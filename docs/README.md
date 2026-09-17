@@ -20,6 +20,10 @@ different, because then the reasoning that produced it is lost.
 | [0001](adr/0001-hosting-and-raw-to-curated-route.md) | S3 raw lake + Postgres curated; Dokploy raw-compose deployment; measured host capacity | Accepted (§2 and §3 superseded by 0003) |
 | [0002](adr/0002-source-mock-mode.md) | Mock mode as a first-class source mode; retention deliberately deferred | Accepted |
 | [0003](adr/0003-ingestion-without-airbyte.md) | No ingestion platform: one worker container, dlt as a library | Accepted |
+| [0004](adr/0004-control-plane-ui.md) | A control plane UI, and why it is not the ingestion platform 0003 rejected | Accepted |
+| [0005](adr/0005-per-tenant-credentials-sealed-in-postgres.md) | Per-tenant OAuth credentials sealed in Postgres, in a schema BI cannot read | Accepted |
+| [0006](adr/0006-tenant-scoped-keys-and-run-ledger.md) | Tenant-scoped byte keys and run ledger; the run id stops being a process singleton | Accepted (ledger half void; see 0007) |
+| [0007](adr/0007-remove-the-run-ledger.md) | Remove the run ledger; partial shortfall is no longer detected | Accepted |
 
 ## Contracts (`contracts/`)
 

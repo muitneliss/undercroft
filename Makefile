@@ -1,11 +1,13 @@
 VENV := .venv-tests
 PY   := $(VENV)/bin/python
+UI   := ui
 
 .DEFAULT_GOAL := help
-.PHONY: help venv verify test itest lint fmt doctor monitors up down seed slice provision-bi backup clean
+.PHONY: help venv verify test itest lint fmt doctor monitors up down seed slice provision-bi backup clean \
+        ui-install ui-lint ui-test ui-build ui-dev api-dev
 
 help:  ## Show available targets
-	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 venv: $(VENV)/.stamp  ## Build the test venv from pinned requirements
 
@@ -17,7 +19,57 @@ $(VENV)/.stamp: requirements-dev.txt pyproject.toml
 	@$(VENV)/bin/pip -q install -e .
 	@touch $@
 
-verify: lint test  ## The gate: lint + tests. Run before claiming anything works.
+verify: lint test ui-lint ui-test  ## The gate. Run before claiming anything works.
+
+# --- the UI half of the gate -------------------------------------------------
+#
+# `make verify` used to need nothing but Python. It now needs Bun as well, and
+# that is a deliberate trade rather than an oversight: the control plane is the
+# first non-Python code in the repo, and a second, separately-invoked gate is how
+# two definitions of "green" start to drift.
+#
+# These targets FAIL LOUDLY when Bun is absent rather than skipping. A check that
+# quietly passes because the toolchain is missing is exactly the failure
+# .claude/rules/tests.md exists to prevent -- it trains people to trust a green
+# run that verified nothing.
+
+# Bun's own lockfile makes install a near no-op when nothing changed, so this is
+# a dependency of the other three rather than something to remember.
+BUN := $(shell command -v bun 2>/dev/null)
+
+define REQUIRE_BUN
+	@if [ -z "$(BUN)" ]; then \
+	  echo "bun is required for the UI half of the gate."; \
+	  echo "Install it with: curl -fsSL https://bun.sh/install | bash"; \
+	  echo "(pinned version in $(UI)/.bun-version)"; \
+	  exit 1; \
+	fi
+endef
+
+ui-install:  ## Install UI dependencies (bun)
+	$(REQUIRE_BUN)
+	@cd $(UI) && bun install --frozen-lockfile
+
+ui-lint: ui-install  ## ESLint, including the rule that keeps money out of a float
+	$(REQUIRE_BUN)
+	@cd $(UI) && bun run lint
+
+ui-test: ui-install  ## Vitest. Offline: no stack, no credentials, no network.
+	$(REQUIRE_BUN)
+	@cd $(UI) && bun run test
+
+ui-build: ui-install  ## Typecheck and build the SPA into ui/dist
+	$(REQUIRE_BUN)
+	@cd $(UI) && bun run build
+
+ui-dev: ui-install  ## Vite dev server, proxying /api to the local control plane
+	$(REQUIRE_BUN)
+	@cd $(UI) && bun run dev
+
+api-dev: venv  ## Run the control plane locally against the compose stack
+	@set -a; . deploy/compose/.env; set +a; \
+	 VCDO_UI_DIST=$(PWD)/$(UI)/dist \
+	 $(VENV)/bin/uvicorn vcdo.api.app:app --reload --port 8000
 
 lint: venv  ## ruff check + format check
 	@$(VENV)/bin/ruff check .

@@ -3,21 +3,34 @@
 The platform is deployed on the Dokploy instance at `lowbit.link`, in project
 `vietcham-data-ops`, as a single raw-compose service.
 
-**Live:** https://vcdo.lowbit.link — Metabase, and the only public surface.
+**Live:** https://vcdo.lowbit.link — Metabase.
+
+**Second public surface (ADR 0004):** the control plane, `api`. It is where a
+customer connects their HubSpot, Xero, Gmail and Drive accounts. Unlike Metabase
+it accepts a session cookie and holds the master key that opens every stored
+OAuth credential, so it runs as its own non-root user in its own image and never
+runs a pipeline itself.
 
 ## What is deployed
 
 | Service | Reachable from | Notes |
 |---|---|---|
-| `metabase` | the internet, HTTPS | The only service with a domain |
+| `metabase` | the internet, HTTPS | Dashboards |
+| `api` | the internet, HTTPS | Control plane. Holds VCDO_SECRET_KEY. Triggers runs via the worker; runs none. |
 | `minio` | compose network only | Raw lake. Holds customer documents. |
 | `postgres` | compose network only | Curated layer |
 | `kestra` + `kestra-postgres` | compose network only | Scheduling |
 | `metabase-postgres` | compose network only | Metabase's own content |
 | `worker` | compose network only | Ingestion; HTTP trigger on :8081 |
 
-**No service other than Metabase publishes a port.** The development compose
-binds ports to localhost for convenience; the server variant has none at all.
+**No service other than Metabase and the control plane publishes a port.** The
+development compose binds ports to localhost for convenience; the server variant
+has none at all.
+
+Both domain-bearing services are attached to the shared `dokploy-network`, which
+is why every service carries a `vcdo-` prefixed alias and why the control plane
+reaches the worker as `http://vcdo-worker:8081` rather than `http://worker:8081`.
+A bare `postgres` resolved to another project's database container once already.
 MinIO, Postgres and Kestra each hold or can reach customer data, and this is a
 host shared with eleven other projects.
 
@@ -134,9 +147,19 @@ ssh ovhvps_lowbit 'docker ps --filter name=vcdo --format "{{.Names}} {{.Status}}
 curl -X POST "http://localhost:18081/api/v1/main/executions/vcdo/hubspot_daily" -u "$USER:$PASS"
 ```
 
-Then look at the numbers, not the status. `ops.run_ledger` must show
-`unaccounted = 0` for every stage; `dq.quarantine` holds anything rejected, with
-its payload.
+Then look at the numbers, not the status. Since ADR 0007 removed the run
+ledger there is no per-stage accounting to check, so the sources are:
+
+- `dq.quarantine` — every row the pipeline refused, with its reason code and
+  original payload. This is now the only per-row record of a rejection.
+- `curated.freshness` — row counts and how old they are, per table. A count that
+  dropped without a matching quarantine entry is the shape of a silent
+  shortfall, and finding it is now a manual comparison rather than an alert.
+- the worker's `events.jsonl` — structured log lines, each carrying `run_id` and
+  `tenant_id`.
+
+**There is no longer an automatic check that rows read equals rows stored plus
+rows excluded.** ADR 0007 records that trade deliberately.
 
 ## Capacity
 
@@ -169,3 +192,14 @@ an open gap, recorded rather than quietly omitted.
 - All four sources run in `mock` mode. No production credential exists yet; per
   ADR 0002 that is the correct state for a source that is not onboarded, not a
   placeholder standing in for something missing.
+- **`VCDO_SECRET_KEY` is not in any backup, and must not be.** It opens
+  `app.connection_secret`, which *is* in the `pg_dump`. A dump restored without
+  the key yields rows nobody can read; a dump stored beside it is encryption that
+  buys nothing. Back the key up separately, by a different mechanism, to a
+  different place — and check this during the next restore rehearsal. See
+  ADR 0005.
+- **Google restricted scopes are not yet cleared.** `gmail.readonly` and
+  `drive.readonly` require Google verification plus an annual third-party CASA
+  assessment before they can serve non-Workspace accounts. Until that completes,
+  the OAuth app stays in Testing status — where **refresh tokens expire after 7
+  days**, which presents as random revocation. See ADR 0004's risk note.

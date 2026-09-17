@@ -286,6 +286,63 @@ services:
         limits:
           memory: 2g
 
+  # The control plane: where a customer connects their HubSpot, Xero, Gmail and
+  # Drive accounts, chooses what to sync, and watches runs.
+  #
+  # The SECOND service with a public face, and the first that accepts a session
+  # cookie. Everything about its placement follows from that: it holds the master
+  # key that opens every stored OAuth credential, so it runs as its own non-root
+  # user in its own image, and it triggers syncs by asking the worker over the
+  # internal network rather than running them itself.
+  #
+  # See ADR 0004 for why this is not the "additional UI to secure and back up"
+  # that ADR 0003 rejected: one container, no second scheduler, no plugin system.
+  api:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.api
+    image: vcdo-api:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Mapped explicitly, variable by variable, for the same reason the worker's
+      # block is: a Dokploy UI variable is NOT injected into a container by
+      # itself, and an unmapped one arrives as an empty string that fails far
+      # from the cause.
+      VCDO_POSTGRES_DSN: postgresql://${VCDO_PG_USER:-vcdo}:${VCDO_PG_PASSWORD:?set in .env}@postgres:5432/${VCDO_PG_DB:-vcdo}
+      VCDO_S3_ENDPOINT: http://minio:9000
+      VCDO_S3_ACCESS_KEY: ${VCDO_S3_ACCESS_KEY:?set in .env}
+      VCDO_S3_SECRET_KEY: ${VCDO_S3_SECRET_KEY:?set in .env}
+      VCDO_S3_REGION: ${VCDO_S3_REGION:-us-east-1}
+      VCDO_S3_BUCKET_RAW: ${VCDO_S3_BUCKET_RAW:-vcc-raw}
+      VCDO_S3_BUCKET_QUARANTINE: ${VCDO_S3_BUCKET_QUARANTINE:-vcc-quarantine}
+      VCDO_LOG_DIR: /app/data/logs
+      VCDO_FIXTURES_DIR: /app/fixtures
+      # Opens every stored credential. Rotating it without re-sealing the rows
+      # makes them unreadable; see ADR 0005 and app.connection_secret.key_version.
+      VCDO_SECRET_KEY: ${VCDO_SECRET_KEY:?set in .env}
+      VCDO_SESSION_SECRET: ${VCDO_SESSION_SECRET:?set in .env}
+      VCDO_API_BASE_URL: ${VCDO_API_BASE_URL:-http://localhost:18000}
+      VCDO_SSO_STAFF_DOMAINS: ${VCDO_SSO_STAFF_DOMAINS:-}
+      VCDO_GOOGLE_CLIENT_ID: ${VCDO_GOOGLE_CLIENT_ID:-}
+      VCDO_GOOGLE_CLIENT_SECRET: ${VCDO_GOOGLE_CLIENT_SECRET:-}
+      VCDO_XERO_CLIENT_ID: ${VCDO_XERO_CLIENT_ID:-}
+      VCDO_XERO_CLIENT_SECRET: ${VCDO_XERO_CLIENT_SECRET:-}
+      VCDO_HUBSPOT_CLIENT_ID: ${VCDO_HUBSPOT_CLIENT_ID:-}
+      VCDO_HUBSPOT_CLIENT_SECRET: ${VCDO_HUBSPOT_CLIENT_SECRET:-}
+      # The same shared secret Kestra presents. The control plane is just another
+      # caller of the worker's fixed verb allowlist; it gets no wider privilege.
+      VCDO_TRIGGER_TOKEN: ${VCDO_TRIGGER_TOKEN:?set in .env}
+      VCDO_WORKER_URL: http://worker:8081
+    ports:
+      - "127.0.0.1:${VCDO_PORT_API:-18000}:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
 volumes:
   worker-data:
   minio-data:

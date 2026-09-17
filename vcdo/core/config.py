@@ -9,15 +9,26 @@ in its compose `environment:` block or an `env_file`. A variable nobody mapped i
 a silent empty string at runtime, which is the failure this module exists to make
 loud.
 
-**Mock mode is a first-class mode, not a test affordance.** We do not yet hold
-credentials for any source. Rather than block, every source resolves through
-``SOURCE_MODE``: ``mock`` serves recorded fixtures, ``live`` calls the real API.
-The seam is identical in both, so switching a source to live is an environment
-change and a credential --- not a code change. That also means the mock path is
+**Mock mode is a first-class mode, not a test affordance.** Every source resolves
+through ``SOURCE_MODE``: ``mock`` serves recorded fixtures, ``live`` calls the
+real API. The seam is identical in both, so switching a source to live is a
+configuration change --- not a code change. That also means the mock path is
 exercised by the same code that will run in production, instead of rotting in a
 test directory.
 
 Mode is resolved per source, so Xero can go live while Gmail is still mocked.
+
+**Credentials are not here, and used not to be either.** This module once
+*required* ``VCDO_<SOURCE>_CREDENTIALS`` for every live source --- while
+:class:`Config` had no field to hold the value and nothing ever read it again.
+The effect was that going live passed validation and then failed in the source
+constructor, and no gate test noticed because none constructed a live source.
+
+They are gone rather than wired up, because one environment variable per source
+cannot describe more than one customer and cannot be rewritten while the process
+runs, and OAuth tokens rotate. Per-tenant credentials live in the registry
+(:mod:`vcdo.core.connections`), sealed in Postgres. What a live source needs now
+is a *connection*, and its absence is reported by the thing that needs it.
 """
 
 from __future__ import annotations
@@ -119,13 +130,6 @@ def load(env: dict[str, str] | None = None) -> Config:
         key = f"VCDO_{source.upper()}_MODE"
         if key in e and e[key].strip():
             overrides[source] = _mode(e, key, mode)
-
-    # Credentials are only required for sources actually running live. Demanding
-    # them in mock mode would make the offline path impossible to run, which is
-    # precisely the path we need working before any credential exists.
-    live = [s for s in SOURCES if overrides.get(s, mode) == "live"]
-    for source in live:
-        _require(e, f"VCDO_{source.upper()}_CREDENTIALS")
 
     return Config(
         source_mode=mode,

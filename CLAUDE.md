@@ -31,6 +31,10 @@ repo imports from it.
 
 2. **Never guess; return nothing and say why.** An empty cell is visibly
    missing; a wrong value is invisibly false. "No evidence" is never "pass".
+   This governs *values*: `money.py` refuses to guess an amount, `names.py`
+   refuses to guess an identity, and `dq.quarantine` records every row the
+   pipeline refused. It no longer governs *counts* — ADR 0007 removed the run
+   ledger, so nothing checks that rows read minus rows stored balances.
 
 3. **PII does not enter git.** Client names are PII. Tracked files use CASE-IDs.
 
@@ -51,12 +55,19 @@ exists.
 | `tests.md` | `tests/**/*.py` | `tmp_path` only, real in-memory over mocks, a guard needs two tests, pin what you import |
 | `pii.md` | `tests/**`, `fixtures/**`, `docs/**`, `wiki/**`, `*.md` | CASE-IDs in tracked files; what must never be committed |
 | `deployment.md` | `deploy/**`, `flows/**` | Dokploy API is the only channel, SSH read-only, explicit memory limits |
+| `ui.md` | `ui/**` | money as a string not a `number`, three-valued rendering, missing is not zero, no mocks |
 
 ## Ingestion
 
 There is **no ingestion platform** in this stack. No Airbyte, no Meltano, no
 Kubernetes. One `worker` container does everything, and `dlt` is a library
 inside it, not a service. The whole platform is one `docker compose up`.
+
+Since ADR 0004 there is a second container, `api` — the control plane, where a
+customer connects their accounts and chooses what to sync. It is **not** a
+second ingestion system and the distinction is the whole of ADR 0004: it runs no
+connector, holds no scheduler, and the platform keeps ingesting with it stopped.
+It configures the worker; it does not become one.
 
 Record-oriented sources go through dlt (verified source for HubSpot, its
 declarative REST toolkit for Xero and Gmail metadata). Byte-oriented paths ---
@@ -66,10 +77,16 @@ Scheduling is Kestra. See ADR 0003.
 
 ## The gate
 
-`make verify` — ruff check, ruff format --check, and the gate tests. Run it
-before claiming anything works. CI runs the same command on push to `main` and
-on every pull request, calling `make` rather than spelling the tools out, so
-there is exactly one definition of the gate.
+`make verify` — ruff check, ruff format --check, the gate tests, then ESLint and
+Vitest over `ui/`. Run it before claiming anything works. CI runs the same
+command on push to `main` and on every pull request, calling `make` rather than
+spelling the tools out, so there is exactly one definition of the gate.
+
+**The gate needs Bun as well as Python now** (`ui/.bun-version`). That is a real
+change to the "runs anywhere with just Python" property and a deliberate one: a
+separately-invoked frontend check is how two definitions of green drift apart.
+The `ui-*` targets **fail with an install hint rather than skipping**, because a
+check that passes because its toolchain is absent is worse than no check.
 
 **A green `make verify` is not evidence that the rules above held.** ruff cannot
 see "never guess", create-only lake writes, or the Dokploy channel rule; the rule

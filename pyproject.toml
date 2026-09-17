@@ -16,6 +16,13 @@ dependencies = [
     "google-auth-oauthlib>=1.2",
     "pydantic>=2.9",
     "zstandard>=0.23",
+    "requests>=2.32",
+    "cryptography>=45",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.28",
+    "itsdangerous>=2.2",
+    "email-validator>=2.2",
 ]
 
 [project.scripts]

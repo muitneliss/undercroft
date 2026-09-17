@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from vcdo.core.obs_log import ObsLog
-from vcdo.core.run_ledger import STREAM, stage
 from vcdo.lake.ingest import land
 from vcdo.lake.store import LakeStore
 from vcdo.sources.base import SourceError
@@ -153,43 +152,6 @@ def test_a_crash_mid_publish_leaves_nothing_half_written(stack):
         0
     ]
     assert after == before, "a crashed transaction must leave no rows behind"
-
-
-# -- accounting ---------------------------------------------------------------
-
-
-def test_rows_lost_without_a_decision_are_surfaced_in_the_ledger(stack):
-    """The quiet failure: a smaller month that nobody can explain."""
-    cfg, lake, log, conn, tenant, _, tmp_path = stack
-
-    with stage("inject:lossy", log) as st:
-        st.rows_in(100)
-        st.rows_out(88)  # 12 vanish with no exclusion reason
-
-    ledger = [
-        json.loads(line) for line in (tmp_path / f"{STREAM}.jsonl").read_text().splitlines() if line.strip()
-    ][-1]
-
-    assert ledger["unaccounted"] == 12
-    assert ledger["level"] == "warning"
-
-
-def test_a_deliberate_exclusion_does_not_look_like_loss(stack):
-    """The guard must stay quiet when rows are dropped ON PURPOSE, or it gets
-    ignored."""
-    cfg, lake, log, conn, tenant, _, tmp_path = stack
-
-    with stage("inject:clean", log) as st:
-        st.rows_in(100)
-        st.rows_out(88)
-        st.excluded(12, "voided_invoice")
-
-    ledger = [
-        json.loads(line) for line in (tmp_path / f"{STREAM}.jsonl").read_text().splitlines() if line.strip()
-    ][-1]
-
-    assert ledger["unaccounted"] == 0
-    assert ledger["level"] == "info"
 
 
 # -- object store outage ------------------------------------------------------

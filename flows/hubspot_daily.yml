@@ -62,5 +62,5 @@ errors:
     message: |
       hubspot_daily FAILED. execution={{ execution.id }}
       A failed run leaves the previous generation serving; curated data is stale,
-      not wrong. Check ops.run_ledger for the stage that failed and
-      dq.quarantine for rejected rows.
+      not wrong. The worker's response body names the exception type; check
+      dq.quarantine for rejected rows and the worker's JSONL log for the stage.

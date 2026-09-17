@@ -2,11 +2,18 @@
 
 Two jobs, and the second is the one nothing off the shelf does.
 
-**Copying PDFs** is straightforward: list the folder subtree, take files whose
-*content* is a PDF, store the original bytes. Identity is the Drive file id, not
-the filename — two files called ``invoice.pdf`` in different folders are
+**Copying PDFs** is straightforward: walk the *selected* folders, take files
+whose *content* is a PDF, store the original bytes. Identity is the Drive file
+id, not the filename — two files called ``invoice.pdf`` in different folders are
 different documents, and keying on name would make one silently overwrite the
 other.
+
+"Selected" is load-bearing and was, for a while, a lie: the live listing asked
+for everything the credential could reach. Against a fixture that is a handful
+of files; against a client's credential it is their entire Drive, copied into a
+create-only lake that cannot un-copy it. Live mode now refuses to start without
+an explicit set of folder ids, and walks them breadth-first because Drive has no
+subtree query.
 
 **Finding deletions requires a full inventory comparison.** Drive's change feed
 and every connector built on it report *additions and edits*; deletions do not
@@ -26,6 +33,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +49,14 @@ ENTITIES = ("files",)
 #: to copy and no md5; exporting them is a separate, lossy decision.
 _GOOGLE_NATIVE_PREFIX = "application/vnd.google-apps."
 
+#: Drive's own type for a folder. Folders are traversed, never stored: they have
+#: no content, and treating one as a document would land an empty object.
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+
+#: The shape of a Drive file id. Folder ids reach us from connection config and
+#: are interpolated into Drive's `q` query, so they are validated, not trusted.
+_FOLDER_ID = re.compile(r"[A-Za-z0-9_-]{10,}")
+
 #: Airbyte's Drive connector caps raw file copy at 1 GB. We apply the same limit
 #: so behaviour does not change if that path is ever reintroduced, and so a
 #: single enormous file cannot stall a sync.
@@ -49,6 +65,7 @@ MAX_FILE_BYTES = 1_024 * 1_024 * 1_024
 
 @dataclass(frozen=True, slots=True)
 class DriveFile:
+    tenant_id: str
     file_id: str
     name: str
     path: str
@@ -58,14 +75,23 @@ class DriveFile:
     data: bytes | None
 
     def lake_key(self) -> str:
-        """Keyed by Drive file id, never by name.
+        """Keyed by tenant and Drive file id, never by name.
 
-        Two ``invoice.pdf`` in different folders are different documents. The
-        name is kept in the key's tail for legibility, but the id is what makes
-        it unique.
+        Two ``invoice.pdf`` in different folders are different documents, so the
+        id is what makes this unique.
+
+        **The tenant leads the key** for the same reason it leads a record key
+        (see :mod:`vcdo.sources.base`): without it one customer's documents
+        cannot be restricted, restored or erased separately from another's, and
+        Drive file ids are only unique within the drive that issued them.
+
+        **The filename is deliberately not in the key.** It was, for legibility,
+        but a filename routinely carries a client name -- and an object key is
+        the one part of the lake that shows up in listings, logs and error
+        messages. It is recorded in the manifest instead, where access is
+        controlled.
         """
-        safe = self.name.replace("/", "_")
-        return f"drive/pdf/{self.file_id}/{safe}"
+        return f"drive/{self.tenant_id}/pdf/{self.file_id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,15 +121,34 @@ class DriveSource:
         mode: str = "mock",
         fixtures_dir: str = "fixtures",
         credentials=None,
+        folder_ids: tuple[str, ...] = (),
         listing: str = "files",
     ) -> None:
         self.tenant_id = tenant_id
         self.mode = mode
         self.fixtures_dir = Path(fixtures_dir)
         self._credentials = credentials
+        self.folder_ids = tuple(folder_ids)
         self._listing = listing
         if mode == "live" and credentials is None:
             raise SourceError("drive live mode requires OAuth credentials")
+        if mode == "live" and not self.folder_ids:
+            # An unscoped live listing is not a smaller version of a scoped one:
+            # it copies the whole of everything the credential can reach into our
+            # lake, which for a client credential is their entire Drive. Refused
+            # here because the mistake is unrecoverable -- the lake is
+            # create-only, so bytes that should never have been copied cannot be
+            # un-copied, only tombstoned.
+            raise SourceError(
+                "drive live mode requires folder_ids; an unscoped listing copies "
+                "everything the credential can reach"
+            )
+        for folder in self.folder_ids:
+            if not _FOLDER_ID.fullmatch(folder):
+                # These arrive from operator-chosen connection config and are
+                # interpolated into Drive's `q` query, so the shape is checked
+                # rather than trusted.
+                raise SourceError(f"drive folder id {folder!r} is not a Drive file id")
 
     def entities(self) -> tuple[str, ...]:
         return ENTITIES
@@ -135,35 +180,60 @@ class DriveSource:
         return list(self._live_listing())
 
     def _live_listing(self) -> Iterator[dict]:
-        """List the subtree, paging properly.
+        """Walk the selected folders, breadth-first, paging properly.
+
+        Drive has **no subtree query**: ``'<id>' in parents`` matches direct
+        children only, so reaching a nested file means walking level by level.
+        The alternative -- listing everything the credential can reach and
+        filtering afterwards -- is what this replaces, and it copied the whole of
+        a client's Drive.
 
         ``pageSize`` alone truncates silently. In a reconciliation job that means
-        every file past the cut is reported deleted, so the loop is mandatory.
+        every file past the cut is reported deleted, so the page loop is
+        mandatory at every level, not just the first.
+
+        Folders already visited are skipped: a file can have several parents and
+        a shortcut can point back up, so an unguarded walk does not terminate.
         """
         from googleapiclient.discovery import build
 
         service = build("drive", "v3", credentials=self._credentials, cache_discovery=False)
         fields = "nextPageToken, files(id, name, mimeType, parents, modifiedTime, size, md5Checksum, trashed)"
-        page_token = None
+
+        pending = list(self.folder_ids)
+        visited: set[str] = set()
         try:
-            while True:
-                response = (
-                    service.files()
-                    .list(
-                        q="trashed = false",
-                        fields=fields,
-                        pageSize=1000,
-                        pageToken=page_token,
-                        includeItemsFromAllDrives=True,
-                        supportsAllDrives=True,
+            while pending:
+                folder = pending.pop()
+                if folder in visited:
+                    continue
+                visited.add(folder)
+
+                page_token = None
+                while True:
+                    response = (
+                        service.files()
+                        .list(
+                            q=f"'{folder}' in parents and trashed = false",
+                            fields=fields,
+                            pageSize=1000,
+                            pageToken=page_token,
+                            includeItemsFromAllDrives=True,
+                            supportsAllDrives=True,
+                        )
+                        .execute()
                     )
-                    .execute()
-                )
-                yield from response.get("files", [])
-                page_token = response.get("nextPageToken")
-                if not page_token:
-                    break
+                    for item in response.get("files", []):
+                        if item.get("mimeType") == _FOLDER_MIME:
+                            pending.append(str(item["id"]))
+                        else:
+                            yield item
+                    page_token = response.get("nextPageToken")
+                    if not page_token:
+                        break
         except Exception as exc:
+            # Never yield a partial listing: reconcile() treats what it is given
+            # as complete, so a truncated walk reports live files as deleted.
             raise SourceError(f"drive listing failed: {exc}") from exc
 
     def pdf_files(self) -> Iterator[DriveFile]:
@@ -191,6 +261,7 @@ class DriveSource:
                 continue
 
             yield DriveFile(
+                tenant_id=self.tenant_id,
                 file_id=str(item["id"]),
                 name=str(item.get("name") or ""),
                 path=str(item.get("_path") or item.get("name") or ""),
