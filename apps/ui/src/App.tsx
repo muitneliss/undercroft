@@ -22,25 +22,28 @@ export function App(): React.ReactElement {
     });
   }, []);
 
-  if (error !== null) {
-    return (
-      <main>
-        <h1>Undercroft</h1>
-        <p role="alert">Sign in to continue.</p>
-      </main>
-    );
-  }
-
   return (
-    <main>
-      <h1>Undercroft</h1>
-      {tenants === null ? (
-        <p aria-busy="true">Loading…</p>
+    <main className="shell">
+      <h1 className="brand">
+        <span className="brand__mark" aria-hidden="true" />
+        Undercroft
+      </h1>
+      <p className="tagline">Control plane</p>
+
+      {error !== null ? (
+        <p className="state" role="status">
+          Sign in to continue.
+        </p>
+      ) : tenants === null ? (
+        <p className="state state--busy" aria-busy="true">
+          Loading…
+        </p>
       ) : (
-        <ul aria-label="tenants">
+        <ul className="tenants" aria-label="tenants">
           {tenants.map((t) => (
-            <li key={t.id}>
-              {t.displayName || t.id} — {t.role}
+            <li key={t.id} className="tenant">
+              <span className="tenant__name">{t.displayName || t.id}</span>
+              <span className="tenant__role">{t.role}</span>
             </li>
           ))}
         </ul>
