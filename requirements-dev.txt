@@ -1,0 +1,31 @@
+# Pinned dev/test dependencies. Resolved and installed 2026-09-17.
+#
+# RULE: if a test imports a module, that module MUST be listed here.
+#
+# Installing something by hand into the venv without recording it here produces
+# green on your machine and red on the next one. The legacy repo lost several
+# waves to exactly this: 18 tests were red purely because python-docx was
+# installed locally but never declared.
+#
+# Pins are exact and verified installable, not aspirational. A pin nobody has
+# resolved is a build break waiting for the next clean checkout.
+
+pytest==9.1.1
+pytest-timeout==2.4.0
+ruff==0.16.8
+
+# Lake / storage
+boto3==1.43.96
+botocore==1.43.96
+zstandard==0.25.0
+
+# Curated store
+psycopg[binary]==3.3.5
+
+# Google APIs (Gmail attachment worker, Drive reconciliation)
+google-api-python-client==2.200.0
+google-auth==2.58.0
+google-auth-oauthlib==1.4.1
+
+# Models / validation
+pydantic==2.13.5

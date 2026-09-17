@@ -1,0 +1,43 @@
+# --- Secrets. Never commit. -------------------------------------------------
+# Dokploy API endpoint + key, written by the `dokploy` skill's Setup Flow.
+.dokploy.json
+*.env
+!.env.example
+*secret*
+*credential*
+
+# `*token*` is deliberately NOT a blanket rule. In the legacy repo it silently
+# swallowed docs/person-name-tokens.json and broke a clean-clone test, and the
+# breakage was invisible until someone checked out fresh. Match token FILES, not
+# every path containing the substring.
+token.json
+token_*.json
+*.token
+
+# --- Client data. PDPA: real names and payloads never enter git. ------------
+data/
+fixtures/live/
+
+# --- Local infrastructure state ---------------------------------------------
+.volumes/
+deploy/compose/.env
+*.sqlite
+*.db
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv*/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# --- Editors / OS ------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+
+# Kanna tool workspace
+.kanna/
