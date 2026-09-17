@@ -149,14 +149,31 @@ body {
   gap: 8px;
 }
 
+/* A tenant row is a button: selecting one focuses the tenant the data path hangs off.
+   The button resets keep it looking like the row it replaced. */
 .tenant {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tenant:hover {
+  border-color: var(--accent);
+}
+
+.tenant--selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .tenant__name {

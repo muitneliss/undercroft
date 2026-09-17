@@ -1,0 +1,6 @@
+# ast-grep project config. `bun run lint:state` (`ast-grep scan`) reads this and runs every
+# rule under ruleDirs. This is the HARD gate for `.claude/rules/state.md`: a rule file is a
+# convention a reader can miss, but an ast-grep rule fails the build. It is wired into
+# `bun run verify`, which CI runs, so a banned `useState` cannot merge.
+ruleDirs:
+  - .ast-grep/rules
