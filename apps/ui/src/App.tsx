@@ -1,61 +1,138 @@
 /**
- * The control-plane shell. Minimal on purpose in v0.1: a sign-in prompt and, once signed
- * in, the tenant list. The data path (connectors, runs, model preview) hangs off a tenant.
+ * The app shell and routing.
  *
- * Server data comes from the tRPC React Query hook, so this component holds no `useState`:
- * the fetch state (`isPending`/`isError`/`data`) belongs to the query cache, and the one
- * piece of client state -- which tenant is selected -- belongs to the Zustand store. See
- * `.claude/rules/state.md`.
+ * Auth is resolved once, at the top, through the tRPC session hook: an error routes to the
+ * title page rather than letting every panel render its own. Server state lives in the
+ * React Query cache behind that hook, never in component state -- see .claude/rules/state.md.
+ *
+ * Every signed-in route renders inside `Book`, which supplies the section board, the
+ * fore-edge tab rail and the running head. The route decides which division is open; the
+ * division decides the board hue; the board hue decides the acetate's solved alpha.
  */
 
-import { useUiStore } from "./store.ts";
-import { trpc } from "./trpc.ts";
+import type { ReactNode } from "react";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 
-export function App(): React.ReactElement {
-  const tenants = trpc.tenants.list.useQuery();
-  const selectedTenantId = useUiStore((state) => state.selectedTenantId);
-  const selectTenant = useUiStore((state) => state.selectTenant);
+import type { Source } from "@/api/types";
+import { SOURCES } from "@/api/types";
+import { Book } from "@/components/Book";
+import { Skeleton } from "@/components/Skeleton";
+import type { DivisionId } from "@/lib/divisions";
+import { Lake } from "@/routes/Lake";
+import { People } from "@/routes/People";
+import { SignIn } from "@/routes/SignIn";
+import { TenantOverview } from "@/routes/TenantOverview";
+import { Tenants } from "@/routes/Tenants";
+import { trpc } from "@/trpc";
+
+function isSource(value: string | undefined): value is Source {
+  return SOURCES.includes(value as Source);
+}
+
+/**
+ * A signed-in page: the book opened at one division.
+ *
+ * `tenantId` comes from the route rather than from state, so a link, a reload and the back
+ * button all land in the same place.
+ */
+function Opened({
+  division,
+  signedInAs,
+  children,
+}: {
+  division: DivisionId;
+  signedInAs: string;
+  children: (tenantId: string) => ReactNode;
+}) {
+  const params = useParams();
+  const tenantId = params["tenantId"];
+
+  if (!tenantId) return <Navigate to="/tenants" replace />;
 
   return (
-    <main className="shell">
-      <h1 className="brand">
-        <span className="brand__mark" aria-hidden="true" />
-        Undercroft
-      </h1>
-      <p className="tagline">Control plane</p>
+    <Book tenantId={tenantId} current={division} signedInAs={signedInAs}>
+      {children(tenantId)}
+    </Book>
+  );
+}
 
-      {/* A failed tenants query means "not signed in" (or no access) -- a normal state, not
-          a red error, so it uses `.state` and role="status". */}
-      {tenants.isError ? (
-        <p className="state" role="status">
-          Sign in to continue.
-        </p>
-      ) : tenants.isPending ? (
-        <p className="state state--busy" aria-busy="true">
-          Loading…
-        </p>
-      ) : (
-        <ul className="tenants" aria-label="tenants">
-          {tenants.data.map((t) => {
-            const selected = t.id === selectedTenantId;
-            return (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  className={selected ? "tenant tenant--selected" : "tenant"}
-                  aria-current={selected}
-                  onClick={() => {
-                    selectTenant(t.id);
-                  }}
-                >
-                  <span className="tenant__name">{t.displayName || t.id}</span>
-                  <span className="tenant__role">{t.role}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </main>
+function ScopeRoute({ signedInAs }: { signedInAs: string }) {
+  const params = useParams();
+  const tenantId = params["tenantId"];
+  const source = params["source"];
+
+  if (!tenantId) return <Navigate to="/tenants" replace />;
+  if (!isSource(source)) return <Navigate to={`/tenants/${tenantId}`} replace />;
+
+  return (
+    <Book tenantId={tenantId} current="sources" signedInAs={signedInAs}>
+      <TenantOverview tenantId={tenantId} scopeFor={source} />
+    </Book>
+  );
+}
+
+export function App() {
+  // The one auth read. `session.me` is an authed procedure, so with no session cookie it
+  // errors -- which, while OAuth is unwired, is always, and the app sits on the title page.
+  const session = trpc.session.me.useQuery(undefined, { retry: false });
+
+  if (session.isPending) {
+    return (
+      <main className="titlepage">
+        <div className="titlepage__leaf">
+          <Skeleton rows={3} />
+        </div>
+      </main>
+    );
+  }
+
+  if (session.isError) {
+    // No reason is passed: auth is not wired, so "expired"/"denied" would invent a failure
+    // that did not happen. The plain title page is the honest state.
+    return <SignIn />;
+  }
+
+  const signedInAs = session.data.email;
+
+  return (
+    <Routes>
+      <Route
+        path="/tenants/:tenantId/connect/:source/scope"
+        element={<ScopeRoute signedInAs={signedInAs} />}
+      />
+      <Route
+        path="/tenants/:tenantId/lake"
+        element={
+          <Opened division="lake" signedInAs={signedInAs}>
+            {(tenantId) => <Lake tenantId={tenantId} />}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/people"
+        element={
+          <Opened division="people" signedInAs={signedInAs}>
+            {(tenantId) => <People tenantId={tenantId} />}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId"
+        element={
+          <Opened division="sources" signedInAs={signedInAs}>
+            {(tenantId) => <TenantOverview tenantId={tenantId} />}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants"
+        element={
+          <Book tenantId={undefined} current="customers" signedInAs={signedInAs}>
+            <Tenants />
+          </Book>
+        }
+      />
+      <Route path="*" element={<Navigate to="/tenants" replace />} />
+    </Routes>
   );
 }
