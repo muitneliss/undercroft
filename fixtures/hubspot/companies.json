@@ -1,0 +1,64 @@
+{
+  "results": [
+    {
+      "id": "7001",
+      "properties": {
+        "name": "Synthetic Alpha Pte Ltd",
+        "domain": "alpha-synthetic.example",
+        "industry": "PROFESSIONAL_SERVICES",
+        "lifecyclestage": "customer",
+        "createdate": "2024-01-15T02:11:00.000Z",
+        "hs_lastmodifieddate": "2026-08-02T09:30:00.000Z",
+        "hubspot_owner_id": "900001"
+      },
+      "createdAt": "2024-01-15T02:11:00.000Z",
+      "updatedAt": "2026-08-02T09:30:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "7002",
+      "properties": {
+        "name": "SYNTHETIC BETA PTE. LTD.",
+        "domain": "beta-synthetic.example",
+        "industry": "TECHNOLOGY",
+        "lifecyclestage": "customer",
+        "createdate": "2024-03-02T06:45:00.000Z",
+        "hs_lastmodifieddate": "2026-07-19T01:05:00.000Z",
+        "hubspot_owner_id": "900001"
+      },
+      "createdAt": "2024-03-02T06:45:00.000Z",
+      "updatedAt": "2026-07-19T01:05:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "7003",
+      "properties": {
+        "name": "Synthetic Gamma Holdings",
+        "domain": "",
+        "industry": "",
+        "lifecyclestage": "lead",
+        "createdate": "2025-11-20T08:00:00.000Z",
+        "hs_lastmodifieddate": "2026-01-04T12:00:00.000Z",
+        "hubspot_owner_id": ""
+      },
+      "createdAt": "2025-11-20T08:00:00.000Z",
+      "updatedAt": "2026-01-04T12:00:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "7004",
+      "properties": {
+        "name": "Synthetic Delta Trading",
+        "domain": "delta-synthetic.example",
+        "industry": "WHOLESALE",
+        "lifecyclestage": "customer",
+        "createdate": "2023-06-11T04:20:00.000Z",
+        "hs_lastmodifieddate": "2026-09-01T03:15:00.000Z",
+        "hubspot_owner_id": "900002"
+      },
+      "createdAt": "2023-06-11T04:20:00.000Z",
+      "updatedAt": "2026-09-01T03:15:00.000Z",
+      "archived": false
+    }
+  ]
+}

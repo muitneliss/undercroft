@@ -1,0 +1,79 @@
+{
+  "results": [
+    {
+      "id": "8001",
+      "properties": {
+        "firstname": "Anh",
+        "lastname": "Nguyen",
+        "email": "anh.nguyen@alpha-synthetic.example",
+        "company": "Synthetic Alpha Pte Ltd",
+        "createdate": "2024-01-15T02:12:00.000Z",
+        "lastmodifieddate": "2026-08-02T09:31:00.000Z",
+        "hubspot_owner_id": "900001"
+      },
+      "createdAt": "2024-01-15T02:12:00.000Z",
+      "updatedAt": "2026-08-02T09:31:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "8002",
+      "properties": {
+        "firstname": "Binh",
+        "lastname": "Tran",
+        "email": "binh.tran@alpha-synthetic.example",
+        "company": "Synthetic Alpha Pte Ltd",
+        "createdate": "2024-02-01T03:00:00.000Z",
+        "lastmodifieddate": "2026-05-12T07:45:00.000Z",
+        "hubspot_owner_id": "900001"
+      },
+      "createdAt": "2024-02-01T03:00:00.000Z",
+      "updatedAt": "2026-05-12T07:45:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "8003",
+      "properties": {
+        "firstname": "Chi",
+        "lastname": "Le",
+        "email": "chi.le@beta-synthetic.example",
+        "company": "SYNTHETIC BETA PTE. LTD.",
+        "createdate": "2024-03-02T06:46:00.000Z",
+        "lastmodifieddate": "2026-07-19T01:06:00.000Z",
+        "hubspot_owner_id": "900001"
+      },
+      "createdAt": "2024-03-02T06:46:00.000Z",
+      "updatedAt": "2026-07-19T01:06:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "8004",
+      "properties": {
+        "firstname": "Dung",
+        "lastname": "Pham",
+        "email": "",
+        "company": "Synthetic Gamma Holdings",
+        "createdate": "2025-11-20T08:01:00.000Z",
+        "lastmodifieddate": "2026-01-04T12:01:00.000Z",
+        "hubspot_owner_id": ""
+      },
+      "createdAt": "2025-11-20T08:01:00.000Z",
+      "updatedAt": "2026-01-04T12:01:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "8005",
+      "properties": {
+        "firstname": "Dung",
+        "lastname": "",
+        "email": "dung@gmail.example",
+        "company": "",
+        "createdate": "2026-02-14T05:30:00.000Z",
+        "lastmodifieddate": "2026-02-14T05:30:00.000Z",
+        "hubspot_owner_id": ""
+      },
+      "createdAt": "2026-02-14T05:30:00.000Z",
+      "updatedAt": "2026-02-14T05:30:00.000Z",
+      "archived": false
+    }
+  ]
+}

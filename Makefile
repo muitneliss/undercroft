@@ -2,7 +2,7 @@ VENV := .venv-tests
 PY   := $(VENV)/bin/python
 
 .DEFAULT_GOAL := help
-.PHONY: help venv verify test itest lint fmt doctor monitors up down seed slice clean
+.PHONY: help venv verify test itest lint fmt doctor monitors up down seed slice provision-bi clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -50,6 +50,9 @@ down:  ## Stop the local stack, keeping volumes
 
 seed: venv  ## Load fixture records into local MinIO
 	@$(PY) -m vcdo.cli.main seed
+
+provision-bi: venv  ## Provision Metabase: admin + read-only curated connection
+	@set -a; . deploy/compose/.env; set +a; $(PY) -m vcdo.cli.main provision-bi
 
 slice: venv  ## Full fixture run: raw -> curated -> dashboard query
 	@$(PY) -m vcdo.cli.main slice

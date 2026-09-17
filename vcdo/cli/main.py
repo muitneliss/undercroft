@@ -65,6 +65,66 @@ def doctor(_args: argparse.Namespace) -> int:
     return EXIT_FAILED if failures else EXIT_OK
 
 
+def _run_pipeline(verb: str):
+    """Build the pipeline verbs. Config and logging are constructed once, here."""
+
+    def run(_args: argparse.Namespace) -> int:
+        from vcdo.cli import pipeline
+        from vcdo.core.obs_log import ObsLog
+
+        try:
+            cfg = load()
+        except MissingConfig as exc:
+            print(f"config: FAIL  {exc}", file=sys.stderr)
+            return EXIT_FAILED
+
+        log = ObsLog(f"cli.{verb}", log_dir=cfg.log_dir)
+        try:
+            if verb == "migrate":
+                applied = pipeline.migrate(cfg, log)
+                print(f"migrate:  OK    {applied} migration(s) applied")
+            elif verb == "seed":
+                landed = pipeline.seed(cfg, log)
+                for entity, n in landed.items():
+                    print(f"seed:     OK    hubspot/{entity}: {n} records")
+            else:
+                r = pipeline.run_slice(cfg, log)
+                print(f"landed:      {r['landed']} raw records")
+                print(f"customers:   {r['customers']}")
+                print(f"deals:       {r['deals']}")
+                print(f"quarantined: {r['quarantined']}")
+                print(
+                    f"dashboard:   {r['won_deals']} won deal(s), "
+                    f"{r['won_amount']} across {r['currencies']} currency/currencies"
+                )
+        except Exception as exc:
+            log.error(f"{verb} failed", error_type=type(exc).__name__)
+            print(f"{verb}: FAIL  {type(exc).__name__}: {exc}", file=sys.stderr)
+            return EXIT_FAILED
+        return EXIT_OK
+
+    return run
+
+
+def provision_bi(_args: argparse.Namespace) -> int:
+    from vcdo.cli.metabase import MetabaseError, provision_from_env
+
+    try:
+        result = provision_from_env()
+    except KeyError as exc:
+        print(f"provision-bi: FAIL  {exc} is not set", file=sys.stderr)
+        return EXIT_FAILED
+    except MetabaseError as exc:
+        print(f"provision-bi: FAIL  {exc}", file=sys.stderr)
+        return EXIT_FAILED
+
+    made = [k for k, v in result["created"].items() if v] or ["nothing (already provisioned)"]
+    print(f"metabase: OK    database id={result['database_id']}, created: {', '.join(made)}")
+    for name in result["tables"]:
+        print(f"          visible: {name}")
+    return EXIT_OK
+
+
 def not_implemented(name: str):
     def run(_args: argparse.Namespace) -> int:
         print(f"`{name}` is not implemented yet", file=sys.stderr)
@@ -78,10 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("doctor", help="check that the stack is usable").set_defaults(fn=doctor)
-    sub.add_parser("seed", help="load fixture records into the lake").set_defaults(fn=not_implemented("seed"))
-    sub.add_parser("slice", help="raw -> curated -> dashboard query").set_defaults(
-        fn=not_implemented("slice")
+    sub.add_parser("provision-bi", help="provision Metabase (idempotent)").set_defaults(fn=provision_bi)
+    sub.add_parser("migrate", help="apply curated schema migrations").set_defaults(
+        fn=_run_pipeline("migrate")
     )
+    sub.add_parser("seed", help="land source records into the lake").set_defaults(fn=_run_pipeline("seed"))
+    sub.add_parser("slice", help="raw -> curated -> dashboard query").set_defaults(fn=_run_pipeline("slice"))
     return parser
 
 
