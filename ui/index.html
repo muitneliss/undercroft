@@ -6,6 +6,39 @@
     <!-- An internal control plane holding customer data has no business in a
          search index, and there is nothing here to share. -->
     <meta name="robots" content="noindex, nofollow" />
+
+    <!-- The board colour behind the browser chrome, so the fore edge does not
+         end at a white strip on a phone. -->
+    <meta name="theme-color" content="#efe9d9" />
+
+    <!-- The three faces are self-hosted, never fetched from a font CDN: this
+         origin holds the session that opens every stored OAuth credential and
+         should make no third-party request at all. Only the latin subsets are
+         preloaded; the latin-ext and Vietnamese ones are fetched on demand by
+         unicode-range, so a reader who needs them pays for them and nobody
+         else does. -->
+    <link
+      rel="preload"
+      href="/fonts/archivo-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/mono-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/garamond-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
     <title>VietCham data platform</title>
   </head>
   <body>

@@ -13,7 +13,15 @@
  * which is true either way.
  */
 
-import type { Connection, LakeObject, Member, SessionUser, Source, Tenant } from "./types";
+import type {
+  Connection,
+  LakeManifests,
+  LakeObject,
+  Member,
+  SessionUser,
+  Source,
+  Tenant,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -111,6 +119,15 @@ export const api = {
    * Returns only a handle. Since ADR 0007 removed the run ledger there is no
    * history to poll afterwards -- the worker holds the live status in memory and
    * loses it on restart, so the UI reports that a sync started and nothing more.
+   *
+   * !! NOT IMPLEMENTED BY THE API. No router in `vcdo/api/routers/` serves
+   * `POST /api/tenants/{id}/runs`; the registered routers are auth, tenants,
+   * connections, oauth, lake and users. The in-memory server in `@/test/server`
+   * DOES implement it, which is why the suite stays green over a call that fails
+   * against the real service -- precisely the failure `.claude/rules/ui.md`
+   * warns about when it says a fake that never refuses makes a broken boundary
+   * look fine. The UI behaviour here is the intended one and is pinned by
+   * `TenantOverview.test.tsx`; the missing piece is the endpoint.
    */
   startRun: (tenantId: string) =>
     request<{ run_id: string; status: string }>(`/api/tenants/${tenantId}/runs`, {
@@ -122,10 +139,34 @@ export const api = {
       `/api/tenants/${tenantId}/lake?prefix=${encodeURIComponent(prefix)}`,
     ),
 
+  /** The manifests for one object: provenance, without the payload. */
+  lakeObject: (tenantId: string, key: string) =>
+    request<LakeManifests>(
+      `/api/tenants/${tenantId}/lake/object?key=${encodeURIComponent(key)}`,
+    ),
+
+  /**
+   * Where the bytes are.
+   *
+   * A link, not a fetch: the response is a file download. It is admin-only and
+   * written to the audit log server-side, because these are the customer's
+   * invoices and email attachments -- so the interface states that before the
+   * click rather than after it.
+   */
+  lakeDownloadUrl: (tenantId: string, key: string, stamp?: string) => {
+    const at = stamp ? `&stamp=${encodeURIComponent(stamp)}` : "";
+    return `/api/tenants/${tenantId}/lake/download?key=${encodeURIComponent(key)}${at}`;
+  },
+
   members: (tenantId: string) => request<Member[]>(`/api/tenants/${tenantId}/members`),
+
+  /** The token comes back exactly once; only its digest is stored. */
   invite: (tenantId: string, email: string, role: string) =>
     request<{ token: string; expires_in_days: number }>(
       `/api/tenants/${tenantId}/members/invitations`,
       { method: "POST", body: JSON.stringify({ email, role }) },
     ),
+
+  removeMember: (tenantId: string, userId: string) =>
+    request<void>(`/api/tenants/${tenantId}/members/${userId}`, { method: "DELETE" }),
 };

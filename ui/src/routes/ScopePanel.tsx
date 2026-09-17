@@ -1,15 +1,24 @@
 /**
- * Choosing what a connected source will sync.
+ * Choosing what a granted source will sync: the leaf hinged down over its row.
  *
- * A side panel, not a modal. Modals are usually the lazy first thought; this is
- * a task with real content that someone may want to check against another tab,
- * and trapping focus over the rest of the app buys nothing here.
+ * Not a modal, and not a side panel either. `.claude/rules/ui.md` ruled out the
+ * modal -- this is a task with real content someone may want to check against
+ * another tab, and trapping focus over the rest of the app buys nothing. In this
+ * world the alternative is better than a side panel: the leaf turns down inside
+ * its own row, so the schedule above and below stays on screen, in the document
+ * and in the tab order, and the section board shows through the acetate at the
+ * alpha `@/lib/acetate` solved for this division.
  *
  * Drive is the case that matters. An unscoped Drive sync copies **everything the
  * credential can reach** into a create-only lake that cannot un-copy it, so the
- * form refuses to save without at least one folder — the same refusal the API
+ * form refuses to save without at least one folder -- the same refusal the API
  * and `DriveSource` both make. Three layers, because the consequence is
  * permanent.
+ *
+ * The checkboxes are punches. Selection is a hole through the leaf everywhere
+ * else in this system, so it is a hole here too; underneath it is an ordinary
+ * `<input type="checkbox">` with its own focus ring, because the metaphor is not
+ * allowed to cost anyone a keyboard.
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +28,8 @@ import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "@/api/client";
 import type { Source } from "@/api/types";
 import { SOURCE_LABEL } from "@/api/types";
+import { Errata } from "@/components/Errata";
+import { ArrowRight } from "@/components/Icon";
 
 const ENTITY_CHOICES: Partial<Record<Source, string[]>> = {
   hubspot: ["companies", "contacts", "deals", "associations"],
@@ -58,19 +69,22 @@ export function ScopePanel({ tenantId, source }: { tenantId: string; source: Sou
 
   const folderList = folders.split(/[\s,]+/).filter(Boolean);
   const driveNeedsFolders = source === "drive" && folderList.length === 0;
+  const choices = ENTITY_CHOICES[source];
 
   return (
-    <div className="panel stack">
-      <div>
-        <h2>What should we sync from {SOURCE_LABEL[source]}?</h2>
-        <p className="page-header__sub">
+    <section className="hinge stack" aria-label={`What to sync from ${SOURCE_LABEL[source]}`}>
+      <span className="hinge__punch hinge__punch--a" aria-hidden="true" />
+      <span className="hinge__punch hinge__punch--b" aria-hidden="true" />
+      <div className="stack stack--tight">
+        <h3>What should we sync from {SOURCE_LABEL[source]}?</h3>
+        <p className="note">
           You can change this at any time. Nothing outside what you choose here is read.
         </p>
       </div>
 
       {source === "drive" ? (
         <div className="field">
-          <label className="field__label" htmlFor="folders">
+          <label className="label" htmlFor="folders">
             Drive folders
           </label>
           <input
@@ -90,7 +104,7 @@ export function ScopePanel({ tenantId, source }: { tenantId: string; source: Sou
 
       {source === "gmail" ? (
         <div className="field">
-          <label className="field__label" htmlFor="labels">
+          <label className="label" htmlFor="labels">
             Gmail labels
           </label>
           <input
@@ -108,11 +122,11 @@ export function ScopePanel({ tenantId, source }: { tenantId: string; source: Sou
         </div>
       ) : null}
 
-      {ENTITY_CHOICES[source] ? (
+      {choices ? (
         <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="field__label">Records to sync</legend>
-          {ENTITY_CHOICES[source]?.map((entity) => (
-            <label key={entity} className="row" style={{ gap: "var(--space-2)" }}>
+          <legend className="label">Records to sync</legend>
+          {choices.map((entity) => (
+            <label key={entity} className="punch">
               <input
                 type="checkbox"
                 checked={entities.includes(entity)}
@@ -124,6 +138,7 @@ export function ScopePanel({ tenantId, source }: { tenantId: string; source: Sou
                   )
                 }
               />
+              <span className="punch__box" aria-hidden="true" />
               {entity}
             </label>
           ))}
@@ -131,12 +146,13 @@ export function ScopePanel({ tenantId, source }: { tenantId: string; source: Sou
       ) : null}
 
       <div className="field">
-        <label className="field__label" htmlFor="schedule">
+        <label className="label" htmlFor="schedule">
           Sync schedule
         </label>
         <input
           id="schedule"
           className="input"
+          style={{ maxWidth: "14rem" }}
           value={schedule}
           onChange={(e) => setSchedule(e.target.value)}
           aria-describedby="schedule-hint"
@@ -147,32 +163,33 @@ export function ScopePanel({ tenantId, source }: { tenantId: string; source: Sou
       </div>
 
       {driveNeedsFolders ? (
-        <p className="field__hint" role="status">
+        <p className="note" role="status">
           Choose at least one folder. Without one we would have to read your entire Drive,
           and we will not do that.
         </p>
       ) : null}
 
       {save.isError ? (
-        <p className="error-text" role="alert">
+        <Errata heading="Not saved" live>
           {save.error instanceof ApiError && save.error.detail
             ? save.error.detail
-            : "Could not save."}
-        </p>
+            : "This scope could not be saved. Nothing has been changed."}
+        </Errata>
       ) : null}
 
       <div className="row">
         <button
-          className="btn btn--primary"
+          className="plate plate--primary"
           onClick={() => save.mutate()}
           disabled={save.isPending || driveNeedsFolders}
         >
           {save.isPending ? "Saving…" : "Save and finish"}
+          {save.isPending ? null : <ArrowRight size={13} />}
         </button>
-        <button className="btn" onClick={() => void navigate(`/tenants/${tenantId}`)}>
+        <button className="plate" onClick={() => void navigate(`/tenants/${tenantId}`)}>
           Cancel
         </button>
       </div>
-    </div>
+    </section>
   );
 }

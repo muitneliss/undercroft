@@ -126,11 +126,78 @@ export const handlers = [
     return HttpResponse.json(store.members[tenantId] ?? []);
   }),
 
-  http.get("/api/tenants/:tenantId/lake", ({ params }) => {
+  /**
+   * The provenance for one object.
+   *
+   * 404 for a key this tenant does not hold, exactly as the real router does. A
+   * lake browser that rendered an empty manifest table for a key belonging to
+   * someone else would be a cross-tenant read wearing an empty state.
+   */
+  http.get("/api/tenants/:tenantId/lake/object", ({ params, request }) => {
     const tenantId = String(params["tenantId"]);
     const denied = requireUser() ?? requireVisible(tenantId);
     if (denied) return denied;
-    return HttpResponse.json([]);
+
+    const key = new URL(request.url).searchParams.get("key") ?? "";
+    const held = (store.lake[tenantId] ?? []).some((o) => o.key === key);
+    const versions = store.manifests[key];
+    if (!held || !versions) {
+      return HttpResponse.json({ detail: "no such object" }, { status: 404 });
+    }
+
+    return HttpResponse.json({ key, versions });
+  }),
+
+  http.get("/api/tenants/:tenantId/lake", ({ params, request }) => {
+    const tenantId = String(params["tenantId"]);
+    const denied = requireUser() ?? requireVisible(tenantId);
+    if (denied) return denied;
+
+    const prefix = new URL(request.url).searchParams.get("prefix") ?? "";
+    const objects = store.lake[tenantId] ?? [];
+    return HttpResponse.json(prefix ? objects.filter((o) => o.key.startsWith(prefix)) : objects);
+  }),
+
+  /**
+   * Create an invitation.
+   *
+   * Admin-only in the real router, and the token comes back exactly once --
+   * only its digest is stored. Both are modelled, because a fake that handed the
+   * token back on demand would let someone build an interface that re-reads it
+   * later, which the real service can never do.
+   */
+  http.post("/api/tenants/:tenantId/members/invitations", async ({ params, request }) => {
+    const tenantId = String(params["tenantId"]);
+    const denied = requireUser() ?? requireVisible(tenantId);
+    if (denied) return denied;
+
+    if (!store.user?.is_staff) {
+      return HttpResponse.json({ detail: "admin only" }, { status: 403 });
+    }
+
+    const body = (await request.json()) as { email: string; role: string };
+    if (!["admin", "member", "viewer"].includes(body.role)) {
+      return HttpResponse.json({ detail: "unknown role" }, { status: 400 });
+    }
+
+    return HttpResponse.json(
+      { token: `invite-${body.email.replace(/[^a-z0-9]/gi, "-")}-once`, expires_in_days: 14 },
+      { status: 201 },
+    );
+  }),
+
+  http.delete("/api/tenants/:tenantId/members/:userId", ({ params }) => {
+    const tenantId = String(params["tenantId"]);
+    const userId = String(params["userId"]);
+    const denied = requireUser() ?? requireVisible(tenantId);
+    if (denied) return denied;
+
+    if (!store.user?.is_staff) {
+      return HttpResponse.json({ detail: "admin only" }, { status: 403 });
+    }
+
+    store.members[tenantId] = (store.members[tenantId] ?? []).filter((m) => m.id !== userId);
+    return new HttpResponse(null, { status: 204 });
   }),
 ];
 

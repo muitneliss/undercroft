@@ -70,3 +70,26 @@ export function formatCount(value: number | null | undefined): string {
 export function orMissing(value: string | null | undefined): string {
   return value === null || value === undefined || value === "" ? MISSING : value;
 }
+
+const UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
+
+/**
+ * A byte count, for the raw lake's object sizes.
+ *
+ * A size is exact in a double far past any object this platform stores, so this
+ * is ordinary arithmetic on a real number rather than the string handling money
+ * demands. `null` still renders as MISSING: an object whose size was never
+ * recorded is not an object of zero bytes.
+ */
+export function formatBytes(value: number | null | undefined): string {
+  if (value === null || value === undefined) return MISSING;
+  if (value < 1000) return `${value.toLocaleString("en-SG")} B`;
+
+  let size = value;
+  let unit = 0;
+  while (size >= 1000 && unit < UNITS.length - 1) {
+    size /= 1000;
+    unit += 1;
+  }
+  return `${size.toFixed(size < 10 ? 1 : 0)} ${UNITS[unit] ?? "B"}`;
+}
