@@ -8,3 +8,5 @@ specs/schema/
 # Owned by release-please, which does not emit prettier-formatted markdown.
 # Formatting it here would fight the release tooling and re-break every release.
 CHANGELOG.md
+# Vendored, self-hosted webfont assets and their upstream licence/readme.
+apps/ui/public/fonts/
