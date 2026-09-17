@@ -167,6 +167,55 @@ services:
         limits:
           memory: 2g
 
+  # Ingestion and transformation. dlt runs as a LIBRARY inside this container, not
+  # as a service -- there is no ingestion platform in this stack, no Kubernetes and
+  # no second UI to secure. See ADR 0003.
+  #
+  # Idle by default. Kestra invokes commands in it on a schedule; it starts no work
+  # on its own, so a restart never re-runs a sync.
+  worker:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    image: vcdo-worker:local
+    depends_on:
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      # Dokploy UI variables are NOT auto-injected. Every variable the worker
+      # needs is mapped here explicitly; an unmapped one arrives as an empty
+      # string and fails somewhere far from the cause.
+      VCDO_SOURCE_MODE: ${VCDO_SOURCE_MODE:-mock}
+      VCDO_HUBSPOT_MODE: ${VCDO_HUBSPOT_MODE:-}
+      VCDO_XERO_MODE: ${VCDO_XERO_MODE:-}
+      VCDO_GMAIL_MODE: ${VCDO_GMAIL_MODE:-}
+      VCDO_DRIVE_MODE: ${VCDO_DRIVE_MODE:-}
+      VCDO_HUBSPOT_CREDENTIALS: ${VCDO_HUBSPOT_CREDENTIALS:-}
+      VCDO_XERO_CREDENTIALS: ${VCDO_XERO_CREDENTIALS:-}
+      VCDO_GMAIL_CREDENTIALS: ${VCDO_GMAIL_CREDENTIALS:-}
+      VCDO_DRIVE_CREDENTIALS: ${VCDO_DRIVE_CREDENTIALS:-}
+      # Service DNS names, not the host ports -- inside the compose network the
+      # published localhost ports do not exist.
+      VCDO_S3_ENDPOINT: http://minio:9000
+      VCDO_S3_ACCESS_KEY: ${VCDO_S3_ACCESS_KEY:?set in .env}
+      VCDO_S3_SECRET_KEY: ${VCDO_S3_SECRET_KEY:?set in .env}
+      VCDO_S3_REGION: ${VCDO_S3_REGION:-us-east-1}
+      VCDO_S3_BUCKET_RAW: ${VCDO_S3_BUCKET_RAW:-vcc-raw}
+      VCDO_S3_BUCKET_QUARANTINE: ${VCDO_S3_BUCKET_QUARANTINE:-vcc-quarantine}
+      VCDO_POSTGRES_DSN: postgresql://${VCDO_PG_USER:-vcdo}:${VCDO_PG_PASSWORD:?set in .env}@postgres:5432/${VCDO_PG_DB:-vcdo}
+      VCDO_LOG_DIR: /app/data/logs
+      VCDO_FIXTURES_DIR: /app/fixtures
+    volumes:
+      - worker-data:/app/data
+      - ../../fixtures:/app/fixtures:ro
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
   # Metabase's application database. Metabase stores its questions, dashboards
   # and permissions here, so this volume is business content, not a cache — it is
   # part of the backup set, not something to be recreated from scratch.
@@ -219,6 +268,7 @@ services:
           memory: 2g
 
 volumes:
+  worker-data:
   minio-data:
   postgres-data:
   kestra-postgres-data:

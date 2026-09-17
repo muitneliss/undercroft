@@ -32,7 +32,14 @@ deterministically from raw, the migration is a backfill, not a data rescue.
 
 ## Decision 2 — Airbyte for all four sources, behind a Xero reconciliation gate
 
-**Chosen.** HubSpot, Xero, Drive and Gmail *metadata* all ingest through Airbyte. Two components
+> **SUPERSEDED by [ADR 0003](0003-ingestion-without-airbyte.md) (2026-09-17).**
+> Airbyte has no Docker Compose deployment any more, and no record-oriented ELT
+> tool can write the PDF bytes that are half our scope. Ingestion is now a single
+> worker container using dlt as a library. **The Xero reconciliation gate below
+> survives and matters more, not less** — we are the connector now, so nothing
+> else is checking our arithmetic.
+
+**Chosen at the time.** HubSpot, Xero, Drive and Gmail *metadata* all ingest through Airbyte. Two components
 stay custom because Airbyte cannot do them at all:
 
 - the **Gmail attachment-bytes worker** (Airbyte does not write attachment bytes as S3 objects), and
@@ -45,7 +52,12 @@ parent. See `docs/contracts/ingestion.md`.
 
 ## Decision 3 — Airbyte self-hosted on the Dokploy server, deployed in stages
 
-**Chosen.** The host has room, but not a comfortable amount of it, so the deployment is staged and
+> **SUPERSEDED by [ADR 0003](0003-ingestion-without-airbyte.md).** There is no
+> Airbyte to host. The capacity measurements below stand and still govern what we
+> deploy: 11.8 GiB free, **no swap**, and a container count that grew 26 -> 31 in
+> one day. Dropping Airbyte removes roughly 4-8 GiB of the projected footprint.
+
+**Chosen at the time.** The host has room, but not a comfortable amount of it, so the deployment is staged and
 measured rather than done in one shot.
 
 Host measured 2026-09-17 over read-only SSH (`ovhvps_lowbit`, Debian 13, kernel 6.12):

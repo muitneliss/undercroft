@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "VietCham data platform: HubSpot/Xero/Gmail/Drive -> raw lake -> curated SQL -> BI"
 requires-python = ">=3.12"
 dependencies = [
+    "dlt[filesystem]>=1.29",
     "boto3>=1.35",
     "psycopg[binary]>=3.2",
     "google-api-python-client>=2.150",

@@ -1,4 +1,4 @@
-# Pinned dev/test dependencies. Resolved and installed 2026-09-17.
+# Pinned dev/test dependencies. Resolved together and installed 2026-09-17.
 #
 # RULE: if a test imports a module, that module MUST be listed here.
 #
@@ -7,16 +7,25 @@
 # waves to exactly this: 18 tests were red purely because python-docx was
 # installed locally but never declared.
 #
-# Pins are exact and verified installable, not aspirational. A pin nobody has
-# resolved is a build break waiting for the next clean checkout.
+# RULE: pins are resolved as a SET, in one `pip install`, never package by
+# package. Pinning independently produced an unsatisfiable requirements file
+# here -- a hand-chosen botocore conflicted with what dlt's s3fs needed, and the
+# break only surfaced on a clean venv rebuild. Change one pin, re-resolve all of
+# them.
 
 pytest==9.1.1
 pytest-timeout==2.4.0
 ruff==0.16.8
 
+# Ingestion. dlt is a LIBRARY, not a service -- see ADR 0003. The [filesystem]
+# extra pulls fsspec/s3fs for object-storage destinations.
+dlt[filesystem]==1.29.1
+fsspec==2026.7.0
+s3fs==2026.7.0
+
 # Lake / storage
-boto3==1.43.96
-botocore==1.43.96
+boto3==1.43.75
+botocore==1.43.75
 zstandard==0.25.0
 
 # Curated store

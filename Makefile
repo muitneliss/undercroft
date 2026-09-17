@@ -48,7 +48,7 @@ up:  ## Start the local stack (minio, postgres, kestra, metabase)
 down:  ## Stop the local stack, keeping volumes
 	@docker compose -f deploy/compose/docker-compose.yml down
 
-seed: venv  ## Load Airbyte-shaped fixture records into local MinIO
+seed: venv  ## Load fixture records into local MinIO
 	@$(PY) -m vcdo.cli.main seed
 
 slice: venv  ## Full fixture run: raw -> curated -> dashboard query

@@ -32,6 +32,18 @@ repo imports from it.
    and in conversation with the owner. Never commit `.dokploy.json`, tokens, or
    anything under `data/`.
 
+## Ingestion
+
+There is **no ingestion platform** in this stack. No Airbyte, no Meltano, no
+Kubernetes. One `worker` container does everything, and `dlt` is a library
+inside it, not a service. The whole platform is one `docker compose up`.
+
+Record-oriented sources go through dlt (verified source for HubSpot, its
+declarative REST toolkit for Xero and Gmail metadata). Byte-oriented paths ---
+Drive PDFs and Gmail attachments --- go through `vcdo.lake.LakeStore`, because
+no record-oriented ELT tool writes binary files and that is half the scope.
+Scheduling is Kestra. See ADR 0003.
+
 ## Money
 
 `Decimal` end to end, `NUMERIC(18,4)` in Postgres, never `float`. Amounts carry
