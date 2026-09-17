@@ -1,174 +1,49 @@
-# The gate, enforced.
-#
-# `make verify` was already built to run here: the plain `test` target
-# deliberately does not source .env, because the gate must pass on a machine
-# with no stack and no secrets. This workflow collects on that design.
-#
-# CI calls `make`, never `ruff`/`pytest` directly. Two spellings of "the gate"
-# drift, and then a green check here stops meaning what a green run locally
-# means.
-name: CI
+name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
 
-permissions:
-  contents: read
-
-env:
-  # Pinned deliberately. A floating "latest" would let an upstream release
-  # change what the wiki guard means without a commit in this repo.
-  YMIR_VERSION: "0.8.0"
-
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-
-      # The gate is no longer Python-only. `make verify` now also runs ESLint and
-      # Vitest over ui/, because the control plane is the first non-Python code
-      # in the repo and a second, separately-invoked gate is how two definitions
-      # of "green" start to drift.
-      #
-      # The `ui-*` targets FAIL when bun is missing rather than skipping, so this
-      # step is load-bearing: without it `make verify` stops here with an install
-      # hint instead of quietly verifying half of what it claims to.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version-file: ui/.bun-version
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      # One definition of the gate: the same `bun run verify` a developer runs locally.
+      - run: bun run verify
 
-      # Builds .venv-tests from requirements-dev.txt as a SET (one pip install,
-      # never package by package -- see the note in that file), installs the
-      # package, then runs ruff check + ruff format --check + the gate tests.
-      #
-      # tests/monitors/ and tests/integration/ stay out. Monitors bind to live
-      # data and deployed services, so red there means data drift, not a code
-      # defect; integration needs the docker stack and secrets. Do not add them
-      # here to "get them running in CI" -- that teaches people to ignore red.
-      - name: make verify
-        run: make verify
-
-      # The SPA is built here as well as in the image, so a type error in the
-      # frontend fails the pull request rather than the deploy. `bun run build`
-      # runs `tsc --noEmit` first; vitest does not typecheck.
-      - name: make ui-build
-        run: make ui-build
-
-      # Measurement, not a gate.
-      #
-      # [tool.pyright] in pyproject.toml points at .venv-tests, which the step
-      # above just built. This runs non-blocking on purpose: nobody has measured
-      # how many of these errors are real, and gating on an unmeasured wall of
-      # them trains people to ignore the wall. Promote to blocking once the
-      # count is known and small.
-      - name: pyright (non-blocking measurement)
-        continue-on-error: true
-        run: .venv-tests/bin/pyright
-
-      # ---------------------------------------------------------------------
-      # Wiki guard -- WRITTEN BUT DISABLED. Blocked upstream, not by choice.
-      #
-      # This harness targets Claude Code *and* Codex, so there is no PreToolUse
-      # hook -- a hook binds one agent, and half-enforcement reads as
-      # enforcement. These steps are the agent-independent equivalent: a wiki
-      # page asserting a fact whose source is not tracked fails the build rather
-      # than quietly becoming folklore.
-      #
-      # They are commented out because `wiki init` is broken in Ymir CLI 0.8.0
-      # (`ENOENT: lstat 'bun'`, reproducible in an empty repo, with and without
-      # --no-hook), so wiki/ does not exist yet. Enabling them now would fail
-      # every build, and a permanently red gate is worse than an absent one.
-      #
-      # TO RE-ENABLE: scaffold the wiki once `wiki init` is fixed (or the CLI is
-      # upgraded past 0.8.0 -- bump YMIR_VERSION above to match), then uncomment.
-      # Verified as working today: the wiki-linux-x64 asset and its published
-      # SHA256SUMS both resolve, and `check --error-on-untracked-sources` is a
-      # real flag on this version.
-      #
-      # - name: Install Ymir wiki CLI
-      #   run: |
-      #     set -euo pipefail
-      #     tmp="$(mktemp -d)"
-      #     base="https://github.com/muitneliss/ymir/releases/download/ymir-v${YMIR_VERSION}"
-      #     curl -fsSL -o "$tmp/wiki-linux-x64" "$base/wiki-linux-x64"
-      #     curl -fsSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt"
-      #     (cd "$tmp" && grep ' wiki-linux-x64$' SHA256SUMS.txt | sha256sum -c -)
-      #     chmod +x "$tmp/wiki-linux-x64"
-      #     sudo mv "$tmp/wiki-linux-x64" /usr/local/bin/wiki
-      #
-      # - name: wiki check
-      #   run: wiki --root ./wiki check --error-on-untracked-sources
-
-  # ---------------------------------------------------------------------------
-  # Deployment definitions. Separate job: it needs docker, not python, and a
-  # compose problem should be legible without scrolling past a test log.
-  # ---------------------------------------------------------------------------
   compose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Validates the stack definition without starting it -- catches a malformed
-      # file or an unsubstituted variable before it reaches the server, where the
-      # same mistake is a failed deploy on a host shared with other projects.
-      - name: docker compose config
-        working-directory: deploy/compose
-        run: |
-          cp .env.example .env
-          docker compose config -q
-          docker compose config --services
-
-      # Every service must declare a memory limit. The target host has no swap,
-      # so an unlimited container turns a spike into an OOM kill that takes
-      # something else down with it. Reads compose's own JSON rather than parsing
-      # YAML: PyYAML is not guaranteed on a runner, and a step that fails on a
-      # missing import reads as a broken build rather than a missing tool.
+      # Every service must declare a memory limit. A service with no ceiling can starve
+      # the others on a small host. This reads compose's own resolved JSON, so a missing
+      # parser cannot look like a passing check.
       - name: every service declares a memory limit
-        working-directory: deploy/compose
         run: |
-          docker compose config --format json | python3 -c "
-          import sys, json
-          cfg = json.load(sys.stdin)
-          missing = [n for n, s in cfg['services'].items()
-                     if not s.get('deploy', {}).get('resources', {}).get('limits', {}).get('memory')]
-          for n in missing:
-              print(f'::error::service {n} has no memory limit')
-          sys.exit(1 if missing else 0)
-          "
+          cd deploy/compose
+          cp .env.example .env
+          missing=$(docker compose config --format json \
+            | python3 -c 'import json,sys; c=json.load(sys.stdin); \
+              print("\n".join(n for n,s in c["services"].items() \
+              if not s.get("deploy",{}).get("resources",{}).get("limits",{}).get("memory")))')
+          if [ -n "$missing" ]; then echo "services with no memory limit:"; echo "$missing"; exit 1; fi
 
-  # ---------------------------------------------------------------------------
-  # The floor, not a scanner. .claude/rules/pii.md carries the real rule; this
-  # catches the two mechanical ways it gets broken.
-  # ---------------------------------------------------------------------------
   secrets:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: secret-bearing paths stay untracked
+      # The floor of the PII rule: secret-bearing paths stay untracked. Catches the two
+      # ways it breaks by accident; the rule itself covers the ways it breaks by reasoning.
+      - name: secret-bearing paths are not tracked
         run: |
-          for f in .dokploy.json deploy/compose/.env; do
-            if git ls-files --error-unmatch "$f" 2>/dev/null; then
-              echo "::error::$f is tracked and must not be"
-              exit 1
+          for path in deploy/compose/.env .env; do
+            if git ls-files --error-unmatch "$path" 2>/dev/null; then
+              echo "$path is tracked and must not be"; exit 1
             fi
           done
-          echo "secret-bearing paths are untracked"
-
-      - name: no credential-shaped strings in tracked content
-        run: |
-          if git grep -nIE -- '-----BEGIN (RSA|OPENSSH|PRIVATE)|gh[pousr]_[A-Za-z0-9]{30,}|pat-[a-z]{2}[0-9]-' \
-               -- . ':!docs/data-platform-handoff.md'; then
-            echo "::error::possible credential in tracked content"
-            exit 1
-          fi
-          echo "no credential-shaped strings found"

@@ -1,0 +1,73 @@
+# yaml-language-server: $schema=../schema/connector.v1.json
+#
+# Xero Accounting. The proof the spec format was not overfitted to HubSpot: oauth2 with
+# refresh-token rotation, an account header carrying THEIR org id, page-number pagination,
+# and hard pacing. Each entity names its own id field.
+#
+# A whole connector as configuration: no code per source.
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: xero
+displayName: Xero Accounting
+baseUrl: https://api.xero.com/api.xro/2.0
+
+auth:
+  kind: oauth2
+  tokenUrl: https://identity.xero.com/connect/token
+  # Xero invalidates the old refresh token the moment it is exchanged. The registry takes
+  # SELECT ... FOR UPDATE before refreshing: two concurrent refreshes do not race, they
+  # destroy the connection.
+  rotatesRefreshToken: true
+  scopes: [offline_access, accounting.transactions.read, accounting.contacts.read]
+  # THEIR organisation id, from ops.connection.external_account_id. It is not our
+  # tenant_id, and sending ours here is a 401 at best and the wrong org's books at worst.
+  accountHeader: xero-tenant-id
+
+defaults:
+  headers: { Accept: application/json }
+  pagination:
+    kind: page-number
+    param: page
+    startAt: 1
+    stopOn: empty-page
+  rateLimit:
+    # 60/min, 5,000/day, 5 concurrent per tenant. 1100ms leaves headroom for clock skew.
+    # Do not lower this to make a backfill finish sooner: a 429 storm costs far more than
+    # the time it saves.
+    minIntervalMs: 1100
+    requestsPerMinute: 60
+    requestsPerDay: 5000
+  retry:
+    attempts: 5
+    on: [429, 500, 502, 503, 504]
+    respectRetryAfter: true
+    maxRetryAfterMs: 120000 # a malformed header must not park a run for hours
+  guards:
+    failOnEmpty: true
+
+entities:
+  - name: contacts
+    request: { kind: list, path: /Contacts, query: { pageSize: "100" } }
+    envelopePath: Contacts
+    idPath: ContactID
+    updatedAtPath: UpdatedDateUTC
+
+  - name: invoices
+    request: { kind: list, path: /Invoices, query: { pageSize: "100" } }
+    envelopePath: Invoices
+    idPath: InvoiceID
+    updatedAtPath: UpdatedDateUTC
+
+  - name: payments
+    request: { kind: list, path: /Payments, query: { pageSize: "100" } }
+    envelopePath: Payments
+    idPath: PaymentID
+    updatedAtPath: UpdatedDateUTC
+
+  # Each entity names its own id field. A single hardcoded "InvoiceID" would silently key
+  # credit notes on nothing.
+  - name: credit_notes
+    request: { kind: list, path: /CreditNotes, query: { pageSize: "100" } }
+    envelopePath: CreditNotes
+    idPath: CreditNoteID
+    updatedAtPath: UpdatedDateUTC

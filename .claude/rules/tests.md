@@ -1,43 +1,27 @@
 ---
-paths:
-  - "tests/**/*.py"
+description: Real implementations over mocks; a guard needs two tests
+globs: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
 ---
 
-# Test discipline
-
-`make verify` is the gate. It has to mean something, which constrains how tests
-are written far more than coverage does.
+# Tests
 
 ## NEVER
 
-- **NEVER write into the repo from a test.** Use `tmp_path`; anything under test
-  takes an explicit output destination.
-- **NEVER assert that a mock was called.** A suite that asserts a mock was
-  called is green whether or not the code works.
-- **NEVER import a module in a test without pinning it in
-  `requirements-dev.txt`.** Installing by hand gives you green here and red on
-  the next machine.
-- **NEVER read coverage as correctness.**
+- **NEVER mock.** No `vi.mock`/`vi.fn`/`vi.spyOn`, no `mock`/`spyOn` from `bun:test`, no
+  asserting a function was called. A suite that asserts a mock was called is green whether
+  or not the code works. An ESLint rule enforces this.
+- **NEVER write into the repo from a test.** Use in-memory stores and PGlite.
 
 ## Follow
 
-- **Prefer a real in-memory implementation over a mock.** `vcdo/lake/memory.py`
-  exists for exactly this; extend it rather than reaching for a patch.
-- **A guard needs two tests:** one proving it fires, one proving it stays quiet.
-  A guard with only the first test is indistinguishable from a guard that always
-  fires.
-- **Pins are resolved as a set, in one `pip install`** — never package by
-  package. Pinning independently once produced an unsatisfiable requirements
-  file here, and the break only surfaced on a clean venv rebuild.
-- **Report an interval, not a bare percentage.** Before trusting any extraction
-  output, measure how much of it is *right*, and say how confident that estimate
-  is.
-- **Respect the gate/monitor split.** `tests/monitors/` binds to live data or
-  deployed services; red there means data drift, not a code defect, so it is
-  excluded from the gate via `norecursedirs` and run explicitly. Do not move a
-  monitor into the gate to "get it running in CI" — you will be teaching people
-  to ignore a red build. `tests/integration/` needs the docker stack and
-  secrets, and is likewise outside the gate.
-
-The plain `test` target deliberately does not source `.env`: the gate must pass
-on a machine with no stack and no secrets, or CI cannot run it.
+- **Real in-memory implementations over fakes-that-always-answer.** `InMemoryObjectStore`,
+  `InMemoryFetcher` (which _refuses_ an unmodelled request), `TestClock`, and PGlite (real
+  Postgres in WASM) are the seams. A fake that never refuses makes a broken boundary look
+  fine.
+- **A guard needs two tests:** one where it fires, one where it stays quiet. A rule with
+  only the firing case can be satisfied by code that always throws.
+- **Assert observable behaviour**, not internals — public values, states, errors.
+- **PGlite proves the grants are correct**, not that a hostile connection cannot escalate
+  past `SET ROLE`; that, and `FOR UPDATE` concurrency, are integration-tier against real
+  Postgres.
+- The offline gate (`bun run verify`) must pass with no Docker, no network, no credentials.

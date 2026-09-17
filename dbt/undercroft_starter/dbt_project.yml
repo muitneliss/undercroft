@@ -1,0 +1,33 @@
+# The starter transform project.
+#
+# This is deliberately thin and deliberately yours. Undercroft ships no business schema:
+# raw.records holds every source's payload as jsonb, and everything above it is SQL you
+# write. This project is one worked example -- a HubSpot deals staging model -- to copy
+# from, not a schema to conform to.
+#
+# dbt runs as an invoked dependency in its own container (Kestra's dbt plugin), as the
+# `undercroft_dbt` role. That role can create only in `analytics` and `dq`, and has no
+# USAGE on `app`, so a model here cannot read a credential even by accident.
+
+name: undercroft_starter
+version: 0.1.0
+config-version: 2
+
+profile: undercroft
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+
+models:
+  undercroft_starter:
+    +materialized: table
+    staging:
+      +schema: analytics
+
+# store_failures writes the offending rows -- which contain source data -- into an audit
+# schema. Pinned to `dq`, which the BI role has no USAGE on, so a failing test never hands
+# raw payload to a dashboard user. This is the second instance of the credential-leak
+# hazard, closed the same way as the first.
+tests:
+  +store_failures: true
+  +schema: dq

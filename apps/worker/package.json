@@ -1,0 +1,18 @@
+{
+  "name": "@undercroft/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@undercroft/core": "workspace:*",
+    "@undercroft/contracts": "workspace:*",
+    "@undercroft/crypto": "workspace:*",
+    "@undercroft/db": "workspace:*",
+    "@undercroft/lake": "workspace:*",
+    "@undercroft/connector-runtime": "workspace:*",
+    "hono": "4.6.14"
+  }
+}

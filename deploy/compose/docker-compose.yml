@@ -1,24 +1,10 @@
-# VietCham data platform — service stack.
+# The whole platform, as one `docker compose up`.
 #
-# This file is the source of truth. Dokploy holds a copy, pushed through the API
-# as raw compose; it is never edited on the server. Direct edits bypass Dokploy's
-# state and produce drift where the dashboard and the host disagree.
-#
-# Memory limits are mandatory on every service, not tuning. We are a tenant on a
-# shared host that already runs 26 containers for eleven other projects, with
-# 11 GiB free and **no swap** — so overcommit is an abrupt OOM kill, not a
-# slowdown. A limit turns "the host fell over" into "one container restarted".
-# See docs/adr/0001.
-#
-# Nothing here publishes a port to the internet. Ports are bound to localhost for
-# development; in Dokploy, only Metabase gets a domain. MinIO, Postgres and
-# Kestra stay on the internal network.
-#
-# Host ports are configurable and default off the well-known numbers. A dev
-# machine usually already has something on 5432/8080/3000, and a stack that
-# refuses to start on a colleague's laptop is a stack they stop running.
-
-name: vcdo
+# There is no ingestion platform here: no Airbyte, no Meltano, no Kubernetes. One worker
+# container ingests and one control-plane container configures it; dbt runs in its own
+# container invoked by Kestra. Every service declares a memory limit, and CI asserts it --
+# a service with no ceiling can starve the others on a small host.
+name: undercroft
 
 x-restart: &restart
   restart: unless-stopped
@@ -29,45 +15,36 @@ services:
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${VCDO_S3_ACCESS_KEY:?set in .env}
-      MINIO_ROOT_PASSWORD: ${VCDO_S3_SECRET_KEY:?set in .env}
-    ports:
-      - "127.0.0.1:${VCDO_PORT_MINIO:-19000}:9000"
-      - "127.0.0.1:${VCDO_PORT_MINIO_CONSOLE:-19001}:9001"
-    volumes:
-      - minio-data:/data
+      MINIO_ROOT_USER: ${UNDERCROFT_S3_ACCESS_KEY:?set in .env}
+      MINIO_ROOT_PASSWORD: ${UNDERCROFT_S3_SECRET_KEY:?set in .env}
+    volumes: [minio-data:/data]
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
-      interval: 15s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
-      start_period: 20s
+    ports:
+      - "127.0.0.1:${UNDERCROFT_PORT_MINIO:-19000}:9000"
+      - "127.0.0.1:${UNDERCROFT_PORT_MINIO_CONSOLE:-19001}:9001"
     deploy:
       resources:
         limits:
           memory: 1g
 
-  # Creates the buckets on first start, then exits. Idempotent: `mb --ignore-existing`
-  # so a restart is not an error, and re-running never disturbs existing objects.
   minio-init:
     image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:
       minio:
         condition: service_healthy
-    environment:
-      VCDO_S3_ACCESS_KEY: ${VCDO_S3_ACCESS_KEY:?set in .env}
-      VCDO_S3_SECRET_KEY: ${VCDO_S3_SECRET_KEY:?set in .env}
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 $$VCDO_S3_ACCESS_KEY $$VCDO_S3_SECRET_KEY &&
-      mc mb --ignore-existing local/vcc-raw &&
-      mc mb --ignore-existing local/vcc-quarantine &&
-      mc mb --ignore-existing local/vcc-curated &&
-      mc anonymous set none local/vcc-raw &&
-      mc anonymous set none local/vcc-quarantine &&
-      mc anonymous set none local/vcc-curated &&
-      echo 'buckets ready'
+      mc alias set local http://minio:9000 $$UNDERCROFT_S3_ACCESS_KEY $$UNDERCROFT_S3_SECRET_KEY &&
+      mc mb --ignore-existing local/${UNDERCROFT_S3_BUCKET_RAW:-undercroft-raw} &&
+      echo done
       "
+    environment:
+      UNDERCROFT_S3_ACCESS_KEY: ${UNDERCROFT_S3_ACCESS_KEY:?set in .env}
+      UNDERCROFT_S3_SECRET_KEY: ${UNDERCROFT_S3_SECRET_KEY:?set in .env}
     deploy:
       resources:
         limits:
@@ -77,38 +54,32 @@ services:
     <<: *restart
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: ${VCDO_PG_USER:-vcdo}
-      POSTGRES_PASSWORD: ${VCDO_PG_PASSWORD:?set in .env}
-      POSTGRES_DB: ${VCDO_PG_DB:-vcdo}
-    ports:
-      - "127.0.0.1:${VCDO_PORT_POSTGRES:-15432}:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+      POSTGRES_USER: ${UNDERCROFT_PG_USER:-undercroft}
+      POSTGRES_PASSWORD: ${UNDERCROFT_PG_PASSWORD:?set in .env}
+      POSTGRES_DB: ${UNDERCROFT_PG_DB:-undercroft}
+    volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${VCDO_PG_USER:-vcdo} -d ${VCDO_PG_DB:-vcdo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${UNDERCROFT_PG_USER:-undercroft}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    ports:
+      - "127.0.0.1:${UNDERCROFT_PORT_POSTGRES:-15432}:5432"
     deploy:
       resources:
         limits:
           memory: 1g
 
-  # Kestra's own metadata database. Deliberately separate from the curated store:
-  # an orchestrator that shares a database with the data it publishes cannot be
-  # restored independently, and a curated-layer restore would roll back the
-  # scheduler's own history with it.
   kestra-postgres:
     <<: *restart
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: kestra
-      POSTGRES_PASSWORD: ${VCDO_KESTRA_PG_PASSWORD:?set in .env}
+      POSTGRES_PASSWORD: ${UNDERCROFT_KESTRA_PG_PASSWORD:?set in .env}
       POSTGRES_DB: kestra
-    volumes:
-      - kestra-postgres-data:/var/lib/postgresql/data
+    volumes: [kestra-postgres-data:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kestra -d kestra"]
+      test: ["CMD-SHELL", "pg_isready -U kestra"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -124,15 +95,13 @@ services:
     depends_on:
       kestra-postgres:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     environment:
       KESTRA_CONFIGURATION: |
         datasources:
           postgres:
             url: jdbc:postgresql://kestra-postgres:5432/kestra
             username: kestra
-            password: ${VCDO_KESTRA_PG_PASSWORD}
+            password: ${UNDERCROFT_KESTRA_PG_PASSWORD}
         kestra:
           repository:
             type: postgres
@@ -142,116 +111,68 @@ services:
             type: local
             local:
               base-path: /app/storage
-          # Off by default Kestra loads 8 "Getting Started" blueprint flows.
-          # An orchestrator that ships with flows nobody wrote is noise at best,
-          # and the flow list stops being an inventory of our own pipelines.
           tutorialFlows:
             enabled: false
           server:
             basic-auth:
-              username: ${VCDO_KESTRA_USER:-admin@vietcham.local}
-              password: ${VCDO_KESTRA_PASSWORD}
-      # `{{ envs.trigger_token }}` resolves to ENV_TRIGGER_TOKEN. The prefix is
-      # ENV_, not KESTRA_: Kestra 0.23 changed it deliberately, because
-      # Micronaut lets KESTRA_* variables override configuration, so any secret
-      # passed that way became readable from every flow. A KESTRA_-prefixed
-      # variable is now simply invisible to expressions.
-      ENV_TRIGGER_TOKEN: ${VCDO_TRIGGER_TOKEN:?set in .env}
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:8080/ui/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    ports:
-      - "127.0.0.1:${VCDO_PORT_KESTRA:-18080}:8080"
+              username: ${UNDERCROFT_KESTRA_USER:-admin@example.com}
+              password: ${UNDERCROFT_KESTRA_PASSWORD}
+      # `{{ envs.trigger_token }}` resolves to ENV_TRIGGER_TOKEN. The prefix is ENV_, not
+      # KESTRA_: a KESTRA_-prefixed variable can override Micronaut config and become
+      # readable from every flow.
+      ENV_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN:?set in .env}
+    # No Docker socket is mounted. Kestra triggers work by calling the worker's HTTP verb
+    # allowlist; it never runs containers itself, so a Kestra compromise is not a host
+    # compromise. dbt runs via the dbt container the worker invokes, not via a task runner.
     volumes:
       - kestra-storage:/app/storage
       - kestra-workdir:/tmp/kestra-wd
+    ports:
+      - "127.0.0.1:${UNDERCROFT_PORT_KESTRA:-18080}:8080"
     deploy:
       resources:
         limits:
           memory: 2g
 
-  # Ingestion and transformation. dlt runs as a LIBRARY inside this container, not
-  # as a service -- there is no ingestion platform in this stack, no Kubernetes and
-  # no second UI to secure. See ADR 0003.
-  #
-  # Idle by default. Kestra invokes commands in it on a schedule; it starts no work
-  # on its own, so a restart never re-runs a sync.
   worker:
     <<: *restart
     build:
       context: ../..
-      dockerfile: deploy/Dockerfile
-    image: vcdo-worker:local
+      dockerfile: deploy/Dockerfile.worker
     depends_on:
-      minio:
-        condition: service_healthy
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
-      # Dokploy UI variables are NOT auto-injected. Every variable the worker
-      # needs is mapped here explicitly; an unmapped one arrives as an empty
-      # string and fails somewhere far from the cause.
-      VCDO_SOURCE_MODE: ${VCDO_SOURCE_MODE:-mock}
-      VCDO_HUBSPOT_MODE: ${VCDO_HUBSPOT_MODE:-}
-      VCDO_XERO_MODE: ${VCDO_XERO_MODE:-}
-      VCDO_GMAIL_MODE: ${VCDO_GMAIL_MODE:-}
-      VCDO_DRIVE_MODE: ${VCDO_DRIVE_MODE:-}
-      VCDO_HUBSPOT_CREDENTIALS: ${VCDO_HUBSPOT_CREDENTIALS:-}
-      VCDO_XERO_CREDENTIALS: ${VCDO_XERO_CREDENTIALS:-}
-      VCDO_GMAIL_CREDENTIALS: ${VCDO_GMAIL_CREDENTIALS:-}
-      VCDO_DRIVE_CREDENTIALS: ${VCDO_DRIVE_CREDENTIALS:-}
-      # Service DNS names, not the host ports -- inside the compose network the
-      # published localhost ports do not exist.
-      VCDO_S3_ENDPOINT: http://minio:9000
-      VCDO_S3_ACCESS_KEY: ${VCDO_S3_ACCESS_KEY:?set in .env}
-      VCDO_S3_SECRET_KEY: ${VCDO_S3_SECRET_KEY:?set in .env}
-      VCDO_S3_REGION: ${VCDO_S3_REGION:-us-east-1}
-      VCDO_S3_BUCKET_RAW: ${VCDO_S3_BUCKET_RAW:-vcc-raw}
-      VCDO_S3_BUCKET_QUARANTINE: ${VCDO_S3_BUCKET_QUARANTINE:-vcc-quarantine}
-      VCDO_POSTGRES_DSN: postgresql://${VCDO_PG_USER:-vcdo}:${VCDO_PG_PASSWORD:?set in .env}@postgres:5432/${VCDO_PG_DB:-vcdo}
-      VCDO_LOG_DIR: /app/data/logs
-      VCDO_FIXTURES_DIR: /app/fixtures
-      VCDO_METABASE_RO_PASSWORD: ${VCDO_METABASE_RO_PASSWORD:?set in .env}
-      # Metabase provisioning. Mapped EXPLICITLY -- a variable set in Dokploy is
-      # not injected into a container by itself, so an unmapped one arrives as an
-      # empty string and fails somewhere far from the cause. This block is the
-      # mapping; the Dokploy environment is only the source of the values.
-      VCDO_METABASE_URL: ${VCDO_METABASE_URL:-http://metabase:3000}
-      VCDO_METABASE_ADMIN_EMAIL: ${VCDO_METABASE_ADMIN_EMAIL:-admin@vietcham.local}
-      VCDO_METABASE_ADMIN_PASSWORD: ${VCDO_METABASE_ADMIN_PASSWORD:?set in .env}
-      VCDO_METABASE_PG_HOST: ${VCDO_METABASE_PG_HOST:-postgres}
-      # Shared secret Kestra presents to start a run. The endpoint is never
-      # published outside the compose network.
-      VCDO_TRIGGER_TOKEN: ${VCDO_TRIGGER_TOKEN:?set in .env}
-    command: ["python", "-m", "vcdo.cli.main", "serve"]
-    volumes:
-      - worker-data:/app/data
-      - ../../fixtures:/app/fixtures:ro
+      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      UNDERCROFT_S3_ENDPOINT: http://minio:9000
+      UNDERCROFT_S3_BUCKET_RAW: ${UNDERCROFT_S3_BUCKET_RAW:-undercroft-raw}
+      UNDERCROFT_S3_ACCESS_KEY: ${UNDERCROFT_S3_ACCESS_KEY}
+      UNDERCROFT_S3_SECRET_KEY: ${UNDERCROFT_S3_SECRET_KEY}
+      UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY:?set in .env}
+      UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN}
     deploy:
       resources:
         limits:
           memory: 1g
 
-  # Metabase's application database. Metabase stores its questions, dashboards
-  # and permissions here, so this volume is business content, not a cache — it is
-  # part of the backup set, not something to be recreated from scratch.
-  metabase-postgres:
+  control-plane:
     <<: *restart
-    image: postgres:17-alpine
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.control-plane
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
-      POSTGRES_USER: metabase
-      POSTGRES_PASSWORD: ${VCDO_METABASE_PG_PASSWORD:?set in .env}
-      POSTGRES_DB: metabase
-    volumes:
-      - metabase-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U metabase -d metabase"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY}
+      UNDERCROFT_SESSION_SECRET: ${UNDERCROFT_SESSION_SECRET:?set in .env}
+      UNDERCROFT_WORKER_URL: http://worker:8081
+      UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN}
+    ports:
+      - "127.0.0.1:${UNDERCROFT_PORT_API:-13000}:3000"
     deploy:
       resources:
         limits:
@@ -261,93 +182,25 @@ services:
     <<: *restart
     image: metabase/metabase:v0.56.8
     depends_on:
-      metabase-postgres:
-        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
       MB_DB_TYPE: postgres
-      MB_DB_HOST: metabase-postgres
-      MB_DB_PORT: 5432
-      MB_DB_DBNAME: metabase
-      MB_DB_USER: metabase
-      MB_DB_PASS: ${VCDO_METABASE_PG_PASSWORD:?set in .env}
-      JAVA_TOOL_OPTIONS: -Xmx1g
+      MB_DB_HOST: postgres
+      MB_DB_PORT: "5432"
+      MB_DB_DBNAME: ${UNDERCROFT_PG_DB:-undercroft}
+      MB_DB_USER: ${UNDERCROFT_PG_USER:-undercroft}
+      MB_DB_PASS: ${UNDERCROFT_PG_PASSWORD}
     ports:
-      - "127.0.0.1:${VCDO_PORT_METABASE:-13000}:3000"
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
+      - "127.0.0.1:${UNDERCROFT_PORT_METABASE:-13001}:3000"
     deploy:
       resources:
         limits:
           memory: 2g
 
-  # The control plane: where a customer connects their HubSpot, Xero, Gmail and
-  # Drive accounts, chooses what to sync, and watches runs.
-  #
-  # The SECOND service with a public face, and the first that accepts a session
-  # cookie. Everything about its placement follows from that: it holds the master
-  # key that opens every stored OAuth credential, so it runs as its own non-root
-  # user in its own image, and it triggers syncs by asking the worker over the
-  # internal network rather than running them itself.
-  #
-  # See ADR 0004 for why this is not the "additional UI to secure and back up"
-  # that ADR 0003 rejected: one container, no second scheduler, no plugin system.
-  api:
-    <<: *restart
-    build:
-      context: ../..
-      dockerfile: deploy/Dockerfile.api
-    image: vcdo-api:local
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      # Mapped explicitly, variable by variable, for the same reason the worker's
-      # block is: a Dokploy UI variable is NOT injected into a container by
-      # itself, and an unmapped one arrives as an empty string that fails far
-      # from the cause.
-      VCDO_POSTGRES_DSN: postgresql://${VCDO_PG_USER:-vcdo}:${VCDO_PG_PASSWORD:?set in .env}@postgres:5432/${VCDO_PG_DB:-vcdo}
-      VCDO_S3_ENDPOINT: http://minio:9000
-      VCDO_S3_ACCESS_KEY: ${VCDO_S3_ACCESS_KEY:?set in .env}
-      VCDO_S3_SECRET_KEY: ${VCDO_S3_SECRET_KEY:?set in .env}
-      VCDO_S3_REGION: ${VCDO_S3_REGION:-us-east-1}
-      VCDO_S3_BUCKET_RAW: ${VCDO_S3_BUCKET_RAW:-vcc-raw}
-      VCDO_S3_BUCKET_QUARANTINE: ${VCDO_S3_BUCKET_QUARANTINE:-vcc-quarantine}
-      VCDO_LOG_DIR: /app/data/logs
-      VCDO_FIXTURES_DIR: /app/fixtures
-      # Opens every stored credential. Rotating it without re-sealing the rows
-      # makes them unreadable; see ADR 0005 and app.connection_secret.key_version.
-      VCDO_SECRET_KEY: ${VCDO_SECRET_KEY:?set in .env}
-      VCDO_SESSION_SECRET: ${VCDO_SESSION_SECRET:?set in .env}
-      VCDO_API_BASE_URL: ${VCDO_API_BASE_URL:-http://localhost:18000}
-      VCDO_SSO_STAFF_DOMAINS: ${VCDO_SSO_STAFF_DOMAINS:-}
-      VCDO_GOOGLE_CLIENT_ID: ${VCDO_GOOGLE_CLIENT_ID:-}
-      VCDO_GOOGLE_CLIENT_SECRET: ${VCDO_GOOGLE_CLIENT_SECRET:-}
-      VCDO_XERO_CLIENT_ID: ${VCDO_XERO_CLIENT_ID:-}
-      VCDO_XERO_CLIENT_SECRET: ${VCDO_XERO_CLIENT_SECRET:-}
-      VCDO_HUBSPOT_CLIENT_ID: ${VCDO_HUBSPOT_CLIENT_ID:-}
-      VCDO_HUBSPOT_CLIENT_SECRET: ${VCDO_HUBSPOT_CLIENT_SECRET:-}
-      # The same shared secret Kestra presents. The control plane is just another
-      # caller of the worker's fixed verb allowlist; it gets no wider privilege.
-      VCDO_TRIGGER_TOKEN: ${VCDO_TRIGGER_TOKEN:?set in .env}
-      VCDO_WORKER_URL: http://worker:8081
-    ports:
-      - "127.0.0.1:${VCDO_PORT_API:-18000}:8000"
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-
 volumes:
-  worker-data:
   minio-data:
   postgres-data:
   kestra-postgres-data:
   kestra-storage:
   kestra-workdir:
-  metabase-postgres-data:

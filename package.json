@@ -1,0 +1,33 @@
+{
+  "name": "undercroft",
+  "version": "0.1.0",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/bun": "1.4.2",
+    "eslint": "10.10.0",
+    "prettier": "3.9.7",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0"
+  },
+  "description": "An immutable raw lake with declarative connectors and user-defined transforms.",
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -b --pretty false",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
+    "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
+    "test": "bun test",
+    "verify": "bun run typecheck && bun run lint && bun run format:check && bun run spec:validate && bun run test"
+  },
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
+}

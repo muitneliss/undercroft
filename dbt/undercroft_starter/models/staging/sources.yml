@@ -1,0 +1,20 @@
+version: 2
+
+# One source, one table. A new connector does NOT add a source here -- it filters
+# raw.records by `source` and `entity`. The platform never learns a source's shape at the
+# database level; the shape is asserted in the models below, where you control it.
+sources:
+  - name: undercroft
+    schema: raw
+    tables:
+      - name: records
+        description: >
+          Every source's records, one row per (source, tenant, entity, upstream id),
+          projecting the newest observation in the lake. History lives in the lake.
+        columns:
+          - name: source
+            tests: [not_null]
+          - name: tenant_id
+            tests: [not_null]
+          - name: source_record_id
+            tests: [not_null]

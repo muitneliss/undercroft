@@ -1,0 +1,77 @@
+id: ingest_daily
+namespace: undercroft
+
+description: |
+  Land a source into the raw lake, project it into raw.records, then run dbt.
+
+  Calls the worker's HTTP trigger rather than running containers itself. Kestra therefore
+  needs no access to the Docker socket, which on a shared host would make a Kestra
+  compromise a host compromise. The trigger can start a fixed set of named verbs and
+  nothing else.
+
+  Concurrency is limited to one run. The worker refuses an overlapping run with 409
+  anyway, but failing here is clearer than a queue of executions that all end in the same
+  conflict.
+
+labels:
+  owner: data-platform
+
+concurrency:
+  behavior: FAIL
+  limit: 1
+
+inputs:
+  - id: source
+    type: STRING
+    defaults: hubspot
+
+tasks:
+  - id: ingest
+    type: io.kestra.plugin.core.http.Request
+    uri: http://worker:8081/v1/runs/ingest
+    method: POST
+    contentType: application/json
+    body: '{{ ''{'' }}"source": "{{ inputs.source }}"{{ ''}'' }}'
+    headers:
+      Authorization: "Bearer {{ envs.trigger_token }}"
+    options:
+      # A full slice is minutes once real sources are attached; a short timeout would kill
+      # a healthy run mid-load.
+      readIdleTimeout: PT30M
+      connectTimeout: PT30S
+
+  - id: assert_ingested
+    type: io.kestra.plugin.core.execution.Fail
+    condition: "{{ outputs.ingest.code != 200 }}"
+    errorMessage: |
+      Worker returned {{ outputs.ingest.code }} rather than 200.
+      Body: {{ outputs.ingest.body }}
+
+  - id: transform
+    type: io.kestra.plugin.core.http.Request
+    uri: http://worker:8081/v1/runs/transform
+    method: POST
+    contentType: application/json
+    body: "{}"
+    headers:
+      Authorization: "Bearer {{ envs.trigger_token }}"
+    options:
+      readIdleTimeout: PT30M
+      connectTimeout: PT30S
+
+  - id: report
+    type: io.kestra.plugin.core.log.Log
+    message: "ingest+transform complete for {{ inputs.source }}: {{ outputs.transform.body }}"
+
+triggers:
+  - id: daily
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 2 * * *"
+
+errors:
+  - id: alert
+    type: io.kestra.plugin.core.log.Log
+    level: ERROR
+    message: |
+      ingest_daily FAILED. execution={{ execution.id }}
+      A failed run leaves the previous data serving; curated tables are stale, not wrong.

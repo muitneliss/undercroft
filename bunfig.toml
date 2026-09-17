@@ -1,0 +1,4 @@
+# happy-dom is registered before any UI test runs, so React has a document to render into.
+# Scoped by the test files that import DOM globals; non-UI tests are unaffected.
+[test]
+preload = ["./apps/ui/src/test/setup.ts"]

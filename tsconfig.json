@@ -1,0 +1,15 @@
+{
+  "//": "Solution file. Holds no sources; `tsc -b` walks `references` in dependency order. Each package adds itself here when it lands.",
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/lake" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/db" },
+    { "path": "./packages/crypto" },
+    { "path": "./packages/connector-runtime" },
+    { "path": "./apps/worker" },
+    { "path": "./apps/control-plane" },
+    { "path": "./apps/ui" }
+  ]
+}

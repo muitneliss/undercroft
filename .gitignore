@@ -1,98 +1,21 @@
-# --- Secrets. Never commit. -------------------------------------------------
-# Dokploy API endpoint + key, written by the `dokploy` skill's Setup Flow.
-.dokploy.json
-*.env
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Secrets. `pii.md` records the failure this section exists to prevent: blanket
+# substring rules like `*secret*` silently swallowed the secrets module and its
+# ADR. Everything here names a path, not a word -- run `git check-ignore -v` on
+# anything new before trusting it.
+.env
+.env.*
 !.env.example
+deploy/compose/.env
 
-# Credential and secret FILES -- not every path containing the word.
-#
-# `*token*` was already narrowed for this reason: in the legacy repo it silently
-# swallowed docs/person-name-tokens.json and broke a clean-clone test, and the
-# breakage was invisible until someone checked out fresh.
-#
-# `*secret*` and `*credential*` were left as blanket rules, and the same thing
-# happened again: `docs/adr/0005-per-tenant-credentials-sealed-in-postgres.md`
-# was silently unstageable. An ADR about how credentials are stored is a
-# document, not a credential. So the lesson is now applied to all three.
-token.json
-token_*.json
-*.token
-credentials.json
-credential_*.json
-*.credentials
-secrets.json
-secrets.yaml
-secrets.yml
-*.secret
-.secrets/
-# Google hands these out as `client_secret_<id>.apps.googleusercontent.com.json`.
-client_secret*.json
-service-account*.json
-
-# The backstop for anything shaped like a secret that the explicit list missed.
-#
-# Source and documentation are exempted, because this rule has now silently
-# swallowed BOTH a document (`docs/adr/0005-...credentials...md`) and a module
-# (`vcdo/core/secrets.py` -- source code, whose absence from a clean clone is an
-# ImportError with no explanation). A file that *implements* or *describes*
-# credential handling is not a credential.
-#
-# The exempted extensions are ones a downloaded secret never has. `.yaml`/`.yml`
-# are deliberately NOT exempted -- `secrets.yaml` is a real artifact shape, and a
-# later negation would override the explicit rule above it.
-#
-# Nothing here can rescue a file under `data/` or `fixtures/live/`: git does not
-# descend into an excluded directory, so those stay ignored whatever they are
-# named.
-*secret*
-*credential*
-!*.md
-!*.py
-!*.ts
-!*.tsx
-!*.sql
-
-# --- Client data. PDPA: real names and payloads never enter git. ------------
+# Real data never enters git.
 data/
 fixtures/live/
 
-# --- Local infrastructure state ---------------------------------------------
-.volumes/
-deploy/compose/.env
-*.sqlite
-*.db
-
-# --- Python ------------------------------------------------------------------
-__pycache__/
-*.py[cod]
-.venv*/
-.pytest_cache/
-.ruff_cache/
-*.egg-info/
-build/
-dist/
-
-# --- Editors / OS ------------------------------------------------------------
 .DS_Store
-.idea/
-.vscode/
-
-# Kanna tool workspace
-.kanna/
-
-# Generated production secrets for Dokploy. Never committed.
-.dokploy-env.json
-
-# --- Design workspace --------------------------------------------------------
-#
-# DESIGN.md, .impeccable/design.json and .impeccable/surfaces/ ARE tracked: they
-# are the durable visual authority, the same way docs/adr/ is the durable
-# decision record. Everything else under .impeccable/ is working material.
-#
-# `quality-bar/` is third-party reference artwork fetched from impeccable.style;
-# it sets the craft level a build aims at and is not ours to redistribute.
-# `review/` is build evidence — screenshots go stale the first time the UI
-# changes, and a stale screenshot in a repo is read as current.
-.impeccable/*
-!.impeccable/design.json
-!.impeccable/surfaces/
+.bun/

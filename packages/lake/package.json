@@ -1,0 +1,13 @@
+{
+  "name": "@undercroft/lake",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@undercroft/core": "workspace:*",
+    "@aws-sdk/client-s3": "3.717.0"
+  }
+}
