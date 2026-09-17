@@ -219,11 +219,30 @@ export async function composeRecord(cfg: Config, deps: Deps): Promise<ComposeRec
 }
 
 /**
+ * Resolve the compose-style `${VAR}` and `${VAR:-default}` an image tag carries. The panel
+ * stores the file unexpanded (`...undercroft-worker:${IMAGE_TAG:-latest}`), so the running
+ * tag has to be reconstructed from the same environment the deploy used before it can be
+ * looked up in ghcr.
+ */
+export function expandEnv(value: string, env: Record<string, string | undefined>): string {
+  return value.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g,
+    (_match: string, name: string, fallback: string | undefined) => {
+      const resolved = env[name];
+      return resolved !== undefined && resolved !== "" ? resolved : (fallback ?? "");
+    },
+  );
+}
+
+/**
  * Services whose image this repo publishes, read out of the compose file the panel holds.
  * Line-wise rather than through a YAML parser: the panel's copy is the only authority on
  * what is deployed, and adding a parser to read it buys nothing.
  */
-export function releasedServices(composeFile: string): { service: string; image: string }[] {
+export function releasedServices(
+  composeFile: string,
+  env: Record<string, string | undefined> = process.env,
+): { service: string; image: string }[] {
   const found: { service: string; image: string }[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
@@ -231,7 +250,7 @@ export function releasedServices(composeFile: string): { service: string; image:
     if (serviceMatch?.[1] !== undefined) service = serviceMatch[1];
     const imageMatch = /^\s+image:\s*(\S+)\s*$/.exec(line);
     if (imageMatch?.[1] !== undefined && imageMatch[1].startsWith(RELEASED_IMAGE_PREFIX)) {
-      found.push({ service, image: imageMatch[1] });
+      found.push({ service, image: expandEnv(imageMatch[1], env) });
     }
   }
   return found;

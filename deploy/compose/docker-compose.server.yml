@@ -181,6 +181,12 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      # The worker needs the buckets to exist before it lands anything, so it waits for the
+      # one-shot creator to finish. This also keeps `docker compose up --wait` happy: a
+      # completed dependency is a success, whereas an init container that just exits with no
+      # dependent reads to --wait as a service that fell over.
+      minio-init:
+        condition: service_completed_successfully
     environment:
       UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_S3_ENDPOINT: http://undercroft-minio:9000
