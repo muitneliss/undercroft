@@ -89,3 +89,68 @@ jobs:
       #
       # - name: wiki check
       #   run: wiki --root ./wiki check --error-on-untracked-sources
+
+  # ---------------------------------------------------------------------------
+  # Deployment definitions. Separate job: it needs docker, not python, and a
+  # compose problem should be legible without scrolling past a test log.
+  # ---------------------------------------------------------------------------
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Validates the stack definition without starting it -- catches a malformed
+      # file or an unsubstituted variable before it reaches the server, where the
+      # same mistake is a failed deploy on a host shared with other projects.
+      - name: docker compose config
+        working-directory: deploy/compose
+        run: |
+          cp .env.example .env
+          docker compose config -q
+          docker compose config --services
+
+      # Every service must declare a memory limit. The target host has no swap,
+      # so an unlimited container turns a spike into an OOM kill that takes
+      # something else down with it. Reads compose's own JSON rather than parsing
+      # YAML: PyYAML is not guaranteed on a runner, and a step that fails on a
+      # missing import reads as a broken build rather than a missing tool.
+      - name: every service declares a memory limit
+        working-directory: deploy/compose
+        run: |
+          docker compose config --format json | python3 -c "
+          import sys, json
+          cfg = json.load(sys.stdin)
+          missing = [n for n, s in cfg['services'].items()
+                     if not s.get('deploy', {}).get('resources', {}).get('limits', {}).get('memory')]
+          for n in missing:
+              print(f'::error::service {n} has no memory limit')
+          sys.exit(1 if missing else 0)
+          "
+
+  # ---------------------------------------------------------------------------
+  # The floor, not a scanner. .claude/rules/pii.md carries the real rule; this
+  # catches the two mechanical ways it gets broken.
+  # ---------------------------------------------------------------------------
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: secret-bearing paths stay untracked
+        run: |
+          for f in .dokploy.json deploy/compose/.env; do
+            if git ls-files --error-unmatch "$f" 2>/dev/null; then
+              echo "::error::$f is tracked and must not be"
+              exit 1
+            fi
+          done
+          echo "secret-bearing paths are untracked"
+
+      - name: no credential-shaped strings in tracked content
+        run: |
+          if git grep -nIE -- '-----BEGIN (RSA|OPENSSH|PRIVATE)|gh[pousr]_[A-Za-z0-9]{30,}|pat-[a-z]{2}[0-9]-' \
+               -- . ':!docs/data-platform-handoff.md'; then
+            echo "::error::possible credential in tracked content"
+            exit 1
+          fi
+          echo "no credential-shaped strings found"

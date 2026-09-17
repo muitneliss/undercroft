@@ -47,11 +47,48 @@ def _verbs():
         log.finish("backup taken", path=str(result.path), bytes=result.bytes)
         return {"path": str(result.path), "bytes": result.bytes}
 
+    def _alerts(cfg, log):
+        import psycopg
+
+        from vcdo.core.alerts import evaluate
+
+        with psycopg.connect(cfg.postgres_dsn, connect_timeout=10) as conn:
+            rows = [
+                dict(
+                    zip(
+                        (
+                            "stage",
+                            "status",
+                            "rows_in",
+                            "rows_out",
+                            "rows_excluded",
+                            "unaccounted",
+                            "error_type",
+                            "recorded_at",
+                        ),
+                        r,
+                        strict=True,
+                    )
+                )
+                for r in conn.execute(
+                    "SELECT stage, status, rows_in, rows_out, rows_excluded, unaccounted, "
+                    "error_type, recorded_at FROM ops.run_ledger ORDER BY recorded_at"
+                )
+            ]
+        found = evaluate(rows)
+        criticals = [a for a in found if a.severity == "critical"]
+        if criticals:
+            # Raised, not returned: the trigger turns an exception into a 500,
+            # and Kestra turns a 500 into a failed execution that alerts.
+            raise RuntimeError(f"{len(criticals)} critical alert(s): {criticals[0].code}")
+        return {"alerts": len(found), "critical": 0}
+
     return {
         "migrate": pipeline.migrate,
         "seed": pipeline.seed,
         "slice": pipeline.run_slice,
         "backup": _backup,
+        "alerts": _alerts,
     }
 
 

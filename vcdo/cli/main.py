@@ -108,6 +108,59 @@ def _run_pipeline(verb: str):
     return run
 
 
+def alerts_cmd(_args: argparse.Namespace) -> int:
+    """Exit 1 on a critical, 0 otherwise. Warnings print but do not fail.
+
+    Semantic exit codes matter here: whatever schedules this needs to
+    distinguish "something is broken" from "something is worth a look", and
+    collapsing both into failure makes the second one get ignored.
+    """
+    import psycopg
+
+    from vcdo.core.alerts import evaluate
+
+    try:
+        cfg = load()
+    except MissingConfig as exc:
+        print(f"alerts: FAIL  {exc}", file=sys.stderr)
+        return EXIT_FAILED
+
+    with psycopg.connect(cfg.postgres_dsn, connect_timeout=10) as conn:
+        rows = [
+            {
+                "stage": r[0],
+                "status": r[1],
+                "rows_in": r[2],
+                "rows_out": r[3],
+                "rows_excluded": r[4],
+                "unaccounted": r[5],
+                "error_type": r[6],
+                "recorded_at": r[7],
+            }
+            for r in conn.execute(
+                """
+                SELECT stage, status, rows_in, rows_out, rows_excluded,
+                       unaccounted, error_type, recorded_at
+                FROM ops.run_ledger
+                ORDER BY recorded_at
+                """
+            )
+        ]
+
+    found = evaluate(rows)
+    if not found:
+        print(f"alerts:   OK    {len(rows)} ledger rows, nothing to report")
+        return EXIT_OK
+
+    for alert in found:
+        stream = sys.stderr if alert.severity == "critical" else sys.stdout
+        print(f"          {alert}", file=stream)
+
+    criticals = [a for a in found if a.severity == "critical"]
+    print(f"alerts:   {len(criticals)} critical, {len(found) - len(criticals)} warning")
+    return EXIT_FAILED if criticals else EXIT_OK
+
+
 def backup_cmd(args: argparse.Namespace) -> int:
     from vcdo.cli.backup import dump
 
@@ -165,6 +218,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("doctor", help="check that the stack is usable").set_defaults(fn=doctor)
+    sub.add_parser("alerts", help="evaluate run health; exit 1 on any critical").set_defaults(fn=alerts_cmd)
+
     backup_parser = sub.add_parser("backup", help="dump curated schemas")
     backup_parser.add_argument("--out-dir", default="/app/data/backups")
     backup_parser.set_defaults(fn=backup_cmd)
