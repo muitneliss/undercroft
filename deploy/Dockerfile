@@ -9,10 +9,26 @@
 
 FROM python:3.12-slim-bookworm
 
-# curl for the healthcheck only. Kept explicit so the image contents stay
-# auditable rather than accumulating whatever a base image happens to ship.
+# curl for the healthcheck; postgresql-client for pg_dump/pg_restore, because
+# backup runs HERE -- an image that can publish data but cannot back it up
+# leaves the restore path untested until the day it is needed.
+# Kept explicit so the image contents stay auditable rather than accumulating
+# whatever a base image happens to ship.
+# postgresql-client-17 specifically, from PGDG. Debian bookworm ships client
+# 15, and pg_dump REFUSES to dump a newer server -- so the default package
+# produces an image whose backup verb fails only when pointed at the real
+# database. Pinned to the major version the compose stack runs.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+         -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+         > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-17 \
+    && apt-get purge -y gnupg && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

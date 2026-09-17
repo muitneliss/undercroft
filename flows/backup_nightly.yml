@@ -1,0 +1,69 @@
+id: backup_nightly
+namespace: vcdo
+
+description: |
+  Nightly dump of the curated schemas.
+
+  What is NOT covered here, deliberately: the raw lake. It is object storage
+  with its own durability story, it is far larger than everything else combined,
+  and it is the one layer that cannot be regenerated -- so it wants object
+  versioning and replication, not a nightly dump. Recorded as an explicit gap
+  rather than quietly omitted.
+
+  Metabase's application database is business content (questions, dashboards,
+  permissions someone authored) and needs its own dump; `vcdo provision-bi`
+  recreates only the connection and the checked-in dashboard, not anything added
+  since. Tracked as outstanding.
+
+  A backup nobody has restored is a hypothesis. tests/integration/
+  test_backup_restore.py restores into a genuinely separate database and checks
+  the rows, constraints and primary keys came back.
+
+labels:
+  owner: data-platform
+  kind: continuity
+
+concurrency:
+  behavior: FAIL
+  limit: 1
+
+tasks:
+  - id: take_backup
+    type: io.kestra.plugin.core.http.Request
+    uri: http://worker:8081/run/backup
+    method: POST
+    contentType: application/json
+    body: "{}"
+    headers:
+      Authorization: "Bearer {{ envs.trigger_token }}"
+    options:
+      readIdleTimeout: PT30M
+      connectTimeout: PT30S
+
+  - id: assert_taken
+    type: io.kestra.plugin.core.execution.Fail
+    condition: "{{ outputs.take_backup.code != 200 }}"
+    errorMessage: |
+      Backup did not complete: HTTP {{ outputs.take_backup.code }}.
+      Body: {{ outputs.take_backup.body }}
+
+  - id: report
+    type: io.kestra.plugin.core.log.Log
+    message: "backup complete: {{ outputs.take_backup.body }}"
+
+triggers:
+  - id: nightly
+    type: io.kestra.plugin.core.trigger.Schedule
+    # After both source flows have published, so the backup contains the day.
+    cron: "0 4 * * *"
+    timezone: Asia/Singapore
+
+errors:
+  - id: alert
+    type: io.kestra.plugin.core.log.Log
+    level: ERROR
+    message: |
+      backup_nightly FAILED. execution={{ execution.id }}
+      Continuity is degraded until this succeeds. An empty or missing dump is
+      the failure that looks like success -- check the reported byte count, not
+      just the exit status.

@@ -74,8 +74,11 @@ def test_both_paths_land_real_pdf_bytes(lake):
     gmail_result = land_gmail_attachments(gmail(mailbox), store, log)
     drive_result = land_drive_pdfs(drive(), store, log)
 
-    assert gmail_result.stored == 3  # receipt, statement, and the second receipt.pdf
-    assert drive_result.stored == 2  # the two invoice.pdf in different folders
+    # stored + unchanged, not stored alone. Drive file ids are fixed, so an
+    # earlier run may already hold these objects -- and "present in the lake" is
+    # the property that matters, not "written during this particular call".
+    assert gmail_result.stored + gmail_result.unchanged == 3
+    assert drive_result.stored + drive_result.unchanged == 2
 
 
 def test_drive_bytes_match_the_source_fixture_exactly(lake):
@@ -138,7 +141,7 @@ def test_a_repeat_run_creates_no_duplicate_objects(lake):
     land_drive_pdfs(drive(), store, log)
     second = land_drive_pdfs(drive(), store, log)
 
-    assert second.stored == 0
+    assert second.stored == 0, "a repeat run must write nothing"
     assert second.unchanged == 2
     assert len(store.versions("drive/pdf/drv-001/invoice.pdf")) == 1
 

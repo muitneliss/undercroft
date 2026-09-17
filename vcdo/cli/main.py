@@ -108,6 +108,23 @@ def _run_pipeline(verb: str):
     return run
 
 
+def backup_cmd(args: argparse.Namespace) -> int:
+    from vcdo.cli.backup import dump
+
+    try:
+        cfg = load()
+        result = dump(cfg.postgres_dsn, args.out_dir)
+    except MissingConfig as exc:
+        print(f"backup: FAIL  {exc}", file=sys.stderr)
+        return EXIT_FAILED
+    except Exception as exc:
+        print(f"backup: FAIL  {type(exc).__name__}: {exc}", file=sys.stderr)
+        return EXIT_FAILED
+
+    print(f"backup:   OK    {result.path} ({result.bytes} bytes, schemas: {', '.join(result.schemas)})")
+    return EXIT_OK
+
+
 def serve_cmd(_args: argparse.Namespace) -> int:
     from vcdo.cli.server import serve
 
@@ -148,6 +165,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("doctor", help="check that the stack is usable").set_defaults(fn=doctor)
+    backup_parser = sub.add_parser("backup", help="dump curated schemas")
+    backup_parser.add_argument("--out-dir", default="/app/data/backups")
+    backup_parser.set_defaults(fn=backup_cmd)
+
     sub.add_parser("serve", help="run the HTTP trigger for Kestra").set_defaults(fn=serve_cmd)
     sub.add_parser("provision-bi", help="provision Metabase (idempotent)").set_defaults(fn=provision_bi)
     sub.add_parser("migrate", help="apply curated schema migrations").set_defaults(

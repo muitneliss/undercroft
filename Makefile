@@ -2,7 +2,7 @@ VENV := .venv-tests
 PY   := $(VENV)/bin/python
 
 .DEFAULT_GOAL := help
-.PHONY: help venv verify test itest lint fmt doctor monitors up down seed slice provision-bi clean
+.PHONY: help venv verify test itest lint fmt doctor monitors up down seed slice provision-bi backup clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -34,7 +34,12 @@ test: venv  ## Gate tests (excludes monitors by design)
 # .env. The plain `test` target deliberately does not: the gate must pass on a
 # machine with no stack and no secrets, or CI cannot run it.
 itest: venv  ## Integration tests against the running local stack
-	@set -a; . deploy/compose/.env; set +a; $(PY) -m pytest tests/integration -q
+# Backup/restore tests need pg_dump and pg_restore matching the server major
+# version. Homebrew's libpq is not on PATH by default; without it those tests
+# skip, and an untested restore is exactly what the backup module warns about.
+	@set -a; . deploy/compose/.env; set +a; \
+	 PATH="/opt/homebrew/opt/libpq/bin:/usr/lib/postgresql/17/bin:$$PATH" \
+	 $(PY) -m pytest tests/integration -q
 
 doctor: venv  ## Check the stack is usable through the seams the pipeline uses
 	@set -a; . deploy/compose/.env; set +a; $(PY) -m vcdo.cli.main doctor
@@ -50,6 +55,10 @@ down:  ## Stop the local stack, keeping volumes
 
 seed: venv  ## Load fixture records into local MinIO
 	@$(PY) -m vcdo.cli.main seed
+
+backup: venv  ## Dump curated schemas (runs in the worker, which has pg_dump 17)
+	@docker compose -f deploy/compose/docker-compose.yml exec -T worker \
+	  python -m vcdo.cli.main backup
 
 provision-bi: venv  ## Provision Metabase: admin + read-only curated connection
 	@set -a; . deploy/compose/.env; set +a; $(PY) -m vcdo.cli.main provision-bi

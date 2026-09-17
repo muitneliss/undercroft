@@ -4,13 +4,14 @@
 image is to mount ``/var/run/docker.sock`` into Kestra. That grants Kestra
 full control of the Docker daemon, which on a shared host means a Kestra
 compromise is a host compromise -- and this host runs eleven other projects. A
-narrow HTTP endpoint that can start exactly three named verbs is a far smaller
+narrow HTTP endpoint that can start a handful of named verbs is a far smaller
 blast radius than "can start any container as root".
 
 Deliberately tiny, and deliberately not a web framework:
 
-- Three fixed verbs. No arbitrary command execution, no shell, no user input
-  reaching a subprocess. The verb is looked up in a dict; anything else is 404.
+- A fixed allowlist of verbs. No arbitrary command execution, no shell, no user
+  input reaching a subprocess. The verb is looked up in a dict; anything else is
+  a 404 that names what is permitted.
 - Bearer token required, compared with :func:`hmac.compare_digest` so a wrong
   token cannot be recovered by timing the response.
 - Bound to the container's own interface and never published. Only the compose
@@ -39,10 +40,18 @@ _LOCK = threading.Lock()
 def _verbs():
     from vcdo.cli import pipeline
 
+    def _backup(cfg, log):
+        from vcdo.cli.backup import dump
+
+        result = dump(cfg.postgres_dsn, "/app/data/backups")
+        log.finish("backup taken", path=str(result.path), bytes=result.bytes)
+        return {"path": str(result.path), "bytes": result.bytes}
+
     return {
         "migrate": pipeline.migrate,
         "seed": pipeline.seed,
         "slice": pipeline.run_slice,
+        "backup": _backup,
     }
 
 
