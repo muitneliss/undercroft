@@ -1,0 +1,85 @@
+{
+  "Invoices": [
+    {
+      "InvoiceID": "aaaa0001-0000-0000-0000-000000000001",
+      "InvoiceNumber": "INV-0001",
+      "Type": "ACCREC",
+      "Status": "PAID",
+      "Contact": { "ContactID": "cccc0001-0000-0000-0000-000000000001", "Name": "Synthetic Alpha Pte Ltd" },
+      "Date": "2026-01-05",
+      "DueDate": "2026-02-04",
+      "CurrencyCode": "USD",
+      "CurrencyRate": 1.0,
+      "SubTotal": 100.00,
+      "TotalTax": 0.00,
+      "Total": 100.00,
+      "AmountPaid": 100.00,
+      "AmountCredited": 0.00,
+      "AmountDue": 0.00,
+      "Payments": [
+        { "PaymentID": "pppp0001-0000-0000-0000-000000000001", "Amount": 40.00, "Date": "2026-01-20" },
+        { "PaymentID": "pppp0002-0000-0000-0000-000000000002", "Amount": 60.00, "Date": "2026-02-01" }
+      ],
+      "UpdatedDateUTC": "2026-02-01T08:00:00Z"
+    },
+    {
+      "InvoiceID": "aaaa0002-0000-0000-0000-000000000002",
+      "InvoiceNumber": "INV-0002",
+      "Type": "ACCREC",
+      "Status": "AUTHORISED",
+      "Contact": { "ContactID": "cccc0002-0000-0000-0000-000000000002", "Name": "SYNTHETIC BETA PTE. LTD." },
+      "Date": "2026-03-01",
+      "DueDate": "2026-03-31",
+      "CurrencyCode": "SGD",
+      "CurrencyRate": 1.0,
+      "SubTotal": 5000.00,
+      "TotalTax": 450.00,
+      "Total": 5450.00,
+      "AmountPaid": 0.00,
+      "AmountCredited": 450.00,
+      "AmountDue": 5000.00,
+      "Payments": [],
+      "UpdatedDateUTC": "2026-03-02T01:00:00Z"
+    },
+    {
+      "InvoiceID": "aaaa0003-0000-0000-0000-000000000003",
+      "InvoiceNumber": "INV-0003",
+      "Type": "ACCREC",
+      "Status": "VOIDED",
+      "Contact": { "ContactID": "cccc0001-0000-0000-0000-000000000001", "Name": "Synthetic Alpha Pte Ltd" },
+      "Date": "2026-04-01",
+      "DueDate": "2026-05-01",
+      "CurrencyCode": "SGD",
+      "CurrencyRate": 1.0,
+      "SubTotal": 999.99,
+      "TotalTax": 0.00,
+      "Total": 999.99,
+      "AmountPaid": 0.00,
+      "AmountCredited": 0.00,
+      "AmountDue": 0.00,
+      "Payments": [],
+      "UpdatedDateUTC": "2026-04-02T03:00:00Z"
+    },
+    {
+      "InvoiceID": "aaaa0004-0000-0000-0000-000000000004",
+      "InvoiceNumber": "BILL-0001",
+      "Type": "ACCPAY",
+      "Status": "PAID",
+      "Contact": { "ContactID": "cccc0009-0000-0000-0000-000000000009", "Name": "Synthetic Supplier Pte Ltd" },
+      "Date": "2026-02-10",
+      "DueDate": "2026-03-10",
+      "CurrencyCode": "SGD",
+      "CurrencyRate": 1.0,
+      "SubTotal": 300.00,
+      "TotalTax": 27.00,
+      "Total": 327.00,
+      "AmountPaid": 327.00,
+      "AmountCredited": 0.00,
+      "AmountDue": 0.00,
+      "Payments": [
+        { "PaymentID": "pppp0004-0000-0000-0000-000000000004", "Amount": 327.00, "Date": "2026-02-28" }
+      ],
+      "UpdatedDateUTC": "2026-02-28T09:00:00Z"
+    }
+  ]
+}

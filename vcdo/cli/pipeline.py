@@ -15,6 +15,7 @@ from vcdo.lake.ingest import land
 from vcdo.lake.s3 import from_config
 from vcdo.lake.store import LakeStore
 from vcdo.sources.hubspot import HubSpotSource
+from vcdo.sources.xero import XeroSource
 
 __all__ = ["migrate", "seed", "run_slice"]
 
@@ -89,19 +90,33 @@ def _source(cfg: Config) -> HubSpotSource:
     )
 
 
+def _sources(cfg: Config) -> list:
+    """Every configured source. Mode is resolved per source, so one can be live
+    while the rest are mocked."""
+    return [
+        _source(cfg),
+        XeroSource(
+            tenant_id=FIXTURE_TENANT,
+            mode=cfg.mode_for("xero"),
+            fixtures_dir=cfg.fixtures_dir,
+        ),
+    ]
+
+
 def seed(cfg: Config, log: ObsLog) -> dict[str, int]:
-    """Land every HubSpot entity into the raw lake."""
-    lake, source = _lake(cfg), _source(cfg)
+    """Land every configured source into the raw lake."""
+    lake = _lake(cfg)
     landed = {}
-    for entity in source.entities():
-        result = land(source, entity, lake, log)
-        landed[entity] = result.read
+    for source in _sources(cfg):
+        for entity in source.entities():
+            result = land(source, entity, lake, log)
+            landed[f"{source.name}/{entity}"] = result.read
     return landed
 
 
 def run_slice(cfg: Config, log: ObsLog) -> dict[str, int]:
     """The full vertical slice: raw -> curated -> a dashboard query."""
-    from vcdo.curated.load import flush_run_ledger, publish_hubspot
+    from vcdo.curated.load import flush_run_ledger, publish_hubspot, publish_xero
 
     migrate(cfg, log)
     landed = seed(cfg, log)
@@ -109,6 +124,9 @@ def run_slice(cfg: Config, log: ObsLog) -> dict[str, int]:
     lake = _lake(cfg)
     with _connect(cfg) as conn:
         published = publish_hubspot(lake, conn, log, FIXTURE_TENANT)
+        # Xero publishes behind its reconciliation gate; a GateBlocked here
+        # propagates and fails the run rather than publishing wrong figures.
+        xero = publish_xero(lake, conn, log, FIXTURE_TENANT)
         # The ledger is projected AFTER publish, so it records what actually
         # happened including the publish stage itself.
         flush_run_ledger(conn, cfg.log_dir, published.run_id)
@@ -132,7 +150,9 @@ def run_slice(cfg: Config, log: ObsLog) -> dict[str, int]:
         "landed": sum(landed.values()),
         "customers": published.customers,
         "deals": published.deals,
-        "quarantined": published.quarantined,
+        "invoices": xero.customers,
+        "payments": xero.deals,
+        "quarantined": published.quarantined + xero.quarantined,
         "won_deals": won,
         "won_amount": won_amount,
         "currencies": currencies,

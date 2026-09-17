@@ -21,7 +21,7 @@ from vcdo.core.run_ledger import stage
 from vcdo.curated.hubspot import CuratedCustomer, CuratedDeal, Rejected, to_customer, to_deal
 from vcdo.lake.store import LakeStore
 
-__all__ = ["publish_hubspot", "PublishResult", "flush_run_ledger"]
+__all__ = ["publish_hubspot", "publish_xero", "PublishResult", "flush_run_ledger", "GateBlocked"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,3 +278,233 @@ def flush_run_ledger(conn: Any, log_dir: str, only_run: str | None = None) -> in
         )
         flushed += 1
     return flushed
+
+
+class GateBlocked(Exception):
+    """The reconciliation gate refused to publish.
+
+    Deliberately an exception, not a return value. A caller can ignore a return
+    value; the whole point is that wrong financial data does not reach a
+    dashboard because someone forgot to check.
+    """
+
+
+def publish_xero(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> PublishResult:
+    """Curate and publish one tenant's Xero raw, gated on reconciliation.
+
+    The gate runs BEFORE anything is written. A blocked run leaves the previous
+    generation serving -- stale, but not wrong -- which is the correct failure
+    mode for accounting data.
+    """
+    from vcdo.curated.xero import to_invoice, to_payment
+    from vcdo.curated.xero_gate import adjudicate
+
+    current_run = run_id()
+    invoices: list[tuple[Any, str]] = []
+    payments: list[tuple[Any, str]] = []
+    rejects: list[tuple[dict, Rejected, str]] = []
+    raw_invoices: list[dict] = []
+
+    with stage("curate:xero", log) as st:
+        read = 0
+        for raw in _read_raw(lake, "xero", tenant_id, "invoices"):
+            read += 1
+            raw_invoices.append(raw.get("payload") or {})
+            key = f"records/xero/{tenant_id}/invoices/{raw['source_record_id']}"
+            result = to_invoice(raw)
+            if isinstance(result, Rejected):
+                rejects.append((raw, result, key))
+                st.excluded(1, result.reason_code)
+            else:
+                invoices.append((result, key))
+
+        for raw in _read_raw(lake, "xero", tenant_id, "payments"):
+            read += 1
+            key = f"records/xero/{tenant_id}/payments/{raw['source_record_id']}"
+            result = to_payment(raw)
+            if isinstance(result, Rejected):
+                rejects.append((raw, result, key))
+                st.excluded(1, result.reason_code)
+            else:
+                payments.append((result, key))
+
+        st.rows_in(read)
+        st.rows_out(len(invoices) + len(payments))
+
+    gate = adjudicate(raw_invoices)
+    _record_findings(conn, current_run, gate)
+
+    if not gate.passed:
+        log.error(
+            "xero gate blocked publish",
+            blocking=len(gate.blocking),
+            codes=sorted({f.code for f in gate.blocking}),
+        )
+        raise GateBlocked(
+            f"{gate.summary()}. Refusing to publish: "
+            + "; ".join(f"{f.code} on {f.document_id}" for f in gate.blocking[:5])
+        )
+
+    # Payments take their currency from their PARENT DOCUMENT, resolved here
+    # rather than asserted in the transform because only at this point do we hold
+    # both sides.
+    #
+    # Credit notes must be in this map, not just invoices. A credit-note payment
+    # points at a CreditNoteID, so an invoice-only lookup leaves it with an amount
+    # and no currency -- which the schema rightly rejects. The database constraint
+    # caught this; the transform tests did not, because in isolation the payment
+    # looked complete.
+    currency_by_document = {i.source_record_id: i.currency for i, _ in invoices}
+    for raw in _read_raw(lake, "xero", tenant_id, "credit_notes"):
+        payload = raw.get("payload") or {}
+        currency = str(payload.get("CurrencyCode") or "").upper()
+        if len(currency) == 3:
+            currency_by_document[raw["source_record_id"]] = currency
+
+    with conn.transaction():
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO ops.generation (run_id, status) VALUES (%s, 'building') RETURNING id",
+            (current_run,),
+        )
+        row = cur.fetchone()
+        assert row is not None
+        generation_id = row[0]
+
+        for invoice, key in invoices:
+            _upsert_invoice(cur, invoice, current_run, key)
+        for payment, key in payments:
+            currency = currency_by_document.get(payment.target_source_id or "")
+            _upsert_payment(cur, payment, currency, current_run, key)
+        for raw, reject, key in rejects:
+            _quarantine(cur, raw, reject, current_run, key)
+
+        cur.execute(
+            "UPDATE ops.generation SET status = 'published', published_at = now() WHERE id = %s",
+            (generation_id,),
+        )
+
+    log.finish(
+        "published xero generation",
+        invoices=len(invoices),
+        payments=len(payments),
+        quarantined=len(rejects),
+        review_findings=len(gate.review),
+    )
+    return PublishResult(current_run, len(invoices), len(payments), len(rejects))
+
+
+def _record_findings(conn: Any, run: str, gate) -> None:
+    """Persist what the gate decided, pass or fail.
+
+    Recorded even on success: the review findings are the backlog, and a clean
+    run is itself evidence the gate was applied rather than skipped.
+    """
+    cur = conn.cursor()
+    for f in gate.findings:
+        cur.execute(
+            """
+            INSERT INTO ops.gate_finding (run_id, source, severity, code, document_id, detail)
+            VALUES (%s, 'xero', %s, %s, %s, %s)
+            """,
+            (run, f.severity, f.code, f.document_id, f.detail),
+        )
+    conn.commit()
+
+
+def _upsert_invoice(cur: Any, i: Any, run: str, key: str) -> None:
+    cur.execute(
+        """
+        INSERT INTO curated.invoices (
+            source, tenant_id, source_record_id, contact_source_id, contact_name,
+            invoice_number, invoice_type, status, currency, currency_rate,
+            total, amount_paid, amount_credited, amount_due, counts_as_revenue,
+            issued_on, due_on, source_updated_at, run_id, lake_key, built_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+        ON CONFLICT (source, tenant_id, source_record_id) DO UPDATE SET
+            contact_source_id = EXCLUDED.contact_source_id,
+            contact_name      = EXCLUDED.contact_name,
+            invoice_number    = EXCLUDED.invoice_number,
+            invoice_type      = EXCLUDED.invoice_type,
+            status            = EXCLUDED.status,
+            currency          = EXCLUDED.currency,
+            currency_rate     = EXCLUDED.currency_rate,
+            total             = EXCLUDED.total,
+            amount_paid       = EXCLUDED.amount_paid,
+            amount_credited   = EXCLUDED.amount_credited,
+            amount_due        = EXCLUDED.amount_due,
+            counts_as_revenue = EXCLUDED.counts_as_revenue,
+            issued_on         = EXCLUDED.issued_on,
+            due_on            = EXCLUDED.due_on,
+            source_updated_at = EXCLUDED.source_updated_at,
+            run_id            = EXCLUDED.run_id,
+            lake_key          = EXCLUDED.lake_key,
+            built_at          = now()
+        """,
+        (
+            i.source,
+            i.tenant_id,
+            i.source_record_id,
+            i.contact_source_id,
+            i.contact_name,
+            i.invoice_number,
+            i.invoice_type,
+            i.status,
+            i.currency,
+            i.currency_rate,
+            i.total,
+            i.amount_paid,
+            i.amount_credited,
+            i.amount_due,
+            i.counts_as_revenue,
+            i.issued_on,
+            i.due_on,
+            i.source_updated_at,
+            run,
+            key,
+        ),
+    )
+
+
+def _upsert_payment(cur: Any, p: Any, currency: str | None, run: str, key: str) -> None:
+    cur.execute(
+        """
+        INSERT INTO curated.payments (
+            source, tenant_id, source_record_id, payment_type, status,
+            target_type, target_source_id, contact_source_id,
+            currency_rate, amount, currency, paid_on, source_updated_at,
+            run_id, lake_key, built_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+        ON CONFLICT (source, tenant_id, source_record_id) DO UPDATE SET
+            payment_type      = EXCLUDED.payment_type,
+            status            = EXCLUDED.status,
+            target_type       = EXCLUDED.target_type,
+            target_source_id  = EXCLUDED.target_source_id,
+            contact_source_id = EXCLUDED.contact_source_id,
+            currency_rate     = EXCLUDED.currency_rate,
+            amount            = EXCLUDED.amount,
+            currency          = EXCLUDED.currency,
+            paid_on           = EXCLUDED.paid_on,
+            source_updated_at = EXCLUDED.source_updated_at,
+            run_id            = EXCLUDED.run_id,
+            lake_key          = EXCLUDED.lake_key,
+            built_at          = now()
+        """,
+        (
+            p.source,
+            p.tenant_id,
+            p.source_record_id,
+            p.payment_type,
+            p.status,
+            p.target_type,
+            p.target_source_id,
+            p.contact_source_id,
+            p.currency_rate,
+            p.amount,
+            currency,
+            p.paid_on,
+            p.source_updated_at,
+            run,
+            key,
+        ),
+    )

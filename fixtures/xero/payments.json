@@ -1,0 +1,72 @@
+{
+  "_comment": [
+    "Recorded Xero payment shapes, including the quirk measured in the legacy",
+    "system: a CREDIT NOTE payment (PaymentType ARCREDITPAYMENT) comes back under",
+    "the 'Invoice' key, and the 'InvoiceID' there carries the CreditNoteID -- not",
+    "any invoice id at all. Resolving the parent by key NAME therefore finds",
+    "nothing and fails the payment-identity check on perfectly sound data.",
+    "See pppp0003 below. Public report: XeroAPI/xero-ruby#48."
+  ],
+  "Payments": [
+    {
+      "PaymentID": "pppp0001-0000-0000-0000-000000000001",
+      "Date": "2026-01-20",
+      "Amount": 40.00,
+      "CurrencyRate": 1.0,
+      "PaymentType": "ACCRECPAYMENT",
+      "Status": "AUTHORISED",
+      "Invoice": {
+        "InvoiceID": "aaaa0001-0000-0000-0000-000000000001",
+        "InvoiceNumber": "INV-0001",
+        "Type": "ACCREC",
+        "Contact": { "ContactID": "cccc0001-0000-0000-0000-000000000001" }
+      },
+      "UpdatedDateUTC": "2026-01-20T02:00:00Z"
+    },
+    {
+      "PaymentID": "pppp0002-0000-0000-0000-000000000002",
+      "Date": "2026-02-01",
+      "Amount": 60.00,
+      "CurrencyRate": 1.0,
+      "PaymentType": "ACCRECPAYMENT",
+      "Status": "AUTHORISED",
+      "Invoice": {
+        "InvoiceID": "aaaa0001-0000-0000-0000-000000000001",
+        "InvoiceNumber": "INV-0001",
+        "Type": "ACCREC",
+        "Contact": { "ContactID": "cccc0001-0000-0000-0000-000000000001" }
+      },
+      "UpdatedDateUTC": "2026-02-01T08:00:00Z"
+    },
+    {
+      "PaymentID": "pppp0003-0000-0000-0000-000000000003",
+      "Date": "2026-03-20",
+      "Amount": 450.00,
+      "CurrencyRate": 1.0,
+      "PaymentType": "ARCREDITPAYMENT",
+      "Status": "AUTHORISED",
+      "Invoice": {
+        "InvoiceID": "nnnn0001-0000-0000-0000-000000000001",
+        "InvoiceNumber": "CN-0001",
+        "Type": "ACCRECCREDIT",
+        "Contact": { "ContactID": "cccc0002-0000-0000-0000-000000000002" }
+      },
+      "UpdatedDateUTC": "2026-03-20T04:00:00Z"
+    },
+    {
+      "PaymentID": "pppp0004-0000-0000-0000-000000000004",
+      "Date": "2026-02-28",
+      "Amount": 327.00,
+      "CurrencyRate": 1.0,
+      "PaymentType": "ACCPAYPAYMENT",
+      "Status": "AUTHORISED",
+      "Invoice": {
+        "InvoiceID": "aaaa0004-0000-0000-0000-000000000004",
+        "InvoiceNumber": "BILL-0001",
+        "Type": "ACCPAY",
+        "Contact": { "ContactID": "cccc0009-0000-0000-0000-000000000009" }
+      },
+      "UpdatedDateUTC": "2026-02-28T09:00:00Z"
+    }
+  ]
+}

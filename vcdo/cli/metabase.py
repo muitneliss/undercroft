@@ -182,6 +182,33 @@ QUESTIONS = [
         """,
     },
     {
+        "name": "Revenue by customer and currency",
+        "description": (
+            "Invoiced, paid, credited and outstanding per customer per month. "
+            "Grouped by currency and never summed across it. Invoiced and paid are "
+            "shown side by side, never added -- that would double-count the same money."
+        ),
+        "sql": """
+            SELECT contact_name, currency, period, invoiced, paid, credited, outstanding, net_invoiced
+            FROM curated.revenue_by_customer_period
+            ORDER BY period DESC, contact_name
+        """,
+    },
+    {
+        "name": "Reconciliation findings",
+        "description": (
+            "What the Xero gate decided. 'block' means a publish was refused and the "
+            "previous generation is still serving; 'review' is a backlog item, most often "
+            "a credit allocation that must not be assumed to be money collected."
+        ),
+        "sql": """
+            SELECT recorded_at, severity, code, document_id, detail
+            FROM ops.gate_finding
+            ORDER BY recorded_at DESC
+            LIMIT 50
+        """,
+    },
+    {
         "name": "Data freshness",
         "description": (
             "How old the numbers on this dashboard are. "

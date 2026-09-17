@@ -92,6 +92,8 @@ def _run_pipeline(verb: str):
                 print(f"landed:      {r['landed']} raw records")
                 print(f"customers:   {r['customers']}")
                 print(f"deals:       {r['deals']}")
+                print(f"invoices:    {r['invoices']}")
+                print(f"payments:    {r['payments']}")
                 print(f"quarantined: {r['quarantined']}")
                 print(
                     f"dashboard:   {r['won_deals']} won deal(s), "
