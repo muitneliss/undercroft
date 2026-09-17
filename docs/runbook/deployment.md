@@ -67,6 +67,35 @@ during the first deploy.
 Production values live in `.dokploy-env.json` locally (gitignored) and in
 Dokploy's environment. They are never committed and never pasted into docs.
 
+## Service names are ambiguous on a shared host
+
+**Every service carries a unique network alias** (`vcdo-postgres`, `vcdo-minio`,
+and so on), and inter-service references use those, never the bare compose
+service name.
+
+This is not tidiness. Metabase has a domain, so Dokploy attaches it to the
+shared `dokploy-network` in addition to ours — and on that network `postgres`
+and `minio` are names other projects use too. During the first deploy, Metabase
+resolved plain `postgres` to **another project's database container** and tried
+to authenticate against it. The only thing that prevented a connection was that
+our password did not match theirs.
+
+Verified after the fix:
+
+```
+vcdo-postgres -> 192.168.96.3   (ours)
+postgres      -> 10.0.1.8       (another project, still)
+```
+
+Metabase's error for this is `Looks like your Password is incorrect`, which
+describes a credential problem and is not one. If a connection fails with that
+message, check what the hostname actually resolves to from *inside the container
+making the connection* before touching any password.
+
+Anything reachable only on our compose network (the worker, Kestra) was never
+affected, which is why the worker connected fine throughout and made the fault
+look like a Metabase-specific credential issue.
+
 ## Administering Kestra
 
 Kestra has no domain by design. To load or inspect flows, tunnel to it:

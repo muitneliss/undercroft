@@ -19,6 +19,13 @@
 #   * Fixtures come from the IMAGE, not a bind mount. There is no repo on the
 #     server for ../../fixtures to resolve to -- it silently becomes an empty
 #     directory, and the failure surfaces as a SourceError far from the cause.
+#   * Every service carries a UNIQUE network alias (vcdo-postgres, vcdo-minio,
+#     ...). This is not cosmetic. Metabase has a domain, so Dokploy attaches it
+#     to the shared `dokploy-network` as well as ours -- and on that network
+#     `postgres` and `minio` are names other projects use too. Metabase resolved
+#     plain `postgres` to ANOTHER PROJECT'S database container and tried to
+#     authenticate against it. The only thing that stopped it connecting was
+#     that our password did not match theirs.
 #   * NO host ports at all. Everything talks over the compose network; only
 #     Metabase is reachable from outside, through Dokploy's proxy. Publishing
 #     a port on a host shared with eleven other projects is surface nobody
@@ -46,6 +53,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    networks:
+      default:
+        aliases:
+          - vcdo-minio
     deploy:
       resources:
         limits:
@@ -91,6 +102,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      default:
+        aliases:
+          - vcdo-postgres
     deploy:
       resources:
         limits:
@@ -114,6 +129,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      default:
+        aliases:
+          - vcdo-kestra-postgres
     deploy:
       resources:
         limits:
@@ -168,6 +187,10 @@ services:
     volumes:
       - kestra-storage:/app/storage
       - kestra-workdir:/tmp/kestra-wd
+    networks:
+      default:
+        aliases:
+          - vcdo-kestra
     deploy:
       resources:
         limits:
@@ -223,13 +246,17 @@ services:
       VCDO_METABASE_URL: ${VCDO_METABASE_URL:-http://metabase:3000}
       VCDO_METABASE_ADMIN_EMAIL: ${VCDO_METABASE_ADMIN_EMAIL:-admin@vietcham.local}
       VCDO_METABASE_ADMIN_PASSWORD: ${VCDO_METABASE_ADMIN_PASSWORD:?set in .env}
-      VCDO_METABASE_PG_HOST: ${VCDO_METABASE_PG_HOST:-postgres}
+      VCDO_METABASE_PG_HOST: ${VCDO_METABASE_PG_HOST:-vcdo-postgres}
       # Shared secret Kestra presents to start a run. The endpoint is never
       # published outside the compose network.
       VCDO_TRIGGER_TOKEN: ${VCDO_TRIGGER_TOKEN:?set in .env}
     command: ["python", "-m", "vcdo.cli.main", "serve"]
     volumes:
       - worker-data:/app/data
+    networks:
+      default:
+        aliases:
+          - vcdo-worker
     deploy:
       resources:
         limits:
@@ -252,6 +279,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      default:
+        aliases:
+          - vcdo-metabase-postgres
     deploy:
       resources:
         limits:
@@ -279,6 +310,10 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
+    networks:
+      default:
+        aliases:
+          - vcdo-metabase
     deploy:
       resources:
         limits:
