@@ -27,6 +27,11 @@ COPY requirements-dev.txt pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
 COPY vcdo/ ./vcdo/
+# Migrations and flows are part of the deployable unit, not incidental files.
+# The worker applies migrations, so an image without them is an image that
+# cannot do its job -- and it fails at runtime, far from the missing COPY.
+COPY migrations/ ./migrations/
+COPY flows/ ./flows/
 RUN pip install --no-cache-dir -e .
 
 # Runs as a non-root user. The worker reads source APIs and writes to object

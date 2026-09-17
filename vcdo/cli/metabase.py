@@ -21,7 +21,7 @@ import time
 import urllib.error
 import urllib.request
 
-__all__ = ["provision"]
+__all__ = ["provision", "QUESTIONS"]
 
 DB_NAME = "VietCham curated"
 
@@ -125,12 +125,149 @@ def provision(
 
     db_id = existing["id"]
     tables = _wait_for_tables(base_url, session, db_id)
+    cards, dashboard = _ensure_dashboard(base_url, session, db_id)
+    created["questions"] = cards
+    created["dashboard"] = dashboard
 
     return {
         "database_id": db_id,
         "created": created,
         "tables": tables,
     }
+
+
+#: The dashboard, defined in version control rather than clicked together.
+#:
+#: Every question groups by currency. Not decoration -- it is the one thing that
+#: makes a mixed-currency total impossible to produce by accident, and a silently
+#: summed mixed-currency figure looks entirely plausible.
+QUESTIONS = [
+    {
+        "name": "Won deals by currency",
+        "description": "Closed-won deal count and value. Grouped by currency; never summed across.",
+        "sql": """
+            SELECT currency,
+                   count(*)    AS won_deals,
+                   sum(amount) AS won_amount
+            FROM curated.deals
+            WHERE is_won
+            GROUP BY currency
+            ORDER BY currency
+        """,
+    },
+    {
+        "name": "Pipeline by stage",
+        "description": (
+            "Open and closed deals by stage. Deals with no readable amount show a null value, not zero."
+        ),
+        "sql": """
+            SELECT stage,
+                   count(*)                       AS deals,
+                   count(amount)                  AS with_amount,
+                   count(*) - count(amount)       AS without_amount,
+                   sum(amount)                    AS value
+            FROM curated.deals
+            GROUP BY stage
+            ORDER BY deals DESC
+        """,
+    },
+    {
+        "name": "Customers by source and kind",
+        "description": "Curated customer counts. One row per source record, not per real-world company.",
+        "sql": """
+            SELECT source, customer_kind, count(*) AS customers
+            FROM curated.customers
+            GROUP BY source, customer_kind
+            ORDER BY source, customer_kind
+        """,
+    },
+    {
+        "name": "Data freshness",
+        "description": (
+            "How old the numbers on this dashboard are. "
+            "A figure with no visible age invites acting on a stale one."
+        ),
+        "sql": "SELECT * FROM curated.freshness ORDER BY table_name",
+    },
+    {
+        "name": "Run health",
+        "description": (
+            "Recent pipeline stages. unaccounted != 0 means rows vanished without anyone deciding they "
+            "should."
+        ),
+        "sql": """
+            SELECT recorded_at, stage, status, rows_in, rows_out, rows_excluded, unaccounted
+            FROM ops.run_ledger
+            ORDER BY recorded_at DESC
+            LIMIT 20
+        """,
+    },
+]
+
+DASHBOARD_NAME = "VietCham overview"
+
+
+def _ensure_dashboard(base: str, session: str, db_id: int) -> tuple[int, bool]:
+    """Create the questions and dashboard if absent. Returns (cards made, dashboard made)."""
+    existing_cards = {c["name"]: c for c in _api(base, "/api/card", session=session)}
+    made = 0
+    card_ids = []
+
+    for q in QUESTIONS:
+        if q["name"] in existing_cards:
+            card_ids.append(existing_cards[q["name"]]["id"])
+            continue
+        card = _api(
+            base,
+            "/api/card",
+            {
+                "name": q["name"],
+                "description": q["description"].strip(),
+                "display": "table",
+                "visualization_settings": {},
+                "dataset_query": {
+                    "type": "native",
+                    "database": db_id,
+                    "native": {"query": q["sql"].strip()},
+                },
+            },
+            session=session,
+        )
+        card_ids.append(card["id"])
+        made += 1
+
+    dashboards = _api(base, "/api/dashboard", session=session)
+    dashboards = dashboards["data"] if isinstance(dashboards, dict) else dashboards
+    if any(d["name"] == DASHBOARD_NAME for d in dashboards):
+        return made, False
+
+    dash = _api(
+        base,
+        "/api/dashboard",
+        {"name": DASHBOARD_NAME, "description": "Curated HubSpot overview, with freshness and run health."},
+        session=session,
+    )
+    _api(
+        base,
+        f"/api/dashboard/{dash['id']}",
+        {
+            "dashcards": [
+                {
+                    "id": -(i + 1),
+                    "card_id": cid,
+                    "row": (i // 2) * 6,
+                    "col": (i % 2) * 9,
+                    "size_x": 9,
+                    "size_y": 6,
+                    "parameter_mappings": [],
+                }
+                for i, cid in enumerate(card_ids)
+            ]
+        },
+        session=session,
+        method="PUT",
+    )
+    return made, True
 
 
 def _wait_for_tables(base: str, session: str, db_id: int, attempts: int = 40) -> list[str]:

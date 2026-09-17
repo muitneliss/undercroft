@@ -106,6 +106,14 @@ def _run_pipeline(verb: str):
     return run
 
 
+def serve_cmd(_args: argparse.Namespace) -> int:
+    from vcdo.cli.server import serve
+
+    print("trigger listening on :8081 (container-internal)")
+    serve()
+    return EXIT_OK
+
+
 def provision_bi(_args: argparse.Namespace) -> int:
     from vcdo.cli.metabase import MetabaseError, provision_from_env
 
@@ -138,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("doctor", help="check that the stack is usable").set_defaults(fn=doctor)
+    sub.add_parser("serve", help="run the HTTP trigger for Kestra").set_defaults(fn=serve_cmd)
     sub.add_parser("provision-bi", help="provision Metabase (idempotent)").set_defaults(fn=provision_bi)
     sub.add_parser("migrate", help="apply curated schema migrations").set_defaults(
         fn=_run_pipeline("migrate")

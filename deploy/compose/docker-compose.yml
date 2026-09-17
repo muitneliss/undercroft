@@ -151,6 +151,12 @@ services:
             basic-auth:
               username: ${VCDO_KESTRA_USER:-admin@vietcham.local}
               password: ${VCDO_KESTRA_PASSWORD}
+      # `{{ envs.trigger_token }}` resolves to ENV_TRIGGER_TOKEN. The prefix is
+      # ENV_, not KESTRA_: Kestra 0.23 changed it deliberately, because
+      # Micronaut lets KESTRA_* variables override configuration, so any secret
+      # passed that way became readable from every flow. A KESTRA_-prefixed
+      # variable is now simply invisible to expressions.
+      ENV_TRIGGER_TOKEN: ${VCDO_TRIGGER_TOKEN:?set in .env}
     healthcheck:
       test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:8080/ui/ || exit 1"]
       interval: 30s
@@ -208,6 +214,11 @@ services:
       VCDO_POSTGRES_DSN: postgresql://${VCDO_PG_USER:-vcdo}:${VCDO_PG_PASSWORD:?set in .env}@postgres:5432/${VCDO_PG_DB:-vcdo}
       VCDO_LOG_DIR: /app/data/logs
       VCDO_FIXTURES_DIR: /app/fixtures
+      VCDO_METABASE_RO_PASSWORD: ${VCDO_METABASE_RO_PASSWORD:?set in .env}
+      # Shared secret Kestra presents to start a run. The endpoint is never
+      # published outside the compose network.
+      VCDO_TRIGGER_TOKEN: ${VCDO_TRIGGER_TOKEN:?set in .env}
+    command: ["python", "-m", "vcdo.cli.main", "serve"]
     volumes:
       - worker-data:/app/data
       - ../../fixtures:/app/fixtures:ro
