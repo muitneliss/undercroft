@@ -1,0 +1,9 @@
+{
+  "//": "The deploy client is typechecked and linted like the rest of the repo: it is the thing that ships releases, and a type error here surfaces as a half-applied rollout.",
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["**/*.ts"]
+}

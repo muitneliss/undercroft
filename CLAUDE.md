@@ -43,6 +43,7 @@ about to touch.** That is the only reason this index exists.
 | `privileges.md` | `packages/db/sql/**`                        | the role and grant model; why the BI role cannot read `raw`                              |
 | `tests.md`      | `**/*.test.ts`                              | real in-memory implementations over mocks, a guard needs two tests                       |
 | `pii.md`        | `specs/**`, `docs/**`, `*.md`, fixtures     | no real customer data in any tracked file                                                |
+| `deployment.md` | `deploy/**`, `flows/**`, deploy workflows   | the Dokploy API is the only channel, every service declares a memory limit               |
 
 ## Language and runtime
 
@@ -62,6 +63,15 @@ and is deliberately separate.
 **A green `verify` is not evidence that the rules above held.** ESLint cannot see "never
 guess", create-only lake writes, or the one-writer rule; the rule files are their only
 enforcement. Treating green as proof would be rule 2 broken by the harness itself.
+
+## Deploying
+
+One Dokploy raw-compose stack on `lowbit.link`; the control plane and Metabase are the only
+public surfaces. Merging the release-please PR cuts a tag, which builds the images and
+deploys them — nothing else does. The Dokploy API is the only channel for a change (SSH is
+read-only), and `scripts/dokploy.ts` verifies a rollout landed rather than trusting
+Dokploy's `done`. See `.claude/rules/deployment.md`, `docs/runbook/deployment.md`, and
+ADR 0008.
 
 ## Conventions
 

@@ -152,6 +152,10 @@ services:
       UNDERCROFT_S3_SECRET_KEY: ${UNDERCROFT_S3_SECRET_KEY}
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY:?set in .env}
       UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN}
+      # dbt runs as a subprocess here (ADR 0007) and connects as `undercroft_dbt`, never as
+      # the platform role. dbt/profiles.yml reads this; without it the transform verb fails
+      # inside dbt, far from anything that names the variable.
+      UNDERCROFT_DBT_PASSWORD: ${UNDERCROFT_DBT_PASSWORD:?set in .env}
     deploy:
       resources:
         limits:
