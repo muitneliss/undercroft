@@ -2,6 +2,7 @@
   "name": "undercroft",
   "version": "0.1.0",
   "devDependencies": {
+    "@ast-grep/cli": "0.45.3",
     "@eslint/js": "10.0.1",
     "@types/bun": "1.4.2",
     "eslint": "10.10.0",
@@ -18,14 +19,18 @@
   "scripts": {
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
+    "lint:state": "ast-grep scan",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
     "test": "bun test",
-    "verify": "bun run typecheck && bun run lint && bun run format:check && bun run spec:validate && bun run test"
+    "verify": "bun run typecheck && bun run lint && bun run lint:state && bun run format:check && bun run spec:validate && bun run test"
   },
   "type": "module",
+  "trustedDependencies": [
+    "@ast-grep/cli"
+  ],
   "workspaces": [
     "packages/*",
     "apps/*"

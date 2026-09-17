@@ -1,0 +1,34 @@
+# Bans React's `useState` in the UI. Client state belongs in the Zustand store
+# (apps/ui/src/store.ts); server state belongs in the tRPC React Query hooks
+# (trpc.*.useQuery()). A local `useState` is a third, unowned source of truth.
+#
+# Two rules because ast-grep binds one language per rule: `.tsx` parses as `tsx`,
+# `.ts` as `typescript`. Both are scoped to apps/ui -- `useState` is a React concern,
+# and the backend apps have no React. See .claude/rules/state.md and docs/adr/0009.
+id: no-usestate-tsx
+language: tsx
+severity: error
+message: >-
+  useState is banned in the UI. Put client state in the Zustand store
+  (apps/ui/src/store.ts) and server state in tRPC React Query hooks
+  (trpc.*.useQuery()). See .claude/rules/state.md.
+files:
+  - "apps/ui/**"
+rule:
+  any:
+    - pattern: useState($$$ARGS)
+    - pattern: React.useState($$$ARGS)
+---
+id: no-usestate-ts
+language: typescript
+severity: error
+message: >-
+  useState is banned in the UI. Put client state in the Zustand store
+  (apps/ui/src/store.ts) and server state in tRPC React Query hooks
+  (trpc.*.useQuery()). See .claude/rules/state.md.
+files:
+  - "apps/ui/**"
+rule:
+  any:
+    - pattern: useState($$$ARGS)
+    - pattern: React.useState($$$ARGS)

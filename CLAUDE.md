@@ -42,6 +42,7 @@ about to touch.** That is the only reason this index exists.
 | `connectors.md` | `packages/connector-runtime/**`, `specs/**` | the spec contract; a failure raises, never an empty stream                               |
 | `privileges.md` | `packages/db/sql/**`                        | the role and grant model; why the BI role cannot read `raw`                              |
 | `tests.md`      | `**/*.test.ts`                              | real in-memory implementations over mocks, a guard needs two tests                       |
+| `state.md`      | `apps/ui/**`                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
 | `pii.md`        | `specs/**`, `docs/**`, `*.md`, fixtures     | no real customer data in any tracked file                                                |
 | `deployment.md` | `deploy/**`, `flows/**`, deploy workflows   | the Dokploy API is the only channel, every service declares a memory limit               |
 
