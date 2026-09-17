@@ -56,26 +56,36 @@ jobs:
         continue-on-error: true
         run: .venv-tests/bin/pyright
 
-      # Wiki guard.
+      # ---------------------------------------------------------------------
+      # Wiki guard -- WRITTEN BUT DISABLED. Blocked upstream, not by choice.
       #
       # This harness targets Claude Code *and* Codex, so there is no PreToolUse
-      # hook -- a hook binds one agent and half-enforcement reads as enforcement.
-      # This is the agent-independent equivalent: a wiki page asserting a fact
-      # whose source is not tracked fails the build rather than quietly becoming
-      # folklore.
+      # hook -- a hook binds one agent, and half-enforcement reads as
+      # enforcement. These steps are the agent-independent equivalent: a wiki
+      # page asserting a fact whose source is not tracked fails the build rather
+      # than quietly becoming folklore.
       #
-      # Downloaded into a temp dir and checksum-verified against the published
-      # SHA256SUMS before it is allowed to run.
-      - name: Install Ymir wiki CLI
-        run: |
-          set -euo pipefail
-          tmp="$(mktemp -d)"
-          base="https://github.com/muitneliss/ymir/releases/download/ymir-v${YMIR_VERSION}"
-          curl -fsSL -o "$tmp/wiki-linux-x64" "$base/wiki-linux-x64"
-          curl -fsSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt"
-          (cd "$tmp" && grep ' wiki-linux-x64$' SHA256SUMS.txt | sha256sum -c -)
-          chmod +x "$tmp/wiki-linux-x64"
-          sudo mv "$tmp/wiki-linux-x64" /usr/local/bin/wiki
-
-      - name: wiki check
-        run: wiki --root ./wiki check --error-on-untracked-sources
+      # They are commented out because `wiki init` is broken in Ymir CLI 0.8.0
+      # (`ENOENT: lstat 'bun'`, reproducible in an empty repo, with and without
+      # --no-hook), so wiki/ does not exist yet. Enabling them now would fail
+      # every build, and a permanently red gate is worse than an absent one.
+      #
+      # TO RE-ENABLE: scaffold the wiki once `wiki init` is fixed (or the CLI is
+      # upgraded past 0.8.0 -- bump YMIR_VERSION above to match), then uncomment.
+      # Verified as working today: the wiki-linux-x64 asset and its published
+      # SHA256SUMS both resolve, and `check --error-on-untracked-sources` is a
+      # real flag on this version.
+      #
+      # - name: Install Ymir wiki CLI
+      #   run: |
+      #     set -euo pipefail
+      #     tmp="$(mktemp -d)"
+      #     base="https://github.com/muitneliss/ymir/releases/download/ymir-v${YMIR_VERSION}"
+      #     curl -fsSL -o "$tmp/wiki-linux-x64" "$base/wiki-linux-x64"
+      #     curl -fsSL -o "$tmp/SHA256SUMS.txt" "$base/SHA256SUMS.txt"
+      #     (cd "$tmp" && grep ' wiki-linux-x64$' SHA256SUMS.txt | sha256sum -c -)
+      #     chmod +x "$tmp/wiki-linux-x64"
+      #     sudo mv "$tmp/wiki-linux-x64" /usr/local/bin/wiki
+      #
+      # - name: wiki check
+      #   run: wiki --root ./wiki check --error-on-untracked-sources

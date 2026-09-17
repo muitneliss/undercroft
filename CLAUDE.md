@@ -6,8 +6,11 @@
 > sync step to stop them diverging -- a symlink removes the failure mode
 > rather than policing it.
 
-Read this before changing anything. It is short on purpose; the reasoning lives
-in `docs/adr/` and in module docstrings next to the code it constrains.
+Read this before changing anything. It is short on purpose, and it is now a
+**map**: the enforceable detail lives in `.claude/rules/`, one file per concern,
+and the reasoning lives in `docs/adr/` and in module docstrings next to the code
+they constrain. Each rule has exactly one owner — the same instinct as the
+symlink above, applied one level down.
 
 ## What this is
 
@@ -24,19 +27,30 @@ repo imports from it.
 ## The three rules that matter most
 
 1. **Raw is the only durable layer.** Everything in Postgres is a projection and
-   may be dropped and rebuilt. Raw cannot be recomputed — if a source edits or
-   deletes their side, what we did not capture is gone. Treat writes to the lake
-   accordingly.
+   may be dropped and rebuilt. Raw cannot be recomputed.
 
-2. **Never guess; return nothing and say why.** An unreadable amount is `None`,
-   not `0`. An unresolved identity is `""`, not a best guess — a wrong code is
-   worse than an empty cell, because an empty cell is visibly missing and a wrong
-   code is invisibly false. "No evidence" is never "pass".
+2. **Never guess; return nothing and say why.** An empty cell is visibly
+   missing; a wrong value is invisibly false. "No evidence" is never "pass".
 
-3. **PII does not enter git.** Client names are PII. Tracked files — docs, tests,
-   fixtures, reports — use CASE-IDs. Real names live only in restricted storage
-   and in conversation with the owner. Never commit `.dokploy.json`, tokens, or
-   anything under `data/`.
+3. **PII does not enter git.** Client names are PII. Tracked files use CASE-IDs.
+
+The specifics of all three are enforced by the rule files below.
+
+## Rules
+
+`.claude/rules/*.md` are path-scoped: each loads when a matching file is opened,
+which is the moment its rule actually bites. **Claude Code discovers these
+automatically. Other agents do not — if you are not Claude Code, read the ones
+matching the files you are about to touch.** That is the only reason this index
+exists.
+
+| Rule file | Applies to | Governs |
+|---|---|---|
+| `data-integrity.md` | `vcdo/**/*.py`, `migrations/**/*.sql` | `Decimal` end to end, explicit dated currency conversion, three-valued comparison, `None`/`""` over a guess |
+| `raw-lake.md` | `vcdo/lake/**`, `vcdo/sources/**` | create-only writes, idempotent by content, retention bounded and reported |
+| `tests.md` | `tests/**/*.py` | `tmp_path` only, real in-memory over mocks, a guard needs two tests, pin what you import |
+| `pii.md` | `tests/**`, `fixtures/**`, `docs/**`, `wiki/**`, `*.md` | CASE-IDs in tracked files; what must never be committed |
+| `deployment.md` | `deploy/**`, `flows/**` | Dokploy API is the only channel, SSH read-only, explicit memory limits |
 
 ## Ingestion
 
@@ -50,49 +64,55 @@ Drive PDFs and Gmail attachments --- go through `vcdo.lake.LakeStore`, because
 no record-oriented ELT tool writes binary files and that is half the scope.
 Scheduling is Kestra. See ADR 0003.
 
-## Money
+## The gate
 
-`Decimal` end to end, `NUMERIC(18,4)` in Postgres, never `float`. Amounts carry
-their currency and are never implicitly converted; conversion is an explicit step
-through a dated rate. Comparison is three-valued (`ok` / `mismatch` /
-`unverified`) — see `vcdo/core/money.py`.
+`make verify` — ruff check, ruff format --check, and the gate tests. Run it
+before claiming anything works. CI runs the same command on push to `main` and
+on every pull request, calling `make` rather than spelling the tools out, so
+there is exactly one definition of the gate.
 
-## Tests
+**A green `make verify` is not evidence that the rules above held.** ruff cannot
+see "never guess", create-only lake writes, or the Dokploy channel rule; the rule
+files are their only enforcement. Treating green as proof would be rule 2 broken
+by the harness itself.
 
-- `make verify` is the gate: ruff + the `tests/` path.
-- `tests/monitors/` binds to live data or deployed services. Red there means data
-  drift, not a code defect, so it is excluded from the gate and run explicitly.
-  This is `norecursedirs`, not `addopts --ignore`, because the latter would make
-  `pytest tests/monitors/` silently collect nothing.
-- **Tests never write into the repo.** Use `tmp_path`; anything under test takes
-  an explicit output destination.
-- If a test imports a module, it is pinned in `requirements-dev.txt`. Installing
-  by hand gives you green and the next machine red.
-- Prefer a real in-memory implementation over a mock. A suite that asserts a mock
-  was called is green whether or not the code works.
-- A guard needs two tests: one proving it fires, one proving it stays quiet.
-- Coverage is not correctness. Before trusting any extraction output, measure how
-  much of it is *right* — and report an interval, not a bare percentage.
+`pyright` is pinned and configured but deliberately **outside** the gate. CI runs
+it non-blocking so the true error count is visible on every push; it becomes a
+gate once that number is known and small, and not before.
 
-## Deployment
+## Commits and releases
 
-Through the `dokploy` skill, against `https://lowbit.link/api`. **The API is the
-only channel for changes; SSH is read-only, for diagnosis.** Direct edits on the
-server bypass Dokploy's state and cause drift.
+Commit messages use **Conventional Commits** (`feat:`, `fix:`, `docs:`,
+`chore:`, `refactor:`, `test:`). release-please derives the version bump and
+`CHANGELOG.md` from them, so a non-conventional message silently produces no
+release. History before this convention was adopted is not conventional; that is
+fine and is not rewritten.
 
-Never fabricate a Dokploy endpoint name — fetch `settings.getOpenApiDocument` and
-search it. Services deploy as raw compose; `deploy/compose/` in this repo is the
-source of truth and Dokploy holds a copy.
+Merging the release PR bumps `[project].version`, writes the changelog and cuts a
+tag. **It does not deploy.** Shipping stays a human action through the `dokploy`
+skill.
 
-We are a tenant on a shared host running eleven other projects. Every service
-carries an explicit memory limit. See ADR 0001 for measured capacity.
+## Where knowledge lives
+
+- `docs/` — **decisions we made.** Numbered, dated, immutable. A reversal gets a
+  new ADR superseding the old one; we never edit a decision to look like it was
+  always different, because then the reasoning that produced it is lost.
+- `wiki/` — **facts we learned.** Measured, updatable, keyword-searchable;
+  chiefly the expensive findings distilled from the legacy system. An ADR may
+  cite a wiki page for the measurement behind it; a wiki page never records a
+  decision.
+
+> **`wiki/` does not exist yet.** `wiki init` is broken in Ymir CLI 0.8.0
+> (`ENOENT: lstat 'bun'`). Until it is scaffolded, learned facts go in `docs/`
+> and the CI wiki guard stays commented out in `.github/workflows/ci.yml`.
+> `.claude/rules/pii.md` already covers `wiki/**` so the PII rule binds it from
+> the first page.
 
 ## Conventions
 
 - Python 3.12, package `vcdo/`. (Not `platform/` — that shadows the stdlib.)
 - `docs/adr/NNNN-topic.md` for decisions. Status, date, the options rejected and
-  why. If a decision is reversed, write a new ADR superseding the old one rather
-  than editing history.
+  why.
 - Module docstrings explain *why*, especially where the code refuses to do the
   obvious thing. A constraint without a recorded reason gets "simplified" away by
   the next reader.
