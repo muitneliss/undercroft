@@ -140,6 +140,7 @@ def seed(cfg: Config, log: ObsLog) -> dict[str, int]:
 
 def run_slice(cfg: Config, log: ObsLog) -> dict[str, int]:
     """The full vertical slice: raw -> curated -> a dashboard query."""
+    from vcdo.curated.link import link_entities
     from vcdo.curated.load import flush_run_ledger, publish_hubspot, publish_xero
 
     migrate(cfg, log)
@@ -151,6 +152,10 @@ def run_slice(cfg: Config, log: ObsLog) -> dict[str, int]:
         # Xero publishes behind its reconciliation gate; a GateBlocked here
         # propagates and fails the run rather than publishing wrong figures.
         xero = publish_xero(lake, conn, log, FIXTURE_TENANT)
+        # Linking runs AFTER both publishes: it is a cross-source operation by
+        # definition, and doing it inside one source's publish would link
+        # against whatever the other had last time.
+        links = link_entities(conn, log, FIXTURE_TENANT)
         # The ledger is projected AFTER publish, so it records what actually
         # happened including the publish stage itself.
         flush_run_ledger(conn, cfg.log_dir, published.run_id)
@@ -177,6 +182,8 @@ def run_slice(cfg: Config, log: ObsLog) -> dict[str, int]:
         "invoices": xero.customers,
         "payments": xero.deals,
         "quarantined": published.quarantined + xero.quarantined,
+        "linked": links.linked,
+        "needs_review": links.proposed + links.conflicted,
         "won_deals": won,
         "won_amount": won_amount,
         "currencies": currencies,

@@ -182,6 +182,37 @@ QUESTIONS = [
         """,
     },
     {
+        "name": "Deals vs invoiced by customer",
+        "description": (
+            "The cross-source view: HubSpot deals alongside Xero invoicing for the same "
+            "customer, joined on resolved entity. Deal value and invoiced value are "
+            "SEPARATE columns and must never be added -- a deal is an expectation and an "
+            "invoice is a claim on money, so summing them double-counts one commercial "
+            "event as it progresses. A customer present in only one system still appears; "
+            "an inner join would silently hide exactly the population worth looking at."
+        ),
+        "sql": """
+            SELECT customer, currency, period,
+                   deals_won, deal_value_won,
+                   invoices, invoiced, paid, outstanding
+            FROM curated.customer_commercial_overview
+            ORDER BY period DESC, customer
+        """,
+    },
+    {
+        "name": "Deals with no customer",
+        "description": (
+            "Deals carrying no HubSpot company association. They are missing from every "
+            "customer-level figure above, and that absence is silent unless listed here. "
+            "An empty table is the healthy state."
+        ),
+        "sql": """
+            SELECT tenant_id, source_record_id, deal_name, stage, amount, currency, closed_on
+            FROM curated.unattributed_deals
+            ORDER BY closed_on DESC NULLS LAST
+        """,
+    },
+    {
         "name": "Revenue by customer and currency",
         "description": (
             "Invoiced, paid, credited and outstanding per customer per month. "

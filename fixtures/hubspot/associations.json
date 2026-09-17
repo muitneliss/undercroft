@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "HubSpot v4 association batch-read shape: /crm/v4/associations/deals/companies/batch/read.",
+    "Without these, a deal has no owner and any join between deals and customers",
+    "is a guess. The first version of curated.customer_commercial_overview joined",
+    "on source alone and credited every contact with every company's deals -- each",
+    "row looked plausible and the totals were fabricated."
+  ],
+  "results": [
+    {
+      "from": { "id": "9001" },
+      "to": [ { "toObjectId": "7001", "associationTypes": [ { "category": "HUBSPOT_DEFINED", "typeId": 341, "label": null } ] } ]
+    },
+    {
+      "from": { "id": "9002" },
+      "to": [ { "toObjectId": "7002", "associationTypes": [ { "category": "HUBSPOT_DEFINED", "typeId": 341, "label": null } ] } ]
+    },
+    {
+      "from": { "id": "9003" },
+      "to": [ { "toObjectId": "7003", "associationTypes": [ { "category": "HUBSPOT_DEFINED", "typeId": 341, "label": null } ] } ]
+    },
+    {
+      "from": { "id": "9004" },
+      "to": [ { "toObjectId": "7004", "associationTypes": [ { "category": "HUBSPOT_DEFINED", "typeId": 341, "label": null } ] } ]
+    }
+  ]
+}

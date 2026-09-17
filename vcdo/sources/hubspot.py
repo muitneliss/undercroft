@@ -38,7 +38,10 @@ __all__ = ["HubSpotSource", "ENTITIES", "PROPERTIES", "SEARCH_CAP"]
 #: being silently dropped.
 SEARCH_CAP = 10_000
 
-ENTITIES = ("companies", "contacts", "deals")
+#: `associations` is not a CRM object -- it is the deal->company edge, read
+#: from a different route. It is in this list because WITHOUT it a deal has no
+#: owner, and any join between deals and customers is a guess.
+ENTITIES = ("companies", "contacts", "deals", "associations")
 
 #: Lifted from the legacy puller, which ran against this portal. Extend
 #: deliberately: every added property widens the payload for every record.
@@ -61,6 +64,7 @@ PROPERTIES: dict[str, tuple[str, ...]] = {
         "lastmodifieddate",
         "hubspot_owner_id",
     ),
+    "associations": (),
     "deals": (
         "dealname",
         "dealstage",
@@ -80,6 +84,7 @@ UPDATED_PROPERTY = {
     "companies": "hs_lastmodifieddate",
     "contacts": "lastmodifieddate",
     "deals": "hs_lastmodifieddate",
+    "associations": "",
 }
 
 
@@ -125,6 +130,16 @@ class HubSpotSource:
         Used by both modes, so a parsing bug cannot hide in the path that only
         production exercises.
         """
+        if entity == "associations":
+            # An edge, not an object: keyed by the deal it comes from.
+            return RawRecord(
+                source=self.name,
+                tenant_id=self.tenant_id,
+                entity=entity,
+                source_record_id=str((item.get("from") or {}).get("id") or ""),
+                source_updated_at=None,
+                payload=item,
+            )
         props = item.get("properties") or {}
         return RawRecord(
             source=self.name,
@@ -152,6 +167,9 @@ class HubSpotSource:
     # -- live -----------------------------------------------------------------
 
     def _read_live(self, entity: str) -> Iterator[dict]:
+        if entity == "associations":
+            yield from self._read_live_associations()
+            return
         from dlt.sources.helpers.rest_client import RESTClient
         from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
         from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
@@ -185,3 +203,31 @@ class HubSpotSource:
                 "result cap. HubSpot does not signal truncation, so this is almost certainly "
                 "silent data loss -- narrow the window and page through it."
             )
+
+    def _read_live_associations(self) -> Iterator[dict]:
+        """Deal -> company edges, via the v4 batch-read route.
+
+        A separate route and a separate shape from CRM objects, which is why it
+        is handled separately rather than bent into the object reader.
+        """
+        import requests
+
+        deal_ids = [str(item.get("id")) for item in self._read_live("deals")]
+        if not deal_ids:
+            return
+
+        for offset in range(0, len(deal_ids), 100):
+            chunk = deal_ids[offset : offset + 100]
+            response = requests.post(
+                "https://api.hubapi.com/crm/v4/associations/deals/companies/batch/read",
+                headers={"Authorization": f"Bearer {self._token}"},
+                json={"inputs": [{"id": deal_id} for deal_id in chunk]},
+                timeout=60,
+            )
+            if response.status_code != 200:
+                raise SourceError(
+                    f"hubspot associations read failed: HTTP {response.status_code}. "
+                    "Without associations a deal has no owner and every deal-to-customer "
+                    "join becomes a guess, so this is fatal rather than skippable."
+                )
+            yield from response.json().get("results", [])

@@ -53,7 +53,7 @@ def publish_hubspot(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> 
     """Curate and publish one tenant's HubSpot raw into Postgres, atomically."""
     current_run = run_id()
     customers: list[tuple[CuratedCustomer, str]] = []
-    deals: list[tuple[CuratedDeal, str]] = []
+    deals: list[tuple[CuratedDeal, str, str | None]] = []
     rejects: list[tuple[dict, Rejected, str]] = []
 
     with stage("curate:hubspot", log) as st:
@@ -69,6 +69,14 @@ def publish_hubspot(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> 
                 else:
                     customers.append((result, key))
 
+        # Association edges first: a deal needs its owner before it is curated.
+        deal_to_company: dict[str, str] = {}
+        for raw in _read_raw(lake, "hubspot", tenant_id, "associations"):
+            read += 1
+            targets = (raw.get("payload") or {}).get("to") or []
+            if targets:
+                deal_to_company[raw["source_record_id"]] = str(targets[0].get("toObjectId") or "")
+
         for raw in _read_raw(lake, "hubspot", tenant_id, "deals"):
             read += 1
             key = f"records/hubspot/{tenant_id}/deals/{raw['source_record_id']}"
@@ -77,7 +85,7 @@ def publish_hubspot(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> 
                 rejects.append((raw, result, key))
                 st.excluded(1, result.reason_code)
             else:
-                deals.append((result, key))
+                deals.append((result, key, deal_to_company.get(raw["source_record_id"])))
 
         st.rows_in(read)
         st.rows_out(len(customers) + len(deals))
@@ -95,8 +103,8 @@ def publish_hubspot(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> 
 
         for customer, key in customers:
             _upsert_customer(cur, customer, current_run, key)
-        for deal, key in deals:
-            _upsert_deal(cur, deal, current_run, key)
+        for deal, key, customer_id in deals:
+            _upsert_deal(cur, deal, current_run, key, customer_id)
         for raw, reject, key in rejects:
             _quarantine(cur, raw, reject, current_run, key)
 
@@ -120,8 +128,8 @@ def _upsert_customer(cur: Any, c: CuratedCustomer, run: str, key: str) -> None:
         INSERT INTO curated.customers (
             source, tenant_id, source_record_id, display_name, normalised_name,
             domain, email, lifecycle_stage, industry, customer_kind,
-            source_created_at, source_updated_at, run_id, lake_key, built_at
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+            source_created_at, source_updated_at, uen, run_id, lake_key, built_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
         ON CONFLICT (source, tenant_id, source_record_id) DO UPDATE SET
             display_name      = EXCLUDED.display_name,
             normalised_name   = EXCLUDED.normalised_name,
@@ -132,6 +140,7 @@ def _upsert_customer(cur: Any, c: CuratedCustomer, run: str, key: str) -> None:
             customer_kind     = EXCLUDED.customer_kind,
             source_created_at = EXCLUDED.source_created_at,
             source_updated_at = EXCLUDED.source_updated_at,
+            uen               = coalesce(EXCLUDED.uen, curated.customers.uen),
             run_id            = EXCLUDED.run_id,
             lake_key          = EXCLUDED.lake_key,
             built_at          = now()
@@ -149,20 +158,21 @@ def _upsert_customer(cur: Any, c: CuratedCustomer, run: str, key: str) -> None:
             c.customer_kind,
             c.source_created_at,
             c.source_updated_at,
+            getattr(c, "uen", None),
             run,
             key,
         ),
     )
 
 
-def _upsert_deal(cur: Any, d: CuratedDeal, run: str, key: str) -> None:
+def _upsert_deal(cur: Any, d: CuratedDeal, run: str, key: str, customer_source_id: str | None) -> None:
     cur.execute(
         """
         INSERT INTO curated.deals (
             source, tenant_id, source_record_id, deal_name, stage, pipeline,
             is_won, is_closed, amount, currency, closed_on,
-            source_created_at, source_updated_at, run_id, lake_key, built_at
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+            source_created_at, source_updated_at, customer_source_id, run_id, lake_key, built_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
         ON CONFLICT (source, tenant_id, source_record_id) DO UPDATE SET
             deal_name         = EXCLUDED.deal_name,
             stage             = EXCLUDED.stage,
@@ -172,6 +182,7 @@ def _upsert_deal(cur: Any, d: CuratedDeal, run: str, key: str) -> None:
             amount            = EXCLUDED.amount,
             currency          = EXCLUDED.currency,
             closed_on         = EXCLUDED.closed_on,
+            customer_source_id = EXCLUDED.customer_source_id,
             source_created_at = EXCLUDED.source_created_at,
             source_updated_at = EXCLUDED.source_updated_at,
             run_id            = EXCLUDED.run_id,
@@ -192,6 +203,7 @@ def _upsert_deal(cur: Any, d: CuratedDeal, run: str, key: str) -> None:
             d.closed_on,
             d.source_created_at,
             d.source_updated_at,
+            customer_source_id,
             run,
             key,
         ),
@@ -305,8 +317,23 @@ def publish_xero(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> Pub
     rejects: list[tuple[dict, Rejected, str]] = []
     raw_invoices: list[dict] = []
 
+    contacts: list[tuple[Any, str]] = []
+
     with stage("curate:xero", log) as st:
         read = 0
+        # Xero contacts become curated customers too. Without both sides in one
+        # table the crosswalk has nothing to link ACROSS -- a HubSpot company and
+        # a Xero contact for the same business would never meet.
+        for raw in _read_raw(lake, "xero", tenant_id, "contacts"):
+            read += 1
+            key = f"records/xero/{tenant_id}/contacts/{raw['source_record_id']}"
+            payload = raw.get("payload") or {}
+            name = (payload.get("Name") or "").strip()
+            if not name:
+                rejects.append((raw, Rejected("missing_name", "xero contact has no Name"), key))
+                st.excluded(1, "missing_name")
+                continue
+            contacts.append((_xero_contact_row(raw, payload, name), key))
         for raw in _read_raw(lake, "xero", tenant_id, "invoices"):
             read += 1
             raw_invoices.append(raw.get("payload") or {})
@@ -329,7 +356,7 @@ def publish_xero(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> Pub
                 payments.append((result, key))
 
         st.rows_in(read)
-        st.rows_out(len(invoices) + len(payments))
+        st.rows_out(len(invoices) + len(payments) + len(contacts))
 
     gate = adjudicate(raw_invoices)
     _record_findings(conn, current_run, gate)
@@ -371,6 +398,8 @@ def publish_xero(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> Pub
         assert row is not None
         generation_id = row[0]
 
+        for contact, key in contacts:
+            _upsert_customer(cur, contact, current_run, key)
         for invoice, key in invoices:
             _upsert_invoice(cur, invoice, current_run, key)
         for payment, key in payments:
@@ -507,4 +536,30 @@ def _upsert_payment(cur: Any, p: Any, currency: str | None, run: str, key: str) 
             run,
             key,
         ),
+    )
+
+
+def _xero_contact_row(raw: dict, payload: dict, name: str):
+    """A Xero contact as a curated customer.
+
+    `CompanyNumber` is Xero's field for the registration number -- the UEN in
+    Singapore. It is the one identifier strong enough to merge on, so it is
+    carried through rather than left in the payload.
+    """
+    from vcdo.core.names import norm_name
+    from vcdo.curated.hubspot import CuratedCustomer
+
+    return CuratedCustomer(
+        source="xero",
+        tenant_id=raw.get("tenant_id", ""),
+        source_record_id=raw["source_record_id"],
+        display_name=name,
+        normalised_name=norm_name(name),
+        domain=None,
+        email=(payload.get("EmailAddress") or "").strip() or None,
+        lifecycle_stage=(payload.get("ContactStatus") or "").strip() or None,
+        industry=None,
+        customer_kind="company",
+        source_created_at=None,
+        source_updated_at=None,
     )

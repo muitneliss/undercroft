@@ -98,7 +98,9 @@ def test_a_malformed_payload_is_quarantined_with_its_payload(stack):
     data = json.loads((ROOT / "fixtures" / "hubspot" / "companies.json").read_text())
     data["results"][0]["properties"]["name"] = "   "  # a company with no readable name
     (broken / "hubspot" / "companies.json").write_text(json.dumps(data))
-    for name in ("contacts", "deals"):
+    # Every entity the source declares, not a hand-listed subset -- adding an
+    # entity should not silently break an unrelated test.
+    for name in ("contacts", "deals", "associations"):
         (broken / "hubspot" / f"{name}.json").write_text(
             (ROOT / "fixtures" / "hubspot" / f"{name}.json").read_text()
         )
