@@ -49,7 +49,18 @@ __all__ = ["ObjectStore", "LakeStore", "PutResult", "ObjectExists", "sha256_hex"
 #: Tracked in docs/adr/0002.
 RETENTION_UNBOUNDED = None
 
-_STAMP = "%Y%m%dT%H%M%SZ"
+#: Version stamp. MICROSECOND precision, not seconds.
+#:
+#: Second granularity looked sufficient and was not: two genuinely different
+#: versions of the same document arriving within one second produced an
+#: identical stamp, and create-only then refused the second one. That is
+#: correct behaviour applied to a wrong key, and it rejects real data during a
+#: backfill or a rapid re-run.
+#:
+#: Finer stamps cannot manufacture spurious versions, because identical bytes
+#: are caught by content-idempotence before a stamp is ever generated. Still
+#: lexically sortable, so ordering is unchanged.
+_STAMP = "%Y%m%dT%H%M%S.%fZ"
 
 
 def sha256_hex(data: bytes) -> str:

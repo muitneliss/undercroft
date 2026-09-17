@@ -17,16 +17,6 @@ pytest==9.1.1
 pytest-timeout==2.4.0
 ruff==0.16.8
 
-# Type checker. Pinned so the [tool.pyright] block in pyproject.toml resolves
-# identically on every machine -- an unpinned checker changes its mind between
-# releases, and the diff reads as "your code broke" rather than "the tool moved".
-#
-# Deliberately NOT part of `make verify` yet. pyproject's own note is the reason:
-# a wall of false errors trains people to ignore the real ones, and nobody has
-# measured how many of these are real. CI runs it non-blocking so the count is
-# visible on every push; gate it once that number is known and small.
-pyright==1.1.414
-
 # Ingestion. dlt is a LIBRARY, not a service -- see ADR 0003. The [filesystem]
 # extra pulls fsspec/s3fs for object-storage destinations.
 dlt[filesystem]==1.29.1

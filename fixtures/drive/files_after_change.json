@@ -1,0 +1,60 @@
+{
+  "files": [
+    {
+      "id": "drv-001",
+      "name": "invoice.pdf",
+      "mimeType": "application/pdf",
+      "parents": [
+        "fld-a"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "626",
+      "md5Checksum": "09f4d6a1f95ecbdd1439f93c905f5f85",
+      "trashed": false,
+      "_path": "Clients/Alpha/invoice.pdf",
+      "_fixture": "drive_folder_a_invoice_v2.pdf"
+    },
+    {
+      "id": "drv-003",
+      "name": "notes.txt",
+      "mimeType": "text/plain",
+      "parents": [
+        "fld-a"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "0",
+      "md5Checksum": null,
+      "trashed": false,
+      "_path": "Clients/Alpha/notes.txt",
+      "_fixture": null
+    },
+    {
+      "id": "drv-004",
+      "name": "Engagement letter",
+      "mimeType": "application/vnd.google-apps.document",
+      "parents": [
+        "fld-a"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "0",
+      "md5Checksum": null,
+      "trashed": false,
+      "_path": "Clients/Alpha/Engagement letter",
+      "_fixture": null
+    },
+    {
+      "id": "drv-005",
+      "name": "receipt.pdf",
+      "mimeType": "application/pdf",
+      "parents": [
+        "fld-b"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "616",
+      "md5Checksum": "3ca7541817512389b6c466ad68265386",
+      "trashed": false,
+      "_path": "Clients/Beta/receipt.pdf",
+      "_fixture": "gmail_receipt.pdf"
+    }
+  ]
+}

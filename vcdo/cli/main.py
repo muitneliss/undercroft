@@ -86,7 +86,7 @@ def _run_pipeline(verb: str):
             elif verb == "seed":
                 landed = pipeline.seed(cfg, log)
                 for entity, n in landed.items():
-                    print(f"seed:     OK    hubspot/{entity}: {n} records")
+                    print(f"seed:     OK    {entity}: {n}")
             else:
                 r = pipeline.run_slice(cfg, log)
                 print(f"landed:      {r['landed']} raw records")

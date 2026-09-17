@@ -43,7 +43,7 @@ def test_restoring_identical_bytes_writes_nothing():
     assert first.status == "created"
     assert second.status == "unchanged"
     assert len(backing) == size_after_first
-    assert lake.versions("drive/pdf/file-1") == ["20260901T000000Z"]
+    assert len(lake.versions("drive/pdf/file-1")) == 1
 
 
 def test_an_existing_observation_is_never_replaced():
@@ -73,11 +73,9 @@ def test_pruning_reports_exactly_what_it_removed_oldest_first():
     for day in range(1, 5):
         lake.put("xero/invoices/INV-1", f"payload {day}".encode(), run_id=f"r{day}", now=at(day))
 
-    assert lake.versions("xero/invoices/INV-1") == [
-        "20260902T000000Z",
-        "20260903T000000Z",
-        "20260904T000000Z",
-    ]
+    kept = lake.versions("xero/invoices/INV-1")
+    assert len(kept) == 3
+    assert [lake.manifest("xero/invoices/INV-1", k)["run_id"] for k in kept] == ["r2", "r3", "r4"]
 
 
 def test_nothing_is_discarded_by_default():
@@ -105,7 +103,8 @@ def test_prune_returns_the_removed_names():
     lake.put("xero/invoices/INV-1", b"b", run_id="r2", now=at(2))
     result = lake.put("xero/invoices/INV-1", b"c", run_id="r3", now=at(3))
 
-    assert result.pruned == ["20260901T000000Z"]
+    assert len(result.pruned) == 1
+    assert result.pruned[0].startswith("20260901T000000")
 
 
 def test_identical_payloads_at_different_keys_are_stored_once():
@@ -149,7 +148,8 @@ def test_manifest_records_provenance_for_every_observation():
         now=at(1),
     )
 
-    man = lake.manifest("drive/pdf/id-aaa/invoice.pdf", "20260901T000000Z")
+    stamp = lake.versions("drive/pdf/id-aaa/invoice.pdf")[-1]
+    man = lake.manifest("drive/pdf/id-aaa/invoice.pdf", stamp)
     assert man["sha256"] == sha256_hex(PDF)
     assert man["bytes"] == len(PDF)
     assert man["run_id"] == "run-42"
@@ -161,7 +161,8 @@ def test_manifest_omits_row_count_unless_the_caller_defines_one():
     lake = LakeStore(InMemoryObjectStore())
     lake.put("drive/pdf/id-aaa/invoice.pdf", PDF, run_id="r1", now=at(1))
 
-    assert "row_count" not in lake.manifest("drive/pdf/id-aaa/invoice.pdf", "20260901T000000Z")
+    stamp = lake.versions("drive/pdf/id-aaa/invoice.pdf")[-1]
+    assert "row_count" not in lake.manifest("drive/pdf/id-aaa/invoice.pdf", stamp)
 
 
 def test_corrupt_blob_raises_rather_than_returning_suspect_bytes():

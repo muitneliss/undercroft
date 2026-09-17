@@ -11,9 +11,11 @@ from pathlib import Path
 
 from vcdo.core.config import Config
 from vcdo.core.obs_log import ObsLog
-from vcdo.lake.ingest import land
+from vcdo.lake.ingest import land, land_drive_pdfs, land_gmail_attachments
 from vcdo.lake.s3 import from_config
 from vcdo.lake.store import LakeStore
+from vcdo.sources.drive import DriveSource
+from vcdo.sources.gmail import GmailSource
 from vcdo.sources.hubspot import HubSpotSource
 from vcdo.sources.xero import XeroSource
 
@@ -26,6 +28,8 @@ MIGRATIONS = Path(__file__).resolve().parents[2] / "migrations"
 #: is not the expected one, because syncing the wrong tenant into a shared lake
 #: is very hard to unpick afterwards.
 FIXTURE_TENANT = "portal-fixture"
+FIXTURE_MAILBOX = "mailbox-fixture@vietcham.example"
+FIXTURE_DRIVE_ROOT = "drive-root-fixture"
 
 
 def _connect(cfg: Config):
@@ -100,6 +104,16 @@ def _sources(cfg: Config) -> list:
             mode=cfg.mode_for("xero"),
             fixtures_dir=cfg.fixtures_dir,
         ),
+        GmailSource(
+            tenant_id=FIXTURE_MAILBOX,
+            mode=cfg.mode_for("gmail"),
+            fixtures_dir=cfg.fixtures_dir,
+        ),
+        DriveSource(
+            tenant_id=FIXTURE_DRIVE_ROOT,
+            mode=cfg.mode_for("drive"),
+            fixtures_dir=cfg.fixtures_dir,
+        ),
     ]
 
 
@@ -111,6 +125,16 @@ def seed(cfg: Config, log: ObsLog) -> dict[str, int]:
         for entity in source.entities():
             result = land(source, entity, lake, log)
             landed[f"{source.name}/{entity}"] = result.read
+
+        # Document BYTES are a separate dataset from the metadata records above.
+        # A successful message or file-listing sync is not evidence that the PDFs
+        # exist as objects -- that is the failure that hides best.
+        if isinstance(source, GmailSource):
+            docs = land_gmail_attachments(source, lake, log)
+            landed["gmail/attachments"] = docs.stored + docs.unchanged
+        elif isinstance(source, DriveSource):
+            docs = land_drive_pdfs(source, lake, log)
+            landed["drive/pdfs"] = docs.stored + docs.unchanged
     return landed
 
 

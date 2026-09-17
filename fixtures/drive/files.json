@@ -1,0 +1,60 @@
+{
+  "files": [
+    {
+      "id": "drv-001",
+      "name": "invoice.pdf",
+      "mimeType": "application/pdf",
+      "parents": [
+        "fld-a"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "618",
+      "md5Checksum": "6ac6da5ef98f3bcc64b85caf91d792ab",
+      "trashed": false,
+      "_path": "Clients/Alpha/invoice.pdf",
+      "_fixture": "drive_folder_a_invoice.pdf"
+    },
+    {
+      "id": "drv-002",
+      "name": "invoice.pdf",
+      "mimeType": "application/pdf",
+      "parents": [
+        "fld-b"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "618",
+      "md5Checksum": "d22bdf8c8ece3492cd6338ce10d46aec",
+      "trashed": false,
+      "_path": "Clients/Beta/invoice.pdf",
+      "_fixture": "drive_folder_b_invoice.pdf"
+    },
+    {
+      "id": "drv-003",
+      "name": "notes.txt",
+      "mimeType": "text/plain",
+      "parents": [
+        "fld-a"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "0",
+      "md5Checksum": null,
+      "trashed": false,
+      "_path": "Clients/Alpha/notes.txt",
+      "_fixture": null
+    },
+    {
+      "id": "drv-004",
+      "name": "Engagement letter",
+      "mimeType": "application/vnd.google-apps.document",
+      "parents": [
+        "fld-a"
+      ],
+      "modifiedTime": "2026-08-01T10:00:00.000Z",
+      "size": "0",
+      "md5Checksum": null,
+      "trashed": false,
+      "_path": "Clients/Alpha/Engagement letter",
+      "_fixture": null
+    }
+  ]
+}

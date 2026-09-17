@@ -54,11 +54,6 @@ known-first-party = ["vcdo"]
 # Point the type checker at the same venv the tests use. Without this it resolves
 # against the system interpreter, reports every third-party import as missing,
 # and the resulting wall of false errors trains people to ignore the real ones.
-#
-# This block is intentionally OUTSIDE the gate: `make verify` does not run
-# pyright. CI runs it non-blocking so the true error count is visible on every
-# push, and it gets promoted to a gate only once that count is known and small.
-# Do not "fix" this by wiring pyright into make verify without that measurement.
 [tool.pyright]
 venvPath = "."
 venv = ".venv-tests"
