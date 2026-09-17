@@ -86,7 +86,42 @@ export type LakeObject = {
   bytes: number | null;
 };
 
-/** Present so the money type is used; the overview endpoint returns these. */
+/**
+ * One observation of an object, from `vcdo/lake/store.py`.
+ *
+ * Every field is optional because a manifest is written once and never migrated
+ * -- an object observed by an older build genuinely may not carry a field a
+ * newer one writes. Marking them required would make the type lie about the
+ * lake's oldest contents, and the interface renders each absence as MISSING
+ * rather than as a zero or an empty cell.
+ */
+export type LakeManifest = {
+  stamp: string;
+  source_key?: string;
+  sha256?: string;
+  blob_key?: string;
+  bytes?: number;
+  run_id?: string;
+  observed_at?: string;
+  reason?: string;
+};
+
+export type LakeManifests = {
+  key: string;
+  versions: LakeManifest[];
+};
+
+/**
+ * Totals for one customer.
+ *
+ * NO ENDPOINT SERVES THIS YET. `curated.customer_commercial_overview` exists in
+ * migration 006 and nothing in `vcdo/api/routers/` exposes it, so nothing in the
+ * interface renders a money figure. The type and `@/lib/money` stay because the
+ * discipline they encode is the expensive part -- an amount crosses as a string
+ * and is never parsed into a JavaScript number -- and re-deriving that later,
+ * against a UI already rendering floats, is how the rule gets broken once and
+ * for good.
+ */
 export type CustomerTotals = {
   customer: string;
   invoiced: Money | null;

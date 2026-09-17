@@ -5,22 +5,25 @@
  * sign-in rather than letting every panel render its own error. A client with
  * exactly one tenant is sent straight into it, because a list of one is not a
  * decision.
+ *
+ * Every signed-in route renders inside `Book`, which supplies the section board,
+ * the fore-edge tab rail and the running head. The route decides which division
+ * is open; the division decides the board hue; the board hue decides the
+ * acetate's solved alpha. Nothing downstream has to know any of that.
  */
 
 import { useQuery } from "@tanstack/react-query";
-import {
-  Navigate,
-  NavLink,
-  Route,
-  Routes,
-  useParams,
-} from "react-router-dom";
+import type { ReactNode } from "react";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import { api, ApiError } from "@/api/client";
 import type { Source } from "@/api/types";
 import { SOURCES } from "@/api/types";
+import { Book } from "@/components/Book";
 import { Skeleton } from "@/components/Skeleton";
-import { ScopePanel } from "@/routes/ScopePanel";
+import type { DivisionId } from "@/lib/divisions";
+import { Lake } from "@/routes/Lake";
+import { People } from "@/routes/People";
 import { SignIn } from "@/routes/SignIn";
 import { TenantOverview } from "@/routes/TenantOverview";
 import { Tenants } from "@/routes/Tenants";
@@ -29,50 +32,45 @@ function isSource(value: string | undefined): value is Source {
   return SOURCES.includes(value as Source);
 }
 
-function TenantRoute({ view }: { view: "overview" | "scope" }) {
+/**
+ * A signed-in page: the book opened at one division.
+ *
+ * `tenantId` comes from the route rather than from state, so a link, a reload
+ * and the back button all land in the same place.
+ */
+function Opened({
+  division,
+  signedInAs,
+  children,
+}: {
+  division: DivisionId;
+  signedInAs: string;
+  children: (tenantId: string) => ReactNode;
+}) {
+  const params = useParams();
+  const tenantId = params["tenantId"];
+
+  if (!tenantId) return <Navigate to="/tenants" replace />;
+
+  return (
+    <Book tenantId={tenantId} current={division} signedInAs={signedInAs}>
+      {children(tenantId)}
+    </Book>
+  );
+}
+
+function ScopeRoute({ signedInAs }: { signedInAs: string }) {
   const params = useParams();
   const tenantId = params["tenantId"];
   const source = params["source"];
 
-  if (!tenantId) return <Navigate to="/" replace />;
-
-  if (view === "scope") {
-    if (!isSource(source)) return <Navigate to={`/tenants/${tenantId}`} replace />;
-    return <ScopePanel tenantId={tenantId} source={source} />;
-  }
-  return <TenantOverview tenantId={tenantId} />;
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  const params = useParams();
-  const tenantId = params["tenantId"];
+  if (!tenantId) return <Navigate to="/tenants" replace />;
+  if (!isSource(source)) return <Navigate to={`/tenants/${tenantId}`} replace />;
 
   return (
-    <div className="app">
-      <nav className="sidebar" aria-label="Main">
-        <div className="sidebar__brand">VietCham data</div>
-        <div className="sidebar__nav">
-          <NavLink className="sidebar__link" to="/tenants" end>
-            Customers
-          </NavLink>
-          {tenantId ? (
-            <>
-              <NavLink className="sidebar__link" to={`/tenants/${tenantId}`} end>
-                Setup
-              </NavLink>
-            </>
-          ) : null}
-        </div>
-        <div className="sidebar__footer">
-          <form method="post" action="/api/auth/logout">
-            <button className="btn" type="submit">
-              Sign out
-            </button>
-          </form>
-        </div>
-      </nav>
-      <main className="main">{children}</main>
-    </div>
+    <Book tenantId={tenantId} current="sources" signedInAs={signedInAs}>
+      <TenantOverview tenantId={tenantId} scopeFor={source} />
+    </Book>
   );
 }
 
@@ -85,8 +83,10 @@ export function App() {
 
   if (session.isPending) {
     return (
-      <main className="main">
-        <Skeleton rows={3} />
+      <main className="titlepage">
+        <div className="titlepage__leaf">
+          <Skeleton rows={3} />
+        </div>
       </main>
     );
   }
@@ -96,30 +96,45 @@ export function App() {
     return <SignIn reason={unauthenticated ? "expired" : "denied"} />;
   }
 
+  const signedInAs = session.data.email;
+  const isStaff = session.data.is_staff;
+
   return (
     <Routes>
       <Route
         path="/tenants/:tenantId/connect/:source/scope"
+        element={<ScopeRoute signedInAs={signedInAs} />}
+      />
+      <Route
+        path="/tenants/:tenantId/lake"
         element={
-          <Shell>
-            <TenantRoute view="scope" />
-          </Shell>
+          <Opened division="lake" signedInAs={signedInAs}>
+            {(tenantId) => <Lake tenantId={tenantId} />}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/people"
+        element={
+          <Opened division="people" signedInAs={signedInAs}>
+            {(tenantId) => <People tenantId={tenantId} isStaff={isStaff} />}
+          </Opened>
         }
       />
       <Route
         path="/tenants/:tenantId"
         element={
-          <Shell>
-            <TenantRoute view="overview" />
-          </Shell>
+          <Opened division="sources" signedInAs={signedInAs}>
+            {(tenantId) => <TenantOverview tenantId={tenantId} />}
+          </Opened>
         }
       />
       <Route
         path="/tenants"
         element={
-          <Shell>
+          <Book tenantId={undefined} current="customers" signedInAs={signedInAs}>
             <Tenants />
-          </Shell>
+          </Book>
         }
       />
       <Route path="*" element={<Navigate to="/tenants" replace />} />

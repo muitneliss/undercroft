@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-17T00:00:00Z",
+  "title": "Design System: VietCham Data Control Plane",
+  "extensions": {
+    "worldKey": "rw-manual-acetate-tab-board",
+    "seedKey": "62ae625c",
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Ink",
+        "canonical": "#16150f",
+        "note": "Near-black, warmed. 16.48:1 on page stock, 15.09:1 on bone.",
+        "tonalRamp": ["oklch(15% 0.012 99.5)", "oklch(27% 0.012 99.5)", "oklch(39% 0.012 99.5)", "oklch(50% 0.012 99.5)", "oklch(61% 0.012 99.5)", "oklch(72% 0.012 99.5)", "oklch(84% 0.012 99.5)", "oklch(95% 0.012 99.5)"]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Secondary Ink",
+        "canonical": "#56513f",
+        "note": "Labels, quiet data, captions. 7.16:1 on page stock.",
+        "tonalRamp": ["oklch(15% 0.029 94.4)", "oklch(27% 0.029 94.4)", "oklch(39% 0.029 94.4)", "oklch(50% 0.029 94.4)", "oklch(61% 0.029 94.4)", "oklch(72% 0.029 94.4)", "oklch(84% 0.029 94.4)", "oklch(95% 0.029 94.4)"]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#6b6450",
+        "note": "Disabled lettering and every recorded absence. Held at 5.31:1 on page stock; a label nobody can read is a defect whatever the WCAG exemption says. On a hinged leaf it is not this value — it is re-mixed from the solved ground at 70% ink, an approved tone there, clearing 5.00:1 on sienna, the worst hue in the wheel.",
+        "tonalRamp": ["oklch(15% 0.032 91.0)", "oklch(27% 0.032 91.0)", "oklch(39% 0.032 91.0)", "oklch(50% 0.032 91.0)", "oklch(61% 0.032 91.0)", "oklch(72% 0.032 91.0)", "oklch(84% 0.032 91.0)", "oklch(95% 0.032 91.0)"]
+      },
+      "bone": {
+        "role": "neutral",
+        "displayName": "Bone Board",
+        "canonical": "#efe9d9",
+        "note": "Body ground and the tab rail's own stock.",
+        "tonalRamp": ["oklch(15% 0.022 89.8)", "oklch(27% 0.022 89.8)", "oklch(39% 0.022 89.8)", "oklch(50% 0.022 89.8)", "oklch(61% 0.022 89.8)", "oklch(72% 0.022 89.8)", "oklch(84% 0.022 89.8)", "oklch(95% 0.022 89.8)"]
+      },
+      "page": {
+        "role": "neutral",
+        "displayName": "Page Stock",
+        "canonical": "#f7f3e7",
+        "note": "The reading field of the open leaf. Constant across divisions.",
+        "tonalRamp": ["oklch(15% 0.016 91.6)", "oklch(27% 0.016 91.6)", "oklch(39% 0.016 91.6)", "oklch(50% 0.016 91.6)", "oklch(61% 0.016 91.6)", "oklch(72% 0.016 91.6)", "oklch(84% 0.016 91.6)", "oklch(95% 0.016 91.6)"]
+      },
+      "leaf": {
+        "role": "neutral",
+        "displayName": "Leaf White",
+        "canonical": "#fbf8f0",
+        "note": "A fresh sheet laid on the page: unprinted leaves, fields, the token box. Also the solver's leaf colour.",
+        "tonalRamp": ["oklch(15% 0.011 89.7)", "oklch(27% 0.011 89.7)", "oklch(39% 0.011 89.7)", "oklch(50% 0.011 89.7)", "oklch(61% 0.011 89.7)", "oklch(72% 0.011 89.7)", "oklch(84% 0.011 89.7)", "oklch(95% 0.011 89.7)"]
+      },
+      "hue-oxide": {
+        "role": "secondary",
+        "displayName": "Oxide Orange",
+        "canonical": "#b24b1a",
+        "note": "CUSTOMERS, extent 2. Darkened from #c2521c so its tab could be lettered at 4.5:1. Solved leaf alpha 0.627; lettered in paper at 5.06:1.",
+        "tonalRamp": ["oklch(15% 0.147 42.5)", "oklch(27% 0.147 42.5)", "oklch(39% 0.147 42.5)", "oklch(50% 0.147 42.5)", "oklch(61% 0.147 42.5)", "oklch(72% 0.147 42.5)", "oklch(84% 0.147 42.5)", "oklch(95% 0.147 42.5)"]
+      },
+      "hue-chrome": {
+        "role": "primary",
+        "displayName": "Chrome Yellow",
+        "canonical": "#eda600",
+        "note": "SOURCES, extent 4, and the system's default board. The only hue that also fills a control. Solved leaf alpha 0.203; lettered in ink at 8.76:1.",
+        "tonalRamp": ["oklch(15% 0.161 77.9)", "oklch(27% 0.161 77.9)", "oklch(39% 0.161 77.9)", "oklch(50% 0.161 77.9)", "oklch(61% 0.161 77.9)", "oklch(72% 0.161 77.9)", "oklch(84% 0.161 77.9)", "oklch(95% 0.161 77.9)"]
+      },
+      "hue-grass": {
+        "role": "secondary",
+        "displayName": "Grass",
+        "canonical": "#3e782b",
+        "note": "Unclaimed wheel hue. Darkened from #45852f for lettering. Solved leaf alpha 0.610; lettered in paper at 5.04:1.",
+        "tonalRamp": ["oklch(15% 0.126 138.8)", "oklch(27% 0.126 138.8)", "oklch(39% 0.126 138.8)", "oklch(50% 0.126 138.8)", "oklch(61% 0.126 138.8)", "oklch(72% 0.126 138.8)", "oklch(84% 0.126 138.8)", "oklch(95% 0.126 138.8)"]
+      },
+      "hue-teal": {
+        "role": "secondary",
+        "displayName": "Forest Teal",
+        "canonical": "#0f7673",
+        "note": "RAW LAKE, extent 3. Solved leaf alpha 0.624; lettered in paper at 5.13:1.",
+        "tonalRamp": ["oklch(15% 0.085 191.6)", "oklch(27% 0.085 191.6)", "oklch(39% 0.085 191.6)", "oklch(50% 0.085 191.6)", "oklch(61% 0.085 191.6)", "oklch(72% 0.085 191.6)", "oklch(84% 0.085 191.6)", "oklch(95% 0.085 191.6)"]
+      },
+      "hue-ultramarine": {
+        "role": "secondary",
+        "displayName": "Ultramarine",
+        "canonical": "#234c9e",
+        "note": "PEOPLE, extent 2. The deepest board in the wheel and the reason the solver exists: alpha 0.676 against chrome's 0.203. Lettered in paper at 7.61:1.",
+        "tonalRamp": ["oklch(15% 0.141 262.3)", "oklch(27% 0.141 262.3)", "oklch(39% 0.141 262.3)", "oklch(50% 0.141 262.3)", "oklch(61% 0.141 262.3)", "oklch(72% 0.141 262.3)", "oklch(84% 0.141 262.3)", "oklch(95% 0.141 262.3)"]
+      },
+      "hue-violet": {
+        "role": "secondary",
+        "displayName": "Violet",
+        "canonical": "#634cb0",
+        "note": "Unclaimed wheel hue. Solved leaf alpha 0.645; lettered in paper at 6.20:1.",
+        "tonalRamp": ["oklch(15% 0.153 290.3)", "oklch(27% 0.153 290.3)", "oklch(39% 0.153 290.3)", "oklch(50% 0.153 290.3)", "oklch(61% 0.153 290.3)", "oklch(72% 0.153 290.3)", "oklch(84% 0.153 290.3)", "oklch(95% 0.153 290.3)"]
+      },
+      "hue-sienna": {
+        "role": "secondary",
+        "displayName": "Sienna",
+        "canonical": "#7f4023",
+        "note": "Unclaimed wheel hue. Solved leaf alpha 0.671; lettered in paper at 7.44:1.",
+        "tonalRamp": ["oklch(15% 0.097 44.1)", "oklch(27% 0.097 44.1)", "oklch(39% 0.097 44.1)", "oklch(50% 0.097 44.1)", "oklch(61% 0.097 44.1)", "oklch(72% 0.097 44.1)", "oklch(84% 0.097 44.1)", "oklch(95% 0.097 44.1)"]
+      },
+      "errata": {
+        "role": "tertiary",
+        "displayName": "Vermilion",
+        "canonical": "#cf2f16",
+        "note": "Held OUT of the seven-hue section wheel. Errata rules only: nothing else in the interface may wear it.",
+        "tonalRamp": ["oklch(15% 0.199 31.7)", "oklch(27% 0.199 31.7)", "oklch(39% 0.199 31.7)", "oklch(50% 0.199 31.7)", "oklch(61% 0.199 31.7)", "oklch(72% 0.199 31.7)", "oklch(84% 0.199 31.7)", "oklch(95% 0.199 31.7)"]
+      },
+      "errata-ink": {
+        "role": "tertiary",
+        "displayName": "Errata Ink",
+        "canonical": "#8c1c09",
+        "note": "The slip's caps mark and the lapsed status mark. 8.24:1 on the slip ground.",
+        "tonalRamp": ["oklch(15% 0.150 31.9)", "oklch(27% 0.150 31.9)", "oklch(39% 0.150 31.9)", "oklch(50% 0.150 31.9)", "oklch(61% 0.150 31.9)", "oklch(72% 0.150 31.9)", "oklch(84% 0.150 31.9)", "oklch(95% 0.150 31.9)"]
+      },
+      "leaf-ground": {
+        "role": "neutral",
+        "displayName": "Solved Leaf Ground",
+        "canonical": "#f0b731",
+        "note": "NOT authored. Published at runtime by @/lib/acetate as the opaque equivalent of the solved acetate composite; the checked-in value is the chrome-yellow solution, rgb(240,183,49) at alpha 0.203.",
+        "tonalRamp": ["oklch(15% 0.153 83.6)", "oklch(27% 0.153 83.6)", "oklch(39% 0.153 83.6)", "oklch(50% 0.153 83.6)", "oklch(61% 0.153 83.6)", "oklch(72% 0.153 83.6)", "oklch(84% 0.153 83.6)", "oklch(95% 0.153 83.6)"]
+      },
+      "mark-granted": {
+        "role": "tertiary",
+        "displayName": "Granted Green",
+        "canonical": "#1c5c33",
+        "note": "The third carrier of the granted state, behind geometry and word. 7.20:1 on page stock.",
+        "tonalRamp": ["oklch(15% 0.094 151.9)", "oklch(27% 0.094 151.9)", "oklch(39% 0.094 151.9)", "oklch(50% 0.094 151.9)", "oklch(61% 0.094 151.9)", "oklch(72% 0.094 151.9)", "oklch(84% 0.094 151.9)", "oklch(95% 0.094 151.9)"]
+      },
+      "mark-pending": {
+        "role": "tertiary",
+        "displayName": "Pending Bronze",
+        "canonical": "#6b4a00",
+        "note": "The third carrier of the awaiting-scope state. 7.27:1 on page stock.",
+        "tonalRamp": ["oklch(15% 0.090 79.3)", "oklch(27% 0.090 79.3)", "oklch(39% 0.090 79.3)", "oklch(50% 0.090 79.3)", "oklch(61% 0.090 79.3)", "oklch(72% 0.090 79.3)", "oklch(84% 0.090 79.3)", "oklch(95% 0.090 79.3)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The page's one H1, uppercase at wdth 92. Drops to 1.9rem below 760px; nothing else in the ramp is fluid." },
+      "headline": { "displayName": "Headline", "purpose": "Section headings within a division. Drops to 1.4rem below 760px." },
+      "title": { "displayName": "Title", "purpose": "A hinged leaf's question, an unprinted leaf's title, a source's name on the schedule." },
+      "body": { "displayName": "Body", "purpose": "The default UI voice. Rarely the right answer for a sentence." },
+      "prose": { "displayName": "Prose", "purpose": "EB Garamond, capped at 62ch. Only sentences a person must read and act on: what a source reads, what it never writes, what a refusal means." },
+      "prose-lead": { "displayName": "Prose Lead", "purpose": "The opening sentence under a heading." },
+      "label": { "displayName": "Label", "purpose": "Hanging heads, field labels, table headers, status words, plate lettering. Tracking widens by role: 0.15em labels, 0.16em tabs, 0.2em wordmark and errata mark, 0.24em spine caption." },
+      "tab": { "displayName": "Tab Lettering", "purpose": "Fore-edge rail labels, rotated upright. Archivo, not mono: navigation labels are not data." },
+      "datum": { "displayName": "Datum", "purpose": "Machine voice only, with tabular figures on: identifiers, digests, accounts, cron, byte counts, dates." },
+      "token": { "displayName": "Token", "purpose": "The one-time invitation token, sized to be read aloud over a phone and selectable as text." },
+      "caption": { "displayName": "Spine Caption", "purpose": "The running foot set vertically down the spine. Decorative, aria-hidden." }
+    },
+    "shadows": [
+      { "name": "ply", "value": "0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13)", "purpose": "The ONLY shadow in the system: a leaf hinged open above its board, and the title page's one centred leaf. Never paired with a border." },
+      { "name": "punch-shallow", "value": "inset 0 1px 1px rgba(22, 21, 15, 0.35)", "purpose": "The inner edge of a punched hole in the spine or the current tab. Not elevation — the opposite gesture." },
+      { "name": "punch-deep", "value": "inset 0 1px 2px rgba(22, 21, 15, 0.4)", "purpose": "The inner edge of a hinge punch or a checked selection hole." },
+      { "name": "field-focus", "value": "inset 0 0 0 1px #16150f", "purpose": "Focus on an input: the keyline thickens inward. Never a glow — a glow would be a second depth system." }
+    ],
+    "motion": [
+      { "name": "hinge", "value": "90ms steps(2, end)", "purpose": "The only timing in the system. Tab slide, plate inversion, field keyline, progress rule, selection fill. Nothing eases and nothing fades." },
+      { "name": "hinge-reduced", "value": "1ms steps(1, end)", "purpose": "Under prefers-reduced-motion the grammar collapses to a single frame; the hinge-down keyframe is switched off entirely." },
+      { "name": "hinge-down", "value": "@keyframes hinge-down { from { transform: rotateX(-14deg); } to { transform: none; } } — transform-origin: top left", "purpose": "A leaf turning down at its punched edge. The signature arrival." },
+      { "name": "set-line", "value": "1.1s steps(6, end) infinite", "purpose": "Loading: lines of type being set, stepping across a repeating rule. Never a spinner." }
+    ],
+    "breakpoints": [
+      { "name": "fewer-columns", "value": "1100px", "purpose": "Sheet drops from four content columns to two; the grant row's head folds to two columns with actions spanning." },
+      { "name": "one-column", "value": "760px", "purpose": "Margin column collapses to 0, display ramp drops, the fore-edge rail becomes a bottom tab strip, the spine and its caption are dropped." }
+    ],
+    "measurementNotes": [
+      {
+        "subject": "Disabled SAVE AND FINISH plate inside a hinged leaf",
+        "toolReads": "4.38:1",
+        "actual": "5.02:1",
+        "why": "A canvas-based contrast sweep cannot resolve a ::before background, so it measures the label against the raw .hinge board rgb(237,166,0). The label actually sits on the composited ground — board plus ::before acetate at alpha 0.204 = rgb(240,183,49), which equals the published --leaf-ground. The page is correct; the tool cannot see through the pseudo-element. Do not 'fix' this."
+      },
+      {
+        "subject": "Solved leaf alpha per wheel hue (leaf #fbf8f0, target 10:1)",
+        "values": "chrome 0.203, grass 0.610, teal 0.624, oxide 0.627, violet 0.645, sienna 0.671, ultramarine 0.676 — each landing at 10.0–10.01:1 against the ink"
+      },
+      {
+        "subject": "Tab lettering derived by letteringOn()",
+        "values": "ink on chrome 8.76:1; paper on grass 5.04:1, oxide 5.06:1, teal 5.13:1, violet 6.20:1, sienna 7.44:1, ultramarine 7.61:1. White on chrome measures 2.09:1, which is what the rail shipped with until it was measured."
+      },
+      {
+        "subject": "The hinged leaf's re-mixed inks, worst hue in the wheel",
+        "values": "Measured against each hue's own solved ground, sienna governs: secondary at 78% ink bottoms out at 6.19:1, faint at 70% bottoms out at 5.00:1.",
+        "why": "Faint ink was 62% during the build, which bottoms out at 4.04:1 on sienna — below the 4.5:1 floor, and invisible if you only check chrome, which measures 4.05:1 there. It was raised to 70% before ship, so both re-mixed tones clear the floor on all seven hues including the three no division has claimed. The disabled plate's lettering now takes the --ink-3 token rather than restating the same mix inline: one value, not two that have to agree."
+      }
+    ],
+    "knownGap": "The build reaches this world's structure, state grammar and palette, but not its full material range. Named and unrendered native devices of the source world: acetate gloss, paper grain, halftone print ink, stacked tab ply, and the manual's reference apparatus (cross-references, marginal annotation). The finish review's disposition was ship, scoped to the fixes it listed, with this ceiling gap left explicitly open."
+  },
+  "components": [
+    {
+      "name": "Primary Plate",
+      "kind": "button",
+      "refersTo": "plate-primary",
+      "description": "The one primary control: a die-cut chrome-yellow plate with a hairline ink keyline and the manual's own right-arrow. There is no third button.",
+      "html": "<button class=\"ds-plate ds-plate--primary\">Connect Google Drive<svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M2.5 8h11\"/><path d=\"M9.5 4 13.5 8l-4 4\"/></svg></button>",
+      "css": ".ds-plate { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; background: transparent; color: #16150f; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 86; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end); } .ds-plate--primary { background: #eda600; color: #16150f; } .ds-plate--primary:hover { background: #16150f; color: #eda600; } .ds-plate--primary:active { background: #56513f; color: #fbf8f0; } .ds-plate--primary:disabled { background: #ece7d6; color: #6b6450; border-color: rgba(22,21,15,0.44); cursor: not-allowed; } .ds-plate:focus-visible { outline: 2px solid #16150f; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Plate",
+      "kind": "button",
+      "refersTo": "plate",
+      "description": "The same die with no ink in it. What DISCONNECT wears — revocation is an ordinary plate, because vermilion is reserved for errata and the safety is the confirmation step, not the colour.",
+      "html": "<button class=\"ds-plate-ghost\">Disconnect</button>",
+      "css": ".ds-plate-ghost { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; background: transparent; color: #16150f; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 86; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end); } .ds-plate-ghost:hover { background: #16150f; color: #fbf8f0; } .ds-plate-ghost:active { background: #56513f; color: #fbf8f0; } .ds-plate-ghost:disabled { border-color: rgba(22,21,15,0.44); color: #6b6450; cursor: not-allowed; } .ds-plate-ghost:focus-visible { outline: 2px solid #16150f; outline-offset: 2px; }"
+    },
+    {
+      "name": "Fore-edge Tab Rail",
+      "kind": "nav",
+      "refersTo": "rail-tab",
+      "description": "The application's entire navigation, on the fore edge where this form puts it. Tab height is proportional to each division's extent, so the rail is a picture of the book. The current tab slides flush and gains a punched hole; a locked division is face-down, not hidden.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"Sections\"><a class=\"ds-rail__tab\" style=\"flex-grow:2;background:#b24b1a;color:#fbf8f0\" href=\"#\">Customers</a><a class=\"ds-rail__tab\" style=\"flex-grow:4;background:#eda600;color:#16150f\" href=\"#\" aria-current=\"page\">Sources</a><a class=\"ds-rail__tab\" style=\"flex-grow:3;background:#0f7673;color:#fbf8f0\" href=\"#\">Raw lake</a><span class=\"ds-rail__tab\" aria-disabled=\"true\" style=\"flex-grow:2\">People</span></nav>",
+      "css": ".ds-rail { display: flex; flex-direction: column; gap: 2px; padding: 1.5rem 0; background: #efe9d9; width: 3.25rem; height: 420px; } .ds-rail__tab { position: relative; display: flex; align-items: center; justify-content: center; border-left: 1px solid rgba(22,21,15,0.44); border-radius: 0 3px 3px 0; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 82; letter-spacing: 0.16em; text-transform: uppercase; text-decoration: none; writing-mode: vertical-rl; padding: 1rem 0; cursor: pointer; transform: translateX(0.75rem); transition: transform 90ms steps(2, end); } .ds-rail__tab:hover:not([aria-disabled=\"true\"]) { transform: translateX(0.5rem); } .ds-rail__tab[aria-current=\"page\"] { transform: none; } .ds-rail__tab[aria-current=\"page\"]::after { content: \"\"; position: absolute; top: 0.75rem; left: 50%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: #f7f3e7; box-shadow: inset 0 1px 1px rgba(22,21,15,0.4); } .ds-rail__tab[aria-disabled=\"true\"] { background: repeating-linear-gradient(135deg, #d6cfba, #d6cfba 3px, #cec7b1 3px, #cec7b1 6px); color: #5f5844; cursor: not-allowed; transform: translateX(1rem); } .ds-rail__tab:focus-visible { outline: 2px solid #16150f; outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Marks",
+      "kind": "chip",
+      "refersTo": null,
+      "description": "Four states as four geometries — solid, half, struck, open — on one 16-unit grid at one 1.5-unit stroke. The word is the second carrier; the hue is the third and least load-bearing, so the schedule survives greyscale and a colour-blind reader. Every mark is aria-hidden.",
+      "html": "<div class=\"ds-marks\"><span class=\"ds-mark\" style=\"color:#1c5c33\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.25\" fill=\"currentColor\" stroke=\"none\"/></svg>Granted</span><span class=\"ds-mark\" style=\"color:#6b4a00\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M8 2.75A5.25 5.25 0 0 0 8 13.25Z\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"8\" cy=\"8\" r=\"5.25\"/></svg>Awaiting scope</span><span class=\"ds-mark\" style=\"color:#8c1c09\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"square\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.25\"/><path d=\"M4.3 11.7 11.7 4.3\"/></svg>Reconnect needed</span><span class=\"ds-mark\" style=\"color:#56513f\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.25\" stroke-dasharray=\"2.2 2\"/></svg>Not granted</span></div>",
+      "css": ".ds-marks { display: flex; flex-direction: column; gap: 0.5rem; background: #f7f3e7; padding: 1rem; } .ds-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 84; letter-spacing: 0.13em; text-transform: uppercase; white-space: nowrap; } .ds-mark svg { flex: none; }"
+    },
+    {
+      "name": "Grant Row",
+      "kind": "card",
+      "refersTo": null,
+      "description": "One source's standing grant as a row on a schedule, never a card in a grid: a card grid gives a lapsed grant the same footprint as a healthy one, which is the single thing this screen exists to prevent. Four columns — name and status / account and scope / schedule and expiry / actions — under a closing rule.",
+      "html": "<div class=\"ds-schedule\"><article class=\"ds-grant\"><div class=\"ds-grant__head\"><div class=\"ds-col\"><h3 class=\"ds-grant__name\">HubSpot</h3><span class=\"ds-mark-inline\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.25\" fill=\"currentColor\"/></svg>Granted</span></div><div class=\"ds-col\"><span class=\"ds-label\">Account</span><span class=\"ds-datum\">CASE-A1B2C3 CRM</span><span class=\"ds-label\">Reads</span><span class=\"ds-datum ds-datum--quiet\">companies, contacts, deals</span></div><div class=\"ds-col ds-col--right\"><span class=\"ds-label\">Schedule</span><span class=\"ds-datum ds-datum--quiet\">Daily at 02:00 SGT</span><span class=\"ds-datum ds-datum--quiet\">No expiry recorded</span></div><div class=\"ds-grant__actions\"><button class=\"ds-plate-ghost\">Change what syncs</button><button class=\"ds-plate-ghost\">Disconnect</button></div></div></article></div>",
+      "css": ".ds-schedule { border-top: 1px solid rgba(22,21,15,0.44); background: #f7f3e7; } .ds-grant { border-bottom: 1px solid rgba(22,21,15,0.16); padding: 1rem 0; } .ds-grant__head { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(0,1.5fr) minmax(0,0.95fr) auto; gap: 1rem; align-items: baseline; } .ds-col { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; } .ds-col--right { text-align: right; } .ds-grant__name { margin: 0; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 1.25rem; font-weight: 700; font-variation-settings: 'wdth' 88; letter-spacing: -0.005em; line-height: 1.08; text-transform: uppercase; color: #16150f; } .ds-mark-inline { display: inline-flex; align-items: center; gap: 0.5rem; color: #1c5c33; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; } .ds-label { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 82; letter-spacing: 0.15em; text-transform: uppercase; color: #56513f; } .ds-datum { font-family: 'Spline Sans Mono', ui-monospace, Menlo, monospace; font-size: 0.8125rem; font-variant-numeric: tabular-nums; color: #16150f; overflow-wrap: anywhere; } .ds-datum--quiet { color: #56513f; } .ds-grant__actions { display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap; } .ds-plate-ghost { padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; background: transparent; color: #16150f; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end); } .ds-plate-ghost:hover { background: #16150f; color: #fbf8f0; }"
+    },
+    {
+      "name": "Unprinted Leaf with Access Statement",
+      "kind": "card",
+      "refersTo": "unprinted-leaf",
+      "description": "A source nobody has granted yet, and the empty state generally: the same object with no ink on it, never a dashed placeholder box. It is taller than the other rows on purpose, because it carries the two-row access statement in Garamond — what is read and what is never written, stated before the redirect.",
+      "html": "<article class=\"ds-unprinted\"><div class=\"ds-unprinted__head\"><h3 class=\"ds-grant__name\">Google Drive</h3><button class=\"ds-plate ds-plate--primary\">Connect Google Drive<svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2.5 8h11\"/><path d=\"M9.5 4 13.5 8l-4 4\"/></svg></button></div><dl class=\"ds-access\"><dt>What we read</dt><dd>PDF documents inside the folders you select. No other folder is read.</dd><dt>What we change</dt><dd>Nothing. Read-only access, and you can disconnect at any time.</dd></dl></article>",
+      "css": ".ds-unprinted { background: #fbf8f0; border: 1px solid rgba(22,21,15,0.16); border-radius: 3px; padding: 1rem; max-width: 58ch; } .ds-unprinted__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; } .ds-grant__name { margin: 0; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 1.25rem; font-weight: 700; font-variation-settings: 'wdth' 88; line-height: 1.08; text-transform: uppercase; color: #16150f; } .ds-access { display: grid; grid-template-columns: 9.5rem minmax(0,1fr); gap: 0.5rem 1.5rem; margin: 1rem 0 0; padding: 1rem 0 0; border-top: 1px dashed rgba(22,21,15,0.44); } .ds-access dt { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 80; letter-spacing: 0.15em; text-transform: uppercase; color: #56513f; padding-top: 0.3rem; } .ds-access dd { margin: 0; font-family: 'EB Garamond', ui-serif, Georgia, serif; font-size: 1.0625rem; line-height: 1.48; max-width: 58ch; color: #16150f; } .ds-plate { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end); } .ds-plate--primary { background: #eda600; color: #16150f; } .ds-plate--primary:hover { background: #16150f; color: #eda600; }"
+    },
+    {
+      "name": "Errata Slip",
+      "kind": "custom",
+      "refersTo": "errata-slip",
+      "description": "The slip a publisher tips into a book to correct something already printed — the shape of a lapsed grant exactly. Vermilion rules top and bottom, the correction in Garamond, one recovery action. It is the only object in the interface allowed to wear vermilion, and the loudest thing on any page it appears on.",
+      "html": "<div class=\"ds-errata\" role=\"alert\"><span class=\"ds-errata__mark\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M3.5 3.5 12.5 12.5\"/><path d=\"M12.5 3.5 3.5 12.5\"/></svg>One grant has lapsed</span><p class=\"ds-errata__body\">Xero. This customer&rsquo;s data has stopped moving, and nothing has been lost &mdash; re-granting resumes where the last sync finished.</p><button class=\"ds-plate ds-plate--primary\">Re-grant Xero<svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2.5 8h11\"/><path d=\"M9.5 4 13.5 8l-4 4\"/></svg></button></div>",
+      "css": ".ds-errata { border-top: 2px solid #cf2f16; border-bottom: 2px solid #cf2f16; background: #fdf0eb; padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; border-radius: 1px; } .ds-errata__mark { display: flex; align-items: center; gap: 0.5rem; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 80; letter-spacing: 0.2em; text-transform: uppercase; color: #8c1c09; } .ds-errata__body { margin: 0; font-family: 'EB Garamond', ui-serif, Georgia, serif; font-size: 1.0625rem; line-height: 1.5; max-width: 62ch; color: #16150f; } .ds-plate { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end); } .ds-plate--primary { background: #eda600; color: #16150f; } .ds-plate--primary:hover { background: #16150f; color: #eda600; }"
+    },
+    {
+      "name": "Hinged Acetate Leaf",
+      "kind": "custom",
+      "refersTo": "hinge-leaf",
+      "description": "The signature move and the only object in the system that casts a shadow. A section of board with a genuinely translucent acetate sheet painted 9px inset inside it at the runtime-solved alpha, punched twice down its binding edge with the page stock showing through. It is not a modal: it hinges open inside its own row, so the board above and below stays in the document and in the tab order. The quieter inks inside it are re-mixed from the solved ground — secondary at 78% ink, faint at 70% — and both are approved tones on a hinged leaf, holding 6.19:1 and 5.00:1 on the worst hue in the wheel.",
+      "html": "<section class=\"ds-hinge\" aria-label=\"What to sync from Google Drive\"><span class=\"ds-hinge__punch ds-hinge__punch--a\" aria-hidden=\"true\"></span><span class=\"ds-hinge__punch ds-hinge__punch--b\" aria-hidden=\"true\"></span><h3 class=\"ds-hinge__title\">What should we sync from Google Drive?</h3><p class=\"ds-hinge__note\">You can change this at any time. Nothing outside what you choose here is read.</p><label class=\"ds-label\" for=\"ds-folders\">Drive folders</label><input id=\"ds-folders\" class=\"ds-input\" placeholder=\"Paste one or more folder IDs\"><div class=\"ds-hinge__actions\"><button class=\"ds-plate-ghost\" disabled>Save and finish</button><button class=\"ds-plate-ghost\">Cancel</button></div></section>",
+      "css": ".ds-hinge { position: relative; padding: 2.0625rem 2.0625rem 2.0625rem 3.5625rem; border-radius: 3px; background: #eda600; box-shadow: 0 2px 3px rgba(22,21,15,0.1), 0 8px 18px rgba(22,21,15,0.13); transform-origin: top left; animation: ds-hinge-down 90ms steps(2, end) both; display: flex; flex-direction: column; gap: 0.75rem; } .ds-hinge::before { content: \"\"; position: absolute; inset: 9px; border-radius: 2px; background: rgba(251,248,240,0.203); } .ds-hinge > * { position: relative; z-index: 1; } .ds-hinge__punch { position: absolute; z-index: 2; left: calc(1rem + 8px); width: 10px; height: 10px; border-radius: 50%; background: #f7f3e7; box-shadow: inset 0 1px 2px rgba(22,21,15,0.4); } .ds-hinge__punch--a { top: 1.5rem; } .ds-hinge__punch--b { bottom: 1.5rem; } .ds-hinge__title { margin: 0; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 1.25rem; font-weight: 700; font-variation-settings: 'wdth' 96; line-height: 1.08; letter-spacing: -0.015em; color: #16150f; } .ds-hinge__note { margin: 0; font-family: 'EB Garamond', ui-serif, Georgia, serif; font-size: 1.0625rem; line-height: 1.5; max-width: 62ch; color: rgb(70,57,22); } .ds-label { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: rgb(70,57,22); } .ds-input { font-family: 'Spline Sans Mono', ui-monospace, Menlo, monospace; font-size: 0.8125rem; padding: 0.5rem 0.65rem; background: #fbf8f0; color: #16150f; border: 1px solid rgba(22,21,15,0.44); border-radius: 2px; transition: border-color 90ms steps(2, end); } .ds-input:focus { outline: none; border-color: #16150f; box-shadow: inset 0 0 0 1px #16150f; } .ds-hinge__actions { display: flex; gap: 0.75rem; } .ds-plate-ghost { padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; background: transparent; color: #16150f; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end); } .ds-plate-ghost:hover:not(:disabled) { background: #16150f; color: #fbf8f0; } .ds-plate-ghost:disabled { background: transparent; border-color: rgb(153,118,35); color: rgb(87,70,25); cursor: not-allowed; } @keyframes ds-hinge-down { from { transform: rotateX(-14deg); } to { transform: none; } } @media (prefers-reduced-motion: reduce) { .ds-hinge { animation: none; } }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "The value is machine voice, so the field is set in the machine face. Focus thickens the same keyline inward rather than adding a glow; the hint below is Garamond, capped at 62ch, and wired by aria-describedby.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field__label\" for=\"ds-schedule\">Sync schedule</label><input id=\"ds-schedule\" class=\"ds-input\" value=\"0 2 * * *\" aria-describedby=\"ds-schedule-hint\"><span id=\"ds-schedule-hint\" class=\"ds-field__hint\">Cron, in Asia/Singapore. <code class=\"ds-code\">0 2 * * *</code> is 2am daily.</span></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.5rem; background: #f7f3e7; padding: 1rem; } .ds-field__label { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 82; letter-spacing: 0.15em; text-transform: uppercase; color: #56513f; } .ds-input { font-family: 'Spline Sans Mono', ui-monospace, Menlo, monospace; font-size: 0.8125rem; padding: 0.5rem 0.65rem; background: #fbf8f0; color: #16150f; border: 1px solid rgba(22,21,15,0.44); border-radius: 2px; caret-color: #16150f; transition: border-color 90ms steps(2, end); } .ds-input::placeholder { color: #6b6450; } .ds-input:hover:not(:disabled) { border-color: #56513f; } .ds-input:focus { outline: none; border-color: #16150f; box-shadow: inset 0 0 0 1px #16150f; } .ds-input:disabled { background: #e9e2d0; color: #6b6450; cursor: not-allowed; } .ds-field__hint { font-family: 'EB Garamond', ui-serif, Georgia, serif; font-size: 1rem; line-height: 1.45; color: #56513f; max-width: 62ch; } .ds-code { font-family: 'Spline Sans Mono', ui-monospace, Menlo, monospace; font-size: 0.9em; background: rgba(22,21,15,0.08); padding: 0.1em 0.3em; border-radius: 2px; }"
+    },
+    {
+      "name": "Punch Selection",
+      "kind": "custom",
+      "refersTo": "punch-box",
+      "description": "The checkbox is a hole through the leaf, which is how selection is shown everywhere else in this system: filled with the current board hue and inset-shadowed when checked. No checkmark, no filled square, no pill.",
+      "html": "<fieldset class=\"ds-punches\"><legend class=\"ds-field__label\">Records to sync</legend><label class=\"ds-punch\"><input type=\"checkbox\" checked><span class=\"ds-punch__box\" aria-hidden=\"true\"></span>companies</label><label class=\"ds-punch\"><input type=\"checkbox\"><span class=\"ds-punch__box\" aria-hidden=\"true\"></span>contacts</label><label class=\"ds-punch\"><input type=\"checkbox\" disabled><span class=\"ds-punch__box\" aria-hidden=\"true\"></span>deals</label></fieldset>",
+      "css": ".ds-punches { border: 0; padding: 1rem; margin: 0; background: #f7f3e7; display: flex; flex-direction: column; gap: 0.25rem; } .ds-field__label { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #56513f; } .ds-punch { position: relative; display: inline-flex; align-items: center; gap: 0.75rem; cursor: pointer; font-family: 'Spline Sans Mono', ui-monospace, Menlo, monospace; font-size: 0.8125rem; color: #16150f; padding: 0.28rem 0; } .ds-punch__box { position: relative; flex: none; width: 15px; height: 15px; border: 1px solid #16150f; border-radius: 50%; background: #fbf8f0; transition: background 90ms steps(2, end); } .ds-punch input { position: absolute; opacity: 0; width: 15px; height: 15px; margin: 0; cursor: pointer; } .ds-punch input:checked + .ds-punch__box { background: #eda600; box-shadow: inset 0 1px 2px rgba(22,21,15,0.45); } .ds-punch input:focus-visible + .ds-punch__box { outline: 2px solid #16150f; outline-offset: 2px; } .ds-punch input:disabled + .ds-punch__box { border-color: rgba(22,21,15,0.44); background: #e9e2d0; } .ds-punch:has(input:disabled) { color: #6b6450; cursor: not-allowed; }"
+    },
+    {
+      "name": "Hanging Head",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The page's structural device: the section label hangs in a fifth margin column to the left of the four-column grid and trails a hairline rule to the frame edge. Because the head sits beside its heading rather than stacked on top of it, no surface in this system needs an eyebrow or a kicker.",
+      "html": "<div class=\"ds-sheet\"><span class=\"ds-head\">Sources</span><div class=\"ds-body\"><h1 class=\"ds-h1\">Finish setting up</h1><p class=\"ds-prose\">1 of 4 connected. Connect a source to start bringing data in.</p><div class=\"ds-gathering\"><span class=\"ds-gathering__inked\" style=\"transform:scaleX(0.25)\"></span></div></div></div>",
+      "css": ".ds-sheet { display: grid; grid-template-columns: 9.5rem repeat(4, minmax(0,1fr)); column-gap: 1.5rem; background: #f7f3e7; padding: 1.5rem; max-width: 78rem; } .ds-head { grid-column: 1; display: flex; align-items: baseline; gap: 0.75rem; padding-top: 0.4rem; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 80; letter-spacing: 0.17em; text-transform: uppercase; color: #56513f; } .ds-head::after { content: \"\"; flex: 1; height: 0; border-top: 1px solid rgba(22,21,15,0.16); transform: translateY(-0.3em); } .ds-body { grid-column: 2 / -1; min-width: 0; display: flex; flex-direction: column; gap: 1rem; } .ds-h1 { margin: 0; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 2.5rem; font-weight: 700; font-variation-settings: 'wdth' 92; line-height: 1.08; letter-spacing: -0.025em; text-transform: uppercase; color: #16150f; } .ds-prose { margin: 0; font-family: 'EB Garamond', ui-serif, Georgia, serif; font-size: 1.0625rem; line-height: 1.53; max-width: 62ch; color: #16150f; } .ds-gathering { height: 4px; max-width: 24rem; background: rgba(22,21,15,0.16); border-radius: 0; } .ds-gathering__inked { display: block; height: 100%; width: 100%; background: #16150f; transform-origin: left center; transition: transform 90ms steps(2, end); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Acetate Tab Board",
+    "overview": "The control plane is a boxed-software reference manual lying open at a tabbed section. One customer is one book; each division is a coloured section board; each panel is a punched sheet of milk acetate hinged a millimetre above that board, with the board still readable through it. What this product records is standing authorities — who granted what, over which scope, until when — and that is a document, not a telemetry surface. The world is the world key rw-manual-acetate-tab-board, seed 62ae625c.\n\nRank in this system is ply: a leaf's height in the stack is its importance. Not size, not colour, not a badge. That one commitment settles most of the system downstream — the four connection states are four geometries before they are four hues, navigation is a fore-edge tab rail rather than a sidebar, and the single raking light means containers are hairline rules and exactly one object in the whole interface casts a shadow. The visual anti-reference is explicit and was the arrangement this repo previously shipped: left sidebar, page header, and source cards three-up in a grid with a status pill each. A card grid gives a lapsed grant the same footprint as a healthy one, which is the single thing this interface exists to prevent.\n\nThe register is printed matter, warm and dry: bone board, near-black ink, seven saturated section hues at full strength, and nothing that eases, fades, glows or gradients. Where there is warmth it is in the paper and in the Garamond, which is reserved for the sentences a person is actually asked to read before handing over access to their accounting system and company mailbox.",
+    "keyCharacteristics": [
+      "Rank is ply, never size or colour.",
+      "One raking light: hairline rules everywhere, exactly one shadow in the system.",
+      "The reading field over a saturated board is solved at runtime, not guessed.",
+      "Vermilion is held out of the section wheel and means errata only.",
+      "Four connection states are four geometries; hue is the third carrier.",
+      "Two hard frames at 90ms, hinged at the punch. Nothing eases or fades.",
+      "Three type voices — display, prose, machine — and no fourth."
+    ],
+    "rules": [
+      {
+        "name": "The Held-Out Vermilion Rule",
+        "section": "colors",
+        "body": "Seven hues divide the book; the eighth is not in the wheel. Vermilion appears on errata and nowhere else — not on destructive controls, not on carets, not on a hover state, not as a chart series. A .plate--revoke variant was built and then deleted for exactly this reason: three DISCONNECT buttons on healthy rows competed with the one slip that mattered. The safety on a destructive action is its confirmation step, not its colour."
+      },
+      {
+        "name": "The Solved Field Rule",
+        "section": "colors",
+        "body": "--leaf-alpha and --leaf-ground are never authored. @/lib/acetate binary-searches sRGB source-over compositing against the live board hue until the composited field clears TARGET_CONTRAST (10:1) against the ink, takes the lowest alpha that does, and publishes both as custom properties on the document element. The values checked into :root (0.203 / #f0b731) are the solver's own chrome-yellow answer, so first paint is already correct. Chrome yellow solves at 0.203 coverage; ultramarine needs 0.676. No hand-picked constant serves both, and acetate.test.ts walks all seven wheel hues plus every live division."
+      },
+      {
+        "name": "The Derived Lettering Rule",
+        "section": "colors",
+        "body": "A label on a saturated ground is never a fixed colour. letteringOn() picks ink or paper per hue by measured contrast — white on the chrome board is 2.09:1, which is what the rail shipped with until it was measured. Two wheel hues were darkened rather than lettered badly. A hue neither house colour can letter at 4.5:1 does not belong in the wheel, and the test says so."
+      },
+      {
+        "name": "The Three Voices Rule",
+        "section": "typography",
+        "body": "Display, prose, machine. There is no fourth face and no fourth role. A new kind of text belongs to one of the three or it does not belong on the page."
+      },
+      {
+        "name": "The Machine Voice Rule",
+        "section": "typography",
+        "body": "Monospace is for values a machine produced — identifiers, digests, dates, cron, counts, addresses. Never for atmosphere, and never for navigation: the rail is lettered in Archivo precisely because monospace as a costume for \"technical\" is the tell. This is a deviation from the direction contract's own FIRST VIEWPORT, taken deliberately."
+      },
+      {
+        "name": "The 62ch Rule",
+        "section": "typography",
+        "body": "Every Garamond block is capped at 62 characters (58ch inside the access statement and the unprinted leaf). Prose that runs the full width of a four-column grid is prose nobody finishes."
+      },
+      {
+        "name": "The Fore-Edge Rule",
+        "section": "layout",
+        "body": "Navigation lives on the fore edge, and tab height is proportional to each division's extent (2 / 4 / 3 / 2), so the rail is a picture of the book as well as a control. Extent is a property of the division, never a measurement of the current customer's data — a tab that resized itself as rows arrived would move the navigation under the operator's cursor. A left sidebar would make this a dashboard wearing a manual's colours."
+      },
+      {
+        "name": "The Hanging Head Rule",
+        "section": "layout",
+        "body": "Section labels hang in the margin column and trail their rule to the frame edge. Because the head is beside the heading, no surface in this system needs a kicker or an eyebrow, and none may introduce one."
+      },
+      {
+        "name": "The One Shadow Rule",
+        "section": "elevation",
+        "body": "There is one shadow and it means one thing: this leaf is hinged above the board. Anything that is not a hinged leaf is separated by a rule."
+      },
+      {
+        "name": "The Two-Weight Rule",
+        "section": "elevation",
+        "body": "Hairline (0.16 alpha) separates; the closing rule (0.44 alpha) ends a block. Both are 1px. There is no third weight and no coloured edge above 1px anywhere in the system — a 3px board-hue bar down a binding edge was built twice and removed twice, because a coloured side-tab accent is the most recognisable tell of a generated interface."
+      },
+      {
+        "name": "The Punch Rule",
+        "section": "shapes",
+        "body": "Selection is a hole, everywhere. A checked box is a punched disc filled with the board hue and inset-shadowed; the current tab is a punched hole showing the page through it. No checkmarks, no filled squares, no pills."
+      }
+    ],
+    "dos": [
+      "Do let the runtime solver own the reading field. Read --leaf-alpha and --leaf-ground; never author a literal alpha over a board hue.",
+      "Do derive a label colour on any saturated ground with letteringOn(), and re-mix the quieter tones from --leaf-ground rather than inheriting the page's — 78% ink for secondary, 70% for faint. Both are approved on a hinged leaf; take the token, don't restate the mix inline.",
+      "Do give a new state its own geometry first, its own word second, and its hue third.",
+      "Do separate with a hairline rule (0.16) and close a block with the strong rule (0.44).",
+      "Do take the next unclaimed wheel hue for a new division, and add it to DIVISIONS with an honest extent — and check acetate.test.ts still passes, which is the gate on whether the hue can be lettered at all.",
+      "Do set prose a person must act on in Garamond at 62ch; set anything a machine produced in Spline Sans Mono with tabular figures.",
+      "Do hang the section label in the margin column with its trailing rule.",
+      "Do render a recorded absence as an em dash in faint ink — never a zero, never an empty cell.",
+      "Do keep motion to steps(2) at 90ms hinged at the punch, and collapse it to a single frame under prefers-reduced-motion."
+    ],
+    "donts": [
+      "Don't use vermilion (#cf2f16 / #8c1c09) for anything but errata. Not destructive controls, not carets, not hover states, not a chart series.",
+      "Don't add a second shadow. If it is not a leaf hinged above its board, it is separated by a rule.",
+      "Don't put a border under the ply shadow. Elevation is declared once.",
+      "Don't introduce a coloured edge thicker than 1px — a board-hue side bar is the generated-interface tell this world has removed twice.",
+      "Don't lay out equal-size cards in a grid as page structure. States get the height they deserve; a schedule is the form.",
+      "Don't write an eyebrow or kicker above a heading. The hanging head already does that job, and on mobile the division label is hidden rather than allowed to stack.",
+      "Don't letter a saturated board in a fixed white. White is 2.09:1 on chrome yellow.",
+      "Don't set navigation, headings or UI labels in the mono face; it is machine voice only.",
+      "Don't ease, fade, glow, or gradient. The two gradients in the build are a 135° hatch (a face-down leaf) and a hard 38% wash (a half-hinged row); neither is decorative depth.",
+      "Don't use Unicode characters (●▲◆○) as status glyphs. Marks are authored geometry at one stroke weight.",
+      "Don't open a panel as a modal. The board stays on screen and in the tab order."
+    ]
+  }
+}

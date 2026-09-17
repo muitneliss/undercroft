@@ -82,3 +82,17 @@ dist/
 
 # Generated production secrets for Dokploy. Never committed.
 .dokploy-env.json
+
+# --- Design workspace --------------------------------------------------------
+#
+# DESIGN.md, .impeccable/design.json and .impeccable/surfaces/ ARE tracked: they
+# are the durable visual authority, the same way docs/adr/ is the durable
+# decision record. Everything else under .impeccable/ is working material.
+#
+# `quality-bar/` is third-party reference artwork fetched from impeccable.style;
+# it sets the craft level a build aims at and is not ours to redistribute.
+# `review/` is build evidence — screenshots go stale the first time the UI
+# changes, and a stale screenshot in a repo is read as current.
+.impeccable/*
+!.impeccable/design.json
+!.impeccable/surfaces/

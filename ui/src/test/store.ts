@@ -13,13 +13,25 @@
  * shape, the amounts and the dates, and those re-identify.
  */
 
-import type { Connection, Member, SessionUser, Source, Tenant } from "@/api/types";
+import type {
+  Connection,
+  LakeManifest,
+  LakeObject,
+  Member,
+  SessionUser,
+  Source,
+  Tenant,
+} from "@/api/types";
 
 export type Store = {
   user: SessionUser | null;
   tenants: Tenant[];
   members: Record<string, Member[]>;
   connections: Record<string, Connection[]>;
+  /** Objects in the raw lake, per tenant. */
+  lake: Record<string, LakeObject[]>;
+  /** Observations per object key, oldest first, create-only as the real lake is. */
+  manifests: Record<string, LakeManifest[]>;
   /** Tenants the signed-in user may see. Others must be indistinguishable from absent. */
   visible: Set<string>;
 };
@@ -62,8 +74,43 @@ export function freshStore(): Store {
         connection("drive"),
       ],
     },
+    lake: { [CASE_A]: [] },
+    manifests: {},
     visible: new Set([CASE_A]),
   };
+}
+
+/**
+ * Put an object in the lake, with one observation per stamp.
+ *
+ * Observations are appended, never replaced: the real store refuses to overwrite
+ * an existing observation, and a fixture helper that quietly overwrote one would
+ * model a lake this platform does not have.
+ */
+export function storeObject(
+  tenantId: string,
+  key: string,
+  observations: Omit<LakeManifest, "stamp">[],
+): void {
+  const versions = observations.map((observation, i) => ({
+    stamp: `2026-09-${String(10 + i).padStart(2, "0")}T02:00:00Z`,
+    source_key: key,
+    ...observation,
+  }));
+
+  const newest = versions[versions.length - 1];
+  const existing = store.lake[tenantId] ?? [];
+
+  store.manifests[key] = versions;
+  store.lake[tenantId] = [
+    ...existing.filter((o) => o.key !== key),
+    {
+      key,
+      versions: versions.length,
+      newest_sha256: newest?.sha256 ?? null,
+      bytes: newest?.bytes ?? null,
+    },
+  ];
 }
 
 export const store: Store = freshStore();

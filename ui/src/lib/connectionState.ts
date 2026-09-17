@@ -30,7 +30,15 @@ export type CardPresentation = {
   detail: string;
   /** The single thing to do next. Null when there is nothing to do. */
   action: { label: string; kind: "connect" | "scope" | "reconnect" } | null;
-  tone: "positive" | "negative" | "attention" | "neutral";
+  /**
+   * Which printed mark this state carries.
+   *
+   * Four distinct geometries rather than four tints of one shape -- solid, half,
+   * struck, open -- so a schedule of grants survives greyscale and colour
+   * blindness, and the hue is the third carrier of the state rather than the
+   * only one.
+   */
+  mark: "granted" | "pending" | "lapsed" | "absent";
   /** Whether this card counts as done on the setup checklist. */
   complete: boolean;
 };
@@ -49,7 +57,7 @@ export function presentConnection(connection: Connection, now = new Date()): Car
       detail:
         "The access we were granted has lapsed or been withdrawn. Nothing has been lost — reconnecting picks up where the last sync finished.",
       action: { label: "Reconnect", kind: "reconnect" },
-      tone: "negative",
+      mark: "lapsed",
       complete: false,
     };
   }
@@ -61,7 +69,7 @@ export function presentConnection(connection: Connection, now = new Date()): Car
         headline: "Not connected",
         detail: "",
         action: { label: "Connect", kind: "connect" },
-        tone: "neutral",
+        mark: "absent",
         complete: false,
       };
 
@@ -74,7 +82,7 @@ export function presentConnection(connection: Connection, now = new Date()): Car
             ? "Connected. Tell us which account to read before the first sync."
             : `Connected to ${connection.external_account_label}. Choose what to sync before the first run.`,
         action: { label: "Choose", kind: "scope" },
-        tone: "attention",
+        mark: "pending",
         complete: false,
       };
 
@@ -84,13 +92,55 @@ export function presentConnection(connection: Connection, now = new Date()): Car
         headline: connection.external_account_label || "Connected",
         detail: "Syncing on schedule.",
         action: null,
-        tone: "positive",
+        mark: "granted",
         complete: true,
       };
 
     default: {
       const exhaustive: never = connection.status;
       throw new Error(`unhandled connection status ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * What a live grant actually permits, in the customer's words.
+ *
+ * The schedule answers who granted what, when it expires and when it next runs,
+ * and for a long time it did not answer *over which scope* -- which is half the
+ * custody question this product exists to hold. The access statement covers it
+ * before the grant is made; this covers it for the years afterwards.
+ *
+ * Returns null when nothing is recorded rather than describing the widest
+ * possible reading. A scope we cannot name is not a scope of everything, and the
+ * caller renders the absence as MISSING.
+ */
+export function scopeSummary(connection: Connection): string | null {
+  const folders = connection.config.folder_ids ?? [];
+  const labels = connection.config.labels ?? [];
+  const entities = connection.config.entities ?? [];
+
+  switch (connection.source) {
+    case "drive":
+      if (folders.length === 0) return null;
+      return folders.length === 1
+        ? "PDFs in 1 selected folder"
+        : `PDFs in ${String(folders.length)} selected folders`;
+
+    case "gmail":
+      // An empty label list is a recorded decision here, not a missing one: the
+      // scope form says so in as many words before it saves.
+      return labels.length === 0
+        ? "Headers and PDF attachments, whole mailbox"
+        : `Headers and PDF attachments in ${labels.join(", ")}`;
+
+    case "hubspot":
+    case "xero":
+      return entities.length === 0 ? null : entities.join(", ");
+
+    default: {
+      const exhaustive: never = connection.source;
+      throw new Error(`unhandled source ${String(exhaustive)}`);
     }
   }
 }
