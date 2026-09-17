@@ -36,3 +36,17 @@ a worked example feels like scratch work rather than a permanent record.
 a blanket substring rule once silently swallowed a legitimate docs file and
 broke a clean-clone test invisibly. Match token *files*, not every path
 containing the word.
+
+That lesson was recorded for `*token*` and **not applied to `*secret*` and
+`*credential*`, so it recurred twice in one change**:
+
+- `docs/adr/0005-per-tenant-credentials-sealed-in-postgres.md` — a document
+  *about* credential storage, silently unstageable.
+- `vcdo/core/secrets.py` — **source code**, whose absence from a clean clone is
+  an `ImportError` with nothing pointing at the cause.
+
+All three are now explicit file patterns, with a documented exemption for source
+and documentation extensions behind them. A file that implements or describes
+credential handling is not a credential. The failure is always silent, which is
+what makes it worth a rule rather than care — and worth checking
+`git check-ignore` on anything new before assuming it is committed.

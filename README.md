@@ -13,7 +13,7 @@ curated tables in Postgres → Metabase dashboards, SQL and Metabot.
 ## Quick start
 
 ```bash
-make verify   # lint + tests. No credentials, no network, no docker needed.
+make verify   # lint + tests, Python and TypeScript. No credentials, no network, no docker.
 make up       # the whole platform: minio, postgres, kestra, metabase, worker
 make seed     # fixture records into local MinIO
 make slice    # full fixture run: raw -> curated -> dashboard query
@@ -25,14 +25,20 @@ real source, a real credential, or a deployed service.
 There is no ingestion platform and no Kubernetes: `dlt` is a library inside the
 worker container. `make up` is the entire stack.
 
+`make verify` needs **Bun** as well as Python, for the UI half of the gate — see
+CLAUDE.md for why that trade was made.
+
 ## Layout
 
 ```
-vcdo/core/      config, logging, run ledger, names, money
+vcdo/core/      config, logging, secrets, connections, names, money
 vcdo/lake/      content-addressed immutable object store
 vcdo/sources/   hubspot, xero, gmail, drive (dlt as a library, no platform)
 vcdo/curated/   models, transforms, crosswalk, data quality
-deploy/Dockerfile   the worker image
+vcdo/api/       the control plane: OAuth, connections, runs (ADR 0004)
+ui/             the operator SPA (Vite + React + TypeScript, tested with Vitest)
+deploy/Dockerfile       the worker image
+deploy/Dockerfile.api   the control plane image (builds the SPA, then serves it)
 deploy/compose/ service definitions (source of truth; Dokploy holds a copy)
 flows/          Kestra workflows
 migrations/     Postgres DDL for the curated layer

@@ -1,0 +1,553 @@
+/*
+ * Operate-mode design tokens.
+ *
+ * This is a tool someone uses to finish a task, so the bar is earned
+ * familiarity: it should disappear into the work. One sans family carries
+ * headings, labels, buttons and data. The type scale is FIXED in rem, not fluid
+ * — product UI is read at consistent DPI, and a heading that shrinks inside a
+ * panel looks broken rather than responsive.
+ *
+ * Colour is restrained. Neutrals carry the interface; the accent is reserved for
+ * the primary action, the current selection and state. A second, cooler neutral
+ * separates chrome from content.
+ *
+ * The state colours are semantic and each is paired with an icon and a text
+ * label wherever it is used, because status must never be carried by colour
+ * alone (WCAG 2.1 AA, 1.4.1).
+ */
+
+:root {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 1.125 ratio. More type elements here than on a brand surface, so a wide
+     scale would read as noise. */
+  --text-xs: 0.79rem;
+  --text-sm: 0.889rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.266rem;
+  --text-2xl: 1.424rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  --radius: 8px;
+  --radius-sm: 5px;
+
+  /* Content surface */
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --surface-sunken: #f4f5f8;
+  /* Chrome: a slightly cooler neutral, so the sidebar reads as a different
+     plane without a border doing all the work. */
+  --chrome: #eef0f5;
+  --border: #dfe2ea;
+  --border-strong: #c3c8d4;
+
+  --text: #16181d;
+  --text-muted: #5b6272;
+  --text-faint: #858c9c;
+
+  --accent: #1f5fd0;
+  --accent-hover: #1a4fae;
+  --accent-subtle: #e8f0fd;
+
+  --positive: #0f7a4d;
+  --positive-subtle: #e4f5ec;
+  --negative: #b3261e;
+  --negative-subtle: #fdeceb;
+  --attention: #8a5300;
+  --attention-subtle: #fdf1dc;
+
+  --focus: 0 0 0 3px rgba(31, 95, 208, 0.35);
+  --shadow-card: 0 1px 2px rgba(16, 20, 30, 0.05), 0 1px 3px rgba(16, 20, 30, 0.04);
+
+  /* Users are mid-task. Fast enough not to wait for, long enough to read as a
+     change of state rather than a jump. */
+  --motion: 180ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 1ms;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+h2 {
+  font-size: var(--text-xl);
+}
+h3 {
+  font-size: var(--text-lg);
+}
+
+p {
+  margin: 0;
+}
+
+/* A visible, consistent focus ring everywhere. Removing it is the single most
+   common accessibility regression in an app like this. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: var(--radius-sm);
+}
+
+/* -- layout ---------------------------------------------------------------- */
+
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+}
+
+.sidebar {
+  background: var(--chrome);
+  border-right: 1px solid var(--border);
+  padding: var(--space-5) var(--space-4);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.sidebar__brand {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sidebar__link {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  transition: background var(--motion), color var(--motion);
+}
+
+.sidebar__link:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+}
+
+.sidebar__link[aria-current="page"] {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.sidebar__footer {
+  margin-top: auto;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.main {
+  padding: var(--space-6);
+  max-width: 1100px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.page-header__sub {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* -- card ------------------------------------------------------------------ */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-card);
+}
+
+.card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.card__detail {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+
+/* -- buttons --------------------------------------------------------------- */
+
+.btn {
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--motion), border-color var(--motion), color var(--motion);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--chrome);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn--danger {
+  color: var(--negative);
+  border-color: var(--border-strong);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--negative-subtle);
+  border-color: var(--negative);
+}
+
+/* -- status ---------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.badge--positive {
+  background: var(--positive-subtle);
+  color: var(--positive);
+  border-color: rgba(15, 122, 77, 0.25);
+}
+
+.badge--negative {
+  background: var(--negative-subtle);
+  color: var(--negative);
+  border-color: rgba(179, 38, 30, 0.25);
+}
+
+.badge--attention {
+  background: var(--attention-subtle);
+  color: var(--attention);
+  border-color: rgba(138, 83, 0, 0.25);
+}
+
+.badge--neutral {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+/* -- checklist ------------------------------------------------------------- */
+
+.checklist {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.progress {
+  height: 6px;
+  background: var(--surface-sunken);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress__fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--motion);
+}
+
+.access-note {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: var(--space-3);
+}
+
+.access-note dt {
+  font-weight: 600;
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.access-note dd {
+  margin: 0 0 var(--space-2) 0;
+}
+
+.access-note dd:last-child {
+  margin-bottom: 0;
+}
+
+/* -- table ----------------------------------------------------------------- */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* The one number the ledger exists to report. It is never allowed to look like
+   an ordinary count. */
+.unaccounted {
+  color: var(--negative);
+  font-weight: 600;
+}
+
+.missing {
+  color: var(--text-faint);
+}
+
+/* -- empty and loading ----------------------------------------------------- */
+
+.empty {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.empty__title {
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.empty__body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 46ch;
+  margin: 0 auto var(--space-4);
+}
+
+/* Skeletons, not a spinner in the middle of content: the shape of what is
+   coming is more useful than the fact that something is happening. */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-sunken), var(--chrome), var(--surface-sunken));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+  height: 1em;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* -- forms ----------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.field__hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.input,
+.select {
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color var(--motion);
+}
+
+.input:hover,
+.select:hover {
+  border-color: var(--text-faint);
+}
+
+.input:disabled {
+  background: var(--surface-sunken);
+  cursor: not-allowed;
+}
+
+.error-text {
+  color: var(--negative);
+  font-size: var(--text-sm);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* -- side panel (not a modal) ---------------------------------------------- */
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
+}

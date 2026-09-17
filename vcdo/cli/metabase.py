@@ -248,15 +248,15 @@ QUESTIONS = [
         "sql": "SELECT * FROM curated.freshness ORDER BY table_name",
     },
     {
-        "name": "Run health",
+        "name": "Rejected rows",
         "description": (
-            "Recent pipeline stages. unaccounted != 0 means rows vanished without anyone deciding they "
-            "should."
+            "Rows the pipeline refused, with the reason it refused them. Since ADR 0007 removed the "
+            "run ledger this is the only per-row record of something not making it through."
         ),
         "sql": """
-            SELECT recorded_at, stage, status, rows_in, rows_out, rows_excluded, unaccounted
-            FROM ops.run_ledger
-            ORDER BY recorded_at DESC
+            SELECT quarantined_at, tenant_id, source, entity, reason_code, detail
+            FROM dq.quarantine
+            ORDER BY quarantined_at DESC
             LIMIT 20
         """,
     },

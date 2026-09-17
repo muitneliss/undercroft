@@ -48,20 +48,37 @@ def lake(tmp_path):
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"MinIO not reachable: {type(exc).__name__}")
 
-    mailbox = f"itest-{uuid.uuid4().hex[:8]}@vietcham.example"
-    yield LakeStore(store), ObsLog("itest", log_dir=tmp_path), mailbox, store
+    # One tenant per run isolates BOTH datasets. It previously isolated only
+    # Gmail, because the tenant was the mailbox and Drive keys carried no tenant
+    # at all -- so `drive/pdf/<file id>` was global and two runs of this file
+    # against the same bucket wrote to the same objects.
+    tenant = f"itest-{uuid.uuid4().hex[:8]}"
+    yield LakeStore(store), ObsLog("itest", log_dir=tmp_path), tenant, store
 
-    for prefix in (f"gmail/attachments/{mailbox}/", "drive/pdf/"):
+    for prefix in (f"gmail/{tenant}/", f"drive/{tenant}/"):
         for key in list(store.list(prefix)):
             store.delete(key)
 
 
-def gmail(mailbox):
-    return GmailSource(tenant_id=mailbox, mode="mock", fixtures_dir=str(FIXTURES))
+#: The address the fixture mailbox represents. Separate from the tenant now: one
+#: names the customer, the other names a person.
+MAILBOX = "mailbox@vietcham.example"
 
 
-def drive(listing="files"):
-    return DriveSource(tenant_id="drive-root", mode="mock", fixtures_dir=str(FIXTURES), listing=listing)
+def gmail(tenant):
+    return GmailSource(tenant_id=tenant, mailbox=MAILBOX, mode="mock", fixtures_dir=str(FIXTURES))
+
+
+def drive(tenant, listing="files"):
+    return DriveSource(tenant_id=tenant, mode="mock", fixtures_dir=str(FIXTURES), listing=listing)
+
+
+def drive_key(tenant, file_id):
+    return f"drive/{tenant}/pdf/{file_id}"
+
+
+def gmail_key(tenant, message_id, part_id):
+    return f"gmail/{tenant}/attachments/{message_id}/{part_id}"
 
 
 # -- the two PDF objects -----------------------------------------------------
@@ -69,10 +86,10 @@ def drive(listing="files"):
 
 def test_both_paths_land_real_pdf_bytes(lake):
     """Two independently verified objects, from two different ingestion paths."""
-    store, log, mailbox, _ = lake
+    store, log, tenant, _ = lake
 
-    gmail_result = land_gmail_attachments(gmail(mailbox), store, log)
-    drive_result = land_drive_pdfs(drive(), store, log)
+    gmail_result = land_gmail_attachments(gmail(tenant), store, log)
+    drive_result = land_drive_pdfs(drive(tenant), store, log)
 
     # stored + unchanged, not stored alone. Drive file ids are fixed, so an
     # earlier run may already hold these objects -- and "present in the lake" is
@@ -82,80 +99,86 @@ def test_both_paths_land_real_pdf_bytes(lake):
 
 
 def test_drive_bytes_match_the_source_fixture_exactly(lake):
-    store, log, _, _ = lake
-    land_drive_pdfs(drive(), store, log)
+    store, log, tenant, _ = lake
+    land_drive_pdfs(drive(tenant), store, log)
 
     expected = (FIXTURES / "pdf" / "drive_folder_a_invoice.pdf").read_bytes()
-    stored = store.read("drive/pdf/drv-001/invoice.pdf")
+    stored = store.read(drive_key(tenant, "drv-001"))
 
     assert stored == expected
     assert sha256(stored) == sha256(expected)
 
 
 def test_gmail_bytes_match_the_source_fixture_exactly(lake):
-    store, log, mailbox, _ = lake
-    land_gmail_attachments(gmail(mailbox), store, log)
+    store, log, tenant, _ = lake
+    land_gmail_attachments(gmail(tenant), store, log)
 
     expected = (FIXTURES / "pdf" / "gmail_receipt.pdf").read_bytes()
-    stored = store.read(f"gmail/attachments/{mailbox}/msg-0001/1/receipt.pdf")
+    stored = store.read(gmail_key(tenant, "msg-0001", "1"))
 
     assert stored == expected
     assert sha256(stored) == sha256(expected)
 
 
 def test_the_two_paths_write_to_separate_prefixes(lake):
-    """raw/drive/pdf/... and raw/gmail/attachments/... are distinct datasets."""
-    store, log, mailbox, backing = lake
-    land_gmail_attachments(gmail(mailbox), store, log)
-    land_drive_pdfs(drive(), store, log)
+    """drive/<tenant>/pdf/... and gmail/<tenant>/attachments/... are distinct datasets."""
+    store, log, tenant, backing = lake
+    land_gmail_attachments(gmail(tenant), store, log)
+    land_drive_pdfs(drive(tenant), store, log)
 
-    assert any(k.startswith("drive/pdf/") for k in backing.list("drive/pdf/"))
-    assert any(k.startswith(f"gmail/attachments/{mailbox}/") for k in backing.list("gmail/attachments/"))
+    assert any(backing.list(f"drive/{tenant}/pdf/"))
+    assert any(backing.list(f"gmail/{tenant}/attachments/"))
 
 
 # -- provenance --------------------------------------------------------------
 
 
 def test_every_object_has_a_manifest_linking_to_its_source(lake):
-    store, log, mailbox, _ = lake
-    land_drive_pdfs(drive(), store, log)
-    land_gmail_attachments(gmail(mailbox), store, log)
+    store, log, tenant, _ = lake
+    land_drive_pdfs(drive(tenant), store, log)
+    land_gmail_attachments(gmail(tenant), store, log)
 
-    drive_key = "drive/pdf/drv-001/invoice.pdf"
-    manifest = store.manifest(drive_key, store.versions(drive_key)[-1])
+    dkey = drive_key(tenant, "drv-001")
+    manifest = store.manifest(dkey, store.versions(dkey)[-1])
     assert manifest["drive_file_id"] == "drv-001"
+    assert manifest["tenant_id"] == tenant
+    assert manifest["name"] == "invoice.pdf"
     assert manifest["sha256"] == sha256((FIXTURES / "pdf" / "drive_folder_a_invoice.pdf").read_bytes())
 
-    mail_key = f"gmail/attachments/{mailbox}/msg-0001/1/receipt.pdf"
+    mail_key = gmail_key(tenant, "msg-0001", "1")
     manifest = store.manifest(mail_key, store.versions(mail_key)[-1])
     assert manifest["message_id"] == "msg-0001"
-    assert manifest["mailbox"] == mailbox
     assert manifest["part_id"] == "1"
+    # The mailbox and filename left the object key; the manifest is where they
+    # are now kept, and this is what proves they were not simply dropped.
+    assert manifest["tenant_id"] == tenant
+    assert manifest["mailbox"] == MAILBOX
+    assert manifest["filename"] == "receipt.pdf"
 
 
 # -- idempotence -------------------------------------------------------------
 
 
 def test_a_repeat_run_creates_no_duplicate_objects(lake):
-    store, log, mailbox, _ = lake
-    land_drive_pdfs(drive(), store, log)
-    second = land_drive_pdfs(drive(), store, log)
+    store, log, tenant, _ = lake
+    land_drive_pdfs(drive(tenant), store, log)
+    second = land_drive_pdfs(drive(tenant), store, log)
 
     assert second.stored == 0, "a repeat run must write nothing"
     assert second.unchanged == 2
-    assert len(store.versions("drive/pdf/drv-001/invoice.pdf")) == 1
+    assert len(store.versions(drive_key(tenant, "drv-001"))) == 1
 
 
 def test_a_changed_drive_file_versions_rather_than_overwrites(lake):
     """The old bytes stay. Raw cannot be recomputed, so nothing is replaced."""
-    store, log, _, _ = lake
-    land_drive_pdfs(drive(), store, log)
-    land_drive_pdfs(drive("files_after_change"), store, log)
+    store, log, tenant, _ = lake
+    land_drive_pdfs(drive(tenant), store, log)
+    land_drive_pdfs(drive(tenant, "files_after_change"), store, log)
 
-    versions = store.versions("drive/pdf/drv-001/invoice.pdf")
+    versions = store.versions(drive_key(tenant, "drv-001"))
     assert len(versions) == 2
     assert (
-        store.read("drive/pdf/drv-001/invoice.pdf", versions[0])
+        store.read(drive_key(tenant, "drv-001"), versions[0])
         == (FIXTURES / "pdf" / "drive_folder_a_invoice.pdf").read_bytes()
     )
 
@@ -165,35 +188,35 @@ def test_a_changed_drive_file_versions_rather_than_overwrites(lake):
 
 def test_a_drive_link_email_creates_no_gmail_object(lake):
     """A link is not an attachment."""
-    store, log, mailbox, backing = lake
-    land_gmail_attachments(gmail(mailbox), store, log)
+    store, log, tenant, backing = lake
+    land_gmail_attachments(gmail(tenant), store, log)
 
-    keys = list(backing.list(f"gmail/attachments/{mailbox}/msg-0003/"))
+    keys = list(backing.list(f"{gmail_key(tenant, 'msg-0003', '')}"))
     assert keys == []
 
 
 def test_a_corrupt_attachment_is_reported_failed_not_stored(lake):
-    store, log, mailbox, backing = lake
-    result = land_gmail_attachments(gmail(mailbox), store, log)
+    store, log, tenant, backing = lake
+    result = land_gmail_attachments(gmail(tenant), store, log)
 
     assert result.failed == 1
-    assert list(backing.list(f"gmail/attachments/{mailbox}/msg-0005/")) == []
+    assert list(backing.list(f"{gmail_key(tenant, 'msg-0005', '')}")) == []
 
 
 def test_a_zip_named_pdf_is_skipped_and_counted_separately_from_failure(lake):
     """Skipped and failed are different states; conflating them hides real problems."""
-    store, log, mailbox, _ = lake
-    result = land_gmail_attachments(gmail(mailbox), store, log)
+    store, log, tenant, _ = lake
+    result = land_gmail_attachments(gmail(tenant), store, log)
 
     assert result.skipped == 1
     assert result.failed == 1
 
 
 def test_a_non_pdf_in_drive_is_excluded(lake):
-    store, log, _, backing = lake
-    land_drive_pdfs(drive(), store, log)
+    store, log, tenant, backing = lake
+    land_drive_pdfs(drive(tenant), store, log)
 
-    assert list(backing.list("drive/pdf/drv-003/")) == []
+    assert list(backing.list(drive_key(tenant, "drv-003"))) == []
 
 
 # -- deletion reconciliation -------------------------------------------------
@@ -201,14 +224,14 @@ def test_a_non_pdf_in_drive_is_excluded(lake):
 
 def test_a_deleted_drive_file_is_detected_by_full_comparison(lake):
     """Drive gives no consumable deletion stream, so this is the only honest way."""
-    store, log, _, _ = lake
-    land_drive_pdfs(drive(), store, log)
+    store, log, tenant, _ = lake
+    land_drive_pdfs(drive(tenant), store, log)
 
     held = {"drv-001", "drv-002"}
-    upstream = {f.file_id for f in drive("files_after_change").pdf_files()}
+    upstream = {f.file_id for f in drive(tenant, "files_after_change").pdf_files()}
 
     result = reconcile(upstream_ids=upstream, held_ids=held)
 
     assert result.tombstoned == ["drv-002"]
     # The bytes are NOT deleted: raw is evidence of what was once there.
-    assert store.read("drive/pdf/drv-002/invoice.pdf").startswith(b"%PDF-")
+    assert store.read(drive_key(tenant, "drv-002")).startswith(b"%PDF-")

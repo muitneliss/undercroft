@@ -12,6 +12,17 @@ What is in the backup set, and why:
     run and the raw lake being reachable. Backing them up turns a recovery from
     "re-run everything and hope the sources agree" into a restore.
 
+``app``
+    **Not a projection.** Tenants, users, memberships and sealed credentials
+    exist nowhere else; losing this schema means every customer reconnects every
+    source by hand. It is the one entry here that would be unrecoverable, which
+    is exactly why it is named rather than assumed.
+
+    The master key that opens ``app.connection_secret`` is deliberately *not*
+    in this dump. A dump restored without it holds rows nobody can read; a dump
+    stored beside it holds encryption that buys nothing. Back the key up
+    separately — see ADR 0005.
+
 Metabase's application database
     **Business content, not a cache.** It holds the questions, dashboards and
     permissions someone authored. Losing it loses work that exists nowhere else,
@@ -41,7 +52,7 @@ __all__ = ["dump", "restore", "BackupResult", "BACKUP_SCHEMAS"]
 
 #: Schemas included in a curated backup. Metabase and Kestra have their own
 #: databases and are dumped separately.
-BACKUP_SCHEMAS = ("curated", "ops", "dq")
+BACKUP_SCHEMAS = ("curated", "ops", "dq", "app")
 
 
 @dataclass(frozen=True, slots=True)

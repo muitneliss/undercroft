@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from vcdo.core.obs_log import ObsLog, run_id
-from vcdo.core.run_ledger import stage
 from vcdo.curated.crosswalk import decide
 
 __all__ = ["link_entities", "LinkResult"]
@@ -66,45 +65,41 @@ def link_entities(conn: Any, log: ObsLog, tenant_id: str) -> LinkResult:
 
     counts = {"active": 0, "proposed": 0, "review_conflict": 0, "unlinked": 0}
 
-    with stage("link:entities", log) as st:
-        st.rows_in(len(rows))
-        candidates = decide(rows)
+    candidates = decide(rows)
 
-        with conn.transaction():
-            cur = conn.cursor()
-            for candidate in candidates:
-                counts[candidate.status] = counts.get(candidate.status, 0) + 1
+    with conn.transaction():
+        cur = conn.cursor()
+        for candidate in candidates:
+            counts[candidate.status] = counts.get(candidate.status, 0) + 1
+            cur.execute(
+                """
+                UPDATE curated.customers
+                SET entity_id = %s
+                WHERE tenant_id = %s AND source = %s AND source_record_id = %s
+                """,
+                (
+                    candidate.entity_key if candidate.is_linked else None,
+                    tenant_id,
+                    candidate.source,
+                    candidate.source_record_id,
+                ),
+            )
+            if candidate.status in ("proposed", "review_conflict"):
                 cur.execute(
                     """
-                    UPDATE curated.customers
-                    SET entity_id = %s
-                    WHERE tenant_id = %s AND source = %s AND source_record_id = %s
+                    INSERT INTO ops.gate_finding
+                        (run_id, source, severity, code, document_id, detail)
+                    VALUES (%s, %s, 'review', %s, %s, %s)
                     """,
                     (
-                        candidate.entity_key if candidate.is_linked else None,
-                        tenant_id,
+                        current_run,
                         candidate.source,
+                        f"identity_{candidate.status}",
                         candidate.source_record_id,
+                        f"{candidate.reason}; evidence: "
+                        + ", ".join(f"{c.basis}={c.reference}" for c in candidate.claims),
                     ),
                 )
-                if candidate.status in ("proposed", "review_conflict"):
-                    cur.execute(
-                        """
-                        INSERT INTO ops.gate_finding
-                            (run_id, source, severity, code, document_id, detail)
-                        VALUES (%s, %s, 'review', %s, %s, %s)
-                        """,
-                        (
-                            current_run,
-                            candidate.source,
-                            f"identity_{candidate.status}",
-                            candidate.source_record_id,
-                            f"{candidate.reason}; evidence: "
-                            + ", ".join(f"{c.basis}={c.reference}" for c in candidate.claims),
-                        ),
-                    )
-
-        st.rows_out(len(candidates))
 
     log.finish("linked entities", **counts)
     return LinkResult(

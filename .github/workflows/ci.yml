@@ -34,6 +34,18 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
+      # The gate is no longer Python-only. `make verify` now also runs ESLint and
+      # Vitest over ui/, because the control plane is the first non-Python code
+      # in the repo and a second, separately-invoked gate is how two definitions
+      # of "green" start to drift.
+      #
+      # The `ui-*` targets FAIL when bun is missing rather than skipping, so this
+      # step is load-bearing: without it `make verify` stops here with an install
+      # hint instead of quietly verifying half of what it claims to.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ui/.bun-version
+
       # Builds .venv-tests from requirements-dev.txt as a SET (one pip install,
       # never package by package -- see the note in that file), installs the
       # package, then runs ruff check + ruff format --check + the gate tests.
@@ -44,6 +56,12 @@ jobs:
       # here to "get them running in CI" -- that teaches people to ignore red.
       - name: make verify
         run: make verify
+
+      # The SPA is built here as well as in the image, so a type error in the
+      # frontend fails the pull request rather than the deploy. `bun run build`
+      # runs `tsc --noEmit` first; vitest does not typecheck.
+      - name: make ui-build
+        run: make ui-build
 
       # Measurement, not a gate.
       #

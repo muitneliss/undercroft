@@ -24,7 +24,14 @@ def messages():
 
 @pytest.fixture
 def source():
-    return GmailSource(tenant_id="mailbox@vietcham.example", mode="mock", fixtures_dir=str(FIXTURES))
+    # Our tenant is a CASE-ID; the mailbox is a separate field. They were one
+    # field, which is how an email address ended up in every attachment's key.
+    return GmailSource(
+        tenant_id="CASE-001",
+        mailbox="mailbox@vietcham.example",
+        mode="mock",
+        fixtures_dir=str(FIXTURES),
+    )
 
 
 def outcomes_for(source, messages, message_id):
@@ -104,10 +111,25 @@ def test_the_lake_key_contains_no_server_assigned_id(source, messages):
     a = [o for o in outcomes_for(source, messages, "msg-0001") if o.status == "stored"][0]
     key = a.attachment.lake_key()
 
-    assert "mailbox@vietcham.example" in key
     assert "msg-0001" in key
     # part id is positional, so it is stable across fetches
-    assert key.endswith("/receipt.pdf")
+    assert key.endswith(f"/{a.attachment.part_id}")
+    assert a.attachment.part_id
+
+
+def test_the_lake_key_names_the_tenant_and_not_the_person(source, messages):
+    """An object key surfaces in listings, logs and errors; a mailbox address is PII.
+
+    The address and the filename are still recorded in the manifest, where access
+    is controlled -- they are removed from the key, not lost.
+    """
+    a = [o for o in outcomes_for(source, messages, "msg-0001") if o.status == "stored"][0]
+    key = a.attachment.lake_key()
+
+    assert key.startswith(f"gmail/{a.attachment.tenant_id}/")
+    assert "@" not in key
+    assert "receipt.pdf" not in key
+    assert a.attachment.filename == "receipt.pdf"
 
 
 def test_extraction_is_deterministic(source, messages):

@@ -1,15 +1,14 @@
-"""Logs must be queryable, must not leak data, and must account for every row.
+"""Logs must be queryable, must not leak data, and must stay attributable.
 
-The failure these guard against is the quiet one: a stage that drops rows without
-anyone deciding to, showing up months later as a month that looked a bit small.
+The run ledger that used to live beside this module was removed in ADR 0007;
+what remains here is the structured log itself. Two properties still matter and
+are guarded below: every line carries the fields that make it queryable, and no
+line carries a secret or a customer's data.
 """
 
 import json
 
-import pytest
-
-from vcdo.core.obs_log import REQUIRED_FIELDS, ObsLog, run_id
-from vcdo.core.run_ledger import STREAM, stage
+from vcdo.core.obs_log import REQUIRED_FIELDS, ObsLog, new_run_id, run_id
 
 
 def read(path):
@@ -44,6 +43,47 @@ def test_run_id_is_inherited_rather_than_regenerated(monkeypatch):
     assert run_id() == "run-from-parent"
 
 
+def test_starting_a_new_run_replaces_an_inherited_id(monkeypatch):
+    """The long-lived worker serves many runs; reusing one id makes their
+    output indistinguishable."""
+    monkeypatch.setenv("VCDO_RUN_ID", "run-from-parent")
+
+    assert new_run_id() != "run-from-parent"
+    assert new_run_id() != new_run_id()
+
+
+def test_a_new_run_id_is_still_exported_for_subprocesses(monkeypatch):
+    """Regenerating must not cost the inheritance that run ids exist for."""
+    monkeypatch.delenv("VCDO_RUN_ID", raising=False)
+    started = new_run_id()
+
+    assert run_id() == started
+
+
+def test_two_tenants_in_one_process_do_not_share_a_run_id(tmp_path, monkeypatch):
+    """The run id is stamped into every lake manifest, curated row, quarantine
+    record and gate finding this run writes.
+
+    Sharing one across tenants makes "which run produced this object" -- the
+    question provenance exists to answer -- unanswerable. The worker is
+    long-lived and serves many runs, so a cached id is not a theoretical problem.
+    """
+    monkeypatch.delenv("VCDO_RUN_ID", raising=False)
+
+    seen = []
+    for tenant in ("CASE-001", "CASE-002"):
+        new_run_id()
+        log = ObsLog("curate", log_dir=tmp_path, tenant_id=tenant)
+        log.start("curating")
+        seen.append((run_id(), tenant))
+
+    assert [t for _, t in seen] == ["CASE-001", "CASE-002"]
+    assert len({r for r, _ in seen}) == 2
+
+    written = read(tmp_path / "events.jsonl")
+    assert {r["tenant_id"] for r in written} == {"CASE-001", "CASE-002"}
+
+
 def test_secret_shaped_fields_never_reach_the_log(tmp_path):
     """Logs travel further and live longer than the data they describe."""
     log = ObsLog("auth", log_dir=tmp_path)
@@ -65,83 +105,3 @@ def test_concurrent_writes_produce_whole_lines(tmp_path):
     records = read(log.path)
     assert len(records) == 200
     assert {r["seq"] for r in records} == set(range(200))
-
-
-# -- run ledger ---------------------------------------------------------------
-
-
-def test_a_balanced_stage_reports_nothing_unaccounted(tmp_path):
-    log = ObsLog("transform", log_dir=tmp_path)
-    with stage("normalize", log) as st:
-        st.rows_in(100)
-        st.rows_out(90)
-        st.excluded(10, "voided_invoice")
-
-    assert st.unaccounted == 0
-    assert st.row["excluded_by_reason"] == {"voided_invoice": 10}
-
-
-def test_rows_that_vanish_without_a_decision_are_surfaced(tmp_path):
-    """This is the signature of a silent shortfall, and it must never be quiet."""
-    log = ObsLog("transform", log_dir=tmp_path)
-    with stage("normalize", log) as st:
-        st.rows_in(100)
-        st.rows_out(90)
-
-    assert st.unaccounted == 10
-    ledger = read(tmp_path / f"{STREAM}.jsonl")[-1]
-    assert ledger["unaccounted"] == 10
-    assert ledger["level"] == "warning"
-
-
-def test_exclusions_are_broken_out_by_reason(tmp_path):
-    """One routine reason and one alarming one must not aggregate into a number."""
-    log = ObsLog("transform", log_dir=tmp_path)
-    with stage("normalize", log) as st:
-        st.rows_in(412)
-        st.excluded(400, "voided_invoice")
-        st.excluded(12, "schema_invalid")
-
-    assert st.row["excluded_by_reason"] == {"voided_invoice": 400, "schema_invalid": 12}
-    assert st.row["rows_excluded"] == 412
-
-
-def test_an_exclusion_without_a_reason_is_refused():
-    """An unexplained exclusion is indistinguishable from a bug."""
-    log = ObsLog("transform", log_dir="/tmp/unused")
-    unstarted = stage("normalize", log)
-    with pytest.raises(ValueError, match="reason"):
-        unstarted.excluded(5, "")
-
-
-def test_a_crashing_stage_still_writes_its_row(tmp_path):
-    """The counts matter most on the failure path, which is where a manual write is skipped."""
-    log = ObsLog("transform", log_dir=tmp_path)
-
-    with pytest.raises(RuntimeError), stage("normalize", log) as st:
-        st.rows_in(50)
-        raise RuntimeError("customer ACME Pte Ltd has a malformed row")
-
-    ledger = read(tmp_path / f"{STREAM}.jsonl")[-1]
-    assert ledger["status"] == "error"
-    assert ledger["rows_in"] == 50
-
-
-def test_a_crash_does_not_leak_the_exception_message(tmp_path):
-    """Exception text routinely embeds the offending row."""
-    log = ObsLog("transform", log_dir=tmp_path)
-
-    with pytest.raises(RuntimeError), stage("normalize", log) as st:
-        st.rows_in(1)
-        raise RuntimeError("customer ACME Pte Ltd has a malformed row")
-
-    written = (tmp_path / f"{STREAM}.jsonl").read_text()
-    assert "ACME" not in written
-    assert json.loads(written.splitlines()[-1])["error_type"] == "RuntimeError"
-
-
-def test_stage_failures_are_not_swallowed(tmp_path):
-    """A ledger that ate the exception would turn a crash into a silent success."""
-    log = ObsLog("transform", log_dir=tmp_path)
-    with pytest.raises(RuntimeError), stage("normalize", log):
-        raise RuntimeError("boom")

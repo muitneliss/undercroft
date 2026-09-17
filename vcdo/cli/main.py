@@ -68,7 +68,7 @@ def doctor(_args: argparse.Namespace) -> int:
 def _run_pipeline(verb: str):
     """Build the pipeline verbs. Config and logging are constructed once, here."""
 
-    def run(_args: argparse.Namespace) -> int:
+    def run(args: argparse.Namespace) -> int:
         from vcdo.cli import pipeline
         from vcdo.core.obs_log import ObsLog
 
@@ -78,17 +78,22 @@ def _run_pipeline(verb: str):
             print(f"config: FAIL  {exc}", file=sys.stderr)
             return EXIT_FAILED
 
-        log = ObsLog(f"cli.{verb}", log_dir=cfg.log_dir)
+        # Defaulted, not required: `vcdo slice` with nothing configured is the
+        # offline verification ADR 0003 names, and it must keep working without
+        # a registry row existing.
+        tenant_id = getattr(args, "tenant", None) or pipeline.FIXTURE_TENANT
+
+        log = ObsLog(f"cli.{verb}", log_dir=cfg.log_dir, tenant_id=tenant_id)
         try:
             if verb == "migrate":
                 applied = pipeline.migrate(cfg, log)
                 print(f"migrate:  OK    {applied} migration(s) applied")
             elif verb == "seed":
-                landed = pipeline.seed(cfg, log)
+                landed = pipeline.seed(cfg, log, tenant_id=tenant_id)
                 for entity, n in landed.items():
                     print(f"seed:     OK    {entity}: {n}")
             else:
-                r = pipeline.run_slice(cfg, log)
+                r = pipeline.run_slice(cfg, log, tenant_id=tenant_id)
                 print(f"landed:      {r['landed']} raw records")
                 print(f"customers:   {r['customers']}")
                 print(f"deals:       {r['deals']}")
@@ -107,59 +112,6 @@ def _run_pipeline(verb: str):
         return EXIT_OK
 
     return run
-
-
-def alerts_cmd(_args: argparse.Namespace) -> int:
-    """Exit 1 on a critical, 0 otherwise. Warnings print but do not fail.
-
-    Semantic exit codes matter here: whatever schedules this needs to
-    distinguish "something is broken" from "something is worth a look", and
-    collapsing both into failure makes the second one get ignored.
-    """
-    import psycopg
-
-    from vcdo.core.alerts import evaluate
-
-    try:
-        cfg = load()
-    except MissingConfig as exc:
-        print(f"alerts: FAIL  {exc}", file=sys.stderr)
-        return EXIT_FAILED
-
-    with psycopg.connect(cfg.postgres_dsn, connect_timeout=10) as conn:
-        rows = [
-            {
-                "stage": r[0],
-                "status": r[1],
-                "rows_in": r[2],
-                "rows_out": r[3],
-                "rows_excluded": r[4],
-                "unaccounted": r[5],
-                "error_type": r[6],
-                "recorded_at": r[7],
-            }
-            for r in conn.execute(
-                """
-                SELECT stage, status, rows_in, rows_out, rows_excluded,
-                       unaccounted, error_type, recorded_at
-                FROM ops.run_ledger
-                ORDER BY recorded_at
-                """
-            )
-        ]
-
-    found = evaluate(rows)
-    if not found:
-        print(f"alerts:   OK    {len(rows)} ledger rows, nothing to report")
-        return EXIT_OK
-
-    for alert in found:
-        stream = sys.stderr if alert.severity == "critical" else sys.stdout
-        print(f"          {alert}", file=stream)
-
-    criticals = [a for a in found if a.severity == "critical"]
-    print(f"alerts:   {len(criticals)} critical, {len(found) - len(criticals)} warning")
-    return EXIT_FAILED if criticals else EXIT_OK
 
 
 def backup_cmd(args: argparse.Namespace) -> int:
@@ -219,7 +171,6 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("doctor", help="check that the stack is usable").set_defaults(fn=doctor)
-    sub.add_parser("alerts", help="evaluate run health; exit 1 on any critical").set_defaults(fn=alerts_cmd)
 
     backup_parser = sub.add_parser("backup", help="dump curated schemas")
     backup_parser.add_argument("--out-dir", default="/app/data/backups")
@@ -230,8 +181,22 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("migrate", help="apply curated schema migrations").set_defaults(
         fn=_run_pipeline("migrate")
     )
-    sub.add_parser("seed", help="land source records into the lake").set_defaults(fn=_run_pipeline("seed"))
-    sub.add_parser("slice", help="raw -> curated -> dashboard query").set_defaults(fn=_run_pipeline("slice"))
+
+    # --tenant is optional on purpose. Omitted, these run against the fixture
+    # tenant, which is what makes `make seed` and `make slice` work on a machine
+    # with no registry row and no credentials.
+    for verb, help_text in (
+        ("seed", "land source records into the lake"),
+        ("slice", "raw -> curated -> dashboard query"),
+    ):
+        p = sub.add_parser(verb, help=help_text)
+        p.add_argument(
+            "--tenant",
+            default=None,
+            metavar="CASE-ID",
+            help="tenant to run for; defaults to the fixture tenant",
+        )
+        p.set_defaults(fn=_run_pipeline(verb))
     return parser
 
 

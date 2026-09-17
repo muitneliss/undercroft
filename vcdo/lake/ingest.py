@@ -4,11 +4,19 @@ The only writer into raw. Everything it stores is immutable and content-addresse
 by :class:`~vcdo.lake.store.LakeStore`, so re-observing an unchanged record costs
 one manifest rather than a second copy of the payload.
 
-Every landing is measured through the run ledger. ``unaccounted`` must be zero:
-records read, minus records stored, minus records deliberately skipped with a
-reason, must balance. A non-zero value means rows disappeared without anyone
-deciding they should, which is the quiet failure mode this whole layer exists to
-prevent.
+Landings are no longer measured through a run ledger; see ADR 0007 for that
+removal and what it gives up. Two guards survive it and are the reason a silent
+shortfall still cannot pass unnoticed *here*:
+
+- :class:`SourceError` propagates. A failed read is never converted into a
+  successful run with fewer rows.
+- An entity that yields **zero** records raises. A source returning nothing is
+  the HubSpot-403 failure wearing a different hat -- a green run that published
+  an empty table -- so it is refused rather than reported as a success.
+
+What is gone is the *arithmetic*: nothing now checks that records read minus
+records stored minus records skipped balances to zero. A partial shortfall, as
+opposed to a total one, is no longer detected.
 """
 
 from __future__ import annotations
@@ -17,7 +25,6 @@ import json
 from dataclasses import dataclass
 
 from vcdo.core.obs_log import ObsLog, run_id
-from vcdo.core.run_ledger import stage
 from vcdo.lake.store import LakeStore
 from vcdo.sources.base import RawRecord, Source, SourceError
 
@@ -47,32 +54,25 @@ def land(source: Source, entity: str, lake: LakeStore, log: ObsLog) -> LandingRe
     created = unchanged = read = 0
     current_run = run_id()
 
-    with stage(f"land:{source.name}:{entity}", log) as st:
-        for record in source.read(entity):
-            read += 1
-            result = lake.put(
-                record.lake_key(),
-                _serialise(record),
-                run_id=current_run,
-                reason=f"{source.name} {entity} record",
-                extra={
-                    "source": record.source,
-                    "tenant_id": record.tenant_id,
-                    "entity": record.entity,
-                    "source_record_id": record.source_record_id,
-                    "source_updated_at": record.source_updated_at,
-                },
-            )
-            if result.status == "created":
-                created += 1
-            else:
-                unchanged += 1
-
-        st.rows_in(read)
-        # `unchanged` counts as stored, not excluded. The record is in the lake;
-        # we simply observed it again. Counting it as an exclusion would make a
-        # steady-state sync look like it was dropping everything.
-        st.rows_out(created + unchanged)
+    for record in source.read(entity):
+        read += 1
+        result = lake.put(
+            record.lake_key(),
+            _serialise(record),
+            run_id=current_run,
+            reason=f"{source.name} {entity} record",
+            extra={
+                "source": record.source,
+                "tenant_id": record.tenant_id,
+                "entity": record.entity,
+                "source_record_id": record.source_record_id,
+                "source_updated_at": record.source_updated_at,
+            },
+        )
+        if result.status == "created":
+            created += 1
+        else:
+            unchanged += 1
 
     if read == 0:
         # An entity the inventory expects to have data returning nothing is the
@@ -137,45 +137,45 @@ def land_gmail_attachments(source, lake: LakeStore, log: ObsLog) -> DocumentResu
     current_run = run_id()
     stored = unchanged = skipped = failed = 0
 
-    with stage(f"attachments:{source.name}", log) as st:
-        messages = list(source.read("messages"))
-        st.rows_in(len(messages))
+    messages = list(source.read("messages"))
 
-        for record in messages:
-            for outcome in source.extract_attachments(record.payload):
-                if outcome.status == "skipped_not_pdf":
-                    skipped += 1
-                    continue
-                if outcome.status == "failed_corrupt":
-                    failed += 1
-                    log.swallowed(
-                        "attachment failed",
-                        message_id=record.source_record_id,
-                        reason=outcome.reason,
-                    )
-                    continue
-
-                att = outcome.attachment
-                result = lake.put(
-                    att.lake_key(),
-                    att.data,
-                    run_id=current_run,
-                    reason="gmail pdf attachment",
-                    extra={
-                        "source": "gmail",
-                        "mailbox": att.mailbox,
-                        "message_id": att.message_id,
-                        "part_id": att.part_id,
-                        "filename": att.filename,
-                        "declared_mime": att.declared_mime,
-                    },
+    for record in messages:
+        for outcome in source.extract_attachments(record.payload):
+            if outcome.status == "skipped_not_pdf":
+                skipped += 1
+                continue
+            if outcome.status == "failed_corrupt":
+                failed += 1
+                log.swallowed(
+                    "attachment failed",
+                    message_id=record.source_record_id,
+                    reason=outcome.reason,
                 )
-                if result.status == "created":
-                    stored += 1
-                else:
-                    unchanged += 1
+                continue
 
-        st.rows_out(len(messages))
+            att = outcome.attachment
+            result = lake.put(
+                att.lake_key(),
+                att.data,
+                run_id=current_run,
+                reason="gmail pdf attachment",
+                extra={
+                    "source": "gmail",
+                    # The tenant is in the key too, but a manifest that can
+                    # only be attributed by parsing its own key cannot answer
+                    # "erase this customer" without a full scan.
+                    "tenant_id": att.tenant_id,
+                    "mailbox": att.mailbox,
+                    "message_id": att.message_id,
+                    "part_id": att.part_id,
+                    "filename": att.filename,
+                    "declared_mime": att.declared_mime,
+                },
+            )
+            if result.status == "created":
+                stored += 1
+            else:
+                unchanged += 1
 
     if failed:
         # Surfaced, never folded into a success count. The handoff is explicit
@@ -199,41 +199,36 @@ def land_drive_pdfs(source, lake: LakeStore, log: ObsLog) -> DocumentResult:
     current_run = run_id()
     stored = unchanged = failed = 0
 
-    with stage(f"documents:{source.name}", log) as st:
-        files = list(source.pdf_files())
-        st.rows_in(len(files))
+    files = list(source.pdf_files())
 
-        for f in files:
-            if not verify_against_drive_md5(f.data, f.md5_checksum):
-                # An independent check: our own SHA-256 would hash truncated
-                # bytes without complaint, because a hash of the wrong bytes is
-                # still a valid hash.
-                failed += 1
-                log.error("drive checksum mismatch", file_id=f.file_id, reason="md5 does not match Drive")
-                continue
+    for f in files:
+        if not verify_against_drive_md5(f.data, f.md5_checksum):
+            # An independent check: our own SHA-256 would hash truncated
+            # bytes without complaint, because a hash of the wrong bytes is
+            # still a valid hash.
+            failed += 1
+            log.error("drive checksum mismatch", file_id=f.file_id, reason="md5 does not match Drive")
+            continue
 
-            result = lake.put(
-                f.lake_key(),
-                f.data,
-                run_id=current_run,
-                reason="drive pdf copy",
-                extra={
-                    "source": "drive",
-                    "drive_file_id": f.file_id,
-                    "name": f.name,
-                    "path": f.path,
-                    "modified_time": f.modified_time,
-                    "md5_checksum": f.md5_checksum,
-                },
-            )
-            if result.status == "created":
-                stored += 1
-            else:
-                unchanged += 1
-
-        st.rows_out(stored + unchanged)
-        if failed:
-            st.excluded(failed, "checksum_mismatch")
+        result = lake.put(
+            f.lake_key(),
+            f.data,
+            run_id=current_run,
+            reason="drive pdf copy",
+            extra={
+                "source": "drive",
+                "tenant_id": f.tenant_id,
+                "drive_file_id": f.file_id,
+                "name": f.name,
+                "path": f.path,
+                "modified_time": f.modified_time,
+                "md5_checksum": f.md5_checksum,
+            },
+        )
+        if result.status == "created":
+            stored += 1
+        else:
+            unchanged += 1
 
     log.finish("landed drive pdfs", stored=stored, unchanged=unchanged, failed=failed)
     return DocumentResult(stored, unchanged, 0, failed, current_run)

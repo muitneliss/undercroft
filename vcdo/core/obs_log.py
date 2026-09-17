@@ -9,6 +9,20 @@ subprocess inherits it rather than inventing its own. Without that, a pipeline
 made of several programs produces several unrelated run ids and nothing can be
 traced end to end --- which is exactly when you need to.
 
+That inheritance is right for a one-shot CLI process and *wrong* for the
+long-lived worker, which serves many runs. Caching forever meant two tenants
+synced by the same process shared a run id --- and the run id is stamped into
+every raw lake manifest, every curated row, every quarantine record and every
+gate finding. Sharing one across tenants makes "which run wrote this object"
+unanswerable, which is the question provenance exists to answer.
+
+:func:`new_run_id` exists for that boundary: a server starts each run with a
+fresh id, and subprocesses of that run still inherit it.
+
+Every line also carries ``tenant_id``, for the same reason the raw lake puts the
+tenant in its key --- a log that cannot be attributed to a customer cannot answer
+"what happened to their data", and cannot be filtered out when they leave.
+
 **Never log data values.** Not email bodies, not customer names, not amounts, not
 tokens. Logs travel further and live longer than the data they describe, and a
 log line is the easiest way for PII to escape the systems designed to hold it.
@@ -25,9 +39,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-__all__ = ["run_id", "log", "ObsLog", "REQUIRED_FIELDS"]
+__all__ = ["run_id", "new_run_id", "log", "ObsLog", "REQUIRED_FIELDS"]
 
-REQUIRED_FIELDS = ("ts", "level", "component", "run_id", "event", "message")
+REQUIRED_FIELDS = ("ts", "level", "component", "run_id", "tenant_id", "event", "message")
 
 _RUN_ID_ENV = "VCDO_RUN_ID"
 
@@ -49,6 +63,19 @@ def run_id() -> str:
     existing = os.environ.get(_RUN_ID_ENV, "").strip()
     if existing:
         return existing
+    return new_run_id()
+
+
+def new_run_id() -> str:
+    """Start a new run: generate an id and export it, replacing any current one.
+
+    For callers that serve *many* runs from one process -- the worker's trigger
+    server, above all. :func:`run_id` deliberately never regenerates, so without
+    this every run in a long-lived process would share the first one's id and
+    their ledger rows would collide on ``(run_id, stage)``.
+
+    Still exported, so subprocesses of *this* run inherit it as before.
+    """
     generated = f"run-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
     os.environ[_RUN_ID_ENV] = generated
     return generated
@@ -63,9 +90,17 @@ class ObsLog:
     half-lines, which corrupts the file for every reader at once.
     """
 
-    def __init__(self, component: str, *, log_dir: str | Path = "data/logs", stream: str = "events") -> None:
+    def __init__(
+        self,
+        component: str,
+        *,
+        log_dir: str | Path = "data/logs",
+        stream: str = "events",
+        tenant_id: str = "",
+    ) -> None:
         self.component = component
         self.stream = stream
+        self.tenant_id = tenant_id
         self._dir = Path(log_dir)
 
     @property
@@ -78,6 +113,7 @@ class ObsLog:
             "level": level,
             "component": self.component,
             "run_id": run_id(),
+            "tenant_id": self.tenant_id,
             "event": event,
             "message": message,
         }

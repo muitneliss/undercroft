@@ -17,11 +17,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from vcdo.core.obs_log import ObsLog, run_id
-from vcdo.core.run_ledger import stage
 from vcdo.curated.hubspot import CuratedCustomer, CuratedDeal, Rejected, to_customer, to_deal
 from vcdo.lake.store import LakeStore
 
-__all__ = ["publish_hubspot", "publish_xero", "PublishResult", "flush_run_ledger", "GateBlocked"]
+__all__ = ["publish_hubspot", "publish_xero", "PublishResult", "GateBlocked"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,39 +55,29 @@ def publish_hubspot(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> 
     deals: list[tuple[CuratedDeal, str, str | None]] = []
     rejects: list[tuple[dict, Rejected, str]] = []
 
-    with stage("curate:hubspot", log) as st:
-        read = 0
-        for entity in ("companies", "contacts"):
-            for raw in _read_raw(lake, "hubspot", tenant_id, entity):
-                read += 1
-                key = f"records/hubspot/{tenant_id}/{entity}/{raw['source_record_id']}"
-                result = to_customer(raw)
-                if isinstance(result, Rejected):
-                    rejects.append((raw, result, key))
-                    st.excluded(1, result.reason_code)
-                else:
-                    customers.append((result, key))
-
-        # Association edges first: a deal needs its owner before it is curated.
-        deal_to_company: dict[str, str] = {}
-        for raw in _read_raw(lake, "hubspot", tenant_id, "associations"):
-            read += 1
-            targets = (raw.get("payload") or {}).get("to") or []
-            if targets:
-                deal_to_company[raw["source_record_id"]] = str(targets[0].get("toObjectId") or "")
-
-        for raw in _read_raw(lake, "hubspot", tenant_id, "deals"):
-            read += 1
-            key = f"records/hubspot/{tenant_id}/deals/{raw['source_record_id']}"
-            result = to_deal(raw)
+    for entity in ("companies", "contacts"):
+        for raw in _read_raw(lake, "hubspot", tenant_id, entity):
+            key = f"records/hubspot/{tenant_id}/{entity}/{raw['source_record_id']}"
+            result = to_customer(raw)
             if isinstance(result, Rejected):
                 rejects.append((raw, result, key))
-                st.excluded(1, result.reason_code)
             else:
-                deals.append((result, key, deal_to_company.get(raw["source_record_id"])))
+                customers.append((result, key))
 
-        st.rows_in(read)
-        st.rows_out(len(customers) + len(deals))
+    # Association edges first: a deal needs its owner before it is curated.
+    deal_to_company: dict[str, str] = {}
+    for raw in _read_raw(lake, "hubspot", tenant_id, "associations"):
+        targets = (raw.get("payload") or {}).get("to") or []
+        if targets:
+            deal_to_company[raw["source_record_id"]] = str(targets[0].get("toObjectId") or "")
+
+    for raw in _read_raw(lake, "hubspot", tenant_id, "deals"):
+        key = f"records/hubspot/{tenant_id}/deals/{raw['source_record_id']}"
+        result = to_deal(raw)
+        if isinstance(result, Rejected):
+            rejects.append((raw, result, key))
+        else:
+            deals.append((result, key, deal_to_company.get(raw["source_record_id"])))
 
     # One transaction. Either the whole generation publishes or none of it does.
     with conn.transaction():
@@ -230,68 +219,6 @@ def _quarantine(cur: Any, raw: dict, reject: Rejected, run: str, key: str) -> No
     )
 
 
-def flush_run_ledger(conn: Any, log_dir: str, only_run: str | None = None) -> int:
-    """Project the JSONL run ledger into ``ops.run_ledger``.
-
-    The JSONL stream stays the primary write: it is flock-protected, survives a
-    database outage, and works before Postgres exists. Postgres is the queryable
-    projection, consistent with the rule that everything in the database is a
-    projection and may be rebuilt.
-
-    Idempotent on ``(run_id, stage)``, so flushing twice is harmless and a
-    partially-flushed run completes cleanly on retry.
-    """
-    from pathlib import Path
-
-    from vcdo.core.run_ledger import STREAM
-
-    path = Path(log_dir) / f"{STREAM}.jsonl"
-    if not path.exists():
-        return 0
-
-    flushed = 0
-    cur = conn.cursor()
-    for line in path.read_text().splitlines():
-        if not line.strip():
-            continue
-        row = json.loads(line)
-        if only_run and row.get("run_id") != only_run:
-            continue
-        if "stage" not in row or "status" not in row:
-            continue
-        cur.execute(
-            """
-            INSERT INTO ops.run_ledger (
-                run_id, stage, status, duration_ms, rows_in, rows_out,
-                rows_excluded, excluded_by_reason, unaccounted, error_type
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (run_id, stage) DO UPDATE SET
-                status            = EXCLUDED.status,
-                duration_ms       = EXCLUDED.duration_ms,
-                rows_in           = EXCLUDED.rows_in,
-                rows_out          = EXCLUDED.rows_out,
-                rows_excluded     = EXCLUDED.rows_excluded,
-                excluded_by_reason = EXCLUDED.excluded_by_reason,
-                unaccounted       = EXCLUDED.unaccounted,
-                error_type        = EXCLUDED.error_type
-            """,
-            (
-                row["run_id"],
-                row["stage"],
-                row["status"],
-                row.get("duration_ms", 0),
-                row.get("rows_in", 0),
-                row.get("rows_out", 0),
-                row.get("rows_excluded", 0),
-                json.dumps(row.get("excluded_by_reason") or {}),
-                row.get("unaccounted", 0),
-                row.get("error_type"),
-            ),
-        )
-        flushed += 1
-    return flushed
-
-
 class GateBlocked(Exception):
     """The reconciliation gate refused to publish.
 
@@ -319,44 +246,33 @@ def publish_xero(lake: LakeStore, conn: Any, log: ObsLog, tenant_id: str) -> Pub
 
     contacts: list[tuple[Any, str]] = []
 
-    with stage("curate:xero", log) as st:
-        read = 0
-        # Xero contacts become curated customers too. Without both sides in one
-        # table the crosswalk has nothing to link ACROSS -- a HubSpot company and
-        # a Xero contact for the same business would never meet.
-        for raw in _read_raw(lake, "xero", tenant_id, "contacts"):
-            read += 1
-            key = f"records/xero/{tenant_id}/contacts/{raw['source_record_id']}"
-            payload = raw.get("payload") or {}
-            name = (payload.get("Name") or "").strip()
-            if not name:
-                rejects.append((raw, Rejected("missing_name", "xero contact has no Name"), key))
-                st.excluded(1, "missing_name")
-                continue
-            contacts.append((_xero_contact_row(raw, payload, name), key))
-        for raw in _read_raw(lake, "xero", tenant_id, "invoices"):
-            read += 1
-            raw_invoices.append(raw.get("payload") or {})
-            key = f"records/xero/{tenant_id}/invoices/{raw['source_record_id']}"
-            result = to_invoice(raw)
-            if isinstance(result, Rejected):
-                rejects.append((raw, result, key))
-                st.excluded(1, result.reason_code)
-            else:
-                invoices.append((result, key))
+    # Xero contacts become curated customers too. Without both sides in one
+    # table the crosswalk has nothing to link ACROSS -- a HubSpot company and
+    # a Xero contact for the same business would never meet.
+    for raw in _read_raw(lake, "xero", tenant_id, "contacts"):
+        key = f"records/xero/{tenant_id}/contacts/{raw['source_record_id']}"
+        payload = raw.get("payload") or {}
+        name = (payload.get("Name") or "").strip()
+        if not name:
+            rejects.append((raw, Rejected("missing_name", "xero contact has no Name"), key))
+            continue
+        contacts.append((_xero_contact_row(raw, payload, name), key))
+    for raw in _read_raw(lake, "xero", tenant_id, "invoices"):
+        raw_invoices.append(raw.get("payload") or {})
+        key = f"records/xero/{tenant_id}/invoices/{raw['source_record_id']}"
+        result = to_invoice(raw)
+        if isinstance(result, Rejected):
+            rejects.append((raw, result, key))
+        else:
+            invoices.append((result, key))
 
-        for raw in _read_raw(lake, "xero", tenant_id, "payments"):
-            read += 1
-            key = f"records/xero/{tenant_id}/payments/{raw['source_record_id']}"
-            result = to_payment(raw)
-            if isinstance(result, Rejected):
-                rejects.append((raw, result, key))
-                st.excluded(1, result.reason_code)
-            else:
-                payments.append((result, key))
-
-        st.rows_in(read)
-        st.rows_out(len(invoices) + len(payments) + len(contacts))
+    for raw in _read_raw(lake, "xero", tenant_id, "payments"):
+        key = f"records/xero/{tenant_id}/payments/{raw['source_record_id']}"
+        result = to_payment(raw)
+        if isinstance(result, Rejected):
+            rejects.append((raw, result, key))
+        else:
+            payments.append((result, key))
 
     gate = adjudicate(raw_invoices)
     _record_findings(conn, current_run, gate)

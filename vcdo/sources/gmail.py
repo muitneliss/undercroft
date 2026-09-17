@@ -9,9 +9,14 @@ because message counts look healthy while documents are silently missing.
 **Attachment identity never uses Gmail's ``attachmentId``.** Gmail regenerates it
 on every fetch: the legacy system measured 0 of 114 matching across two identical
 runs. An id that changes cannot be an idempotency key, cannot dedupe, and cannot
-be dereferenced later. Identity here is ``(mailbox, message_id, part_id,
-filename)`` plus the SHA-256 of the bytes — all derivable without any
-server-assigned value.
+be dereferenced later. Identity here is ``(tenant_id, message_id, part_id)`` plus
+the SHA-256 of the bytes — all derivable without any server-assigned value.
+
+Identity used to lead with the *mailbox* and end with the *filename*. Both were
+removed from the key: an address and an attachment name are personal data, and an
+object key is the one part of the lake that appears in listings, logs and error
+messages. Neither carried uniqueness the tenant and positional part id do not
+already carry. Both are still recorded in the manifest.
 
 That is why live mode fetches ``format="raw"``/``full`` once per message and
 extracts bytes locally rather than making a second ``attachments.get`` call. One
@@ -35,6 +40,7 @@ ENTITIES = ("messages",)
 
 @dataclass(frozen=True, slots=True)
 class Attachment:
+    tenant_id: str
     mailbox: str
     message_id: str
     part_id: str
@@ -43,9 +49,21 @@ class Attachment:
     data: bytes
 
     def lake_key(self) -> str:
-        """Positional and stable. Never contains a server-assigned id."""
-        name = (self.filename or "unnamed").replace("/", "_")
-        return f"gmail/attachments/{self.mailbox}/{self.message_id}/{self.part_id}/{name}"
+        """Positional and stable. Never contains a server-assigned id.
+
+        **Keyed by tenant, not by mailbox.** The mailbox is a person's email
+        address, and an object key is the one part of the lake that surfaces in
+        listings, logs and error messages; the tenant CASE-ID says the same thing
+        about ownership without naming anyone. The address itself is recorded in
+        the manifest, where access is controlled. There is exactly one Gmail
+        connection per tenant (``ops.connection`` is keyed ``(tenant_id,
+        source)``), so this is no less unique than the address was.
+
+        **The filename is not in the key either.** It carried no uniqueness --
+        ``part_id`` is positional and already unique within a message -- and
+        attachment filenames routinely contain client names.
+        """
+        return f"gmail/{self.tenant_id}/attachments/{self.message_id}/{self.part_id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,13 +90,24 @@ class GmailSource:
         mode: str = "mock",
         fixtures_dir: str = "fixtures",
         credentials=None,
+        mailbox: str = "",
     ) -> None:
-        self.tenant_id = tenant_id  # the mailbox
+        self.tenant_id = tenant_id
+        #: The mailbox address this connection reads. Public, and deliberately
+        #: separate from ``tenant_id``: one names the customer whose lake this
+        #: is, the other names a person. They were the same field, which put an
+        #: email address into every attachment's object key.
+        self.mailbox = mailbox
         self.mode = mode
         self.fixtures_dir = Path(fixtures_dir)
         self._credentials = credentials
         if mode == "live" and credentials is None:
             raise SourceError("gmail live mode requires OAuth credentials")
+        if mode == "live" and not mailbox:
+            # Live reads use userId="me", so the mailbox is whatever the
+            # credential happens to be. Recording which one we believe it is
+            # makes a mis-connected account visible instead of silent.
+            raise SourceError("gmail live mode requires mailbox (the address the credential reads)")
 
     def entities(self) -> tuple[str, ...]:
         return ENTITIES
@@ -185,7 +214,8 @@ class GmailSource:
                     "stored",
                     "pdf confirmed by content",
                     Attachment(
-                        mailbox=self.tenant_id,
+                        tenant_id=self.tenant_id,
+                        mailbox=self.mailbox,
                         message_id=message_id,
                         part_id=part.part_id,
                         filename=part.filename,
