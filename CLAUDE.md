@@ -1,5 +1,11 @@
 # vietcham-data-ops — working conventions
 
+> `AGENTS.md` is a **symlink to this file**, so Codex and Claude read the same
+> rules and cannot drift apart. Edit `CLAUDE.md`; never replace the symlink
+> with a copy. The legacy repo kept two byte-identical files and needed a
+> sync step to stop them diverging -- a symlink removes the failure mode
+> rather than policing it.
+
 Read this before changing anything. It is short on purpose; the reasoning lives
 in `docs/adr/` and in module docstrings next to the code it constrains.
 

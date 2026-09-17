@@ -6,6 +6,8 @@ curated tables in Postgres → Metabase dashboards, SQL and Metabot.
 ## Start here
 
 - **[CLAUDE.md](CLAUDE.md)** — working conventions. Read before changing anything.
+  (`AGENTS.md` is a symlink to it, so Codex and Claude cannot drift apart.)
+- **[docs/](docs/README.md)** — documentation index.
 - **[docs/adr/](docs/adr/)** — decisions, with the options rejected and why.
 
 ## Quick start
