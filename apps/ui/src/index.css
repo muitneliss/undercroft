@@ -1,0 +1,180 @@
+/*
+ * The control-plane shell's styling.
+ *
+ * Deliberately small and self-contained: a system font stack (no web-font request from the
+ * origin that holds the master key), design tokens for one neutral ramp plus a single
+ * accent, and a light/dark pair driven by the OS. This is the v0.1 shell -- a brand line, a
+ * sign-in state, and the tenant list -- so the styling covers exactly those and no
+ * speculative component the app does not yet render.
+ *
+ * "Sign in to continue" is a NORMAL state, not an error, so it is not painted red. Red is
+ * kept for real failure, the same restraint the fuller design language reserves it for.
+ */
+
+:root {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+
+  /* Neutral ink-on-paper ramp. */
+  --paper: #f7f7f5;
+  --card: #ffffff;
+  --line: #e4e4e0;
+  --ink: #1b1b18;
+  --ink-soft: #56564f;
+  --ink-faint: #8a8a80;
+
+  --accent: #4338ca;
+  --accent-soft: #eef0fb;
+  --danger: #b42318;
+
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(27, 27, 24, 0.04), 0 8px 28px rgba(27, 27, 24, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f0f0e;
+    --card: #191917;
+    --line: #2c2c28;
+    --ink: #f2f2ee;
+    --ink-soft: #b6b6ac;
+    --ink-faint: #82827a;
+
+    --accent: #a5b4fc;
+    --accent-soft: #20223a;
+    --danger: #f97066;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background:
+    radial-gradient(
+      1200px 600px at 50% -10%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 60%
+    ),
+    var(--paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* -- the shell card --------------------------------------------------------- */
+
+.shell {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.brand__mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--accent);
+  align-self: center;
+}
+
+.tagline {
+  margin: 0 0 24px;
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+}
+
+/* -- states ----------------------------------------------------------------- */
+
+.state {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+  border: 1px solid transparent;
+}
+
+.state--busy {
+  color: var(--ink-faint);
+  background: transparent;
+  border-color: var(--line);
+}
+
+.state--error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+/* -- tenant list ------------------------------------------------------------ */
+
+.tenants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tenant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.tenant__name {
+  font-weight: 550;
+}
+
+.tenant__role {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  text-transform: lowercase;
+}
+
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
