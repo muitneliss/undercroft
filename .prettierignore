@@ -5,3 +5,5 @@ coverage/
 bun.lock
 *.tsbuildinfo
 specs/schema/
+# Vendored, self-hosted webfont assets and their upstream licence/readme.
+apps/ui/public/fonts/

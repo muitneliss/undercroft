@@ -1,50 +1,278 @@
 /*
- * The control-plane shell's styling.
+ * The acetate tab board.
  *
- * Deliberately small and self-contained: a system font stack (no web-font request from the
- * origin that holds the master key), design tokens for one neutral ramp plus a single
- * accent, and a light/dark pair driven by the OS. This is the v0.1 shell -- a brand line, a
- * sign-in state, and the tenant list -- so the styling covers exactly those and no
- * speculative component the app does not yet render.
+ * The control plane is a boxed-software reference manual lying open at a tabbed
+ * section. One customer is one book; each division is a coloured section board;
+ * each panel is a punched acetate leaf hinged a millimetre above it.
  *
- * "Sign in to continue" is a NORMAL state, not an error, so it is not painted red. Red is
- * kept for real failure, the same restraint the fuller design language reserves it for.
+ * WHY THIS AND NOT A DASHBOARD. What this product actually is, is a record of
+ * standing authorities -- who granted what, over which scope, until when. That
+ * is a document, not a telemetry surface, and the category's answer (left
+ * sidebar, page header, source cards three-up, one status pill each) makes every
+ * state look like every other state at a glance. Here RANK IS PLY, not size and
+ * not colour: a leaf's height in the stack is its importance, and the connection
+ * states are told by hinge, punch, face and slip BEFORE any hue is involved.
+ * That is also, not by coincidence, how a badge stops depending on colour (WCAG
+ * 2.1 AA 1.4.1) -- the form supplies the redundancy instead of it being bolted
+ * on afterwards.
+ *
+ * VERMILION IS HELD OUT of the section wheel. Seven hues divide the book and are
+ * taken in order; the eighth is reserved for errata and appears nowhere else. A
+ * lapsed grant is the state that actually happens in production -- Xero's
+ * refresh token dies after 60 days unused, a customer revokes from their own
+ * account page, and a Testing-status Google token lasts a week -- so it does not
+ * get a small red badge. It gets the one colour nothing else may use.
+ *
+ * ONE RAKING LIGHT. Containers are hairline rules, never shadows and never
+ * gradients. Exactly one thing in the system casts a real shadow: a leaf
+ * currently hinged open above the board. Depth means ply and nothing else, so a
+ * shadow anywhere else would be a second, lying depth system.
+ *
+ * THE READING FIELD IS SOLVED, NOT GUESSED. Milk acetate over a saturated board
+ * is only readable if the leaf's alpha suits that board's hue, and these hues run
+ * from chrome yellow to ultramarine. `@/lib/acetate` binary-searches the
+ * composite at runtime until the field's contrast against the ink clears the
+ * target, then publishes `--leaf-alpha` and `--leaf-ground` below. The values
+ * checked in here are the chrome-yellow solution, so the first paint is already
+ * correct and the solver only ever adjusts it.
  */
 
-:root {
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+/* -- faces ------------------------------------------------------------------
+ *
+ * Self-hosted, not from a font CDN. This origin holds the session cookie that
+ * opens every stored OAuth credential; it has no business making a third-party
+ * request on every page load, and an internal control plane cannot assume a font
+ * host is reachable either.
+ *
+ * Archivo stands in for Univers: a grotesque with a real width axis, so the
+ * condensed headline voice and the upright display voice come out of one file.
+ * EB Garamond stands in for Sabon and carries every sentence a customer must
+ * read before granting access -- prose that asks for consent should look like
+ * prose, not like chrome. Spline Sans Mono carries machine voice only:
+ * identifiers, digests, dates, cron, counts, addresses. It is never used for
+ * atmosphere -- monospace as a costume for "technical" is the tell it would be.
+ * It ships latin only, because everything set in it is ASCII by construction;
+ * a stray glyph falls through to the system mono behind it.
+ */
 
-  /* Neutral ink-on-paper ramp. */
-  --paper: #f7f7f5;
-  --card: #ffffff;
-  --line: #e4e4e0;
-  --ink: #1b1b18;
-  --ink-soft: #56564f;
-  --ink-faint: #8a8a80;
-
-  --accent: #4338ca;
-  --accent-soft: #eef0fb;
-  --danger: #b42318;
-
-  --radius: 12px;
-  --shadow: 0 1px 2px rgba(27, 27, 24, 0.04), 0 8px 28px rgba(27, 27, 24, 0.06);
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("/fonts/archivo-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("/fonts/archivo-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("/fonts/archivo-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0f0f0e;
-    --card: #191917;
-    --line: #2c2c28;
-    --ink: #f2f2ee;
-    --ink-soft: #b6b6ac;
-    --ink-faint: #82827a;
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/garamond-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/garamond-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/garamond-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/garamond-italic-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/garamond-italic-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/garamond-italic-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
 
-    --accent: #a5b4fc;
-    --accent-soft: #20223a;
-    --danger: #f97066;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.45);
+@font-face {
+  font-family: "Spline Sans Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/mono-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Spline Sans Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/mono-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* -- the board -------------------------------------------------------------- */
+
+:root {
+  --face-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --face-prose: "EB Garamond", ui-serif, Georgia, serif;
+  --face-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Board stock and ink. The ground is warm because the whole world is printed
+     matter; a neutral grey would make the section hues read as UI accents
+     rather than as printed divider board. */
+  --bone: #efe9d9;
+  --leaf: #fbf8f0;
+  --ink: #16150f;
+  --ink-2: #56513f;
+  /* The faintest tone still has to be readable: it letters disabled controls and
+     every recorded absence. WCAG exempts a disabled control, but a label nobody
+     can read is a defect whatever the exemption says, and the previous value sat
+     at 4.1:1 on the page stock. */
+  --ink-3: #6b6450;
+
+  /* Rules, never shadows. Two weights: the hairline that separates, and the
+     heavier rule that closes a block. */
+  --rule: rgba(22, 21, 15, 0.16);
+  --rule-strong: rgba(22, 21, 15, 0.44);
+  --hair: 1px;
+
+  /* The section wheel. Seven hues divide the book and are taken in order; four
+     are spoken for and three are the system's room to grow. Vermilion is not in
+     the wheel -- see --errata. */
+  --hue-oxide: #b24b1a;
+  --hue-chrome: #eda600;
+  --hue-grass: #3e782b;
+  --hue-teal: #0f7673;
+  --hue-ultramarine: #234c9e;
+  --hue-violet: #634cb0;
+  --hue-sienna: #7f4023;
+
+  /* Held out of the wheel. Errata only, nowhere else, ever. */
+  --errata: #cf2f16;
+  --errata-ink: #8c1c09;
+
+  /* The current division's board, set per route on the app root. These are the
+     SOURCES defaults so nothing flashes before the route resolves. */
+  --board: var(--hue-chrome);
+  --board-ink: #4a3300;
+
+  /* The page stock: acetate over bone, constant across divisions. The reading
+     field does not change colour when you turn to another section -- only the
+     fore edge, the punch holes and the hinged leaf carry the board's hue. */
+  --page: #f7f3e7;
+
+  /* Solved at runtime by @/lib/acetate against --board, and consumed only by the
+     hinged leaf, which is the one surface that genuinely lies over the board.
+     These are the solver's own chrome-yellow answer, so the first paint is
+     already correct; `acetate.test.ts` is what keeps every other hue honest. */
+  --leaf-alpha: 0.203;
+  --leaf-ground: #f0b731;
+
+  /* Fixed in rem, not fluid. Product UI is read at a consistent distance, and a
+     heading that shrinks inside a panel reads as broken rather than responsive. */
+  --t-micro: 0.6875rem;
+  --t-small: 0.8125rem;
+  --t-body: 0.9375rem;
+  --t-prose: 1.0625rem;
+  --t-lead: 1.125rem;
+  --t-h3: 1.25rem;
+  --t-h2: 1.75rem;
+  --t-h1: 2.5rem;
+
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4.5rem;
+
+  /* A cut sheet of board, not a rounded card. */
+  --r-leaf: 3px;
+  --r-plate: 2px;
+
+  /* The only motion in the system: a hinge at the punched edge, two hard
+     frames, no easing curve anywhere. A page of printed leaves does not ease. */
+  --hinge: 90ms steps(2, end);
+
+  /* The one shadow the system allows: a leaf standing off the board it is
+     hinged above. Offset plus soft blur, so it reads as height rather than as a
+     coloured halo. */
+  --ply-shadow: 0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13);
+
+  --head-col: 9.5rem;
+  --rail-w: 3.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --hinge: 1ms steps(1, end);
   }
 }
 
@@ -54,127 +282,1284 @@
   box-sizing: border-box;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
+html {
+  font-size: 16px;
+  /* The scrollbar is part of the board, not a browser artefact. */
+  scrollbar-color: var(--rule-strong) var(--bone);
 }
 
 body {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  font-family: var(--font-sans);
+  margin: 0;
+  background: var(--bone);
   color: var(--ink);
-  background:
-    radial-gradient(
-      1200px 600px at 50% -10%,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      transparent 60%
-    ),
-    var(--paper);
+  font-family: var(--face-display);
+  font-size: var(--t-body);
+  font-variation-settings: "wdth" 100;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* -- the shell card --------------------------------------------------------- */
-
-.shell {
-  width: 100%;
-  max-width: 420px;
-  padding: 32px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+::selection {
+  background: var(--hue-chrome);
+  color: var(--ink);
 }
 
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 0 0 4px;
-  font-size: 1.5rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bone);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border: 3px solid var(--bone);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-2);
 }
 
-.brand__mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--accent);
-  align-self: center;
-}
-
-.tagline {
-  margin: 0 0 24px;
-  color: var(--ink-faint);
-  font-size: 0.8125rem;
-  letter-spacing: 0.01em;
-}
-
-/* -- states ----------------------------------------------------------------- */
-
-.state {
+h1,
+h2,
+h3,
+h4 {
   margin: 0;
-  padding: 14px 16px;
-  border-radius: 10px;
-  font-size: 0.9375rem;
-  background: var(--accent-soft);
-  color: var(--ink-soft);
-  border: 1px solid transparent;
+  font-family: var(--face-display);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
 }
 
-.state--busy {
-  color: var(--ink-faint);
-  background: transparent;
-  border-color: var(--line);
+h1 {
+  font-size: var(--t-h1);
+  font-variation-settings: "wdth" 92;
+  text-transform: uppercase;
+}
+h2 {
+  font-size: var(--t-h2);
+  font-variation-settings: "wdth" 88;
+  text-transform: uppercase;
+}
+h3 {
+  font-size: var(--t-h3);
+  font-variation-settings: "wdth" 96;
+  letter-spacing: -0.015em;
+}
+h4 {
+  font-size: var(--t-body);
+  font-variation-settings: "wdth" 100;
+  letter-spacing: 0;
 }
 
-.state--error {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-}
-
-/* -- tenant list ------------------------------------------------------------ */
-
-.tenants {
-  list-style: none;
+p {
   margin: 0;
-  padding: 0;
+}
+
+a {
+  color: var(--ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: var(--rule-strong);
+}
+a:hover {
+  text-decoration-color: var(--ink);
+}
+
+/* One focus treatment everywhere. A hard offset frame rather than a glow: a glow
+   would be the second depth system this design does not have. */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Every figure in this product is compared down a column. */
+.num,
+time,
+.mono {
+  font-family: var(--face-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* -- the book --------------------------------------------------------------- */
+
+.book {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rail-w);
+  background: var(--board);
+}
+
+/* The leaf: a sheet of milk acetate lying on the section board, punched twice at
+   its binding edge, with the running foot set down the spine. */
+.leaf {
+  position: relative;
+  background: var(--page);
+  min-width: 0;
+  /* Left padding clears the spine, then leaves a gutter. Setting it to exactly
+     the spine's width put the hanging heads hard against the spine rule. */
+  padding: var(--s-5) var(--s-6) var(--s-8) calc(var(--s-7) + var(--s-4));
+  border-right: var(--hair) solid var(--rule-strong);
+}
+
+/* The punch holes and the spine caption: the only purely decorative marks in the
+   interface, and therefore the only ones hidden from assistive technology
+   rather than narrated. */
+.leaf__spine {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--s-7);
+  border-right: var(--hair) solid var(--rule);
+  pointer-events: none;
+}
+
+.leaf__punch {
+  position: absolute;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  border-radius: 50%;
+  background: var(--board);
+  box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.35);
+}
+.leaf__punch--a {
+  top: 14%;
+}
+.leaf__punch--b {
+  top: 62%;
+}
+
+.leaf__caption {
+  position: absolute;
+  bottom: var(--s-5);
+  left: 50%;
+  transform: translateX(-50%) rotate(180deg);
+  writing-mode: vertical-rl;
+  font-family: var(--face-mono);
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* -- the tab rail ----------------------------------------------------------- */
+
+/*
+ * Navigation lives on the fore edge, because in this form that is where it
+ * lives. Height is proportional to each division's extent, so the rail is a
+ * picture of the book as well as a control.
+ *
+ * The source's divider boards "carry no mark at all". These carry a mark. This
+ * is an Operate surface, and unlabelled navigation is not a stylistic position,
+ * it is a defect; the deviation is deliberate and it is the only one taken
+ * against the form.
+ */
+
+.rail {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
+  padding: var(--s-5) 0;
+  background: var(--bone);
 }
 
-.tenant {
+.rail__tab {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
+  border: none;
+  border-left: var(--hair) solid var(--rule-strong);
+  border-radius: 0 var(--r-leaf) var(--r-leaf) 0;
+  background: var(--tab-hue);
+  color: #fff;
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 82;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-decoration: none;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+  padding: var(--s-4) 0;
+  /* Slid with a transform, never a margin. Animating margin reflows the whole
+     rail on every hover; a transform is composited and costs nothing. */
+  transform: translateX(var(--s-3));
+  transition: transform var(--hinge);
+}
+
+.rail__tab:hover:not([aria-disabled="true"]) {
+  transform: translateX(var(--s-2));
+}
+
+/* The current tab extends past the others and becomes the board. */
+.rail__tab[aria-current="page"] {
+  transform: none;
+}
+
+/* Selected is a punched hole. Not a colour change and not a bar: the hole. */
+.rail__tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  top: var(--s-3);
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: var(--page);
+  box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+}
+
+/* Disabled is face-down: the leaf turned over, showing unprinted board back. */
+.rail__tab[aria-disabled="true"] {
+  background: repeating-linear-gradient(135deg, #d6cfba, #d6cfba 3px, #cec7b1 3px, #cec7b1 6px);
+  color: #5f5844;
+  cursor: not-allowed;
+  transform: translateX(var(--s-4));
+}
+
+/* -- the page inside the leaf ------------------------------------------------ */
+
+.sheet {
+  display: grid;
+  grid-template-columns: var(--head-col) repeat(4, minmax(0, 1fr));
+  column-gap: var(--s-5);
+  align-content: start;
+  max-width: 78rem;
+}
+
+/* Heads hang in the margin column. This is the form's own structure, and it is
+   why no page here needs an eyebrow: the label sits beside its heading rather
+   than stacked on top of it. */
+.head {
+  grid-column: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  padding-top: 0.4rem;
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 80;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* Each head trails its rule to the frame edge. That is what makes the margin
+   column read as structure rather than as a stack of loose labels. */
+.head::after {
+  content: "";
+  flex: 1;
+  height: 0;
+  border-top: var(--hair) solid var(--rule);
+  transform: translateY(-0.3em);
+}
+
+.body {
+  grid-column: 2 / -1;
+  min-width: 0;
+}
+
+.band-rule {
+  grid-column: 1 / -1;
+  height: 0;
+  border-top: var(--hair) solid var(--rule);
+  margin: var(--s-6) 0 var(--s-5);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.stack--tight {
+  gap: var(--s-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.spread {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  gap: var(--s-4);
+  flex-wrap: wrap;
 }
 
-.tenant__name {
-  font-weight: 550;
+/* -- the running head -------------------------------------------------------- */
+
+.runhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding-bottom: var(--s-3);
+  margin-bottom: var(--s-6);
+  border-bottom: var(--hair) solid var(--rule-strong);
+  flex-wrap: wrap;
 }
 
-.tenant__role {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 999px;
-  color: var(--accent);
-  background: var(--accent-soft);
-  text-transform: lowercase;
+.runhead__mark {
+  font-family: var(--face-display);
+  font-size: var(--t-body);
+  font-weight: 700;
+  font-variation-settings: "wdth" 78;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-decoration: none;
 }
 
-:where(a, button, [tabindex]):focus-visible {
-  outline: 2px solid var(--accent);
+/*
+ * Which book is open, in the place a book says it: the running head.
+ *
+ * The primary user holds several member companies at once and is usually
+ * mid-call about one of them. A record that never names its customer is one
+ * they have to verify from the URL, and this sits on every division rather than
+ * on the screen that happened to fetch it.
+ */
+.runhead__record {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  margin-right: auto;
+  padding-left: var(--s-5);
+  min-width: 0;
+}
+
+.runhead__customer {
+  font-family: var(--face-display);
+  font-size: var(--t-h3);
+  font-weight: 700;
+  font-variation-settings: "wdth" 86;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.runhead__right {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  font-size: var(--t-micro);
+}
+
+/* -- prose ------------------------------------------------------------------- */
+
+/*
+ * Garamond, and only for sentences a person is asked to read and act on: what a
+ * source will read, what it will never write, what a refusal means. Consent copy
+ * set in 13px UI sans reads as boilerplate, and boilerplate is precisely what it
+ * must not be.
+ */
+.prose {
+  font-family: var(--face-prose);
+  font-size: var(--t-prose);
+  line-height: 1.53;
+  max-width: 62ch;
+  color: var(--ink);
+}
+
+.prose--lead {
+  font-size: var(--t-lead);
+  line-height: 1.45;
+}
+
+.note {
+  font-family: var(--face-prose);
+  font-size: var(--t-prose);
+  line-height: 1.5;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+.label {
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 82;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.datum {
+  font-family: var(--face-mono);
+  font-size: var(--t-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.datum--quiet {
+  color: var(--ink-2);
+}
+
+/* A recorded absence. Never a zero, never an empty cell. */
+.missing {
+  color: var(--ink-3);
+  font-family: var(--face-mono);
+}
+
+/* -- controls ---------------------------------------------------------------- */
+
+/*
+ * A plate, printed and die-cut: chrome-yellow ground, hairline keyline, caps
+ * label, and the arrow the manual uses for "go on". Secondary is the same die
+ * with no ink in it. There is no third button.
+ */
+.plate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0.5rem 0.9rem;
+  border: var(--hair) solid var(--ink);
+  border-radius: var(--r-plate);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 86;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background var(--hinge),
+    color var(--hinge);
+}
+
+.plate:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--leaf);
+}
+
+.plate:active:not(:disabled) {
+  background: var(--ink-2);
+  color: var(--leaf);
+}
+
+.plate:disabled {
+  border-color: var(--rule-strong);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+.plate--primary {
+  background: var(--hue-chrome);
+  color: var(--ink);
+}
+.plate--primary:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--hue-chrome);
+}
+.plate--primary:disabled {
+  /* Light enough that the faint ink still clears the floor on it. The darker
+     fill this replaced put its own label at 4.3:1. */
+  background: #ece7d6;
+  color: var(--ink-3);
+  border-color: var(--rule-strong);
+}
+
+/*
+ * Revocation is an ordinary plate.
+ *
+ * It printed in the errata colour until three DISCONNECT buttons on healthy rows
+ * were seen competing with the one errata slip that mattered. Vermilion is held
+ * out of the section wheel so the slip can be the only thing wearing it, and
+ * spending it on a control that sits on every granted row spends exactly what it
+ * was reserved for. The safety here is the confirmation step, not the colour.
+ */
+
+.plate--small {
+  padding: 0.3rem 0.6rem;
+  font-size: 10px;
+}
+
+/* -- fields ------------------------------------------------------------------ */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.field__hint {
+  font-family: var(--face-prose);
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+.input {
+  font-family: var(--face-mono);
+  font-size: var(--t-small);
+  padding: 0.5rem 0.65rem;
+  background: var(--leaf);
+  color: var(--ink);
+  border: var(--hair) solid var(--rule-strong);
+  border-radius: var(--r-plate);
+  caret-color: var(--ink);
+  transition: border-color var(--hinge);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--ink-2);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.input:disabled {
+  background: #e9e2d0;
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+/* The punch is the checkbox: a hole through the leaf when a thing is selected,
+   which is how selection is shown everywhere else in this system. */
+.punch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  cursor: pointer;
+  font-family: var(--face-mono);
+  font-size: var(--t-small);
+  padding: 0.28rem 0;
+}
+
+.punch__box {
+  position: relative;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: var(--hair) solid var(--ink);
+  border-radius: 50%;
+  background: var(--leaf);
+  transition: background var(--hinge);
+}
+
+.punch input {
+  position: absolute;
+  opacity: 0;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.punch input:checked + .punch__box {
+  background: var(--board);
+  box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45);
+}
+
+.punch input:focus-visible + .punch__box {
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
-  border-radius: 4px;
+}
+
+.punch input:disabled + .punch__box {
+  border-color: var(--rule-strong);
+  background: #e9e2d0;
+}
+
+.punch:has(input:disabled) {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+/* -- the schedule of grants -------------------------------------------------- */
+
+/*
+ * Rows, not a grid of equal cards. An operator reads down a column of sources
+ * the way they read down any schedule, and a card grid would give the lapsed
+ * grant exactly the same footprint as the healthy one -- which is the one thing
+ * this screen exists to prevent.
+ */
+
+.schedule {
+  border-top: var(--hair) solid var(--rule-strong);
+}
+
+.grant {
+  position: relative;
+  border-bottom: var(--hair) solid var(--rule);
+  padding: var(--s-4) 0;
+}
+
+.grant__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(0, 0.95fr) auto;
+  gap: var(--s-4);
+  align-items: baseline;
+}
+
+.grant__name {
+  font-family: var(--face-display);
+  font-size: var(--t-h3);
+  font-weight: 700;
+  font-variation-settings: "wdth" 88;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+}
+
+.grant__account {
+  min-width: 0;
+}
+
+.grant__when {
+  text-align: right;
+}
+
+.grant__actions {
+  display: flex;
+  gap: var(--s-2);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* A grant nobody has made yet is an unprinted leaf: it carries the access
+   statement instead of a status, because that is the decision being asked for,
+   and it is taller than the others on purpose. */
+.grant--unprinted {
+  background: var(--leaf);
+  border: var(--hair) solid var(--rule);
+  border-radius: var(--r-leaf);
+  padding: var(--s-4);
+  margin: var(--s-2) 0;
+}
+
+/* Pending is half-hinged: the leaf lifted at its binding edge and not yet laid
+   down. A shape before it is a colour.
+ *
+ * The binding edge is a PERFORATION -- a hairline of dashes, the way a leaf that
+ * has not yet been torn down and laid flat actually looks. It was a 3px solid
+ * bar in the section hue until the detector named that for what it is: a
+ * coloured side-tab accent is the most recognisable tell of a generated
+ * interface, and nothing in this design carries a coloured edge above 1px. The
+ * perforation says more in less ink, and it belongs to the world rather than to
+ * the category. */
+.grant--pending {
+  border-left: var(--hair) dashed var(--rule-strong);
+  padding-left: var(--s-4);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--board) 16%, transparent),
+    transparent 38%
+  );
+}
+
+/* How much of the section has been set. A rule inked in as far as it goes,
+   which is what a printed progress indicator looks like -- not a rounded pill
+   with a gradient in it. */
+.gathering {
+  height: 4px;
+  max-width: 24rem;
+  background: var(--rule);
+  border-radius: 0;
+}
+
+.gathering__inked {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--ink);
+  /* Scaled from the left rather than animating width, which would relayout the
+     rule on every change. */
+  transform-origin: left center;
+  transition: transform var(--hinge);
+}
+
+/* -- the access statement ---------------------------------------------------- */
+
+/*
+ * What is read and what is never written, on the leaf, before the redirect.
+ * `.claude/rules/ui.md` and ConnectionCard.test.tsx both hold this in place; if
+ * a later pass deletes it as clutter, those tests are the objection.
+ */
+.access {
+  display: grid;
+  grid-template-columns: var(--head-col) minmax(0, 1fr);
+  gap: var(--s-2) var(--s-5);
+  margin: var(--s-4) 0 0;
+  padding: var(--s-4) 0 0;
+  border-top: var(--hair) dashed var(--rule-strong);
+}
+
+.access dt {
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 80;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding-top: 0.3rem;
+}
+
+.access dd {
+  margin: 0;
+  font-family: var(--face-prose);
+  font-size: var(--t-prose);
+  line-height: 1.48;
+  max-width: 58ch;
+}
+
+/* -- errata ------------------------------------------------------------------ */
+
+/*
+ * The slip a publisher tips into a book to correct it. Vermilion, and the only
+ * thing on any page allowed to use it: rules top and bottom, the correction set
+ * in prose, and one action.
+ */
+.errata {
+  border-top: 2px solid var(--errata);
+  border-bottom: 2px solid var(--errata);
+  background: #fdf0eb;
+  padding: var(--s-4) var(--s-5);
+  margin: var(--s-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  align-items: flex-start;
+  border-radius: 1px;
+}
+
+.errata__mark {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 80;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--errata-ink);
+}
+
+.errata__body {
+  font-family: var(--face-prose);
+  font-size: var(--t-prose);
+  line-height: 1.5;
+  max-width: 62ch;
+  color: var(--ink);
+}
+
+.errata--inline {
+  margin: var(--s-3) 0 0;
+  padding: var(--s-3) var(--s-4);
+}
+
+/* -- status marks ------------------------------------------------------------ */
+
+/*
+ * Shape first, word second, hue third. Each mark is a different geometry, so a
+ * row is readable in greyscale, at a glance, and by someone who cannot
+ * distinguish the hues at all.
+ */
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 84;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mark svg {
+  flex: none;
+}
+
+.mark--granted {
+  color: #1c5c33;
+}
+.mark--pending {
+  color: #6b4a00;
+}
+.mark--lapsed {
+  color: var(--errata-ink);
+}
+.mark--absent {
+  color: var(--ink-2);
+}
+
+/* -- the hinged leaf --------------------------------------------------------- */
+
+/*
+ * The signature move. A clear acetate leaf hinged down at its punched edge over
+ * the board, which stays readable through it: `--leaf-alpha` is solved at
+ * runtime for whichever section hue is current, so this is a real translucency
+ * with a guaranteed contrast rather than a decorative one.
+ *
+ * It is NOT a modal. `.claude/rules/ui.md` decided scope selection is not a
+ * modal, so the leaf hinges open inside its own row -- the board above and below
+ * stays in the document, in the tab order, and on screen.
+ */
+.hinge {
+  position: relative;
+  margin-top: var(--s-4);
+  /* The board the leaf lies on, exposed at every edge. */
+  padding: calc(var(--s-5) + 9px) calc(var(--s-5) + 9px) calc(var(--s-5) + 9px)
+    calc(var(--s-7) + 9px);
+  border-radius: var(--r-leaf);
+  background: var(--board);
+  /* Elevation is declared ONCE. This carried a hairline border UNDER the ply
+     shadow, which is the ghost card -- two depth systems disagreeing about which
+     one is real. Ply is the rank here, so the shadow keeps it. */
+  box-shadow: var(--ply-shadow);
+  transform-origin: top left;
+  animation: hinge-down var(--hinge) both;
+}
+
+/*
+ * The acetate itself: genuinely translucent, lying on the board above.
+ *
+ * This was an opaque composite of leaf-over-board -- arithmetically the same
+ * colour, visually a painted panel, and it meant the runtime solver did real
+ * work that nothing on screen could show. Now the alpha it solves is the alpha
+ * the compositor applies, over a board that is actually behind the sheet, so the
+ * translucency is a fact rather than a claim and each hue in the wheel reads
+ * differently through it.
+ */
+.hinge::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--leaf) calc(var(--leaf-alpha) * 100%), transparent);
+}
+
+/* Content rides above the sheet; the sheet is painted, not stacked. */
+.hinge > * {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * Secondary ink on a hinged leaf is mixed FROM the ground, never inherited from
+ * the page.
+ *
+ * The solver guarantees the primary ink against the solved field and nothing
+ * else, and the page's secondary grey is calibrated for bone. On the chrome
+ * board it measured 4.35:1 -- under the 4.5:1 floor, on the hint text that
+ * explains what a Drive folder is. Mixing the page ink into the actual ground
+ * keeps the hierarchy visible and puts every tone back above the floor on every
+ * hue in the wheel.
+ */
+.hinge {
+  --ink-2: color-mix(in srgb, var(--ink) 78%, var(--leaf-ground));
+  /* 70%, not 62%. At 62% the faintest tone measured 4.04:1 against the solved
+     sienna ground -- below the floor. Nothing renders `--ink-3` inside a hinge
+     today, so this was a loaded gun rather than a live defect: the next person
+     to put a MISSING dash or a hint on a hinged leaf would have shipped
+     sub-floor text with nothing to warn them. 70% clears 5.00:1 on the worst
+     hue in the wheel. */
+  --ink-3: color-mix(in srgb, var(--ink) 70%, var(--leaf-ground));
+}
+
+/* A disabled control on a saturated ground. The page's pale grey fill reads as a
+   hole punched in the board; an outline mixed from the ground stays part of it. */
+.hinge .plate:disabled,
+.hinge .plate--primary:disabled {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ink) 40%, var(--leaf-ground));
+  color: var(--ink-3);
+}
+
+/*
+ * The leaf is punched, like every other leaf in the book.
+ *
+ * This replaces a 3px board-hue bar down the binding edge, which was the
+ * coloured side-tab reintroduced on the one panel the detector does not scan as
+ * a card. The punch says "hinged leaf" without saying it in an accent border,
+ * and it is the thing the whole world is named after.
+ */
+.hinge__punch {
+  position: absolute;
+  z-index: 2;
+  left: calc(var(--s-4) + 8px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  /* The page beneath, not the board. A hole must show what is behind it, and
+     these were filled in the board hue on a ground that is mostly board hue --
+     two faint smudges rather than two holes. Leaf and board are punched together
+     in a ring binder, so what shows through is the page below both. */
+  background: var(--page);
+  box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.4);
+}
+.hinge__punch--a {
+  top: var(--s-5);
+}
+.hinge__punch--b {
+  bottom: var(--s-5);
+}
+
+@keyframes hinge-down {
+  from {
+    transform: rotateX(-14deg);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hinge {
+    animation: none;
+  }
+}
+
+/* The one-time invitation token. Set large enough to be read aloud over a phone
+   without anyone squinting, boxed so it cannot be mistaken for prose, and
+   selectable -- a clipboard API that silently fails must not destroy the only
+   copy of this value. */
+.token {
+  font-family: var(--face-mono);
+  font-size: var(--t-lead);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+  background: var(--leaf);
+  border: var(--hair) solid var(--ink);
+  border-radius: var(--r-plate);
+  padding: var(--s-4);
+  user-select: all;
+}
+
+/* -- tables ------------------------------------------------------------------ */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-small);
+}
+
+.table caption {
+  text-align: left;
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 80;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding-bottom: var(--s-2);
+}
+
+.table th {
+  text-align: left;
+  font-family: var(--face-display);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  font-variation-settings: "wdth" 80;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding: var(--s-2) var(--s-3) var(--s-2) 0;
+  border-bottom: var(--hair) solid var(--rule-strong);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--s-3) var(--s-3) var(--s-3) 0;
+  border-bottom: var(--hair) solid var(--rule);
+  vertical-align: baseline;
+}
+
+.table tbody tr:hover td {
+  background: color-mix(in srgb, var(--board) 8%, transparent);
+}
+
+.table .num {
+  text-align: right;
+}
+
+/* Only the last cell loses its right padding. Zeroing it on every numeric cell
+   ran the byte counts straight into the button in the column beside them. */
+.table td:last-child,
+.table th:last-child {
+  padding-right: 0;
+  text-align: right;
+}
+
+code {
+  font-family: var(--face-mono);
+  font-size: 0.9em;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  padding: 0.1em 0.3em;
+  border-radius: 2px;
+}
+
+/* -- empty and loading -------------------------------------------------------- */
+
+/*
+ * An empty division is an unprinted leaf, not a dashed placeholder box: the same
+ * object, with no ink on it yet. It says what will be printed here and what to
+ * do about it.
+ */
+.unprinted {
+  background: var(--leaf);
+  border: var(--hair) solid var(--rule);
+  border-radius: var(--r-leaf);
+  padding: var(--s-6) var(--s-5);
+  max-width: 58ch;
+}
+
+.unprinted__title {
+  font-family: var(--face-display);
+  font-size: var(--t-h3);
+  font-weight: 700;
+  font-variation-settings: "wdth" 88;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--s-3);
+}
+
+/* Skeletons are lines of type being set, not a spinner: the shape of what is
+   coming keeps the leaf from jumping when it lands. */
+.setting {
+  height: 0.8rem;
+  background: repeating-linear-gradient(90deg, var(--rule) 0 60%, transparent 60% 100%);
+  background-size: 7px 100%;
+  opacity: 0.6;
+  animation: set-line 1.1s steps(6, end) infinite;
+}
+
+@keyframes set-line {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setting {
+    animation: none;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* -- the title page ----------------------------------------------------------- */
+
+/*
+ * Sign-in is the manual's title page: no tab rail, because you are not in a
+ * section yet. One leaf, centred, with the whole wheel printed down its fore
+ * edge as the contents of the book about to be opened.
+ */
+.titlepage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--s-5);
+  background: var(--bone);
+}
+
+.titlepage__leaf {
+  position: relative;
+  width: min(34rem, 100%);
+  background: var(--leaf);
+  border: var(--hair) solid var(--rule-strong);
+  border-radius: var(--r-leaf);
+  padding: var(--s-7) var(--s-7) var(--s-6);
+  box-shadow: var(--ply-shadow);
+}
+
+.titlepage__wheel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0 var(--r-leaf) var(--r-leaf) 0;
+  overflow: hidden;
+}
+
+.titlepage__wheel span {
+  flex: 1;
+}
+
+/* -- adaptation ---------------------------------------------------------------
+ *
+ * "Width deals fewer leaves, four columns to two to one." The fore-edge rail
+ * cannot be a fore edge on a phone, so it becomes a stepped tab strip at the
+ * foot of the leaf: same hues, same punch, same extend. At the foot rather than
+ * the head because that is where a thumb is, and because the leaf's own heading
+ * should be the first thing on the screen rather than the navigation.
+ */
+
+@media (max-width: 1100px) {
+  .sheet {
+    grid-template-columns: var(--head-col) repeat(2, minmax(0, 1fr));
+  }
+  .grant__head {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    row-gap: var(--s-2);
+  }
+  .grant__when {
+    text-align: left;
+  }
+  .grant__actions {
+    justify-content: flex-start;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --head-col: 0rem;
+    --t-h1: 1.9rem;
+    --t-h2: 1.4rem;
+  }
+
+  .book {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .rail {
+    flex-direction: row;
+    padding: var(--s-3) var(--s-3) env(safe-area-inset-bottom, 0);
+    overflow-x: auto;
+  }
+
+  .rail__tab {
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+    border-left: none;
+    border-top: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-leaf) var(--r-leaf) 0 0;
+    /* Room on the left for the punch, so the hole never sits on the label. */
+    padding: var(--s-3) var(--s-4) var(--s-3) var(--s-6);
+    flex: 1 1 auto;
+    transform: translateY(var(--s-3));
+  }
+  .rail__tab:hover:not([aria-disabled="true"]) {
+    transform: translateY(var(--s-2));
+  }
+  .rail__tab[aria-current="page"] {
+    transform: none;
+  }
+  .rail__tab[aria-current="page"]::after {
+    top: 50%;
+    left: var(--s-3);
+    margin-top: -4.5px;
+    margin-left: 0;
+  }
+  .rail__tab[aria-disabled="true"] {
+    transform: translateY(var(--s-4));
+  }
+
+  .leaf {
+    padding: var(--s-5) var(--s-4) var(--s-7);
+    border-right: none;
+  }
+
+  .leaf__spine,
+  .leaf__caption {
+    display: none;
+  }
+
+  /* Flush with the wordmark above it. The side padding that separates the record
+     from the wordmark in a row becomes an indent once the head stacks, and left
+     the one new element as the only thing off the leaf's margin. */
+  .runhead__record {
+    padding-left: 0;
+    margin-right: 0;
+  }
+
+  .sheet {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--s-1);
+  }
+
+  .head {
+    grid-column: 1;
+    padding-top: 0;
+    padding-bottom: var(--s-1);
+  }
+
+  /*
+   * The division label is not printed above the page heading on a phone.
+   *
+   * With the margin column collapsed it stacked directly over the H1 as
+   * letterspaced micro-caps -- which is an eyebrow, the one device the craft
+   * floor bans outright rather than merely discourages. The heading carries its
+   * own weight, and the division is already named on the tab strip at the foot
+   * of the leaf, in its own colour, at the size of a control. Nothing is lost by
+   * not saying it twice.
+   */
+  .head--division {
+    display: none;
+  }
+
+  .body {
+    grid-column: 1;
+  }
+
+  .access {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1);
+  }
+
+  .access dt {
+    padding-top: var(--s-3);
+  }
+
+  .grant__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

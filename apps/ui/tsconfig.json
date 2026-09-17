@@ -7,8 +7,9 @@
     "types": ["bun", "@happy-dom/global-registrator"],
     "jsx": "react-jsx",
     "module": "ESNext",
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
   },
-  "include": ["src/**/*"],
-  "references": [{ "path": "../../packages/core" }]
+  "include": ["src/**/*"]
 }

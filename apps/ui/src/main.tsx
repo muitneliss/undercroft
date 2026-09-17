@@ -1,14 +1,33 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App.tsx";
-// Side-effect import: Vite extracts this into a hashed CSS asset the control plane serves.
-import "./index.css";
+import { BrowserRouter } from "react-router-dom";
 
-const root = document.getElementById("root");
-if (root !== null) {
-  createRoot(root).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
-}
+import { App } from "@/App";
+import "@/index.css";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // A control plane is read repeatedly while someone works through setup.
+      // Refetching on focus keeps a connection card from claiming "connected"
+      // after the operator disconnected it in another tab.
+      refetchOnWindowFocus: true,
+      staleTime: 5_000,
+      retry: 1,
+    },
+  },
+});
+
+const container = document.getElementById("root");
+if (!container) throw new Error("no #root element");
+
+createRoot(container).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </QueryClientProvider>
+  </StrictMode>,
+);
