@@ -144,6 +144,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      # The worker needs the buckets before it lands anything; waiting on the one-shot
+      # creator also keeps `docker compose up --wait` from reading its clean exit as a crash.
+      minio-init:
+        condition: service_completed_successfully
     environment:
       UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_S3_ENDPOINT: http://minio:9000
