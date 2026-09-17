@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=../schema/connector.v1.json
+#
+# HubSpot CRM. Bearer auth against a sealed per-tenant credential; JSON next-link
+# pagination; client-side incremental on each object's last-modified property.
+#
+# A whole connector as configuration: no code per source.
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: hubspot
+displayName: HubSpot CRM
+baseUrl: https://api.hubapi.com
+
+auth:
+  kind: bearer
+  token: { from: connection }
+
+defaults:
+  headers: { Accept: application/json }
+  pagination:
+    kind: json-link
+    nextPath: paging.next.link
+  rateLimit:
+    requestsPerMinute: 100 # 110/10s burst on a Pro portal; leave headroom
+  retry:
+    attempts: 5
+    on: [429, 500, 502, 503, 504]
+    respectRetryAfter: true
+  guards:
+    failOnEmpty: true
+    # The search endpoint returns at most 10,000 results and does not signal
+    # truncation. Landing exactly on it is almost certainly silent data loss.
+    failOnExactCount: 10000
+
+entities:
+  - name: companies
+    request:
+      kind: list
+      path: /crm/v3/objects/companies
+      query:
+        limit: "100"
+        archived: "false"
+        properties: name,domain,industry,lifecyclestage,createdate,hs_lastmodifieddate,hubspot_owner_id
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    incremental:
+      strategy: client-filter
+      sourcePath: properties.hs_lastmodifieddate
+
+  - name: contacts
+    request:
+      kind: list
+      path: /crm/v3/objects/contacts
+      query:
+        limit: "100"
+        archived: "false"
+        properties: firstname,lastname,email,company,createdate,lastmodifieddate,hubspot_owner_id
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    incremental:
+      strategy: client-filter
+      # NOT hs_lastmodifieddate. HubSpot names it differently on contacts, and the
+      # wrong name yields a cursor that never advances.
+      sourcePath: properties.lastmodifieddate
+
+  - name: deals
+    request:
+      kind: list
+      path: /crm/v3/objects/deals
+      query:
+        limit: "100"
+        archived: "false"
+        properties: dealname,dealstage,pipeline,amount,closedate,createdate,hs_lastmodifieddate,hubspot_owner_id
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    incremental:
+      strategy: client-filter
+      sourcePath: properties.hs_lastmodifieddate
+
+  # Not a CRM object: the deal-to-company edge, on a different route with a different
+  # shape. Without it a deal has no owner and every deal-to-customer join is a guess --
+  # so a failure here is fatal, not skippable.
+  - name: associations
+    request:
+      kind: batch-from
+      entity: deals
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/deals/companies/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false # a portal with no associations is a real state

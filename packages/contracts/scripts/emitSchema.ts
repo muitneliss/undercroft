@@ -1,0 +1,25 @@
+/**
+ * Emit the connector spec's JSON Schema to `specs/schema/connector.v1.json`.
+ *
+ * The schema is what gives a spec author editor autocomplete and inline validation via
+ * the `# yaml-language-server: $schema=` line at the top of each spec. It is generated
+ * from the same Zod schema the runtime validates against, so the editor and the runtime
+ * never disagree about what a valid spec is.
+ */
+
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { zodToJsonSchema } from "zod-to-json-schema";
+import { ConnectorSpec } from "../src/connectorSpec.ts";
+
+const repoRoot = join(import.meta.dirname, "..", "..", "..");
+const outPath = join(repoRoot, "specs", "schema", "connector.v1.json");
+
+const schema = zodToJsonSchema(ConnectorSpec, {
+  name: "Connector",
+  $refStrategy: "none",
+});
+
+mkdirSync(dirname(outPath), { recursive: true });
+writeFileSync(outPath, `${JSON.stringify(schema, null, 2)}\n`);
+process.stdout.write(`wrote ${outPath}\n`);

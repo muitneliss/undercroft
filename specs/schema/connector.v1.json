@@ -1,0 +1,682 @@
+{
+  "$ref": "#/definitions/Connector",
+  "definitions": {
+    "Connector": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "undercroft.dev/v1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Connector"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "auth": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "none"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "bearer"
+                },
+                "token": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "const": "connection"
+                        }
+                      },
+                      "required": [
+                        "from"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "const": "env"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "token"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "oauth2"
+                },
+                "tokenUrl": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "rotatesRefreshToken": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "accountHeader": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "tokenUrl"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "defaults": {
+          "type": "object",
+          "properties": {
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "default": 60000
+            },
+            "pagination": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "none"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "json-link"
+                    },
+                    "nextPath": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "nextPath"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "page-number"
+                    },
+                    "param": {
+                      "type": "string",
+                      "default": "page"
+                    },
+                    "startAt": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 1
+                    },
+                    "stopOn": {
+                      "type": "string",
+                      "enum": [
+                        "empty-page",
+                        "total-path"
+                      ],
+                      "default": "empty-page"
+                    },
+                    "totalPath": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "cursor"
+                    },
+                    "cursorPath": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                    },
+                    "param": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "cursorPath",
+                    "param"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "offset"
+                    },
+                    "param": {
+                      "type": "string",
+                      "default": "offset"
+                    },
+                    "limitParam": {
+                      "type": "string",
+                      "default": "limit"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              ],
+              "default": {
+                "kind": "none"
+              }
+            },
+            "rateLimit": {
+              "type": "object",
+              "properties": {
+                "minIntervalMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 0
+                },
+                "requestsPerMinute": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "requestsPerDay": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            },
+            "retry": {
+              "type": "object",
+              "properties": {
+                "attempts": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10,
+                  "default": 5
+                },
+                "on": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "default": [
+                    429,
+                    500,
+                    502,
+                    503,
+                    504
+                  ]
+                },
+                "backoff": {
+                  "type": "string",
+                  "enum": [
+                    "exponential",
+                    "fixed"
+                  ],
+                  "default": "exponential"
+                },
+                "baseMs": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "default": 500
+                },
+                "maxMs": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "default": 30000
+                },
+                "jitter": {
+                  "type": "string",
+                  "enum": [
+                    "full",
+                    "none"
+                  ],
+                  "default": "full"
+                },
+                "respectRetryAfter": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "maxRetryAfterMs": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "default": 120000
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            },
+            "guards": {
+              "type": "object",
+              "properties": {
+                "failOnEmpty": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "failOnExactCount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "maxRecords": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "request": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "list"
+                      },
+                      "method": {
+                        "type": "string",
+                        "enum": [
+                          "GET",
+                          "POST"
+                        ],
+                        "default": "GET"
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "query": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "default": {}
+                      },
+                      "body": {}
+                    },
+                    "required": [
+                      "kind",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "batch-from"
+                      },
+                      "entity": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "idPath": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                      },
+                      "chunkSize": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 100
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "bodyTemplate": {
+                        "type": "string",
+                        "enum": [
+                          "hubspot-batch-inputs"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "entity",
+                      "idPath",
+                      "path",
+                      "bodyTemplate"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "envelopePath": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+              },
+              "idPath": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+              },
+              "updatedAtPath": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+              },
+              "pagination": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "none"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "json-link"
+                      },
+                      "nextPath": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "nextPath"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "page-number"
+                      },
+                      "param": {
+                        "type": "string",
+                        "default": "page"
+                      },
+                      "startAt": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 1
+                      },
+                      "stopOn": {
+                        "type": "string",
+                        "enum": [
+                          "empty-page",
+                          "total-path"
+                        ],
+                        "default": "empty-page"
+                      },
+                      "totalPath": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "cursor"
+                      },
+                      "cursorPath": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                      },
+                      "param": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "cursorPath",
+                      "param"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "offset"
+                      },
+                      "param": {
+                        "type": "string",
+                        "default": "offset"
+                      },
+                      "limitParam": {
+                        "type": "string",
+                        "default": "limit"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "incremental": {
+                "type": "object",
+                "properties": {
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "query-param",
+                      "client-filter",
+                      "header"
+                    ]
+                  },
+                  "param": {
+                    "type": "string"
+                  },
+                  "header": {
+                    "type": "string"
+                  },
+                  "sourcePath": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_$][A-Za-z0-9_$.[\\]-]*$"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "iso8601",
+                      "epoch-millis",
+                      "yyyy-mm-dd"
+                    ],
+                    "default": "iso8601"
+                  }
+                },
+                "required": [
+                  "strategy",
+                  "sourcePath"
+                ],
+                "additionalProperties": false
+              },
+              "rateLimit": {
+                "type": "object",
+                "properties": {
+                  "minIntervalMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                  },
+                  "requestsPerMinute": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "requestsPerDay": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              },
+              "guards": {
+                "type": "object",
+                "properties": {
+                  "failOnEmpty": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "failOnExactCount": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "maxRecords": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              }
+            },
+            "required": [
+              "name",
+              "request",
+              "idPath"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "id",
+        "displayName",
+        "baseUrl",
+        "auth",
+        "entities"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

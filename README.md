@@ -1,58 +1,61 @@
-# VietCham Data Platform
+# Undercroft
 
-HubSpot, Xero, Gmail and Google Drive → an immutable raw lake on S3/MinIO →
-curated tables in Postgres → Metabase dashboards, SQL and Metabot.
+> An immutable raw lake, declarative connectors, and a schema you define yourself.
 
-## Start here
+An _undercroft_ is the vaulted chamber beneath a building — the part that holds
+everything up and outlives what stands on it. That is the whole architecture in one
+word: the raw lake is the only durable layer, and everything above it is a projection
+you can drop and rebuild.
 
-- **[CLAUDE.md](CLAUDE.md)** — working conventions. Read before changing anything.
-  (`AGENTS.md` is a symlink to it, so Codex and Claude cannot drift apart.)
-- **[docs/](docs/README.md)** — documentation index.
-- **[docs/adr/](docs/adr/)** — decisions, with the options rejected and why.
+**Status: pre-alpha.** Under active construction; nothing is stable yet.
 
-## Quick start
+## What it does
 
-```bash
-make verify   # lint + tests, Python and TypeScript. No credentials, no network, no docker.
-make up       # the whole platform: minio, postgres, kestra, metabase, worker
-make seed     # fixture records into local MinIO
-make slice    # full fixture run: raw -> curated -> dashboard query
-```
-
-The whole gate runs offline against fixtures. Nothing in `make verify` touches a
-real source, a real credential, or a deployed service.
-
-There is no ingestion platform and no Kubernetes: `dlt` is a library inside the
-worker container. `make up` is the entire stack.
-
-`make verify` needs **Bun** as well as Python, for the UI half of the gate — see
-CLAUDE.md for why that trade was made.
-
-## Layout
+Connect your accounts, declare what to pull in YAML, and write your own SQL on top.
 
 ```
-vcdo/core/      config, logging, secrets, connections, names, money
-vcdo/lake/      content-addressed immutable object store
-vcdo/sources/   hubspot, xero, gmail, drive (dlt as a library, no platform)
-vcdo/curated/   models, transforms, crosswalk, data quality
-vcdo/api/       the control plane: OAuth, connections, runs (ADR 0004)
-ui/             the operator SPA (Vite + React + TypeScript, tested with Vitest)
-deploy/Dockerfile       the worker image
-deploy/Dockerfile.api   the control plane image (builds the SPA, then serves it)
-deploy/compose/ service definitions (source of truth; Dokploy holds a copy)
-flows/          Kestra workflows
-migrations/     Postgres DDL for the curated layer
+  your APIs ──▶ raw lake (S3/MinIO)  ──▶  raw.records (Postgres)  ──▶  dbt  ──▶  BI
+              immutable, content-addressed      one generic table      your models
 ```
 
-## Source reference
+- **The raw lake is create-only and content-addressed.** Re-storing identical bytes
+  writes nothing. Nothing is ever overwritten in place. It is the one layer that cannot
+  be recomputed, so it is the one layer treated as durable.
+- **Connectors are YAML, not code.** Base URL, auth, pagination, entities, cursors.
+  Adding a REST source needs no migration and no pull request.
+- **No business schema ships.** Records land in one generic table; every table above it
+  is a dbt model you wrote. Undercroft has no opinion about what a "customer" is.
+- **Multi-tenant.** Per-tenant credentials sealed with AES-256-GCM, and a control-plane
+  UI where someone connects their own accounts.
+- **Anything can ingest.** A REST lake API means a shell script or an orchestrator can
+  land data too — through the same create-only, content-addressed path.
 
-The legacy system at `vcc-ostwin-architecture-review` solves the same domain
-problem on a single operator machine. It is the reference for domain rules —
-entity identity, Xero API behaviour, currency and GST policy, PII handling — and
-is **not** a dependency. Read it before designing; do not import from it.
+## Design rules
 
-## Safety
+1. **Raw is the only durable layer.** Everything in Postgres is a projection and may be
+   dropped and rebuilt. Raw cannot be recomputed.
+2. **Never guess; return nothing and say why.** An empty cell is visibly missing; a wrong
+   value is invisibly false. "No evidence" is never "pass". Money is a string end to end,
+   and an unreadable amount is `null`, never `0`.
+3. **One writer, many callers.** Every byte enters through the lake's create-only path,
+   whatever called it.
 
-Client names are PII. Tracked files use CASE-IDs; real names live only in
-restricted storage. `.dokploy.json`, tokens and `data/` are gitignored and must
-never be committed.
+## Stack
+
+TypeScript on [Bun](https://bun.sh), end to end. Postgres, S3/MinIO,
+[Kestra](https://kestra.io) for scheduling, [dbt](https://getdbt.com) for transforms,
+and any BI tool that speaks Postgres.
+
+## Development
+
+```sh
+bun install
+bun run verify      # typecheck, lint, format, tests -- offline, no credentials needed
+```
+
+`verify` is the gate and runs with no Docker, no network and no credentials. `bun run
+itest` adds the Docker-backed integration tier.
+
+## License
+
+MIT

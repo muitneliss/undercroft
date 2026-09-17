@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["bun"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+
+    // A value import from a type-only path emits a runtime `import` and fails
+    // the build here, rather than silently bundling the server -- and with it
+    // `pg` and the secret-key loader -- into the browser. `apps/ui` imports
+    // `AppRouter` from the control plane, so this is load-bearing, not taste.
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    // Bun executes TypeScript directly, so nothing in this repo needs compiled
+    // JavaScript. `tsc -b` exists only to typecheck and to emit the declarations
+    // that project references need -- which is what makes importing `./clock.ts`
+    // with its real extension legal.
+    "allowImportingTsExtensions": true,
+    "emitDeclarationOnly": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  }
+}

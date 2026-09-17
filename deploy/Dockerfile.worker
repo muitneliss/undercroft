@@ -1,0 +1,36 @@
+# The worker: ingest, the lake write API, the raw loader, and the dbt transform.
+#
+# Bun runs TypeScript directly, so there is no build step for our code. dbt is installed as
+# a BINARY we invoke -- we author no Python and import nothing from it. It lives here
+# rather than in a container the worker starts, because starting a container needs the
+# Docker socket and nothing in this stack gets one. See ADR 0007.
+FROM oven/bun:1.4.2-debian
+
+# dbt-core and the Postgres adapter, pinned. A venv keeps them off the system Python.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/dbt \
+    && /opt/dbt/bin/pip install --no-cache-dir "dbt-core==1.9.1" "dbt-postgres==1.9.0"
+ENV PATH="/opt/dbt/bin:${PATH}"
+
+WORKDIR /app
+
+# Install dependencies against the lockfile first, so a source change does not re-resolve.
+COPY package.json bun.lock ./
+COPY packages ./packages
+COPY apps ./apps
+RUN bun install --frozen-lockfile --production
+
+# Connector specs and the dbt project are read at run time.
+COPY specs ./specs
+COPY dbt ./dbt
+
+ENV UNDERCROFT_SPECS_DIR=/app/specs/connectors \
+    UNDERCROFT_DBT_PROJECT_DIR=/app/dbt/undercroft_starter \
+    UNDERCROFT_DBT_PROFILES_DIR=/app/dbt
+EXPOSE 8081
+
+# Idle until called. Kestra invokes the HTTP verbs on a schedule; the worker starts no work
+# on its own, so a restart never re-runs a sync.
+CMD ["bun", "run", "apps/worker/src/server.ts"]
