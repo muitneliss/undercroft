@@ -1,13 +1,43 @@
-# The control plane: tRPC + OAuth + (built) SPA. A second public surface beside the
-# worker, deliberately separate so ingestion keeps running with it stopped (ADR 0004).
+# The control plane: tRPC + OAuth + the built SPA, served same-origin. A second public
+# surface beside the worker, deliberately separate so ingestion keeps running with it
+# stopped (ADR 0004).
+
+# --- stage 1: build the SPA --------------------------------------------------
+#
+# A full install (dev deps included) because Vite and the React plugin are devDependencies.
+# `apps/ui` builds to `apps/ui/dist`, which the runtime stage copies in and the server
+# serves. A type error does not fail here -- `vite build` transpiles rather than typechecks;
+# the gate's `bun run typecheck` is what guards types.
+FROM oven/bun:1.4.2-slim AS ui
+
+WORKDIR /app
+
+# The root tsconfigs come too: `apps/ui/tsconfig.json` extends `tsconfig.base.json`, and
+# Vite's esbuild transform reads that chain. Without them the build fails resolving the
+# extends -- the worker image needs no tsconfig because Bun runs the sources directly.
+COPY package.json bun.lock tsconfig.base.json tsconfig.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN bun install --frozen-lockfile
+RUN cd apps/ui && bun run build
+
+# --- stage 2: the runtime ----------------------------------------------------
 FROM oven/bun:1.4.2-slim
 
 WORKDIR /app
+
+# Where the server looks for the SPA. Baked in so the image is self-contained: a container
+# started with nothing but a database URL still serves the site.
+ENV UNDERCROFT_UI_DIST=/app/apps/ui/dist
 
 COPY package.json bun.lock ./
 COPY packages ./packages
 COPY apps ./apps
 RUN bun install --frozen-lockfile --production
+
+# The built assets, from stage 1. `apps/ui/dist` is not in the source tree, so this brings
+# it in on top of the source copied above.
+COPY --from=ui /app/apps/ui/dist ./apps/ui/dist
 
 EXPOSE 3000
 

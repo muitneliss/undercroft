@@ -13,7 +13,14 @@ function required(name: string): string {
 }
 
 const pool = createPool(required("UNDERCROFT_POSTGRES_DSN"));
-const app = createServer({ exec: asExecutor(pool) });
+// The image bakes the built SPA in and points here; a bare `bun run` with the variable
+// unset serves the API alone. Spread so the optional stays absent rather than `undefined`,
+// which exactOptionalPropertyTypes forbids.
+const uiDist = process.env.UNDERCROFT_UI_DIST;
+const app = createServer({
+  exec: asExecutor(pool),
+  ...(uiDist !== undefined && uiDist !== "" ? { uiDist } : {}),
+});
 
 // parseInt, not Number(): a port, not an amount.
 const port = parseInt(process.env.UNDERCROFT_API_PORT ?? "3000", 10);
