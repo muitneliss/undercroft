@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/muitneliss/vietcham-data-ops/compare/v0.1.0...v0.2.0) (2026-09-17)
+
+
+### Features
+
+* redesign the control plane as a tabbed reference manual ([3798d1f](https://github.com/muitneliss/vietcham-data-ops/commit/3798d1f988432dd872c7423d292103f6bd58ab89))
+
 ## 0.1.0 (2026-09-17)
 
 
