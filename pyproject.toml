@@ -49,6 +49,16 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["vcdo"]
 
+# --- pyright -----------------------------------------------------------------
+# Point the type checker at the same venv the tests use. Without this it resolves
+# against the system interpreter, reports every third-party import as missing,
+# and the resulting wall of false errors trains people to ignore the real ones.
+[tool.pyright]
+venvPath = "."
+venv = ".venv-tests"
+include = ["vcdo", "tests"]
+typeCheckingMode = "standard"
+
 # --- pytest ------------------------------------------------------------------
 # The gate/monitor split matters. `norecursedirs` is used rather than
 # `addopts = --ignore` or `-m "not monitor"`, because those beat even an explicit

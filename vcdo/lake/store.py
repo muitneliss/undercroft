@@ -35,8 +35,19 @@ from typing import Protocol
 
 __all__ = ["ObjectStore", "LakeStore", "PutResult", "ObjectExists", "sha256_hex"]
 
-#: Default number of provenance-addressed versions kept per logical key.
-RETENTION_N = 30
+#: Default retention: ``None`` means keep every observation, forever.
+#:
+#: This is a deliberate decision (owner, 2026-09-17), not an oversight. The lake
+#: is the only layer that cannot be recomputed, and a retention policy has not
+#: been set yet, so the safe default is to discard nothing. Note that create-only
+#: plus content-idempotence already bounds growth by *real* change: re-observing
+#: an unchanged file costs one manifest, not one copy.
+#:
+#: This will need revisiting. Under Singapore PDPA, personal data must not be
+#: retained once it no longer serves a business or legal purpose, so "keep
+#: everything" is a starting position with a deadline, not a permanent policy.
+#: Tracked in docs/adr/0002.
+RETENTION_UNBOUNDED = None
 
 _STAMP = "%Y%m%dT%H%M%SZ"
 
@@ -96,9 +107,9 @@ class LakeStore:
     and when did we see it".
     """
 
-    def __init__(self, store: ObjectStore, *, retention: int = RETENTION_N) -> None:
-        if retention < 1:
-            raise ValueError("retention must be at least 1")
+    def __init__(self, store: ObjectStore, *, retention: int | None = RETENTION_UNBOUNDED) -> None:
+        if retention is not None and retention < 1:
+            raise ValueError("retention must be at least 1, or None to keep everything")
         self._store = store
         self._retention = retention
 
@@ -248,6 +259,8 @@ class LakeStore:
         deliberate garbage-collection step --- not something retention should do
         as a side effect.
         """
+        if self._retention is None:
+            return []
         key = self._validate_source_key(source_key)
         stamps = self.versions(key)
         excess = len(stamps) - self._retention

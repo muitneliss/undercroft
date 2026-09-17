@@ -5,7 +5,7 @@ promises that make it an archive rather than a cache, plus the key-shape guard
 that stops retention deleting sibling data.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -78,6 +78,25 @@ def test_pruning_reports_exactly_what_it_removed_oldest_first():
         "20260903T000000Z",
         "20260904T000000Z",
     ]
+
+
+def test_nothing_is_discarded_by_default():
+    """Owner decision 2026-09-17: keep everything until a retention policy exists.
+
+    A default that quietly drops history would make that decision silently
+    untrue, and the loss would only surface when someone needed the old version.
+    """
+    lake = LakeStore(InMemoryObjectStore())
+    base = at(1)
+    for n in range(40):
+        lake.put(
+            "xero/invoices/INV-1",
+            f"payload {n}".encode(),
+            run_id=f"r{n}",
+            now=base + timedelta(hours=n),
+        )
+
+    assert len(lake.versions("xero/invoices/INV-1")) == 40
 
 
 def test_prune_returns_the_removed_names():
