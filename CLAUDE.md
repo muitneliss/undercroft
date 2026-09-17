@@ -76,6 +76,12 @@ see "never guess", create-only lake writes, or the Dokploy channel rule; the rul
 files are their only enforcement. Treating green as proof would be rule 2 broken
 by the harness itself.
 
+CI does add two mechanical slices on top — every compose service declares a
+memory limit, and secret-bearing paths stay untracked. Those are the *floor* of
+`deployment.md` and `pii.md`, not the whole of either: they catch the two ways
+each rule gets broken by accident, and nothing about the ways it gets broken by
+reasoning.
+
 `pyright` is pinned and configured but deliberately **outside** the gate. CI runs
 it non-blocking so the true error count is visible on every push; it becomes a
 gate once that number is known and small, and not before.

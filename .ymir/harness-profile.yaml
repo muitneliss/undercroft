@@ -185,7 +185,13 @@ concerns:
     runs:
       - make-verify           # blocking: ruff check + ruff format --check + gate tests
       - pyright               # non-blocking (continue-on-error) — this is the measurement
-      - wiki-check            # blocking: wiki check --error-on-untracked-sources
+      - wiki-check            # WRITTEN BUT COMMENTED OUT — see applied.wiki below
+      # Added by concurrent work during apply, not by this spec, and kept:
+      - compose-config        # blocking: docker compose config -q
+      - memory-limits         # blocking: every service declares a memory limit
+      - secret-floor          # blocking: secret-bearing paths untracked, no credential shapes
+      # The last two mechanically enforce the floor of deployment.md and pii.md.
+      # They do not make those rules gateable — they catch the accidental half.
     excludes:
       - tests/monitors        # binds to live data; red means drift, not a defect
       - tests/integration     # needs the docker stack and secrets
@@ -308,3 +314,46 @@ audit:
       resolution: >-
         Accepted and recorded. A green `make verify` is not evidence that these
         held — which is itself an instance of rule 2: no evidence is not a pass.
+
+# --- Apply outcome (run 20260917143513) --------------------------------------
+# What the spec produced when generated. Recorded so a later reader does not
+# re-derive it, and above all does not re-attempt the wiki and assume it worked.
+applied:
+  rules:      "generated — 5 files under .claude/rules/; frontmatter matches this profile; every avoid[] item has a NEVER bullet"
+  lint:       "generated — pyright==1.1.414 pinned; clean `make clean && make venv` rebuild re-resolved the set with no conflict; [tool.pyright] annotated as deliberately outside the gate"
+  ci:         "generated — .github/workflows/ci.yml; later merged with concurrent work into one workflow carrying verify + compose + secrets jobs"
+  release:    "generated — .github/workflows/release-please.yml; no deploy step, no publish step, minimal permissions"
+  claude_md:  "generated — CLAUDE.md rewritten as map + rules index; AGENTS.md symlink verified intact; no AGENT.md written"
+
+  wiki:
+    result: FAILED
+    blocker: >-
+      `wiki init` is broken in Ymir CLI 0.8.0: it exits with
+      `ENOENT: no such file or directory, lstat 'bun'`. Reproduced in an empty
+      git repo, with and without --no-hook, and with both ./wiki and wiki as
+      --root. Other subcommands (status, check, validate) work on the same
+      binary, so it is init specifically.
+    not_worked_around: >-
+      The wiki tree was NOT hand-created. The playbook requires scaffolding
+      through the CLI precisely so the tree, SCHEMA.md and index stay the CLI's
+      to own; a hand-built imitation would validate today and diverge silently.
+    consequences:
+      - "wiki/ does not exist; the docs/ vs wiki/ boundary is documented in CLAUDE.md but not yet operative."
+      - "The CI wiki guard is written and commented out in .github/workflows/ci.yml rather than enabled, because a guard pointed at a missing directory is a permanently red gate."
+      - ".claude/rules/pii.md already scopes wiki/** so the PII rule binds from the first page whenever it is scaffolded."
+    verified_still_viable:
+      - "wiki-linux-x64 and its published SHA256SUMS both resolve from the pinned 0.8.0 release."
+      - "`check --error-on-untracked-sources` is a real flag on this version."
+    to_resume: >-
+      Once init is fixed or the CLI moves past 0.8.0, run the wiki section of
+      the playbook, bump YMIR_VERSION in ci.yml to match, and uncomment the two
+      guard steps. Nothing else in this spec depends on it.
+    reported: "captured locally by the CLI's own crash reporter; `wiki report` to review, `wiki report --yes` to send. Not sent."
+
+  measurements:
+    pyright: >-
+      43 errors, 0 warnings on the tree at apply time. The first is
+      `RESTClient is not exported from dlt.sources.helpers.rest_client`
+      (vcdo/sources/xero.py) — third-party stub noise, exactly the category
+      pyproject's comment warned would drown real errors. This number is the
+      evidence for keeping pyright out of the gate; revisit when it is small.
