@@ -16,36 +16,40 @@ export function App(): React.ReactElement {
   const selectedTenantId = useUiStore((state) => state.selectedTenantId);
   const selectTenant = useUiStore((state) => state.selectTenant);
 
-  // A failed tenants query means "not signed in" (or no access), not a page to red-box.
-  if (tenants.isError) {
-    return (
-      <main>
-        <h1>Undercroft</h1>
-        <p role="alert">Sign in to continue.</p>
-      </main>
-    );
-  }
-
   return (
-    <main>
-      <h1>Undercroft</h1>
-      {tenants.isPending ? (
-        <p aria-busy="true">Loading…</p>
+    <main className="shell">
+      <h1 className="brand">
+        <span className="brand__mark" aria-hidden="true" />
+        Undercroft
+      </h1>
+      <p className="tagline">Control plane</p>
+
+      {/* A failed tenants query means "not signed in" (or no access) -- a normal state, not
+          a red error, so it uses `.state` and role="status". */}
+      {tenants.isError ? (
+        <p className="state" role="status">
+          Sign in to continue.
+        </p>
+      ) : tenants.isPending ? (
+        <p className="state state--busy" aria-busy="true">
+          Loading…
+        </p>
       ) : (
-        <ul aria-label="tenants">
+        <ul className="tenants" aria-label="tenants">
           {tenants.data.map((t) => {
             const selected = t.id === selectedTenantId;
             return (
               <li key={t.id}>
                 <button
                   type="button"
+                  className={selected ? "tenant tenant--selected" : "tenant"}
                   aria-current={selected}
                   onClick={() => {
                     selectTenant(t.id);
                   }}
                 >
-                  {t.displayName || t.id} — {t.role}
-                  {selected ? " (selected)" : ""}
+                  <span className="tenant__name">{t.displayName || t.id}</span>
+                  <span className="tenant__role">{t.role}</span>
                 </button>
               </li>
             );

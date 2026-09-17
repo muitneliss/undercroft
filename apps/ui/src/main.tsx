@@ -4,6 +4,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { trpc } from "./trpc.ts";
+// Side-effect import: Vite extracts this into a hashed CSS asset the control plane serves.
+import "./index.css";
 
 // Module-level singletons, deliberately not `useState(() => ...)` as the tRPC docs show.
 // That pattern exists to give each SSR request its own client; this is a browser-only SPA,
