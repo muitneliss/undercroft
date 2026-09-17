@@ -41,3 +41,6 @@ dist/
 
 # Kanna tool workspace
 .kanna/
+
+# Generated production secrets for Dokploy. Never committed.
+.dokploy-env.json

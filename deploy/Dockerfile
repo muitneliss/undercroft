@@ -48,6 +48,12 @@ COPY vcdo/ ./vcdo/
 # cannot do its job -- and it fails at runtime, far from the missing COPY.
 COPY migrations/ ./migrations/
 COPY flows/ ./flows/
+# Fixtures are part of the image, not a mount. Mock mode is a real production
+# mode (ADR 0002), so a worker that cannot reach its fixtures cannot run at
+# all -- and a bind mount to a repo path resolves to an EMPTY directory on a
+# server that has no repo, which fails as a SourceError far from the cause.
+# They are synthetic and tiny; nothing here is client data.
+COPY fixtures/ ./fixtures/
 RUN pip install --no-cache-dir -e .
 
 # Runs as a non-root user. The worker reads source APIs and writes to object

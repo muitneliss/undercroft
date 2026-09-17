@@ -10,13 +10,20 @@
 # slowdown. A limit turns "the host fell over" into "one container restarted".
 # See docs/adr/0001.
 #
-# Nothing here publishes a port to the internet. Ports are bound to localhost for
-# development; in Dokploy, only Metabase gets a domain. MinIO, Postgres and
-# Kestra stay on the internal network.
+# SERVER VARIANT -- generated from docker-compose.yml, do not edit directly.
 #
-# Host ports are configurable and default off the well-known numbers. A dev
-# machine usually already has something on 5432/8080/3000, and a stack that
-# refuses to start on a colleague's laptop is a stack they stop running.
+# Differences from the development file, and why:
+#
+#   * The worker uses a PUBLISHED image. Dokploy raw compose has no repo
+#     checkout, so there is no build context on the server.
+#   * Fixtures come from the IMAGE, not a bind mount. There is no repo on the
+#     server for ../../fixtures to resolve to -- it silently becomes an empty
+#     directory, and the failure surfaces as a SourceError far from the cause.
+#   * NO host ports at all. Everything talks over the compose network; only
+#     Metabase is reachable from outside, through Dokploy's proxy. Publishing
+#     a port on a host shared with eleven other projects is surface nobody
+#     asked for -- and MinIO, Postgres and Kestra each hold or can reach
+#     customer data.
 
 name: vcdo
 
@@ -31,9 +38,6 @@ services:
     environment:
       MINIO_ROOT_USER: ${VCDO_S3_ACCESS_KEY:?set in .env}
       MINIO_ROOT_PASSWORD: ${VCDO_S3_SECRET_KEY:?set in .env}
-    ports:
-      - "127.0.0.1:${VCDO_PORT_MINIO:-19000}:9000"
-      - "127.0.0.1:${VCDO_PORT_MINIO_CONSOLE:-19001}:9001"
     volumes:
       - minio-data:/data
     healthcheck:
@@ -80,8 +84,6 @@ services:
       POSTGRES_USER: ${VCDO_PG_USER:-vcdo}
       POSTGRES_PASSWORD: ${VCDO_PG_PASSWORD:?set in .env}
       POSTGRES_DB: ${VCDO_PG_DB:-vcdo}
-    ports:
-      - "127.0.0.1:${VCDO_PORT_POSTGRES:-15432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -163,8 +165,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
-    ports:
-      - "127.0.0.1:${VCDO_PORT_KESTRA:-18080}:8080"
     volumes:
       - kestra-storage:/app/storage
       - kestra-workdir:/tmp/kestra-wd
@@ -181,10 +181,11 @@ services:
   # on its own, so a restart never re-runs a sync.
   worker:
     <<: *restart
-    build:
-      context: ../..
-      dockerfile: deploy/Dockerfile
-    image: vcdo-worker:local
+    # Published image, not a build. Dokploy raw compose has no repo checkout, so
+    # there is no build context on the server. Tagged by version rather than
+    # `latest` so "which build is running" has an answer -- see the note in
+    # .github/workflows/release-please.yml about that question being unanswerable.
+    image: ghcr.io/muitneliss/vcdo-worker:0.1.1
     depends_on:
       minio:
         condition: service_healthy
@@ -229,7 +230,6 @@ services:
     command: ["python", "-m", "vcdo.cli.main", "serve"]
     volumes:
       - worker-data:/app/data
-      - ../../fixtures:/app/fixtures:ro
     deploy:
       resources:
         limits:
@@ -273,8 +273,6 @@ services:
       MB_DB_USER: metabase
       MB_DB_PASS: ${VCDO_METABASE_PG_PASSWORD:?set in .env}
       JAVA_TOOL_OPTIONS: -Xmx1g
-    ports:
-      - "127.0.0.1:${VCDO_PORT_METABASE:-13000}:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
       interval: 30s
