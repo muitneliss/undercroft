@@ -1,0 +1,60 @@
+# Version, changelog, tag -- and then, on a release, build the images and deploy them.
+#
+# release-please maintains a release PR from Conventional Commits. Merging it bumps
+# `version` in package.json, writes CHANGELOG.md, and cuts a GitHub release + tag. Only THEN
+# do the images build and the stack roll over; a plain push to main ships nothing.
+#
+# This reverses the pre-rebrand stance that shipping stays a manual act. The trade is
+# recorded in docs/adr/0008: a full-privilege Dokploy key now lives in GitHub secrets,
+# accepted because the alternative (a deploy webhook) returns no deployment id, so nothing
+# could poll, verify, or collect a log -- and an unverified deploy is how a release reports
+# success while the host runs the build before it.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          release-type: node
+
+  # Publish the release's images. Gated on a release actually being cut, and granting
+  # packages:write on THIS job -- a called workflow can only narrow the caller's token.
+  release-images:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-images.yml
+    with:
+      tags: ${{ needs.release-please.outputs.tag_name }},latest
+
+  # `needs` names BOTH jobs on purpose. release-please alone satisfies the graph and would
+  # start the deploy while the build is still running, so `latest` would resolve to the
+  # PREVIOUS release and the deploy would report success on the wrong images.
+  deploy:
+    needs: [release-please, release-images]
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets:
+      dokploy_api_key: ${{ secrets.DOKPLOY_API_KEY }}
+      dokploy_compose_id: ${{ secrets.DOKPLOY_COMPOSE_ID }}

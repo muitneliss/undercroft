@@ -1,0 +1,96 @@
+# Roll the current release out to Dokploy through its API, then prove it landed.
+#
+# There is deliberately NO `push:` trigger. Images are published only on a release, so a
+# push to main changes no image; deploying on one would restart the whole stack to roll out
+# the release that is already running. This runs from release.yml after the images are
+# built, or by hand.
+#
+# Every step is `bun run scripts/dokploy.ts <cmd>` -- the same client an operator runs. The
+# Dokploy API is the only channel for a change; SSH is for reading state, never making one.
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The release being rolled out, e.g. v1.2.3. Logged; the panel decides which images to pull."
+        required: true
+        type: string
+    secrets:
+      dokploy_api_key:
+        required: true
+      dokploy_compose_id:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Label for this run. Which images get pulled is the panel's to decide via IMAGE_TAG."
+        default: "latest"
+        type: string
+
+# One compose, one deploy at a time, and cancel-in-progress MUST stay false: Dokploy has no
+# API to cancel a running deploy (compose.cancelDeployment is cloud-only), so cancelling
+# this job would not stop the rollout -- it would abandon it half-applied with nothing
+# watching and no log collected.
+concurrency:
+  group: dokploy-deploy
+  cancel-in-progress: false
+
+env:
+  # Public knowledge, not a secret: a wrong endpoint belongs in a diff, not hidden in
+  # repository settings. Only the api key and the compose id are secret.
+  DOKPLOY_API_ENDPOINT: https://lowbit.link/api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read # `verify` reads ghcr manifests to compare digests
+    env:
+      DOKPLOY_API_KEY: ${{ secrets.dokploy_api_key || secrets.DOKPLOY_API_KEY }}
+      DOKPLOY_COMPOSE_ID: ${{ secrets.dokploy_compose_id || secrets.DOKPLOY_COMPOSE_ID }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Require the secrets this job cannot derive
+        run: |
+          missing=0
+          [ -z "$DOKPLOY_API_KEY" ]   && { echo "::error::secret DOKPLOY_API_KEY is not set";   missing=1; }
+          [ -z "$DOKPLOY_COMPOSE_ID" ] && { echo "::error::secret DOKPLOY_COMPOSE_ID is not set"; missing=1; }
+          [ "$missing" -eq 0 ] || exit 1
+          echo "rolling out ${{ inputs.tag }}"
+
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - run: bun install --frozen-lockfile
+
+      # The gate before anything is queued, when failing is free: the panel must point at
+      # published images and be told to pull them.
+      - name: Preflight
+        run: bun run scripts/dokploy.ts preflight
+
+      - name: Deploy and wait for it to settle
+        run: bun run scripts/dokploy.ts deploy ${{ inputs.tag }}
+
+      # BEFORE the smoke probes: Dokploy reports `done` for a deploy that changed nothing,
+      # and every probe passes against the old images. This asks the host which image digest
+      # each released container is actually running and compares it to what ghcr serves.
+      - name: Verify the host runs the published images
+        run: bun run scripts/dokploy.ts verify
+
+      - name: Smoke-test the public surfaces
+        run: |
+          bun run scripts/dokploy.ts smoke \
+            https://undercroft.lowbit.link/api/health \
+            https://undercroft-bi.lowbit.link/api/health
+
+      # Otherwise the only record of why a rollout failed lives in a panel the reader may not
+      # have access to, and Dokploy prunes it.
+      - name: Collect the deployment log
+        if: failure()
+        run: bun run scripts/dokploy.ts logs

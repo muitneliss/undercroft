@@ -1,0 +1,86 @@
+# Build the two first-party images and push them to GHCR.
+#
+# Reusable (workflow_call) so release.yml can chain build -> deploy, and dispatchable
+# (workflow_dispatch) so the very first images can be seeded before any release exists --
+# a stack cannot pull an image that was never pushed.
+#
+# Images are published ONLY here, and this runs only when a release is cut or a human asks.
+# So `latest` means "the current release", not "the tip of main"; the compose file tracks
+# `${IMAGE_TAG:-latest}` and needs no edit to pick up a release.
+name: build-images
+
+on:
+  workflow_call:
+    inputs:
+      tags:
+        description: 'Comma-separated tags to push, e.g. "v1.2.3,latest".'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Comma-separated tags. Naming "latest" moves the deploy pointer.'
+        default: "latest"
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  # The images are ghcr.io/<owner>/undercroft-<service>. Owner comes from the repository so
+  # a fork publishes under its own namespace rather than failing to push to this one.
+  OWNER: ${{ github.repository_owner }}
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: worker
+            dockerfile: deploy/Dockerfile.worker
+          - service: control-plane
+            dockerfile: deploy/Dockerfile.control-plane
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Expand "v1.2.3,latest" into the fully-qualified refs buildx wants, one per line.
+      - name: Assemble image refs
+        id: refs
+        run: |
+          image="${REGISTRY}/${OWNER}/undercroft-${{ matrix.service }}"
+          refs=""
+          IFS=',' read -ra tags <<< "${{ inputs.tags }}"
+          for tag in "${tags[@]}"; do
+            tag="$(echo "$tag" | xargs)"   # trim
+            [ -z "$tag" ] && continue
+            refs="${refs}${image}:${tag}"$'\n'
+          done
+          {
+            echo "tags<<EOF"
+            echo "$refs"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # linux/amd64 only, and deliberately: the Dokploy host is amd64, and an arm64
+          # image fails `docker compose pull` there with "no matching manifest". Do NOT add
+          # setup-qemu "for safety" -- it doubles build time to produce an image nothing pulls.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.refs.outputs.tags }}
+          cache-from: type=gha,scope=undercroft-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=undercroft-${{ matrix.service }}

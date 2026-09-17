@@ -24,15 +24,22 @@ jobs:
       # Every service must declare a memory limit. A service with no ceiling can starve
       # the others on a small host. This reads compose's own resolved JSON, so a missing
       # parser cannot look like a passing check.
+      #
+      # BOTH files: the development one and the server variant that Dokploy actually runs.
+      # A limit that exists here but not in the deployed file is a limit that does not exist.
       - name: every service declares a memory limit
         run: |
           cd deploy/compose
           cp .env.example .env
-          missing=$(docker compose config --format json \
-            | python3 -c 'import json,sys; c=json.load(sys.stdin); \
-              print("\n".join(n for n,s in c["services"].items() \
-              if not s.get("deploy",{}).get("resources",{}).get("limits",{}).get("memory")))')
-          if [ -n "$missing" ]; then echo "services with no memory limit:"; echo "$missing"; exit 1; fi
+          fail=0
+          for file in docker-compose.yml docker-compose.server.yml; do
+            missing=$(docker compose -f "$file" config --format json \
+              | python3 -c 'import json,sys; c=json.load(sys.stdin); \
+                print("\n".join(n for n,s in c["services"].items() \
+                if not s.get("deploy",{}).get("resources",{}).get("limits",{}).get("memory")))')
+            if [ -n "$missing" ]; then echo "$file: services with no memory limit:"; echo "$missing"; fail=1; fi
+          done
+          exit $fail
 
   secrets:
     runs-on: ubuntu-latest

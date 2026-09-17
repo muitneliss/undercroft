@@ -10,6 +10,7 @@
     { "path": "./packages/connector-runtime" },
     { "path": "./apps/worker" },
     { "path": "./apps/control-plane" },
-    { "path": "./apps/ui" }
+    { "path": "./apps/ui" },
+    { "path": "./scripts" }
   ]
 }
