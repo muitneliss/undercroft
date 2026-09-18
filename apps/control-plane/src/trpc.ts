@@ -13,8 +13,16 @@
  *   than hide a page.
  * - **Sessions are server-side and opaque.** A stateless token cannot be withdrawn before
  *   it expires, and the buttons behind this cookie mint OAuth tokens into a customer's
- *   accounting system. Revocation and expiry are checked in SQL, so a session revoked a
- *   moment ago cannot be used by a request that read the row just before.
+ *   accounting system. So the session row is read from the database on every request, and a
+ *   session revoked a moment ago cannot be used by a request that read the row just before.
+ *   Better Auth performs that read (`auth.api.getSession`) since it owns the session table;
+ *   what it must never be allowed to do is answer from `session.cookieCache`, which would
+ *   make this property quietly untrue. `auth/auth.ts` records that.
+ *
+ * Authentication and authorization are two identities here, joined by email address:
+ * Better Auth's `app.auth_user` proves who the caller is, and `app.app_user` -- which
+ * `app.tenant_member` keys -- is what a role is resolved against. `Context.user.userId` is
+ * always the `app_user` uuid, never Better Auth's id. `auth/invite.ts` holds that seam.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -29,29 +37,12 @@ export interface SessionUser {
 export interface Context {
   readonly exec: SqlExecutor;
   readonly user: SessionUser | null;
+  /** Better Auth's session id, or `""` when unauthenticated. For audit, not for authority. */
   readonly sessionId: string;
-  /** Set by the HTTP layer so a procedure can hand the browser a cookie to clear. */
-  readonly setCookie: (value: string) => void;
 }
 
 export type Role = "viewer" | "member" | "admin";
 export const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2 };
-
-/** Resolve a session cookie to a user, checking revocation and expiry in SQL. */
-export async function userForSession(
-  exec: SqlExecutor,
-  sessionId: string,
-): Promise<SessionUser | null> {
-  if (sessionId === "") return null;
-  const { rows } = await exec.query<{ user_id: string; email: string }>(
-    `SELECT u.id AS user_id, u.email
-     FROM app.session s JOIN app.app_user u ON u.id = s.user_id
-     WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
-    [sessionId],
-  );
-  const row = rows[0];
-  return row === undefined ? null : { userId: row.user_id, email: row.email };
-}
 
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {

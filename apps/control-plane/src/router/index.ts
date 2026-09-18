@@ -13,12 +13,18 @@ export const appRouter = router({
     me: authedProcedure.query(({ ctx }) => ({ userId: ctx.user.userId, email: ctx.user.email })),
 
     signOut: authedProcedure.mutation(async ({ ctx }) => {
-      // Revoked in SQL: the opaque session is gone the instant this returns, unlike a
-      // stateless token that would stay valid until expiry.
-      await ctx.exec.query("UPDATE app.session SET revoked_at = now() WHERE id = $1", [
-        ctx.sessionId,
-      ]);
-      ctx.setCookie("undercroft_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+      // Deleted in SQL, not marked: the session is gone the instant this returns, so the
+      // next request cannot be authenticated by a row that no longer exists. Stronger than
+      // the `revoked_at` flag this replaces, and unlike a stateless token it does not stay
+      // valid until expiry.
+      //
+      // This is the one place outside `auth/` that writes to a Better Auth table, and it is
+      // a deliberate exception: `auth.api.signOut` would do the same DELETE, but routing it
+      // through the auth handler would mean the browser using a second client for one
+      // button, and revocation is the guarantee this repo least wants to delegate. The
+      // browser's now-dangling cookie resolves to no session and is overwritten on the next
+      // sign-in.
+      await ctx.exec.query("DELETE FROM app.auth_session WHERE id = $1", [ctx.sessionId]);
       return { ok: true };
     }),
   }),

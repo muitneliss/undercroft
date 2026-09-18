@@ -33,7 +33,7 @@ async function seedMembership(tenantId: string, userId: string, role: Role): Pro
 }
 
 function caller(user: SessionUser | null) {
-  const ctx: Context = { exec: db, user, sessionId: "s1", setCookie: () => {} };
+  const ctx: Context = { exec: db, user, sessionId: "s1" };
   return appRouter.createCaller(ctx);
 }
 
