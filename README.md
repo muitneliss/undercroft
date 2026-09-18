@@ -1,9 +1,19 @@
+<!-- The device, from apps/ui/public. Absolute raw URLs, not repository-relative
+     ones: GitHub rewrites a relative path only for markdown image syntax, and
+     leaves it alone inside raw HTML -- where it then resolves against the blob
+     page and loads an HTML document instead of the mark. The reversed cut is
+     for GitHub's dark theme, which the ink block would disappear into. -->
 <picture>
   <source
     media="(prefers-color-scheme: dark)"
-    srcset="apps/ui/public/mark-reversed.svg"
+    srcset="https://raw.githubusercontent.com/muitneliss/undercroft/main/apps/ui/public/mark-reversed.svg"
   />
-  <img src="apps/ui/public/mark.svg" alt="" width="56" height="56" />
+  <img
+    src="https://raw.githubusercontent.com/muitneliss/undercroft/main/apps/ui/public/mark.svg"
+    alt=""
+    width="64"
+    height="64"
+  />
 </picture>
 
 # Undercroft
