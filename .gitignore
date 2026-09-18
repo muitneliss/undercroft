@@ -12,10 +12,19 @@ coverage/
 .env.*
 !.env.example
 deploy/compose/.env
+# Local Dokploy CLI state. `.dokploy.json` holds the panel api_key and password;
+# `.dokploy-env.json` is a dump of the whole environment blob, so it carries every
+# live credential the stack runs on. Named here because they sit at the repo root,
+# where `git add -A` would otherwise publish them on the first careless commit.
+.dokploy.json
+.dokploy-env.json
 
 # Real data never enters git.
 data/
 fixtures/live/
+
+# Local agent/tool scratch space, not part of the project.
+.kanna/
 
 .DS_Store
 .bun/

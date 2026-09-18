@@ -10,3 +10,9 @@ specs/schema/
 CHANGELOG.md
 # Vendored, self-hosted webfont assets and their upstream licence/readme.
 apps/ui/public/fonts/
+# Untracked local tool state (gitignored too). Listed again because the Prettier CLI
+# reads only this file, so without it `format:check` fails the gate on a developer's
+# own scratch files -- and one of them is a dump of every live credential.
+.dokploy.json
+.dokploy-env.json
+.kanna/
