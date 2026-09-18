@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.tsx";
 import { trpc } from "./trpc.ts";
 // Side-effect import: Vite extracts this into a hashed CSS asset the control plane serves.
@@ -30,7 +31,19 @@ if (root !== null) {
     <StrictMode>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          <App />
+          {/*
+           * `App` renders <Routes>, which throws without a Router above it. Until sign-in
+           * existed this was unreachable -- `session.me` always failed, so `App` always
+           * returned the title page, which uses no router hooks. The first successful login
+           * would have crashed the app on its first render.
+           *
+           * BrowserRouter, not Hash or Memory: the control plane already serves index.html
+           * for any unmatched path, so a deep link like /tenants/42 and a reload both land
+           * on the SPA and the URL stays the thing you can paste to a colleague.
+           */}
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
         </QueryClientProvider>
       </trpc.Provider>
     </StrictMode>,
