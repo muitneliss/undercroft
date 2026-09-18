@@ -12,7 +12,7 @@
  * concludes a grant has a day longer than it has.
  */
 
-import { MISSING } from "@/lib/money";
+import { MISSING } from "@/lib/money.ts";
 
 const ZONE = "Asia/Singapore";
 
@@ -93,7 +93,7 @@ export function expiryNote(iso: string | null | undefined, now = new Date()): st
  * five fields they already know how to read.
  */
 export function describeSchedule(cron: string): string {
-  const fields = cron.trim().split(/\s+/);
+  const fields = cron.trim().split(/\s+/u);
   if (fields.length !== 5) return cron.trim();
 
   const [minute, hour, dayOfMonth, month, dayOfWeek] = fields;
@@ -101,7 +101,7 @@ export function describeSchedule(cron: string): string {
 
   if (everyDay && hour === "*" && minute === "0") return "Hourly";
 
-  if (everyDay && /^\d{1,2}$/.test(hour ?? "") && /^\d{1,2}$/.test(minute ?? "")) {
+  if (everyDay && /^\d{1,2}$/u.test(hour ?? "") && /^\d{1,2}$/u.test(minute ?? "")) {
     const hh = (hour ?? "0").padStart(2, "0");
     const mm = (minute ?? "0").padStart(2, "0");
     return `Daily at ${hh}:${mm} SGT`;

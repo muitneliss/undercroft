@@ -42,7 +42,7 @@ describe("numbers survive verbatim", () => {
   });
 
   test("refuses a JavaScript number rather than hashing a value nobody sent", () => {
-    expect(() => canonicalJson({ n: 8500.0001 })).toThrow(/refusing to canonicalise/);
+    expect(() => canonicalJson({ n: 8500.0001 })).toThrow(/refusing to canonicalise/u);
   });
 
   test("accepts a bigint, which is exact", () => {
@@ -77,7 +77,7 @@ describe("strings are escaped to ASCII", () => {
   test("output is pure ASCII whatever went in", () => {
     const serialised = canonicalJson({ "\u{1F5FF}": "café", plain: "ok" });
     // eslint-disable-next-line no-control-regex -- asserting the absence of non-ASCII is the point
-    expect(/^[\x00-\x7F]*$/.test(serialised)).toBe(true);
+    expect(/^[\x00-\x7F]*$/u.test(serialised)).toBe(true);
   });
 
   test("sorts keys by code point, not by UTF-16 code unit", () => {

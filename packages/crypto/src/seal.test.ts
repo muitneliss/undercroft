@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { currentKeyVersion, SecretKeyMissing, seal, unseal } from "./seal.ts";
 import { createPkce, hashToken, tokenMatches } from "./tokens.ts";
-import { currentKeyVersion, seal, SecretKeyMissing, unseal } from "./seal.ts";
 
 // A fresh 32-byte key, base64. Two versions for rotation tests.
 const KEY_V1 = Buffer.alloc(32, 1).toString("base64");
@@ -40,7 +40,7 @@ describe("tampering is caught, never opened as empty", () => {
 
   test("a truncated blob throws", () => {
     const e = env(KEY_V1);
-    expect(() => unseal({ blob: new Uint8Array(4), keyVersion: 1 }, e)).toThrow(/truncated/);
+    expect(() => unseal({ blob: new Uint8Array(4), keyVersion: 1 }, e)).toThrow(/truncated/u);
   });
 });
 
@@ -68,7 +68,7 @@ describe("additive key rotation", () => {
 describe("a short key is refused, never stretched", () => {
   test("rejects a 16-byte key rather than padding it to 32", () => {
     const short = Buffer.alloc(16, 9).toString("base64");
-    expect(() => seal("x", { env: env(short) })).toThrow(/32 bytes/);
+    expect(() => seal("x", { env: env(short) })).toThrow(/32 bytes/u);
   });
 
   test("rejects a missing key eagerly", () => {

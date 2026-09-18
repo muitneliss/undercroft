@@ -45,7 +45,7 @@ describe("runTransform invokes dbt and reports honestly", () => {
         ...dirs,
         spawn: () => Promise.resolve({ exitCode: 1, output: "Database Error in model x" }),
       }),
-    ).rejects.toThrow(/exited 1/);
+    ).rejects.toThrow(/exited 1/u);
   });
 
   test("only the tail of dbt output is returned, never the whole log", async () => {

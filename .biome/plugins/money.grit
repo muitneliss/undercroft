@@ -30,34 +30,18 @@ pattern money_coercions() {
     // `Number(x)`. Matched as a call so `Number` as a type annotation, or as a namespace
     // (`Number.isInteger`), is untouched -- only the coercion is.
     `Number($_)` as $call where {
-      register_diagnostic(
-        span = $call,
-        message = "Number() produces a float. Money is a string end to end -- parse it with parseAmount() from @undercroft/core and format it with formatMoney().",
-        severity = "error"
-      )
+      register_diagnostic(span=$call, message="Number() produces a float. Money is a string end to end -- parse it with parseAmount() from @undercroft/core and format it with formatMoney().", severity="error")
     },
     `Number.parseFloat($_)` as $call where {
-      register_diagnostic(
-        span = $call,
-        message = "Number.parseFloat produces a float. See @undercroft/core/money.",
-        severity = "error"
-      )
+      register_diagnostic(span=$call, message="Number.parseFloat produces a float. See @undercroft/core/money.", severity="error")
     },
     `Number.parseInt($...)` as $call where {
-      register_diagnostic(
-        span = $call,
-        message = "Number.parseInt produces a float. See @undercroft/core/money.",
-        severity = "error"
-      )
+      register_diagnostic(span=$call, message="Number.parseInt produces a float. See @undercroft/core/money.", severity="error")
     },
     // `Big#toNumber()` is the float you spent a library avoiding. It exists for charting,
     // and a chart is not a ledger.
     `$_.toNumber()` as $call where {
-      register_diagnostic(
-        span = $call,
-        message = "toNumber() discards precision. Keep the Big, or render with toFixed(); see @undercroft/core/money.",
-        severity = "error"
-      )
+      register_diagnostic(span=$call, message="toNumber() discards precision. Keep the Big, or render with toFixed(); see @undercroft/core/money.", severity="error")
     },
     // Unary `+`. The literal exclusion is carried over from the ESLint selector
     // (`[argument.type!='Literal']`): `+1` is a number that was always a number, while
@@ -66,11 +50,7 @@ pattern money_coercions() {
       // Non-capturing groups are required: GritQL reads a regex capture group as a variable
       // binding and refuses the pattern ("matched 1 variables, but expected 0").
       $operand <: not r"(?:[0-9][0-9._e]*|\"[^\"]*\"|'[^']*')",
-      register_diagnostic(
-        span = $coercion,
-        message = "Unary + coerces to a float. If this is money, use formatMoney(); if it is a count, it is already a number.",
-        severity = "error"
-      )
+      register_diagnostic(span=$coercion, message="Unary + coerces to a float. If this is money, use formatMoney(); if it is a count, it is already a number.", severity="error")
     }
   }
 }

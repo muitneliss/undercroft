@@ -5,4 +5,4 @@ export {
   type HttpResponse,
   raiseForStatus,
 } from "./fetcher.ts";
-export { readEntity, type RawRecordOut, type RunContext } from "./run.ts";
+export { type RawRecordOut, type RunContext, readEntity } from "./run.ts";

@@ -9,8 +9,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { connection } from "@/test/fixtures";
-import { presentConnection, setupProgress } from "./connectionState";
+import { connection } from "@/test/fixtures.ts";
+import { presentConnection, setupProgress } from "./connectionState.ts";
 
 const NOW = new Date("2026-09-17T12:00:00Z");
 

@@ -1,13 +1,13 @@
-import { createStampSource, TestClock } from "@undercroft/core";
-import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
-import { seal } from "@undercroft/crypto";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
+import { createStampSource, TestClock } from "@undercroft/core";
+import { seal } from "@undercroft/crypto";
+import { migrate } from "@undercroft/db";
+import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { runIngest } from "./ingest.ts";
 

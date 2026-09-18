@@ -28,7 +28,7 @@ async function expectDenied(fn: () => Promise<unknown>): Promise<void> {
     await fn();
     throw new Error("expected a permission error, but the query succeeded");
   } catch (error) {
-    expect((error as Error).message).toMatch(/permission denied|not.*allowed/i);
+    expect((error as Error).message).toMatch(/permission denied|not.*allowed/iu);
   }
 }
 
@@ -95,7 +95,7 @@ describe("every table in app is granted to the control plane, and to nothing els
     // The schema is not empty, or the query above would pass by vacuity.
     expect(rows.length).toBeGreaterThan(0);
     const ungranted = rows.filter(
-      (r) => !r.can_select || !r.can_insert || !r.can_update || !r.can_delete,
+      (r) => !(r.can_select && r.can_insert && r.can_update && r.can_delete),
     );
     expect(ungranted.map((r) => r.table_name)).toEqual([]);
   });

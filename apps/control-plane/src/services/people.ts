@@ -22,7 +22,7 @@ import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import * as invitations from "../repos/invitation.ts";
-import { listMembers, roleForEmail, type Member } from "../repos/membership.ts";
+import { listMembers, type Member, roleForEmail } from "../repos/membership.ts";
 
 export type { Member };
 export type Invitation = invitations.InvitationRow;
@@ -55,8 +55,8 @@ export function invitationMessage(to: string, tenantId: string, publicUrl: strin
     text:
       `You have been given access to ${tenantId} in Undercroft.\n\n` +
       `Sign in at ${publicUrl} — use this address (${to}) exactly, either with Google ` +
-      `or by asking for a one-time code.\n\n` +
-      `If you were not expecting this, you can ignore it; nothing happens until you sign in.`,
+      "or by asking for a one-time code.\n\n" +
+      "If you were not expecting this, you can ignore it; nothing happens until you sign in.",
   };
 }
 

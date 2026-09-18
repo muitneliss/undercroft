@@ -1,8 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { canonicalJson, createStampSource, TestClock } from "@undercroft/core";
-import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { landRecords } from "../services/land.ts";
 import { loadStreamToRaw } from "../services/loadToRaw.ts";
 import { createLakeApi } from "./lake.ts";

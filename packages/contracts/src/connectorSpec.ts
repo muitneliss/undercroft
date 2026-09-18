@@ -18,7 +18,7 @@ import { z } from "zod";
 const JsonPath = z
   .string()
   .min(1)
-  .regex(/^[A-Za-z0-9_$][A-Za-z0-9_$.[\]-]*$/, "must be a dotted path like 'paging.next.link'");
+  .regex(/^[A-Za-z0-9_$][A-Za-z0-9_$.[\]-]*$/u, "must be a dotted path like 'paging.next.link'");
 
 const Auth = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
@@ -151,7 +151,7 @@ const Request = z.discriminatedUnion("kind", [
 ]);
 
 const Entity = z.object({
-  name: z.string().regex(/^[a-z][a-z0-9_]*$/, "entity name must be snake_case"),
+  name: z.string().regex(/^[a-z][a-z0-9_]*$/u, "entity name must be snake_case"),
   request: Request,
   /** Where the record array lives in the response. Omit if the body *is* the array. */
   envelopePath: JsonPath.optional(),
@@ -169,7 +169,7 @@ export const ConnectorSpec = z
   .object({
     apiVersion: z.literal("undercroft.dev/v1"),
     kind: z.literal("Connector"),
-    id: z.string().regex(/^[a-z][a-z0-9_-]*$/, "connector id must be kebab/snake-case"),
+    id: z.string().regex(/^[a-z][a-z0-9_-]*$/u, "connector id must be kebab/snake-case"),
     displayName: z.string().min(1),
     baseUrl: z.string().url(),
     auth: Auth,

@@ -13,11 +13,11 @@
  * (Kestra -> worker -> lake -> raw) untouched. ADR 0004.
  */
 
+import { extname, join, normalize, sep } from "node:path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { EmailSender } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
-import { extname, join, normalize, sep } from "node:path";
 import { appUserForEmail } from "../services/invite.ts";
 import { invitationMessage } from "../services/people.ts";
 import type { Auth } from "./auth.ts";
@@ -187,12 +187,12 @@ async function resolveCaller(
  * is refused rather than reaching outside the build.
  */
 async function resolveAsset(dist: string, urlPath: string): Promise<string | null> {
-  const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.(\/|\\|$))+/, "");
+  const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.(\/|\\|$))+/u, "");
   if (rel === "/" || rel === "." || rel === sep) return null;
   const candidate = join(dist, rel);
   if (candidate !== dist && !candidate.startsWith(dist + sep)) return null;
   return (await Bun.file(candidate).exists()) ? candidate : null;
 }
 
-export { appRouter } from "./router.ts";
 export type { AppRouter } from "./router.ts";
+export { appRouter } from "./router.ts";

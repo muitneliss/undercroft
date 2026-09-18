@@ -7,9 +7,9 @@
  * below is a way in that must or must not work.
  */
 
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { appUserForEmail, resolveInvitedUser } from "./invite.ts";
 
 let db: TestDatabase;

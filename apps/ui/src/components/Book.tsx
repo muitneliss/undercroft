@@ -18,14 +18,14 @@
  * than narrated.
  */
 
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { Link } from "react-router-dom";
 
-import { Mark } from "@/components/Mark";
-import { TabRail } from "@/components/TabRail";
-import { applyBoard } from "@/lib/acetate";
-import { division, type DivisionId } from "@/lib/divisions";
-import { trpc } from "@/trpc";
+import { Mark } from "@/components/Mark.tsx";
+import { TabRail } from "@/components/TabRail.tsx";
+import { applyBoard } from "@/lib/acetate.ts";
+import { type DivisionId, division } from "@/lib/divisions.ts";
+import { trpc } from "@/trpc.ts";
 
 export function Book({
   tenantId,

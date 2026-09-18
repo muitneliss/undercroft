@@ -66,9 +66,9 @@ function escapeString(value: string): string {
     }
     const code = char.codePointAt(0)!;
     if (code < 0x20 || code > 0x7e) {
-      if (code > 0xffff) {
-        const offset = code - 0x10000;
-        out += hex4(0xd800 + (offset >> 10)) + hex4(0xdc00 + (offset & 0x3ff));
+      if (code > 0xff_ff) {
+        const offset = code - 0x1_00_00;
+        out += hex4(0xd8_00 + (offset >> 10)) + hex4(0xdc_00 + (offset & 0x3_ff));
       } else {
         out += hex4(code);
       }

@@ -19,14 +19,14 @@
   "files": {
     "includes": [
       "**",
-      "!**/node_modules/**",
-      "!**/dist/**",
-      "!**/coverage/**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
       // Emitted by `bun run spec:schema` from the Zod contracts. Formatting generated
       // output means the generator and the formatter disagree on every run.
-      "!specs/schema/**",
+      "!specs/schema",
       // Vendored upstream webfont assets; not ours to restyle.
-      "!apps/ui/public/fonts/**"
+      "!apps/ui/public/fonts"
     ]
   },
 

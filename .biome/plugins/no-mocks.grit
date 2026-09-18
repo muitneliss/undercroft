@@ -17,12 +17,24 @@ language js
 
 pattern mock_calls() {
   or {
-    `vi.mock($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
-    `vi.spyOn($...)` as $call where { register_diagnostic(span = $call, message = "Do not spy. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
-    `vi.fn($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
-    `jest.mock($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
-    `jest.spyOn($...)` as $call where { register_diagnostic(span = $call, message = "Do not spy. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
-    `jest.fn($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") }
+    `vi.mock($...)` as $call where {
+      register_diagnostic(span=$call, message="Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity="error")
+    },
+    `vi.spyOn($...)` as $call where {
+      register_diagnostic(span=$call, message="Do not spy. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity="error")
+    },
+    `vi.fn($...)` as $call where {
+      register_diagnostic(span=$call, message="Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity="error")
+    },
+    `jest.mock($...)` as $call where {
+      register_diagnostic(span=$call, message="Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity="error")
+    },
+    `jest.spyOn($...)` as $call where {
+      register_diagnostic(span=$call, message="Do not spy. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity="error")
+    },
+    `jest.fn($...)` as $call where {
+      register_diagnostic(span=$call, message="Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity="error")
+    }
   }
 }
 

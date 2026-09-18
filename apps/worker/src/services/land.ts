@@ -9,8 +9,8 @@
  * those bytes, so re-landing an unchanged record reports `unchanged` and writes nothing.
  */
 
-import type { LakeStore } from "@undercroft/lake";
 import { lakeKeyOf, streamOf } from "@undercroft/contracts";
+import type { LakeStore } from "@undercroft/lake";
 
 export interface RecordToLand {
   readonly entity: string;
@@ -84,7 +84,7 @@ export async function landRecords(
         status: put.status,
         sha256: put.sha256,
         lakeKey: key,
-        ...(put.versionKey !== "" ? { stamp: put.versionKey.split("/").at(-1)! } : {}),
+        ...(put.versionKey === "" ? {} : { stamp: put.versionKey.split("/").at(-1)! }),
       });
     } catch (error) {
       failed += 1;

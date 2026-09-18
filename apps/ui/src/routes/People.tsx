@@ -19,10 +19,10 @@
 
 import { useRef } from "react";
 
-import { EmptyState } from "@/components/EmptyState";
-import { Errata } from "@/components/Errata";
-import { Skeleton } from "@/components/Skeleton";
-import { trpc } from "@/trpc";
+import { EmptyState } from "@/components/EmptyState.tsx";
+import { Errata } from "@/components/Errata.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
+import { trpc } from "@/trpc.ts";
 
 export function People({ tenantId }: { tenantId: string }) {
   const utils = trpc.useUtils();
@@ -51,7 +51,7 @@ export function People({ tenantId }: { tenantId: string }) {
 
   if (members.isError || invitations.isError) {
     return (
-      <Errata heading="Not loaded" live>
+      <Errata heading="Not loaded" live={true}>
         The roster for {tenantId} could not be loaded. Nothing has been changed.
       </Errata>
     );
@@ -142,7 +142,7 @@ export function People({ tenantId }: { tenantId: string }) {
         )}
 
         {revoke.isError ? (
-          <Errata heading="Not withdrawn" live>
+          <Errata heading="Not withdrawn" live={true}>
             {revoke.error.message}
           </Errata>
         ) : null}
@@ -172,7 +172,7 @@ export function People({ tenantId }: { tenantId: string }) {
                 name="email"
                 type="email"
                 autoComplete="off"
-                required
+                required={true}
                 placeholder="colleague@example.com"
                 ref={emailField}
                 disabled={invite.isPending}
@@ -202,7 +202,7 @@ export function People({ tenantId }: { tenantId: string }) {
             </div>
 
             {invite.isError ? (
-              <Errata heading="Not invited" live>
+              <Errata heading="Not invited" live={true}>
                 {invite.error.message}
               </Errata>
             ) : null}

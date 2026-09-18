@@ -16,6 +16,7 @@
  * a corrupted shared log is worse than an ephemeral one.
  */
 
+import process from "node:process";
 import { type Clock, systemClock } from "./clock.ts";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";

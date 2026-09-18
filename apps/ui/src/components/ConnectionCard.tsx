@@ -23,13 +23,13 @@
  * separate states rather than two shades of "not working".
  */
 
-import type { Connection } from "@/api/types";
-import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types";
-import { ArrowRight, Errata as ErrataMark } from "@/components/Icon";
-import { StatusMark } from "@/components/StatusMark";
-import { presentConnection, scopeSummary } from "@/lib/connectionState";
-import { orMissing } from "@/lib/money";
-import { describeSchedule, expiryNote } from "@/lib/when";
+import type { Connection } from "@/api/types.ts";
+import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types.ts";
+import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
+import { StatusMark } from "@/components/StatusMark.tsx";
+import { presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import { orMissing } from "@/lib/money.ts";
+import { describeSchedule, expiryNote } from "@/lib/when.ts";
 
 const MARK_LABEL = {
   granted: "Granted",
@@ -159,11 +159,11 @@ export function ConnectionCard({
             </button>
           ) : null}
 
-          {!unprinted ? (
+          {unprinted ? null : (
             <button className="plate" onClick={onDisconnect} disabled={busy}>
               Disconnect
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 

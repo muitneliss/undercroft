@@ -9,6 +9,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import process from "node:process";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { ConnectorSpec } from "../src/connectorSpec.ts";
 

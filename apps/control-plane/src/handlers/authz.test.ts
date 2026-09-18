@@ -6,10 +6,10 @@
  * Postgres grants and rows.
  */
 
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { TRPCError } from "@trpc/server";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { TRPCError } from "@trpc/server";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { appRouter } from "./router.ts";
 import type { Context, Role, SessionUser } from "./trpc.ts";
 

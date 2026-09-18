@@ -16,8 +16,8 @@
 
 import type { SqlExecutor } from "../executor.ts";
 import {
-  type Credential,
   ConnectionRegistryError,
+  type Credential,
   readCredential,
   setStatus,
   writeCredential,
@@ -60,7 +60,7 @@ export async function accessToken(
 ): Promise<string> {
   const credential = await readCredential(exec, tenantId, source, {
     forUpdate: true,
-    ...(opts.env !== undefined ? { env: opts.env } : {}),
+    ...(opts.env === undefined ? {} : { env: opts.env }),
   });
 
   if (!needsRefresh(credential, opts.now)) return credential.accessToken;

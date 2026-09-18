@@ -147,7 +147,7 @@ export const appRouter = router({
     // A preview of an analytics table for the UI. Money-shaped columns come back as
     // strings, never numbers -- the amount rule, held at the API boundary.
     preview: tenantProcedure
-      .input(z.object({ table: z.string().regex(/^[a-z][a-z0-9_]*$/) }))
+      .input(z.object({ table: z.string().regex(/^[a-z][a-z0-9_]*$/u) }))
       .query(async ({ ctx, input }) => ({
         rows: await models.preview(ctx.exec, input.table),
       })),

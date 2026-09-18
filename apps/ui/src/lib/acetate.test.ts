@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { DIVISIONS } from "@/lib/divisions";
+import { DIVISIONS } from "@/lib/divisions.ts";
 import {
   composite,
   contrast,
@@ -24,7 +24,7 @@ import {
   parseHex,
   solveLeaf,
   TARGET_CONTRAST,
-} from "./acetate";
+} from "./acetate.ts";
 
 const LEAF = PAPER;
 

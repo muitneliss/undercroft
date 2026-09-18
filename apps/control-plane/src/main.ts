@@ -9,6 +9,7 @@
  * far cheaper thing to debug. `ServerDeps.auth` is optional precisely so this is expressible.
  */
 
+import process from "node:process";
 import { createHttpEmailSender, createLogger, type EmailSender } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { createAuth } from "./handlers/auth.ts";
@@ -105,7 +106,7 @@ const app = createServer({
 });
 
 // parseInt, not Number(): a port, not an amount.
-const port = parseInt(process.env.UNDERCROFT_API_PORT ?? "3000", 10);
+const port = Number.parseInt(process.env.UNDERCROFT_API_PORT ?? "3000", 10);
 log.info("listening", { port });
 
 export default { port, fetch: app.fetch };

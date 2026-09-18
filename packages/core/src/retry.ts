@@ -58,14 +58,14 @@ export interface RetryDeps {
 export function parseRetryAfter(header: string | null, now: Date): number | null {
   if (header === null) return null;
   const trimmed = header.trim();
-  if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10) * 1000;
+  if (/^\d+$/u.test(trimmed)) return Number.parseInt(trimmed, 10) * 1000;
   const at = Date.parse(trimmed);
   if (Number.isNaN(at)) return null;
   return Math.max(0, at - now.getTime());
 }
 
 function backoffFor(policy: RetryPolicy, attempt: number, random: () => number): number {
-  const raw = policy.backoff === "fixed" ? policy.baseMs : policy.baseMs * Math.pow(2, attempt - 1);
+  const raw = policy.backoff === "fixed" ? policy.baseMs : policy.baseMs * 2 ** (attempt - 1);
   const capped = Math.min(raw, policy.maxMs);
   return policy.jitter === "full" ? Math.floor(capped * random()) : capped;
 }

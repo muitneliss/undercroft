@@ -13,7 +13,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { type ObjectStore, ObjectNotFound } from "./objectStore.ts";
+import { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 
 export interface S3StoreConfig {
   readonly bucket: string;
@@ -41,7 +41,7 @@ export class S3ObjectStore implements ObjectStore {
     this.#client = new S3Client({
       forcePathStyle: config.forcePathStyle ?? true,
       region: config.region ?? "us-east-1",
-      ...(config.endpoint !== undefined ? { endpoint: config.endpoint } : {}),
+      ...(config.endpoint === undefined ? {} : { endpoint: config.endpoint }),
       ...(config.accessKeyId !== undefined && config.secretAccessKey !== undefined
         ? {
             credentials: {
@@ -89,7 +89,7 @@ export class S3ObjectStore implements ObjectStore {
         new ListObjectsV2Command({
           Bucket: this.#bucket,
           Prefix: prefix,
-          ...(token !== undefined ? { ContinuationToken: token } : {}),
+          ...(token === undefined ? {} : { ContinuationToken: token }),
         }),
       );
       for (const item of response.Contents ?? []) {

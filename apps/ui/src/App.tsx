@@ -13,17 +13,17 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 
-import type { Source } from "@/api/types";
-import { SOURCES } from "@/api/types";
-import { Book } from "@/components/Book";
-import { Skeleton } from "@/components/Skeleton";
-import type { DivisionId } from "@/lib/divisions";
-import { Lake } from "@/routes/Lake";
-import { People } from "@/routes/People";
-import { SignIn } from "@/routes/SignIn";
-import { TenantOverview } from "@/routes/TenantOverview";
-import { Tenants } from "@/routes/Tenants";
-import { trpc } from "@/trpc";
+import type { Source } from "@/api/types.ts";
+import { SOURCES } from "@/api/types.ts";
+import { Book } from "@/components/Book.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
+import type { DivisionId } from "@/lib/divisions.ts";
+import { Lake } from "@/routes/Lake.tsx";
+import { People } from "@/routes/People.tsx";
+import { SignIn } from "@/routes/SignIn.tsx";
+import { TenantOverview } from "@/routes/TenantOverview.tsx";
+import { Tenants } from "@/routes/Tenants.tsx";
+import { trpc } from "@/trpc.ts";
 
 function isSource(value: string | undefined): value is Source {
   return SOURCES.includes(value as Source);
@@ -47,7 +47,7 @@ function Opened({
   const params = useParams();
   const tenantId = params["tenantId"];
 
-  if (!tenantId) return <Navigate to="/tenants" replace />;
+  if (!tenantId) return <Navigate to="/tenants" replace={true} />;
 
   return (
     <Book tenantId={tenantId} current={division} signedInAs={signedInAs}>
@@ -61,8 +61,8 @@ function ScopeRoute({ signedInAs }: { signedInAs: string }) {
   const tenantId = params["tenantId"];
   const source = params["source"];
 
-  if (!tenantId) return <Navigate to="/tenants" replace />;
-  if (!isSource(source)) return <Navigate to={`/tenants/${tenantId}`} replace />;
+  if (!tenantId) return <Navigate to="/tenants" replace={true} />;
+  if (!isSource(source)) return <Navigate to={`/tenants/${tenantId}`} replace={true} />;
 
   return (
     <Book tenantId={tenantId} current="sources" signedInAs={signedInAs}>
@@ -136,7 +136,7 @@ export function App() {
           </Book>
         }
       />
-      <Route path="*" element={<Navigate to="/tenants" replace />} />
+      <Route path="*" element={<Navigate to="/tenants" replace={true} />} />
     </Routes>
   );
 }

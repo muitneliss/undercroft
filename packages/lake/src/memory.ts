@@ -7,7 +7,7 @@
  * suite is green and the code has never run.
  */
 
-import { type ObjectStore, ObjectNotFound } from "./objectStore.ts";
+import { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 
 export class InMemoryObjectStore implements ObjectStore {
   readonly #objects = new Map<string, Uint8Array>();

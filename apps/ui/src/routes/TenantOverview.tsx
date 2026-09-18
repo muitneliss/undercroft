@@ -13,10 +13,10 @@
  * actionable, rather than rendering buttons that post nowhere.
  */
 
-import { Errata } from "@/components/Errata";
-import { Skeleton } from "@/components/Skeleton";
-import { formatCount } from "@/lib/money";
-import { trpc } from "@/trpc";
+import { Errata } from "@/components/Errata.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
+import { formatCount } from "@/lib/money.ts";
+import { trpc } from "@/trpc.ts";
 
 export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: string }) {
   const connections = trpc.connections.list.useQuery({ tenantId });
@@ -25,7 +25,7 @@ export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: stri
 
   if (connections.isError) {
     return (
-      <Errata heading="Not loaded" live>
+      <Errata heading="Not loaded" live={true}>
         This customer’s grants could not be loaded, or you do not have access to them. Nothing has
         been changed.
       </Errata>

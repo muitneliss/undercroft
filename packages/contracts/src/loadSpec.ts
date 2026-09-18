@@ -8,7 +8,7 @@
  */
 
 import { parse as parseYaml } from "yaml";
-import { z } from "zod";
+import type { z } from "zod";
 import { ConnectorSpec } from "./connectorSpec.ts";
 
 export class SpecError extends Error {

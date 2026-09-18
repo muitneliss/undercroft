@@ -1,5 +1,5 @@
-import Big from "big.js";
 import { describe, expect, test } from "bun:test";
+import Big from "big.js";
 import {
   add,
   compare,
@@ -59,7 +59,7 @@ describe("parseAmount reads exactly or not at all", () => {
   });
 
   test("throws on a number rather than laundering the precision loss upstream", () => {
-    expect(() => parseAmount(1234.56 as unknown as string)).toThrow(/already happened upstream/);
+    expect(() => parseAmount(1234.56 as unknown as string)).toThrow(/already happened upstream/u);
   });
 
   test("an unreadable amount never becomes zero", () => {
@@ -72,8 +72,8 @@ describe("parseAmount reads exactly or not at all", () => {
 
 describe("currency is never implicit", () => {
   test("rejects anything that is not an ISO 4217 alpha-3 code", () => {
-    expect(() => currency("sgd")).toThrow(/ISO 4217/);
-    expect(() => currency("SGDX")).toThrow(/ISO 4217/);
+    expect(() => currency("sgd")).toThrow(/ISO 4217/u);
+    expect(() => currency("SGDX")).toThrow(/ISO 4217/u);
   });
 
   test("adds two amounts in the same currency", () => {
@@ -83,7 +83,7 @@ describe("currency is never implicit", () => {
   test("refuses to add across currencies rather than converting silently", () => {
     const sgd = money(parseAmount("10"), SGD)!;
     const usd = money(parseAmount("10"), USD)!;
-    expect(() => add(sgd, usd)).toThrow(/dated FX rate/);
+    expect(() => add(sgd, usd)).toThrow(/dated FX rate/u);
   });
 
   test("subtracts without floating point drift", () => {

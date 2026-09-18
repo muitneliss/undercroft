@@ -8,7 +8,7 @@
  * already in place.
  */
 
-import { EmptyState } from "@/components/EmptyState";
+import { EmptyState } from "@/components/EmptyState.tsx";
 
 export function Lake({ tenantId }: { tenantId: string }) {
   return (

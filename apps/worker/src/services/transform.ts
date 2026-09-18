@@ -62,7 +62,7 @@ export async function runTransform(
     deps.profilesDir,
     "--project-dir",
     deps.projectDir,
-    ...(opts.select !== undefined ? ["--select", opts.select] : []),
+    ...(opts.select === undefined ? [] : ["--select", opts.select]),
   ];
 
   const { exitCode, output } = await spawn(cmd, deps.projectDir);

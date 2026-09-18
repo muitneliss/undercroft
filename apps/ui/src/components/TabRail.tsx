@@ -28,8 +28,8 @@
 // job is saying which section you are in. The division is already known here.
 import { Link } from "react-router-dom";
 
-import { letteringOn } from "@/lib/acetate";
-import { DIVISIONS, divisionPath, type DivisionId } from "@/lib/divisions";
+import { letteringOn } from "@/lib/acetate.ts";
+import { DIVISIONS, type DivisionId, divisionPath } from "@/lib/divisions.ts";
 
 export function TabRail({
   tenantId,

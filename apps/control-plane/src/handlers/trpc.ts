@@ -29,8 +29,8 @@
  * above, and holding it in one place is why every tenant-scoped procedure gets it right.
  */
 
-import type { SqlExecutor } from "@undercroft/db";
 import { initTRPC, TRPCError } from "@trpc/server";
+import type { SqlExecutor } from "@undercroft/db";
 import { z } from "zod";
 import { outranks, type Role, roleFor } from "../services/authz.ts";
 

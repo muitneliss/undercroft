@@ -11,7 +11,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { oneShotServices, verify, type Config, type Deps } from "./dokploy.ts";
+import { type Config, type Deps, oneShotServices, verify } from "./dokploy.ts";
 
 const ENDPOINT = "https://panel.example.test/api";
 const CFG: Config = { endpoint: ENDPOINT, apiKey: "test-key", composeId: "compose-1" };
@@ -138,7 +138,7 @@ test("a one-shot service that exited non-zero fails the release", async () => {
   );
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
-    /db-migrate: one-shot service is exited with exit code 1/,
+    /db-migrate: one-shot service is exited with exit code 1/u,
   );
 });
 
@@ -148,7 +148,7 @@ test("a one-shot service still running when verify asks fails the release", asyn
   );
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
-    /db-migrate: one-shot service is running/,
+    /db-migrate: one-shot service is running/u,
   );
 });
 
@@ -156,7 +156,7 @@ test("a one-shot service whose inspect carries no State is refused, not assumed 
   const { deps } = recorder(routes({ tag: "v1.3.0", migrateState: "omitted" }));
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
-    /db-migrate: docker.getConfig returned no State/,
+    /db-migrate: docker.getConfig returned no State/u,
   );
 });
 
@@ -171,7 +171,7 @@ test("a one-shot service that exited 0 on the wrong image still fails", async ()
 test("a long-running service that is not running still fails the release", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", workerState: "exited" }));
 
-  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(/worker: container is exited/);
+  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(/worker: container is exited/u);
 });
 
 test("a long-running service on a stale digest fails the release", async () => {

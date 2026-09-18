@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { MISSING, exactAmount, formatCount, formatMoney, orMissing } from "./money";
+import { exactAmount, formatCount, formatMoney, MISSING, orMissing } from "./money.ts";
 
 describe("formatMoney", () => {
   test("keeps every digit of an amount a double could not hold", () => {

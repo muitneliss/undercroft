@@ -7,10 +7,10 @@
  * definition and no hand-written second copy to drift.
  */
 
-import { Hono } from "hono";
 import { LandRecordsRequest, MAX_BATCH_BYTES } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
+import { Hono } from "hono";
 import { authenticate } from "../services/auth.ts";
 import { runIngest } from "../services/ingest.ts";
 import { landRecords } from "../services/land.ts";
@@ -29,7 +29,7 @@ export interface LakeApiDeps {
 
 function bearerOf(header: string | undefined): string | null {
   if (header === undefined) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header);
+  const match = /^Bearer\s+(.+)$/iu.exec(header);
   return match?.[1] ?? null;
 }
 

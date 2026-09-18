@@ -6,13 +6,13 @@
  */
 
 export { createLakeApi, type LakeApiDeps } from "./handlers/lake.ts";
-export { authenticate, type AuthOutcome } from "./services/auth.ts";
-export { runIngest, type IngestResult, type RunDeps } from "./services/ingest.ts";
+export { type AuthOutcome, authenticate } from "./services/auth.ts";
+export { type IngestResult, type RunDeps, runIngest } from "./services/ingest.ts";
 export {
-  landRecords,
   type LandedRecord,
   type LandResult,
+  landRecords,
   type RecordToLand,
 } from "./services/land.ts";
-export { loadStreamToRaw, type LoadResult } from "./services/loadToRaw.ts";
+export { type LoadResult, loadStreamToRaw } from "./services/loadToRaw.ts";
 export { runTransform, type TransformDeps, type TransformResult } from "./services/transform.ts";

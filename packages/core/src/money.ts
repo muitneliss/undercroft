@@ -57,9 +57,9 @@ Big.NE = -1e6;
  * than pick, because both readings are plausible and only the source system knows which
  * it meant.
  */
-const EURO_NOTATION = /\.\d{3},/;
-const CLEANUP = /[\s'_]/g;
-const ISO_4217 = /^[A-Z]{3}$/;
+const EURO_NOTATION = /\.\d{3},/u;
+const CLEANUP = /[\s'_]/gu;
+const ISO_4217 = /^[A-Z]{3}$/u;
 
 /** What a person sees where there is no value. Never an empty cell, never `0`. */
 export const MISSING = "—";
@@ -133,10 +133,10 @@ export function parseAmount(value: string | Big | bigint | null | undefined): Bi
   let text = value.replace(CLEANUP, "");
   if (EURO_NOTATION.test(text)) return null;
 
-  text = text.replace(/,/g, "");
+  text = text.replace(/,/gu, "");
   // Strip a leading currency symbol and a trailing code; keep sign and digits.
-  text = text.replace(/^[^\d\-+.]+/, "");
-  if (!/\d$/.test(text)) text = text.replace(/[^\d]+$/, "");
+  text = text.replace(/^[^\d\-+.]+/u, "");
+  if (!/\d$/u.test(text)) text = text.replace(/[^\d]+$/u, "");
   if (text === "" || text === "-" || text === "+" || text === ".") return null;
   // `Decimal("+42")` is legal in Python; `new Big("+42")` throws. An explicit plus
   // is a sign, not a defect, so strip it rather than refusing the amount.
@@ -194,7 +194,7 @@ export function sub(a: Money, b: Money): Money {
 export function compare(
   observed: Money | null,
   expected: Money | null,
-  tolerance: string = "0.02",
+  tolerance = "0.02",
 ): Verdict {
   if (observed === null || expected === null) return "unverified";
   if (observed.currency !== expected.currency) return "unverified";

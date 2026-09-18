@@ -7,7 +7,7 @@
  * server.
  */
 
-import type { Connection, Source } from "@/api/types";
+import type { Connection, Source } from "@/api/types.ts";
 
 export function connection(source: Source, over: Partial<Connection> = {}): Connection {
   return {

@@ -15,7 +15,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     // A control plane is read repeatedly while someone works through setup; a short stale
     // window keeps a connection card from claiming "connected" after it was undone elsewhere.
-    queries: { staleTime: 5_000, retry: 1 },
+    queries: { staleTime: 5000, retry: 1 },
   },
 });
 

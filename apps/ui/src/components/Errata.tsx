@@ -18,7 +18,7 @@
 
 import type { ReactNode } from "react";
 
-import { Errata as ErrataMark } from "@/components/Icon";
+import { Errata as ErrataMark } from "@/components/Icon.tsx";
 
 export function Errata({
   heading,

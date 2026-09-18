@@ -37,11 +37,7 @@ pattern server_value_import() {
     // Non-capturing group is required: GritQL reads a regex capture group as a variable
     // binding and refuses the pattern ("matched 1 variables, but expected 0").
     $clause <: not r"\{\s*type\s[^,}]*(?:,\s*type\s[^,}]*)*,?\s*\}",
-    register_diagnostic(
-      span = $statement,
-      message = "Import the control-plane router as a type only; a value import bundles the server -- and with it `pg` and the secret-key loader -- into the browser. Use `import type`.",
-      severity = "error"
-    )
+    register_diagnostic(span=$statement, message="Import the control-plane router as a type only; a value import bundles the server -- and with it `pg` and the secret-key loader -- into the browser. Use `import type`.", severity="error")
   }
 }
 

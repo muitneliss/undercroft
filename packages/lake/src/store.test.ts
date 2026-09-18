@@ -1,5 +1,5 @@
-import { createStampSource, TestClock } from "@undercroft/core";
 import { beforeEach, describe, expect, test } from "bun:test";
+import { createStampSource, TestClock } from "@undercroft/core";
 import { InMemoryObjectStore } from "./memory.ts";
 import { LakeStore, ObjectExists } from "./store.ts";
 
@@ -12,7 +12,7 @@ let clock: TestClock;
 function lake(retention?: number) {
   return new LakeStore(backing, {
     stamps: createStampSource(clock),
-    ...(retention !== undefined ? { retention } : {}),
+    ...(retention === undefined ? {} : { retention }),
   });
 }
 
@@ -89,7 +89,7 @@ describe("reading verifies the digest", () => {
   });
 
   test("reading a key with no observations raises", async () => {
-    await expect(lake().read("hubspot/deals/absent")).rejects.toThrow(/no observations/);
+    await expect(lake().read("hubspot/deals/absent")).rejects.toThrow(/no observations/u);
   });
 });
 
@@ -136,7 +136,7 @@ describe("retention is bounded and reported", () => {
   });
 
   test("a retention below 1 is refused", () => {
-    expect(() => new LakeStore(backing, { retention: 0 })).toThrow(/at least 1/);
+    expect(() => new LakeStore(backing, { retention: 0 })).toThrow(/at least 1/u);
   });
 
   test("blobs are never pruned, because another key may reference them", async () => {

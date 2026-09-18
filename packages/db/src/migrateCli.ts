@@ -19,6 +19,7 @@
  * evidence at all.
  */
 
+import process from "node:process";
 import { migrate } from "./migrate.ts";
 import { asExecutor, createPool } from "./pool.ts";
 

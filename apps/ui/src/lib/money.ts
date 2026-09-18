@@ -26,13 +26,13 @@ export const MISSING = "—";
  * read is reported as unreadable rather than coerced into something plausible.
  */
 function parts(amount: string): { sign: string; whole: string; fraction: string } | null {
-  const match = /^(-?)(\d+)(?:\.(\d*))?$/.exec(amount.trim());
+  const match = /^(-?)(\d+)(?:\.(\d*))?$/u.exec(amount.trim());
   if (!match) return null;
   return { sign: match[1] ?? "", whole: match[2] ?? "0", fraction: match[3] ?? "" };
 }
 
 function group(whole: string): string {
-  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
 }
 
 /**

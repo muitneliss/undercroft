@@ -45,9 +45,9 @@
  * where an invitation is actually redeemed into a membership.
  */
 
-import { type EmailSender } from "@undercroft/core";
+import type { EmailSender } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
@@ -253,7 +253,7 @@ export function createAuth(config: AuthConfig): Auth {
               text:
                 `Your sign-in code is ${otp}\n\n` +
                 `It expires in ${String(OTP_EXPIRES_SECONDS / 60)} minutes. ` +
-                `If you did not ask to sign in, you can ignore this email.`,
+                "If you did not ask to sign in, you can ignore this email.",
             })
             .catch((error: unknown) => config.onEmailError?.(error));
         },

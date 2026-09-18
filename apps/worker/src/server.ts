@@ -6,9 +6,10 @@
  * called; it starts no work on its own, so a restart never re-runs a sync.
  */
 
+import { join } from "node:path";
+import process from "node:process";
 import { asExecutor, createPool } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
-import { join } from "node:path";
 import { createLakeApi } from "./handlers/lake.ts";
 
 function required(name: string): string {
@@ -20,9 +21,9 @@ function required(name: string): string {
 const pool = createPool(required("UNDERCROFT_POSTGRES_DSN"));
 const store = new S3ObjectStore({
   bucket: required("UNDERCROFT_S3_BUCKET_RAW"),
-  ...(process.env.UNDERCROFT_S3_ENDPOINT !== undefined
-    ? { endpoint: process.env.UNDERCROFT_S3_ENDPOINT }
-    : {}),
+  ...(process.env.UNDERCROFT_S3_ENDPOINT === undefined
+    ? {}
+    : { endpoint: process.env.UNDERCROFT_S3_ENDPOINT }),
   ...(process.env.UNDERCROFT_S3_ACCESS_KEY !== undefined &&
   process.env.UNDERCROFT_S3_SECRET_KEY !== undefined
     ? {
@@ -49,7 +50,7 @@ const app = createLakeApi({
 });
 
 // parseInt, not Number(): a port, not an amount (the money lint rule bans Number()).
-const port = parseInt(process.env.UNDERCROFT_WORKER_PORT ?? "8081", 10);
+const port = Number.parseInt(process.env.UNDERCROFT_WORKER_PORT ?? "8081", 10);
 console.log(`undercroft worker listening on :${port}`);
 
 export default { port, fetch: app.fetch };

@@ -27,11 +27,12 @@
  * deploy something nobody asked for.
  */
 
+import process from "node:process";
 const POLL_INTERVAL_MS = 10_000;
 const DEPLOYMENT_APPEARS_WITHIN_MS = 300_000;
 const DEPLOYMENT_SETTLES_WITHIN_MS = 3_600_000;
 const SMOKE_SETTLE_MS = 120_000;
-const SMOKE_INTERVAL_MS = 5_000;
+const SMOKE_INTERVAL_MS = 5000;
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524]);
 
 /** Images this repo publishes. Everything else in the stack is upstream and not ours to verify. */
@@ -100,7 +101,7 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
   if (missing.length > 0) {
     throw new Error(`not configured: ${missing.join(", ")} must be set`);
   }
-  return { endpoint: endpoint.replace(/\/$/, ""), apiKey, composeId };
+  return { endpoint: endpoint.replace(/\/$/u, ""), apiKey, composeId };
 }
 
 export const realDeps: Deps = {
@@ -197,7 +198,7 @@ export async function deployAndWait(
   deps.log(`deployment ${deploymentId} queued`);
 
   // Phase two: watch that record, and only that record, until it settles.
-  for (let current = ours; ;) {
+  for (let current = ours; ; ) {
     if (current.status === "done") {
       deps.log(`deployment ${deploymentId} done`);
       return current;
@@ -239,7 +240,7 @@ export async function composeRecord(cfg: Config, deps: Deps): Promise<ComposeRec
  */
 export function expandEnv(value: string, env: Record<string, string | undefined>): string {
   return value.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g,
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/gu,
     (_match: string, name: string, fallback: string | undefined) => {
       const resolved = env[name];
       return resolved !== undefined && resolved !== "" ? resolved : (fallback ?? "");
@@ -259,9 +260,9 @@ export function releasedServices(
   const found: { service: string; image: string }[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
-    const serviceMatch = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/.exec(line);
+    const serviceMatch = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
     if (serviceMatch?.[1] !== undefined) service = serviceMatch[1];
-    const imageMatch = /^\s+image:\s*(\S+)\s*$/.exec(line);
+    const imageMatch = /^\s+image:\s*(\S+)\s*$/u.exec(line);
     if (imageMatch?.[1] !== undefined && imageMatch[1].startsWith(RELEASED_IMAGE_PREFIX)) {
       found.push({ service, image: expandEnv(imageMatch[1], env) });
     }
@@ -284,9 +285,9 @@ export function oneShotServices(composeFile: string): Set<string> {
   const found = new Set<string>();
   let candidate = "";
   for (const line of composeFile.split("\n")) {
-    const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/.exec(line);
+    const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
     if (nameMatch?.[1] !== undefined) candidate = nameMatch[1];
-    if (/^\s+condition:\s*service_completed_successfully\s*$/.test(line) && candidate !== "") {
+    if (/^\s+condition:\s*service_completed_successfully\s*$/u.test(line) && candidate !== "") {
       found.add(candidate);
     }
   }
@@ -355,7 +356,8 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
 
   let manifest = await get(tag);
   const manifests = manifest.manifests as
-    { digest: string; platform?: { os: string; architecture: string } }[] | undefined;
+    | { digest: string; platform?: { os: string; architecture: string } }[]
+    | undefined;
   if (manifests !== undefined) {
     const amd64 = manifests.find(
       (m) => m.platform?.os === "linux" && m.platform.architecture === "amd64",
@@ -549,7 +551,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      throw new Error(`usage: dokploy.ts preflight|deploy|verify|smoke|logs|status`);
+      throw new Error("usage: dokploy.ts preflight|deploy|verify|smoke|logs|status");
   }
 }
 

@@ -18,8 +18,8 @@
  * showing it to everyone else once.
  */
 
-import { MarkAbsent, MarkGranted, MarkLapsed, MarkPending } from "@/components/Icon";
-import type { CardPresentation } from "@/lib/connectionState";
+import { MarkAbsent, MarkGranted, MarkLapsed, MarkPending } from "@/components/Icon.tsx";
+import type { CardPresentation } from "@/lib/connectionState.ts";
 
 type Mark = CardPresentation["mark"];
 

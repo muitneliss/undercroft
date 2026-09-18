@@ -13,9 +13,9 @@
  * enumeration defence belongs to the browser surface, not here.
  */
 
+import { timingSafeEqual } from "node:crypto";
 import { hashToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
-import { timingSafeEqual } from "node:crypto";
 import { findByDigest, type IngestKeyRow } from "../repos/ingestKey.ts";
 
 export type { IngestKeyRow };

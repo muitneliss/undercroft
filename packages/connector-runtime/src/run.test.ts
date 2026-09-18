@@ -1,6 +1,6 @@
-import { ConnectorError, parseLossless, TestClock } from "@undercroft/core";
-import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
 import { describe, expect, test } from "bun:test";
+import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
+import { ConnectorError, parseLossless, TestClock } from "@undercroft/core";
 import type { RawRecordOut } from "./run.ts";
 import { readEntity } from "./run.ts";
 import { InMemoryFetcher } from "./testing.ts";
@@ -26,7 +26,7 @@ entities:
     updatedAtPath: updatedAt
     guards:
       failOnEmpty: ${over.failOnEmpty ?? true}
-      ${over.failOnExactCount !== undefined ? `failOnExactCount: ${over.failOnExactCount}` : ""}
+      ${over.failOnExactCount === undefined ? "" : `failOnExactCount: ${over.failOnExactCount}`}
 `);
 }
 
@@ -104,7 +104,7 @@ describe("guards", () => {
       body: { results: [], paging: {} },
     });
     await expect(collect(readEntity(spec(), spec().entities[0]!, ctx(fetcher)))).rejects.toThrow(
-      /no records/,
+      /no records/u,
     );
   });
 
@@ -122,7 +122,7 @@ describe("guards", () => {
       body: { results: [{ id: "1" }, { id: "2" }], paging: {} },
     });
     await expect(collect(readEntity(s, s.entities[0]!, ctx(fetcher)))).rejects.toThrow(
-      /truncation/,
+      /truncation/u,
     );
   });
 
@@ -139,7 +139,7 @@ describe("an unmodelled request is an error", () => {
   test("the fetcher refuses a request nobody recorded", async () => {
     const fetcher = new InMemoryFetcher(); // nothing recorded
     await expect(collect(readEntity(spec(), spec().entities[0]!, ctx(fetcher)))).rejects.toThrow(
-      /no recorded response/,
+      /no recorded response/u,
     );
   });
 });

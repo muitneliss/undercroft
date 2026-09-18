@@ -1,6 +1,6 @@
 /** Mirrors vcdo/api/models.py. Money is a string here for the reason given there. */
 
-import type { Money } from "@/lib/money";
+import type { Money } from "@/lib/money.ts";
 
 export type Source = "hubspot" | "xero" | "gmail" | "drive";
 

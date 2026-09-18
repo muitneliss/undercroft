@@ -42,24 +42,24 @@ export const TARGET_CONTRAST = 10;
 
 /** Parse `#rgb` or `#rrggbb`. Returns null for anything else rather than guessing. */
 export function parseHex(hex: string): Rgb | null {
-  const value = hex.trim().replace(/^#/, "");
+  const value = hex.trim().replace(/^#/u, "");
 
-  if (/^[0-9a-f]{3}$/i.test(value)) {
+  if (/^[0-9a-f]{3}$/iu.test(value)) {
     const r = value.slice(0, 1);
     const g = value.slice(1, 2);
     const b = value.slice(2, 3);
     return {
-      r: parseInt(`${r}${r}`, 16),
-      g: parseInt(`${g}${g}`, 16),
-      b: parseInt(`${b}${b}`, 16),
+      r: Number.parseInt(`${r}${r}`, 16),
+      g: Number.parseInt(`${g}${g}`, 16),
+      b: Number.parseInt(`${b}${b}`, 16),
     };
   }
 
-  if (/^[0-9a-f]{6}$/i.test(value)) {
+  if (/^[0-9a-f]{6}$/iu.test(value)) {
     return {
-      r: parseInt(value.slice(0, 2), 16),
-      g: parseInt(value.slice(2, 4), 16),
-      b: parseInt(value.slice(4, 6), 16),
+      r: Number.parseInt(value.slice(0, 2), 16),
+      g: Number.parseInt(value.slice(2, 4), 16),
+      b: Number.parseInt(value.slice(4, 6), 16),
     };
   }
 
@@ -77,7 +77,7 @@ export function toHex({ r, g, b }: Rgb): string {
 /** sRGB transfer function, per WCAG 2.1. */
 function linearise(channel: number): number {
   const c = channel / 255;
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
 /** WCAG 2.1 relative luminance. */

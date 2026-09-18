@@ -14,11 +14,11 @@
 
 import { Link } from "react-router-dom";
 
-import { EmptyState } from "@/components/EmptyState";
-import { Errata } from "@/components/Errata";
-import { Skeleton } from "@/components/Skeleton";
-import { formatCount } from "@/lib/money";
-import { trpc } from "@/trpc";
+import { EmptyState } from "@/components/EmptyState.tsx";
+import { Errata } from "@/components/Errata.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
+import { formatCount } from "@/lib/money.ts";
+import { trpc } from "@/trpc.ts";
 
 export function Tenants() {
   const tenants = trpc.tenants.list.useQuery();
@@ -27,7 +27,7 @@ export function Tenants() {
 
   if (tenants.isError) {
     return (
-      <Errata heading="Not loaded" live>
+      <Errata heading="Not loaded" live={true}>
         The list of customers could not be loaded. Nothing has been changed.
       </Errata>
     );

@@ -57,7 +57,7 @@ describe("what retries and what does not", () => {
     // one, and on some providers into a lockout.
     const op = attemptCounter(5, 401);
     await expect(withRetry(op.run, DEFAULT_RETRY, { clock: new TestClock() })).rejects.toThrow(
-      /HTTP 401/,
+      /HTTP 401/u,
     );
     expect(op.calls).toBe(1);
   });
@@ -133,16 +133,16 @@ describe("Retry-After", () => {
     let calls = 0;
     const op = async () => {
       calls += 1;
-      if (calls === 1) throw new HttpError(429, "https://example.test/x", "", 5_000);
+      if (calls === 1) throw new HttpError(429, "https://example.test/x", "", 5000);
       return "ok";
     };
     const result = withRetry(op, DEFAULT_RETRY, {
       clock,
       onRetry: ({ delayMs }) => delays.push(delayMs),
     });
-    await clock.advance(5_000);
+    await clock.advance(5000);
     expect(await result).toBe("ok");
-    expect(delays).toEqual([5_000]);
+    expect(delays).toEqual([5000]);
   });
 
   test("is clamped, so a hostile header cannot park a run for hours", async () => {

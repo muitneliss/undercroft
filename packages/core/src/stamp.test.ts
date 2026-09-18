@@ -62,7 +62,7 @@ describe("StampSource is strictly monotonic", () => {
     const clock = new TestClock();
     const stamps = createStampSource(clock);
     const before = stamps.next();
-    await clock.advance(1_000);
+    await clock.advance(1000);
     const after = stamps.next();
     expect(parseStamp(after)! - parseStamp(before)!).toBeGreaterThanOrEqual(1_000_000);
   });

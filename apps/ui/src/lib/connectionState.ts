@@ -15,10 +15,14 @@
  * rendering, and so "expired" is decided in one place.
  */
 
-import type { Connection } from "@/api/types";
+import type { Connection } from "@/api/types.ts";
 
 export type CardState =
-  "not_connected" | "connected" | "needs_scope" | "needs_reconnect" | "expired";
+  | "not_connected"
+  | "connected"
+  | "needs_scope"
+  | "needs_reconnect"
+  | "expired";
 
 export type CardPresentation = {
   state: CardState;

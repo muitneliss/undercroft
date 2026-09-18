@@ -1,6 +1,6 @@
-import { TestClock } from "@undercroft/core";
-import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
 import { describe, expect, test } from "bun:test";
+import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
+import { TestClock } from "@undercroft/core";
 import type { RawRecordOut } from "./run.ts";
 import { readEntity } from "./run.ts";
 import { InMemoryFetcher } from "./testing.ts";

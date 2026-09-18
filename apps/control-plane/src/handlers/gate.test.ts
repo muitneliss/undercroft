@@ -17,12 +17,12 @@
  * `app.app_user`, `app.invitation` and `app.tenant_member` live in real Postgres via PGlite.
  */
 
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createAuth } from "./auth.ts";
 import { createServer } from "./server.ts";
 
@@ -121,7 +121,7 @@ async function requestCode(email: string): Promise<Response> {
 /** The six-digit code out of the one email we sent, or null if we sent none. */
 function codeFromEmail(): string | null {
   const text = sender.last?.text;
-  return text === undefined ? null : (/\d{6}/.exec(text)?.[0] ?? null);
+  return text === undefined ? null : (/\d{6}/u.exec(text)?.[0] ?? null);
 }
 
 /** Sign in and return the cookie header a browser would send back. */
@@ -175,7 +175,7 @@ describe("a one-time code is only ever posted to an address that could use it", 
 
     expect(sender.sent).toHaveLength(1);
     expect(sender.last?.to).toBe("operator@example.test");
-    expect(codeFromEmail()).toMatch(/^\d{6}$/);
+    expect(codeFromEmail()).toMatch(/^\d{6}$/u);
   });
 });
 

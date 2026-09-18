@@ -18,11 +18,12 @@
  * it grants is the right to try.
  */
 
+import process from "node:process";
 import { createHttpEmailSender, type EmailSender } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
-import { invitationMessage } from "./services/people.ts";
-import * as people from "./services/people.ts";
 import { ensureTenant, findTenant } from "./repos/tenant.ts";
+import * as people from "./services/people.ts";
+import { invitationMessage } from "./services/people.ts";
 
 const ROLES = new Set(["viewer", "member", "admin"]);
 

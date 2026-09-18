@@ -10,7 +10,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { presentVerdict, type Verdict } from "./verdict";
+import { presentVerdict, type Verdict } from "./verdict.ts";
 
 describe("presentVerdict", () => {
   test("renders three genuinely different states", () => {
@@ -31,7 +31,7 @@ describe("presentVerdict", () => {
     const { label, description } = presentVerdict("unverified");
 
     expect(label).toBe("Not verified");
-    expect(description).toMatch(/not a match/i);
+    expect(description).toMatch(/not a match/iu);
   });
 
   test("every state carries a word and an icon, never colour alone", () => {
@@ -43,6 +43,6 @@ describe("presentVerdict", () => {
   });
 
   test("an unrecognised verdict throws rather than rendering as a pass", () => {
-    expect(() => presentVerdict("probably fine" as Verdict)).toThrow(/unhandled verdict/);
+    expect(() => presentVerdict("probably fine" as Verdict)).toThrow(/unhandled verdict/u);
   });
 });

@@ -9,12 +9,12 @@
  */
 
 export type { QueryResult, SqlExecutor } from "./executor.ts";
-export { loadMigrations, migrate, type Migration, type MigrateResult } from "./migrate.ts";
+export { loadMigrations, type MigrateResult, type Migration, migrate } from "./migrate.ts";
 export {
   asExecutor,
   createPool,
-  pinTypeParsers,
   type Pool,
   type PoolClient,
+  pinTypeParsers,
   withTransaction,
 } from "./pool.ts";

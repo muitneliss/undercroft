@@ -8,6 +8,7 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import process from "node:process";
 import { parseSpec, SpecError } from "../src/loadSpec.ts";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");

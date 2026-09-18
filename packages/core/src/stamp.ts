@@ -29,9 +29,9 @@
 
 import { type Clock, systemClock } from "./clock.ts";
 
-const STAMP_PATTERN = /^\d{8}T\d{6}\.\d{6}Z$/;
+const STAMP_PATTERN = /^\d{8}T\d{6}\.\d{6}Z$/u;
 
-const MICROS_PER_MS = 1_000;
+const MICROS_PER_MS = 1000;
 const MICROS_PER_SECOND = 1_000_000;
 
 export function isStamp(value: string): boolean {
@@ -64,7 +64,7 @@ export function parseStamp(stamp: string): number | null {
   if (Number.isNaN(ms)) return null;
   // `iso` carries whole seconds only, so `ms` is exactly seconds-in-milliseconds and
   // the full sub-second part comes from the stamp's own six digits.
-  return ms * MICROS_PER_MS + parseInt(stamp.slice(16, 22), 10);
+  return ms * MICROS_PER_MS + Number.parseInt(stamp.slice(16, 22), 10);
 }
 
 export interface StampSource {

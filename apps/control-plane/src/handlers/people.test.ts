@@ -11,13 +11,13 @@
  * a procedure is a different question from who may hold a session.
  */
 
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { TRPCError } from "@trpc/server";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { TRPCError } from "@trpc/server";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveInvitedUser } from "../services/invite.ts";
 import { appRouter } from "./router.ts";
-import { type Context, type Role, type SessionUser } from "./trpc.ts";
+import type { Context, Role, SessionUser } from "./trpc.ts";
 
 let db: TestDatabase;
 

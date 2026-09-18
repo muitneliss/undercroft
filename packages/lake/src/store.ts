@@ -25,7 +25,7 @@
  */
 
 import { createStampSource, isStamp, type StampSource, systemClock } from "@undercroft/core";
-import { type ObjectStore } from "./objectStore.ts";
+import type { ObjectStore } from "./objectStore.ts";
 
 /**
  * Default retention: `undefined` means keep every observation, forever.
@@ -82,7 +82,7 @@ export interface JournalEntry {
  * empty, traverse, or shadow a reserved prefix.
  */
 function validateStream(stream: string): string {
-  const s = stream.replace(/^\/+|\/+$/g, "");
+  const s = stream.replace(/^\/+|\/+$/gu, "");
   if (s === "") throw new RangeError("journal stream must not be empty");
   if (s.split("/").includes("..")) {
     throw new RangeError(`journal stream must not traverse: ${JSON.stringify(stream)}`);
@@ -146,7 +146,7 @@ export class LakeStore {
    * the store, rather than promised in a docstring no line of code keeps.
    */
   static validateSourceKey(sourceKey: string): string {
-    const key = sourceKey.replace(/^\/+|\/+$/g, "");
+    const key = sourceKey.replace(/^\/+|\/+$/gu, "");
     if (key === "") throw new RangeError("source_key must not be empty");
     const segments = key.split("/");
     if (segments.includes("..")) {

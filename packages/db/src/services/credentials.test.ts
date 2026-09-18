@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { accessToken, needsRefresh } from "./credentials.ts";
+import { migrate } from "../migrate.ts";
 import {
   ConnectionRegistryError,
   type Credential,
@@ -7,8 +7,8 @@ import {
   upsertConnection,
   writeCredential,
 } from "../repos/connections.ts";
-import { migrate } from "../migrate.ts";
 import { createTestDatabase, type TestDatabase } from "../testing.ts";
+import { accessToken, needsRefresh } from "./credentials.ts";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const env: NodeJS.ProcessEnv = { UNDERCROFT_SECRET_KEY: KEY };
@@ -70,7 +70,7 @@ describe("accessToken refreshes and writes the rotated token back", () => {
       return Promise.resolve({
         accessToken: "access-2",
         refreshToken: "refresh-2",
-        expiresAt: new Date(now.getTime() + 3600_000).toISOString(),
+        expiresAt: new Date(now.getTime() + 3_600_000).toISOString(),
       });
     };
 

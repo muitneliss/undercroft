@@ -17,6 +17,7 @@
  *   record always hashes to the same bytes even if the API reorders its keys.
  */
 
+import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import {
   type Clock,
   ConnectorError,
@@ -29,7 +30,6 @@ import {
   systemClock,
   withRetry,
 } from "@undercroft/core";
-import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
 
 export interface RawRecordOut {
@@ -132,7 +132,7 @@ function nextPageUrl(
       if (recordsThisPage === 0) return null;
       const url = new URL(currentUrl);
       // parseInt, not Number(): an offset index, not an amount.
-      const prev = parseInt(url.searchParams.get(pagination.param) ?? "0", 10);
+      const prev = Number.parseInt(url.searchParams.get(pagination.param) ?? "0", 10);
       url.searchParams.set(pagination.param, String(prev + recordsThisPage));
       return url.toString();
     }
@@ -177,12 +177,12 @@ export async function* readEntity(
   const pacer = createPacer(
     {
       minIntervalMs: rateLimit.minIntervalMs,
-      ...(rateLimit.requestsPerMinute !== undefined
-        ? { requestsPerMinute: rateLimit.requestsPerMinute }
-        : {}),
-      ...(rateLimit.requestsPerDay !== undefined
-        ? { requestsPerDay: rateLimit.requestsPerDay }
-        : {}),
+      ...(rateLimit.requestsPerMinute === undefined
+        ? {}
+        : { requestsPerMinute: rateLimit.requestsPerMinute }),
+      ...(rateLimit.requestsPerDay === undefined
+        ? {}
+        : { requestsPerDay: rateLimit.requestsPerDay }),
     },
     clock,
   );
@@ -200,7 +200,7 @@ export async function* readEntity(
         return parseLossless(response.text);
       },
       policy,
-      { clock, ...(ctx.random !== undefined ? { random: ctx.random } : {}) },
+      { clock, ...(ctx.random === undefined ? {} : { random: ctx.random }) },
     ).catch((error: unknown) => {
       throw new ConnectorError(spec.id, entity.name, seen, describe(error), { cause: error });
     });

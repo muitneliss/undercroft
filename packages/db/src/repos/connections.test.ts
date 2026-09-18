@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { migrate } from "../migrate.ts";
+import { createTestDatabase, type TestDatabase } from "../testing.ts";
 import {
   ConnectionRegistryError,
   type Credential,
@@ -6,8 +8,6 @@ import {
   upsertConnection,
   writeCredential,
 } from "./connections.ts";
-import { migrate } from "../migrate.ts";
-import { createTestDatabase, type TestDatabase } from "../testing.ts";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const env: NodeJS.ProcessEnv = { UNDERCROFT_SECRET_KEY: KEY };

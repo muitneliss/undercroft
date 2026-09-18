@@ -30,6 +30,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import process from "node:process";
 
 const KEY_ENV = "UNDERCROFT_SECRET_KEY";
 
@@ -86,7 +87,7 @@ function keys(env: NodeJS.ProcessEnv = process.env): Map<number, Buffer> {
     // parseInt, not Number(): the money lint rule bans Number() everywhere, and a key
     // version is an integer index, not an amount. NaN from a non-numeric version is
     // caught by the isInteger check below.
-    const version = versionText === "" ? 1 : parseInt(versionText, 10);
+    const version = versionText === "" ? 1 : Number.parseInt(versionText, 10);
     if (!Number.isInteger(version)) {
       throw new SecretKeyMissing(
         `${KEY_ENV} version ${JSON.stringify(versionText)} is not an integer`,

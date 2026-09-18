@@ -36,7 +36,7 @@ export function createFetcher(timeoutMs = 60_000): Fetcher {
         const response = await fetch(request.url, {
           method: request.method,
           headers: request.headers,
-          ...(request.body !== undefined ? { body: request.body } : {}),
+          ...(request.body === undefined ? {} : { body: request.body }),
           signal: controller.signal,
         });
         const text = await response.text();
@@ -59,6 +59,8 @@ export function raiseForStatus(request: HttpRequest, response: HttpResponse): vo
   // parseInt, not Number(): the money lint rule bans Number() everywhere, and this is a
   // seconds count, not an amount.
   const retryAfterMs =
-    retryAfter !== null && /^\d+$/.test(retryAfter) ? parseInt(retryAfter, 10) * 1000 : null;
+    retryAfter !== null && /^\d+$/u.test(retryAfter)
+      ? Number.parseInt(retryAfter, 10) * 1000
+      : null;
   throw new HttpError(response.status, request.url, response.text.slice(0, 500), retryAfterMs);
 }

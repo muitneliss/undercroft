@@ -30,10 +30,10 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
-import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth";
-import { Errata } from "@/components/Errata";
-import { Mark } from "@/components/Mark";
-import { DIVISIONS } from "@/lib/divisions";
+import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth.ts";
+import { Errata } from "@/components/Errata.tsx";
+import { Mark } from "@/components/Mark.tsx";
+import { DIVISIONS } from "@/lib/divisions.ts";
 
 /** The full wheel, including the three hues no division has claimed yet. */
 const WHEEL = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "#7f4023"];
@@ -86,7 +86,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
         ) : null}
 
         {reason === "denied" ? (
-          <Errata heading="No access" live>
+          <Errata heading="No access" live={true}>
             That account does not have access. If you were invited, sign in with the exact address
             the invitation was sent to.
           </Errata>
@@ -117,7 +117,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
                 name="email"
                 type="email"
                 autoComplete="email"
-                required
+                required={true}
                 placeholder="you@example.com"
                 ref={emailField}
                 disabled={sendCode.isPending}
@@ -125,7 +125,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
             </div>
 
             {sendCode.isError ? (
-              <Errata heading="Not sent" live>
+              <Errata heading="Not sent" live={true}>
                 {sendCode.error.message}
               </Errata>
             ) : null}
@@ -156,7 +156,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                required
+                required={true}
                 maxLength={6}
                 placeholder="000000"
                 ref={codeField}
@@ -173,7 +173,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
             </div>
 
             {signIn.isError ? (
-              <Errata heading="Not signed in" live>
+              <Errata heading="Not signed in" live={true}>
                 {signIn.error.message}
               </Errata>
             ) : null}
