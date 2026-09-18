@@ -6,7 +6,17 @@
  * integration-tier concern against real Postgres with real login roles.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/noConditionalExpect: These assert inside a callback the code under test invokes -- a refresher, an onRetry hook -- which is how you check what a collaborator was handed without mocking it. `.claude/rules/tests.md` bans the mock alternative outright.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExpect: Test bodies whose assertion is that the call did not throw. The guard style `.claude/rules/tests.md` prescribes puts the check in a conditional throw rather than an expect().
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/suspicious/noMisplacedAssertion: Assertions inside a helper that several tests call, which is how the repeated part of a check is named once.
+
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import type { SqlExecutor } from "./executor.ts";
 import { migrate } from "./migrate.ts";
 import { createTestDatabase, type TestDatabase } from "./testing.ts";
@@ -28,12 +38,12 @@ async function expectDenied(fn: () => Promise<unknown>): Promise<void> {
     await fn();
     throw new Error("expected a permission error, but the query succeeded");
   } catch (error) {
-    expect((error as Error).message).toMatch(/permission denied|not.*allowed/i);
+    expect((error as Error).message).toMatch(/permission denied|not.*allowed/iu);
   }
 }
 
 describe("the default-privilege grant is unique and correctly scoped", () => {
-  test("pg_default_acl has exactly one row: dbt -> bi in analytics", async () => {
+  it("pg_default_acl has exactly one row: dbt -> bi in analytics", async () => {
     // The structural control. A second ALTER DEFAULT PRIVILEGES anywhere -- the exact
     // shape of the original hazard -- makes this fail.
     const { rows } = await db.query<{ grantor: string; schema: string; objtype: string }>(
@@ -48,7 +58,7 @@ describe("the default-privilege grant is unique and correctly scoped", () => {
 });
 
 describe("a table dbt creates at runtime reaches BI, and only BI-safe schemas do", () => {
-  test("BI can read a table dbt created after the migrations ran", async () => {
+  it("BI can read a table dbt created after the migrations ran", async () => {
     await db.asRole("undercroft_dbt", async (tx: SqlExecutor) => {
       await tx.exec("CREATE TABLE analytics.fct_demo AS SELECT 1 AS n");
     });
@@ -58,7 +68,7 @@ describe("a table dbt creates at runtime reaches BI, and only BI-safe schemas do
     expect(rows.rows[0]?.n).toBe(1);
   });
 
-  test("BI cannot reach credentials, raw payloads, or quarantine by any route", async () => {
+  it("BI cannot reach credentials, raw payloads, or quarantine by any route", async () => {
     await db.asRole("undercroft_bi", async (tx) => {
       await expectDenied(() => tx.query("SELECT * FROM app.connection_secret"));
       await expectDenied(() => tx.query("SELECT * FROM raw.records"));
@@ -74,7 +84,7 @@ describe("every table in app is granted to the control plane, and to nothing els
   // plane gets "permission denied for table" on first use while the whole suite stays
   // green. This enumerates the schema instead of naming tables, so it covers the next
   // table too, not just today's.
-  test("no table in app is missing the control plane's DML grants", async () => {
+  it("no table in app is missing the control plane's DML grants", async () => {
     const { rows } = await db.query<{
       table_name: string;
       can_select: boolean;
@@ -95,12 +105,12 @@ describe("every table in app is granted to the control plane, and to nothing els
     // The schema is not empty, or the query above would pass by vacuity.
     expect(rows.length).toBeGreaterThan(0);
     const ungranted = rows.filter(
-      (r) => !r.can_select || !r.can_insert || !r.can_update || !r.can_delete,
+      (r) => !(r.can_select && r.can_insert && r.can_update && r.can_delete),
     );
     expect(ungranted.map((r) => r.table_name)).toEqual([]);
   });
 
-  test("BI cannot read a session, a login identity or an OAuth token", async () => {
+  it("BI cannot read a session, a login identity or an OAuth token", async () => {
     // The quiet side of the same boundary: app is revoked from BI wholesale, so the tables
     // that hold a live session token are unreachable rather than merely ungranted.
     await db.asRole("undercroft_bi", async (tx) => {
@@ -113,7 +123,7 @@ describe("every table in app is granted to the control plane, and to nothing els
 });
 
 describe("a user-authored dbt model cannot read a credential", () => {
-  test("dbt has no USAGE on app, so a model selecting the secret fails", async () => {
+  it("dbt has no USAGE on app, so a model selecting the secret fails", async () => {
     // The primary control, and it is a privilege rather than a policy: the model fails at
     // execution because its role cannot see the schema at all.
     await db.asRole("undercroft_dbt", async (tx) => {
@@ -123,7 +133,7 @@ describe("a user-authored dbt model cannot read a credential", () => {
     });
   });
 
-  test("dbt cannot create outside analytics and dq", async () => {
+  it("dbt cannot create outside analytics and dq", async () => {
     await db.asRole("undercroft_dbt", async (tx) => {
       await expectDenied(() => tx.exec("CREATE TABLE ops.sneaky (n int)"));
     });

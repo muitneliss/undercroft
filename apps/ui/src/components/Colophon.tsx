@@ -18,11 +18,13 @@
  * otherwise read a bare version number with nothing to attach it to.
  */
 
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
 import { useTranslation } from "react-i18next";
 
-import { RELEASE } from "@/lib/release";
+import { RELEASE } from "@/lib/release.ts";
 
-export function Colophon() {
+export function Colophon(): React.JSX.Element {
   const { t } = useTranslation();
 
   return (

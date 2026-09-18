@@ -1,4 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { migrate } from "./migrate.ts";
 import { createTestDatabase, type TestDatabase } from "./testing.ts";
 
@@ -13,20 +17,20 @@ afterEach(async () => {
 });
 
 describe("migrations apply and are idempotent", () => {
-  test("a fresh database applies every migration", async () => {
+  it("a fresh database applies every migration", async () => {
     const result = await migrate(db);
     expect(result.applied.length).toBeGreaterThanOrEqual(5);
     expect(result.skipped).toEqual([]);
   });
 
-  test("a second run applies nothing", async () => {
+  it("a second run applies nothing", async () => {
     await migrate(db);
     const again = await migrate(db);
     expect(again.applied).toEqual([]);
     expect(again.skipped.length).toBeGreaterThanOrEqual(5);
   });
 
-  test("the raw records table is partitioned by source", async () => {
+  it("the raw records table is partitioned by source", async () => {
     await migrate(db);
     const { rows } = await db.query<{ partstrat: string }>(
       `SELECT partstrat FROM pg_partitioned_table

@@ -11,7 +11,11 @@
  * key itself, which looks like text and satisfies any "is it non-empty" check.
  */
 
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
+import { describe, expect, test as it } from "bun:test";
 
 import { invitationMessage } from "../services/people.ts";
 import { en } from "./en.ts";
@@ -27,7 +31,9 @@ function keys(catalogue: Record<string, unknown>, prefix = ""): Set<string> {
   for (const [name, value] of Object.entries(catalogue)) {
     const path = prefix === "" ? name : `${prefix}.${name}`;
     if (isBranch(value)) {
-      for (const nested of keys(value, path)) found.add(nested);
+      for (const nested of keys(value, path)) {
+        found.add(nested);
+      }
     } else {
       found.add(path);
     }
@@ -36,11 +42,11 @@ function keys(catalogue: Record<string, unknown>, prefix = ""): Set<string> {
 }
 
 describe("the catalogues", () => {
-  test("answer exactly the same keys as each other", () => {
+  it("answer exactly the same keys as each other", () => {
     expect([...keys(en)].sort()).toEqual([...keys(vi)].sort());
   });
 
-  test("answer every key with a sentence rather than with the key itself", () => {
+  it("answer every key with a sentence rather than with the key itself", () => {
     for (const locale of ["vi", "en"] as const) {
       const t = messages(locale);
       for (const key of keys(vi)) {
@@ -53,7 +59,7 @@ describe("the catalogues", () => {
 describe("the invitation email", () => {
   const args = ["ada@example.test", "CASE-0042", "https://app.example.test"] as const;
 
-  test("is written in the language it was asked for", () => {
+  it("is written in the language it was asked for", () => {
     const vietnamese = invitationMessage(...args, "vi");
     const english = invitationMessage(...args, "en");
 
@@ -62,7 +68,7 @@ describe("the invitation email", () => {
     expect(english.text).toContain("Sign in at");
   });
 
-  test("tells the reader all three things they need, in both languages", () => {
+  it("tells the reader all three things they need, in both languages", () => {
     // Which customer, where to sign in, and which address to use. An interpolation that
     // silently stopped resolving would leave `{{publicUrl}}` in an email nobody proofreads.
     for (const locale of ["vi", "en"] as const) {

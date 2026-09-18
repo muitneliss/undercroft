@@ -20,10 +20,16 @@
  * sentence a reader actually sees rather than a key.
  */
 
+// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
-import { MISSING } from "@/lib/money";
+import { MISSING } from "@/lib/money.ts";
 
 const ZONE = "Asia/Singapore";
 
@@ -47,7 +53,9 @@ const DATE_TIME = new Map<Locale, Intl.DateTimeFormat>();
  */
 function dateFormat(locale: Locale): Intl.DateTimeFormat {
   const held = DATE.get(locale);
-  if (held) return held;
+  if (held) {
+    return held;
+  }
   const made = new Intl.DateTimeFormat(CLDR[locale], {
     day: "2-digit",
     month: "short",
@@ -60,7 +68,9 @@ function dateFormat(locale: Locale): Intl.DateTimeFormat {
 
 function dateTimeFormat(locale: Locale): Intl.DateTimeFormat {
   const held = DATE_TIME.get(locale);
-  if (held) return held;
+  if (held) {
+    return held;
+  }
   const made = new Intl.DateTimeFormat(CLDR[locale], {
     day: "2-digit",
     month: "short",
@@ -75,7 +85,9 @@ function dateTimeFormat(locale: Locale): Intl.DateTimeFormat {
 }
 
 function parse(iso: string | null | undefined): Date | null {
-  if (!iso) return null;
+  if (!iso) {
+    return null;
+  }
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -100,7 +112,9 @@ const DAY_MS = 86_400_000;
  */
 export function daysUntil(iso: string | null | undefined, now = new Date()): number | null {
   const date = parse(iso);
-  if (!date) return null;
+  if (!date) {
+    return null;
+  }
   return Math.round((date.getTime() - now.getTime()) / DAY_MS);
 }
 
@@ -112,16 +126,24 @@ export function daysUntil(iso: string | null | undefined, now = new Date()): num
  * looks like missing data.
  */
 export function expiryNote(t: TFunction, iso: string | null | undefined, now = new Date()): string {
-  if (!iso) return t("when.noExpiry");
+  if (!iso) {
+    return t("when.noExpiry");
+  }
 
   const days = daysUntil(iso, now);
-  if (days === null) return MISSING;
+  if (days === null) {
+    return MISSING;
+  }
   if (days < 0) {
     const ago = Math.abs(days);
     return ago === 1 ? t("when.lapsedYesterday") : t("when.lapsedDays", { count: ago });
   }
-  if (days === 0) return t("when.expiresToday");
-  if (days === 1) return t("when.expiresTomorrow");
+  if (days === 0) {
+    return t("when.expiresToday");
+  }
+  if (days === 1) {
+    return t("when.expiresTomorrow");
+  }
   return t("when.expiresInDays", { count: days });
 }
 
@@ -135,15 +157,19 @@ export function expiryNote(t: TFunction, iso: string | null | undefined, now = n
  * translator is worse still, because only one of its two answers ever gets checked.
  */
 export function describeSchedule(t: TFunction, cron: string): string {
-  const fields = cron.trim().split(/\s+/);
-  if (fields.length !== 5) return cron.trim();
+  const fields = cron.trim().split(/\s+/u);
+  if (fields.length !== 5) {
+    return cron.trim();
+  }
 
   const [minute, hour, dayOfMonth, month, dayOfWeek] = fields;
   const everyDay = dayOfMonth === "*" && month === "*" && dayOfWeek === "*";
 
-  if (everyDay && hour === "*" && minute === "0") return t("when.hourly");
+  if (everyDay && hour === "*" && minute === "0") {
+    return t("when.hourly");
+  }
 
-  if (everyDay && /^\d{1,2}$/.test(hour ?? "") && /^\d{1,2}$/.test(minute ?? "")) {
+  if (everyDay && /^\d{1,2}$/u.test(hour ?? "") && /^\d{1,2}$/u.test(minute ?? "")) {
     const hh = (hour ?? "0").padStart(2, "0");
     const mm = (minute ?? "0").padStart(2, "0");
     return t("when.dailyAt", { time: `${hh}:${mm}` });

@@ -17,8 +17,14 @@
  * devDependency, which is the same one `bun run lint:rules` runs.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, copyFileSync, rmSync, writeFileSync, readdirSync } from "node:fs";
+// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -130,7 +136,9 @@ beforeAll(async () => {
   const rules = join(project, ".ast-grep", "rules");
   mkdirSync(rules, { recursive: true });
   const source = join(REPO, ".ast-grep", "rules");
-  for (const name of readdirSync(source)) copyFileSync(join(source, name), join(rules, name));
+  for (const name of readdirSync(source)) {
+    copyFileSync(join(source, name), join(rules, name));
+  }
   copyFileSync(join(REPO, "sgconfig.yml"), join(project, "sgconfig.yml"));
 
   for (const [path, body] of Object.entries(FIXTURES)) {
@@ -151,75 +159,77 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  if (project !== "") rmSync(project, { recursive: true, force: true });
+  if (project !== "") {
+    rmSync(project, { recursive: true, force: true });
+  }
 });
 
 describe("the dependency direction is enforced, not described", () => {
-  test("a handler importing a repo is refused", () => {
+  it("a handler importing a repo is refused", () => {
     expect(rulesOn("apps/demo/src/handlers/reachesRepo.ts")).toContain("layer-handler-no-repo");
   });
 
-  test("a handler importing a service is not", () => {
+  it("a handler importing a service is not", () => {
     expect(rulesOn("apps/demo/src/handlers/viaService.ts")).toEqual([]);
   });
 
-  test("a service importing a transport library is refused", () => {
+  it("a service importing a transport library is refused", () => {
     expect(rulesOn("apps/demo/src/services/importsTransport.ts")).toContain(
       "layer-service-no-upward",
     );
   });
 
-  test("a service importing a repo is not", () => {
+  it("a service importing a repo is not", () => {
     expect(rulesOn("apps/demo/src/services/tenants.ts")).toEqual([]);
   });
 
-  test("a repo importing a service is refused", () => {
+  it("a repo importing a service is refused", () => {
     expect(rulesOn("apps/demo/src/repos/importsService.ts")).toContain("layer-repo-no-upward");
   });
 
-  test("a repo importing only the executor seam is not", () => {
+  it("a repo importing only the executor seam is not", () => {
     expect(rulesOn("apps/demo/src/repos/tenant.ts")).toEqual([]);
   });
 
-  test("a shared package importing a layer is refused", () => {
+  it("a shared package importing a layer is refused", () => {
     expect(rulesOn("packages/core/src/reachesLayer.ts")).toContain("layer-shared-no-layer");
   });
 
-  test("a shared package that imports no layer is not", () => {
+  it("a shared package that imports no layer is not", () => {
     expect(rulesOn("packages/core/src/pure.ts")).toEqual([]);
   });
 });
 
 describe("SQL is confined to the repo layer", () => {
-  test("a statement in a service is refused", () => {
+  it("a statement in a service is refused", () => {
     expect(rulesOn("apps/demo/src/services/withSql.ts")).toContain("layer-sql-in-repos");
   });
 
-  test("the same statement inside a repo is not", () => {
+  it("the same statement inside a repo is not", () => {
     expect(rulesOn("apps/demo/src/repos/tenant.ts")).toEqual([]);
   });
 
-  test("a tRPC procedure's .query is not a database call", () => {
+  it("a tRPC procedure's .query is not a database call", () => {
     // The whole router matched before the receiver was constrained.
     expect(rulesOn("apps/demo/src/handlers/trpcStyle.ts")).toEqual([]);
   });
 
-  test("prose that reads like SQL is not a statement", () => {
+  it("prose that reads like SQL is not a statement", () => {
     // "Select a source from the list" has no schema-qualified table, so it is not ours.
     expect(rulesOn("apps/demo/src/services/prose.ts")).toEqual([]);
   });
 });
 
 describe("dependencies arrive as arguments", () => {
-  test("a service reading process.env is refused", () => {
+  it("a service reading process.env is refused", () => {
     expect(rulesOn("apps/demo/src/services/readsEnv.ts")).toContain("layer-injected-deps");
   });
 
-  test("a service reading an injected env is not", () => {
+  it("a service reading an injected env is not", () => {
     expect(rulesOn("apps/demo/src/services/takesDeps.ts")).toEqual([]);
   });
 
-  test("importing the pg driver outside its seam is refused", () => {
+  it("importing the pg driver outside its seam is refused", () => {
     expect(rulesOn("apps/demo/src/repos/usesDriver.ts")).toContain("layer-no-driver-import");
   });
 });

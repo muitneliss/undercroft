@@ -24,6 +24,13 @@
  * holds the session. Same reasoning as `@undercroft/db`'s `./repos` and `./services`.
  */
 
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
+// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+
 export type Locale = "vi" | "en";
 
 /** Every locale this platform speaks, in the order it speaks them. */
@@ -44,7 +51,9 @@ function isLocale(value: string): value is Locale {
  * is unreadable, and unreadable is reported rather than rounded to a language.
  */
 export function parseLocale(value: string | null | undefined): Locale | null {
-  if (value === null || value === undefined) return null;
+  if (value === null || value === undefined) {
+    return null;
+  }
   const primary = value.trim().toLowerCase().split("-")[0] ?? "";
   return isLocale(primary) ? primary : null;
 }
@@ -58,7 +67,9 @@ export function parseLocale(value: string | null | undefined): Locale | null {
  * ranked last.
  */
 export function negotiateLocale(header: string | null | undefined): Locale {
-  if (header === null || header === undefined) return DEFAULT_LOCALE;
+  if (header === null || header === undefined) {
+    return DEFAULT_LOCALE;
+  }
 
   const ranked = header
     .split(",")
@@ -71,7 +82,7 @@ export function negotiateLocale(header: string | null | undefined): Locale {
       return { locale: parseLocale(tag), weight: q === undefined ? "1" : q };
     })
     .filter((entry): entry is { locale: Locale; weight: string } => entry.locale !== null)
-    .filter((entry) => !/^0(\.0+)?$/.test(entry.weight))
+    .filter((entry) => !/^0(\.0+)?$/u.test(entry.weight))
     .sort((a, b) => b.weight.localeCompare(a.weight, "en"));
 
   return ranked[0]?.locale ?? DEFAULT_LOCALE;

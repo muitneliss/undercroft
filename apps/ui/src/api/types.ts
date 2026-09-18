@@ -1,6 +1,8 @@
 /** Mirrors vcdo/api/models.py. Money is a string here for the reason given there. */
 
-import type { Money } from "@/lib/money";
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+import type { Money } from "@/lib/money.ts";
 
 export type Source = "hubspot" | "xero" | "gmail" | "drive";
 
@@ -42,7 +44,7 @@ export const SOURCE_ACCESS: Record<
 
 export type ConnectionStatus = "disconnected" | "connected" | "needs_scope" | "needs_reconnect";
 
-export type Connection = {
+export interface Connection {
   source: Source;
   status: ConnectionStatus;
   external_account_id: string;
@@ -52,36 +54,36 @@ export type Connection = {
   schedule_cron: string;
   last_run_id: string;
   expires_at: string | null;
-};
+}
 
-export type Tenant = {
+export interface Tenant {
   id: string;
   display_name: string;
   status: string;
   created_at: string;
-};
+}
 
-export type Member = {
+export interface Member {
   id: string;
   email: string;
   display_name: string;
   is_staff: boolean;
   role: string | null;
-};
+}
 
-export type SessionUser = {
+export interface SessionUser {
   id: string;
   email: string;
   display_name: string;
   is_staff: boolean;
-};
+}
 
-export type LakeObject = {
+export interface LakeObject {
   key: string;
   versions: number;
   newest_sha256: string | null;
   bytes: number | null;
-};
+}
 
 /**
  * One observation of an object, from `vcdo/lake/store.py`.
@@ -92,7 +94,7 @@ export type LakeObject = {
  * lake's oldest contents, and the interface renders each absence as MISSING
  * rather than as a zero or an empty cell.
  */
-export type LakeManifest = {
+export interface LakeManifest {
   stamp: string;
   source_key?: string;
   sha256?: string;
@@ -101,12 +103,12 @@ export type LakeManifest = {
   run_id?: string;
   observed_at?: string;
   reason?: string;
-};
+}
 
-export type LakeManifests = {
+export interface LakeManifests {
   key: string;
   versions: LakeManifest[];
-};
+}
 
 /**
  * Totals for one customer.
@@ -119,8 +121,8 @@ export type LakeManifests = {
  * against a UI already rendering floats, is how the rule gets broken once and
  * for good.
  */
-export type CustomerTotals = {
+export interface CustomerTotals {
   customer: string;
   invoiced: Money | null;
   outstanding: Money | null;
-};
+}

@@ -1,3 +1,8 @@
+// biome-ignore-all lint/performance/noNamespaceImport: `import pg from "pg"` and friends: these packages have no useful named exports, and the namespace import is the documented way to consume them.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
@@ -52,7 +57,9 @@ export const appRouter = router({
 
     get: tenantProcedure.query(async ({ ctx, input }) => {
       const tenant = await tenants.get(ctx.exec, input.tenantId);
-      if (tenant === null) throw new TRPCError({ code: "NOT_FOUND" });
+      if (tenant === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
       return { ...tenant, role: ctx.role };
     }),
   }),
@@ -154,7 +161,7 @@ export const appRouter = router({
     // A preview of an analytics table for the UI. Money-shaped columns come back as
     // strings, never numbers -- the amount rule, held at the API boundary.
     preview: tenantProcedure
-      .input(z.object({ table: z.string().regex(/^[a-z][a-z0-9_]*$/) }))
+      .input(z.object({ table: z.string().regex(/^[a-z][a-z0-9_]*$/u) }))
       .query(async ({ ctx, input }) => ({
         rows: await models.preview(ctx.exec, input.table),
       })),

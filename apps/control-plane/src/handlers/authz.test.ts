@@ -6,11 +6,18 @@
  * Postgres grants and rows.
  */
 
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { TRPCError } from "@trpc/server";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { appRouter } from "./router.ts";
 import type { Context, Role, SessionUser } from "./trpc.ts";
 
@@ -68,7 +75,7 @@ afterEach(async () => {
 });
 
 describe("a non-member is told the tenant does not exist", () => {
-  test("get on a tenant the caller cannot see is NOT_FOUND, not FORBIDDEN", async () => {
+  it("get on a tenant the caller cannot see is NOT_FOUND, not FORBIDDEN", async () => {
     // FORBIDDEN would confirm the tenant exists, turning this into a customer-list oracle.
     await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-secret')");
     const outsider = await seedUser("outsider@example.test");
@@ -81,7 +88,7 @@ describe("a non-member is told the tenant does not exist", () => {
     ).toBe("NOT_FOUND");
   });
 
-  test("a member gets the tenant back", async () => {
+  it("a member gets the tenant back", async () => {
     const user = await seedUser("member@example.test");
     await seedMembership("CASE-1", user, "member");
     const tenant = await caller({ userId: user, email: "member@example.test" }).tenants.get({
@@ -93,7 +100,7 @@ describe("a non-member is told the tenant does not exist", () => {
 });
 
 describe("role ranks gate privileged actions once membership is established", () => {
-  test("a viewer calling startOAuth gets FORBIDDEN, because they know the tenant exists", async () => {
+  it("a viewer calling startOAuth gets FORBIDDEN, because they know the tenant exists", async () => {
     const user = await seedUser("viewer@example.test");
     await seedMembership("CASE-1", user, "viewer");
     expect(
@@ -106,7 +113,7 @@ describe("role ranks gate privileged actions once membership is established", ()
     ).toBe("FORBIDDEN");
   });
 
-  test("an admin may start an OAuth flow", async () => {
+  it("an admin may start an OAuth flow", async () => {
     const user = await seedUser("admin@example.test");
     await seedMembership("CASE-1", user, "admin");
     const result = await caller({
@@ -121,11 +128,11 @@ describe("role ranks gate privileged actions once membership is established", ()
 });
 
 describe("unauthenticated access", () => {
-  test("session.me without a user is UNAUTHORIZED", async () => {
+  it("session.me without a user is UNAUTHORIZED", async () => {
     expect(await errorCode(() => caller(null).session.me())).toBe("UNAUTHORIZED");
   });
 
-  test("the list view shows only tenants the caller belongs to", async () => {
+  it("the list view shows only tenants the caller belongs to", async () => {
     const user = await seedUser("u@example.test");
     await seedMembership("CASE-1", user, "member");
     await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-other')");
@@ -135,7 +142,7 @@ describe("unauthenticated access", () => {
 });
 
 describe("models.preview keeps money as a string", () => {
-  test("a numeric column comes back as a string, never a float", async () => {
+  it("a numeric column comes back as a string, never a float", async () => {
     const user = await seedUser("u@example.test");
     await seedMembership("CASE-1", user, "member");
     await db.exec("CREATE TABLE analytics.fct_demo (amount numeric(18,4))");

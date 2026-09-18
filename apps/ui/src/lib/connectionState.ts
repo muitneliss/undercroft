@@ -22,17 +22,24 @@
  * that needed a language to be computed would be a decision taken in the wrong place.
  */
 
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+
 import type { TFunction } from "i18next";
 
-import type { Connection } from "@/api/types";
+import type { Connection } from "@/api/types.ts";
 
 export type CardState =
-  "not_connected" | "connected" | "needs_scope" | "needs_reconnect" | "expired";
+  | "not_connected"
+  | "connected"
+  | "needs_scope"
+  | "needs_reconnect"
+  | "expired";
 
 /** The single thing to do next, as a decision rather than as a button label. */
 export type ActionKind = "connect" | "scope" | "reconnect";
 
-export type CardFacts = {
+export interface CardFacts {
   state: CardState;
   /** What to do next, or null when there is nothing to do. */
   actionKind: ActionKind | null;
@@ -47,7 +54,7 @@ export type CardFacts = {
   mark: "granted" | "pending" | "lapsed" | "absent";
   /** Whether this card counts as done on the setup checklist. */
   complete: boolean;
-};
+}
 
 export type CardPresentation = CardFacts & {
   headline: string;
@@ -176,7 +183,9 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
 
   switch (connection.source) {
     case "drive":
-      if (folders.length === 0) return null;
+      if (folders.length === 0) {
+        return null;
+      }
       return t("scope.driveFolders", { count: folders.length });
 
     case "gmail":

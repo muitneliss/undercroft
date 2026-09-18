@@ -26,6 +26,13 @@
  * so an accidental `JSON.stringify` yields a number-shaped string, never a float.
  */
 
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+
 import Big from "big.js";
 
 /**
@@ -57,9 +64,9 @@ Big.NE = -1e6;
  * than pick, because both readings are plausible and only the source system knows which
  * it meant.
  */
-const EURO_NOTATION = /\.\d{3},/;
-const CLEANUP = /[\s'_]/g;
-const ISO_4217 = /^[A-Z]{3}$/;
+const EURO_NOTATION = /\.\d{3},/u;
+const CLEANUP = /[\s'_]/gu;
+const ISO_4217 = /^[A-Z]{3}$/u;
 
 /** What a person sees where there is no value. Never an empty cell, never `0`. */
 export const MISSING = "—";
@@ -113,9 +120,15 @@ export function currency(code: string): Iso4217 {
  * defect into everything downstream.
  */
 export function parseAmount(value: string | Big | bigint | null | undefined): Big | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (value instanceof Big) return value;
-  if (typeof value === "bigint") return new Big(value.toString());
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (value instanceof Big) {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    return new Big(value.toString());
+  }
 
   if (typeof value === "number") {
     throw new TypeError(
@@ -128,19 +141,29 @@ export function parseAmount(value: string | Big | bigint | null | undefined): Bi
     // through to the Big constructor, and a coerced 1 is a fabricated amount.
     return null;
   }
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
 
   let text = value.replace(CLEANUP, "");
-  if (EURO_NOTATION.test(text)) return null;
+  if (EURO_NOTATION.test(text)) {
+    return null;
+  }
 
-  text = text.replace(/,/g, "");
+  text = text.replace(/,/gu, "");
   // Strip a leading currency symbol and a trailing code; keep sign and digits.
-  text = text.replace(/^[^\d\-+.]+/, "");
-  if (!/\d$/.test(text)) text = text.replace(/[^\d]+$/, "");
-  if (text === "" || text === "-" || text === "+" || text === ".") return null;
+  text = text.replace(/^[^\d\-+.]+/u, "");
+  if (!/\d$/u.test(text)) {
+    text = text.replace(/[^\d]+$/u, "");
+  }
+  if (text === "" || text === "-" || text === "+" || text === ".") {
+    return null;
+  }
   // `Decimal("+42")` is legal in Python; `new Big("+42")` throws. An explicit plus
   // is a sign, not a defect, so strip it rather than refusing the amount.
-  if (text.startsWith("+")) text = text.slice(1);
+  if (text.startsWith("+")) {
+    text = text.slice(1);
+  }
 
   try {
     return new Big(text);
@@ -151,7 +174,9 @@ export function parseAmount(value: string | Big | bigint | null | undefined): Bi
 
 /** Build a `Money`, or `null` if there was no amount to build it from. */
 export function money(amount: Big | null, code: Iso4217): Money | null {
-  if (amount === null) return null;
+  if (amount === null) {
+    return null;
+  }
   return { amount: amount.toFixed(SCALE_DP) as Amount, currency: code };
 }
 
@@ -194,10 +219,14 @@ export function sub(a: Money, b: Money): Money {
 export function compare(
   observed: Money | null,
   expected: Money | null,
-  tolerance: string = "0.02",
+  tolerance = "0.02",
 ): Verdict {
-  if (observed === null || expected === null) return "unverified";
-  if (observed.currency !== expected.currency) return "unverified";
+  if (observed === null || expected === null) {
+    return "unverified";
+  }
+  if (observed.currency !== expected.currency) {
+    return "unverified";
+  }
   return toBig(observed).minus(toBig(expected)).abs().lte(new Big(tolerance)) ? "ok" : "mismatch";
 }
 
@@ -209,7 +238,9 @@ export function compare(
  * caller can surface it in a tooltip. `null` renders as MISSING, never as `0`.
  */
 export function formatMoney(value: Money | null, locale = "en-US"): string {
-  if (value === null) return MISSING;
+  if (value === null) {
+    return MISSING;
+  }
   const fixed = toBig(value).round(2, Big.roundDown).toFixed(2);
   const negative = fixed.startsWith("-");
   const [whole = "0", fraction = "00"] = (negative ? fixed.slice(1) : fixed).split(".");

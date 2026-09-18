@@ -25,17 +25,25 @@
  * than narrated.
  */
 
-import { useEffect, type ReactNode } from "react";
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on components that render a handful of rows. The re-render the rule is about matters under a memoised list of hundreds; these lists are bounded by how many connections a tenant has.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useGlobalThis: Reading `process` in a composition root on Bun, where it is the documented global.
+// biome-ignore-all lint/suspicious/noLeakedRender: A boolean guard in JSX whose left side is a real boolean, so nothing leaks.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
+import { type ReactNode, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { Colophon } from "@/components/Colophon";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { Mark } from "@/components/Mark";
-import { TabRail } from "@/components/TabRail";
-import { applyBoard } from "@/lib/acetate";
-import { division, type DivisionId } from "@/lib/divisions";
-import { trpc } from "@/trpc";
+import { Colophon } from "@/components/Colophon.tsx";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
+import { Mark } from "@/components/Mark.tsx";
+import { TabRail } from "@/components/TabRail.tsx";
+import { applyBoard } from "@/lib/acetate.ts";
+import { type DivisionId, division } from "@/lib/divisions.ts";
+import { trpc } from "@/trpc.ts";
 
 export function Book({
   tenantId,
@@ -47,7 +55,7 @@ export function Book({
   current: DivisionId;
   signedInAs: string;
   children: ReactNode;
-}) {
+}): React.JSX.Element {
   const { t } = useTranslation();
   const board = division(current).hue;
 

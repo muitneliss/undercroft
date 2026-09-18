@@ -6,6 +6,10 @@
  * `deals`, HTTP 429" tells them what happened before they open anything.
  */
 
+// biome-ignore-all lint/complexity/useMaxParams: Four functions take five arguments, each a distinct required input with no sensible grouping. Bundling them into an options object to satisfy a count would hide which are required.
+// biome-ignore-all lint/style/noExcessiveClassesPerFile: Error types declared next to the seam that raises them, which is where a reader looks for them.
+// biome-ignore-all lint/style/noParameterProperties: TypeScript parameter properties in two classes. The alternative is declaring each field and then assigning it in the constructor, which is the same information written twice.
+
 export class UndercroftError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);

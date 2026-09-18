@@ -6,8 +6,13 @@
  * path, on the first invalid file.
  */
 
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import process from "node:process";
 import { parseSpec, SpecError } from "../src/loadSpec.ts";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");

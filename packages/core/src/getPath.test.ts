@@ -1,4 +1,8 @@
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
+
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { describe, expect, test as it } from "bun:test";
 import { parseLossless } from "./canonicalJson.ts";
 import { getPath, getStringPath, parsePath } from "./getPath.ts";
 
@@ -11,7 +15,7 @@ const payload = parseLossless(`{
 }`);
 
 describe("parsePath", () => {
-  test.each([
+  it.each([
     ["", []],
     ["a", ["a"]],
     ["a.b.c", ["a", "b", "c"]],
@@ -24,25 +28,25 @@ describe("parsePath", () => {
 });
 
 describe("getPath", () => {
-  test("reads a nested value", () => {
+  it("reads a nested value", () => {
     expect(getPath(payload, "paging.next.link")).toBe("https://api.example.test/next");
   });
 
-  test("reads through an array index", () => {
+  it("reads through an array index", () => {
     expect(getPath(payload, "results[1].id")).toBe("2");
   });
 
-  test("returns undefined for a missing step rather than throwing", () => {
+  it("returns undefined for a missing step rather than throwing", () => {
     expect(getPath(payload, "paging.previous.link")).toBeUndefined();
     expect(getPath(payload, "results[9].id")).toBeUndefined();
     expect(getPath(payload, "nothing.anything")).toBeUndefined();
   });
 
-  test("an empty path is the whole document", () => {
+  it("an empty path is the whole document", () => {
     expect(getPath(payload, "")).toBe(payload);
   });
 
-  test("refuses to walk into the prototype chain", () => {
+  it("refuses to walk into the prototype chain", () => {
     // A spec pointing here would otherwise return a function where the caller
     // expected a record id -- silently the wrong kind of thing.
     expect(getPath(payload, "constructor")).toBeUndefined();
@@ -50,25 +54,25 @@ describe("getPath", () => {
     expect(getPath({}, "constructor.prototype")).toBeUndefined();
   });
 
-  test("does not find inherited properties", () => {
+  it("does not find inherited properties", () => {
     expect(getPath({}, "toString")).toBeUndefined();
   });
 });
 
 describe("getStringPath", () => {
-  test("reads a string", () => {
+  it("reads a string", () => {
     expect(getStringPath(payload, "results[0].id")).toBe("1");
   });
 
-  test("renders a large number as its digits rather than losing them", () => {
+  it("renders a large number as its digits rather than losing them", () => {
     expect(getStringPath(payload, "count")).toBe("1234567890123456789012345");
   });
 
-  test("treats an empty string as absent, because an empty id is not an id", () => {
+  it("treats an empty string as absent, because an empty id is not an id", () => {
     expect(getStringPath(payload, "blank")).toBeNull();
   });
 
-  test("returns null rather than coercing an object or a null", () => {
+  it("returns null rather than coercing an object or a null", () => {
     expect(getStringPath(payload, "paging")).toBeNull();
     expect(getStringPath(payload, "nothing")).toBeNull();
     expect(getStringPath(payload, "missing")).toBeNull();

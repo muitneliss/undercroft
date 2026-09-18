@@ -1,3 +1,5 @@
+// biome-ignore-all lint/correctness/noUnresolvedImports: `react` and `pg` resolve through the workspace package that depends on them; Biome's module resolver does not walk a Bun workspace layout. tsc and the build both resolve them.
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { StrictMode } from "react";
@@ -19,7 +21,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     // A control plane is read repeatedly while someone works through setup; a short stale
     // window keeps a connection card from claiming "connected" after it was undone elsewhere.
-    queries: { staleTime: 5_000, retry: 1 },
+    queries: { staleTime: 5000, retry: 1 },
   },
 });
 
@@ -38,7 +40,7 @@ const trpcClient = trpc.createClient({
   ],
 });
 
-const root = document.getElementById("root");
+const root = document.querySelector("#root");
 if (root !== null) {
   createRoot(root).render(
     <StrictMode>

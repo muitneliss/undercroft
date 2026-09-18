@@ -11,6 +11,14 @@
  * so that is all this supports.
  */
 
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
+// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
+
 import { isLosslessNumber } from "lossless-json";
 
 /**
@@ -24,14 +32,22 @@ import { isLosslessNumber } from "lossless-json";
 const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
 
 export function parsePath(path: string): string[] {
-  if (path === "") return [];
+  if (path === "") {
+    return [];
+  }
   const segments: string[] = [];
   for (const part of path.split(".")) {
-    const match = /^([^[\]]*)((?:\[\d+\])*)$/.exec(part);
-    if (match === null) throw new TypeError(`unreadable path segment ${JSON.stringify(part)}`);
+    const match = /^([^[\]]*)((?:\[\d+\])*)$/u.exec(part);
+    if (match === null) {
+      throw new TypeError(`unreadable path segment ${JSON.stringify(part)}`);
+    }
     const [, name = "", indices = ""] = match;
-    if (name !== "") segments.push(name);
-    for (const index of indices.matchAll(/\[(\d+)\]/g)) segments.push(index[1]!);
+    if (name !== "") {
+      segments.push(name);
+    }
+    for (const index of indices.matchAll(/\[(\d+)\]/gu)) {
+      segments.push(index[1]!);
+    }
   }
   return segments;
 }
@@ -40,16 +56,26 @@ export function parsePath(path: string): string[] {
 export function getPath(root: unknown, path: string): unknown {
   let current = root;
   for (const segment of parsePath(path)) {
-    if (current === null || current === undefined) return undefined;
-    if (FORBIDDEN.has(segment)) return undefined;
+    if (current === null || current === undefined) {
+      return undefined;
+    }
+    if (FORBIDDEN.has(segment)) {
+      return undefined;
+    }
     if (Array.isArray(current)) {
-      const index = parseInt(segment, 10);
-      if (Number.isNaN(index)) return undefined;
+      const index = Number.parseInt(segment, 10);
+      if (Number.isNaN(index)) {
+        return undefined;
+      }
       current = current[index];
       continue;
     }
-    if (typeof current !== "object") return undefined;
-    if (!Object.prototype.hasOwnProperty.call(current, segment)) return undefined;
+    if (typeof current !== "object") {
+      return undefined;
+    }
+    if (!Object.hasOwn(current, segment)) {
+      return undefined;
+    }
     current = (current as Record<string, unknown>)[segment];
   }
   return current;
@@ -63,10 +89,16 @@ export function getPath(root: unknown, path: string): unknown {
  */
 export function getStringPath(root: unknown, path: string): string | null {
   const value = getPath(root, path);
-  if (typeof value === "string") return value === "" ? null : value;
-  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "string") {
+    return value === "" ? null : value;
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
   // A number that arrived through `lossless-json` keeps its digits as a string; return
   // them rather than coercing to a `number` and losing anything past a double.
-  if (isLosslessNumber(value)) return value.toString();
+  if (isLosslessNumber(value)) {
+    return value.toString();
+  }
   return null;
 }

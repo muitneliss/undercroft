@@ -33,6 +33,12 @@
  * from the form.
  */
 
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/nursery/noInlineStyles: Every one of these is data becoming a style: the tab rail's flexGrow IS the division's extent, the skeleton's width varies per row, the colour wheel paints each swatch its own hue. Biome's fix deletes the attribute rather than relocating it, which removes the feature.
+// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
 // A plain Link, deliberately not a NavLink. NavLink decides "active" by path
 // prefix, so `/tenants` stayed active inside `/tenants/CASE-.../lake` and two
 // tabs rendered as the current one -- two punched holes in a strip whose whole
@@ -40,8 +46,8 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { letteringOn } from "@/lib/acetate";
-import { DIVISIONS, divisionPath, type DivisionId } from "@/lib/divisions";
+import { letteringOn } from "@/lib/acetate.ts";
+import { DIVISIONS, type DivisionId, divisionPath } from "@/lib/divisions.ts";
 
 export function TabRail({
   tenantId,
@@ -49,7 +55,7 @@ export function TabRail({
 }: {
   tenantId: string | undefined;
   current: DivisionId;
-}) {
+}): React.JSX.Element {
   const { t } = useTranslation();
 
   return (

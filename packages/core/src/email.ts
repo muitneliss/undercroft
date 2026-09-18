@@ -17,6 +17,10 @@
  * an area where the only other observer is a confused person staring at an empty inbox.
  */
 
+// biome-ignore-all lint/style/noExcessiveClassesPerFile: Error types declared next to the seam that raises them, which is where a reader looks for them.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+
 import { HttpError, UndercroftError } from "./errors.ts";
 
 export interface EmailMessage {
@@ -28,7 +32,7 @@ export interface EmailMessage {
 }
 
 export interface EmailSender {
-  send(message: EmailMessage): Promise<void>;
+  send: (message: EmailMessage) => Promise<void>;
 }
 
 /** A message that no provider would accept. Raised before anything is sent. */
@@ -116,6 +120,10 @@ function assertSendable(message: EmailMessage): void {
   if (message.to === "" || !message.to.includes("@")) {
     throw new UnsendableEmail(`not a usable recipient address: ${JSON.stringify(message.to)}`);
   }
-  if (message.subject === "") throw new UnsendableEmail("an email with no subject");
-  if (message.text === "") throw new UnsendableEmail("an email with no body");
+  if (message.subject === "") {
+    throw new UnsendableEmail("an email with no subject");
+  }
+  if (message.text === "") {
+    throw new UnsendableEmail("an email with no body");
+  }
 }

@@ -13,21 +13,32 @@
  * actionable, rather than rendering buttons that post nowhere.
  */
 
+// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
 import { useTranslation } from "react-i18next";
 
-import { Errata } from "@/components/Errata";
-import { Skeleton } from "@/components/Skeleton";
-import { trpc } from "@/trpc";
+import { Errata } from "@/components/Errata.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
+import { trpc } from "@/trpc.ts";
 
-export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: string }) {
+export function TenantOverview({
+  tenantId,
+}: {
+  tenantId: string;
+  scopeFor?: string;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const connections = trpc.connections.list.useQuery({ tenantId });
 
-  if (connections.isPending) return <Skeleton rows={5} />;
+  if (connections.isPending) {
+    return <Skeleton rows={5} />;
+  }
 
   if (connections.isError) {
     return (
-      <Errata heading={t("common.notLoaded")} live>
+      <Errata heading={t("common.notLoaded")} live={true}>
         {t("sources.notLoaded")}
       </Errata>
     );

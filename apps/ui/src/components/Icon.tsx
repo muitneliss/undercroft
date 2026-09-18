@@ -18,12 +18,21 @@
  * announcing the mark as well would say everything twice.
  */
 
-type IconProps = {
+// biome-ignore-all lint/style/useFilenamingConvention: One file named for the thing it exports, matching every other module in its directory.
+
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+
+interface IconProps {
   size?: number;
   className?: string;
-};
+}
 
-function Frame({ size = 16, className, children }: IconProps & { children: React.ReactNode }) {
+function Frame({
+  size = 16,
+  className,
+  children,
+}: IconProps & { children: React.ReactNode }): React.JSX.Element {
   return (
     <svg
       width={size}
@@ -44,7 +53,7 @@ function Frame({ size = 16, className, children }: IconProps & { children: React
 }
 
 /** Granted: the hole punched and inked solid. */
-export function MarkGranted(props: IconProps) {
+export function MarkGranted(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <circle cx="8" cy="8" r="5.25" fill="currentColor" stroke="none" />
@@ -53,7 +62,7 @@ export function MarkGranted(props: IconProps) {
 }
 
 /** Awaiting scope: the leaf half-hinged, inked on one side only. */
-export function MarkPending(props: IconProps) {
+export function MarkPending(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M8 2.75A5.25 5.25 0 0 0 8 13.25Z" fill="currentColor" stroke="none" />
@@ -63,7 +72,7 @@ export function MarkPending(props: IconProps) {
 }
 
 /** Lapsed: struck through, the way a withdrawn entry is struck in a register. */
-export function MarkLapsed(props: IconProps) {
+export function MarkLapsed(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <circle cx="8" cy="8" r="5.25" />
@@ -73,7 +82,7 @@ export function MarkLapsed(props: IconProps) {
 }
 
 /** Not granted: the outline printed, nothing filled in yet. */
-export function MarkAbsent(props: IconProps) {
+export function MarkAbsent(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <circle cx="8" cy="8" r="5.25" strokeDasharray="2.2 2" />
@@ -82,7 +91,7 @@ export function MarkAbsent(props: IconProps) {
 }
 
 /** The manual's "go on". */
-export function ArrowRight(props: IconProps) {
+export function ArrowRight(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M2.5 8h11" />
@@ -91,7 +100,7 @@ export function ArrowRight(props: IconProps) {
   );
 }
 
-export function ArrowLeft(props: IconProps) {
+export function ArrowLeft(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M13.5 8h-11" />
@@ -101,7 +110,7 @@ export function ArrowLeft(props: IconProps) {
 }
 
 /** Turn the leaf down. */
-export function ChevronDown(props: IconProps) {
+export function ChevronDown(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M3.5 6 8 10.5 12.5 6" />
@@ -110,7 +119,7 @@ export function ChevronDown(props: IconProps) {
 }
 
 /** Turn the leaf back up. */
-export function ChevronUp(props: IconProps) {
+export function ChevronUp(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M3.5 10 8 5.5 12.5 10" />
@@ -119,7 +128,7 @@ export function ChevronUp(props: IconProps) {
 }
 
 /** Take the bytes off the shelf. */
-export function Download(props: IconProps) {
+export function Download(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M8 2.5v8" />
@@ -130,7 +139,7 @@ export function Download(props: IconProps) {
 }
 
 /** Errata: the correction mark itself. */
-export function Errata(props: IconProps) {
+export function Errata(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M3.5 3.5 12.5 12.5" />
@@ -140,7 +149,7 @@ export function Errata(props: IconProps) {
 }
 
 /** Add a leaf to the book. */
-export function Plus(props: IconProps) {
+export function Plus(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M8 2.75v10.5" />
@@ -150,7 +159,7 @@ export function Plus(props: IconProps) {
 }
 
 /** A stored object: a stack of versions under one key. */
-export function Stack(props: IconProps) {
+export function Stack(props: IconProps): React.JSX.Element {
   return (
     <Frame {...props}>
       <path d="M2.5 5.5 8 2.75l5.5 2.75L8 8.25 2.5 5.5Z" />
