@@ -147,8 +147,23 @@ link you cannot trust.
   its own SQL, which was correct in production and a silent no-op against any other backing
   store. The revocation test is what caught it, and the seam now runs through the code that
   owns the table — which is the "one writer" rule applied to a table this repo does not own.
-- **Still unproven offline: the real `pg` path.** Better Auth emits unqualified table names
-  and is handed a pool with `search_path=app`; the gate exercises the memory adapter, so that
-  resolution is first tried on deploy. It fails loudly
-  (`relation "auth_user" does not exist`), not silently, and `bun run migrate` is the step
-  that prevents it.
+- **A schema mismatch refuses every request — it is not a warning.** This was got wrong once,
+  in this file, and the first production deploy corrected it. Better Auth runs a schema check
+  and raises `SchemaMismatchError`, so with the tables absent the control plane logged
+  `sign_in_configured` and then answered **500 to every `/api/auth/*` request**:
+
+  ```
+  ERROR [Better Auth]: Database schema mismatch
+    Missing tables
+      auth_user, auth_session, auth_account, auth_verification
+  ```
+
+  The failure is at least loud and specific rather than silent. But it means the migration is
+  not an operational nicety to be done "before people start using it" — nothing works until
+  it has run. Hence `db-migrate`, the one-shot compose service that applies the schema before
+  the control plane or the worker starts, so a deploy can no longer land code against a
+  schema that does not have its tables.
+
+- **The real `pg` path is exercised on deploy, not in the gate.** Better Auth emits
+  unqualified table names against a pool whose `search_path` is `app`; the offline gate uses
+  the memory adapter. Verified working against the live stack.

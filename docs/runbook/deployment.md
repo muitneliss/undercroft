@@ -87,20 +87,29 @@ have no default and hard-fail the stack if unset:
 
 ## Applying migrations
 
-The schema is not applied by starting a service. Run it as its own step, before the new
-images start:
+**A deploy applies them.** The `db-migrate` service runs `bun run migrate` from the
+control-plane image, and both the control plane and the worker wait on
+`service_completed_successfully` — so no service ever starts against a schema that lacks its
+tables. It is idempotent and ledgered, so re-running each deploy costs one query.
+
+It is a one-shot service rather than a call at service boot on purpose: the control plane may
+one day run more than one replica, and two replicas racing the same DDL is a failure that
+only appears under the load you least want it to.
+
+To apply by hand — a database restored from backup, or a migration you want in before a
+deploy:
 
 ```sh
 UNDERCROFT_POSTGRES_DSN=... bun run migrate
 ```
 
-It prints what it applied and what it skipped, and is idempotent — "already up to date" and
-"applied 1 migration(s)" are different facts, and a deploy log that cannot tell them apart
-is no evidence. Deliberately not run at boot: the control plane can run more than one
-replica, and two replicas racing the same DDL is a failure that appears under the worst load.
+It prints what it applied and what it skipped: "already up to date" and "applied 1
+migration(s)" are different facts, and a log that cannot tell them apart is no evidence.
 
-Sign-in needs `060_auth.sql`. Until it is applied, every login fails with
-`relation "auth_user" does not exist`.
+**If the schema is behind, sign-in does not degrade — it stops.** Better Auth raises
+`SchemaMismatchError` and answers 500 to every `/api/auth/*` request, while still logging
+`sign_in_configured` at boot. Look for `Database schema mismatch` with the missing table
+names in the control-plane log.
 
 ## Sign-in
 
@@ -185,9 +194,9 @@ Two Kestra behaviours that waste time otherwise:
 - **Only the first admin needs SQL.** After that, invitations are issued from the People
   division. The bootstrap insert is under [Sign-in](#sign-in), and it exists because there is
   nobody to invite the first person.
-- **The real `pg` + `search_path` path is first exercised on deploy.** Better Auth emits
-  unqualified table names against a pool whose `search_path` is `app`; the offline gate uses
-  its memory adapter. A mistake here fails loudly (`relation "auth_user" does not exist`)
+- **The real `pg` + `search_path` path is exercised on deploy, not in the gate.** Better Auth
+  emits unqualified table names against a pool whose `search_path` is `app`; the offline gate
+  uses its memory adapter. A mistake here fails loudly (`Database schema mismatch`)
   rather than silently, and `bun run migrate` is what prevents it.
 - The `undercroft_dbt` role that `dbt/profiles.yml` connects as is not created by any
   migration on this branch; the transform verb will fail until it exists.

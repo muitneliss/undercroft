@@ -148,6 +148,9 @@ services:
       # creator also keeps `docker compose up --wait` from reading its clean exit as a crash.
       minio-init:
         condition: service_completed_successfully
+      # The worker reads and writes `raw`, so it waits for the schema too.
+      db-migrate:
+        condition: service_completed_successfully
     environment:
       UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_S3_ENDPOINT: http://minio:9000
@@ -165,6 +168,34 @@ services:
         limits:
           memory: 1g
 
+  # The schema, applied before anything reads it. Same image as the control plane, which
+  # carries the migrations and the `migrate` script; it runs once and exits.
+  #
+  # A one-shot service rather than a call at service boot: the control plane may one day run
+  # more than one replica, and two replicas racing the same DDL is a failure that only shows
+  # up under the load you least want it to. `migrate()` is idempotent and ledgered, so
+  # re-running on every deploy costs one query.
+  #
+  # Without this, a deploy that adds a table leaves the services pointed at a schema that
+  # does not have it. Better Auth refuses EVERY request on a schema mismatch — it is not a
+  # warning — so sign-in returns 500 until the migration lands.
+  db-migrate:
+    # Deliberately NOT `<<: *restart`. This is meant to exit, and `restart: unless-stopped`
+    # would turn a completed migration into a crash-loop.
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.control-plane
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["bun", "run", "migrate"]
+    environment:
+      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
   control-plane:
     <<: *restart
     build:
@@ -173,6 +204,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # The schema must exist before the first request, not eventually.
+      db-migrate:
+        condition: service_completed_successfully
     environment:
       UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY}
