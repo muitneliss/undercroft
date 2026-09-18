@@ -122,6 +122,69 @@ describe("role ranks gate privileged actions once membership is established", ()
     });
     expect(result.authorizeUrl).toContain("/oauth/hubspot/");
   });
+
+  test("a member cannot change what a connection reads", async () => {
+    // Narrowing or widening a live grant is an admin's decision. A member may see the
+    // schedule; they may not alter what a customer shares.
+    const user = await seedUser("member@example.test");
+    await seedMembership("CASE-1", user, "member");
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "member@example.test" }).connections.setScope({
+          tenantId: "CASE-1",
+          source: "gmail",
+          selection: { labels: [] },
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  test("an admin may change what a connection reads", async () => {
+    const user = await seedUser("admin2@example.test");
+    await seedMembership("CASE-1", user, "admin");
+    await db.query(
+      "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-1','gmail','connected')",
+    );
+
+    const result = await caller({
+      userId: user,
+      email: "admin2@example.test",
+    }).connections.setScope({
+      tenantId: "CASE-1",
+      source: "gmail",
+      selection: { labels: [] },
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  test("a member cannot end a grant", async () => {
+    const user = await seedUser("member2@example.test");
+    await seedMembership("CASE-1", user, "member");
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "member2@example.test" }).connections.disconnect({
+          tenantId: "CASE-1",
+          source: "gmail",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  test("browsing a scope with no worker configured says so rather than failing obscurely", async () => {
+    // `ctx.worker` is null in these tests. A PRECONDITION_FAILED names the cause; letting it
+    // through would surface as a network error that reads like a Google outage.
+    const user = await seedUser("admin3@example.test");
+    await seedMembership("CASE-1", user, "admin");
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "admin3@example.test" }).connections.browseScope({
+          tenantId: "CASE-1",
+          source: "gmail",
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+  });
 });
 
 describe("unauthenticated access", () => {

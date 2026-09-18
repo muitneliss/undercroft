@@ -61,6 +61,17 @@ export function parseScope(source: string, selectionJson: string): ConnectionSco
     return null;
   }
   if (typeof raw !== "object" || raw === null) return null;
-  const parsed = ConnectionScope.safeParse({ kind: source, ...raw });
+
+  // The source's own key must be PRESENT, not merely defaultable. Zod's `.default([])` would
+  // otherwise turn `{}` into a valid empty selection -- which reads as "the whole mailbox",
+  // exactly the collapse of "nobody has chosen yet" into "somebody chose everything" that
+  // the rest of this file exists to prevent. It also catches a Drive-shaped selection saved
+  // under Gmail: the key it carries is not the key that source uses.
+  const key = source === "gmail" ? "labels" : source === "drive" ? "files" : null;
+  if (key === null || !Array.isArray((raw as Record<string, unknown>)[key])) {
+    return null;
+  }
+
+  const parsed = ConnectionScope.safeParse({ ...raw, kind: source });
   return parsed.success ? parsed.data : null;
 }

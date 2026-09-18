@@ -84,6 +84,73 @@ export const appRouter = router({
         if (started.ok) return { authorizeUrl: started.authorizeUrl };
         return { authorizeUrl: `/oauth/${input.source}/start?tenant=__set_by_server__` };
       }),
+
+    /**
+     * What an admin may choose from, for the scope picker.
+     *
+     * Proxied to the worker because it needs a live token, which only the worker can open.
+     * Gmail only: under `drive.file` the choosing happens in the browser through Google's own
+     * Picker, so there is nothing for the server to list.
+     */
+    browseScope: requireRole("admin")
+      .input(z.object({ source: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        const outcome = await ctx.worker.browseScope({
+          source: input.source,
+          tenantId: ctx.tenantId,
+          kind: "labels",
+        });
+        if (!outcome.ok) {
+          throw new TRPCError({
+            code: outcome.reason === "unreachable" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        return outcome.value;
+      }),
+
+    /** Record what may be read. Admin-only: it widens or narrows a live grant. */
+    setScope: requireRole("admin")
+      .input(z.object({ source: z.string().min(1), selection: z.unknown() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await connections.setScope(ctx.exec, {
+          tenantId: ctx.tenantId,
+          source: input.source,
+          selectionJson: JSON.stringify(input.selection ?? {}),
+          actor: ctx.user.email,
+          actorId: ctx.user.userId,
+        });
+        if (!result.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: messages(ctx.locale)("error.scopeNotUnderstood", { source: input.source }),
+          });
+        }
+        return { ok: true };
+      }),
+
+    /**
+     * End a grant.
+     *
+     * Reports whether the provider was actually told rather than assuming it: our row
+     * disappearing while Google's grant stands would make "you can disconnect at any time"
+     * -- copy already on the consent card -- a half-truth.
+     */
+    disconnect: requireRole("admin")
+      .input(z.object({ source: z.string().min(1) }))
+      .mutation(({ ctx, input }) =>
+        connections.disconnect(ctx.exec, ctx.worker, {
+          tenantId: ctx.tenantId,
+          source: input.source,
+          actor: ctx.user.email,
+        }),
+      ),
   }),
 
   /**

@@ -46,5 +46,8 @@ export const vi = {
     alreadyMember: "{{email}} đã có quyền truy cập với vai trò {{role}}.",
     noOpenInvitation: "Không có lời mời nào đang mở với id đó.",
     requiresRole: "Thao tác này cần vai trò {{role}}.",
+    workerUnavailable:
+      "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    scopeNotUnderstood: "Không đọc được lựa chọn cho nguồn {{source}}.",
   },
 };

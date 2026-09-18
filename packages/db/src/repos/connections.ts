@@ -273,3 +273,76 @@ export async function deleteCredential(
     source,
   ]);
 }
+
+/**
+ * A connection with everything the operator UI renders, in one read.
+ *
+ * Three LEFT JOINs, because all three are genuinely optional: a connection may have no
+ * chosen scope, no credential and no run yet, and each absence is a state the card has copy
+ * for rather than an error.
+ *
+ * **`ciphertext` is not in the select list, and that is the whole licence for this join.**
+ * The control plane may know WHEN a credential expires -- that is what turns "which
+ * connections need attention" into a query instead of a decrypt-everything loop -- and it
+ * may not know what the credential is. It could not open one anyway: it holds no master
+ * key. Adding `ciphertext` here would not merely widen a row, it would move a secret into
+ * the internet-facing process.
+ */
+export interface ConnectionView extends Connection {
+  readonly accountLabel: string;
+  /** The chosen scope as JSON text. The service parses it; this decides nothing. */
+  readonly selectionJson: string;
+  readonly chosenAt: string | null;
+  readonly expiresAt: string | null;
+  readonly lastRunId: string;
+}
+
+export async function listConnectionViews(
+  exec: SqlExecutor,
+  tenantId: string,
+): Promise<ConnectionView[]> {
+  const { rows } = await exec.query<{
+    tenantId: string;
+    source: string;
+    status: Connection["status"];
+    externalAccountId: string | null;
+    scope: string;
+    accountLabel: string | null;
+    selectionJson: string | null;
+    chosenAt: Date | string | null;
+    expiresAt: Date | string | null;
+    lastRunId: string | null;
+  }>(
+    `SELECT c.tenant_id AS "tenantId", c.source, c.status,
+            c.external_account_id AS "externalAccountId", c.scope,
+            d.account_label       AS "accountLabel",
+            d.selection::text     AS "selectionJson",
+            d.chosen_at           AS "chosenAt",
+            s.expires_at          AS "expiresAt",
+            r.id                  AS "lastRunId"
+     FROM ops.connection c
+     LEFT JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
+     LEFT JOIN app.connection_secret s ON s.tenant_id = c.tenant_id AND s.source = c.source
+     LEFT JOIN LATERAL (
+       SELECT id FROM ops.run
+       WHERE tenant_id = c.tenant_id AND source = c.source
+       ORDER BY started_at DESC LIMIT 1
+     ) r ON true
+     WHERE c.tenant_id = $1
+     ORDER BY c.source`,
+    [tenantId],
+  );
+
+  return rows.map((row) => ({
+    tenantId: row.tenantId,
+    source: row.source,
+    status: row.status,
+    externalAccountId: row.externalAccountId,
+    scope: row.scope,
+    accountLabel: row.accountLabel ?? "",
+    selectionJson: row.selectionJson ?? "{}",
+    chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),
+    expiresAt: row.expiresAt === null ? null : new Date(row.expiresAt).toISOString(),
+    lastRunId: row.lastRunId ?? "",
+  }));
+}
