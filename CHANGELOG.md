@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.2.0](https://github.com/muitneliss/undercroft/compare/v1.1.0...v1.2.0) (2026-09-18)
+
+
+### Features
+
+* close the loop — invitations in the product, and the whole ring under test ([50d4607](https://github.com/muitneliss/undercroft/commit/50d4607bf792985e532b16f384173949cea3fd57))
+* **control-plane:** invite-only sign-in with Google and an emailed code ([982e28f](https://github.com/muitneliss/undercroft/commit/982e28f3940b21e009a134d64194eb7ed3087453))
+* **core:** add an EmailSender seam for one-time sign-in codes ([d00395f](https://github.com/muitneliss/undercroft/commit/d00395f1c35212162b8ce05350bd87b777aae5e2))
+* **db:** add Better Auth's tables, their grants, and a way to apply migrations ([1427352](https://github.com/muitneliss/undercroft/commit/14273520f6682230ff1a94fc45f67beb88f314db))
+* invite-only sign-in with Better Auth (Google + emailed code) ([b32330c](https://github.com/muitneliss/undercroft/commit/b32330c9987255cfb6790edbc148dd4d2515016e))
+* **ui:** give Undercroft a device, and cut the icons from it ([ce204b7](https://github.com/muitneliss/undercroft/commit/ce204b7f99a76c741c180a2b745a97486dfeb424))
+* **ui:** give Undercroft a device, and cut the icons from it ([07665e7](https://github.com/muitneliss/undercroft/commit/07665e77175fd509f92694f1b539cfbc6bdac2aa))
+* **ui:** make sign-in live, with Google and a one-time code ([5a602dd](https://github.com/muitneliss/undercroft/commit/5a602ddcb623b2198b06e7a2a9a56570885ece4e))
+
+
+### Bug Fixes
+
+* **docs:** point the README device at raw URLs so it actually renders ([e91a5f3](https://github.com/muitneliss/undercroft/commit/e91a5f3dd81d11719a4eae63fc3c992b2fde2b43))
+* **ui:** mount BrowserRouter so signed-in routes can resolve ([74fee20](https://github.com/muitneliss/undercroft/commit/74fee209eabd628dd6ae734e307528e4a207f7a6))
+
 ## [1.1.0](https://github.com/muitneliss/undercroft/compare/v1.0.0...v1.1.0) (2026-09-17)
 
 
