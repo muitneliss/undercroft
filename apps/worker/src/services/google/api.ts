@@ -41,8 +41,13 @@ export const GOOGLE_MIN_INTERVAL_MS = 120;
 
 export interface GoogleApiDeps {
   readonly fetcher: ByteFetcher;
-  /** Resolves a bearer token. Called per request so a refresh mid-run is picked up. */
-  token(): Promise<string>;
+  /**
+   * Resolves a bearer token. Called per request, so a refresh mid-run is picked up.
+   *
+   * A property rather than a method: it is passed by reference between deps objects, and a
+   * method separated from its object carries a `this` nobody intended.
+   */
+  readonly token: () => Promise<string>;
   readonly clock?: Clock;
   readonly pacer?: Pacer;
   readonly retry?: RetryPolicy;

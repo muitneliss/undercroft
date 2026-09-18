@@ -4,6 +4,15 @@ export {
   type ConnectorPagination,
   ConnectorSpec,
 } from "./connectorSpec.ts";
+export {
+  BrowseScopeRequest,
+  BrowseScopeResponse,
+  CredentialInput,
+  RevokeConnectionRequest,
+  RevokeConnectionResponse,
+  StoreCredentialRequest,
+  StoreCredentialResponse,
+} from "./connectionApi.ts";
 export { ConnectionScope, DriveScope, GmailScope, parseScope } from "./connectionScope.ts";
 export {
   ApiError,

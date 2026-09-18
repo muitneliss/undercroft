@@ -22,3 +22,4 @@ export {
   writeConnectionDetail,
   writeCredential,
 } from "./connections.ts";
+export { tenantExists } from "./tenants.ts";
