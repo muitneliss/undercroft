@@ -9,6 +9,8 @@
  * No dbt, no ORM, no framework. The schema is stated once, here, in SQL.
  */
 
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SqlExecutor } from "./executor.ts";

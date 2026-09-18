@@ -12,6 +12,8 @@
  * extremes a hand-picked alpha would fail on.
  */
 
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
 import { describe, expect, test } from "bun:test";
 
 import { DIVISIONS } from "@/lib/divisions.ts";

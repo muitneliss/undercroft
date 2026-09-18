@@ -7,6 +7,8 @@
  * the start of each run, so no two runs share an id.
  */
 
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+
 import { randomUUID } from "node:crypto";
 
 export function newRunId(): string {

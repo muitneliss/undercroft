@@ -17,6 +17,8 @@
  *   record always hashes to the same bytes even if the API reorders its keys.
  */
 
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import {
   type Clock,

@@ -9,6 +9,8 @@
  * which is exactly the bug in "compare `latest` to `latest`" that the release-tag argument
  * exists to close.
  */
+
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 import { expect, test } from "bun:test";
 
 import { type Config, type Deps, oneShotServices, verify } from "./dokploy.ts";

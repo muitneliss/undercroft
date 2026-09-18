@@ -8,6 +8,8 @@
  * compare against" into either a pass or a failure. Both are claims nobody made.
  */
 
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
 import { describe, expect, test } from "bun:test";
 
 import { presentVerdict, type Verdict } from "./verdict.ts";

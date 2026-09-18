@@ -29,6 +29,9 @@
  * customer reconnects. Packing it into the blob here removes that trap.
  */
 
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
+
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import process from "node:process";
 

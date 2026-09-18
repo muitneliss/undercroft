@@ -18,6 +18,9 @@
  * it grants is the right to try.
  */
 
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
+
 import process from "node:process";
 import { createHttpEmailSender, type EmailSender } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";

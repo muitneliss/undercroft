@@ -13,6 +13,8 @@
  * (Kestra -> worker -> lake -> raw) untouched. ADR 0004.
  */
 
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+
 import { extname, join, normalize, sep } from "node:path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { EmailSender } from "@undercroft/core";

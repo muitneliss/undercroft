@@ -27,6 +27,8 @@
  * design use a saturated ground under dense tabular content at all.
  */
 
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+
 /** A gamma-encoded sRGB colour, 0-255 per channel. */
 export interface Rgb {
   r: number;

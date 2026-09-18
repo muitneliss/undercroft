@@ -12,6 +12,9 @@
  * "Add" affordance is a plain note rather than a form that would post nowhere.
  */
 
+// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/EmptyState.tsx";

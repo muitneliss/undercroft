@@ -13,6 +13,8 @@
  * enumeration defence belongs to the browser surface, not here.
  */
 
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+
 import { timingSafeEqual } from "node:crypto";
 import { hashToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";

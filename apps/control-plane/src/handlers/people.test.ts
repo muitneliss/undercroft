@@ -11,6 +11,8 @@
  * a procedure is a different question from who may hold a session.
  */
 
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { migrate } from "@undercroft/db";
