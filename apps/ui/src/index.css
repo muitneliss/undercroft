@@ -37,6 +37,40 @@
  * correct and the solver only ever adjusts it.
  */
 
+/**
+ * biome-ignore-all lint/style/noHexColors: The palette has to stay hex because
+ * `@/lib/acetate` reads `--leaf` and `--ink` back out of the computed styles and
+ * parses them with `parseHex`, which accepts `#rgb`/`#rrggbb` and returns null for
+ * anything else rather than guessing. Rewriting these as oklch() would make that
+ * parse fail, and the solver would silently fall back to its hardcoded defaults --
+ * a guessed colour in the code path that guarantees WCAG contrast, which is
+ * exactly the failure `.claude/rules/money.md` rule 2 is about. Moving off hex
+ * means rewriting the colour pipeline and its tests, not editing this file.
+ */
+
+/**
+ * biome-ignore-all lint/nursery/noUnusedClasses: The rule cannot see a class name
+ * that is assembled at runtime, and this UI assembles them -- `className={`mark
+ * mark--${mark}`}` in StatusMark.tsx builds one per state. Every name it reports
+ * here is reachable that way, so acting on this rule would delete live styles.
+ */
+
+/**
+ * biome-ignore-all lint/nursery/useBaseline: Three progressive enhancements --
+ * `scrollbar-color`, `::selection` and `user-select`. Each degrades to the
+ * browser default where it is unsupported; none of them carries meaning that the
+ * form depends on, and the form's own redundancy rules mean no state is told by
+ * one of these alone.
+ */
+
+/**
+ * biome-ignore-all lint/style/noExcessiveLinesPerFile: This is one document, not
+ * a module that grew. The board, the leaf and the rail are defined against each
+ * other -- the comments here argue contrast ratios across sections -- and cutting
+ * it at 300 lines would split a single argument across files without making any
+ * part of it easier to read.
+ */
+
 /* -- faces ------------------------------------------------------------------
  *
  * Self-hosted, not from a font CDN. This origin holds the session cookie that
@@ -496,7 +530,12 @@
     border: none;
     border-left: var(--hair) solid var(--rule-strong);
     border-radius: 0 var(--r-leaf) var(--r-leaf) 0;
-    background: var(--tab-hue);
+    /* No `background` here on purpose. Every tab gets one from somewhere more
+       specific: an open division takes its hue as an inline style from
+       `TabRail.tsx`, because the hue is data, and a face-down one takes the
+       hatch from `[aria-disabled="true"]` below. A `var(--tab-hue)` sat here
+       until the linter pointed out that nothing ever declares `--tab-hue`, so
+       the declaration had always resolved to nothing. */
     color: #fff;
     font-family: var(--face-display);
     font-size: var(--t-micro);
@@ -1183,6 +1222,30 @@
     box-shadow: var(--ply-shadow);
     transform-origin: top left;
     animation: hinge-down var(--hinge) both;
+
+    /*
+     * Secondary ink on a hinged leaf is mixed FROM the ground, never inherited
+     * from the page.
+     *
+     * The solver guarantees the primary ink against the solved field and nothing
+     * else, and the page's secondary grey is calibrated for bone. On the chrome
+     * board it measured 4.35:1 -- under the 4.5:1 floor, on the hint text that
+     * explains what a Drive folder is. Mixing the page ink into the actual ground
+     * keeps the hierarchy visible and puts every tone back above the floor on
+     * every hue in the wheel.
+     *
+     * These two lived in a second `.hinge` block further down until that turned
+     * out to be the only duplicate selector in the sheet. Same declarations, same
+     * order, one block.
+     */
+    --ink-2: color-mix(in srgb, var(--ink) 78%, var(--leaf-ground));
+    /* 70%, not 62%. At 62% the faintest tone measured 4.04:1 against the solved
+     sienna ground -- below the floor. Nothing renders `--ink-3` inside a hinge
+     today, so this was a loaded gun rather than a live defect: the next person
+     to put a MISSING dash or a hint on a hinged leaf would have shipped
+     sub-floor text with nothing to warn them. 70% clears 5.00:1 on the worst
+     hue in the wheel. */
+    --ink-3: color-mix(in srgb, var(--ink) 70%, var(--leaf-ground));
   }
 
   /*
@@ -1207,28 +1270,6 @@
   .hinge > * {
     position: relative;
     z-index: 1;
-  }
-
-  /*
- * Secondary ink on a hinged leaf is mixed FROM the ground, never inherited from
- * the page.
- *
- * The solver guarantees the primary ink against the solved field and nothing
- * else, and the page's secondary grey is calibrated for bone. On the chrome
- * board it measured 4.35:1 -- under the 4.5:1 floor, on the hint text that
- * explains what a Drive folder is. Mixing the page ink into the actual ground
- * keeps the hierarchy visible and puts every tone back above the floor on every
- * hue in the wheel.
- */
-  .hinge {
-    --ink-2: color-mix(in srgb, var(--ink) 78%, var(--leaf-ground));
-    /* 70%, not 62%. At 62% the faintest tone measured 4.04:1 against the solved
-     sienna ground -- below the floor. Nothing renders `--ink-3` inside a hinge
-     today, so this was a loaded gun rather than a live defect: the next person
-     to put a MISSING dash or a hint on a hinged leaf would have shipped
-     sub-floor text with nothing to warn them. 70% clears 5.00:1 on the worst
-     hue in the wheel. */
-    --ink-3: color-mix(in srgb, var(--ink) 70%, var(--leaf-ground));
   }
 
   /* A disabled control on a saturated ground. The page's pale grey fill reads as a
