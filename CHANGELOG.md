@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/muitneliss/undercroft/compare/v1.0.0...v1.1.0) (2026-09-17)
+
+
+### Features
+
+* **ui:** adopt the impeccable design on the tRPC + Zustand architecture ([cbb59dc](https://github.com/muitneliss/undercroft/commit/cbb59dcd09c13624b0ad48ed084e34916c76f855))
+* **ui:** adopt the impeccable design on the tRPC + Zustand architecture ([73cf759](https://github.com/muitneliss/undercroft/commit/73cf759ce5131a13b214e49f46966f57bd10da1f))
+
+
+### Bug Fixes
+
+* stop prettier failing on release-please's CHANGELOG ([685e980](https://github.com/muitneliss/undercroft/commit/685e980f87eda1eb74dd5b6068894350092bf75c))
+* stop prettier from failing on release-please's CHANGELOG ([68268a6](https://github.com/muitneliss/undercroft/commit/68268a624962dd9094c540bcb0d0b8293a0408f0))
+
 ## [1.0.0](https://github.com/muitneliss/undercroft/compare/v0.2.0...v1.0.0) (2026-09-17)
 
 
