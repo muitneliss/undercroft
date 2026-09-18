@@ -129,3 +129,74 @@ describe("a user-authored dbt model cannot read a credential", () => {
     });
   });
 });
+
+describe("the worker can seal a credential, and cannot choose what it reads", () => {
+  // The worker is the only process holding the master key, so it is the only role that may
+  // create a connection and store a sealed credential. It is NOT the role that decides what
+  // a customer shared -- that is an admin's decision in the control plane. The pair below
+  // is that boundary from both sides.
+  beforeEach(async () => {
+    await db.exec("INSERT INTO ops.tenant (id, display_name) VALUES ('CASE-0042', 'Acme')");
+  });
+
+  test("the worker can create a connection and store a sealed credential", async () => {
+    // The quiet side. Every statement here is one `storeCredential` actually runs; before
+    // 070 the worker held only SELECT on ops.connection and could not have run any of them.
+    await db.asRole("undercroft_worker", async (tx) => {
+      await tx.query(
+        `INSERT INTO ops.connection (tenant_id, source, status) VALUES ($1, $2, 'connected')
+         ON CONFLICT (tenant_id, source) DO UPDATE SET status = EXCLUDED.status`,
+        ["CASE-0042", "gmail"],
+      );
+      await tx.query(
+        `INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version)
+         VALUES ($1, $2, $3, 1)`,
+        ["CASE-0042", "gmail", Buffer.from("sealed")],
+      );
+      await tx.query("UPDATE ops.connection SET status = 'expired' WHERE tenant_id = $1", [
+        "CASE-0042",
+      ]);
+    });
+
+    const { rows } = await db.query<{ status: string }>(
+      "SELECT status FROM ops.connection WHERE tenant_id = $1",
+      ["CASE-0042"],
+    );
+    expect(rows[0]?.status).toBe("expired");
+  });
+
+  test("the worker can read a chosen scope but cannot change one", async () => {
+    await db.query("INSERT INTO ops.connection (tenant_id, source) VALUES ($1, $2)", [
+      "CASE-0042",
+      "gmail",
+    ]);
+    await db.query(
+      "INSERT INTO app.connection_detail (tenant_id, source, selection) VALUES ($1, $2, $3::jsonb)",
+      ["CASE-0042", "gmail", '{"labels":[]}'],
+    );
+
+    await db.asRole("undercroft_worker", async (tx) => {
+      const { rows } = await tx.query<{ selection: unknown }>(
+        "SELECT selection FROM app.connection_detail WHERE tenant_id = $1",
+        ["CASE-0042"],
+      );
+      expect(rows).toHaveLength(1);
+
+      // The firing side: widening its own grant is exactly what the worker must not do.
+      await expectDenied(() =>
+        tx.query("UPDATE app.connection_detail SET selection = '{}'::jsonb WHERE tenant_id = $1", [
+          "CASE-0042",
+        ]),
+      );
+    });
+  });
+
+  test("BI cannot read a mailbox address or an in-flight consent", async () => {
+    // app is revoked from BI wholesale, so both new tables are unreachable rather than
+    // merely ungranted -- the same argument that keeps a label name off a dashboard.
+    await db.asRole("undercroft_bi", async (tx) => {
+      await expectDenied(() => tx.query("SELECT * FROM app.connection_detail"));
+      await expectDenied(() => tx.query("SELECT * FROM app.oauth_handshake"));
+    });
+  });
+});
