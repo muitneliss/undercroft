@@ -1,5 +1,7 @@
 /** Mirrors vcdo/api/models.py. Money is a string here for the reason given there. */
 
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import type { Money } from "@/lib/money.ts";
 
 export type Source = "hubspot" | "xero" | "gmail" | "drive";
