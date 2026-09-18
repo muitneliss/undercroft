@@ -28,6 +28,14 @@
  * currently hinged open above the board. Depth means ply and nothing else, so a
  * shadow anywhere else would be a second, lying depth system.
  *
+ * FRAMES ARE SIZE, and nothing eases. A page of printed leaves is not eased into
+ * place, it is moved, so every duration in this sheet is `steps(n, end)` and
+ * there is no cubic-bezier anywhere in it. The frame count is not decoration
+ * either: two frames is a part moving, three is a loose slip laid onto the page,
+ * four is a whole leaf turning about its spine. It is the same trick as ply --
+ * the reader learns the scale once and then knows the size of anything they see
+ * move. ADR 0013.
+ *
  * THE READING FIELD IS SOLVED, NOT GUESSED. Milk acetate over a saturated board
  * is only readable if the leaf's alpha suits that board's hue, and these hues run
  * from chrome yellow to ultramarine. `@/lib/acetate` binary-searches the
@@ -56,9 +64,13 @@
  */
 
 /**
- * biome-ignore-all lint/nursery/useBaseline: Three progressive enhancements --
- * `scrollbar-color`, `::selection` and `user-select`. Each degrades to the browser
- * default where it is unsupported, and the form tells no state by one of these alone.
+ * biome-ignore-all lint/nursery/useBaseline: Four progressive enhancements --
+ * `scrollbar-color`, `::selection`, `user-select` and `overflow-x: clip`. Each degrades
+ * to the browser default where it is unsupported, and the form tells no state by one of
+ * these alone. The clip is the only one worth a sentence: where it is not supported the
+ * axis falls back to `visible`, so a leaf mid-turn can briefly overhang the binder --
+ * a 190ms cosmetic overflow, not a broken layout, and the alternative (`hidden`) fails
+ * in the worse direction by moving the document's scroll inside `.book`.
  */
 
 /**
@@ -309,9 +321,29 @@
     --r-leaf: 3px;
     --r-plate: 2px;
 
-    /* The only motion in the system: a hinge at the punched edge, two hard
-     frames, no easing curve anywhere. A page of printed leaves does not ease. */
+    /*
+     * Motion, and there is no easing curve anywhere in this sheet.
+     *
+     * A page of printed leaves does not ease. It is MOVED -- by a hand or by a
+     * press -- and it arrives in the discrete frames that movement has. So every
+     * duration below is `steps(n, end)` and none of them is a cubic-bezier.
+     *
+     * What varies between them is HOW MANY FRAMES, and that is not a tuning
+     * knob. Frames are the size of the thing that moved, exactly as ply is rank:
+     * two frames is a part, three is a loose slip laid onto the page, four is a
+     * whole leaf turning about its spine. Reading a frame count off a transition
+     * tells you what kind of object you just watched move, which is why a part
+     * may not borrow the leaf's four frames to feel more important.
+     *
+     * `--pass` is the odd one and is deliberately not a movement at all: it is
+     * ink going down in passes of the press, opacity only, nothing travelling.
+     * That is why it is the single token the reduced-motion block below leaves
+     * alone -- there is nothing in it to reduce. ADR 0013 has the argument.
+     */
     --hinge: 90ms steps(2, end);
+    --tip: 150ms steps(3, end);
+    --turn: 190ms steps(4, end);
+    --pass: 120ms steps(2, end);
 
     /* The one shadow the system allows: a leaf standing off the board it is
      hinged above. Offset plus soft blur, so it reads as height rather than as a
@@ -327,9 +359,21 @@
     --tab-punch-x: 1.05rem;
   }
 
+  /*
+   * Reduced motion is fewer and gentler, not off.
+   *
+   * The three tokens that MOVE something collapse to a single frame, and the
+   * keyframes that travel are swapped or switched off beside the rules that set
+   * them. `--pass` is untouched on purpose: it is opacity, so a row that inked
+   * in still says "I am new" to a reader who asked for no movement -- which is
+   * the fact that mattered. Taking that away as well would be reading the
+   * preference as "tell me less".
+   */
   @media (prefers-reduced-motion: reduce) {
     :root {
       --hinge: 1ms steps(1, end);
+      --tip: 1ms steps(1, end);
+      --turn: 1ms steps(1, end);
     }
   }
 
@@ -458,6 +502,14 @@
     grid-template-areas: "rail" "leaf";
     grid-template-rows: auto minmax(0, 1fr);
     background: var(--board);
+    /* The binder's edge is the binder's edge. A leaf mid-turn is tipped toward
+     the reader and so projects a few per cent wider than the page it lands on;
+     without this, a 190ms turn hands the window a horizontal scrollbar and
+     takes it back again, which reads as the layout breaking rather than as a
+     page moving. `clip` rather than `hidden` deliberately: `hidden` on one axis
+     computes the other to `auto` and would move the whole document's scroll
+     inside this element. */
+    overflow-x: clip;
   }
 
   /* The leaf: a sheet of milk acetate lying on the section board, punched twice at
@@ -485,6 +537,46 @@
     display: flex;
     flex-direction: column;
     row-gap: var(--s-6);
+
+    /*
+     * The page turn. This is the one authored moment in the system.
+     *
+     * The entire navigation of this application is a tab strip on a ring
+     * binder, and the single physical act that defines that object -- a leaf
+     * swinging about its punched edge and coming down on the next section's
+     * board -- was the one thing the interface never did. Opening a division
+     * replaced the page instantly, which is a thing a screen does and not a
+     * thing a book does.
+     *
+     * Four frames, because this is a whole leaf and frames are size. About
+     * `left center`, because that is where the punches are: the spine is the
+     * hinge, and rotating about anything else would be a card flipping rather
+     * than a page turning. `perspective()` lives inside the transform rather
+     * than on `.book` so the depth belongs to the leaf that is moving and not
+     * to the binder holding it still.
+     *
+     * It fires on mount, and `Book.tsx` keys this element to which book is open
+     * at which division -- so it turns when the section changes and when the
+     * customer changes, and stays put for a hinged panel opening inside the
+     * section it already belongs to. Same leaf, no turn.
+     */
+    transform-origin: left center;
+    animation: leaf-turn var(--turn) both;
+  }
+
+  @keyframes leaf-turn {
+    from {
+      transform: perspective(1600px) rotateY(-5deg);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .leaf {
+      animation: none;
+    }
   }
 
   /* Block behaviour, restored. The rest of this layout was written against a block
@@ -629,6 +721,26 @@
     border-radius: 50%;
     background: var(--page);
     box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+    /* A hole is not a state a tab fades into; it is punched, and punching is one
+     stroke. Two frames because the hole is a part of the tab, not a leaf. The
+     pseudo-element only exists while this selector matches, so it is created --
+     and the animation runs -- at the moment the section becomes the open one. */
+    animation: punch-through var(--hinge) both;
+  }
+
+  @keyframes punch-through {
+    from {
+      transform: scale(0.15);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rail__tab[aria-current="page"]::after {
+      animation: none;
+    }
   }
 
   /* Disabled is face-down: the leaf turned over, showing unprinted board back.
@@ -920,7 +1032,8 @@
     cursor: pointer;
     transition:
       background var(--hinge),
-      color var(--hinge);
+      color var(--hinge),
+      transform var(--hinge);
   }
 
   .plate:hover:not(:disabled) {
@@ -928,9 +1041,14 @@
     color: var(--leaf);
   }
 
+  /* A die-cut plate that is struck goes DOWN. One pixel, which is the whole
+   travel a printed control has; anything more would be a screen button
+   pretending to be pressed rather than a plate that was. The colour change
+   alone said "you are on it", never "it took the blow". */
   .plate:active:not(:disabled) {
     background: var(--ink-2);
     color: var(--leaf);
+    transform: translateY(1px);
   }
 
   .plate:disabled {
@@ -1121,6 +1239,34 @@
     border-top: var(--hair) solid var(--rule-strong);
   }
 
+  /*
+   * A row that inks in is a row that was not there before.
+   *
+   * That is the whole meaning, and it is why there is NO STAGGER here. A
+   * staggered list is a piece of choreography about the list arriving; React
+   * reconciles these rows by key, so an existing row does not remount and does
+   * not re-run this, and the only thing that inks is the one that is actually
+   * new. Withdraw an invitation and the remaining rows sit still; send one and
+   * exactly one line is laid down. Stagger would have spent that signal on
+   * decoration -- every row moving on every fetch, saying nothing.
+   *
+   * Two passes of the press, opacity only. Nothing travels, which is why
+   * `--pass` is the token reduced motion leaves alone.
+   */
+  .grant,
+  .table tbody tr {
+    animation: ink-set var(--pass) both;
+  }
+
+  @keyframes ink-set {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   .grant {
     position: relative;
     border-bottom: var(--hair) solid var(--rule);
@@ -1263,6 +1409,54 @@
     gap: var(--s-3);
     align-items: flex-start;
     border-radius: 1px;
+
+    /*
+     * The slip is TIPPED IN, which is the verb a publisher actually uses.
+     *
+     * A correction slip is a loose leaf laid into a bound book after the fact,
+     * and it never goes in perfectly square. Three frames, because a slip is
+     * bigger than a part and smaller than a leaf, and it lands flat: the
+     * crookedness belongs to the arrival, not to the finished page.
+     *
+     * This matters beyond the world. A slip that was on the page when it opened
+     * and a slip that arrived while you were reading are different facts, and
+     * the interface said them identically -- `role="alert"` told a screen reader
+     * and nothing told anyone else. Now the ink laying down IS the announcement.
+     */
+    animation: slip-tip var(--tip) both;
+  }
+
+  /*
+   * A status note is the quiet half of the same event: something happened and
+   * the page is reporting it. It gets the slip's arrival because it IS one --
+   * "the invitation went out", "your link expired" -- and the alternative is a
+   * sentence that was not there a moment ago appearing with no account of
+   * itself. The selector is the role rather than a class on purpose: what earns
+   * the motion is having been announced, and anything the app announces later
+   * gets it without anyone remembering to.
+   */
+  .note[role="status"] {
+    animation: slip-tip var(--tip) both;
+  }
+
+  @keyframes slip-tip {
+    from {
+      opacity: 0;
+      transform: translateY(-3px) rotate(-0.4deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* The travel goes; the ink stays. A slip still lays itself down in two passes,
+   it just does not arrive from above or land crooked on the way. */
+  @media (prefers-reduced-motion: reduce) {
+    .errata,
+    .note[role="status"] {
+      animation: ink-set var(--pass) both;
+    }
   }
 
   .errata__mark {
@@ -1512,6 +1706,10 @@
     padding: var(--s-3) var(--s-3) var(--s-3) 0;
     border-bottom: var(--hair) solid var(--rule);
     vertical-align: baseline;
+    /* The row wash arrived as a hard cut while every other ground in the system
+     changed in the hinge's two frames. Same token, so the schedule answers the
+     cursor the way a plate does. */
+    transition: background var(--hinge);
   }
 
   .table tbody tr:hover td {
@@ -1623,6 +1821,35 @@
     border-radius: var(--r-leaf);
     padding: var(--s-7) var(--s-7) var(--s-6);
     box-shadow: var(--ply-shadow);
+    /* The book opens. Same turn as every division after it, about the same
+     binding edge, so the first thing anyone sees teaches the gesture the rest of
+     the application is navigated by. */
+    transform-origin: left center;
+    animation: leaf-turn var(--turn) both;
+  }
+
+  /*
+   * Asking for the code is a new leaf, not an edited one.
+   *
+   * The address form and the code form occupy the same place on the title page,
+   * and the step between them is the only navigation this screen has. It
+   * changed in place, so the one moment a reader needs to notice -- we have
+   * sent you something, now look at your mail -- was the moment the page was
+   * most completely silent. `SignIn.tsx` keys the form to the step so the swap
+   * is a real remount and this runs.
+   */
+  .titlepage__leaf form {
+    animation: slip-tip var(--tip) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .titlepage__leaf {
+      animation: none;
+    }
+
+    .titlepage__leaf form {
+      animation: ink-set var(--pass) both;
+    }
   }
 
   /*
