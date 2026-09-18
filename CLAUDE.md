@@ -98,3 +98,10 @@ ADR 0008.
 - Lint rules that fight the codebase get disabled **with a written reason**, not worked
   around file by file.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).
+
+## Wiki / Context
+
+This project has an LLM-maintained wiki under `wiki/`. You MUST NOT hand-edit
+wiki docs (`wiki/sources`, `wiki/notes`, `index.md`, `log.md`) — they are
+managed by the Ymir wiki CLI and a PreToolUse hook blocks direct edits. See
+`wiki/SCHEMA.md` for the rules and command reference.
