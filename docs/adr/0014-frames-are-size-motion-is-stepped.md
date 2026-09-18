@@ -1,4 +1,4 @@
-# 13. Frames are size, and nothing eases
+# 14. Frames are size, and nothing eases
 
 - Status: Accepted
 - Date: 2026-09-18

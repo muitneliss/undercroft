@@ -34,7 +34,7 @@
  * either: two frames is a part moving, three is a loose slip laid onto the page,
  * four is a whole leaf turning about its spine. It is the same trick as ply --
  * the reader learns the scale once and then knows the size of anything they see
- * move. ADR 0013.
+ * move. ADR 0014.
  *
  * THE READING FIELD IS SOLVED, NOT GUESSED. Milk acetate over a saturated board
  * is only readable if the leaf's alpha suits that board's hue, and these hues run
@@ -338,7 +338,7 @@
      * `--pass` is the odd one and is deliberately not a movement at all: it is
      * ink going down in passes of the press, opacity only, nothing travelling.
      * That is why it is the single token the reduced-motion block below leaves
-     * alone -- there is nothing in it to reduce. ADR 0013 has the argument.
+     * alone -- there is nothing in it to reduce. ADR 0014 has the argument.
      */
     --hinge: 90ms steps(2, end);
     --tip: 150ms steps(3, end);
