@@ -168,6 +168,18 @@ export default tseslint.config(
     },
   },
   {
+    // Claude Code hooks are Node scripts run by the agent harness, not app code: they read
+    // the tool call on stdin and answer on stdout, so `process` is their whole interface.
+    // They are linted rather than ignored -- a broken hook fails open, which for
+    // `block-wiki-edits.mjs` means hand-edits reach CLI-owned wiki pages silently. The
+    // globals are declared inline rather than pulling in `globals`, which would be a new
+    // dependency for two names.
+    files: [".claude/hooks/**/*.{js,mjs}"],
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly" },
+    },
+  },
+  {
     // Tests may import from anywhere and use non-null assertions on fixtures
     // they just created.
     files: ["**/*.test.{ts,tsx}", "**/test/**/*.{ts,tsx}", "**/scripts/**/*.ts"],
