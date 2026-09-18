@@ -1,11 +1,10 @@
-import { hashToken, randomToken } from "@undercroft/crypto";
-import { getConnection, listConnections } from "@undercroft/db";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { authedProcedure, publicProcedure, requireRole, router, tenantProcedure } from "../trpc.ts";
-
-/** How long an invitation stays open. Long enough to be acted on, short enough to expire. */
-const INVITATION_DAYS = 7;
+import * as connections from "../services/connections.ts";
+import * as models from "../services/models.ts";
+import * as people from "../services/people.ts";
+import * as tenants from "../services/tenants.ts";
+import { authedProcedure, publicProcedure, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 const Role = z.enum(["viewer", "member", "admin"]);
 
@@ -21,6 +20,12 @@ const Email = z.string().trim().toLowerCase().email().max(320); // the longest a
  * The control-plane API. The React app imports `AppRouter` as a type only, so the client
  * and server can never disagree about a shape -- the hand-mirrored DTO file the Python era
  * needed simply does not exist.
+ *
+ * Every procedure here is transport: validate the input, call one service, turn what comes
+ * back into a tRPC result or a `TRPCError`. No SQL, no repo -- the schema is not the API's
+ * business, and the enforcement is `layer-sql-in-repos` and `layer-handler-no-repo`.
+ * Which status code a refusal deserves IS this layer's business, and it is why the services
+ * return values rather than throwing: `null` here is a 404 only because this file says so.
  */
 export const appRouter = router({
   session: router({
@@ -42,35 +47,21 @@ export const appRouter = router({
   }),
 
   tenants: router({
-    list: authedProcedure.query(async ({ ctx }) => {
-      // Only tenants the caller is a member of. This query IS the visibility boundary for
-      // the list view.
-      const { rows } = await ctx.exec.query<{ id: string; display_name: string; role: string }>(
-        `SELECT t.id, t.display_name, m.role
-         FROM app.tenant_member m JOIN ops.tenant t ON t.id = m.tenant_id
-         WHERE m.user_id = $1 ORDER BY t.id`,
-        [ctx.user.userId],
-      );
-      return rows.map((r) => ({ id: r.id, displayName: r.display_name, role: r.role }));
-    }),
+    list: authedProcedure.query(({ ctx }) => tenants.listForCaller(ctx.exec, ctx.user.userId)),
 
     get: tenantProcedure.query(async ({ ctx, input }) => {
-      const { rows } = await ctx.exec.query<{ id: string; display_name: string }>(
-        "SELECT id, display_name FROM ops.tenant WHERE id = $1",
-        [input.tenantId],
-      );
-      const tenant = rows[0];
-      if (tenant === undefined) throw new TRPCError({ code: "NOT_FOUND" });
-      return { id: tenant.id, displayName: tenant.display_name, role: ctx.role };
+      const tenant = await tenants.get(ctx.exec, input.tenantId);
+      if (tenant === null) throw new TRPCError({ code: "NOT_FOUND" });
+      return { ...tenant, role: ctx.role };
     }),
   }),
 
   connections: router({
-    list: tenantProcedure.query(({ ctx, input }) => listConnections(ctx.exec, input.tenantId)),
+    list: tenantProcedure.query(({ ctx, input }) => connections.list(ctx.exec, input.tenantId)),
 
     get: tenantProcedure
       .input(z.object({ source: z.string().min(1) }))
-      .query(({ ctx, input }) => getConnection(ctx.exec, input.tenantId, input.source)),
+      .query(({ ctx, input }) => connections.get(ctx.exec, input.tenantId, input.source)),
 
     // Starting an OAuth flow mints tokens into a customer's account, so it is admin-only.
     // The redirect itself is a plain HTTP route (a provider cannot speak tRPC); this
@@ -85,127 +76,64 @@ export const appRouter = router({
   /**
    * Who may see a tenant, and how they were invited.
    *
-   * This is what closes the loop on invite-only sign-in: the gate admits an address that has
-   * a live `app.invitation` row, and these procedures are how such a row comes to exist
-   * without anyone opening a SQL client.
-   *
-   * No invitation token is ever returned or sent. `app.invitation.token_sha256` exists for a
-   * link-based flow that this one does not use: Google and a one-time code already prove the
-   * person controls the address, which is the only thing a token would have proved. A digest
-   * of a random value is stored so the column keeps its shape and nothing replayable exists.
+   * The decisions -- one live invitation per address, an audit entry, whether the invitee
+   * could be told -- are in `services/people.ts`. What is left here is the HTTP meaning of
+   * each outcome: an address that already has access is a CONFLICT, an invitation that was
+   * not open is a NOT_FOUND.
    */
   people: router({
-    members: tenantProcedure.query(async ({ ctx, input }) => {
-      const { rows } = await ctx.exec.query<{ user_id: string; email: string; role: string }>(
-        `SELECT m.user_id, u.email, m.role
-         FROM app.tenant_member m JOIN app.app_user u ON u.id = m.user_id
-         WHERE m.tenant_id = $1 ORDER BY u.email`,
-        [input.tenantId],
-      );
-      return rows.map((r) => ({ userId: r.user_id, email: r.email, role: r.role }));
-    }),
+    members: tenantProcedure.query(({ ctx, input }) => people.members(ctx.exec, input.tenantId)),
 
-    invitations: tenantProcedure.query(async ({ ctx, input }) => {
-      // `status` is derived in SQL rather than from two nullable columns in the client, so
-      // "expired" cannot disagree with the clock the gate reads.
-      const { rows } = await ctx.exec.query<{
-        id: string;
-        email: string;
-        role: string;
-        status: string;
-        expires_at: string;
-      }>(
-        `SELECT id, email, role, expires_at,
-                CASE WHEN accepted_at IS NOT NULL THEN 'accepted'
-                     WHEN expires_at <= now()     THEN 'expired'
-                     ELSE 'pending' END AS status
-         FROM app.invitation WHERE tenant_id = $1
-         ORDER BY created_at DESC`,
-        [input.tenantId],
-      );
-      return rows.map((r) => ({
-        id: r.id,
-        email: r.email,
-        role: r.role,
-        status: r.status,
-        expiresAt: r.expires_at,
-      }));
-    }),
+    invitations: tenantProcedure.query(({ ctx, input }) =>
+      people.invitationsFor(ctx.exec, input.tenantId),
+    ),
 
     /**
      * Invite an address.
      *
      * Admin-only: an invitation grants a role inside a customer's tenant, and the buttons
      * behind it mint OAuth tokens into that customer's accounting system.
-     *
-     * Re-inviting an address with a live invitation REFRESHES it rather than adding a second
-     * row. Two open invitations for one address would both be redeemed at first sign-in,
-     * which is a confusing way to grant one membership.
      */
     invite: requireRole("admin")
       .input(z.object({ email: Email, role: Role }))
       .mutation(async ({ ctx, input }) => {
-        const alreadyMember = await ctx.exec.query<{ role: string }>(
-          `SELECT m.role FROM app.tenant_member m JOIN app.app_user u ON u.id = m.user_id
-           WHERE m.tenant_id = $1 AND u.email = $2`,
-          [ctx.tenantId, input.email],
-        );
-        if (alreadyMember.rows[0] !== undefined) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `${input.email} already has access as ${alreadyMember.rows[0].role}.`,
-          });
+        const result = await people.invite(ctx.exec, {
+          tenantId: ctx.tenantId,
+          email: input.email,
+          role: input.role,
+          actor: ctx.user.email,
+          notify: ctx.notifyInvitation,
+        });
+
+        if (!result.ok) {
+          if (result.reason === "already-member") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `${input.email} already has access as ${result.role}.`,
+            });
+          }
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
         }
-
-        const { rows } = await ctx.exec.query<{ id: string }>(
-          `INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
-           VALUES ($1, $2, $3, $4, now() + ($5 || ' days')::interval)
-           RETURNING id`,
-          [
-            ctx.tenantId,
-            input.email,
-            input.role,
-            hashToken(randomToken()),
-            String(INVITATION_DAYS),
-          ],
-        );
-        const id = rows[0]?.id;
-        if (id === undefined) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-        // Supersede any older open invitation for the same address, so exactly one is live.
-        await ctx.exec.query(
-          `DELETE FROM app.invitation
-           WHERE tenant_id = $1 AND email = $2 AND accepted_at IS NULL AND id <> $3`,
-          [ctx.tenantId, input.email, id],
-        );
-
-        await ctx.exec.query(
-          `INSERT INTO ops.audit_log (tenant_id, actor, action, detail)
-           VALUES ($1, $2, 'people.invite', $3)`,
-          [ctx.tenantId, ctx.user.email, JSON.stringify({ email: input.email, role: input.role })],
-        );
 
         // Whether the invitee was told is reported, never assumed: with no mail configured
         // the invitation is still valid and the admin has to pass the address on by hand.
-        const notified = await ctx.notifyInvitation(input.email, ctx.tenantId);
-        return { id, email: input.email, role: input.role, notified };
+        return {
+          id: result.id,
+          email: input.email,
+          role: input.role,
+          notified: result.notified,
+        };
       }),
 
     /** Withdraw an invitation that has not been accepted. */
     revokeInvitation: requireRole("admin")
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
-        // Scoped by tenant_id as well as id, so an admin of one tenant cannot revoke
-        // another's invitation by guessing a uuid. `accepted_at IS NULL` because a redeemed
-        // invitation is history -- removing access is removing the membership, not the
-        // invitation, and conflating them would look like it worked and change nothing.
-        const { rows } = await ctx.exec.query<{ id: string }>(
-          `DELETE FROM app.invitation
-           WHERE id = $1 AND tenant_id = $2 AND accepted_at IS NULL
-           RETURNING id`,
-          [input.id, ctx.tenantId],
-        );
-        if (rows[0] === undefined) {
+        const revoked = await people.revokeInvitation(ctx.exec, {
+          id: input.id,
+          tenantId: ctx.tenantId,
+        });
+        if (!revoked) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "No open invitation with that id.",
@@ -220,12 +148,9 @@ export const appRouter = router({
     // strings, never numbers -- the amount rule, held at the API boundary.
     preview: tenantProcedure
       .input(z.object({ table: z.string().regex(/^[a-z][a-z0-9_]*$/) }))
-      .query(async ({ ctx, input }) => {
-        const { rows } = await ctx.exec.query<Record<string, unknown>>(
-          `SELECT * FROM analytics.${input.table} LIMIT 50`,
-        );
-        return { rows };
-      }),
+      .query(async ({ ctx, input }) => ({
+        rows: await models.preview(ctx.exec, input.table),
+      })),
   }),
 
   runs: router({

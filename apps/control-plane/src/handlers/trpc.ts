@@ -17,17 +17,22 @@
  *   session revoked a moment ago cannot be used by a request that read the row just before.
  *   Better Auth performs that read (`auth.api.getSession`) since it owns the session table;
  *   what it must never be allowed to do is answer from `session.cookieCache`, which would
- *   make this property quietly untrue. `auth/auth.ts` records that.
+ *   make this property quietly untrue. `handlers/auth.ts` records that.
  *
  * Authentication and authorization are two identities here, joined by email address:
  * Better Auth's `app.auth_user` proves who the caller is, and `app.app_user` -- which
  * `app.tenant_member` keys -- is what a role is resolved against. `Context.user.userId` is
- * always the `app_user` uuid, never Better Auth's id. `auth/invite.ts` holds that seam.
+ * always the `app_user` uuid, never Better Auth's id. `services/invite.ts` holds that seam.
+ *
+ * What is NOT here is the query. A role is resolved through `services/authz.ts`, which
+ * answers with a role or `null`; turning that `null` into NOT_FOUND is the decision argued
+ * above, and holding it in one place is why every tenant-scoped procedure gets it right.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { outranks, type Role, roleFor } from "../services/authz.ts";
 
 export interface SessionUser {
   readonly userId: string;
@@ -58,8 +63,7 @@ export interface Context {
   readonly notifyInvitation: (email: string, tenantId: string) => Promise<boolean>;
 }
 
-export type Role = "viewer" | "member" | "admin";
-export const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2 };
+export type { Role };
 
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
@@ -87,19 +91,15 @@ export const authedProcedure = t.procedure.use(({ ctx, next }) => {
 export const tenantProcedure = authedProcedure
   .input(z.object({ tenantId: z.string().min(1) }))
   .use(async ({ ctx, input, next }) => {
-    const { rows } = await ctx.exec.query<{ role: Role }>(
-      "SELECT role FROM app.tenant_member WHERE tenant_id = $1 AND user_id = $2",
-      [input.tenantId, ctx.user.userId],
-    );
-    const role = rows[0]?.role;
-    if (role === undefined) throw new TRPCError({ code: "NOT_FOUND" });
+    const role = await roleFor(ctx.exec, input.tenantId, ctx.user.userId);
+    if (role === null) throw new TRPCError({ code: "NOT_FOUND" });
     return next({ ctx: { ...ctx, role, tenantId: input.tenantId } });
   });
 
 /** Require at least `min` authority. FORBIDDEN here is correct: membership is established. */
 export function requireRole(min: Role) {
   return tenantProcedure.use(({ ctx, next }) => {
-    if (ROLE_RANK[ctx.role] < ROLE_RANK[min]) {
+    if (!outranks(ctx.role, min)) {
       throw new TRPCError({ code: "FORBIDDEN", message: `requires ${min}` });
     }
     return next();

@@ -1,7 +1,7 @@
 /**
  * The invite gate: who is allowed to have a session at all.
  *
- * Undercroft has two identities for a person and this function is the seam between them.
+ * Undercroft has two identities for a person and this module is the seam between them.
  * Better Auth owns the AUTHENTICATION identity (`app.auth_user`, "this address proved it
  * controls a Google account or a mailbox"). `app.app_user` is the AUTHORIZATION identity --
  * it is what `app.tenant_member` keys, and therefore what every tenant-scoped procedure
@@ -18,12 +18,17 @@
  * *just* proved by stronger means. Requiring both would add a step that demonstrates
  * nothing new.
  *
- * Kept as a plain exported function rather than logic inside a Better Auth callback so it
+ * Kept as plain exported functions rather than logic inside a Better Auth callback so they
  * can be driven directly in the offline gate: the library cannot boot against PGlite, but
- * this can, and this is the part that decides who gets in.
+ * these can, and this is the part that decides who gets in. The statements they run live in
+ * `../repos/{appUser,invitation,membership}.ts`; what stays here is the order they happen
+ * in, which is the part worth reading twice.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
+import { findIdByEmail, provisionByEmail } from "../repos/appUser.ts";
+import { isKnownOrInvited, listLiveForEmail, markAccepted } from "../repos/invitation.ts";
+import { addMember } from "../repos/membership.ts";
 
 export interface InvitedUser {
   /** `app.app_user.id` -- the uuid `app.tenant_member` keys, never Better Auth's user id. */
@@ -65,46 +70,25 @@ export async function resolveInvitedUser(
   const email = normalizeEmail(rawEmail);
   if (email === "") return null;
 
-  const existing = await exec.query<{ id: string }>(
-    "SELECT id FROM app.app_user WHERE email = $1",
-    [email],
-  );
-  let appUserId = existing.rows[0]?.id;
-
-  const invitations = await exec.query<{ id: string; tenant_id: string; role: string }>(
-    `SELECT id, tenant_id, role FROM app.invitation
-     WHERE email = $1 AND accepted_at IS NULL AND expires_at > now()`,
-    [email],
-  );
+  let appUserId = await findIdByEmail(exec, email);
+  const invitations = await listLiveForEmail(exec, email);
 
   // Neither known nor invited. An expired invitation lands here too, which is the point:
   // an invitation that has run out is not a weaker yes, it is a no.
-  if (appUserId === undefined && invitations.rows.length === 0) return null;
+  if (appUserId === null && invitations.length === 0) return null;
 
-  if (appUserId === undefined) {
-    const created = await exec.query<{ id: string }>(
-      `INSERT INTO app.app_user (email) VALUES ($1)
-       ON CONFLICT (email) DO UPDATE SET email = app.app_user.email
-       RETURNING id`,
-      [email],
-    );
-    appUserId = created.rows[0]?.id;
-    // The upsert above returns a row on both paths, so this cannot happen -- but an
-    // undefined id would otherwise be written into a membership as a silent NULL.
-    if (appUserId === undefined) {
+  if (appUserId === null) {
+    appUserId = await provisionByEmail(exec, email);
+    // The upsert returns a row on both paths, so this cannot happen -- but an absent id
+    // would otherwise be written into a membership as a silent NULL.
+    if (appUserId === null) {
       throw new Error(`could not provision an app_user for ${email}`);
     }
   }
 
-  for (const invitation of invitations.rows) {
-    await exec.query(
-      `INSERT INTO app.tenant_member (tenant_id, user_id, role) VALUES ($1, $2, $3)
-       ON CONFLICT (tenant_id, user_id) DO NOTHING`,
-      [invitation.tenant_id, appUserId, invitation.role],
-    );
-    await exec.query("UPDATE app.invitation SET accepted_at = now() WHERE id = $1", [
-      invitation.id,
-    ]);
+  for (const invitation of invitations) {
+    await addMember(exec, invitation.tenantId, appUserId, invitation.role);
+    await markAccepted(exec, invitation.id);
   }
 
   return { appUserId, email };
@@ -122,17 +106,7 @@ export async function resolveInvitedUser(
 export async function isAdmissible(exec: SqlExecutor, rawEmail: string): Promise<boolean> {
   const email = normalizeEmail(rawEmail);
   if (email === "") return false;
-
-  const { rows } = await exec.query<{ ok: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM app.app_user WHERE email = $1
-       UNION ALL
-       SELECT 1 FROM app.invitation
-       WHERE email = $1 AND accepted_at IS NULL AND expires_at > now()
-     ) AS ok`,
-    [email],
-  );
-  return rows[0]?.ok === true;
+  return await isKnownOrInvited(exec, email);
 }
 
 /**
@@ -149,10 +123,6 @@ export async function appUserForEmail(
   const email = normalizeEmail(rawEmail);
   if (email === "") return null;
 
-  const { rows } = await exec.query<{ id: string }>(
-    "SELECT id FROM app.app_user WHERE email = $1",
-    [email],
-  );
-  const id = rows[0]?.id;
-  return id === undefined ? null : { appUserId: id, email };
+  const id = await findIdByEmail(exec, email);
+  return id === null ? null : { appUserId: id, email };
 }
