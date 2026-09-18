@@ -17,12 +17,28 @@
  * `app.app_user`, `app.invitation` and `app.tenant_member` live in real Postgres via PGlite.
  */
 
+// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
+// biome-ignore-all lint/suspicious/noMisplacedAssertion: Assertions inside a helper that several tests call, which is how the repeated part of a check is named once.
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
+
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test as it } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createAuth } from "./auth.ts";
 import { createServer } from "./server.ts";
 
@@ -59,7 +75,10 @@ beforeEach(async () => {
   // -- which is also its only trusted origin -- and that is not known until the socket is
   // bound.
   let handler: (request: Request) => Response | Promise<Response> = () => new Response(null);
-  server = Bun.serve({ port: 0, fetch: (request) => handler(request) });
+  server = Bun.serve({
+    port: 0,
+    fetch: (request): Response | Promise<Response> => handler(request),
+  });
   origin = server.url.origin;
 
   const auth = createAuth({
@@ -121,7 +140,7 @@ async function requestCode(email: string): Promise<Response> {
 /** The six-digit code out of the one email we sent, or null if we sent none. */
 function codeFromEmail(): string | null {
   const text = sender.last?.text;
-  return text === undefined ? null : (/\d{6}/.exec(text)?.[0] ?? null);
+  return text === undefined ? null : (/\d{6}/u.exec(text)?.[0] ?? null);
 }
 
 /** Sign in and return the cookie header a browser would send back. */
@@ -136,7 +155,7 @@ async function sessionMe(cookie: string): Promise<Response> {
 }
 
 describe("a one-time code is only ever posted to an address that could use it", () => {
-  test("an uninvited address is told nothing and mailed nothing", async () => {
+  it("an uninvited address is told nothing and mailed nothing", async () => {
     const response = await requestCode("stranger@example.test");
 
     // Not an error: answering honestly would make this form an oracle for which addresses
@@ -145,7 +164,7 @@ describe("a one-time code is only ever posted to an address that could use it", 
     expect(sender.sent).toHaveLength(0);
   });
 
-  test("a refused address is recorded, so an operator can see who was turned away", async () => {
+  it("a refused address is recorded, so an operator can see who was turned away", async () => {
     // The person on the other side sees only "No access". Without this row nobody can tell a
     // typo from a broken gate -- which is what happened on the first production sign-in, and
     // cost a round of guessing that one query against this table answers.
@@ -157,7 +176,7 @@ describe("a one-time code is only ever posted to an address that could use it", 
     expect(rows).toEqual([{ actor: "stranger@example.test", action: "auth.refused" }]);
   });
 
-  test("an admitted address leaves no refusal behind", async () => {
+  it("an admitted address leaves no refusal behind", async () => {
     // The quiet side. A trail that recorded every attempt would bury the refusals it exists
     // to surface.
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
@@ -168,19 +187,19 @@ describe("a one-time code is only ever posted to an address that could use it", 
     expect(rows).toHaveLength(0);
   });
 
-  test("an invited address is mailed exactly one code", async () => {
+  it("an invited address is mailed exactly one code", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
 
     await requestCode("operator@example.test");
 
     expect(sender.sent).toHaveLength(1);
     expect(sender.last?.to).toBe("operator@example.test");
-    expect(codeFromEmail()).toMatch(/^\d{6}$/);
+    expect(codeFromEmail()).toMatch(/^\d{6}$/u);
   });
 });
 
 describe("signing in with a code lands on the platform's own user identity", () => {
-  test("the code becomes a session cookie that resolves to the app_user uuid", async () => {
+  it("the code becomes a session cookie that resolves to the app_user uuid", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
     await requestCode("operator@example.test");
 
@@ -203,7 +222,7 @@ describe("signing in with a code lands on the platform's own user identity", () 
     expect(body.result.data.email).toBe("operator@example.test");
   });
 
-  test("an uninvited address cannot sign in even with a code in hand", async () => {
+  it("an uninvited address cannot sign in even with a code in hand", async () => {
     // The firing case for the whole feature: a code obtained for an invited address, then
     // offered for an uninvited one. No user may be provisioned.
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
@@ -221,7 +240,7 @@ describe("signing in with a code lands on the platform's own user identity", () 
     expect(rows).toHaveLength(0);
   });
 
-  test("the invitation is redeemed into the membership it promised", async () => {
+  it("the invitation is redeemed into the membership it promised", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
     await requestCode("operator@example.test");
 
@@ -237,7 +256,7 @@ describe("signing in with a code lands on the platform's own user identity", () 
 });
 
 describe("a session can be withdrawn before it expires", () => {
-  test("signing out stops the very same cookie from working", async () => {
+  it("signing out stops the very same cookie from working", async () => {
     // The guarantee `trpc.ts` is built around, actually exercised rather than asserted in a
     // docstring. The session row is deleted, so the next request cannot be authenticated by
     // a row that no longer exists -- no cache, no grace window.
@@ -256,7 +275,7 @@ describe("a session can be withdrawn before it expires", () => {
 });
 
 describe("the session and the SPA do not fight over a route", () => {
-  test("an auth path is handled by the auth handler, never by the app shell", async () => {
+  it("an auth path is handled by the auth handler, never by the app shell", async () => {
     // The catch-all answers any GET with index.html, so an auth route registered after it
     // would turn Google's redirect into a 200 serving the shell -- a sign-in that silently
     // never completes. Asserting "not HTML" is the durable form of that.

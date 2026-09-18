@@ -17,6 +17,22 @@
  *   record always hashes to the same bytes even if the API reorders its keys.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/complexity/useMaxParams: Four functions take five arguments, each a distinct required input with no sensible grouping. Bundling them into an options object to satisfy a count would hide which are required.
+// biome-ignore-all lint/nursery/usePlaywrightValidDescribeCallback: Playwright-domain rule. There is no Playwright in this repo.
+// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
+// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
+// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useDefaultSwitchClause: Switches over a closed union where the compiler proves exhaustiveness. A default clause would make the next added member compile silently instead of failing here.
+// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/suspicious/useAwait: An async function with no await, because the port it implements returns a promise. The contract is the signature, not the body -- `.claude/rules/tests.md` and the ESLint config this replaced both called this out by name.
+
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+
+import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import {
   type Clock,
   ConnectorError,
@@ -29,7 +45,6 @@ import {
   systemClock,
   withRetry,
 } from "@undercroft/core";
-import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
 
 export interface RawRecordOut {
@@ -88,7 +103,7 @@ async function authHeaders(spec: ConnectorSpec, ctx: RunContext): Promise<Record
     if (ctx.token === undefined) {
       throw new ConnectorError(spec.id, "*", 0, "connector needs a token but none was supplied");
     }
-    headers["authorization"] = `Bearer ${await ctx.token()}`;
+    headers.authorization = `Bearer ${await ctx.token()}`;
   }
   if (spec.auth.kind === "oauth2" && spec.auth.accountHeader !== undefined) {
     // Deliberately left to the caller to fill via defaults.headers; the account id is the
@@ -99,7 +114,9 @@ async function authHeaders(spec: ConnectorSpec, ctx: RunContext): Promise<Record
 
 function buildUrl(baseUrl: string, path: string, query: Record<string, string>): string {
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(query)) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 }
 
@@ -119,26 +136,34 @@ function nextPageUrl(
     case "json-link": {
       const next = getStringPath(parsed, pagination.nextPath);
       // A next-link equal to the current URL is an infinite loop wearing a cursor.
-      if (next === null || next === currentUrl) return null;
+      if (next === null || next === currentUrl) {
+        return null;
+      }
       return next;
     }
     case "page-number": {
-      if (pagination.stopOn === "empty-page" && recordsThisPage === 0) return null;
+      if (pagination.stopOn === "empty-page" && recordsThisPage === 0) {
+        return null;
+      }
       const url = new URL(currentUrl);
       url.searchParams.set(pagination.param, String(pagination.startAt + pageIndex + 1));
       return url.toString();
     }
     case "offset": {
-      if (recordsThisPage === 0) return null;
+      if (recordsThisPage === 0) {
+        return null;
+      }
       const url = new URL(currentUrl);
       // parseInt, not Number(): an offset index, not an amount.
-      const prev = parseInt(url.searchParams.get(pagination.param) ?? "0", 10);
+      const prev = Number.parseInt(url.searchParams.get(pagination.param) ?? "0", 10);
       url.searchParams.set(pagination.param, String(prev + recordsThisPage));
       return url.toString();
     }
     case "cursor": {
       const cursor = getStringPath(parsed, pagination.cursorPath);
-      if (cursor === null) return null;
+      if (cursor === null) {
+        return null;
+      }
       const url = new URL(currentUrl);
       url.searchParams.set(pagination.param, cursor);
       return url.toString();
@@ -177,12 +202,12 @@ export async function* readEntity(
   const pacer = createPacer(
     {
       minIntervalMs: rateLimit.minIntervalMs,
-      ...(rateLimit.requestsPerMinute !== undefined
-        ? { requestsPerMinute: rateLimit.requestsPerMinute }
-        : {}),
-      ...(rateLimit.requestsPerDay !== undefined
-        ? { requestsPerDay: rateLimit.requestsPerDay }
-        : {}),
+      ...(rateLimit.requestsPerMinute === undefined
+        ? {}
+        : { requestsPerMinute: rateLimit.requestsPerMinute }),
+      ...(rateLimit.requestsPerDay === undefined
+        ? {}
+        : { requestsPerDay: rateLimit.requestsPerDay }),
     },
     clock,
   );
@@ -191,8 +216,8 @@ export async function* readEntity(
   let seen = 0;
 
   /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
-  const fetchJson = async (request: HttpRequest): Promise<unknown> =>
-    withRetry(
+  async function fetchJson(request: HttpRequest): Promise<unknown> {
+    return withRetry(
       async () => {
         await pacer.acquire();
         const response = await ctx.fetcher.send(request);
@@ -200,13 +225,14 @@ export async function* readEntity(
         return parseLossless(response.text);
       },
       policy,
-      { clock, ...(ctx.random !== undefined ? { random: ctx.random } : {}) },
+      { clock, ...(ctx.random === undefined ? {} : { random: ctx.random }) },
     ).catch((error: unknown) => {
       throw new ConnectorError(spec.id, entity.name, seen, describe(error), { cause: error });
     });
+  }
 
   /** Turn one decoded page into records, refusing any that cannot be keyed. */
-  const emit = function* (parsed: unknown): Generator<RawRecordOut> {
+  function* emit(parsed: unknown): Generator<RawRecordOut> {
     for (const record of extractRecords(entity, spec, parsed)) {
       const id = getStringPath(record, entity.idPath);
       if (id === null) {
@@ -229,7 +255,7 @@ export async function* readEntity(
       };
       seen += 1;
     }
-  };
+  }
 
   if (entity.request.kind === "batch-from") {
     // A relation read: ids harvested from another entity, POSTed in chunks. This exists
@@ -250,7 +276,9 @@ export async function* readEntity(
       });
       for (const record of emit(parsed)) {
         yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) return;
+        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
+          return;
+        }
       }
     }
   } else {
@@ -266,12 +294,16 @@ export async function* readEntity(
       const pageSize = extractRecords(entity, spec, parsed).length;
       for (const record of emit(parsed)) {
         yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) return;
+        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
+          return;
+        }
       }
 
       const next = nextPageUrl(entity, spec, parsed, pageIndex, pageSize, currentUrl);
       pageIndex += 1;
-      if (next === null) break;
+      if (next === null) {
+        break;
+      }
       url = next;
     }
   }

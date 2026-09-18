@@ -17,17 +17,29 @@
  * only thing that actually knows.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on the two single-instance forms in the app -- a sign-in panel and an invite form, neither of which can appear twice on a page. The id is what the <label> points at.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/nursery/useReactNamingConvention: Fires on props named for the domain rather than for React's conventions. The domain names are the ones the design documents use.
+// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on components that render a handful of rows. The re-render the rule is about matters under a memoised list of hundreds; these lists are bounded by how many connections a tenant has.
+// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
+// biome-ignore-all lint/style/noNestedTernary: Three chained conditions that map one value onto three outcomes. Written as nested if/else they occupy fifteen lines to say the same thing.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState } from "@/components/EmptyState";
-import { Errata } from "@/components/Errata";
-import { Skeleton } from "@/components/Skeleton";
-import { useUiStore } from "@/store";
-import { trpc } from "@/trpc";
-import { formatDate } from "@/lib/when";
+import { EmptyState } from "@/components/EmptyState.tsx";
+import { Errata } from "@/components/Errata.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
+import { formatDate } from "@/lib/when.ts";
+import { useUiStore } from "@/store.ts";
+import { trpc } from "@/trpc.ts";
 
-export function People({ tenantId }: { tenantId: string }) {
+export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const utils = trpc.useUtils();
@@ -38,25 +50,29 @@ export function People({ tenantId }: { tenantId: string }) {
   const members = trpc.people.members.useQuery({ tenantId });
   const invitations = trpc.people.invitations.useQuery({ tenantId });
 
-  const invalidate = async () => {
+  async function invalidate(): Promise<void> {
     await utils.people.invitations.invalidate({ tenantId });
     await utils.people.members.invalidate({ tenantId });
-  };
+  }
 
   const invite = trpc.people.invite.useMutation({
     onSuccess: async () => {
-      if (emailField.current !== null) emailField.current.value = "";
+      if (emailField.current !== null) {
+        emailField.current.value = "";
+      }
       await invalidate();
     },
   });
 
   const revoke = trpc.people.revokeInvitation.useMutation({ onSuccess: invalidate });
 
-  if (members.isPending || invitations.isPending) return <Skeleton rows={4} />;
+  if (members.isPending || invitations.isPending) {
+    return <Skeleton rows={4} />;
+  }
 
   if (members.isError || invitations.isError) {
     return (
-      <Errata heading={t("common.notLoaded")} live>
+      <Errata heading={t("common.notLoaded")} live={true}>
         {t("people.notLoaded", { tenantId })}
       </Errata>
     );
@@ -128,7 +144,7 @@ export function People({ tenantId }: { tenantId: string }) {
                         className="plate plate--small"
                         type="button"
                         disabled={revoke.isPending}
-                        onClick={() => {
+                        onClick={(): void => {
                           revoke.mutate({ tenantId, id: invitation.id });
                         }}
                       >
@@ -143,7 +159,7 @@ export function People({ tenantId }: { tenantId: string }) {
         )}
 
         {revoke.isError ? (
-          <Errata heading={t("people.notWithdrawn")} live>
+          <Errata heading={t("people.notWithdrawn")} live={true}>
             {revoke.error.message}
           </Errata>
         ) : null}
@@ -151,11 +167,13 @@ export function People({ tenantId }: { tenantId: string }) {
         {isAdmin ? (
           <form
             className="stack stack--tight"
-            onSubmit={(event) => {
+            onSubmit={(event): void => {
               event.preventDefault();
               const email = emailField.current?.value.trim() ?? "";
               const role = roleField.current?.value ?? "viewer";
-              if (email === "") return;
+              if (email === "") {
+                return;
+              }
               invite.mutate({
                 tenantId,
                 email,
@@ -173,7 +191,7 @@ export function People({ tenantId }: { tenantId: string }) {
                 name="email"
                 type="email"
                 autoComplete="off"
-                required
+                required={true}
                 placeholder={t("people.invitePlaceholder")}
                 ref={emailField}
                 disabled={invite.isPending}
@@ -205,7 +223,7 @@ export function People({ tenantId }: { tenantId: string }) {
             </div>
 
             {invite.isError ? (
-              <Errata heading={t("people.notInvited")} live>
+              <Errata heading={t("people.notInvited")} live={true}>
                 {/* The server's own words. It composes them in the language this browser
                     asked for -- `main.tsx` sends `accept-language` on every tRPC call --
                     so this renders a Vietnamese sentence for a Vietnamese reader without

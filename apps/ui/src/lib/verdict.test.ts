@@ -8,16 +8,21 @@
  * compare against" into either a pass or a failure. Both are claims nobody made.
  */
 
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
 
-import { translatorFor } from "@/i18n";
-import { presentVerdict, type Verdict } from "./verdict";
+import { describe, expect, test as it } from "bun:test";
+
+import { translatorFor } from "@/i18n/index.ts";
+import { presentVerdict, type Verdict } from "./verdict.ts";
 
 const en = translatorFor("en");
 const vi = translatorFor("vi");
 
 describe("presentVerdict", () => {
-  test("renders three genuinely different states", () => {
+  it("renders three genuinely different states", () => {
     const tones = (["ok", "mismatch", "unverified"] as const).map(
       (v) => presentVerdict(en, v).tone,
     );
@@ -25,24 +30,24 @@ describe("presentVerdict", () => {
     expect(new Set(tones).size).toBe(3);
   });
 
-  test("unverified is neither the pass nor the failure treatment", () => {
+  it("unverified is neither the pass nor the failure treatment", () => {
     const unverified = presentVerdict(en, "unverified");
 
     expect(unverified.tone).not.toBe(presentVerdict(en, "ok").tone);
     expect(unverified.tone).not.toBe(presentVerdict(en, "mismatch").tone);
   });
 
-  test("unverified says no evidence was found, not that a check is pending", () => {
+  it("unverified says no evidence was found, not that a check is pending", () => {
     // "Pending" or "Unknown" would imply it resolves itself later. It does not -- and the
     // Vietnamese wording has to keep that distinction, which is the half a translation is
     // most likely to lose. "Chưa kiểm chứng" is "not verified", not "đang chờ" ("pending").
     expect(presentVerdict(en, "unverified").label).toBe("Not verified");
-    expect(presentVerdict(en, "unverified").description).toMatch(/not a match/i);
+    expect(presentVerdict(en, "unverified").description).toMatch(/not a match/iu);
     expect(presentVerdict(vi, "unverified").label).toBe("Chưa kiểm chứng");
-    expect(presentVerdict(vi, "unverified").description).toMatch(/không có nghĩa là khớp/i);
+    expect(presentVerdict(vi, "unverified").description).toMatch(/không có nghĩa là khớp/iu);
   });
 
-  test("every state carries a word and an icon in both languages, never colour alone", () => {
+  it("every state carries a word and an icon in both languages, never colour alone", () => {
     for (const verdict of ["ok", "mismatch", "unverified"] as const) {
       for (const t of [en, vi]) {
         const presented = presentVerdict(t, verdict);
@@ -52,7 +57,7 @@ describe("presentVerdict", () => {
     }
   });
 
-  test("an unrecognised verdict throws rather than rendering as a pass", () => {
-    expect(() => presentVerdict(en, "probably fine" as Verdict)).toThrow(/unhandled verdict/);
+  it("an unrecognised verdict throws rather than rendering as a pass", () => {
+    expect(() => presentVerdict(en, "probably fine" as Verdict)).toThrow(/unhandled verdict/u);
   });
 });

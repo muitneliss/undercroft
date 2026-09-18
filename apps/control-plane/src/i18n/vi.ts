@@ -46,6 +46,13 @@ export const vi = {
     alreadyMember: "{{email}} đã có quyền truy cập với vai trò {{role}}.",
     noOpenInvitation: "Không có lời mời nào đang mở với id đó.",
     requiresRole: "Thao tác này cần vai trò {{role}}.",
+    /**
+     * Says what is missing without naming the variable that grants it. An operator reading
+     * this cannot fix it themselves -- somebody with access to the deployment's environment
+     * has to -- so the sentence points at a person rather than at a setting.
+     */
+    requiresSuperadmin: "Thao tác này cần quyền quản trị toàn hệ thống.",
+    tenantExists: "Mã tham chiếu {{tenantId}} đã được dùng cho một khách hàng khác.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     scopeNotUnderstood: "Không đọc được lựa chọn cho nguồn {{source}}.",

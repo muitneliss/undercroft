@@ -8,12 +8,20 @@
  * of those paths need. These tests are what keeps them wired.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import { seal } from "@undercroft/crypto";
 import { migrate, type SqlExecutor } from "@undercroft/db";
 import type { Credential } from "@undercroft/db/repos";
 import { readCredential } from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { resolveToken } from "./ingest.ts";
 
@@ -43,7 +51,7 @@ afterEach(async () => {
  * what is under test: that the refresh and the credential read share one transaction, and
  * that a throw rolls the write back.
  */
-const transactor = async <T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> => {
+async function transactor<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> {
   await db.exec("BEGIN");
   try {
     const result = await fn(db);
@@ -53,7 +61,7 @@ const transactor = async <T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> =>
     await db.exec("ROLLBACK");
     throw error;
   }
-};
+}
 
 async function storeCredential(credential: Credential): Promise<void> {
   const sealed = seal(JSON.stringify(credential), { env: ENV });
@@ -79,7 +87,7 @@ async function statusOf(): Promise<string | undefined> {
 }
 
 describe("resolveToken", () => {
-  test("a credential well short of expiry is returned as it stands", async () => {
+  it("a credential well short of expiry is returned as it stands", async () => {
     // The quiet side of the refresh guard: a resolver that always refreshed would spend a
     // refresh token on every run for no reason.
     await storeCredential({
@@ -101,7 +109,7 @@ describe("resolveToken", () => {
     expect(token).toBe("still-good");
   });
 
-  test("an expired credential with no refresher marks the connection expired and raises", async () => {
+  it("an expired credential with no refresher marks the connection expired and raises", async () => {
     // The firing side, and the regression this file exists to catch: `accessToken` writes
     // the status and THEN throws, so inside a transaction the rollback takes the status
     // with it. Re-applied outside, or the card reads "connected" forever while every run
@@ -109,12 +117,12 @@ describe("resolveToken", () => {
     await storeCredential({ accessToken: "stale", refreshToken: "r", expiresAt: LONG_EXPIRED });
 
     await expect(resolveToken({ exec: db, env: ENV, transactor }, INPUT)).rejects.toThrow(
-      /needs re-consent/,
+      /needs re-consent/u,
     );
     expect(await statusOf()).toBe("expired");
   });
 
-  test("an expired credential with a refresher is refreshed and written back", async () => {
+  it("an expired credential with a refresher is refreshed and written back", async () => {
     await storeCredential({ accessToken: "stale", refreshToken: "r0", expiresAt: LONG_EXPIRED });
 
     const token = await resolveToken(
@@ -142,7 +150,7 @@ describe("resolveToken", () => {
     expect(stored.accessToken).toBe("fresh-after-r0");
   });
 
-  test("a failed refresh rolls back and leaves the stored credential untouched", async () => {
+  it("a failed refresh rolls back and leaves the stored credential untouched", async () => {
     // Google's token endpoint being briefly down must cost nothing. A half-written
     // credential here costs the connection outright, and the customer has to re-consent.
     await storeCredential({ accessToken: "stale", refreshToken: "r0", expiresAt: LONG_EXPIRED });
@@ -157,14 +165,14 @@ describe("resolveToken", () => {
         },
         INPUT,
       ),
-    ).rejects.toThrow(/503/);
+    ).rejects.toThrow(/503/u);
 
     const stored = await readCredential(db, INPUT.tenantId, INPUT.source, { env: ENV });
     expect(stored.refreshToken).toBe("r0");
     expect(stored.accessToken).toBe("stale");
   });
 
-  test("a transient refresh failure does not mark the connection expired", async () => {
+  it("a transient refresh failure does not mark the connection expired", async () => {
     // The other side of the same judgement. Marking expired here would send a customer to
     // re-consent over a provider hiccup that fixes itself in a minute.
     await storeCredential({ accessToken: "stale", refreshToken: "r0", expiresAt: LONG_EXPIRED });
@@ -184,9 +192,9 @@ describe("resolveToken", () => {
     expect(await statusOf()).toBe("connected");
   });
 
-  test("a connection with no stored credential says so", async () => {
+  it("a connection with no stored credential says so", async () => {
     await expect(resolveToken({ exec: db, env: ENV, transactor }, INPUT)).rejects.toThrow(
-      /has not completed its OAuth flow/,
+      /has not completed its OAuth flow/u,
     );
   });
 });

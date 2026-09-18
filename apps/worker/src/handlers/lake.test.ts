@@ -1,8 +1,19 @@
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
+// biome-ignore-all lint/suspicious/useAwait: An async function with no await, because the port it implements returns a promise. The contract is the signature, not the body -- `.claude/rules/tests.md` and the ESLint config this replaced both called this out by name.
+
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { canonicalJson, createStampSource, TestClock } from "@undercroft/core";
-import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { landRecords } from "../services/land.ts";
 import { loadStreamToRaw } from "../services/loadToRaw.ts";
 import { createLakeApi } from "./lake.ts";
@@ -11,7 +22,10 @@ let backing: InMemoryObjectStore;
 let lake: LakeStore;
 let db: TestDatabase;
 
-function record(id: string, payload: object) {
+function record(
+  id: string,
+  payload: object,
+): { entity: string; sourceRecordId: string; sourceUpdatedAt: null; payloadText: string } {
   return {
     entity: "deals",
     sourceRecordId: id,
@@ -22,7 +36,10 @@ function record(id: string, payload: object) {
 
 // For payloads with non-integer numbers: canonicalJson refuses a JS float (correctly), so
 // the record's text is built from raw JSON where the number never becomes a JS number.
-function recordText(id: string, payloadText: string) {
+function recordText(
+  id: string,
+  payloadText: string,
+): { entity: string; sourceRecordId: string; sourceUpdatedAt: null; payloadText: string } {
   return { entity: "deals", sourceRecordId: id, sourceUpdatedAt: null, payloadText };
 }
 
@@ -42,7 +59,7 @@ afterEach(async () => {
 });
 
 describe("landing records into the lake", () => {
-  test("a first landing creates; re-landing the same records writes nothing", async () => {
+  it("a first landing creates; re-landing the same records writes nothing", async () => {
     const records = [record("1", { id: "1", n: 10n }), record("2", { id: "2", n: 20n })];
     const first = await landRecords(lake, {
       source: "hubspot",
@@ -67,9 +84,11 @@ describe("landing records into the lake", () => {
 });
 
 describe("the lake records API", () => {
-  const api = () => createLakeApi({ lake, exec: db, serviceToken: "svc-token" });
+  function api() {
+    return createLakeApi({ lake, exec: db, serviceToken: "svc-token" });
+  }
 
-  async function post(body: unknown, token = "svc-token") {
+  async function post(body: unknown, token = "svc-token"): Promise<Response> {
     return api().request("/v1/lake/records", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -77,7 +96,7 @@ describe("the lake records API", () => {
     });
   }
 
-  test("lands a valid batch and reports created", async () => {
+  it("lands a valid batch and reports created", async () => {
     const res = await post({
       source: "hubspot",
       tenantId: "CASE-1",
@@ -91,7 +110,7 @@ describe("the lake records API", () => {
     expect(json.created).toBe(1);
   });
 
-  test("an unauthenticated caller is refused before anything is written", async () => {
+  it("an unauthenticated caller is refused before anything is written", async () => {
     const res = await post(
       {
         source: "hubspot",
@@ -107,7 +126,7 @@ describe("the lake records API", () => {
     expect((await backing.list("_blobs/")).length).toBe(0);
   });
 
-  test("a malformed request is a 400 with the offending path", async () => {
+  it("a malformed request is a 400 with the offending path", async () => {
     const res = await post({ source: "hubspot" }); // missing tenantId, runId, records
     expect(res.status).toBe(400);
     const json = (await res.json()) as { code: string; details: string[] };
@@ -119,7 +138,7 @@ describe("the lake records API", () => {
 describe("loading the lake into raw.records", () => {
   const identity = { source: "hubspot", tenantId: "CASE-1", entity: "deals" };
 
-  test("first load inserts; a second load over an unchanged lake updates nothing", async () => {
+  it("first load inserts; a second load over an unchanged lake updates nothing", async () => {
     await landRecords(lake, {
       source: "hubspot",
       tenantId: "CASE-1",
@@ -136,7 +155,7 @@ describe("loading the lake into raw.records", () => {
     expect(second.changed).toBe(0);
   });
 
-  test("a changed payload is loaded as a change, keeping the newest", async () => {
+  it("a changed payload is loaded as a change, keeping the newest", async () => {
     await landRecords(lake, {
       source: "hubspot",
       tenantId: "CASE-1",
@@ -160,7 +179,7 @@ describe("loading the lake into raw.records", () => {
     expect(rows[0]?.stage).toBe("won");
   });
 
-  test("payload numbers are stored exactly, not through a float", async () => {
+  it("payload numbers are stored exactly, not through a float", async () => {
     await landRecords(lake, {
       source: "hubspot",
       tenantId: "CASE-1",

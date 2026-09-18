@@ -1,0 +1,44 @@
+// The UI may reference the control plane's router only as a TYPE.
+//
+// A value import bundles the server into the browser -- and with it `pg` and the secret-key
+// loader. `import type` is erased at compile time and costs nothing; `import { x }` pulls the
+// whole module graph in. This was an ESLint `no-restricted-imports` entry with
+// `allowTypeImports`, and it is a plugin because Biome's `noRestrictedImports` has
+// `importNames` and `allowImportNames` but no way to say "type position only".
+//
+// The path scope is INSIDE the pattern, via `$filename`, rather than on this plugin's entry
+// in `biome.jsonc`. Biome 2.5.14 accepts `{ "path": ..., "includes": [...] }` -- the schema
+// documents that form and the config deserialises without complaint -- but the plugin then
+// never runs, on any file. Verified by A/B against one fixture: the object form reports 0
+// diagnostics where the plain-string form reports 1. So the scope has to live somewhere that
+// actually executes. Re-test the object form on the next Biome upgrade; if it works, move the
+// scope back into the config where it reads better, and delete this paragraph.
+//
+// The scope matters: the server packages import each other by value legitimately, and without
+// it this rule would fire across the whole monorepo.
+//
+// Both spellings of a type import are allowed, because both are erased:
+//   import type { AppRouter } from "@undercroft/control-plane";
+//   import { type AppRouter } from "@undercroft/control-plane";
+// The second is excluded by the clause regex rather than the statement regex, since the
+// `type` keyword sits on the specifier, not on the statement.
+
+language js
+
+pattern server_value_import() {
+  `import $clause from $src` as $statement where {
+    $filename <: r".*/apps/ui/.*",
+    $src <: r".*@undercroft/control-plane.*",
+    // `import type ... from` -- the keyword is on the statement.
+    $statement <: not r"(?s)import\s+type\s[\s\S]*",
+    // `{ type A, type B }` -- every specifier carries its own `type` keyword. A MIXED
+    // clause (`{ type A, b }`) is deliberately still an error, because `b` is a value.
+    //
+    // Non-capturing group is required: GritQL reads a regex capture group as a variable
+    // binding and refuses the pattern ("matched 1 variables, but expected 0").
+    $clause <: not r"\{\s*type\s[^,}]*(?:,\s*type\s[^,}]*)*,?\s*\}",
+    register_diagnostic(span=$statement, message="Import the control-plane router as a type only; a value import bundles the server -- and with it `pg` and the secret-key loader -- into the browser. Use `import type`.", severity="error")
+  }
+}
+
+server_value_import()

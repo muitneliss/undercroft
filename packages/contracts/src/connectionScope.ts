@@ -12,6 +12,10 @@
  * BI has no USAGE on -- see `packages/db/sql/070_google_ingestion.sql`.
  */
 
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/style/noNestedTernary: Three chained conditions that map one value onto three outcomes. Written as nested if/else they occupy fifteen lines to say the same thing.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
 import { z } from "zod";
 
 const Chosen = z.object({
@@ -60,7 +64,9 @@ export function parseScope(source: string, selectionJson: string): ConnectionSco
   } catch {
     return null;
   }
-  if (typeof raw !== "object" || raw === null) return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
 
   // The source's own key must be PRESENT, not merely defaultable. Zod's `.default([])` would
   // otherwise turn `{}` into a valid empty selection -- which reads as "the whole mailbox",

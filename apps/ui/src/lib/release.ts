@@ -24,4 +24,6 @@
  * a narrower claim than the screen makes, so it is written down here rather than dressed
  * up on the page.
  */
+
+// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
 export const RELEASE: string = __UNDERCROFT_RELEASE__;

@@ -178,8 +178,53 @@ process deliberately starts with no way in rather than offering a button that fa
 ## 7. Bootstrap the first admin
 
 Invitations are issued from the **People** page, but nobody is signed in yet and there is no
-one to invite you. So one command, once. Use **your own real email address** — the one on the
-Google account you will click through with.
+one to invite you. Two ways out of that, and the first needs no shell.
+
+### The way that needs no shell: `UNDERCROFT_SUPERADMINS`
+
+Name yourself in the environment, with **your own real address** — the one on the Google
+account you will click through with:
+
+```sh
+UNDERCROFT_SUPERADMINS=you@yourdomain.com
+```
+
+Several are comma-separated, and naming more than one is the point: a single person on
+holiday should not be able to lock everybody out.
+
+```sh
+UNDERCROFT_SUPERADMINS=you@yourdomain.com,colleague@yourdomain.com
+```
+
+Restart the control plane — on the server, set it in Dokploy's environment and redeploy. The
+boot log counts them:
+
+```json
+{ "event": "superadmins_configured", "count": 2 }
+```
+
+If it says `superadmins_none`, the variable did not reach the process. If it says
+`superadmins_rejected`, it prints back the entries it would not read — almost always a
+semicolon or a space where a comma belongs. The addresses themselves are never logged.
+
+Then sign in (step 8). You land on an empty **Customers** page with an **Add a customer**
+form that only a superadmin sees; create `CASE-0001` there, then invite everyone else from
+**People** as normal.
+
+Three things worth knowing:
+
+- **The variable is the authority, not a seed.** Nothing in the database records who is a
+  superadmin. Remove an address and redeploy, and it is withdrawn at the next request; add
+  one and it is granted. That is also the recovery path if every tenant admin leaves.
+- **It grants authority, never identity.** You still prove you control the address, through
+  Google or a one-time code, exactly like everyone else.
+- **A superadmin administers every customer**, present and future. It is not the top of the
+  `viewer`/`member`/`admin` ladder, it is beside it. ADR 0013.
+
+### The way that needs no deploy: `bun run invite`
+
+Still the right tool for inviting somebody to **one** customer, and the one to use if you
+would rather nobody held platform authority. One command, once:
 
 ```sh
 UNDERCROFT_POSTGRES_DSN='postgres://undercroft:<password>@localhost:15432/undercroft' \

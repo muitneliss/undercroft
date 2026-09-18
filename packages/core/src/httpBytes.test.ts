@@ -1,4 +1,9 @@
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/noConditionalExpect: These assert inside a callback the code under test invokes -- a refresher, an onRetry hook -- which is how you check what a collaborator was handed without mocking it. `.claude/rules/tests.md` bans the mock alternative outright.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+
+import { describe, expect, test as it } from "bun:test";
 import { HttpError } from "./errors.ts";
 import { type ByteRequest, InMemoryByteFetcher, raiseForByteStatus } from "./httpBytes.ts";
 
@@ -10,7 +15,7 @@ function get(url: string): ByteRequest {
 }
 
 describe("the in-memory byte fetcher is a real seam", () => {
-  test("bytes survive the round trip unchanged", async () => {
+  it("bytes survive the round trip unchanged", async () => {
     // The whole reason this seam exists: the text fetcher would UTF-8 decode these and the
     // original bytes would be unrecoverable.
     const fetcher = new InMemoryByteFetcher().on("GET", "https://x.test/f", { body: PDF });
@@ -20,18 +25,18 @@ describe("the in-memory byte fetcher is a real seam", () => {
     expect(response.bytes).toEqual(PDF);
   });
 
-  test("an unmodelled request rejects rather than returning nothing", async () => {
+  it("an unmodelled request rejects rather than returning nothing", async () => {
     // The firing side of the guard, and the property that makes the offline gate mean
     // something: a collector calling an endpoint nobody recorded must fail loudly, not
     // yield an empty result that reads as "the mailbox is empty".
     const fetcher = new InMemoryByteFetcher().on("GET", "https://x.test/known", { body: PDF });
 
     await expect(fetcher.send(get("https://x.test/unknown"))).rejects.toThrow(
-      /no recorded response for GET https:\/\/x.test\/unknown/,
+      /no recorded response for GET https:\/\/x.test\/unknown/u,
     );
   });
 
-  test("a recorded request is answered and recorded as a call", async () => {
+  it("a recorded request is answered and recorded as a call", async () => {
     // The quiet side. Without it, a fetcher that rejected everything would pass the test
     // above.
     const fetcher = new InMemoryByteFetcher().on("GET", "https://x.test/known", { body: PDF });
@@ -42,7 +47,7 @@ describe("the in-memory byte fetcher is a real seam", () => {
     expect(fetcher.calls.map((c) => c.url)).toEqual(["https://x.test/known"]);
   });
 
-  test("queued responses are returned in order, then the last one repeats", async () => {
+  it("queued responses are returned in order, then the last one repeats", async () => {
     // What lets a retry test record `429` then `200` against one URL.
     const fetcher = new InMemoryByteFetcher()
       .on("GET", "https://x.test/p", { status: 429, body: "slow down" })
@@ -55,7 +60,7 @@ describe("the in-memory byte fetcher is a real seam", () => {
     expect([first.status, second.status, third.status]).toEqual([429, 200, 200]);
   });
 
-  test("a recorded object body is encoded as JSON", async () => {
+  it("a recorded object body is encoded as JSON", async () => {
     const fetcher = new InMemoryByteFetcher().on("GET", "https://x.test/j", {
       body: { messages: [{ id: "m1" }] },
     });
@@ -67,14 +72,14 @@ describe("the in-memory byte fetcher is a real seam", () => {
 });
 
 describe("raiseForByteStatus", () => {
-  test("a 2xx passes through untouched", () => {
+  it("a 2xx passes through untouched", () => {
     // The quiet side: a guard that always threw would satisfy every test below.
     expect(() =>
       raiseForByteStatus(get("https://x.test/f"), { status: 200, headers: {}, bytes: PDF }),
     ).not.toThrow();
   });
 
-  test("a 429 carries its Retry-After through as milliseconds", () => {
+  it("a 429 carries its Retry-After through as milliseconds", () => {
     try {
       raiseForByteStatus(get("https://x.test/f"), {
         status: 429,
@@ -91,7 +96,7 @@ describe("raiseForByteStatus", () => {
     }
   });
 
-  test("a binary error body does not break the error message", () => {
+  it("a binary error body does not break the error message", () => {
     // The excerpt is decoded non-fatally. A strict decoder would throw here -- replacing a
     // useful 503 with a TypeError raised while building the log line.
     const notUtf8 = new Uint8Array([0xff, 0xfe, 0xfd, 0x00, 0x80]);
@@ -108,7 +113,7 @@ describe("raiseForByteStatus", () => {
     }
   });
 
-  test("a malformed Retry-After is ignored rather than trusted", () => {
+  it("a malformed Retry-After is ignored rather than trusted", () => {
     // "in a bit" must not become NaN milliseconds and park a run.
     try {
       raiseForByteStatus(get("https://x.test/f"), {

@@ -162,7 +162,7 @@ services:
       # Per-tenant Gmail and Drive ingestion. A SECOND Google client, never the sign-in
       # one above: signing in asks for `openid email profile`, this asks for a customer's
       # mailbox. One client carrying both scope lists is one misconfiguration away from
-      # handing over a mailbox as a side effect of signing in. See docs/adr/0014.
+      # handing over a mailbox as a side effect of signing in. See docs/adr/0016.
       # Unset means the consent flow does not exist and every Google source reads
       # "not connected" -- the right state while Google verification is pending.
       UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
@@ -232,7 +232,7 @@ services:
       # Per-tenant Gmail and Drive ingestion. A SECOND Google client, never the sign-in
       # one above: signing in asks for `openid email profile`, this asks for a customer's
       # mailbox. One client carrying both scope lists is one misconfiguration away from
-      # handing over a mailbox as a side effect of signing in. See docs/adr/0014.
+      # handing over a mailbox as a side effect of signing in. See docs/adr/0016.
       # Unset means the consent flow does not exist and every Google source reads
       # "not connected" -- the right state while Google verification is pending.
       UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
@@ -245,6 +245,10 @@ services:
       UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
       UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
       UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}
+      # The platform administrators: a comma-separated list of addresses that may sign in
+      # with no invitation and hold admin in every tenant. This variable IS the authority —
+      # removing an address and redeploying withdraws it. See ADR 0013.
+      UNDERCROFT_SUPERADMINS: ${UNDERCROFT_SUPERADMINS:-}
     ports:
       - "127.0.0.1:${UNDERCROFT_PORT_API:-13000}:3000"
     deploy:

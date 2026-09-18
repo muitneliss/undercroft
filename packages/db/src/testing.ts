@@ -12,13 +12,15 @@
  * entry so production code cannot import PGlite by accident.
  */
 
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+
 import { PGlite } from "@electric-sql/pglite";
 import type { QueryResult, SqlExecutor } from "./executor.ts";
 
 export interface TestDatabase extends SqlExecutor {
   /** Run a block as another role, resetting afterwards even on failure. */
-  asRole<T>(role: string, fn: (tx: SqlExecutor) => Promise<T>): Promise<T>;
-  close(): Promise<void>;
+  asRole: <T>(role: string, fn: (tx: SqlExecutor) => Promise<T>) => Promise<T>;
+  close: () => Promise<void>;
 }
 
 export async function createTestDatabase(): Promise<TestDatabase> {
@@ -26,11 +28,14 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   await db.waitReady;
 
   const base: SqlExecutor = {
-    async query<T = Record<string, unknown>>(text: string, params?: readonly unknown[]) {
+    async query<T = Record<string, unknown>>(
+      text: string,
+      params?: readonly unknown[],
+    ): Promise<{ rows: T[] }> {
       const result = await db.query<T>(text, params as unknown[] | undefined);
       return { rows: result.rows } satisfies QueryResult<T>;
     },
-    async exec(sql: string) {
+    async exec(sql: string): Promise<void> {
       await db.exec(sql);
     },
   };
@@ -45,7 +50,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         await base.query("RESET ROLE");
       }
     },
-    async close() {
+    async close(): Promise<void> {
       await db.close();
     },
   };

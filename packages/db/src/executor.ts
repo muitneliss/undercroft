@@ -13,10 +13,10 @@ export interface QueryResult<T> {
 
 export interface SqlExecutor {
   /** Run one statement with parameters. */
-  query<T = Record<string, unknown>>(
+  query: <T = Record<string, unknown>>(
     text: string,
     params?: readonly unknown[],
-  ): Promise<QueryResult<T>>;
+  ) => Promise<QueryResult<T>>;
   /** Run a batch of statements with no parameters -- a whole migration file. */
-  exec(sql: string): Promise<void>;
+  exec: (sql: string) => Promise<void>;
 }

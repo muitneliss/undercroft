@@ -7,8 +7,11 @@
  * never disagree about what a valid spec is.
  */
 
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import process from "node:process";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { ConnectorSpec } from "../src/connectorSpec.ts";
 

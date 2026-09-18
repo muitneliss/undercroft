@@ -6,12 +6,16 @@
  * consent, because Google's redirect must land on a public origin and the worker has none.
  * So the token bundle crosses one internal hop, on the same trigger-token allowlist Kestra
  * uses, and the internet-facing service keeps the property that it can never read a stored
- * credential back. ADR 0014.
+ * credential back. ADR 0016.
  *
  * A capability, not a config bag. `main.ts` builds one of these from env and injects it;
  * nothing below the entrypoint knows a URL or a token exists, and a test substitutes
  * `InMemoryWorkerClient` without a socket.
  */
+
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
 import type {
   BrowseScopeResponse,
@@ -42,16 +46,16 @@ export interface StoreCredentialInput {
 }
 
 export interface WorkerClient {
-  storeCredential(input: StoreCredentialInput): Promise<WorkerOutcome<StoreCredentialResponse>>;
-  browseScope(input: {
+  storeCredential: (input: StoreCredentialInput) => Promise<WorkerOutcome<StoreCredentialResponse>>;
+  browseScope: (input: {
     source: string;
     tenantId: string;
     kind: "labels";
-  }): Promise<WorkerOutcome<BrowseScopeResponse>>;
-  revokeConnection(input: {
+  }) => Promise<WorkerOutcome<BrowseScopeResponse>>;
+  revokeConnection: (input: {
     source: string;
     tenantId: string;
-  }): Promise<WorkerOutcome<RevokeConnectionResponse>>;
+  }) => Promise<WorkerOutcome<RevokeConnectionResponse>>;
 }
 
 export interface HttpWorkerConfig {
@@ -145,7 +149,9 @@ export class InMemoryWorkerClient implements WorkerClient {
   async storeCredential(
     input: StoreCredentialInput,
   ): Promise<WorkerOutcome<StoreCredentialResponse>> {
-    if (this.#failWith !== null) return this.#fail();
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
     this.stored.push(input);
     if (this.#exec !== null) {
       await upsertConnection(this.#exec, {
@@ -168,7 +174,9 @@ export class InMemoryWorkerClient implements WorkerClient {
   }
 
   browseScope(): Promise<WorkerOutcome<BrowseScopeResponse>> {
-    if (this.#failWith !== null) return this.#fail();
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
     return Promise.resolve({ ok: true, value: { items: this.#labels } });
   }
 
@@ -176,7 +184,9 @@ export class InMemoryWorkerClient implements WorkerClient {
     source: string;
     tenantId: string;
   }): Promise<WorkerOutcome<RevokeConnectionResponse>> {
-    if (this.#failWith !== null) return this.#fail();
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
     this.revoked.push(input);
     return Promise.resolve({ ok: true, value: { revokedUpstream: true } });
   }

@@ -27,11 +27,37 @@
  * deploy something nobody asked for.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/useSingleJsDocAsterisk: Bullet lists inside module docstrings. Biome's fix flattens them, which destroyed the list recording how invite-only is enforced in three independent places -- exactly the documentation that must not be damaged by a formatter.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
+// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
+// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
+// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One design document and one deploy client, each of which argues with itself across its length. Splitting at 300 lines would cut a single argument in half.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
+
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
+
+import process from "node:process";
+
 const POLL_INTERVAL_MS = 10_000;
 const DEPLOYMENT_APPEARS_WITHIN_MS = 300_000;
 const DEPLOYMENT_SETTLES_WITHIN_MS = 3_600_000;
 const SMOKE_SETTLE_MS = 120_000;
-const SMOKE_INTERVAL_MS = 5_000;
+const SMOKE_INTERVAL_MS = 5000;
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524]);
 
 /** Images this repo publishes. Everything else in the stack is upstream and not ours to verify. */
@@ -100,13 +126,13 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
   if (missing.length > 0) {
     throw new Error(`not configured: ${missing.join(", ")} must be set`);
   }
-  return { endpoint: endpoint.replace(/\/$/, ""), apiKey, composeId };
+  return { endpoint: endpoint.replace(/\/$/u, ""), apiKey, composeId };
 }
 
 export const realDeps: Deps = {
-  fetch: (input, init) => globalThis.fetch(input, init ?? {}),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  log: (line) => process.stdout.write(`${line}\n`),
+  fetch: (input, init): Promise<Response> => globalThis.fetch(input, init ?? {}),
+  sleep: (ms): Promise<void> => new Promise((resolve): NodeJS.Timeout => setTimeout(resolve, ms)),
+  log: (line): boolean => process.stdout.write(`${line}\n`),
   now: () => Date.now(),
 };
 
@@ -141,10 +167,14 @@ export async function callApi<T>(
       ...(isWrite ? { body: JSON.stringify(options.payload) } : {}),
     });
 
-    if (response.ok) return (await response.json()) as T;
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
 
     lastError = `${endpoint} -> HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`;
-    if (!RETRYABLE_STATUS.has(response.status) || attempt === attempts) break;
+    if (!RETRYABLE_STATUS.has(response.status) || attempt === attempts) {
+      break;
+    }
     await deps.sleep(POLL_INTERVAL_MS);
   }
   throw new Error(lastError);
@@ -197,7 +227,7 @@ export async function deployAndWait(
   deps.log(`deployment ${deploymentId} queued`);
 
   // Phase two: watch that record, and only that record, until it settles.
-  for (let current = ours; ;) {
+  for (let current = ours; ; ) {
     if (current.status === "done") {
       deps.log(`deployment ${deploymentId} done`);
       return current;
@@ -239,7 +269,7 @@ export async function composeRecord(cfg: Config, deps: Deps): Promise<ComposeRec
  */
 export function expandEnv(value: string, env: Record<string, string | undefined>): string {
   return value.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g,
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/gu,
     (_match: string, name: string, fallback: string | undefined) => {
       const resolved = env[name];
       return resolved !== undefined && resolved !== "" ? resolved : (fallback ?? "");
@@ -259,10 +289,12 @@ export function releasedServices(
   const found: { service: string; image: string }[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
-    const serviceMatch = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/.exec(line);
-    if (serviceMatch?.[1] !== undefined) service = serviceMatch[1];
-    const imageMatch = /^\s+image:\s*(\S+)\s*$/.exec(line);
-    if (imageMatch?.[1] !== undefined && imageMatch[1].startsWith(RELEASED_IMAGE_PREFIX)) {
+    const serviceMatch = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
+    if (serviceMatch?.[1] !== undefined) {
+      service = serviceMatch[1];
+    }
+    const imageMatch = /^\s+image:\s*(\S+)\s*$/u.exec(line);
+    if (imageMatch?.[1]?.startsWith(RELEASED_IMAGE_PREFIX)) {
       found.push({ service, image: expandEnv(imageMatch[1], env) });
     }
   }
@@ -284,9 +316,11 @@ export function oneShotServices(composeFile: string): Set<string> {
   const found = new Set<string>();
   let candidate = "";
   for (const line of composeFile.split("\n")) {
-    const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/.exec(line);
-    if (nameMatch?.[1] !== undefined) candidate = nameMatch[1];
-    if (/^\s+condition:\s*service_completed_successfully\s*$/.test(line) && candidate !== "") {
+    const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
+    if (nameMatch?.[1] !== undefined) {
+      candidate = nameMatch[1];
+    }
+    if (/^\s+condition:\s*service_completed_successfully\s*$/u.test(line) && candidate !== "") {
       found.add(candidate);
     }
   }
@@ -312,7 +346,9 @@ export async function preflight(cfg: Config, deps: Deps): Promise<void> {
         "Dokploy raw compose has no checkout, so a `build:` context cannot work there.",
     );
   }
-  for (const { service, image } of services) deps.log(`  ${service} -> ${image}`);
+  for (const { service, image } of services) {
+    deps.log(`  ${service} -> ${image}`);
+  }
 
   const missing = REQUIRED_COMMAND_FLAGS.filter((flag) => !compose.command.includes(flag));
   if (missing.length > 0) {
@@ -341,30 +377,38 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
     `https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`,
     { headers: token === "" ? {} : { Authorization: `Basic ${token}` } },
   );
-  if (!pull.ok) throw new Error(`ghcr token for ${repo}: HTTP ${pull.status}`);
+  if (!pull.ok) {
+    throw new Error(`ghcr token for ${repo}: HTTP ${pull.status}`);
+  }
   const bearer = ((await pull.json()) as { token: string }).token;
 
-  const get = async (reference: string): Promise<Record<string, unknown>> => {
+  async function get(reference: string): Promise<Record<string, unknown>> {
     const response = await deps.fetch(`https://ghcr.io/v2/${repo}/manifests/${reference}`, {
       headers: { Authorization: `Bearer ${bearer}`, Accept: accept },
     });
-    if (!response.ok)
+    if (!response.ok) {
       throw new Error(`ghcr manifest ${repo}:${reference}: HTTP ${response.status}`);
+    }
     return (await response.json()) as Record<string, unknown>;
-  };
+  }
 
   let manifest = await get(tag);
   const manifests = manifest.manifests as
-    { digest: string; platform?: { os: string; architecture: string } }[] | undefined;
+    | { digest: string; platform?: { os: string; architecture: string } }[]
+    | undefined;
   if (manifests !== undefined) {
     const amd64 = manifests.find(
       (m) => m.platform?.os === "linux" && m.platform.architecture === "amd64",
     );
-    if (amd64 === undefined) throw new Error(`${image} has no linux/amd64 manifest`);
+    if (amd64 === undefined) {
+      throw new Error(`${image} has no linux/amd64 manifest`);
+    }
     manifest = await get(amd64.digest);
   }
   const config = manifest.config as { digest: string } | undefined;
-  if (config === undefined) throw new Error(`${image} manifest carries no config digest`);
+  if (config === undefined) {
+    throw new Error(`${image} manifest carries no config digest`);
+  }
   return config.digest;
 }
 
@@ -394,7 +438,9 @@ export async function verify(
   const compose = await composeRecord(cfg, deps);
   const env = releaseTag === "" ? process.env : { ...process.env, IMAGE_TAG: releaseTag };
   const services = releasedServices(compose.composeFile, env);
-  if (services.length === 0) throw new Error("nothing to verify: no released images in compose");
+  if (services.length === 0) {
+    throw new Error("nothing to verify: no released images in compose");
+  }
   const oneShot = oneShotServices(compose.composeFile);
 
   const containers = await callApi<Container[]>(cfg, deps, "docker.getContainersByAppNameMatch", {
@@ -534,7 +580,9 @@ async function main(): Promise<void> {
     }
     case "smoke": {
       const urls = process.argv.slice(3);
-      if (urls.length === 0) throw new Error("usage: smoke <url> [url...]");
+      if (urls.length === 0) {
+        throw new Error("usage: smoke <url> [url...]");
+      }
       await smoke(deps, urls);
       return;
     }
@@ -549,7 +597,7 @@ async function main(): Promise<void> {
       return;
     }
     default:
-      throw new Error(`usage: dokploy.ts preflight|deploy|verify|smoke|logs|status`);
+      throw new Error("usage: dokploy.ts preflight|deploy|verify|smoke|logs|status");
   }
 }
 

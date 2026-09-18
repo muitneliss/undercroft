@@ -28,11 +28,16 @@
  * what types cannot -- a plural form present in one catalogue and missing from the other.
  */
 
-import { DEFAULT_LOCALE, type Locale, LOCALES } from "@undercroft/core/locale";
+// biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
+// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
+
+import { DEFAULT_LOCALE, LOCALES, type Locale } from "@undercroft/core/locale";
 import i18next, { type TFunction } from "i18next";
 import { initReactI18next } from "react-i18next";
 
-import { useUiStore } from "@/store";
+import { useUiStore } from "@/store.ts";
 import { en } from "./en.ts";
 import { vi } from "./vi.ts";
 
@@ -77,7 +82,9 @@ void i18next.use(initReactI18next).init({
  * React does not own.
  */
 function project(locale: Locale): void {
-  if (i18next.language !== locale) void i18next.changeLanguage(locale);
+  if (i18next.language !== locale) {
+    void i18next.changeLanguage(locale);
+  }
   document.documentElement.lang = locale;
 }
 

@@ -1,6 +1,11 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { type RawDocumentRow, tombstoneMissing, upsertDocuments } from "./rawDocuments.ts";
 
@@ -42,13 +47,13 @@ async function shaOf(documentId: string): Promise<string | undefined> {
 }
 
 describe("upsertDocuments", () => {
-  test("a document never seen before is created", async () => {
+  it("a document never seen before is created", async () => {
     const counts = await upsertDocuments(db, IDENTITY, [doc()]);
 
     expect(counts).toEqual({ created: 1, changed: 0, unchanged: 0 });
   });
 
-  test("re-landing identical bytes writes no new row version", async () => {
+  it("re-landing identical bytes writes no new row version", async () => {
     // The idempotency guard. Without it an hourly schedule rewrites every row every hour,
     // which is WAL and index churn for no information.
     await upsertDocuments(db, IDENTITY, [doc()]);
@@ -58,7 +63,7 @@ describe("upsertDocuments", () => {
     expect(counts).toEqual({ created: 0, changed: 0, unchanged: 1 });
   });
 
-  test("a document whose bytes changed is updated", async () => {
+  it("a document whose bytes changed is updated", async () => {
     // The quiet side of the same guard: a rule that never updated would pass the test
     // above and lose every revision.
     await upsertDocuments(db, IDENTITY, [doc()]);
@@ -69,7 +74,7 @@ describe("upsertDocuments", () => {
     expect(await shaOf("19a2f:001")).toBe("b".repeat(64));
   });
 
-  test("an older observation does not overwrite a newer row", async () => {
+  it("an older observation does not overwrite a newer row", async () => {
     // No time travel. A backfill running beside the hourly schedule must not rewind a row
     // to a state the source has already moved past.
     await upsertDocuments(db, IDENTITY, [doc({ observedAt: LATER, sha256: "b".repeat(64) })]);
@@ -82,7 +87,7 @@ describe("upsertDocuments", () => {
     expect(await shaOf("19a2f:001")).toBe("b".repeat(64));
   });
 
-  test("a byte length beyond a float's exact range survives the round trip", async () => {
+  it("a byte length beyond a float's exact range survives the round trip", async () => {
     // bigint, carried as text and cast by Postgres. Through a JS number this arrives as
     // 9007199254740992 -- a silently wrong file size.
     await upsertDocuments(db, IDENTITY, [doc({ byteLength: "9007199254740993" })]);
@@ -94,7 +99,7 @@ describe("upsertDocuments", () => {
     expect(String(rows[0]?.byte_length)).toBe("9007199254740993");
   });
 
-  test("an empty batch touches nothing", async () => {
+  it("an empty batch touches nothing", async () => {
     expect(await upsertDocuments(db, IDENTITY, [])).toEqual({
       created: 0,
       changed: 0,
@@ -104,7 +109,7 @@ describe("upsertDocuments", () => {
 });
 
 describe("tombstoneMissing", () => {
-  test("a document the run no longer sees is tombstoned", async () => {
+  it("a document the run no longer sees is tombstoned", async () => {
     await upsertDocuments(db, IDENTITY, [doc({ documentId: "gone" }), doc({ documentId: "kept" })]);
 
     const count = await tombstoneMissing(db, IDENTITY, {
@@ -119,7 +124,7 @@ describe("tombstoneMissing", () => {
     expect(rows.map((r) => r.document_id)).toEqual(["gone"]);
   });
 
-  test("a document the run still sees is left alone", async () => {
+  it("a document the run still sees is left alone", async () => {
     // The quiet side. A tombstoner that marked everything would pass the test above.
     await upsertDocuments(db, IDENTITY, [doc({ documentId: "kept" })]);
 
@@ -128,7 +133,7 @@ describe("tombstoneMissing", () => {
     expect(count).toBe(0);
   });
 
-  test("another tenant's documents are never tombstoned", async () => {
+  it("another tenant's documents are never tombstoned", async () => {
     // The identity is part of the WHERE clause, not a convention. A collector running for
     // one tenant must not reach into another's catalogue.
     await upsertDocuments(db, { source: "gmail", tenantId: "CASE-0043" }, [doc()]);

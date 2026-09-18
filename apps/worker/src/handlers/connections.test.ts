@@ -6,13 +6,19 @@
  * answer is deliberately narrower than for `/v1/lake/records`.
  */
 
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import { createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { hashToken, randomToken } from "@undercroft/crypto";
 import { migrate } from "@undercroft/db";
 import { readCredential } from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { createLakeApi } from "./lake.ts";
 
@@ -81,12 +87,12 @@ async function issueIngestKey(): Promise<string> {
 }
 
 describe("who may manage a credential", () => {
-  test("the trigger token is accepted", async () => {
+  it("the trigger token is accepted", async () => {
     // The quiet side: a guard that refused everything would satisfy the two below.
     expect((await post("/v1/connections/credential", VALID)).status).toBe(200);
   });
 
-  test("an ingest key is refused, even though it is valid for the lake API", async () => {
+  it("an ingest key is refused, even though it is valid for the lake API", async () => {
     // The firing side, and the point of the verb being service-token only. An ingest key is
     // a grant to LAND data; accepting one here would widen every key ever issued into a
     // credential-management capability.
@@ -99,7 +105,7 @@ describe("who may manage a credential", () => {
     expect(rows).toHaveLength(0);
   });
 
-  test("no token at all is refused", async () => {
+  it("no token at all is refused", async () => {
     const response = await api().request("/v1/connections/credential", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -111,7 +117,7 @@ describe("who may manage a credential", () => {
 });
 
 describe("storing a credential", () => {
-  test("the connection and its sealed secret are both written", async () => {
+  it("the connection and its sealed secret are both written", async () => {
     await post("/v1/connections/credential", VALID);
 
     const { rows } = await db.query<{ status: string; external_account_id: string }>(
@@ -126,7 +132,7 @@ describe("storing a credential", () => {
     expect(stored.refreshToken).toBe("rt");
   });
 
-  test("an unknown tenant is a 404 and leaves no credential behind", async () => {
+  it("an unknown tenant is a 404 and leaves no credential behind", async () => {
     const response = await post("/v1/connections/credential", { ...VALID, tenantId: "CASE-9999" });
 
     expect(response.status).toBe(404);
@@ -134,7 +140,7 @@ describe("storing a credential", () => {
     expect(rows).toHaveLength(0);
   });
 
-  test("a malformed body is refused and its details name paths, not values", async () => {
+  it("a malformed body is refused and its details name paths, not values", async () => {
     // The body carries a live refresh token; an error that echoed it would put a
     // credential in a log.
     const response = await post("/v1/connections/credential", {
@@ -146,7 +152,7 @@ describe("storing a credential", () => {
     expect(JSON.stringify(await response.json())).not.toContain("super-secret-token");
   });
 
-  test("consenting twice replaces the credential rather than failing", async () => {
+  it("consenting twice replaces the credential rather than failing", async () => {
     await post("/v1/connections/credential", VALID);
 
     const response = await post("/v1/connections/credential", {
@@ -160,7 +166,7 @@ describe("storing a credential", () => {
 });
 
 describe("browsing what may be shared", () => {
-  test("gmail labels come back for the picker", async () => {
+  it("gmail labels come back for the picker", async () => {
     await post("/v1/connections/credential", VALID);
     fetcher.on("GET", "https://gmail.googleapis.com/gmail/v1/users/me/labels", {
       body: { labels: [{ id: "Label_8", name: "Invoices" }] },
@@ -176,7 +182,7 @@ describe("browsing what may be shared", () => {
     expect(await response.json()).toEqual({ items: [{ id: "Label_8", name: "Invoices" }] });
   });
 
-  test("drive cannot be browsed, because its choosing happens in the Picker", async () => {
+  it("drive cannot be browsed, because its choosing happens in the Picker", async () => {
     const response = await post("/v1/connections/browse", {
       source: "drive",
       tenantId: TENANT,
@@ -188,7 +194,7 @@ describe("browsing what may be shared", () => {
 });
 
 describe("revoking a connection", () => {
-  test("the stored credential is deleted and Google is told", async () => {
+  it("the stored credential is deleted and Google is told", async () => {
     await post("/v1/connections/credential", VALID);
     fetcher.on("POST", "https://oauth2.googleapis.com/revoke", { status: 200, body: "" });
 
@@ -199,7 +205,7 @@ describe("revoking a connection", () => {
     expect(rows).toHaveLength(0);
   });
 
-  test("a customer can disconnect even when Google refuses the revoke", async () => {
+  it("a customer can disconnect even when Google refuses the revoke", async () => {
     // A token already revoked at Google answers 400. Refusing to disconnect over that would
     // trap a customer in a connection they have asked to end.
     await post("/v1/connections/credential", VALID);

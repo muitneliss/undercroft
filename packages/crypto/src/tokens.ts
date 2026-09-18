@@ -6,6 +6,10 @@
  * S256 is the only challenge method generated -- `plain` defeats the purpose.
  */
 
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 /** A URL-safe random token, for an ingest key or an invitation. */
@@ -22,7 +26,9 @@ export function hashToken(token: string): string {
 export function tokenMatches(token: string, storedDigest: string): boolean {
   const a = Buffer.from(hashToken(token), "hex");
   const b = Buffer.from(storedDigest, "hex");
-  if (a.byteLength !== b.byteLength) return false;
+  if (a.byteLength !== b.byteLength) {
+    return false;
+  }
   return timingSafeEqual(a, b);
 }
 

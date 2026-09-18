@@ -9,8 +9,13 @@
  * those bytes, so re-landing an unchanged record reports `unchanged` and writes nothing.
  */
 
-import type { LakeStore } from "@undercroft/lake";
+// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
+// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+
 import { lakeKeyOf, streamOf } from "@undercroft/contracts";
+import type { LakeStore } from "@undercroft/lake";
 
 export interface RecordToLand {
   readonly entity: string;
@@ -76,15 +81,18 @@ export async function landRecords(
         stream: streamOf(identity),
         extra: { sourceUpdatedAt: record.sourceUpdatedAt },
       });
-      if (put.status === "created") created += 1;
-      else unchanged += 1;
+      if (put.status === "created") {
+        created += 1;
+      } else {
+        unchanged += 1;
+      }
       results.push({
         entity: record.entity,
         sourceRecordId: record.sourceRecordId,
         status: put.status,
         sha256: put.sha256,
         lakeKey: key,
-        ...(put.versionKey !== "" ? { stamp: put.versionKey.split("/").at(-1)! } : {}),
+        ...(put.versionKey === "" ? {} : { stamp: put.versionKey.split("/").at(-1)! }),
       });
     } catch (error) {
       failed += 1;

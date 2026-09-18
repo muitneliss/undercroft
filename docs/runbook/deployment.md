@@ -162,8 +162,27 @@ line first; a button that fails at the first click is the failure this avoids.
 ### Bootstrapping the first admin
 
 Invitations are issued from the **People** division once someone is in. Nobody is, on a fresh
-deployment, and there is no one to invite them — so one command is needed, once. Run it in
-the control-plane container, which already has the DSN:
+deployment, and there is no one to invite them.
+
+**Set `UNDERCROFT_SUPERADMINS` in Dokploy's environment and redeploy.** It is a
+comma-separated list of addresses that may sign in with no invitation and that administer
+every customer:
+
+```
+UNDERCROFT_SUPERADMINS=you@example.test,colleague@example.test
+```
+
+Name more than one. A single address here is a single point of lockout.
+
+Those addresses can then sign in, create `CASE-0001` from the **Add a customer** form on the
+Customers page — visible only to them — and invite everyone else from **People**. No shell,
+no SQL, and the variable is the authority rather than a seed: removing an address and
+redeploying withdraws it at the next request, which is also how you recover if every tenant
+admin leaves. The boot log reports `superadmins_configured` with a count, never the
+addresses. ADR 0013.
+
+The older path still works and is the one to use for an ordinary invitation to a single
+customer, run in the control-plane container, which already has the DSN:
 
 ```sh
 docker exec -it undercroft-<stack>-control-plane-1 bun run invite -- \
@@ -217,8 +236,9 @@ Two Kestra behaviours that waste time otherwise:
 
 ## Known gaps
 
-- **Nobody needs SQL.** The first admin comes from `bun run invite` (see
-  [Sign-in](#sign-in)); everyone after that is invited from the People division.
+- **Nobody needs SQL, and since ADR 0013 nobody needs a shell either.** The first admins come
+  from `UNDERCROFT_SUPERADMINS` in Dokploy's environment (see [Sign-in](#sign-in)); everyone
+  after that is invited from the People division.
 - **The real `pg` + `search_path` path is exercised on deploy, not in the gate.** Better Auth
   emits unqualified table names against a pool whose `search_path` is `app`; the offline gate
   uses its memory adapter. A mistake here fails loudly (`Database schema mismatch`)

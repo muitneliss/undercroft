@@ -8,7 +8,12 @@
  * query during static serving into a loud failure rather than a silent dependency.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,7 +38,7 @@ afterAll(async () => {
 });
 
 describe("the SPA is served without shadowing the API", () => {
-  test("an unknown route falls back to index.html so the browser router can resolve it", async () => {
+  it("an unknown route falls back to index.html so the browser router can resolve it", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     const response = await app.fetch(new Request("http://c/tenants/42"));
@@ -42,7 +47,7 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.text()).toContain("Undercroft");
   });
 
-  test("a real built asset is served as itself, not the index fallback", async () => {
+  it("a real built asset is served as itself, not the index fallback", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     const response = await app.fetch(new Request("http://c/app.js"));
@@ -51,7 +56,7 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.text()).toContain("bundle");
   });
 
-  test("the health route still answers with the SPA mounted", async () => {
+  it("the health route still answers with the SPA mounted", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     const response = await app.fetch(new Request("http://c/api/health"));
@@ -60,7 +65,7 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
-  test("a traversal out of the dist directory is refused, not served", async () => {
+  it("a traversal out of the dist directory is refused, not served", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     // Encoded so it reaches the handler intact rather than being collapsed by the URL parser.
@@ -70,7 +75,7 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.text()).toContain("Undercroft");
   });
 
-  test("Google's consent callback is not swallowed by the SPA fallback", async () => {
+  it("Google's consent callback is not swallowed by the SPA fallback", async () => {
     // The exact hazard `/api/auth/*` carries a comment about, now for a second OAuth route.
     // Registered after the catch-all this would answer 200 with index.html: a consent that
     // appears to work, never completes, and leaves nothing anywhere explaining why.

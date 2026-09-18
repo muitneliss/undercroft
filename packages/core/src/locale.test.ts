@@ -7,18 +7,20 @@
  * pinned from both sides -- it reads what it should and refuses what it should not.
  */
 
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { describe, expect, test as it } from "bun:test";
 
 import { DEFAULT_LOCALE, negotiateLocale, parseLocale } from "./locale.ts";
 
 describe("parseLocale", () => {
-  test("reads a tag we speak, with or without a region", () => {
+  it("reads a tag we speak, with or without a region", () => {
     expect(parseLocale("vi")).toBe("vi");
     expect(parseLocale("en-SG")).toBe("en");
     expect(parseLocale(" VI-vn ")).toBe("vi");
   });
 
-  test("refuses a tag we do not speak rather than guessing one", () => {
+  it("refuses a tag we do not speak rather than guessing one", () => {
     // The guard's quiet side. A parser that answered "vi" here would make every
     // unreadable preference indistinguishable from a real Vietnamese one.
     expect(parseLocale("fr")).toBeNull();
@@ -29,7 +31,7 @@ describe("parseLocale", () => {
 });
 
 describe("negotiateLocale", () => {
-  test("Vietnamese is what a request with no preference gets", () => {
+  it("Vietnamese is what a request with no preference gets", () => {
     // Not a fallback: the operators read Vietnamese. If this ever returns "en" the
     // product's default language has changed without anyone deciding to change it.
     expect(DEFAULT_LOCALE).toBe("vi");
@@ -38,13 +40,13 @@ describe("negotiateLocale", () => {
     expect(negotiateLocale("fr-FR,de;q=0.8")).toBe("vi");
   });
 
-  test("honours the highest-weighted language we speak, not header order", () => {
+  it("honours the highest-weighted language we speak, not header order", () => {
     expect(negotiateLocale("en-GB")).toBe("en");
     expect(negotiateLocale("fr-FR,en;q=0.9,vi;q=0.4")).toBe("en");
     expect(negotiateLocale("en;q=0.4,vi;q=0.9")).toBe("vi");
   });
 
-  test("a language explicitly refused with q=0 is not selected", () => {
+  it("a language explicitly refused with q=0 is not selected", () => {
     // "en;q=0" means "not acceptable". Ranking it last instead of dropping it would
     // still select it when it is the only tag we recognise.
     expect(negotiateLocale("en;q=0")).toBe("vi");

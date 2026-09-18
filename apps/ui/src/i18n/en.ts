@@ -9,6 +9,8 @@
  * reads like prose written for the screen rather than like a translation of one.
  */
 
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
+
 export const en = {
   app: {
     name: "Undercroft",
@@ -75,9 +77,19 @@ export const en = {
     colCustomer: "Customer",
     colReference: "Reference",
     colRole: "Your role",
-    addHead: "Add",
+    addHead: "Add a customer",
     addNote:
-      "Adding a customer isn’t available here yet — the control plane exposes no create endpoint. Tenants are provisioned out of band for now.",
+      "Only a platform administrator can add a customer. Ask whoever runs this control plane to create the reference.",
+    addLead:
+      "The reference is a CASE-id and cannot be changed once the first raw data has landed under it — choose it carefully.",
+    idLabel: "Reference",
+    idPlaceholder: "CASE-0001",
+    idHint: "Letters, digits, hyphens and underscores. Never a real customer name.",
+    nameLabel: "Display name",
+    namePlaceholder: "Leave empty to use the reference",
+    add: "Add customer",
+    adding: "Adding…",
+    notAdded: "Not added",
     notLoaded: "The list of customers could not be loaded. Nothing has been changed.",
   },
 

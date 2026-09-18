@@ -16,26 +16,39 @@
  * URL rather than from state -- the browser left and came back, and there is no state left.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/performance/noJsxPropsBind: An inline submit handler on a single form. The re-render the rule is about matters under a memoised list of hundreds; this is one <form>.
+// biome-ignore-all lint/style/useGlobalThis: Reading `process` in a composition root on Bun, where it is the documented global.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
-import type { Connection } from "@/api/types";
-import { ConnectionCard } from "@/components/ConnectionCard";
-import { Errata } from "@/components/Errata";
-import { Skeleton } from "@/components/Skeleton";
-import { divisionPath } from "@/lib/divisions";
-import { trpc } from "@/trpc";
+import type { Connection } from "@/api/types.ts";
+import { ConnectionCard } from "@/components/ConnectionCard.tsx";
+import { Errata } from "@/components/Errata.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
+import { divisionPath } from "@/lib/divisions.ts";
+import { trpc } from "@/trpc.ts";
 
-export function TenantOverview({ tenantId }: { tenantId: string }) {
+export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const utils = trpc.useUtils();
   const connections = trpc.connections.list.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
 
-  const invalidate = async () => {
+  async function invalidate(): Promise<void> {
     await utils.connections.list.invalidate({ tenantId });
-  };
+  }
 
   const startOAuth = trpc.connections.startOAuth.useMutation({
     onSuccess: (result) => {
@@ -50,7 +63,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }) {
 
   if (connections.isError || tenant.isError) {
     return (
-      <Errata heading={t("common.notLoaded")} live>
+      <Errata heading={t("common.notLoaded")} live={true}>
         {t("sources.notLoaded")}
       </Errata>
     );
@@ -72,7 +85,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }) {
         </p>
 
         {failed ? (
-          <Errata heading={t("grant.connectFailed")} live>
+          <Errata heading={t("grant.connectFailed")} live={true}>
             {params.get("reason") === "declined"
               ? t("grant.connectDeclined")
               : t("grant.connectFailed")}
@@ -80,7 +93,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }) {
         ) : null}
 
         {disconnect.isError ? (
-          <Errata heading={t("grant.disconnectFailed")} live>
+          <Errata heading={t("grant.disconnectFailed")} live={true}>
             {disconnect.error.message}
           </Errata>
         ) : null}
@@ -88,7 +101,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }) {
         {disconnect.isSuccess && !disconnect.data.revokedUpstream ? (
           // Reported, never assumed: our row is gone but the grant may still stand at
           // Google, and only the customer can finish that.
-          <Errata heading={t("grant.disconnected")} live>
+          <Errata heading={t("grant.disconnected")} live={true}>
             {t("grant.disconnectedNotRevoked")}
           </Errata>
         ) : null}

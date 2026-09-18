@@ -1,6 +1,16 @@
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/suspicious/noBitwiseOperators: Byte and hash arithmetic, where bitwise operators are the operation rather than a clever substitute for one.
+
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { describe, expect, test as it } from "bun:test";
+import { currentKeyVersion, SecretKeyMissing, seal, unseal } from "./seal.ts";
 import { createPkce, hashToken, tokenMatches } from "./tokens.ts";
-import { currentKeyVersion, seal, SecretKeyMissing, unseal } from "./seal.ts";
 
 // A fresh 32-byte key, base64. Two versions for rotation tests.
 const KEY_V1 = Buffer.alloc(32, 1).toString("base64");
@@ -11,13 +21,13 @@ function env(value: string): NodeJS.ProcessEnv {
 }
 
 describe("seal and unseal round-trip", () => {
-  test("opens what it sealed", () => {
+  it("opens what it sealed", () => {
     const e = env(KEY_V1);
     const sealed = seal("refresh-token-abc", { env: e });
     expect(unseal(sealed, e)).toBe("refresh-token-abc");
   });
 
-  test("a fresh nonce means two seals of the same value differ", () => {
+  it("a fresh nonce means two seals of the same value differ", () => {
     const e = env(KEY_V1);
     const a = seal("same", { env: e });
     const b = seal("same", { env: e });
@@ -27,7 +37,7 @@ describe("seal and unseal round-trip", () => {
 });
 
 describe("tampering is caught, never opened as empty", () => {
-  test("a flipped ciphertext bit throws rather than returning a value", () => {
+  it("a flipped ciphertext bit throws rather than returning a value", () => {
     // The rule in one assertion: a credential that silently opens as "" would present as
     // a connection that exists and does not work -- the slowest failure to diagnose.
     const e = env(KEY_V1);
@@ -38,20 +48,20 @@ describe("tampering is caught, never opened as empty", () => {
     expect(() => unseal({ blob: tampered, keyVersion: sealed.keyVersion }, e)).toThrow();
   });
 
-  test("a truncated blob throws", () => {
+  it("a truncated blob throws", () => {
     const e = env(KEY_V1);
-    expect(() => unseal({ blob: new Uint8Array(4), keyVersion: 1 }, e)).toThrow(/truncated/);
+    expect(() => unseal({ blob: new Uint8Array(4), keyVersion: 1 }, e)).toThrow(/truncated/u);
   });
 });
 
 describe("additive key rotation", () => {
-  test("new values seal under the highest version", () => {
+  it("new values seal under the highest version", () => {
     const e = env(`1:${KEY_V1},2:${KEY_V2}`);
     expect(currentKeyVersion(e)).toBe(2);
     expect(seal("x", { env: e }).keyVersion).toBe(2);
   });
 
-  test("a value sealed under an old key still opens after a new key is added", () => {
+  it("a value sealed under an old key still opens after a new key is added", () => {
     const oldOnly = env(`1:${KEY_V1}`);
     const sealed = seal("legacy", { env: oldOnly });
 
@@ -59,37 +69,37 @@ describe("additive key rotation", () => {
     expect(unseal(sealed, both)).toBe("legacy");
   });
 
-  test("opening a value whose key was rotated out is a clear error, not a guess", () => {
+  it("opening a value whose key was rotated out is a clear error, not a guess", () => {
     const sealed = seal("x", { env: env(`1:${KEY_V1}`) });
     expect(() => unseal(sealed, env(`2:${KEY_V2}`))).toThrow(SecretKeyMissing);
   });
 });
 
 describe("a short key is refused, never stretched", () => {
-  test("rejects a 16-byte key rather than padding it to 32", () => {
+  it("rejects a 16-byte key rather than padding it to 32", () => {
     const short = Buffer.alloc(16, 9).toString("base64");
-    expect(() => seal("x", { env: env(short) })).toThrow(/32 bytes/);
+    expect(() => seal("x", { env: env(short) })).toThrow(/32 bytes/u);
   });
 
-  test("rejects a missing key eagerly", () => {
+  it("rejects a missing key eagerly", () => {
     expect(() => seal("x", { env: {} })).toThrow(SecretKeyMissing);
   });
 });
 
 describe("token hashing", () => {
-  test("a token matches its own stored digest and nothing else", () => {
+  it("a token matches its own stored digest and nothing else", () => {
     const digest = hashToken("uc_live_secret");
     expect(tokenMatches("uc_live_secret", digest)).toBe(true);
     expect(tokenMatches("wrong", digest)).toBe(false);
   });
 
-  test("the digest is not the token", () => {
+  it("the digest is not the token", () => {
     expect(hashToken("token")).not.toBe("token");
   });
 });
 
 describe("PKCE", () => {
-  test("produces an S256 challenge that verifies against its verifier", () => {
+  it("produces an S256 challenge that verifies against its verifier", () => {
     const { verifier, challenge, method } = createPkce();
     expect(method).toBe("S256");
     const recomputed = new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");

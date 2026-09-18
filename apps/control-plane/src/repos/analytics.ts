@@ -16,7 +16,7 @@
 import type { SqlExecutor } from "@undercroft/db";
 
 /** dbt model names are lowercase snake_case. Anything else is not an identifier we made. */
-const IDENTIFIER = /^[a-z][a-z0-9_]*$/;
+const IDENTIFIER = /^[a-z][a-z0-9_]*$/u;
 
 const PREVIEW_ROWS = 50;
 

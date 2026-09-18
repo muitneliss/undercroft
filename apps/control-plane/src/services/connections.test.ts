@@ -7,10 +7,14 @@
  * expiry and never a ciphertext -- is a property of the query.
  */
 
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import { migrate } from "@undercroft/db";
 import { upsertConnection, writeConnectionDetail, writeCredential } from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { disconnect, KNOWN_SOURCES, list, presentStatus, setScope } from "./connections.ts";
 import { InMemoryWorkerClient } from "./workerClient.ts";
@@ -32,20 +36,20 @@ afterEach(async () => {
 });
 
 describe("presentStatus", () => {
-  test("a connected, scoped source is connected", () => {
+  it("a connected, scoped source is connected", () => {
     expect(
       presentStatus({ status: "connected", source: "gmail", selectionJson: GMAIL_SCOPE }),
     ).toBe("connected");
   });
 
-  test("connected with no recorded scope needs one", () => {
+  it("connected with no recorded scope needs one", () => {
     // Running in this state would read a whole mailbox on the strength of a missing row.
     expect(presentStatus({ status: "connected", source: "gmail", selectionJson: "{}" })).toBe(
       "needs_scope",
     );
   });
 
-  test("an empty label list is a recorded decision, not a missing one", () => {
+  it("an empty label list is a recorded decision, not a missing one", () => {
     // The quiet side: "deliberately the whole mailbox" must not read as "nobody has chosen".
     expect(
       presentStatus({
@@ -56,14 +60,14 @@ describe("presentStatus", () => {
     ).toBe("connected");
   });
 
-  test("a source that takes no scope is connected without one", () => {
+  it("a source that takes no scope is connected without one", () => {
     // HubSpot and Xero have no picker, so `needs_scope` would be a state nobody can leave.
     expect(presentStatus({ status: "connected", source: "hubspot", selectionJson: "{}" })).toBe(
       "connected",
     );
   });
 
-  test("expired and error both read as needing a reconnect", () => {
+  it("expired and error both read as needing a reconnect", () => {
     // One state on screen: telling a token expiry from a provider fault is not the
     // customer's question to answer.
     expect(presentStatus({ status: "expired", source: "gmail", selectionJson: GMAIL_SCOPE })).toBe(
@@ -74,7 +78,7 @@ describe("presentStatus", () => {
     );
   });
 
-  test("disconnected stays disconnected", () => {
+  it("disconnected stays disconnected", () => {
     expect(
       presentStatus({ status: "disconnected", source: "gmail", selectionJson: GMAIL_SCOPE }),
     ).toBe("disconnected");
@@ -82,7 +86,7 @@ describe("presentStatus", () => {
 });
 
 describe("the schedule", () => {
-  test("a tenant with nothing connected still sees every source", async () => {
+  it("a tenant with nothing connected still sees every source", async () => {
     // The schedule IS the product: the screen a new customer lands on is the one an
     // established one uses, and an empty list gave it nothing to show.
     const rows = await list(db, TENANT);
@@ -91,7 +95,7 @@ describe("the schedule", () => {
     expect(rows.every((r) => r.status === "disconnected")).toBe(true);
   });
 
-  test("an expiry is read without the credential it belongs to", async () => {
+  it("an expiry is read without the credential it belongs to", async () => {
     // The licence for joining `app.connection_secret` at all: knowing WHEN a credential
     // expires turns "which connections need attention" into a query, and the control plane
     // could not open the credential anyway -- it holds no master key.
@@ -116,7 +120,7 @@ describe("the schedule", () => {
     expect(JSON.stringify(gmail)).not.toContain("rt");
   });
 
-  test("the granted scope string comes back split", async () => {
+  it("the granted scope string comes back split", async () => {
     await upsertConnection(db, {
       tenantId: TENANT,
       source: "gmail",
@@ -140,7 +144,7 @@ describe("choosing a scope", () => {
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
   });
 
-  test("a valid selection is stored and moves the card to connected", async () => {
+  it("a valid selection is stored and moves the card to connected", async () => {
     const result = await setScope(db, {
       tenantId: TENANT,
       source: "gmail",
@@ -155,7 +159,7 @@ describe("choosing a scope", () => {
     expect(gmail?.config.labels).toEqual(["Invoices"]);
   });
 
-  test("a selection that does not match the source is refused", async () => {
+  it("a selection that does not match the source is refused", async () => {
     // The firing side. A picker that saved a Drive shape under gmail would otherwise store
     // something the collector cannot read, and the run would fail far from the cause.
     const result = await setScope(db, {
@@ -169,7 +173,7 @@ describe("choosing a scope", () => {
     expect(result).toEqual({ ok: false, reason: "unsupported-source" });
   });
 
-  test("the audit entry counts what was chosen and never names it", async () => {
+  it("the audit entry counts what was chosen and never names it", async () => {
     // `ops.audit_log` has a wider readership than `app.connection_detail`. What was decided
     // and by whom belongs in a trail; which folders a customer picked is their data.
     await setScope(db, {
@@ -200,7 +204,7 @@ describe("disconnecting", () => {
     });
   });
 
-  test("the grant ends, the scope is cleared, and the account history stays", async () => {
+  it("the grant ends, the scope is cleared, and the account history stays", async () => {
     const worker = new InMemoryWorkerClient();
 
     const result = await disconnect(db, worker, {
@@ -221,7 +225,7 @@ describe("disconnecting", () => {
     expect(gmail?.externalAccountLabel).toBe("ops@acme.test");
   });
 
-  test("a customer can disconnect with no worker configured", async () => {
+  it("a customer can disconnect with no worker configured", async () => {
     // Our side must not depend on the provider being reachable, or a Google outage would
     // trap a customer in a connection they asked to end.
     const result = await disconnect(db, null, {

@@ -28,6 +28,14 @@
  * currently hinged open above the board. Depth means ply and nothing else, so a
  * shadow anywhere else would be a second, lying depth system.
  *
+ * FRAMES ARE SIZE, and nothing eases. A page of printed leaves is not eased into
+ * place, it is moved, so every duration in this sheet is `steps(n, end)` and
+ * there is no cubic-bezier anywhere in it. The frame count is not decoration
+ * either: two frames is a part moving, three is a loose slip laid onto the page,
+ * four is a whole leaf turning about its spine. It is the same trick as ply --
+ * the reader learns the scale once and then knows the size of anything they see
+ * move. ADR 0014.
+ *
  * THE READING FIELD IS SOLVED, NOT GUESSED. Milk acetate over a saturated board
  * is only readable if the leaf's alpha suits that board's hue, and these hues run
  * from chrome yellow to ultramarine. `@/lib/acetate` binary-searches the
@@ -35,6 +43,48 @@
  * target, then publishes `--leaf-alpha` and `--leaf-ground` below. The values
  * checked in here are the chrome-yellow solution, so the first paint is already
  * correct and the solver only ever adjusts it.
+ */
+
+/**
+ * biome-ignore-all lint/style/noHexColors: The palette has to stay hex because
+ * `@/lib/acetate` reads `--leaf` and `--ink` back out of the computed styles and
+ * parses them with `parseHex`, which accepts `#rgb`/`#rrggbb` and returns null for
+ * anything else rather than guessing. Rewriting these as oklch() would make that
+ * parse fail, and the solver would fall back to its hardcoded defaults -- a guessed
+ * colour in the code path that guarantees WCAG contrast, which is exactly the
+ * failure rule 2 is about. Moving off hex means rewriting the colour pipeline and
+ * its tests, not editing this file.
+ */
+
+/**
+ * biome-ignore-all lint/nursery/noUnusedClasses: The rule cannot see a class name
+ * assembled at runtime, and this UI assembles them -- `className={`mark mark--${mark}`}`
+ * in StatusMark.tsx builds one per state. Every name it reports is reachable that
+ * way, so acting on this rule would delete live styles.
+ */
+
+/**
+ * biome-ignore-all lint/nursery/useBaseline: Four progressive enhancements --
+ * `scrollbar-color`, `::selection`, `user-select` and `overflow-x: clip`. Each degrades
+ * to the browser default where it is unsupported, and the form tells no state by one of
+ * these alone. The clip is the only one worth a sentence: where it is not supported the
+ * axis falls back to `visible`, so a leaf mid-turn can briefly overhang the binder --
+ * a 190ms cosmetic overflow, not a broken layout, and the alternative (`hidden`) fails
+ * in the worse direction by moving the document's scroll inside `.book`.
+ */
+
+/**
+ * biome-ignore-all lint/style/noExcessiveLinesPerFile: This is one document, not a
+ * module that grew. The board, the leaf and the rail are defined against each other
+ * -- the comments argue contrast ratios across sections -- and cutting it at 300
+ * lines would split a single argument across files.
+ */
+
+/**
+ * biome-ignore-all lint/style/noDescendingSpecificity: `.colophon .datum` is grouped
+ * with the colophon, which puts it above the generic `.datum`. The specific rule
+ * still wins -- specificity decides this, not source order -- so the cascade is what
+ * it reads as; moving the block would separate it from the component it belongs to.
  */
 
 /* -- faces ------------------------------------------------------------------
@@ -175,254 +225,308 @@
     U+A720-A7FF;
 }
 
-/* -- the board -------------------------------------------------------------- */
+/*
+ * Everything below is in ONE cascade layer.
+ *
+ * An unlayered rule beats every layered rule regardless of specificity, so a
+ * stylesheet that mixes the two has a precedence order you cannot read off the
+ * source. One layer for the whole sheet keeps the order here exactly what it
+ * always was -- source order and specificity, unchanged -- while making that
+ * guarantee explicit and leaving a place for a future reset or vendor sheet to
+ * sit UNDER the design system rather than over it.
+ *
+ * @font-face and the header above stay outside: they declare resources, not
+ * style rules, and a layer would mean nothing for them.
+ */
+@layer undercroft {
+  /* -- the board -------------------------------------------------------------- */
 
-:root {
-  --face-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
-  --face-prose: "EB Garamond", ui-serif, Georgia, serif;
-  --face-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  :root {
+    --face-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+    --face-prose: "EB Garamond", ui-serif, Georgia, serif;
+    --face-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Board stock and ink. The ground is warm because the whole world is printed
+    /* Board stock and ink. The ground is warm because the whole world is printed
      matter; a neutral grey would make the section hues read as UI accents
      rather than as printed divider board. */
-  --bone: #efe9d9;
-  --leaf: #fbf8f0;
-  --ink: #16150f;
-  --ink-2: #56513f;
-  /* The faintest tone still has to be readable: it letters disabled controls and
+    --bone: #efe9d9;
+    --leaf: #fbf8f0;
+    --ink: #16150f;
+    --ink-2: #56513f;
+    /* The faintest tone still has to be readable: it letters disabled controls and
      every recorded absence. WCAG exempts a disabled control, but a label nobody
      can read is a defect whatever the exemption says, and the previous value sat
      at 4.1:1 on the page stock. */
-  --ink-3: #6b6450;
+    --ink-3: #6b6450;
 
-  /* Rules, never shadows. Two weights: the hairline that separates, and the
+    /* Rules, never shadows. Two weights: the hairline that separates, and the
      heavier rule that closes a block. */
-  --rule: rgba(22, 21, 15, 0.16);
-  --rule-strong: rgba(22, 21, 15, 0.44);
-  --hair: 1px;
+    --rule: rgba(22, 21, 15, 0.16);
+    --rule-strong: rgba(22, 21, 15, 0.44);
+    --hair: 1px;
 
-  /* The section wheel. Seven hues divide the book and are taken in order; four
+    /* The section wheel. Seven hues divide the book and are taken in order; four
      are spoken for and three are the system's room to grow. Vermilion is not in
      the wheel -- see --errata. */
-  --hue-oxide: #b24b1a;
-  --hue-chrome: #eda600;
-  --hue-grass: #3e782b;
-  --hue-teal: #0f7673;
-  --hue-ultramarine: #234c9e;
-  --hue-violet: #634cb0;
-  --hue-sienna: #7f4023;
+    --hue-oxide: #b24b1a;
+    --hue-chrome: #eda600;
+    --hue-grass: #3e782b;
+    --hue-teal: #0f7673;
+    --hue-ultramarine: #234c9e;
+    --hue-violet: #634cb0;
+    --hue-sienna: #7f4023;
 
-  /* Held out of the wheel. Errata only, nowhere else, ever. */
-  --errata: #cf2f16;
-  --errata-ink: #8c1c09;
+    /* Held out of the wheel. Errata only, nowhere else, ever. */
+    --errata: #cf2f16;
+    --errata-ink: #8c1c09;
 
-  /* The current division's board, set per route on the app root. These are the
+    /* The current division's board, set per route on the app root. These are the
      SOURCES defaults so nothing flashes before the route resolves. */
-  --board: var(--hue-chrome);
-  --board-ink: #4a3300;
+    --board: var(--hue-chrome);
+    --board-ink: #4a3300;
 
-  /* The page stock: acetate over bone, constant across divisions. The reading
+    /* The page stock: acetate over bone, constant across divisions. The reading
      field does not change colour when you turn to another section -- only the
      fore edge, the punch holes and the hinged leaf carry the board's hue. */
-  --page: #f7f3e7;
+    --page: #f7f3e7;
 
-  /* Solved at runtime by @/lib/acetate against --board, and consumed only by the
+    /* Solved at runtime by @/lib/acetate against --board, and consumed only by the
      hinged leaf, which is the one surface that genuinely lies over the board.
      These are the solver's own chrome-yellow answer, so the first paint is
      already correct; `acetate.test.ts` is what keeps every other hue honest. */
-  --leaf-alpha: 0.203;
-  --leaf-ground: #f0b731;
+    --leaf-alpha: 0.203;
+    --leaf-ground: #f0b731;
 
-  /* Fixed in rem, not fluid. Product UI is read at a consistent distance, and a
+    /* Fixed in rem, not fluid. Product UI is read at a consistent distance, and a
      heading that shrinks inside a panel reads as broken rather than responsive. */
-  --t-micro: 0.6875rem;
-  --t-small: 0.8125rem;
-  --t-body: 0.9375rem;
-  --t-prose: 1.0625rem;
-  --t-lead: 1.125rem;
-  --t-h3: 1.25rem;
-  --t-h2: 1.75rem;
-  --t-h1: 2.5rem;
+    --t-micro: 0.6875rem;
+    --t-small: 0.8125rem;
+    --t-body: 0.9375rem;
+    --t-prose: 1.0625rem;
+    --t-lead: 1.125rem;
+    --t-h3: 1.25rem;
+    --t-h2: 1.75rem;
+    --t-h1: 2.5rem;
 
-  --s-1: 0.25rem;
-  --s-2: 0.5rem;
-  --s-3: 0.75rem;
-  --s-4: 1rem;
-  --s-5: 1.5rem;
-  --s-6: 2rem;
-  --s-7: 3rem;
-  --s-8: 4.5rem;
+    --s-1: 0.25rem;
+    --s-2: 0.5rem;
+    --s-3: 0.75rem;
+    --s-4: 1rem;
+    --s-5: 1.5rem;
+    --s-6: 2rem;
+    --s-7: 3rem;
+    --s-8: 4.5rem;
 
-  /* A cut sheet of board, not a rounded card. */
-  --r-leaf: 3px;
-  --r-plate: 2px;
+    /* A cut sheet of board, not a rounded card. */
+    --r-leaf: 3px;
+    --r-plate: 2px;
 
-  /* The only motion in the system: a hinge at the punched edge, two hard
-     frames, no easing curve anywhere. A page of printed leaves does not ease. */
-  --hinge: 90ms steps(2, end);
+    /*
+     * Motion, and there is no easing curve anywhere in this sheet.
+     *
+     * A page of printed leaves does not ease. It is MOVED -- by a hand or by a
+     * press -- and it arrives in the discrete frames that movement has. So every
+     * duration below is `steps(n, end)` and none of them is a cubic-bezier.
+     *
+     * What varies between them is HOW MANY FRAMES, and that is not a tuning
+     * knob. Frames are the size of the thing that moved, exactly as ply is rank:
+     * two frames is a part, three is a loose slip laid onto the page, four is a
+     * whole leaf turning about its spine. Reading a frame count off a transition
+     * tells you what kind of object you just watched move, which is why a part
+     * may not borrow the leaf's four frames to feel more important.
+     *
+     * `--pass` is the odd one and is deliberately not a movement at all: it is
+     * ink going down in passes of the press, opacity only, nothing travelling.
+     * That is why it is the single token the reduced-motion block below leaves
+     * alone -- there is nothing in it to reduce. ADR 0014 has the argument.
+     */
+    --hinge: 90ms steps(2, end);
+    --tip: 150ms steps(3, end);
+    --turn: 190ms steps(4, end);
+    --pass: 120ms steps(2, end);
 
-  /* The one shadow the system allows: a leaf standing off the board it is
+    /* The one shadow the system allows: a leaf standing off the board it is
      hinged above. Offset plus soft blur, so it reads as height rather than as a
      coloured halo. */
-  --ply-shadow: 0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13);
+    --ply-shadow: 0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13);
 
-  --head-col: 9.5rem;
+    --head-col: 9.5rem;
 
-  /* The tab strip's own measurements. Named because the punch has to land
+    /* The tab strip's own measurements. Named because the punch has to land
      inside the label's indent at both edges the strip is used at, and a punch
      that drifts onto its own lettering is the defect the rotation replaced. */
-  --tab-indent: 2.4rem;
-  --tab-punch-x: 1.05rem;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --hinge: 1ms steps(1, end);
+    --tab-indent: 2.4rem;
+    --tab-punch-x: 1.05rem;
   }
-}
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+  /*
+   * Reduced motion is fewer and gentler, not off.
+   *
+   * The three tokens that MOVE something collapse to a single frame, and the
+   * keyframes that travel are swapped or switched off beside the rules that set
+   * them. `--pass` is untouched on purpose: it is opacity, so a row that inked
+   * in still says "I am new" to a reader who asked for no movement -- which is
+   * the fact that mattered. Taking that away as well would be reading the
+   * preference as "tell me less".
+   */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --hinge: 1ms steps(1, end);
+      --tip: 1ms steps(1, end);
+      --turn: 1ms steps(1, end);
+    }
+  }
 
-html {
-  font-size: 16px;
-  /* The scrollbar is part of the board, not a browser artefact. */
-  scrollbar-color: var(--rule-strong) var(--bone);
-}
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-body {
-  margin: 0;
-  background: var(--bone);
-  color: var(--ink);
-  font-family: var(--face-display);
-  font-size: var(--t-body);
-  font-variation-settings: "wdth" 100;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+  html {
+    font-size: 16px;
+    /* The scrollbar is part of the board, not a browser artefact. */
+    scrollbar-color: var(--rule-strong) var(--bone);
+  }
 
-::selection {
-  background: var(--hue-chrome);
-  color: var(--ink);
-}
+  body {
+    margin: 0;
+    background: var(--bone);
+    color: var(--ink);
+    font-family: var(--face-display);
+    font-size: var(--t-body);
+    font-variation-settings: "wdth" 100;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bone);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--rule-strong);
-  border: 3px solid var(--bone);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-2);
-}
+  ::selection {
+    background: var(--hue-chrome);
+    color: var(--ink);
+  }
 
-h1,
-h2,
-h3,
-h4 {
-  margin: 0;
-  font-family: var(--face-display);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
-}
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bone);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--rule-strong);
+    border: 3px solid var(--bone);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-2);
+  }
 
-h1 {
-  font-size: var(--t-h1);
-  font-variation-settings: "wdth" 92;
-  text-transform: uppercase;
-}
-h2 {
-  font-size: var(--t-h2);
-  font-variation-settings: "wdth" 88;
-  text-transform: uppercase;
-}
-h3 {
-  font-size: var(--t-h3);
-  font-variation-settings: "wdth" 96;
-  letter-spacing: -0.015em;
-}
-h4 {
-  font-size: var(--t-body);
-  font-variation-settings: "wdth" 100;
-  letter-spacing: 0;
-}
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+    font-family: var(--face-display);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+  }
 
-p {
-  margin: 0;
-}
+  h1 {
+    font-size: var(--t-h1);
+    font-variation-settings: "wdth" 92;
+    text-transform: uppercase;
+  }
+  h2 {
+    font-size: var(--t-h2);
+    font-variation-settings: "wdth" 88;
+    text-transform: uppercase;
+  }
+  h3 {
+    font-size: var(--t-h3);
+    font-variation-settings: "wdth" 96;
+    letter-spacing: -0.015em;
+  }
+  h4 {
+    font-size: var(--t-body);
+    font-variation-settings: "wdth" 100;
+    letter-spacing: 0;
+  }
 
-a {
-  color: var(--ink);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
-  text-decoration-color: var(--rule-strong);
-}
-a:hover {
-  text-decoration-color: var(--ink);
-}
+  p {
+    margin: 0;
+  }
 
-/* One focus treatment everywhere. A hard offset frame rather than a glow: a glow
+  a {
+    color: var(--ink);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+    text-decoration-color: var(--rule-strong);
+  }
+  a:hover {
+    text-decoration-color: var(--ink);
+  }
+
+  /* One focus treatment everywhere. A hard offset frame rather than a glow: a glow
    would be the second depth system this design does not have. */
-:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
 
-input,
-button,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
+  input,
+  button,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
 
-/* Every figure in this product is compared down a column. */
-.num,
-time,
-.mono {
-  font-family: var(--face-mono);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-}
+  /* Every figure in this product is compared down a column. */
+  .num,
+  time,
+  .mono {
+    font-family: var(--face-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
 
-/* -- the book --------------------------------------------------------------- */
+  /* -- the book --------------------------------------------------------------- */
 
-.book {
-  min-height: 100vh;
-  display: grid;
-  /* The strip is at the head and the leaf fills the rest. Placed by area rather
+  .book {
+    min-height: 100vh;
+    display: grid;
+    /* The strip is at the head and the leaf fills the rest. Placed by area rather
      than by source order, because the phone moves the strip to the foot without
      moving it in the DOM -- navigation stays ahead of the page it navigates. */
-  grid-template-areas: "rail" "leaf";
-  grid-template-rows: auto minmax(0, 1fr);
-  background: var(--board);
-}
+    grid-template-areas: "rail" "leaf";
+    grid-template-rows: auto minmax(0, 1fr);
+    background: var(--board);
+    /* The binder's edge is the binder's edge. A leaf mid-turn is tipped toward
+     the reader and so projects a few per cent wider than the page it lands on;
+     without this, a 190ms turn hands the window a horizontal scrollbar and
+     takes it back again, which reads as the layout breaking rather than as a
+     page moving. `clip` rather than `hidden` deliberately: `hidden` on one axis
+     computes the other to `auto` and would move the whole document's scroll
+     inside this element. */
+    overflow-x: clip;
+  }
 
-/* The leaf: a sheet of milk acetate lying on the section board, punched twice at
+  /* The leaf: a sheet of milk acetate lying on the section board, punched twice at
    its binding edge, with the running foot set down the spine. */
-.leaf {
-  grid-area: leaf;
-  position: relative;
-  /* Above the strip, so a tab pushed back tucks under the leaf rather than
+  .leaf {
+    grid-area: leaf;
+    position: relative;
+    /* Above the strip, so a tab pushed back tucks under the leaf rather than
      poking out below it. This is the only thing holding the retracted tabs
      down; without it they draw over the running head. */
-  z-index: 1;
-  background: var(--page);
-  min-width: 0;
-  /* Left padding clears the spine, then leaves a gutter. Setting it to exactly
+    z-index: 1;
+    background: var(--page);
+    min-width: 0;
+    /* Left padding clears the spine, then leaves a gutter. Setting it to exactly
      the spine's width put the hanging heads hard against the spine rule. */
-  padding: var(--s-5) var(--s-6) var(--s-8) calc(var(--s-7) + var(--s-4));
-  /* Head, page, foot -- in that order and in that direction, so the colophon can
+    padding: var(--s-5) var(--s-6) var(--s-8) calc(var(--s-7) + var(--s-4));
+    /* Head, page, foot -- in that order and in that direction, so the colophon can
      take the free space below the page rather than following the last line of it.
      A section with two rows on it would otherwise print its imprint a third of the
      way down the leaf, which reads as a stray line rather than as the foot.
@@ -430,63 +534,103 @@ time,
      longer carries a bottom margin of its own: one value, set once, and the foot
      is separated from the page by exactly what the page is separated from the
      head by. */
-  display: flex;
-  flex-direction: column;
-  row-gap: var(--s-6);
-}
+    display: flex;
+    flex-direction: column;
+    row-gap: var(--s-6);
 
-/* Block behaviour, restored. The rest of this layout was written against a block
+    /*
+     * The page turn. This is the one authored moment in the system.
+     *
+     * The entire navigation of this application is a tab strip on a ring
+     * binder, and the single physical act that defines that object -- a leaf
+     * swinging about its punched edge and coming down on the next section's
+     * board -- was the one thing the interface never did. Opening a division
+     * replaced the page instantly, which is a thing a screen does and not a
+     * thing a book does.
+     *
+     * Four frames, because this is a whole leaf and frames are size. About
+     * `left center`, because that is where the punches are: the spine is the
+     * hinge, and rotating about anything else would be a card flipping rather
+     * than a page turning. `perspective()` lives inside the transform rather
+     * than on `.book` so the depth belongs to the leaf that is moving and not
+     * to the binder holding it still.
+     *
+     * It fires on mount, and `Book.tsx` keys this element to which book is open
+     * at which division -- so it turns when the section changes and when the
+     * customer changes, and stays put for a hinged panel opening inside the
+     * section it already belongs to. Same leaf, no turn.
+     */
+    transform-origin: left center;
+    animation: leaf-turn var(--turn) both;
+  }
+
+  @keyframes leaf-turn {
+    from {
+      transform: perspective(1600px) rotateY(-5deg);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .leaf {
+      animation: none;
+    }
+  }
+
+  /* Block behaviour, restored. The rest of this layout was written against a block
    leaf, and without this a sheet taller than the viewport is COMPRESSED by the
    flex container instead of overflowing it into a scroll. */
-.leaf > * {
-  flex: none;
-}
+  .leaf > * {
+    flex: none;
+  }
 
-/* The punch holes and the spine caption: the only purely decorative marks in the
+  /* The punch holes and the spine caption: the only purely decorative marks in the
    interface, and therefore the only ones hidden from assistive technology
    rather than narrated. */
-.leaf__spine {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--s-7);
-  border-right: var(--hair) solid var(--rule);
-  pointer-events: none;
-}
+  .leaf__spine {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--s-7);
+    border-right: var(--hair) solid var(--rule);
+    pointer-events: none;
+  }
 
-.leaf__punch {
-  position: absolute;
-  left: 50%;
-  width: 11px;
-  height: 11px;
-  margin-left: -5.5px;
-  border-radius: 50%;
-  background: var(--board);
-  box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.35);
-}
-.leaf__punch--a {
-  top: 14%;
-}
-.leaf__punch--b {
-  top: 62%;
-}
+  .leaf__punch {
+    position: absolute;
+    left: 50%;
+    width: 11px;
+    height: 11px;
+    margin-left: -5.5px;
+    border-radius: 50%;
+    background: var(--board);
+    box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.35);
+  }
+  .leaf__punch--a {
+    top: 14%;
+  }
+  .leaf__punch--b {
+    top: 62%;
+  }
 
-.leaf__caption {
-  position: absolute;
-  bottom: var(--s-5);
-  left: 50%;
-  transform: translateX(-50%) rotate(180deg);
-  writing-mode: vertical-rl;
-  font-family: var(--face-mono);
-  font-size: 9px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
+  .leaf__caption {
+    position: absolute;
+    bottom: var(--s-5);
+    left: 50%;
+    transform: translateX(-50%) rotate(180deg);
+    writing-mode: vertical-rl;
+    font-family: var(--face-mono);
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
 
-/* -- the tab strip ---------------------------------------------------------- */
+  /* -- the tab strip ---------------------------------------------------------- */
 
-/*
+  /*
  * The divisions are top tabs, across the head of the book.
  *
  * They were side tabs down the fore edge, and the placement was the right
@@ -508,38 +652,38 @@ time,
  * against the form.
  */
 
-.rail {
-  grid-area: rail;
-  display: flex;
-  gap: 2px;
-  padding: var(--s-4) var(--s-5) 0;
-  background: var(--bone);
-}
+  .rail {
+    grid-area: rail;
+    display: flex;
+    gap: 2px;
+    padding: var(--s-4) var(--s-5) 0;
+    background: var(--bone);
+  }
 
-.rail__tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  /* Left-aligned from a constant indent, so the labels hold one column whether
+  .rail__tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    /* Left-aligned from a constant indent, so the labels hold one column whether
      a tab is out, pushed back, or face-down. Centring them made the open
      section's word jump sideways as the tab slid, which reads as the label
      moving rather than the tab. */
-  justify-content: flex-start;
-  border: none;
-  /* The rule goes on the edge that meets the leaf, as it did on the fore edge. */
-  border-bottom: var(--hair) solid var(--rule-strong);
-  border-radius: var(--r-leaf) var(--r-leaf) 0 0;
-  color: #fff;
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 86;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-  /* Bottom-heavy on purpose, and it is load-bearing rather than taste.
+    justify-content: flex-start;
+    border: none;
+    /* The rule goes on the edge that meets the leaf, as it did on the fore edge. */
+    border-bottom: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-leaf) var(--r-leaf) 0 0;
+    color: #fff;
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 86;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    /* Bottom-heavy on purpose, and it is load-bearing rather than taste.
    *
    * A tab that is not the current one slides toward the leaf to retract, so the
    * leaf covers its lower edge -- which means the label has to live in the upper
@@ -547,150 +691,170 @@ time,
    * tab stood 40px and the face-down ones lost the bottom of their own lettering
    * under the leaf. The label needs (retract + half its line) of clearance, so
    * the deep bottom padding is the room the tab retracts INTO. */
-  padding: var(--s-4) var(--s-4) var(--s-5) var(--tab-indent);
-  /* Slid with a transform, never a margin. Animating margin reflows the whole
+    padding: var(--s-4) var(--s-4) var(--s-5) var(--tab-indent);
+    /* Slid with a transform, never a margin. Animating margin reflows the whole
      strip on every hover; a transform is composited and costs nothing. */
-  transform: translateY(var(--s-3));
-  transition: transform var(--hinge);
-}
+    transform: translateY(var(--s-3));
+    transition: transform var(--hinge);
+  }
 
-.rail__tab:hover:not([aria-disabled="true"]) {
-  transform: translateY(var(--s-2));
-}
+  .rail__tab:hover:not([aria-disabled="true"]) {
+    transform: translateY(var(--s-2));
+  }
 
-/* The current tab stands proud of the others and becomes the board. */
-.rail__tab[aria-current="page"] {
-  transform: none;
-}
+  /* The current tab stands proud of the others and becomes the board. */
+  .rail__tab[aria-current="page"] {
+    transform: none;
+  }
 
-/* Selected is a punched hole. Not a colour change and not a bar: the hole. */
-.rail__tab[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  /* On the label's line, not on the tab's centre. The padding is asymmetric, so
+  /* Selected is a punched hole. Not a colour change and not a bar: the hole. */
+  .rail__tab[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    /* On the label's line, not on the tab's centre. The padding is asymmetric, so
      a hole at 50% would sit visibly below the word it belongs to. */
-  top: var(--s-4);
-  margin-top: 0.34em;
-  left: var(--tab-punch-x);
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--page);
-  box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
-}
+    top: var(--s-4);
+    margin-top: 0.34em;
+    left: var(--tab-punch-x);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--page);
+    box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+    /* A hole is not a state a tab fades into; it is punched, and punching is one
+     stroke. Two frames because the hole is a part of the tab, not a leaf. The
+     pseudo-element only exists while this selector matches, so it is created --
+     and the animation runs -- at the moment the section becomes the open one. */
+    animation: punch-through var(--hinge) both;
+  }
 
-/* Disabled is face-down: the leaf turned over, showing unprinted board back.
+  @keyframes punch-through {
+    from {
+      transform: scale(0.15);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rail__tab[aria-current="page"]::after {
+      animation: none;
+    }
+  }
+
+  /* Disabled is face-down: the leaf turned over, showing unprinted board back.
  *
  * The lettering is #524a37, not the #5f5844 this shipped with. That measured
  * 4.37:1 on the hatch -- under the floor, on the one label that says why a
  * section will not open. WCAG exempts a disabled control; the note on --ink-3
  * above already answers that, and 5.42:1 costs nothing. */
-.rail__tab[aria-disabled="true"] {
-  background: repeating-linear-gradient(135deg, #d6cfba, #d6cfba 3px, #cec7b1 3px, #cec7b1 6px);
-  color: #524a37;
-  cursor: not-allowed;
-  transform: translateY(var(--s-4));
-}
+  .rail__tab[aria-disabled="true"] {
+    background: repeating-linear-gradient(135deg, #d6cfba, #d6cfba 3px, #cec7b1 3px, #cec7b1 6px);
+    color: #524a37;
+    cursor: not-allowed;
+    transform: translateY(var(--s-4));
+  }
 
-/* -- the page inside the leaf ------------------------------------------------ */
+  /* -- the page inside the leaf ------------------------------------------------ */
 
-.sheet {
-  display: grid;
-  grid-template-columns: var(--head-col) repeat(4, minmax(0, 1fr));
-  column-gap: var(--s-5);
-  align-content: start;
-  max-width: 78rem;
-}
+  .sheet {
+    display: grid;
+    grid-template-columns: var(--head-col) repeat(4, minmax(0, 1fr));
+    column-gap: var(--s-5);
+    align-content: start;
+    max-width: 78rem;
+  }
 
-/* Heads hang in the margin column. This is the form's own structure, and it is
+  /* Heads hang in the margin column. This is the form's own structure, and it is
    why no page here needs an eyebrow: the label sits beside its heading rather
    than stacked on top of it. */
-.head {
-  grid-column: 1;
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
-  padding-top: 0.4rem;
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 80;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-}
+  .head {
+    grid-column: 1;
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    padding-top: 0.4rem;
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 80;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
 
-/* Each head trails its rule to the frame edge. That is what makes the margin
+  /* Each head trails its rule to the frame edge. That is what makes the margin
    column read as structure rather than as a stack of loose labels. */
-.head::after {
-  content: "";
-  flex: 1;
-  height: 0;
-  border-top: var(--hair) solid var(--rule);
-  transform: translateY(-0.3em);
-}
+  .head::after {
+    content: "";
+    flex: 1;
+    height: 0;
+    border-top: var(--hair) solid var(--rule);
+    transform: translateY(-0.3em);
+  }
 
-.body {
-  grid-column: 2 / -1;
-  min-width: 0;
-}
+  .body {
+    grid-column: 2 / -1;
+    min-width: 0;
+  }
 
-.band-rule {
-  grid-column: 1 / -1;
-  height: 0;
-  border-top: var(--hair) solid var(--rule);
-  margin: var(--s-6) 0 var(--s-5);
-}
+  .band-rule {
+    grid-column: 1 / -1;
+    height: 0;
+    border-top: var(--hair) solid var(--rule);
+    margin: var(--s-6) 0 var(--s-5);
+  }
 
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  min-width: 0;
-}
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-4);
+    min-width: 0;
+  }
 
-.stack--tight {
-  gap: var(--s-2);
-}
+  .stack--tight {
+    gap: var(--s-2);
+  }
 
-.row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  flex-wrap: wrap;
-}
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+  }
 
-.spread {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s-4);
-  flex-wrap: wrap;
-}
+  .spread {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--s-4);
+    flex-wrap: wrap;
+  }
 
-/* -- the running head -------------------------------------------------------- */
+  /* -- the running head -------------------------------------------------------- */
 
-.runhead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-4);
-  padding-bottom: var(--s-3);
-  border-bottom: var(--hair) solid var(--rule-strong);
-  flex-wrap: wrap;
-}
+  .runhead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-4);
+    padding-bottom: var(--s-3);
+    border-bottom: var(--hair) solid var(--rule-strong);
+    flex-wrap: wrap;
+  }
 
-.runhead__mark {
-  font-family: var(--face-display);
-  font-size: var(--t-body);
-  font-weight: 700;
-  font-variation-settings: "wdth" 78;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  text-decoration: none;
-}
+  .runhead__mark {
+    font-family: var(--face-display);
+    font-size: var(--t-body);
+    font-weight: 700;
+    font-variation-settings: "wdth" 78;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
 
-/*
+  /*
  * The device set with the wordmark.
  *
  * Sized in em so it tracks the wordmark's own cap height rather than a pixel
@@ -705,14 +869,14 @@ time,
  * page. Same rule as the punch holes down the spine: a hole shows what is under
  * it, and one painted in a fixed tone is a smudge.
  */
-.runhead__mark svg {
-  width: 1.15em;
-  height: 1.15em;
-  vertical-align: -0.2em;
-  margin-right: 0.44em;
-}
+  .runhead__mark svg {
+    width: 1.15em;
+    height: 1.15em;
+    vertical-align: -0.2em;
+    margin-right: 0.44em;
+  }
 
-/*
+  /*
  * Which book is open, in the place a book says it: the running head.
  *
  * The primary user holds several member companies at once and is usually
@@ -720,37 +884,37 @@ time,
  * they have to verify from the URL, and this sits on every division rather than
  * on the screen that happened to fetch it.
  */
-.runhead__record {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
-  margin-right: auto;
-  padding-left: var(--s-5);
-  min-width: 0;
-}
+  .runhead__record {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    margin-right: auto;
+    padding-left: var(--s-5);
+    min-width: 0;
+  }
 
-.runhead__customer {
-  font-family: var(--face-display);
-  font-size: var(--t-h3);
-  font-weight: 700;
-  font-variation-settings: "wdth" 86;
-  letter-spacing: -0.015em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .runhead__customer {
+    font-family: var(--face-display);
+    font-size: var(--t-h3);
+    font-weight: 700;
+    font-variation-settings: "wdth" 86;
+    letter-spacing: -0.015em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-.runhead__right {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-4);
-  font-size: var(--t-micro);
-}
+  .runhead__right {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-4);
+    font-size: var(--t-micro);
+  }
 
-/* -- the colophon ------------------------------------------------------------ */
+  /* -- the colophon ------------------------------------------------------------ */
 
-/*
+  /*
  * Which printing this is, at the foot of the leaf.
  *
  * The running head is closed by a rule beneath it; this opens with the same rule
@@ -766,144 +930,150 @@ time,
  * The rule stops at the sheet's own measure rather than running to the padding,
  * so it ends where `.band-rule` and the heads' trailing rules end.
  */
-.colophon {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
-  flex-wrap: wrap;
-  margin-top: auto;
-  padding-top: var(--s-4);
-  border-top: var(--hair) solid var(--rule);
-  max-width: 78rem;
-}
+  .colophon {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+    margin-top: auto;
+    padding-top: var(--s-4);
+    border-top: var(--hair) solid var(--rule);
+    max-width: 78rem;
+  }
 
-/* Set down to the label's size, but deliberately NOT to `.datum--quiet`. The tag is
+  /* Set down to the label's size, but deliberately NOT to `.datum--quiet`. The tag is
    the one string on the page somebody retypes -- into IMAGE_TAG, or into a bug
    report -- and a figure too faint to read back correctly is a worse defect at the
    foot of a page than a loud one. The label beside it carries the quiet instead. */
-.colophon .datum {
-  font-size: var(--t-micro);
-}
+  .colophon .datum {
+    font-size: var(--t-micro);
+  }
 
-/* -- prose ------------------------------------------------------------------- */
+  /* -- prose ------------------------------------------------------------------- */
 
-/*
+  /*
  * Garamond, and only for sentences a person is asked to read and act on: what a
  * source will read, what it will never write, what a refusal means. Consent copy
  * set in 13px UI sans reads as boilerplate, and boilerplate is precisely what it
  * must not be.
  */
-.prose {
-  font-family: var(--face-prose);
-  font-size: var(--t-prose);
-  line-height: 1.53;
-  max-width: 62ch;
-  color: var(--ink);
-}
+  .prose {
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.53;
+    max-width: 62ch;
+    color: var(--ink);
+  }
 
-.prose--lead {
-  font-size: var(--t-lead);
-  line-height: 1.45;
-}
+  .prose--lead {
+    font-size: var(--t-lead);
+    line-height: 1.45;
+  }
 
-.note {
-  font-family: var(--face-prose);
-  font-size: var(--t-prose);
-  line-height: 1.5;
-  color: var(--ink-2);
-  max-width: 62ch;
-}
+  .note {
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 62ch;
+  }
 
-.label {
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 82;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-}
+  .label {
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 82;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
 
-.datum {
-  font-family: var(--face-mono);
-  font-size: var(--t-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
+  .datum {
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
 
-.datum--quiet {
-  color: var(--ink-2);
-}
+  .datum--quiet {
+    color: var(--ink-2);
+  }
 
-/* A recorded absence. Never a zero, never an empty cell. */
-.missing {
-  color: var(--ink-3);
-  font-family: var(--face-mono);
-}
+  /* A recorded absence. Never a zero, never an empty cell. */
+  .missing {
+    color: var(--ink-3);
+    font-family: var(--face-mono);
+  }
 
-/* -- controls ---------------------------------------------------------------- */
+  /* -- controls ---------------------------------------------------------------- */
 
-/*
+  /*
  * A plate, printed and die-cut: chrome-yellow ground, hairline keyline, caps
  * label, and the arrow the manual uses for "go on". Secondary is the same die
  * with no ink in it. There is no third button.
  */
-.plate {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  padding: 0.5rem 0.9rem;
-  border: var(--hair) solid var(--ink);
-  border-radius: var(--r-plate);
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 86;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  text-decoration: none;
-  cursor: pointer;
-  transition:
-    background var(--hinge),
-    color var(--hinge);
-}
+  .plate {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    padding: 0.5rem 0.9rem;
+    border: var(--hair) solid var(--ink);
+    border-radius: var(--r-plate);
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 86;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      background var(--hinge),
+      color var(--hinge),
+      transform var(--hinge);
+  }
 
-.plate:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--leaf);
-}
+  .plate:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--leaf);
+  }
 
-.plate:active:not(:disabled) {
-  background: var(--ink-2);
-  color: var(--leaf);
-}
+  /* A die-cut plate that is struck goes DOWN. One pixel, which is the whole
+   travel a printed control has; anything more would be a screen button
+   pretending to be pressed rather than a plate that was. The colour change
+   alone said "you are on it", never "it took the blow". */
+  .plate:active:not(:disabled) {
+    background: var(--ink-2);
+    color: var(--leaf);
+    transform: translateY(1px);
+  }
 
-.plate:disabled {
-  border-color: var(--rule-strong);
-  color: var(--ink-3);
-  cursor: not-allowed;
-}
+  .plate:disabled {
+    border-color: var(--rule-strong);
+    color: var(--ink-3);
+    cursor: not-allowed;
+  }
 
-.plate--primary {
-  background: var(--hue-chrome);
-  color: var(--ink);
-}
-.plate--primary:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--hue-chrome);
-}
-.plate--primary:disabled {
-  /* Light enough that the faint ink still clears the floor on it. The darker
+  .plate--primary {
+    background: var(--hue-chrome);
+    color: var(--ink);
+  }
+  .plate--primary:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--hue-chrome);
+  }
+  .plate--primary:disabled {
+    /* Light enough that the faint ink still clears the floor on it. The darker
      fill this replaced put its own label at 4.3:1. */
-  background: #ece7d6;
-  color: var(--ink-3);
-  border-color: var(--rule-strong);
-}
+    background: #ece7d6;
+    color: var(--ink-3);
+    border-color: var(--rule-strong);
+  }
 
-/*
+  /*
  * Revocation is an ordinary plate.
  *
  * It printed in the errata colour until three DISCONNECT buttons on healthy rows
@@ -913,14 +1083,14 @@ time,
  * was reserved for. The safety here is the confirmation step, not the colour.
  */
 
-.plate--small {
-  padding: 0.3rem 0.6rem;
-  font-size: 10px;
-}
+  .plate--small {
+    padding: 0.3rem 0.6rem;
+    font-size: 10px;
+  }
 
-/* -- the language pair -------------------------------------------------------- */
+  /* -- the language pair -------------------------------------------------------- */
 
-/*
+  /*
  * Two plates bound into one control, the way a two-language manual is bound as one
  * book rather than shelved as two. Both faces stay on the page: a dropdown would hide
  * the language from the one reader who cannot find it any other way -- someone who
@@ -931,193 +1101,221 @@ time,
  * fact to a screen reader.
  */
 
-.langset {
-  display: inline-flex;
-}
+  .langset {
+    display: inline-flex;
+  }
 
-.langset .plate {
-  border-radius: 0;
-}
+  .langset .plate {
+    border-radius: 0;
+  }
 
-.langset .plate:first-child {
-  border-radius: var(--r-plate) 0 0 var(--r-plate);
-}
+  .langset .plate:first-child {
+    border-radius: var(--r-plate) 0 0 var(--r-plate);
+  }
 
-.langset .plate:last-child {
-  border-radius: 0 var(--r-plate) var(--r-plate) 0;
-  /* The two borders overlap into one rule, so the pair reads as one control. */
-  margin-left: calc(-1 * var(--hair));
-}
+  .langset .plate:last-child {
+    border-radius: 0 var(--r-plate) var(--r-plate) 0;
+    /* The two borders overlap into one rule, so the pair reads as one control. */
+    margin-left: calc(-1 * var(--hair));
+  }
 
-.langset .plate[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--leaf);
-}
+  .langset .plate[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--leaf);
+  }
 
-/* -- fields ------------------------------------------------------------------ */
+  /* -- fields ------------------------------------------------------------------ */
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  min-width: 0;
-}
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    min-width: 0;
+  }
 
-.field__hint {
-  font-family: var(--face-prose);
-  font-size: 1rem;
-  line-height: 1.45;
-  color: var(--ink-2);
-  max-width: 62ch;
-}
+  .field__hint {
+    font-family: var(--face-prose);
+    font-size: 1rem;
+    line-height: 1.45;
+    color: var(--ink-2);
+    max-width: 62ch;
+  }
 
-.input {
-  font-family: var(--face-mono);
-  font-size: var(--t-small);
-  padding: 0.5rem 0.65rem;
-  background: var(--leaf);
-  color: var(--ink);
-  border: var(--hair) solid var(--rule-strong);
-  border-radius: var(--r-plate);
-  caret-color: var(--ink);
-  transition: border-color var(--hinge);
-}
+  .input {
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+    padding: 0.5rem 0.65rem;
+    background: var(--leaf);
+    color: var(--ink);
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+    caret-color: var(--ink);
+    transition: border-color var(--hinge);
+  }
 
-.input::placeholder {
-  color: var(--ink-3);
-}
+  .input::placeholder {
+    color: var(--ink-3);
+  }
 
-.input:hover:not(:disabled) {
-  border-color: var(--ink-2);
-}
+  .input:hover:not(:disabled) {
+    border-color: var(--ink-2);
+  }
 
-.input:focus {
-  outline: none;
-  border-color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--ink);
-}
+  .input:focus {
+    outline: none;
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink);
+  }
 
-.input:disabled {
-  background: #e9e2d0;
-  color: var(--ink-3);
-  cursor: not-allowed;
-}
+  .input:disabled {
+    background: #e9e2d0;
+    color: var(--ink-3);
+    cursor: not-allowed;
+  }
 
-/* The punch is the checkbox: a hole through the leaf when a thing is selected,
+  /* The punch is the checkbox: a hole through the leaf when a thing is selected,
    which is how selection is shown everywhere else in this system. */
-.punch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-3);
-  cursor: pointer;
-  font-family: var(--face-mono);
-  font-size: var(--t-small);
-  padding: 0.28rem 0;
-}
+  .punch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    cursor: pointer;
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+    padding: 0.28rem 0;
+  }
 
-.punch__box {
-  position: relative;
-  flex: none;
-  width: 15px;
-  height: 15px;
-  border: var(--hair) solid var(--ink);
-  border-radius: 50%;
-  background: var(--leaf);
-  transition: background var(--hinge);
-}
+  .punch__box {
+    position: relative;
+    flex: none;
+    width: 15px;
+    height: 15px;
+    border: var(--hair) solid var(--ink);
+    border-radius: 50%;
+    background: var(--leaf);
+    transition: background var(--hinge);
+  }
 
-.punch input {
-  position: absolute;
-  opacity: 0;
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  cursor: pointer;
-}
+  .punch input {
+    position: absolute;
+    opacity: 0;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    cursor: pointer;
+  }
 
-.punch input:checked + .punch__box {
-  background: var(--board);
-  box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45);
-}
+  .punch input:checked + .punch__box {
+    background: var(--board);
+    box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45);
+  }
 
-.punch input:focus-visible + .punch__box {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
+  .punch input:focus-visible + .punch__box {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
 
-.punch input:disabled + .punch__box {
-  border-color: var(--rule-strong);
-  background: #e9e2d0;
-}
+  .punch input:disabled + .punch__box {
+    border-color: var(--rule-strong);
+    background: #e9e2d0;
+  }
 
-.punch:has(input:disabled) {
-  color: var(--ink-3);
-  cursor: not-allowed;
-}
+  .punch:has(input:disabled) {
+    color: var(--ink-3);
+    cursor: not-allowed;
+  }
 
-/* -- the schedule of grants -------------------------------------------------- */
+  /* -- the schedule of grants -------------------------------------------------- */
 
-/*
+  /*
  * Rows, not a grid of equal cards. An operator reads down a column of sources
  * the way they read down any schedule, and a card grid would give the lapsed
  * grant exactly the same footprint as the healthy one -- which is the one thing
  * this screen exists to prevent.
  */
 
-.schedule {
-  border-top: var(--hair) solid var(--rule-strong);
-}
+  .schedule {
+    border-top: var(--hair) solid var(--rule-strong);
+  }
 
-.grant {
-  position: relative;
-  border-bottom: var(--hair) solid var(--rule);
-  padding: var(--s-4) 0;
-}
+  /*
+   * A row that inks in is a row that was not there before.
+   *
+   * That is the whole meaning, and it is why there is NO STAGGER here. A
+   * staggered list is a piece of choreography about the list arriving; React
+   * reconciles these rows by key, so an existing row does not remount and does
+   * not re-run this, and the only thing that inks is the one that is actually
+   * new. Withdraw an invitation and the remaining rows sit still; send one and
+   * exactly one line is laid down. Stagger would have spent that signal on
+   * decoration -- every row moving on every fetch, saying nothing.
+   *
+   * Two passes of the press, opacity only. Nothing travels, which is why
+   * `--pass` is the token reduced motion leaves alone.
+   */
+  .grant,
+  .table tbody tr {
+    animation: ink-set var(--pass) both;
+  }
 
-.grant__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(0, 0.95fr) auto;
-  gap: var(--s-4);
-  align-items: baseline;
-}
+  @keyframes ink-set {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 
-.grant__name {
-  font-family: var(--face-display);
-  font-size: var(--t-h3);
-  font-weight: 700;
-  font-variation-settings: "wdth" 88;
-  letter-spacing: -0.005em;
-  text-transform: uppercase;
-}
+  .grant {
+    position: relative;
+    border-bottom: var(--hair) solid var(--rule);
+    padding: var(--s-4) 0;
+  }
 
-.grant__account {
-  min-width: 0;
-}
+  .grant__head {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(0, 0.95fr) auto;
+    gap: var(--s-4);
+    align-items: baseline;
+  }
 
-.grant__when {
-  text-align: right;
-}
+  .grant__name {
+    font-family: var(--face-display);
+    font-size: var(--t-h3);
+    font-weight: 700;
+    font-variation-settings: "wdth" 88;
+    letter-spacing: -0.005em;
+    text-transform: uppercase;
+  }
 
-.grant__actions {
-  display: flex;
-  gap: var(--s-2);
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
+  .grant__account {
+    min-width: 0;
+  }
 
-/* A grant nobody has made yet is an unprinted leaf: it carries the access
+  .grant__when {
+    text-align: right;
+  }
+
+  .grant__actions {
+    display: flex;
+    gap: var(--s-2);
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  /* A grant nobody has made yet is an unprinted leaf: it carries the access
    statement instead of a status, because that is the decision being asked for,
    and it is taller than the others on purpose. */
-.grant--unprinted {
-  background: var(--leaf);
-  border: var(--hair) solid var(--rule);
-  border-radius: var(--r-leaf);
-  padding: var(--s-4);
-  margin: var(--s-2) 0;
-}
+  .grant--unprinted {
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    padding: var(--s-4);
+    margin: var(--s-2) 0;
+  }
 
-/* Pending is half-hinged: the leaf lifted at its binding edge and not yet laid
+  /* Pending is half-hinged: the leaf lifted at its binding edge and not yet laid
    down. A shape before it is a colour.
  *
  * The binding edge is a PERFORATION -- a hairline of dashes, the way a leaf that
@@ -1127,158 +1325,206 @@ time,
  * interface, and nothing in this design carries a coloured edge above 1px. The
  * perforation says more in less ink, and it belongs to the world rather than to
  * the category. */
-.grant--pending {
-  border-left: var(--hair) dashed var(--rule-strong);
-  padding-left: var(--s-4);
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--board) 16%, transparent),
-    transparent 38%
-  );
-}
+  .grant--pending {
+    border-left: var(--hair) dashed var(--rule-strong);
+    padding-left: var(--s-4);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--board) 16%, transparent),
+      transparent 38%
+    );
+  }
 
-/* How much of the section has been set. A rule inked in as far as it goes,
+  /* How much of the section has been set. A rule inked in as far as it goes,
    which is what a printed progress indicator looks like -- not a rounded pill
    with a gradient in it. */
-.gathering {
-  height: 4px;
-  max-width: 24rem;
-  background: var(--rule);
-  border-radius: 0;
-}
+  .gathering {
+    height: 4px;
+    max-width: 24rem;
+    background: var(--rule);
+    border-radius: 0;
+  }
 
-.gathering__inked {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: var(--ink);
-  /* Scaled from the left rather than animating width, which would relayout the
+  .gathering__inked {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: var(--ink);
+    /* Scaled from the left rather than animating width, which would relayout the
      rule on every change. */
-  transform-origin: left center;
-  transition: transform var(--hinge);
-}
+    transform-origin: left center;
+    transition: transform var(--hinge);
+  }
 
-/* -- the access statement ---------------------------------------------------- */
+  /* -- the access statement ---------------------------------------------------- */
 
-/*
+  /*
  * What is read and what is never written, on the leaf, before the redirect.
  * `.claude/rules/ui.md` and ConnectionCard.test.tsx both hold this in place; if
  * a later pass deletes it as clutter, those tests are the objection.
  */
-.access {
-  display: grid;
-  grid-template-columns: var(--head-col) minmax(0, 1fr);
-  gap: var(--s-2) var(--s-5);
-  margin: var(--s-4) 0 0;
-  padding: var(--s-4) 0 0;
-  border-top: var(--hair) dashed var(--rule-strong);
-}
+  .access {
+    display: grid;
+    grid-template-columns: var(--head-col) minmax(0, 1fr);
+    gap: var(--s-2) var(--s-5);
+    margin: var(--s-4) 0 0;
+    padding: var(--s-4) 0 0;
+    border-top: var(--hair) dashed var(--rule-strong);
+  }
 
-.access dt {
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 80;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  padding-top: 0.3rem;
-}
+  .access dt {
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 80;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    padding-top: 0.3rem;
+  }
 
-.access dd {
-  margin: 0;
-  font-family: var(--face-prose);
-  font-size: var(--t-prose);
-  line-height: 1.48;
-  max-width: 58ch;
-}
+  .access dd {
+    margin: 0;
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.48;
+    max-width: 58ch;
+  }
 
-/* -- errata ------------------------------------------------------------------ */
+  /* -- errata ------------------------------------------------------------------ */
 
-/*
+  /*
  * The slip a publisher tips into a book to correct it. Vermilion, and the only
  * thing on any page allowed to use it: rules top and bottom, the correction set
  * in prose, and one action.
  */
-.errata {
-  border-top: 2px solid var(--errata);
-  border-bottom: 2px solid var(--errata);
-  background: #fdf0eb;
-  padding: var(--s-4) var(--s-5);
-  margin: var(--s-4) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  align-items: flex-start;
-  border-radius: 1px;
-}
+  .errata {
+    border-top: 2px solid var(--errata);
+    border-bottom: 2px solid var(--errata);
+    background: #fdf0eb;
+    padding: var(--s-4) var(--s-5);
+    margin: var(--s-4) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+    align-items: flex-start;
+    border-radius: 1px;
 
-.errata__mark {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 80;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--errata-ink);
-}
+    /*
+     * The slip is TIPPED IN, which is the verb a publisher actually uses.
+     *
+     * A correction slip is a loose leaf laid into a bound book after the fact,
+     * and it never goes in perfectly square. Three frames, because a slip is
+     * bigger than a part and smaller than a leaf, and it lands flat: the
+     * crookedness belongs to the arrival, not to the finished page.
+     *
+     * This matters beyond the world. A slip that was on the page when it opened
+     * and a slip that arrived while you were reading are different facts, and
+     * the interface said them identically -- `role="alert"` told a screen reader
+     * and nothing told anyone else. Now the ink laying down IS the announcement.
+     */
+    animation: slip-tip var(--tip) both;
+  }
 
-.errata__body {
-  font-family: var(--face-prose);
-  font-size: var(--t-prose);
-  line-height: 1.5;
-  max-width: 62ch;
-  color: var(--ink);
-}
+  /*
+   * A status note is the quiet half of the same event: something happened and
+   * the page is reporting it. It gets the slip's arrival because it IS one --
+   * "the invitation went out", "your link expired" -- and the alternative is a
+   * sentence that was not there a moment ago appearing with no account of
+   * itself. The selector is the role rather than a class on purpose: what earns
+   * the motion is having been announced, and anything the app announces later
+   * gets it without anyone remembering to.
+   */
+  .note[role="status"] {
+    animation: slip-tip var(--tip) both;
+  }
 
-.errata--inline {
-  margin: var(--s-3) 0 0;
-  padding: var(--s-3) var(--s-4);
-}
+  @keyframes slip-tip {
+    from {
+      opacity: 0;
+      transform: translateY(-3px) rotate(-0.4deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 
-/* -- status marks ------------------------------------------------------------ */
+  /* The travel goes; the ink stays. A slip still lays itself down in two passes,
+   it just does not arrive from above or land crooked on the way. */
+  @media (prefers-reduced-motion: reduce) {
+    .errata,
+    .note[role="status"] {
+      animation: ink-set var(--pass) both;
+    }
+  }
 
-/*
+  .errata__mark {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 80;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--errata-ink);
+  }
+
+  .errata__body {
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.5;
+    max-width: 62ch;
+    color: var(--ink);
+  }
+
+  .errata--inline {
+    margin: var(--s-3) 0 0;
+    padding: var(--s-3) var(--s-4);
+  }
+
+  /* -- status marks ------------------------------------------------------------ */
+
+  /*
  * Shape first, word second, hue third. Each mark is a different geometry, so a
  * row is readable in greyscale, at a glance, and by someone who cannot
  * distinguish the hues at all.
  */
-.mark {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 84;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
+  .mark {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 84;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
 
-.mark svg {
-  flex: none;
-}
+  .mark svg {
+    flex: none;
+  }
 
-.mark--granted {
-  color: #1c5c33;
-}
-.mark--pending {
-  color: #6b4a00;
-}
-.mark--lapsed {
-  color: var(--errata-ink);
-}
-.mark--absent {
-  color: var(--ink-2);
-}
+  .mark--granted {
+    color: #1c5c33;
+  }
+  .mark--pending {
+    color: #6b4a00;
+  }
+  .mark--lapsed {
+    color: var(--errata-ink);
+  }
+  .mark--absent {
+    color: var(--ink-2);
+  }
 
-/* -- the hinged leaf --------------------------------------------------------- */
+  /* -- the hinged leaf --------------------------------------------------------- */
 
-/*
+  /*
  * The signature move. A clear acetate leaf hinged down at its punched edge over
  * the board, which stays readable through it: `--leaf-alpha` is solved at
  * runtime for whichever section hue is current, so this is a real translucency
@@ -1288,23 +1534,47 @@ time,
  * modal, so the leaf hinges open inside its own row -- the board above and below
  * stays in the document, in the tab order, and on screen.
  */
-.hinge {
-  position: relative;
-  margin-top: var(--s-4);
-  /* The board the leaf lies on, exposed at every edge. */
-  padding: calc(var(--s-5) + 9px) calc(var(--s-5) + 9px) calc(var(--s-5) + 9px)
-    calc(var(--s-7) + 9px);
-  border-radius: var(--r-leaf);
-  background: var(--board);
-  /* Elevation is declared ONCE. This carried a hairline border UNDER the ply
+  .hinge {
+    position: relative;
+    margin-top: var(--s-4);
+    /* The board the leaf lies on, exposed at every edge. */
+    padding: calc(var(--s-5) + 9px) calc(var(--s-5) + 9px) calc(var(--s-5) + 9px)
+      calc(var(--s-7) + 9px);
+    border-radius: var(--r-leaf);
+    background: var(--board);
+    /* Elevation is declared ONCE. This carried a hairline border UNDER the ply
      shadow, which is the ghost card -- two depth systems disagreeing about which
      one is real. Ply is the rank here, so the shadow keeps it. */
-  box-shadow: var(--ply-shadow);
-  transform-origin: top left;
-  animation: hinge-down var(--hinge) both;
-}
+    box-shadow: var(--ply-shadow);
+    transform-origin: top left;
+    animation: hinge-down var(--hinge) both;
 
-/*
+    /*
+     * Secondary ink on a hinged leaf is mixed FROM the ground, never inherited
+     * from the page.
+     *
+     * The solver guarantees the primary ink against the solved field and nothing
+     * else, and the page's secondary grey is calibrated for bone. On the chrome
+     * board it measured 4.35:1 -- under the 4.5:1 floor, on the hint text that
+     * explains what a Drive folder is. Mixing the page ink into the actual ground
+     * keeps the hierarchy visible and puts every tone back above the floor on
+     * every hue in the wheel.
+     *
+     * These two lived in a second `.hinge` block further down until that turned
+     * out to be the only duplicate selector in the sheet. Same declarations, same
+     * order, one block.
+     */
+    --ink-2: color-mix(in srgb, var(--ink) 78%, var(--leaf-ground));
+    /* 70%, not 62%. At 62% the faintest tone measured 4.04:1 against the solved
+     sienna ground -- below the floor. Nothing renders `--ink-3` inside a hinge
+     today, so this was a loaded gun rather than a live defect: the next person
+     to put a MISSING dash or a hint on a hinged leaf would have shipped
+     sub-floor text with nothing to warn them. 70% clears 5.00:1 on the worst
+     hue in the wheel. */
+    --ink-3: color-mix(in srgb, var(--ink) 70%, var(--leaf-ground));
+  }
+
+  /*
  * The acetate itself: genuinely translucent, lying on the board above.
  *
  * This was an opaque composite of leaf-over-board -- arithmetically the same
@@ -1314,52 +1584,30 @@ time,
  * translucency is a fact rather than a claim and each hue in the wheel reads
  * differently through it.
  */
-.hinge::before {
-  content: "";
-  position: absolute;
-  inset: 9px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--leaf) calc(var(--leaf-alpha) * 100%), transparent);
-}
+  .hinge::before {
+    content: "";
+    position: absolute;
+    inset: 9px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--leaf) calc(var(--leaf-alpha) * 100%), transparent);
+  }
 
-/* Content rides above the sheet; the sheet is painted, not stacked. */
-.hinge > * {
-  position: relative;
-  z-index: 1;
-}
+  /* Content rides above the sheet; the sheet is painted, not stacked. */
+  .hinge > * {
+    position: relative;
+    z-index: 1;
+  }
 
-/*
- * Secondary ink on a hinged leaf is mixed FROM the ground, never inherited from
- * the page.
- *
- * The solver guarantees the primary ink against the solved field and nothing
- * else, and the page's secondary grey is calibrated for bone. On the chrome
- * board it measured 4.35:1 -- under the 4.5:1 floor, on the hint text that
- * explains what a Drive folder is. Mixing the page ink into the actual ground
- * keeps the hierarchy visible and puts every tone back above the floor on every
- * hue in the wheel.
- */
-.hinge {
-  --ink-2: color-mix(in srgb, var(--ink) 78%, var(--leaf-ground));
-  /* 70%, not 62%. At 62% the faintest tone measured 4.04:1 against the solved
-     sienna ground -- below the floor. Nothing renders `--ink-3` inside a hinge
-     today, so this was a loaded gun rather than a live defect: the next person
-     to put a MISSING dash or a hint on a hinged leaf would have shipped
-     sub-floor text with nothing to warn them. 70% clears 5.00:1 on the worst
-     hue in the wheel. */
-  --ink-3: color-mix(in srgb, var(--ink) 70%, var(--leaf-ground));
-}
-
-/* A disabled control on a saturated ground. The page's pale grey fill reads as a
+  /* A disabled control on a saturated ground. The page's pale grey fill reads as a
    hole punched in the board; an outline mixed from the ground stays part of it. */
-.hinge .plate:disabled,
-.hinge .plate--primary:disabled {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--ink) 40%, var(--leaf-ground));
-  color: var(--ink-3);
-}
+  .hinge .plate:disabled,
+  .hinge .plate--primary:disabled {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--ink) 40%, var(--leaf-ground));
+    color: var(--ink-3);
+  }
 
-/*
+  /*
  * The leaf is punched, like every other leaf in the book.
  *
  * This replaces a 3px board-hue bar down the binding edge, which was the
@@ -1367,211 +1615,244 @@ time,
  * a card. The punch says "hinged leaf" without saying it in an accent border,
  * and it is the thing the whole world is named after.
  */
-.hinge__punch {
-  position: absolute;
-  z-index: 2;
-  left: calc(var(--s-4) + 8px);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  /* The page beneath, not the board. A hole must show what is behind it, and
+  .hinge__punch {
+    position: absolute;
+    z-index: 2;
+    left: calc(var(--s-4) + 8px);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    /* The page beneath, not the board. A hole must show what is behind it, and
      these were filled in the board hue on a ground that is mostly board hue --
      two faint smudges rather than two holes. Leaf and board are punched together
      in a ring binder, so what shows through is the page below both. */
-  background: var(--page);
-  box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.4);
-}
-.hinge__punch--a {
-  top: var(--s-5);
-}
-.hinge__punch--b {
-  bottom: var(--s-5);
-}
-
-@keyframes hinge-down {
-  from {
-    transform: rotateX(-14deg);
+    background: var(--page);
+    box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.4);
   }
-  to {
-    transform: none;
+  .hinge__punch--a {
+    top: var(--s-5);
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hinge {
-    animation: none;
+  .hinge__punch--b {
+    bottom: var(--s-5);
   }
-}
 
-/* The one-time invitation token. Set large enough to be read aloud over a phone
+  @keyframes hinge-down {
+    from {
+      transform: rotateX(-14deg);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hinge {
+      animation: none;
+    }
+  }
+
+  /* The one-time invitation token. Set large enough to be read aloud over a phone
    without anyone squinting, boxed so it cannot be mistaken for prose, and
    selectable -- a clipboard API that silently fails must not destroy the only
    copy of this value. */
-.token {
-  font-family: var(--face-mono);
-  font-size: var(--t-lead);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  word-break: break-all;
-  background: var(--leaf);
-  border: var(--hair) solid var(--ink);
-  border-radius: var(--r-plate);
-  padding: var(--s-4);
-  user-select: all;
-}
+  .token {
+    font-family: var(--face-mono);
+    font-size: var(--t-lead);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    word-break: break-all;
+    background: var(--leaf);
+    border: var(--hair) solid var(--ink);
+    border-radius: var(--r-plate);
+    padding: var(--s-4);
+    user-select: all;
+  }
 
-/* -- tables ------------------------------------------------------------------ */
+  /* -- tables ------------------------------------------------------------------ */
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--t-small);
-}
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--t-small);
+  }
 
-.table caption {
-  text-align: left;
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 80;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  padding-bottom: var(--s-2);
-}
+  .table caption {
+    text-align: left;
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 80;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    padding-bottom: var(--s-2);
+  }
 
-.table th {
-  text-align: left;
-  font-family: var(--face-display);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  font-variation-settings: "wdth" 80;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  padding: var(--s-2) var(--s-3) var(--s-2) 0;
-  border-bottom: var(--hair) solid var(--rule-strong);
-  white-space: nowrap;
-}
+  .table th {
+    text-align: left;
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 80;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    padding: var(--s-2) var(--s-3) var(--s-2) 0;
+    border-bottom: var(--hair) solid var(--rule-strong);
+    white-space: nowrap;
+  }
 
-.table td {
-  padding: var(--s-3) var(--s-3) var(--s-3) 0;
-  border-bottom: var(--hair) solid var(--rule);
-  vertical-align: baseline;
-}
+  .table td {
+    padding: var(--s-3) var(--s-3) var(--s-3) 0;
+    border-bottom: var(--hair) solid var(--rule);
+    vertical-align: baseline;
+    /* The row wash arrived as a hard cut while every other ground in the system
+     changed in the hinge's two frames. Same token, so the schedule answers the
+     cursor the way a plate does. */
+    transition: background var(--hinge);
+  }
 
-.table tbody tr:hover td {
-  background: color-mix(in srgb, var(--board) 8%, transparent);
-}
+  .table tbody tr:hover td {
+    background: color-mix(in srgb, var(--board) 8%, transparent);
+  }
 
-.table .num {
-  text-align: right;
-}
+  .table .num {
+    text-align: right;
+  }
 
-/* Only the last cell loses its right padding. Zeroing it on every numeric cell
+  /* Only the last cell loses its right padding. Zeroing it on every numeric cell
    ran the byte counts straight into the button in the column beside them. */
-.table td:last-child,
-.table th:last-child {
-  padding-right: 0;
-  text-align: right;
-}
+  .table td:last-child,
+  .table th:last-child {
+    padding-right: 0;
+    text-align: right;
+  }
 
-code {
-  font-family: var(--face-mono);
-  font-size: 0.9em;
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-  padding: 0.1em 0.3em;
-  border-radius: 2px;
-}
+  code {
+    font-family: var(--face-mono);
+    font-size: 0.9em;
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    padding: 0.1em 0.3em;
+    border-radius: 2px;
+  }
 
-/* -- empty and loading -------------------------------------------------------- */
+  /* -- empty and loading -------------------------------------------------------- */
 
-/*
+  /*
  * An empty division is an unprinted leaf, not a dashed placeholder box: the same
  * object, with no ink on it yet. It says what will be printed here and what to
  * do about it.
  */
-.unprinted {
-  background: var(--leaf);
-  border: var(--hair) solid var(--rule);
-  border-radius: var(--r-leaf);
-  padding: var(--s-6) var(--s-5);
-  max-width: 58ch;
-}
+  .unprinted {
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    padding: var(--s-6) var(--s-5);
+    max-width: 58ch;
+  }
 
-.unprinted__title {
-  font-family: var(--face-display);
-  font-size: var(--t-h3);
-  font-weight: 700;
-  font-variation-settings: "wdth" 88;
-  text-transform: uppercase;
-  letter-spacing: -0.01em;
-  margin-bottom: var(--s-3);
-}
+  .unprinted__title {
+    font-family: var(--face-display);
+    font-size: var(--t-h3);
+    font-weight: 700;
+    font-variation-settings: "wdth" 88;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    margin-bottom: var(--s-3);
+  }
 
-/* Skeletons are lines of type being set, not a spinner: the shape of what is
+  /* Skeletons are lines of type being set, not a spinner: the shape of what is
    coming keeps the leaf from jumping when it lands. */
-.setting {
-  height: 0.8rem;
-  background: repeating-linear-gradient(90deg, var(--rule) 0 60%, transparent 60% 100%);
-  background-size: 7px 100%;
-  opacity: 0.6;
-  animation: set-line 1.1s steps(6, end) infinite;
-}
-
-@keyframes set-line {
-  from {
-    background-position-x: 0;
-  }
-  to {
-    background-position-x: 42px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
   .setting {
-    animation: none;
+    height: 0.8rem;
+    background: repeating-linear-gradient(90deg, var(--rule) 0 60%, transparent 60% 100%);
+    background-size: 7px 100%;
+    opacity: 0.6;
+    animation: set-line 1.1s steps(6, end) infinite;
   }
-}
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
+  @keyframes set-line {
+    from {
+      background-position-x: 0;
+    }
+    to {
+      background-position-x: 42px;
+    }
+  }
 
-/* -- the title page ----------------------------------------------------------- */
+  @media (prefers-reduced-motion: reduce) {
+    .setting {
+      animation: none;
+    }
+  }
 
-/*
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* -- the title page ----------------------------------------------------------- */
+
+  /*
  * Sign-in is the manual's title page: no tab rail, because you are not in a
  * section yet. One leaf, centred, with the whole wheel printed down its fore
  * edge as the contents of the book about to be opened.
  */
-.titlepage {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: var(--s-5);
-  background: var(--bone);
-}
+  .titlepage {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: var(--s-5);
+    background: var(--bone);
+  }
 
-.titlepage__leaf {
-  position: relative;
-  width: min(34rem, 100%);
-  background: var(--leaf);
-  border: var(--hair) solid var(--rule-strong);
-  border-radius: var(--r-leaf);
-  padding: var(--s-7) var(--s-7) var(--s-6);
-  box-shadow: var(--ply-shadow);
-}
+  .titlepage__leaf {
+    position: relative;
+    width: min(34rem, 100%);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-leaf);
+    padding: var(--s-7) var(--s-7) var(--s-6);
+    box-shadow: var(--ply-shadow);
+    /* The book opens. Same turn as every division after it, about the same
+     binding edge, so the first thing anyone sees teaches the gesture the rest of
+     the application is navigated by. */
+    transform-origin: left center;
+    animation: leaf-turn var(--turn) both;
+  }
 
-/*
+  /*
+   * Asking for the code is a new leaf, not an edited one.
+   *
+   * The address form and the code form occupy the same place on the title page,
+   * and the step between them is the only navigation this screen has. It
+   * changed in place, so the one moment a reader needs to notice -- we have
+   * sent you something, now look at your mail -- was the moment the page was
+   * most completely silent. `SignIn.tsx` keys the form to the step so the swap
+   * is a real remount and this runs.
+   */
+  .titlepage__leaf form {
+    animation: slip-tip var(--tip) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .titlepage__leaf {
+      animation: none;
+    }
+
+    .titlepage__leaf form {
+      animation: ink-set var(--pass) both;
+    }
+  }
+
+  /*
  * The imprint: the device and the name, closed off by a rule.
  *
  * This replaces a micro-caps "Undercroft" stacked directly on top of the H1,
@@ -1582,48 +1863,48 @@ code {
  * rule is the same one that closes the running head, so the first screen already
  * teaches the device that carries every screen after it.
  */
-.imprint {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding-bottom: var(--s-4);
-  border-bottom: var(--hair) solid var(--rule-strong);
-}
+  .imprint {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    padding-bottom: var(--s-4);
+    border-bottom: var(--hair) solid var(--rule-strong);
+  }
 
-.imprint svg {
-  flex: none;
-}
+  .imprint svg {
+    flex: none;
+  }
 
-/* Set larger than the running head's wordmark so the device and the name hold
+  /* Set larger than the running head's wordmark so the device and the name hold
    roughly the same proportion here as they do up there. The device grows on the
    title page; if the name did not grow with it, the lockup would be two
    different lockups. */
-.imprint__name {
-  font-family: var(--face-display);
-  font-size: var(--t-h3);
-  font-weight: 700;
-  font-variation-settings: "wdth" 78;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
+  .imprint__name {
+    font-family: var(--face-display);
+    font-size: var(--t-h3);
+    font-weight: 700;
+    font-variation-settings: "wdth" 78;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
 
-.titlepage__wheel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 10px;
-  display: flex;
-  flex-direction: column;
-  border-radius: 0 var(--r-leaf) var(--r-leaf) 0;
-  overflow: hidden;
-}
+  .titlepage__wheel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 10px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 0 var(--r-leaf) var(--r-leaf) 0;
+    overflow: hidden;
+  }
 
-.titlepage__wheel span {
-  flex: 1;
-}
+  .titlepage__wheel span {
+    flex: 1;
+  }
 
-/* -- adaptation ---------------------------------------------------------------
+  /* -- adaptation ---------------------------------------------------------------
  *
  * "Width deals fewer leaves, four columns to two to one." The tab strip moves to
  * the foot of the leaf: same hues, same punch, same extent, same upright
@@ -1639,78 +1920,78 @@ code {
  * It no longer does: the head and the foot are now the same object.
  */
 
-@media (max-width: 1100px) {
-  .sheet {
-    grid-template-columns: var(--head-col) repeat(2, minmax(0, 1fr));
-  }
-  .grant__head {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    row-gap: var(--s-2);
-  }
-  .grant__when {
-    text-align: left;
-  }
-  .grant__actions {
-    justify-content: flex-start;
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 760px) {
-  :root {
-    --head-col: 0rem;
-    --t-h1: 1.9rem;
-    --t-h2: 1.4rem;
+  @media (max-width: 1100px) {
+    .sheet {
+      grid-template-columns: var(--head-col) repeat(2, minmax(0, 1fr));
+    }
+    .grant__head {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      row-gap: var(--s-2);
+    }
+    .grant__when {
+      text-align: left;
+    }
+    .grant__actions {
+      justify-content: flex-start;
+      grid-column: 1 / -1;
+    }
   }
 
-  .book {
-    grid-template-areas: "leaf" "rail";
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
+  @media (max-width: 760px) {
+    :root {
+      --head-col: 0rem;
+      --t-h1: 1.9rem;
+      --t-h2: 1.4rem;
+    }
 
-  .rail {
-    padding: var(--s-3) var(--s-3) env(safe-area-inset-bottom, 0);
-    overflow-x: auto;
-  }
+    .book {
+      grid-template-areas: "leaf" "rail";
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
 
-  /* The only thing that flips: the rule moves to the edge that now meets the
+    .rail {
+      padding: var(--s-3) var(--s-3) env(safe-area-inset-bottom, 0);
+      overflow-x: auto;
+    }
+
+    /* The only thing that flips: the rule moves to the edge that now meets the
      leaf. The tab still hangs its rounded head toward the page and still slides
      down to retract, so the gesture is identical at either edge. */
-  .rail__tab {
-    border-bottom: none;
-    border-top: var(--hair) solid var(--rule-strong);
-    flex: 1 1 auto;
-  }
+    .rail__tab {
+      border-bottom: none;
+      border-top: var(--hair) solid var(--rule-strong);
+      flex: 1 1 auto;
+    }
 
-  .leaf {
-    padding: var(--s-5) var(--s-4) var(--s-7);
-  }
+    .leaf {
+      padding: var(--s-5) var(--s-4) var(--s-7);
+    }
 
-  .leaf__spine,
-  .leaf__caption {
-    display: none;
-  }
+    .leaf__spine,
+    .leaf__caption {
+      display: none;
+    }
 
-  /* Flush with the wordmark above it. The side padding that separates the record
+    /* Flush with the wordmark above it. The side padding that separates the record
      from the wordmark in a row becomes an indent once the head stacks, and left
      the one new element as the only thing off the leaf's margin. */
-  .runhead__record {
-    padding-left: 0;
-    margin-right: 0;
-  }
+    .runhead__record {
+      padding-left: 0;
+      margin-right: 0;
+    }
 
-  .sheet {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: var(--s-1);
-  }
+    .sheet {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: var(--s-1);
+    }
 
-  .head {
-    grid-column: 1;
-    padding-top: 0;
-    padding-bottom: var(--s-1);
-  }
+    .head {
+      grid-column: 1;
+      padding-top: 0;
+      padding-bottom: var(--s-1);
+    }
 
-  /*
+    /*
    * The division label is not printed above the page heading on a phone.
    *
    * With the margin column collapsed it stacked directly over the H1 as
@@ -1720,24 +2001,25 @@ code {
    * of the leaf, in its own colour, at the size of a control. Nothing is lost by
    * not saying it twice.
    */
-  .head--division {
-    display: none;
-  }
+    .head--division {
+      display: none;
+    }
 
-  .body {
-    grid-column: 1;
-  }
+    .body {
+      grid-column: 1;
+    }
 
-  .access {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s-1);
-  }
+    .access {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-1);
+    }
 
-  .access dt {
-    padding-top: var(--s-3);
-  }
+    .access dt {
+      padding-top: var(--s-3);
+    }
 
-  .grant__head {
-    grid-template-columns: minmax(0, 1fr);
+    .grant__head {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 }

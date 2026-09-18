@@ -12,13 +12,15 @@
  * exists and why the format being wrong somewhere is survivable rather than fatal.
  */
 
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+
 import { z } from "zod";
 
 /** A dotted path into a JSON body: `paging.next.link`, `Invoices`, `from.id`. */
 const JsonPath = z
   .string()
   .min(1)
-  .regex(/^[A-Za-z0-9_$][A-Za-z0-9_$.[\]-]*$/, "must be a dotted path like 'paging.next.link'");
+  .regex(/^[A-Za-z0-9_$][A-Za-z0-9_$.[\]-]*$/u, "must be a dotted path like 'paging.next.link'");
 
 const Auth = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
@@ -151,7 +153,7 @@ const Request = z.discriminatedUnion("kind", [
 ]);
 
 const Entity = z.object({
-  name: z.string().regex(/^[a-z][a-z0-9_]*$/, "entity name must be snake_case"),
+  name: z.string().regex(/^[a-z][a-z0-9_]*$/u, "entity name must be snake_case"),
   request: Request,
   /** Where the record array lives in the response. Omit if the body *is* the array. */
   envelopePath: JsonPath.optional(),
@@ -169,7 +171,7 @@ export const ConnectorSpec = z
   .object({
     apiVersion: z.literal("undercroft.dev/v1"),
     kind: z.literal("Connector"),
-    id: z.string().regex(/^[a-z][a-z0-9_-]*$/, "connector id must be kebab/snake-case"),
+    id: z.string().regex(/^[a-z][a-z0-9_-]*$/u, "connector id must be kebab/snake-case"),
     displayName: z.string().min(1),
     baseUrl: z.string().url(),
     auth: Auth,

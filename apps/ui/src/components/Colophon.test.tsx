@@ -15,13 +15,17 @@
  * same stamp a Vite build writes (`src/test/setup.ts` reads the version the build reads).
  */
 
-import { afterEach, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/useFilenamingConvention: One file named for the thing it exports, matching every other module in its directory.
+
+import { afterEach, expect, test as it } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 
-import { Colophon } from "@/components/Colophon";
+import { Colophon } from "@/components/Colophon.tsx";
 // The side effect is the point: `useTranslation` resolves against the module-level i18next
 // singleton, and without it every key renders as itself. See `@/i18n`.
-import "@/i18n";
+import "@/i18n/index.ts";
 
 /**
  * happy-dom's document is global to the whole `bun test` process, so a render left standing
@@ -35,13 +39,13 @@ import "@/i18n";
  */
 afterEach(cleanup);
 
-test("prints the release as the tag that rolls the stack back to it", () => {
+it("prints the release as the tag that rolls the stack back to it", () => {
   render(<Colophon />);
 
-  expect(screen.getByText(/^v\d+\.\d+\.\d+$/)).toBeDefined();
+  expect(screen.getByText(/^v\d+\.\d+\.\d+$/u)).toBeDefined();
 });
 
-test("labels the tag, so a version number is not read out attached to nothing", () => {
+it("labels the tag, so a version number is not read out attached to nothing", () => {
   render(<Colophon />);
 
   // Vietnamese is what a reader who has chosen nothing gets. The label is also the stamp's

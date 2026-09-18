@@ -17,9 +17,11 @@
  * because a division that vanishes teaches nobody that it exists.
  */
 
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
 export type DivisionId = "customers" | "sources" | "lake" | "people";
 
-export type Division = {
+export interface Division {
   id: DivisionId;
   /**
    * The catalogue key for this division's name, not the name itself.
@@ -35,7 +37,7 @@ export type Division = {
   extent: number;
   /** Whether this division belongs to a single customer's book. */
   scoped: boolean;
-};
+}
 
 export const DIVISIONS: readonly Division[] = [
   { id: "customers", labelKey: "nav.customers", hue: "#b24b1a", extent: 2, scoped: false },
@@ -48,13 +50,19 @@ export function division(id: DivisionId): Division {
   const found = DIVISIONS.find((d) => d.id === id);
   // Unreachable while DivisionId and DIVISIONS agree, and a loud failure rather
   // than a silently unstyled page if they ever stop agreeing.
-  if (!found) throw new Error(`unknown division ${id}`);
+  if (!found) {
+    throw new Error(`unknown division ${id}`);
+  }
   return found;
 }
 
 /** Where a division opens for a given customer. */
 export function divisionPath(id: DivisionId, tenantId: string | undefined): string {
-  if (id === "customers") return "/tenants";
-  if (!tenantId) return "/tenants";
+  if (id === "customers") {
+    return "/tenants";
+  }
+  if (!tenantId) {
+    return "/tenants";
+  }
   return id === "sources" ? `/tenants/${tenantId}` : `/tenants/${tenantId}/${id}`;
 }

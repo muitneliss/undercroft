@@ -34,7 +34,7 @@ export const RawDocument = z.object({
   documentId: z.string().min(1, "a document with no id cannot be traced"),
   contentType: z.string().min(1),
   /** Bytes as a decimal string. `bigint` in Postgres; a JS number would round at 2^53. */
-  byteLength: z.string().regex(/^\d+$/),
+  byteLength: z.string().regex(/^\d+$/u),
   /** When the source last changed it. Null is honest; a guess is not. */
   sourceUpdatedAt: z.string().datetime().nullable(),
 });

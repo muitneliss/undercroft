@@ -13,6 +13,9 @@
  * callback finds the row still there.
  */
 
+// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import type { SqlExecutor } from "@undercroft/db";
 
 export interface Handshake {
@@ -75,7 +78,9 @@ export async function consumeHandshake(
     [stateSha256],
   );
   const row = rows[0];
-  if (row === undefined) return null;
+  if (row === undefined) {
+    return null;
+  }
   return {
     tenantId: row.tenant_id,
     source: row.source,

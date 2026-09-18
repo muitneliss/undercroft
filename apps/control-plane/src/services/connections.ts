@@ -13,6 +13,11 @@
  * query rather than a decrypt-everything loop.
  */
 
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+
+// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
+
 import { parseScope } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -87,8 +92,12 @@ export function presentStatus(row: {
   // `error` and `expired` are both "this will not run until somebody acts", and the card has
   // one state for that. Keeping them apart on screen would ask a customer to tell a token
   // expiry from a provider fault, which is not their question to answer.
-  if (row.status === "error" || row.status === "expired") return "needs_reconnect";
-  if (row.status === "disconnected") return "disconnected";
+  if (row.status === "error" || row.status === "expired") {
+    return "needs_reconnect";
+  }
+  if (row.status === "disconnected") {
+    return "disconnected";
+  }
   // Connected, but nobody has said what may be read. Running in this state would read a
   // whole mailbox on the strength of a missing row.
   if (SCOPED_SOURCES.has(row.source) && parseScope(row.source, row.selectionJson) === null) {
@@ -173,7 +182,9 @@ export async function setScope(
   },
 ): Promise<SetScopeOutcome> {
   const scope = parseScope(input.source, input.selectionJson);
-  if (scope === null) return { ok: false, reason: "unsupported-source" };
+  if (scope === null) {
+    return { ok: false, reason: "unsupported-source" };
+  }
 
   await writeConnectionDetail(exec, {
     tenantId: input.tenantId,
@@ -256,7 +267,11 @@ function configOf(
   selectionJson: string,
 ): { labels?: string[]; folderIds?: string[]; entities?: string[] } {
   const scope = parseScope(source, selectionJson);
-  if (scope === null) return {};
-  if (scope.kind === "gmail") return { labels: scope.labels.map((l) => l.name) };
+  if (scope === null) {
+    return {};
+  }
+  if (scope.kind === "gmail") {
+    return { labels: scope.labels.map((l) => l.name) };
+  }
   return { folderIds: scope.files.map((f) => f.id) };
 }

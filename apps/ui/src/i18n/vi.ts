@@ -23,6 +23,8 @@
  *   and `@/lib/money`, which decide a zone and a separator in one place each.
  */
 
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
+
 export const vi = {
   app: {
     name: "Undercroft",
@@ -95,9 +97,24 @@ export const vi = {
     colCustomer: "Khách hàng",
     colReference: "Mã tham chiếu",
     colRole: "Vai trò của bạn",
-    addHead: "Thêm",
+    addHead: "Thêm khách hàng",
+    /**
+     * Shown in place of the form to everyone who is not a platform administrator. It names
+     * who can do this rather than only saying that the reader cannot, so the next step is
+     * obvious instead of being a dead end.
+     */
     addNote:
-      "Chưa thể thêm khách hàng ở đây — bảng điều khiển chưa có endpoint tạo mới. Hiện tại các tenant được tạo bên ngoài.",
+      "Chỉ quản trị viên toàn hệ thống mới thêm được khách hàng. Hãy đề nghị người quản lý bảng điều khiển tạo mã tham chiếu mới.",
+    addLead:
+      "Mã tham chiếu là một CASE-id và không đổi được sau khi dữ liệu thô đầu tiên đã ghi vào hồ — hãy chọn kỹ.",
+    idLabel: "Mã tham chiếu",
+    idPlaceholder: "CASE-0001",
+    idHint: "Chữ cái, chữ số, dấu gạch ngang và gạch dưới. Không dùng tên thật của khách hàng.",
+    nameLabel: "Tên hiển thị",
+    namePlaceholder: "Để trống thì dùng chính mã tham chiếu",
+    add: "Thêm khách hàng",
+    adding: "Đang thêm…",
+    notAdded: "Chưa thêm được",
     notLoaded: "Không tải được danh sách khách hàng. Không có gì bị thay đổi.",
   },
 

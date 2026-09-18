@@ -27,11 +27,15 @@
  * a plain `StartAfter`.
  */
 
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+
 import { type Clock, systemClock } from "./clock.ts";
 
-const STAMP_PATTERN = /^\d{8}T\d{6}\.\d{6}Z$/;
+const STAMP_PATTERN = /^\d{8}T\d{6}\.\d{6}Z$/u;
 
-const MICROS_PER_MS = 1_000;
+const MICROS_PER_MS = 1000;
 const MICROS_PER_SECOND = 1_000_000;
 
 export function isStamp(value: string): boolean {
@@ -56,20 +60,24 @@ export function formatStamp(micros: number): string {
 
 /** Parse a stamp back to microseconds since the epoch, or `null` if it is not one. */
 export function parseStamp(stamp: string): number | null {
-  if (!isStamp(stamp)) return null;
+  if (!isStamp(stamp)) {
+    return null;
+  }
   const iso =
     `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}` +
     `T${stamp.slice(9, 11)}:${stamp.slice(11, 13)}:${stamp.slice(13, 15)}Z`;
   const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return null;
+  if (Number.isNaN(ms)) {
+    return null;
+  }
   // `iso` carries whole seconds only, so `ms` is exactly seconds-in-milliseconds and
   // the full sub-second part comes from the stamp's own six digits.
-  return ms * MICROS_PER_MS + parseInt(stamp.slice(16, 22), 10);
+  return ms * MICROS_PER_MS + Number.parseInt(stamp.slice(16, 22), 10);
 }
 
 export interface StampSource {
   /** The next stamp. Strictly greater than every stamp this source has returned. */
-  next(): string;
+  next: () => string;
 }
 
 export function createStampSource(clock: Clock = systemClock): StampSource {

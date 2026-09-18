@@ -14,8 +14,11 @@
 - [ADR 0010 Invite-Only Sign-In with Better Auth](sources/adr-0010-invite-only-sign-in-with-better-auth.md)
 - [ADR 0010 The Mark Is One Ink](sources/adr-0010-the-mark-is-one-ink.md)
 - [ADR 0011 Layers Are Directories, Handler to Service to Repo](sources/adr-0011-layers-are-directories-handler-to-service-to-repo.md)
+- [ADR 0012 Biome Replaces ESLint and Prettier](sources/adr-0012-biome-replaces-eslint-and-prettier.md)
 - [ADR 0012 The Tab Strip Crosses the Head](sources/adr-0012-the-tab-strip-crosses-the-head.md)
 - [ADR 0012 Vietnamese First, i18next in Browser and Server](sources/adr-0012-vietnamese-first-i18next-in-browser-and-server.md)
+- [ADR 0013 Superadmins Named in the Environment](sources/adr-0013-superadmins-named-in-the-environment.md)
+- [ADR 0014 Frames Are Size, Nothing Eases](sources/adr-0014-frames-are-size-nothing-eases.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
 

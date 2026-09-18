@@ -1,4 +1,4 @@
-# 13. Gmail and Drive are a first-party collector, not a connector spec
+# 15. Gmail and Drive are a first-party collector, not a connector spec
 
 - Status: Accepted
 - Date: 2026-09-18

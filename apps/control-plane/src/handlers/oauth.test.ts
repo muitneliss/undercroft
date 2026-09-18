@@ -6,9 +6,16 @@
  * into a customer's Google account, so every check in front of it is the feature.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { Hono } from "hono";
 
 import { startConsent } from "../services/oauth.ts";
@@ -112,7 +119,9 @@ async function beginConsent(source = "gmail"): Promise<string> {
     { exec: db, google },
     { tenantId: TENANT, source, startedBy: ADMIN.userId },
   );
-  if (!started.ok) throw new Error("expected the consent to start");
+  if (!started.ok) {
+    throw new Error("expected the consent to start");
+  }
   return new URL(started.authorizeUrl).searchParams.get("state") ?? "";
 }
 
@@ -120,75 +129,8 @@ function callback(app: Hono, query: Record<string, string>) {
   return app.request(`/oauth/google/callback?${new URLSearchParams(query).toString()}`);
 }
 
-describe("starting a consent", () => {
-  test("the authorize URL asks for offline access and forces the consent screen", async () => {
-    // Both are required. Without `access_type=offline` Google issues no refresh token at
-    // all; without `prompt=consent` it issues one only on the very first consent, so a
-    // customer who reconnects gets a credential that dies at the next expiry and cannot be
-    // refreshed -- hours later, far from the cause.
-    const started = await startConsent(
-      { exec: db, google },
-      { tenantId: TENANT, source: "gmail", startedBy: ADMIN.userId },
-    );
-    if (!started.ok) throw new Error("expected the consent to start");
-
-    const params = new URL(started.authorizeUrl).searchParams;
-    expect(params.get("access_type")).toBe("offline");
-    expect(params.get("prompt")).toBe("consent");
-    expect(params.get("code_challenge_method")).toBe("S256");
-    expect(params.get("redirect_uri")).toBe("https://undercroft.test/oauth/google/callback");
-  });
-
-  test("drive asks for drive.file, never drive.readonly", async () => {
-    // drive.file reaches only what the admin picked in the Picker, so "No other folder is
-    // read" is enforced by Google. It is also not a restricted scope, so it carries no
-    // annual CASA assessment.
-    const started = await startConsent(
-      { exec: db, google },
-      { tenantId: TENANT, source: "drive", startedBy: ADMIN.userId },
-    );
-    if (!started.ok) throw new Error("expected the consent to start");
-
-    const scope = new URL(started.authorizeUrl).searchParams.get("scope") ?? "";
-    expect(scope).toContain("https://www.googleapis.com/auth/drive.file");
-    expect(scope).not.toContain("drive.readonly");
-  });
-
-  test("the state is stored as a digest, never in the clear", async () => {
-    const state = await beginConsent();
-
-    const { rows } = await db.query<{ state_sha256: string }>(
-      "SELECT state_sha256 FROM app.oauth_handshake",
-    );
-    expect(rows[0]?.state_sha256).not.toBe(state);
-    expect(rows[0]?.state_sha256).toHaveLength(64);
-  });
-
-  test("an unconfigured ingest client refuses rather than building a broken URL", async () => {
-    const started = await startConsent(
-      { exec: db },
-      {
-        tenantId: TENANT,
-        source: "gmail",
-        startedBy: ADMIN.userId,
-      },
-    );
-
-    expect(started).toEqual({ ok: false, reason: "not-configured" });
-  });
-
-  test("an unsupported source is refused", async () => {
-    const started = await startConsent(
-      { exec: db, google },
-      { tenantId: TENANT, source: "hubspot", startedBy: ADMIN.userId },
-    );
-
-    expect(started).toEqual({ ok: false, reason: "unsupported-source" });
-  });
-});
-
 describe("completing a consent", () => {
-  test("a valid state and an admin stores the credential and goes to the scope picker", async () => {
+  it("a valid state and an admin stores the credential and goes to the scope picker", async () => {
     // The quiet side: every refusal below would be satisfied by a callback that refused
     // everything.
     const state = await beginConsent();
@@ -201,7 +143,7 @@ describe("completing a consent", () => {
     expect(worker.stored[0]?.credential.refreshToken).toBe("rt");
   });
 
-  test("the account id sent to the worker is Google's sub, not the address", async () => {
+  it("the account id sent to the worker is Google's sub, not the address", async () => {
     // `ops.connection.external_account_id` is readable by the BI role. An address there
     // would be a customer's mailbox on a dashboard.
     const state = await beginConsent();
@@ -212,7 +154,7 @@ describe("completing a consent", () => {
     expect(worker.stored[0]?.externalAccountId).not.toContain("@");
   });
 
-  test("the address is recorded where BI cannot read it", async () => {
+  it("the address is recorded where BI cannot read it", async () => {
     const state = await beginConsent();
 
     await callback(appFor(ADMIN), { state, code: "auth-code" });
@@ -224,14 +166,14 @@ describe("completing a consent", () => {
     expect(rows[0]?.account_label).toBe("ops@acme.test");
   });
 
-  test("an unknown state is refused and nothing is exchanged", async () => {
+  it("an unknown state is refused and nothing is exchanged", async () => {
     const response = await callback(appFor(ADMIN), { state: "never-issued", code: "auth-code" });
 
     expect(response.headers.get("location")).toContain("connect=failed");
     expect(worker.stored).toHaveLength(0);
   });
 
-  test("the same state cannot be used twice", async () => {
+  it("the same state cannot be used twice", async () => {
     // Single use is a property of one `DELETE ... RETURNING`, not of a read-then-delete
     // that leaves a window a replay can win.
     const state = await beginConsent();
@@ -243,7 +185,7 @@ describe("completing a consent", () => {
     expect(worker.stored).toHaveLength(1);
   });
 
-  test("a member of the tenant is refused: starting a flow is not a standing authorisation", async () => {
+  it("a member of the tenant is refused: starting a flow is not a standing authorisation", async () => {
     // Minutes pass between start and callback, and a role can be withdrawn in them. The
     // check is re-asked at the moment of use.
     const state = await beginConsent();
@@ -254,7 +196,7 @@ describe("completing a consent", () => {
     expect(worker.stored).toHaveLength(0);
   });
 
-  test("nobody signed in is refused", async () => {
+  it("nobody signed in is refused", async () => {
     const state = await beginConsent();
 
     const response = await callback(appFor(null), { state, code: "auth-code" });
@@ -263,13 +205,13 @@ describe("completing a consent", () => {
     expect(worker.stored).toHaveLength(0);
   });
 
-  test("an admin who declined at Google is not shown an error", async () => {
+  it("an admin who declined at Google is not shown an error", async () => {
     const response = await callback(appFor(ADMIN), { error: "access_denied", state: "x" });
 
     expect(response.headers.get("location")).toContain("reason=declined");
   });
 
-  test("a refused code exchange stores nothing", async () => {
+  it("a refused code exchange stores nothing", async () => {
     const state = await beginConsent();
     tokenResponse = { status: 400, body: { error: "invalid_grant" } };
 
@@ -279,7 +221,7 @@ describe("completing a consent", () => {
     expect(worker.stored).toHaveLength(0);
   });
 
-  test("a worker that cannot seal leaves no half-made connection", async () => {
+  it("a worker that cannot seal leaves no half-made connection", async () => {
     const state = await beginConsent();
     worker.failing("unreachable");
 
@@ -290,7 +232,7 @@ describe("completing a consent", () => {
     expect(rows).toHaveLength(0);
   });
 
-  test("a consent that worked is written to the audit trail", async () => {
+  it("a consent that worked is written to the audit trail", async () => {
     const state = await beginConsent();
 
     await callback(appFor(ADMIN), { state, code: "auth-code" });

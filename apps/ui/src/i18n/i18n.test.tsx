@@ -17,13 +17,18 @@
  * green whether or not the reader can read the page.
  */
 
-import { afterEach, describe, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
+import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DEFAULT_LOCALE } from "@undercroft/core/locale";
 
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { Lake } from "@/routes/Lake";
-import { useUiStore } from "@/store";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
+import { Lake } from "@/routes/Lake.tsx";
+import { useUiStore } from "@/store.ts";
 import { en } from "./en.ts";
 import { translatorFor } from "./index.ts";
 import { vi } from "./vi.ts";
@@ -42,10 +47,12 @@ function isBranch(value: unknown): value is Record<string, unknown> {
 function keys(catalogue: Record<string, unknown>, prefix = ""): Set<string> {
   const found = new Set<string>();
   for (const [name, value] of Object.entries(catalogue)) {
-    const base = name.replace(/_(zero|one|two|few|many|other)$/, "");
+    const base = name.replace(/_(zero|one|two|few|many|other)$/u, "");
     const path = prefix === "" ? base : `${prefix}.${base}`;
     if (isBranch(value)) {
-      for (const nested of keys(value, path)) found.add(nested);
+      for (const nested of keys(value, path)) {
+        found.add(nested);
+      }
     } else {
       found.add(path);
     }
@@ -64,7 +71,7 @@ afterEach(() => {
 });
 
 describe("the catalogues", () => {
-  test("answer exactly the same keys as each other", () => {
+  it("answer exactly the same keys as each other", () => {
     const viKeys = [...keys(vi)].sort();
     const enKeys = [...keys(en)].sort();
 
@@ -73,7 +80,7 @@ describe("the catalogues", () => {
     expect(enKeys).toEqual(viKeys);
   });
 
-  test("answer every key with a translation rather than with the key itself", () => {
+  it("answer every key with a translation rather than with the key itself", () => {
     // i18next returns the key when it cannot resolve one, which looks like text and passes
     // any "is it non-empty" assertion. This is the check that does not.
     for (const locale of ["vi", "en"] as const) {
@@ -87,7 +94,7 @@ describe("the catalogues", () => {
     }
   });
 
-  test("English agrees with its count and Vietnamese does not have to", () => {
+  it("English agrees with its count and Vietnamese does not have to", () => {
     // The reason plurals go through i18next at all. A ternary in a component would have
     // produced "1 khách hàngs" the first time this catalogue was not English.
     expect(translatorFor("en")("tenants.caption", { count: 1 })).toBe("1 customer");
@@ -98,13 +105,13 @@ describe("the catalogues", () => {
 });
 
 describe("choosing a language", () => {
-  test("Vietnamese is what a reader who has chosen nothing gets", () => {
+  it("Vietnamese is what a reader who has chosen nothing gets", () => {
     render(<Lake tenantId="CASE-0042" />);
 
     expect(screen.getByRole("heading", { name: "Hồ dữ liệu thô" })).toBeDefined();
   });
 
-  test("pressing English rewrites the page and the document's language", async () => {
+  it("pressing English rewrites the page and the document's language", async () => {
     render(
       <>
         <LanguageSwitcher />
@@ -120,7 +127,7 @@ describe("choosing a language", () => {
     expect(useUiStore.getState().locale).toBe("en");
   });
 
-  test("the language not in use stays on the page, so it can be pressed", () => {
+  it("the language not in use stays on the page, so it can be pressed", () => {
     // A dropdown would hide it. The one reader who most needs this control is the one who
     // cannot read the label on it, which is why both faces are always drawn.
     render(<LanguageSwitcher />);

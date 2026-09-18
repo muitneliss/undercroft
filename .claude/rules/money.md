@@ -12,8 +12,15 @@ sharper than most languages: its only numeric type is a float.
 ## NEVER
 
 - **NEVER put a monetary amount in a `number`.** No `Number()`, no `parseFloat`, no unary
-  `+`, no `JSON.parse` into arithmetic, no `Big#toNumber()`. An ESLint rule enforces this
-  repo-wide; if it fires, the rule is right.
+  `+`, no `JSON.parse` into arithmetic, no `Big#toNumber()`. Enforced repo-wide by
+  `.biome/plugins/money.grit` and by `noRestrictedGlobals` in `biome.jsonc`; if it fires,
+  the rule is right.
+
+  `Number.parseInt` is the one spelling deliberately left alone: a port or a key version is
+  an integer index, not an amount, and Biome's `useNumberNamespace` rewrites the bare global
+  into exactly that form. The plugin's docstring records why banning both spellings of one
+  function is a contradiction rather than extra strictness.
+
 - **NEVER default an unreadable amount to `0`.** A zero is indistinguishable from a real
   zero downstream. An unreadable amount is `null` (`parseAmount` returns it) or a NULL
   column (`parse_amount` in dbt).

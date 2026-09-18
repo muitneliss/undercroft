@@ -23,15 +23,21 @@
  * separate states rather than two shades of "not working".
  */
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
 import { useTranslation } from "react-i18next";
 
-import type { Connection } from "@/api/types";
-import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types";
-import { ArrowRight, Errata as ErrataMark } from "@/components/Icon";
-import { StatusMark } from "@/components/StatusMark";
-import { presentConnection, scopeSummary } from "@/lib/connectionState";
-import { orMissing } from "@/lib/money";
-import { describeSchedule, expiryNote } from "@/lib/when";
+import type { Connection } from "@/api/types.ts";
+import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types.ts";
+import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
+import { StatusMark } from "@/components/StatusMark.tsx";
+import { presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import { orMissing } from "@/lib/money.ts";
+import { describeSchedule, expiryNote } from "@/lib/when.ts";
 
 const MARK_LABEL = {
   granted: "grant.markGranted",
@@ -52,7 +58,7 @@ export function ConnectionCard({
   onScope: () => void;
   onDisconnect: () => void;
   busy?: boolean;
-}) {
+}): React.JSX.Element {
   const { t } = useTranslation();
   const card = presentConnection(t, connection);
   const access = SOURCE_ACCESS[connection.source];
@@ -136,37 +142,52 @@ export function ConnectionCard({
 
         <div className="grant__actions">
           {card.action?.kind === "connect" ? (
-            <button className="plate plate--primary" onClick={onConnect} disabled={busy}>
+            <button
+              type="button"
+              className="plate plate--primary"
+              onClick={onConnect}
+              disabled={busy}
+            >
               {t("grant.connect", { name })}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "scope" ? (
-            <button className="plate plate--primary" onClick={onScope} disabled={busy}>
+            <button
+              type="button"
+              className="plate plate--primary"
+              onClick={onScope}
+              disabled={busy}
+            >
               {t("grant.chooseScope")}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "reconnect" ? (
-            <button className="plate plate--primary" onClick={onConnect} disabled={busy}>
+            <button
+              type="button"
+              className="plate plate--primary"
+              onClick={onConnect}
+              disabled={busy}
+            >
               {t("grant.reconnect", { name })}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.state === "connected" ? (
-            <button className="plate" onClick={onScope} disabled={busy}>
+            <button type="button" className="plate" onClick={onScope} disabled={busy}>
               {t("grant.changeScope")}
             </button>
           ) : null}
 
-          {!unprinted ? (
-            <button className="plate" onClick={onDisconnect} disabled={busy}>
+          {unprinted ? null : (
+            <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
               {t("grant.disconnect")}
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 

@@ -6,7 +6,7 @@
  * `UNDERCROFT_SECRET_KEY` and is the only process that may seal a credential. So the token
  * bundle crosses one hop, over the internal network, on the same trigger-token allowlist
  * Kestra uses -- and the control plane keeps the property that matters: it can never *read*
- * a stored credential, because it does not have the key. See ADR 0014.
+ * a stored credential, because it does not have the key. See ADR 0016.
  *
  * These are Zod schemas rather than TypeScript interfaces because the boundary is HTTP.
  * A type would be erased at exactly the point where a mis-shaped body has to be refused.

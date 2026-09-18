@@ -27,8 +27,20 @@
  * design use a saturated ground under dense tabular content at all.
  */
 
+// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+
+// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
+
 /** A gamma-encoded sRGB colour, 0-255 per channel. */
-export type Rgb = { r: number; g: number; b: number };
+export interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
 
 /**
  * The contrast the reading field must clear against the ink.
@@ -40,26 +52,49 @@ export type Rgb = { r: number; g: number; b: number };
  */
 export const TARGET_CONTRAST = 10;
 
+/**
+ * The constants of WCAG 2.1's colour maths, named as the specification names them.
+ *
+ * These are not tuning parameters and not ours to choose: change one and the contrast
+ * figures this module reports stop meaning "WCAG contrast". They are spelled out here
+ * rather than inline so that is obvious, and so the next reader can check them against
+ * the spec without reverse-engineering an expression.
+ *
+ * https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
+ * https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio
+ */
+const SRGB_CHANNEL_MAX = 255;
+const SRGB_LINEAR_THRESHOLD = 0.040_45;
+const SRGB_LINEAR_DIVISOR = 12.92;
+const SRGB_GAMMA_OFFSET = 0.055;
+const SRGB_GAMMA_DIVISOR = 1.055;
+const SRGB_GAMMA_EXPONENT = 2.4;
+const LUMINANCE_RED = 0.2126;
+const LUMINANCE_GREEN = 0.7152;
+const LUMINANCE_BLUE = 0.0722;
+/** The flare constant. It keeps the ratio finite when one colour is pure black. */
+const CONTRAST_FLARE = 0.05;
+
 /** Parse `#rgb` or `#rrggbb`. Returns null for anything else rather than guessing. */
 export function parseHex(hex: string): Rgb | null {
-  const value = hex.trim().replace(/^#/, "");
+  const value = hex.trim().replace(/^#/u, "");
 
-  if (/^[0-9a-f]{3}$/i.test(value)) {
+  if (/^[0-9a-f]{3}$/iu.test(value)) {
     const r = value.slice(0, 1);
     const g = value.slice(1, 2);
     const b = value.slice(2, 3);
     return {
-      r: parseInt(`${r}${r}`, 16),
-      g: parseInt(`${g}${g}`, 16),
-      b: parseInt(`${b}${b}`, 16),
+      r: Number.parseInt(`${r}${r}`, 16),
+      g: Number.parseInt(`${g}${g}`, 16),
+      b: Number.parseInt(`${b}${b}`, 16),
     };
   }
 
-  if (/^[0-9a-f]{6}$/i.test(value)) {
+  if (/^[0-9a-f]{6}$/iu.test(value)) {
     return {
-      r: parseInt(value.slice(0, 2), 16),
-      g: parseInt(value.slice(2, 4), 16),
-      b: parseInt(value.slice(4, 6), 16),
+      r: Number.parseInt(value.slice(0, 2), 16),
+      g: Number.parseInt(value.slice(2, 4), 16),
+      b: Number.parseInt(value.slice(4, 6), 16),
     };
   }
 
@@ -67,22 +102,27 @@ export function parseHex(hex: string): Rgb | null {
 }
 
 export function toHex({ r, g, b }: Rgb): string {
-  const channel = (c: number) =>
-    Math.max(0, Math.min(255, Math.round(c)))
+  function channel(c: number): string {
+    return Math.max(0, Math.min(SRGB_CHANNEL_MAX, Math.round(c)))
       .toString(16)
       .padStart(2, "0");
+  }
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
 /** sRGB transfer function, per WCAG 2.1. */
 function linearise(channel: number): number {
-  const c = channel / 255;
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  const c = channel / SRGB_CHANNEL_MAX;
+  return c <= SRGB_LINEAR_THRESHOLD
+    ? c / SRGB_LINEAR_DIVISOR
+    : ((c + SRGB_GAMMA_OFFSET) / SRGB_GAMMA_DIVISOR) ** SRGB_GAMMA_EXPONENT;
 }
 
 /** WCAG 2.1 relative luminance. */
 export function luminance({ r, g, b }: Rgb): number {
-  return 0.2126 * linearise(r) + 0.7152 * linearise(g) + 0.0722 * linearise(b);
+  return (
+    LUMINANCE_RED * linearise(r) + LUMINANCE_GREEN * linearise(g) + LUMINANCE_BLUE * linearise(b)
+  );
 }
 
 /** WCAG 2.1 contrast ratio. Order-independent. */
@@ -91,7 +131,7 @@ export function contrast(a: Rgb, b: Rgb): number {
   const lb = luminance(b);
   const lighter = Math.max(la, lb);
   const darker = Math.min(la, lb);
-  return (lighter + 0.05) / (darker + 0.05);
+  return (lighter + CONTRAST_FLARE) / (darker + CONTRAST_FLARE);
 }
 
 /**
@@ -123,18 +163,20 @@ export const INK: Rgb = { r: 22, g: 21, b: 15 };
  */
 export function letteringOn(boardHex: string): string {
   const board = parseHex(boardHex);
-  if (!board) return toHex(INK);
+  if (!board) {
+    return toHex(INK);
+  }
   return contrast(board, INK) >= contrast(board, PAPER) ? toHex(INK) : toHex(PAPER);
 }
 
-export type Solution = {
+export interface Solution {
   /** Coverage of the leaf over the board, 0-1. */
   alpha: number;
   /** The composite at that alpha, as an opaque hex. */
   ground: string;
   /** What the solved field actually achieves against the ink. */
   contrast: number;
-};
+}
 
 /**
  * The lowest leaf coverage whose composite still clears `target` against `ink`.
@@ -205,7 +247,9 @@ export function applyBoard(element: HTMLElement, boardHex: string): Solution | n
   const leaf = parseHex(styles.getPropertyValue("--leaf")) ?? { r: 251, g: 248, b: 240 };
   const ink = parseHex(styles.getPropertyValue("--ink")) ?? { r: 22, g: 21, b: 15 };
   const board = parseHex(boardHex);
-  if (!board) return null;
+  if (!board) {
+    return null;
+  }
 
   const solution = solveLeaf(leaf, board, ink);
   element.style.setProperty("--board", boardHex);

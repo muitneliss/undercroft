@@ -1,6 +1,12 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+
 import { createStampSource, TestClock } from "@undercroft/core";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test as it } from "bun:test";
 
 import { type DocumentToLand, landDocuments, MAX_DOCUMENT_BYTES } from "./landDocument.ts";
 
@@ -38,7 +44,7 @@ function land(documents: readonly DocumentToLand[]) {
 }
 
 describe("landDocuments", () => {
-  test("a document is landed under its own key and reported created", async () => {
+  it("a document is landed under its own key and reported created", async () => {
     const result = await land([document()]);
 
     expect(result.created).toBe(1);
@@ -46,7 +52,7 @@ describe("landDocuments", () => {
     expect(result.results[0]?.byteLength).toBe(String(PDF.byteLength));
   });
 
-  test("re-landing identical bytes reports unchanged and writes no new version", async () => {
+  it("re-landing identical bytes reports unchanged and writes no new version", async () => {
     // The lake's content addressing, reached through this path. Without it an hourly
     // schedule pushes real history out through retention using copies of the same file.
     await land([document()]);
@@ -57,7 +63,7 @@ describe("landDocuments", () => {
     expect(await lake.versions("documents/gmail/CASE-0042/19a2f:001")).toHaveLength(1);
   });
 
-  test("an oversized document is refused before its bytes are fetched", async () => {
+  it("an oversized document is refused before its bytes are fetched", async () => {
     // The firing side of the size guard, and `fetchBytes` rejecting is how the test proves
     // "before": the lake has no streaming path, so a 300 MB attachment does not run slowly,
     // it ends the process.
@@ -70,10 +76,10 @@ describe("landDocuments", () => {
 
     expect(result.skipped).toBe(1);
     expect(result.results[0]?.status).toBe("skipped");
-    expect(result.results[0]?.reason).toMatch(/over the \d+ ceiling/);
+    expect(result.results[0]?.reason).toMatch(/over the \d+ ceiling/u);
   });
 
-  test("a document exactly at the ceiling is landed, not refused", async () => {
+  it("a document exactly at the ceiling is landed, not refused", async () => {
     // The quiet side. A guard written with `>=` would reject the boundary case, and the
     // test above would not notice.
     const result = await land([document({ declaredBytes: String(MAX_DOCUMENT_BYTES) })]);
@@ -81,7 +87,7 @@ describe("landDocuments", () => {
     expect(result).toMatchObject({ created: 1, skipped: 0 });
   });
 
-  test("a declared size too large for a float is still compared exactly", async () => {
+  it("a declared size too large for a float is still compared exactly", async () => {
     // BigInt, not Number: a provider-controlled size string must not round into range.
     const result = await land([
       document({
@@ -93,7 +99,7 @@ describe("landDocuments", () => {
     expect(result.skipped).toBe(1);
   });
 
-  test("one failing document does not abort the batch", async () => {
+  it("one failing document does not abort the batch", async () => {
     const result = await land([
       document({ documentId: "bad", fetchBytes: () => Promise.reject(new Error("410 gone")) }),
       document({ documentId: "good" }),
@@ -103,17 +109,17 @@ describe("landDocuments", () => {
     expect(result.results.find((r) => r.documentId === "bad")?.reason).toBe("410 gone");
   });
 
-  test("names a human wrote reach the lake manifest", async () => {
+  it("names a human wrote reach the lake manifest", async () => {
     await land([document()]);
 
     const [stamp] = await lake.versions("documents/gmail/CASE-0042/19a2f:001");
     const manifest = await lake.manifest("documents/gmail/CASE-0042/19a2f:001", stamp ?? "");
 
-    expect(manifest["filename"]).toBe("invoice-0042.pdf");
-    expect(manifest["mailbox"]).toBe("ops@acme.test");
+    expect(manifest.filename).toBe("invoice-0042.pdf");
+    expect(manifest.mailbox).toBe("ops@acme.test");
   });
 
-  test("a filename never reaches the lake key", async () => {
+  it("a filename never reaches the lake key", async () => {
     // The other half of the PII boundary. `raw.documents.lake_key` is granted to dbt, so a
     // filename in a key is one `dbt run` from a dashboard.
     const result = await land([document()]);
@@ -121,7 +127,7 @@ describe("landDocuments", () => {
     expect(result.results[0]?.lakeKey).not.toContain("invoice-0042");
   });
 
-  test("a document is landed with no journal stream", async () => {
+  it("a document is landed with no journal stream", async () => {
     // Journalled objects are decoded as JSON text for `payload jsonb` by the record loader.
     // A PDF on that path is mojibake in a jsonb column, so documents stay off the journal
     // and are catalogued directly instead.

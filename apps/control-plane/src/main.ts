@@ -9,15 +9,26 @@
  * far cheaper thing to debug. `ServerDeps.auth` is optional precisely so this is expressible.
  */
 
+// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/style/noDefaultExport: The default export IS this entry point's contract -- Bun reads a server object and Vite reads a config that way, by name.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
+
+import process from "node:process";
 import { createHttpEmailSender, createLogger, type EmailSender } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
+import { parseSuperadmins } from "./services/superadmin.ts";
 import { createHttpWorkerClient } from "./services/workerClient.ts";
 
 function required(name: string): string {
   const value = process.env[name];
-  if (value === undefined || value === "") throw new Error(`${name} is required`);
+  if (value === undefined || value === "") {
+    throw new Error(`${name} is required`);
+  }
   return value;
 }
 
@@ -53,7 +64,7 @@ const googleClientSecret = optional("UNDERCROFT_GOOGLE_CLIENT_SECRET");
  * Separate from the sign-in one above on purpose. Signing in asks for `openid email
  * profile`; this asks for a customer's mailbox or documents. One client carrying both scope
  * lists is one misconfiguration away from handing over a mailbox as a side effect of signing
- * in -- which is the failure `docs/runbook/sign-in-setup.md` warns about and ADR 0014
+ * in -- which is the failure `docs/runbook/sign-in-setup.md` warns about and ADR 0016
  * records. Unset means the per-tenant consent does not exist and every Google source reads
  * "not connected", which is the right state while Google verification is pending.
  */
@@ -79,7 +90,7 @@ const googleIngest =
 /**
  * The worker: the only process holding the master key, and so the only one that may seal a
  * credential. The control plane runs the browser half of a consent and hands the bundle over
- * on the trigger-token allowlist. ADR 0014.
+ * on the trigger-token allowlist. ADR 0016.
  */
 const workerUrl = optional("UNDERCROFT_WORKER_URL");
 const triggerToken = optional("UNDERCROFT_TRIGGER_TOKEN");
@@ -87,6 +98,14 @@ const worker =
   workerUrl === undefined || triggerToken === undefined
     ? undefined
     : createHttpWorkerClient({ baseUrl: workerUrl, triggerToken });
+
+/**
+ * The platform administrators, read here and consulted on every request thereafter.
+ *
+ * Parsed at boot rather than per request so a malformed entry is reported once, at the
+ * moment somebody can still connect it to the deploy they just made, instead of never.
+ */
+const superadmins = parseSuperadmins(optional("UNDERCROFT_SUPERADMINS"));
 
 const email: EmailSender | undefined =
   mailApiKey === undefined || mailFrom === undefined
@@ -109,10 +128,11 @@ const auth =
         secret: sessionSecret,
         baseUrl: publicUrl,
         email,
+        superadmins: superadmins.addresses,
         ...(googleClientId === undefined || googleClientSecret === undefined
           ? {}
           : { google: { clientId: googleClientId, clientSecret: googleClientSecret } }),
-        onEmailError: (error) =>
+        onEmailError: (error): void =>
           log.error("otp_send_failed", {
             errorMessage: error instanceof Error ? error.message : String(error),
           }),
@@ -132,12 +152,42 @@ if (auth === undefined) {
   log.info("sign_in_configured", { methods: "google,email-otp" });
 }
 
+/**
+ * How many platform administrators this process will honour, and what it would not read.
+ *
+ * The COUNT, never the addresses: a log line is the one artefact that reliably leaves the
+ * host, and a list of the platform's most privileged accounts is exactly the thing not to
+ * put in one. `rejected` is the exception and it is deliberate -- an entry that matches
+ * nobody is not an administrator's address, it is a typo, and printing it back is the only
+ * way the person who wrote it finds out.
+ *
+ * Zero is logged at `warn` rather than passed over. It is a legitimate configuration -- an
+ * install that bootstrapped long ago and now manages access by invitation needs none -- but
+ * it is also exactly what a variable set on the wrong service looks like, and the two are
+ * indistinguishable until somebody is locked out.
+ */
+if (superadmins.rejected.length > 0) {
+  log.warn("superadmins_rejected", {
+    entries: superadmins.rejected.join(","),
+    hint: "UNDERCROFT_SUPERADMINS is a comma-separated list of email addresses",
+  });
+}
+
+if (superadmins.addresses.size === 0) {
+  log.warn("superadmins_none", { variable: "UNDERCROFT_SUPERADMINS" });
+} else {
+  log.info("superadmins_configured", { count: superadmins.addresses.size });
+}
+
 // The image bakes the built SPA in and points here; a bare `bun run` with the variable
 // unset serves the API alone. Spread so the optional stays absent rather than `undefined`,
 // which exactOptionalPropertyTypes forbids.
 const uiDist = optional("UNDERCROFT_UI_DIST");
 const app = createServer({
   exec,
+  // Not spread conditionally: an empty set is the honest answer for an install that names
+  // none, and it means `resolveCaller` has one code path rather than two.
+  superadmins: superadmins.addresses,
   ...(auth === undefined ? {} : { auth }),
   // Passed independently of `auth`: an invitation email is worth sending even on an install
   // where sign-in itself is not fully configured yet.
@@ -149,7 +199,7 @@ const app = createServer({
 });
 
 // parseInt, not Number(): a port, not an amount.
-const port = parseInt(process.env.UNDERCROFT_API_PORT ?? "3000", 10);
+const port = Number.parseInt(process.env.UNDERCROFT_API_PORT ?? "3000", 10);
 log.info("listening", { port });
 
 export default { port, fetch: app.fetch };

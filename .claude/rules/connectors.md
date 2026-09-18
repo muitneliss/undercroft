@@ -33,7 +33,7 @@ runtime. Adding a REST source is a file and no migration.
   kind would grow the format for two exotic sources and put bytes on the record loader's
   path, where they become mojibake in a `jsonb` column. The valve is taken INSIDE the worker
   rather than by an external caller of the lake API, because the credential must not leave
-  the one process holding `UNDERCROFT_SECRET_KEY`. ADR 0013.
+  the one process holding `UNDERCROFT_SECRET_KEY`. ADR 0015.
 - **What such a collector still reuses is everything the runtime got right**: `createPacer`,
   `withRetry` and `Clock` from `@undercroft/core`, and `ConnectorError` carrying how many
   records were seen. A collector that re-implemented pacing would be a second place for a 429

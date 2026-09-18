@@ -1,14 +1,21 @@
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+
+import { describe, expect, test as it } from "bun:test";
 import { runTransform } from "./transform.ts";
 
 const dirs = { projectDir: "/app/dbt/undercroft_starter", profilesDir: "/app/dbt" };
 
 describe("runTransform invokes dbt and reports honestly", () => {
-  test("builds the project with the right directories", async () => {
+  it("builds the project with the right directories", async () => {
     let seen: readonly string[] = [];
     const result = await runTransform({
       ...dirs,
-      spawn: (cmd) => {
+      spawn: (cmd): Promise<{ exitCode: number; output: string }> => {
         seen = cmd;
         return Promise.resolve({ exitCode: 0, output: "Completed successfully" });
       },
@@ -21,12 +28,12 @@ describe("runTransform invokes dbt and reports honestly", () => {
     expect(seen).toContain(dirs.projectDir);
   });
 
-  test("passes a --select through when given one", async () => {
+  it("passes a --select through when given one", async () => {
     let seen: readonly string[] = [];
     await runTransform(
       {
         ...dirs,
-        spawn: (cmd) => {
+        spawn: (cmd): Promise<{ exitCode: number; output: string }> => {
           seen = cmd;
           return Promise.resolve({ exitCode: 0, output: "ok" });
         },
@@ -37,7 +44,7 @@ describe("runTransform invokes dbt and reports honestly", () => {
     expect(seen).toContain("stg_hubspot_deals");
   });
 
-  test("a non-zero exit raises rather than reporting success", async () => {
+  it("a non-zero exit raises rather than reporting success", async () => {
     // A failed transform must not report success: the previous tables keep serving, which
     // is stale rather than wrong, and only an error says so.
     await expect(
@@ -45,10 +52,10 @@ describe("runTransform invokes dbt and reports honestly", () => {
         ...dirs,
         spawn: () => Promise.resolve({ exitCode: 1, output: "Database Error in model x" }),
       }),
-    ).rejects.toThrow(/exited 1/);
+    ).rejects.toThrow(/exited 1/u);
   });
 
-  test("only the tail of dbt output is returned, never the whole log", async () => {
+  it("only the tail of dbt output is returned, never the whole log", async () => {
     // dbt's log can echo row values from a failing test; those belong in `dq`, not in an
     // HTTP response.
     const long = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n");

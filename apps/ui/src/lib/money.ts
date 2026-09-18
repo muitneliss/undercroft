@@ -25,9 +25,19 @@
  * beside the digits, which is what makes the fixed format unambiguous.
  */
 
+// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
+
 import type { Locale } from "@undercroft/core/locale";
 
-export type Money = { amount: string; currency: string };
+export interface Money {
+  amount: string;
+  currency: string;
+}
 
 /** What a missing value looks like. An em dash, never a zero. */
 export const MISSING = "—";
@@ -39,13 +49,15 @@ export const MISSING = "—";
  * read is reported as unreadable rather than coerced into something plausible.
  */
 function parts(amount: string): { sign: string; whole: string; fraction: string } | null {
-  const match = /^(-?)(\d+)(?:\.(\d*))?$/.exec(amount.trim());
-  if (!match) return null;
+  const match = /^(-?)(\d+)(?:\.(\d*))?$/u.exec(amount.trim());
+  if (!match) {
+    return null;
+  }
   return { sign: match[1] ?? "", whole: match[2] ?? "0", fraction: match[3] ?? "" };
 }
 
 function group(whole: string): string {
-  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
 }
 
 /**
@@ -56,10 +68,14 @@ function group(whole: string): string {
  *   stays available through {@link exactAmount}.
  */
 export function formatMoney(money: Money | null | undefined, dp = 2): string {
-  if (!money) return MISSING;
+  if (!money) {
+    return MISSING;
+  }
 
   const split = parts(money.amount);
-  if (!split) return MISSING;
+  if (!split) {
+    return MISSING;
+  }
 
   const fraction = split.fraction.padEnd(dp, "0").slice(0, dp);
   const digits = dp > 0 ? `${group(split.whole)}.${fraction}` : group(split.whole);
@@ -104,8 +120,12 @@ const UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
  * recorded is not an object of zero bytes.
  */
 export function formatBytes(value: number | null | undefined, locale: Locale): string {
-  if (value === null || value === undefined) return MISSING;
-  if (value < 1000) return `${value.toLocaleString(CLDR[locale])} B`;
+  if (value === null || value === undefined) {
+    return MISSING;
+  }
+  if (value < 1000) {
+    return `${value.toLocaleString(CLDR[locale])} B`;
+  }
 
   let size = value;
   let unit = 0;

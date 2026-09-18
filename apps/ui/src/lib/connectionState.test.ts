@@ -7,11 +7,16 @@
  * says "fix this" and cannot say how.
  */
 
-import { describe, expect, test } from "bun:test";
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/nursery/noConditionalExpect: These assert inside a callback the code under test invokes -- a refresher, an onRetry hook -- which is how you check what a collaborator was handed without mocking it. `.claude/rules/tests.md` bans the mock alternative outright.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
 
-import { translatorFor } from "@/i18n";
-import { connection } from "@/test/fixtures";
-import { presentConnection, setupProgress } from "./connectionState";
+import { describe, expect, test as it } from "bun:test";
+
+import { translatorFor } from "@/i18n/index.ts";
+import { connection } from "@/test/fixtures.ts";
+import { presentConnection, setupProgress } from "./connectionState.ts";
 
 const NOW = new Date("2026-09-17T12:00:00Z");
 
@@ -20,7 +25,7 @@ const NOW = new Date("2026-09-17T12:00:00Z");
 const t = translatorFor("vi");
 
 describe("presentConnection", () => {
-  test("an unconnected source offers to connect", () => {
+  it("an unconnected source offers to connect", () => {
     const card = presentConnection(t, connection("xero"), NOW);
 
     expect(card.state).toBe("not_connected");
@@ -28,7 +33,7 @@ describe("presentConnection", () => {
     expect(card.complete).toBe(false);
   });
 
-  test("a connected source with a chosen scope is done", () => {
+  it("a connected source with a chosen scope is done", () => {
     const card = presentConnection(
       t,
       connection("xero", { status: "connected", externalAccountLabel: "CASE-A1B2C3 Pte Ltd" }),
@@ -40,21 +45,21 @@ describe("presentConnection", () => {
     expect(card.complete).toBe(true);
   });
 
-  test("a source awaiting its scope asks for a decision, not a reconnect", () => {
+  it("a source awaiting its scope asks for a decision, not a reconnect", () => {
     const card = presentConnection(t, connection("drive", { status: "needs_scope" }), NOW);
 
     expect(card.state).toBe("needs_scope");
     expect(card.action?.kind).toBe("scope");
   });
 
-  test("a revoked grant asks for a reconnect, not a decision", () => {
+  it("a revoked grant asks for a reconnect, not a decision", () => {
     const card = presentConnection(t, connection("gmail", { status: "needs_reconnect" }), NOW);
 
     expect(card.state).toBe("needs_reconnect");
     expect(card.action?.kind).toBe("reconnect");
   });
 
-  test("an expired credential needs reconnecting even if the status still says connected", () => {
+  it("an expired credential needs reconnecting even if the status still says connected", () => {
     // Xero's refresh token dies after 60 days unused and nothing tells us.
     const card = presentConnection(
       t,
@@ -66,7 +71,7 @@ describe("presentConnection", () => {
     expect(card.action?.kind).toBe("reconnect");
   });
 
-  test("a credential with no recorded expiry is not treated as expired", () => {
+  it("a credential with no recorded expiry is not treated as expired", () => {
     // A HubSpot private-app token genuinely does not expire. Demanding a
     // reconnect for it would break a connection that works.
     const card = presentConnection(
@@ -79,7 +84,7 @@ describe("presentConnection", () => {
     expect(card.complete).toBe(true);
   });
 
-  test("a credential expiring later today is still fine now", () => {
+  it("a credential expiring later today is still fine now", () => {
     const card = presentConnection(
       t,
       connection("xero", { status: "connected", expiresAt: "2026-09-17T23:00:00Z" }),
@@ -89,20 +94,23 @@ describe("presentConnection", () => {
     expect(card.state).toBe("connected");
   });
 
-  test("every state offers exactly one next action, or none when complete", () => {
+  it("every state offers exactly one next action, or none when complete", () => {
     const states = ["disconnected", "connected", "needs_scope", "needs_reconnect"] as const;
 
     for (const status of states) {
       const card = presentConnection(t, connection("xero", { status }), NOW);
       expect(card.headline).not.toBe("");
-      if (card.complete) expect(card.action).toBeNull();
-      else expect(card.action).not.toBeNull();
+      if (card.complete) {
+        expect(card.action).toBeNull();
+      } else {
+        expect(card.action).not.toBeNull();
+      }
     }
   });
 });
 
 describe("setupProgress", () => {
-  test("counts only the sources that are actually usable", () => {
+  it("counts only the sources that are actually usable", () => {
     const progress = setupProgress([
       connection("hubspot", { status: "connected" }),
       connection("xero", { status: "needs_scope" }),
@@ -113,7 +121,7 @@ describe("setupProgress", () => {
     expect(progress).toEqual({ done: 1, total: 4, finished: false });
   });
 
-  test("is finished only when every source is connected", () => {
+  it("is finished only when every source is connected", () => {
     const all = (["hubspot", "xero", "gmail", "drive"] as const).map((s) =>
       connection(s, { status: "connected" }),
     );
@@ -121,7 +129,7 @@ describe("setupProgress", () => {
     expect(setupProgress(all).finished).toBe(true);
   });
 
-  test("an empty list is not finished", () => {
+  it("an empty list is not finished", () => {
     // Otherwise a tenant whose connections failed to load renders as complete.
     expect(setupProgress([]).finished).toBe(false);
   });

@@ -19,6 +19,19 @@
  *   which would turn the callback into an oracle for whether a guessed state ever existed.
  */
 
+// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
+
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
 import { createPkce, hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { writeConnectionDetail } from "@undercroft/db/repos";
@@ -29,12 +42,13 @@ import {
   pruneExpiredHandshakes,
   startHandshake,
 } from "../repos/oauthHandshake.ts";
+import { exchangeCode, type GoogleIngestConfig, redirectUri } from "./googleExchange.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
+// Re-exported so callers keep naming one seam: this module is what they reason about.
+export type { GoogleIngestConfig };
+
 export const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-/** Where Google is told to come back to. One URI for both sources; the state carries which. */
-export const CALLBACK_PATH = "/oauth/google/callback";
 
 /** Minutes, not hours: a consent is a thing somebody is doing right now. */
 const HANDSHAKE_TTL_MS = 15 * 60 * 1000;
@@ -58,27 +72,6 @@ export const SOURCE_SCOPES: Readonly<Record<string, readonly string[]>> = {
 
 export function isGoogleSource(source: string): boolean {
   return Object.hasOwn(SOURCE_SCOPES, source);
-}
-
-export interface GoogleIngestConfig {
-  readonly clientId: string;
-  readonly clientSecret: string;
-  /** The origin the BROWSER uses. Google builds `redirect_uri` from it. */
-  readonly publicUrl: string;
-  /**
-   * The browser Picker's API key and the Google project number. Public values -- they
-   * identify the app and authorise nothing -- and only Drive needs them.
-   */
-  readonly pickerApiKey?: string;
-  readonly projectNumber?: string;
-  readonly authorizeUrl?: string;
-  readonly tokenUrl?: string;
-  /**
-   * Injected in tests. Typed as the call this module actually makes rather than
-   * `typeof fetch`, whose Bun signature carries a `preconnect` property no stand-in has and
-   * none of this code uses.
-   */
-  readonly fetch?: (url: string, init: RequestInit) => Promise<Response>;
 }
 
 export interface OAuthDeps {
@@ -105,10 +98,14 @@ export async function startConsent(
   input: { tenantId: string; source: string; startedBy: string },
 ): Promise<StartOutcome> {
   const google = deps.google;
-  if (google === undefined) return { ok: false, reason: "not-configured" };
+  if (google === undefined) {
+    return { ok: false, reason: "not-configured" };
+  }
 
   const scopes = SOURCE_SCOPES[input.source];
-  if (scopes === undefined) return { ok: false, reason: "unsupported-source" };
+  if (scopes === undefined) {
+    return { ok: false, reason: "unsupported-source" };
+  }
 
   // Housekeeping on the way past: abandoned consents leave rows holding a live PKCE
   // verifier, and this is the only path that runs often enough to need no scheduler.
@@ -154,7 +151,7 @@ export type CompleteOutcome =
 
 export interface CompleteDeps extends OAuthDeps {
   /** Answers whether the caller is an admin of the tenant. Injected, so this stays pure-ish. */
-  isAdminOf(tenantId: string, userId: string): Promise<boolean>;
+  isAdminOf: (tenantId: string, userId: string) => Promise<boolean>;
 }
 
 /**
@@ -256,93 +253,4 @@ export async function completeConsent(
     source: handshake.source,
     accountLabel: exchanged.email,
   };
-}
-
-export function redirectUri(publicUrl: string): string {
-  return `${publicUrl.replace(/\/+$/, "")}${CALLBACK_PATH}`;
-}
-
-interface Exchanged {
-  readonly accessToken: string;
-  readonly refreshToken: string;
-  readonly expiresAt: string | null;
-  readonly scope: string;
-  readonly sub: string;
-  readonly email: string;
-}
-
-const MS_PER_SECOND = 1000;
-
-/**
- * Spend the authorization code.
- *
- * Returns `null` on any failure rather than throwing: every failure here means the same
- * thing to the caller -- the consent did not complete -- and the differences between them
- * are Google's business, not a customer's.
- */
-async function exchangeCode(
-  google: GoogleIngestConfig,
-  input: { code: string; verifier: string },
-): Promise<Exchanged | null> {
-  const doFetch = google.fetch ?? globalThis.fetch;
-  try {
-    const response = await doFetch(google.tokenUrl ?? GOOGLE_TOKEN_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: google.clientId,
-        client_secret: google.clientSecret,
-        code: input.code,
-        code_verifier: input.verifier,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri(google.publicUrl),
-      }).toString(),
-    });
-    if (!response.ok) return null;
-
-    const body = (await response.json()) as Record<string, unknown>;
-    const accessToken = typeof body["access_token"] === "string" ? body["access_token"] : "";
-    if (accessToken === "") return null;
-
-    const identity = readIdToken(body["id_token"]);
-    return {
-      accessToken,
-      refreshToken: typeof body["refresh_token"] === "string" ? body["refresh_token"] : "",
-      expiresAt:
-        typeof body["expires_in"] === "number"
-          ? new Date(Date.now() + body["expires_in"] * MS_PER_SECOND).toISOString()
-          : null,
-      scope: typeof body["scope"] === "string" ? body["scope"] : "",
-      sub: identity.sub,
-      email: identity.email,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Read `sub` and `email` out of the id token's payload.
- *
- * The signature is NOT verified, and that is sound here only because of where the token came
- * from: a direct, server-to-server TLS response to a request carrying our client secret and
- * a PKCE verifier we generated. There is no attacker-supplied path to this value. The same
- * two claims taken from anything a browser handed us would have to be verified.
- */
-function readIdToken(idToken: unknown): { sub: string; email: string } {
-  if (typeof idToken !== "string") return { sub: "", email: "" };
-  const payload = idToken.split(".")[1];
-  if (payload === undefined) return { sub: "", email: "" };
-  try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<
-      string,
-      unknown
-    >;
-    return {
-      sub: typeof claims["sub"] === "string" ? claims["sub"] : "",
-      email: typeof claims["email"] === "string" ? claims["email"] : "",
-    };
-  } catch {
-    return { sub: "", email: "" };
-  }
 }

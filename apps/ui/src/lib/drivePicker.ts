@@ -17,7 +17,14 @@
  * connects Drive should not be fetching Google's JavaScript on every page.
  */
 
-import type { ChosenFile } from "@/store";
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+import type { ChosenFile } from "@/store.ts";
 
 const GSI_SRC = "https://accounts.google.com/gsi/client";
 const GAPI_SRC = "https://apis.google.com/js/api.js";
@@ -35,23 +42,27 @@ export interface GooglePickerConfig {
 interface GoogleGlobals {
   accounts?: {
     oauth2: {
-      initTokenClient(config: {
+      initTokenClient: (config: {
         client_id: string;
         scope: string;
         callback: (response: { access_token?: string }) => void;
-      }): { requestAccessToken(): void };
+      }) => { requestAccessToken: () => void };
     };
   };
   picker?: unknown;
 }
 
+// biome-ignore-start lint/nursery/useVarsOnTop: `var` is the only declaration form that adds to `globalThis` in an ambient block. There is no hoisting here to regret -- these are type declarations for two scripts Google injects.
 declare global {
   var google: GoogleGlobals | undefined;
-  var gapi: { load(name: string, cb: () => void): void } | undefined;
+  var gapi: { load: (name: string, cb: () => void) => void } | undefined;
 }
+// biome-ignore-end lint/nursery/useVarsOnTop: see above
 
 function loadScript(src: string): Promise<void> {
-  if (document.querySelector(`script[src="${src}"]`) !== null) return Promise.resolve();
+  if (document.querySelector(`script[src="${src}"]`) !== null) {
+    return Promise.resolve();
+  }
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = src;
@@ -79,7 +90,9 @@ export async function openDrivePicker(
   await Promise.all([loadScript(GSI_SRC), loadScript(GAPI_SRC)]);
 
   const accessToken = await requestBrowserToken(config.clientId);
-  if (accessToken === null) return;
+  if (accessToken === null) {
+    return;
+  }
 
   await new Promise<void>((resolve) => {
     globalThis.gapi?.load("picker", () => {
@@ -92,7 +105,9 @@ export async function openDrivePicker(
   // cast at one call site is more honest than a hand-written declaration file claiming to
   // describe it.
   const picker = globalThis.google?.picker as PickerNamespace | undefined;
-  if (picker === undefined) return;
+  if (picker === undefined) {
+    return;
+  }
 
   const view = new picker.DocsView(picker.ViewId.DOCS)
     .setIncludeFolders(true)
@@ -106,7 +121,9 @@ export async function openDrivePicker(
     .addView(view)
     .enableFeature(picker.Feature.MULTISELECT_ENABLED)
     .setCallback((data: PickerResponse) => {
-      if (data.action !== picker.Action.PICKED) return;
+      if (data.action !== picker.Action.PICKED) {
+        return;
+      }
       onPicked(
         (data.docs ?? []).map((doc) => ({
           id: doc.id,
@@ -122,7 +139,9 @@ export async function openDrivePicker(
 /** A short-lived browser token for the Picker alone. Never sent to us, never stored. */
 function requestBrowserToken(clientId: string): Promise<string | null> {
   const oauth2 = globalThis.google?.accounts?.oauth2;
-  if (oauth2 === undefined) return Promise.resolve(null);
+  if (oauth2 === undefined) {
+    return Promise.resolve(null);
+  }
 
   return new Promise((resolve) => {
     oauth2
@@ -143,19 +162,19 @@ interface PickerResponse {
 }
 
 interface PickerView {
-  setIncludeFolders(on: boolean): PickerView;
-  setSelectFolderEnabled(on: boolean): PickerView;
-  setMimeTypes(types: string): PickerView;
+  setIncludeFolders: (on: boolean) => PickerView;
+  setSelectFolderEnabled: (on: boolean) => PickerView;
+  setMimeTypes: (types: string) => PickerView;
 }
 
 interface PickerBuilderApi {
-  setOAuthToken(token: string): PickerBuilderApi;
-  setDeveloperKey(key: string): PickerBuilderApi;
-  setAppId(appId: string): PickerBuilderApi;
-  addView(view: PickerView): PickerBuilderApi;
-  enableFeature(feature: unknown): PickerBuilderApi;
-  setCallback(cb: (data: PickerResponse) => void): PickerBuilderApi;
-  build(): { setVisible(visible: boolean): void };
+  setOAuthToken: (token: string) => PickerBuilderApi;
+  setDeveloperKey: (key: string) => PickerBuilderApi;
+  setAppId: (appId: string) => PickerBuilderApi;
+  addView: (view: PickerView) => PickerBuilderApi;
+  enableFeature: (feature: unknown) => PickerBuilderApi;
+  setCallback: (cb: (data: PickerResponse) => void) => PickerBuilderApi;
+  build: () => { setVisible: (visible: boolean) => void };
 }
 
 interface PickerNamespace {

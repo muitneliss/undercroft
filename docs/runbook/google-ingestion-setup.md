@@ -8,7 +8,7 @@ actually worked.
 > tenant, and its credentials are sealed into `app.connection_secret` by the worker. They use
 > **two different Google clients on purpose** — one client carrying both scope lists is one
 > misconfiguration away from handing over a mailbox as a side effect of signing in. The
-> reasoning is in [ADR 0014](../adr/0014-the-worker-seals-the-control-plane-consents.md).
+> reasoning is in [ADR 0016](../adr/0016-the-worker-seals-the-control-plane-consents.md).
 
 ---
 

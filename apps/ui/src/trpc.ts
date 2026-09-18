@@ -15,7 +15,7 @@
  * source of truth.
  */
 
-import { createTRPCReact, type CreateTRPCReact } from "@trpc/react-query";
+import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
 import type { AppRouter } from "@undercroft/control-plane/router";
 
 // The annotation is required, not decorative: without it the inferred type reaches into the

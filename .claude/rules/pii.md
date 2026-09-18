@@ -23,7 +23,7 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   object store that dbt and BI cannot reach at all. `raw.documents.metadata` carries only
   opaque provider ids, timestamps, enumerated types and counts. `landDocuments` takes
   `metadata` and `manifest` as two separate arguments so the split is visible at every call
-  site; see `apps/worker/src/services/landDocument.ts` and ADR 0013.
+  site; see `apps/worker/src/services/landDocument.ts` and ADR 0015.
 
 ## Follow
 

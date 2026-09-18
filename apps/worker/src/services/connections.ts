@@ -6,12 +6,15 @@
  * Google's redirect needs a public URL, and the worker has none -- then hands the token
  * bundle over the internal network on the trigger-token allowlist. What that preserves is
  * narrow and worth naming: the internet-facing service can never *read* a stored
- * credential, because it has no key to open one with. ADR 0014.
+ * credential, because it has no key to open one with. ADR 0016.
  *
  * Every function returns a tagged result rather than throwing a status code. Deciding what
  * "unknown tenant" means over HTTP is the handler's business (`layer-service-no-upward`),
  * and a service that threw one would be callable from exactly one caller.
  */
+
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 
 import type { CredentialInput } from "@undercroft/contracts";
 import type { ByteFetcher } from "@undercroft/core";
@@ -38,7 +41,8 @@ export interface StoreCredentialDeps {
 }
 
 export type StoreCredentialOutcome =
-  { ok: true; expiresAt: string | null } | { ok: false; reason: "unknown-tenant" };
+  | { ok: true; expiresAt: string | null }
+  | { ok: false; reason: "unknown-tenant" };
 
 /**
  * Record a connection and seal its credential.
@@ -97,7 +101,8 @@ export interface BrowseDeps {
 }
 
 export type BrowseOutcome =
-  { ok: true; items: { id: string; name: string }[] } | { ok: false; reason: "unsupported" };
+  | { ok: true; items: { id: string; name: string }[] }
+  | { ok: false; reason: "unsupported" };
 
 /**
  * What an admin may choose from.

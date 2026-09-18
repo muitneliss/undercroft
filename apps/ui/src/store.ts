@@ -29,6 +29,11 @@
  * the address bar is exactly the drift this store exists to prevent.
  */
 
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -76,14 +81,14 @@ export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       selectedTenantId: null,
-      selectTenant: (id) =>
+      selectTenant: (id): unknown =>
         set((state) => ({ selectedTenantId: state.selectedTenantId === id ? null : id })),
       clearTenant: () => set({ selectedTenantId: null }),
       locale: DEFAULT_LOCALE,
-      setLocale: (locale) => set({ locale }),
+      setLocale: (locale): unknown => set({ locale }),
       scopeDraft: null,
-      setScopeDraft: (scopeDraft) => set({ scopeDraft }),
-      toggleScopeLabel: (source, label) =>
+      setScopeDraft: (scopeDraft): unknown => set({ scopeDraft }),
+      toggleScopeLabel: (source, label): unknown =>
         set((state) => {
           const draft = state.scopeDraft?.source === source ? state.scopeDraft : null;
           const labels = draft?.labels ?? [];

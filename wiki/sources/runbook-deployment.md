@@ -5,7 +5,7 @@ date: 2026-09-18
 tags: []
 source: docs/runbook/deployment.md
 source_path: docs/runbook/deployment.md
-source_hash: 6d561b305ba2168c5b7346d706a9b87695510e9207e1954657b2fd7d0999f17c
+source_hash: 005f32b738095fe8e57f1e1970ab765ceb162025b870fab8b4b27e8d21ee900e
 ingested: 2026-09-18
 ---
 
@@ -81,6 +81,11 @@ block names it. An unmapped one arrives as an empty string and fails far from th
 Production values live in Dokploy's environment and in a local gitignored file, never
 committed. The `:?set in .env` variables have no default and hard-fail the stack if unset.
 
+**CI never writes the panel's configuration** — not the compose file, not the environment
+blob. `saveEnvironment` replaces the whole blob, which holds every live credential, so
+`preflight` asserts the config and a human repairs a drift. `scripts/dokploy.ts` has no
+write-environment subcommand for this reason.
+
 ## Applying migrations
 
 **A deploy applies them.** The `db-migrate` service runs `bun run migrate` from the
@@ -112,9 +117,23 @@ credentials are a separate per-tenant consent held sealed in `app.connection_sec
 ### Bootstrapping the first admin
 
 Invitations are issued from the **People** division once someone is in. Nobody is, on a
-fresh deployment — so `bun run invite` is run once, inside the control-plane container which
-already has the DSN. `--create-tenant` is opt-in, so a mistyped tenant id cannot invent a
-customer. It writes an ordinary invitation and grants nothing on its own.
+fresh deployment, and there is no one to invite them.
+
+**Set `UNDERCROFT_SUPERADMINS` in Dokploy's environment and redeploy.** It is a
+comma-separated list of addresses that may sign in with no invitation and that administer
+every customer. Name more than one — a single address is a single point of lockout.
+
+Those addresses then sign in, create the first customer from the **Add a customer** form on
+the Customers page (visible only to them), and invite everyone else from People. No shell
+and no SQL. The variable is the authority rather than a seed: removing an address and
+redeploying withdraws it at the next request, which is also how to recover if every tenant
+admin leaves. The boot log reports `superadmins_configured` with a count, never the
+addresses. See [[ADR 0013 Superadmins Named in the Environment]].
+
+The older path still works and is the one for an ordinary invitation to a single customer:
+`bun run invite`, run inside the control-plane container which already has the DSN.
+`--create-tenant` is opt-in, so a mistyped tenant id cannot invent a customer. It writes an
+ordinary invitation and grants nothing on its own.
 
 Then sign in with **exactly** that address: the first sign-in creates the `app.app_user`
 row, redeems every live invitation into `app.tenant_member`, and stamps `accepted_at`.
@@ -141,8 +160,9 @@ Two behaviours that waste time otherwise:
 
 ## Known gaps
 
-* **Nobody needs SQL.** The first admin comes from `bun run invite`; everyone after that is
-  invited from the People division.
+* **Nobody needs SQL, and nobody needs a shell.** The first admins come from
+  `UNDERCROFT_SUPERADMINS` in Dokploy's environment; everyone after that is invited from the
+  People division.
 * **The real `pg` + `search_path` path is exercised on deploy, not in the gate.**
 * The `undercroft_dbt` role that `dbt/profiles.yml` connects as is not created by any
   migration on this branch; the transform verb will fail until it exists.

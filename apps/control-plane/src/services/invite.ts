@@ -23,13 +23,31 @@
  * these can, and this is the part that decides who gets in. The statements they run live in
  * `../repos/{appUser,invitation,membership}.ts`; what stays here is the order they happen
  * in, which is the part worth reading twice.
+ *
+ * ## The one address that needs no invitation
+ *
+ * A superadmin named in `UNDERCROFT_SUPERADMINS` is admissible with no `app.invitation` row
+ * and no `app_user`, because on a fresh deployment neither can exist yet -- that is the
+ * chicken and egg ADR 0013 exists to break. It is an admission rule and nothing more: the
+ * address must still prove it controls a Google account or a mailbox, and what it is spared
+ * is only the invitation.
+ *
+ * The list is passed in rather than read from the environment here, so a test drives this
+ * gate with a list it chose. `services/superadmin.ts` records why the environment, and not a
+ * column, is the authority. It defaults to `NO_SUPERADMINS`, so a caller that forgets the
+ * argument admits nobody extra -- the direction a gate is allowed to fail in.
  */
+
+// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
 import type { SqlExecutor } from "@undercroft/db";
 import { findIdByEmail, provisionByEmail } from "../repos/appUser.ts";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import { isKnownOrInvited, listLiveForEmail, markAccepted } from "../repos/invitation.ts";
 import { addMember } from "../repos/membership.ts";
+import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "./superadmin.ts";
 
 export interface InvitedUser {
   /** `app.app_user.id` -- the uuid `app.tenant_member` keys, never Better Auth's user id. */
@@ -61,22 +79,37 @@ function normalizeEmail(email: string): string {
  * invited to several tenants before ever signing in, and honouring one while silently
  * leaving the rest pending is the kind of half-state nobody goes looking for.
  *
+ * A superadmin is provisioned with **no memberships at all**, and that is not an oversight:
+ * their authority comes from the environment and is resolved per request by
+ * `authz.authorityIn`. Writing them an `admin` row in every tenant would be a copy of the
+ * environment inside the database, which is the drift ADR 0013 chose against -- and it would
+ * silently survive their removal from the variable.
+ *
  * Run this inside a transaction (`withTransaction`). It reads, then writes on the basis of
  * what it read.
  */
 export async function resolveInvitedUser(
   exec: SqlExecutor,
   rawEmail: string,
+  superadmins: Superadmins = NO_SUPERADMINS,
 ): Promise<InvitedUser | null> {
   const email = normalizeEmail(rawEmail);
-  if (email === "") return null;
+  if (email === "") {
+    return null;
+  }
 
   let appUserId = await findIdByEmail(exec, email);
   const invitations = await listLiveForEmail(exec, email);
 
   // Neither known nor invited. An expired invitation lands here too, which is the point:
   // an invitation that has run out is not a weaker yes, it is a no.
-  if (appUserId === null && invitations.length === 0) return null;
+  //
+  // A superadmin is the exception, and the ONLY one: the address is provisioned so that
+  // `app_user` exists for it -- every audit row and every membership the platform later
+  // writes is keyed by that uuid -- even though nobody has invited it anywhere.
+  if (appUserId === null && invitations.length === 0 && !isSuperadmin(superadmins, email)) {
+    return null;
+  }
 
   if (appUserId === null) {
     appUserId = await provisionByEmail(exec, email);
@@ -103,10 +136,26 @@ export async function resolveInvitedUser(
  * whether to put a one-time code in the post. Kept separate rather than given a `dryRun`
  * flag, because a gate that shares a code path with a writer is one refactor away from
  * provisioning the person it was supposed to refuse.
+ *
+ * The superadmin check comes first and answers without a query. That ordering is what makes
+ * the platform recoverable: if the database is reachable but `app.invitation` has been
+ * emptied by a bad migration, the addresses in the environment can still get in and repair
+ * it. It must stay an exact-match set lookup for the same reason -- anything that widened it
+ * to a pattern would make "who may skip the invitation" a thing nobody can read off the
+ * configuration.
  */
-export async function isAdmissible(exec: SqlExecutor, rawEmail: string): Promise<boolean> {
+export async function isAdmissible(
+  exec: SqlExecutor,
+  rawEmail: string,
+  superadmins: Superadmins = NO_SUPERADMINS,
+): Promise<boolean> {
   const email = normalizeEmail(rawEmail);
-  if (email === "") return false;
+  if (email === "") {
+    return false;
+  }
+  if (isSuperadmin(superadmins, email)) {
+    return true;
+  }
   return await isKnownOrInvited(exec, email);
 }
 
@@ -160,7 +209,9 @@ export async function appUserForEmail(
   rawEmail: string,
 ): Promise<InvitedUser | null> {
   const email = normalizeEmail(rawEmail);
-  if (email === "") return null;
+  if (email === "") {
+    return null;
+  }
 
   const id = await findIdByEmail(exec, email);
   return id === null ? null : { appUserId: id, email };

@@ -1,0 +1,182 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+
+  // Biome replaces ESLint + typescript-eslint, and takes the formatter for every language
+  // it can parse. Prettier survives only for Markdown and YAML; see `.prettierignore` and
+  // `docs/adr/0012-biome-replaces-eslint-and-prettier.md`.
+  //
+  // This file is `.jsonc` rather than `.json` on purpose. Every non-obvious setting below
+  // is a decision with a reason, and CLAUDE.md is explicit that a constraint with no
+  // recorded reason gets "simplified" away by the next reader. A plain `.json` could not
+  // hold any of these comments.
+
+  // `.gitignore` already names everything that must not be read: `data/`, `fixtures/live/`,
+  // `.kanna/`, and the two Dokploy files that hold every live credential. Pointing Biome at
+  // it means that list is maintained in exactly one place -- the failure mode `pii.md`
+  // records is a second, drifting copy of an ignore list.
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      // Emitted by `bun run spec:schema` from the Zod contracts. Formatting generated
+      // output means the generator and the formatter disagree on every run.
+      "!specs/schema",
+      // Vendored upstream webfont assets; not ours to restyle.
+      "!apps/ui/public/fonts"
+    ]
+  },
+
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    // The four settings here and in `javascript.formatter` below are the old `.prettierrc`
+    // transcribed. Reformatting the whole repo under them moved two files, so the migration
+    // is not hiding a style change inside a tooling change.
+    "lineWidth": 100
+  },
+
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+
+  // ESLint's `no-restricted-syntax` has no equivalent rule in Biome, and the money and
+  // no-mock bans it carried are the two rules this repo most needs a machine to enforce --
+  // `money.md` exists because a wrong amount does not raise, it just arrives in a dashboard
+  // looking like a fact. GritQL plugins are the replacement; each file states which rule
+  // file it enforces.
+  "plugins": [
+    "./.biome/plugins/money.grit",
+    "./.biome/plugins/no-mocks.grit",
+    // Applies to `apps/ui/**` only -- the server packages import each other by value
+    // legitimately. That scope is enforced inside the pattern with `$filename`, NOT with
+    // this entry's `includes` option: the object form silently stops the plugin running in
+    // 2.5.14. The plugin's own header records the A/B that established it.
+    "./.biome/plugins/ui-server-import.grit"
+  ],
+
+  "linter": {
+    "enabled": true,
+
+    // Maximum strictness, chosen deliberately: every rule Biome ships, at error severity.
+    //
+    // `preset: "all"` turns on all 554 rules across the eight groups -- including nursery,
+    // which is experimental and WILL churn on a Biome minor bump. The per-group `"error"`
+    // entries escalate the ones whose default severity is `info` or `warn`, because a
+    // warning that never fails the gate is a rule nobody fixes.
+    //
+    // The cost is accepted knowingly: several rules here belong to frameworks this repo
+    // does not use, and they cannot be satisfied, only suppressed. Every such suppression
+    // is inline, at the line it applies to, with the reason written next to it -- never a
+    // blanket `off` in this file. See the ADR for why that trade was taken.
+    "rules": {
+      "preset": "all",
+      "a11y": "error",
+      "complexity": "error",
+      "correctness": "error",
+      "nursery": "error",
+      "performance": "error",
+      "security": "error",
+      "style": "error",
+      "suspicious": "error"
+    },
+
+    // Domains are Biome's per-framework rule bundles. All fifteen are on, which is what
+    // "every rule" means -- including `solid` and `qwik`, whose rules contradict React and
+    // are suppressed at their call sites rather than switched off here.
+    //
+    // `project` and `types` are the two that earn their keep: `project` walks the module
+    // graph (undeclared dependencies, import cycles) and `types` runs the inference engine,
+    // which is what carries `noFloatingPromises`, `noMisusedPromises` and
+    // `noUnsafeTypeAssertion` across from `typescript-eslint`'s type-checked preset. Losing
+    // those was the one real risk in dropping typescript-eslint.
+    "domains": {
+      "astro": "all",
+      "drizzle": "all",
+      "next": "all",
+      "playwright": "all",
+      "project": "all",
+      "qwik": "all",
+      "react": "all",
+      "reactNative": "all",
+      "solid": "all",
+      "svelte": "all",
+      "tailwind": "all",
+      "test": "all",
+      "turborepo": "all",
+      "types": "all",
+      "vue": "all"
+    }
+  },
+
+  // Two rules need OPTIONS, and a group set to a bare severity (`"style": "error"` above)
+  // has nowhere to put them -- the group is either a severity or a map of rules, not both.
+  // An override merges on top of the base config, which is how both survive: every style
+  // rule stays at error, and these two also get their lists.
+  "overrides": [
+    {
+      "includes": ["**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            // This rule enforces CONSISTENCY, not one particular spelling -- `style` picks
+            // which one. Left at its default (`"expression"`) it reported 261 findings,
+            // because it wants `const f = () => {}` and this codebase is written in
+            // `function f() {}` throughout. Pointing it at the convention the repo already
+            // follows takes that to 16, and those 16 are the real inconsistencies.
+            //
+            // This is the rule at full strength, aimed correctly. Rewriting 261 declarations
+            // into arrow consts to satisfy a default would be a large diff that changes
+            // hoisting behaviour and buys nothing.
+            "useConsistentFunctionStyle": {
+              "level": "error",
+              "options": { "style": "declaration" }
+            }
+          },
+          "style": {
+            // Ported from ESLint `no-restricted-imports`. The three decimal libraries are
+            // banned for the same reason, stated per-entry below: each one turns an
+            // unreadable amount into something that is not an error.
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "decimal.js": "decimal.js yields NaN on unparseable input, which propagates silently and prints as a value. A guessed amount is worse than a thrown one. Use big.js via @undercroft/core.",
+                  "decimal.js-light": "Same NaN semantics as decimal.js. Use big.js via @undercroft/core.",
+                  "dinero.js": "dinero forces a scale decision at parse time, which we cannot make for an arbitrary source string. Use big.js via @undercroft/core.",
+                  "bun:test": {
+                    "importNames": ["mock", "spyOn", "jest"],
+                    "message": "Do not mock. Use the real in-memory implementation from @undercroft/testing. See .claude/rules/tests.md."
+                  }
+                }
+              }
+            },
+            // `parseFloat` is a name lookup rather than a syntax shape, so the rule engine
+            // expresses it better than the money plugin's patterns could.
+            //
+            // `parseInt` is NOT listed, matching the ESLint config this replaced: it is the
+            // sanctioned way to read a port or a key version, and `useNumberNamespace`
+            // rewrites it to `Number.parseInt` anyway. The reasoning is in money.grit.
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "parseFloat": "parseFloat produces a float. Money is a string end to end -- parse it with parseAmount() from @undercroft/core and format it with formatMoney()."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# 14. The worker seals; the control plane consents
+# 16. The worker seals; the control plane consents
 
 - Status: Accepted
 - Date: 2026-09-18

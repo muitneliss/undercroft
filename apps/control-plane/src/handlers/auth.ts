@@ -43,15 +43,30 @@
  *
  * `databaseHooks.user.create.before` is the provisioning step, not a fourth gate: it is
  * where an invitation is actually redeemed into a membership.
+ *
+ * All three consult the same superadmin list, resolved once in `createAuth`. An address in
+ * `UNDERCROFT_SUPERADMINS` passes all three with no invitation -- it is the one way in that
+ * does not require somebody already inside, which is what makes a fresh deployment usable.
+ * It weakens none of them: the address still has to prove it controls the mailbox or the
+ * Google account, and three gates reading one list cannot disagree about who is on it.
+ * ADR 0013.
  */
+
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
+// biome-ignore-all lint/correctness/useSingleJsDocAsterisk: Bullet lists inside module docstrings. Biome's fix flattens them, which destroyed the list recording how invite-only is enforced in three independent places -- exactly the documentation that must not be damaged by a formatter.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
 
 import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { messages } from "../i18n/index.ts";
 import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
+import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 
 /**
  * Which language to answer a Better Auth hook in.
@@ -119,6 +134,15 @@ export interface AuthConfig {
   /** The origin the browser reaches this control plane on, e.g. `https://app.example.test`. */
   readonly baseUrl: string;
   readonly email: EmailSender;
+  /**
+   * The addresses from `UNDERCROFT_SUPERADMINS`, which are admissible with no invitation.
+   *
+   * Optional, and absent means "none": an install that names no superadmin is invite-only
+   * exactly as it was before ADR 0013. It is here rather than read from the environment
+   * inside the gate because this is a layer, and `layer-injected-deps` is the rule that
+   * keeps a configuration substitutable by its caller.
+   */
+  readonly superadmins?: Superadmins;
   /** Omitted for an install that signs in by emailed code only. */
   readonly google?: GoogleCredentials;
   /** Where a failed OTP send is reported. Sending is not awaited, so this is the only trace. */
@@ -140,15 +164,18 @@ export interface AuthSession {
  * without reaching into a nested `node_modules`.
  */
 export interface Auth {
-  handler(request: Request): Promise<Response>;
+  handler: (request: Request) => Promise<Response>;
   api: {
-    getSession(input: { headers: Headers }): Promise<AuthSession | null>;
+    getSession: (input: { headers: Headers }) => Promise<AuthSession | null>;
     /** Revoke the caller's session. Better Auth deletes the row rather than flagging it. */
-    signOut(input: { headers: Headers }): Promise<unknown>;
+    signOut: (input: { headers: Headers }) => Promise<unknown>;
   };
 }
 
 export function createAuth(config: AuthConfig): Auth {
+  // Resolved once, so the three gates below cannot end up consulting different lists.
+  const superadmins = config.superadmins ?? NO_SUPERADMINS;
+
   return betterAuth({
     database: config.database,
     secret: config.secret,
@@ -178,7 +205,9 @@ export function createAuth(config: AuthConfig): Auth {
       validateUserInfo: async ({ user }) => {
         // An identity with no address cannot be matched to an invitation, so it is refused:
         // `isAdmissible("")` is false. Failing closed on a missing email is the point.
-        if (await isAdmissible(config.exec, user.email ?? "")) return;
+        if (await isAdmissible(config.exec, user.email ?? "", superadmins)) {
+          return;
+        }
 
         // Recorded, because the person on the other side sees only "No access" and the
         // operator needs to know WHICH address was turned away -- usually a typo or the
@@ -257,7 +286,7 @@ export function createAuth(config: AuthConfig): Auth {
         // Hashed at rest, the same stance app.invitation takes with token_sha256: a
         // database read must not yield something replayable.
         storeOTP: "hashed",
-        sendVerificationOTP: async ({ email, otp }, context) => {
+        sendVerificationOTP: async ({ email, otp }, context): Promise<void> => {
           // Do not put a code in the post for an address that could never use it. Without
           // this, anyone could make this platform email an arbitrary stranger on demand --
           // our mail reputation spending itself on someone else's spam.
@@ -266,7 +295,7 @@ export function createAuth(config: AuthConfig): Auth {
           // from "sent". Answering honestly here would turn the sign-in form into an
           // oracle for which addresses have access, which is the same enumeration argument
           // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
-          if (!(await isAdmissible(config.exec, email))) {
+          if (!(await isAdmissible(config.exec, email, superadmins))) {
             // Silent to the caller, not to the operator: the response must not reveal that
             // this address has no access, but the trail must say so.
             await recordRefusal(config.exec, { email, via: "email-otp" });
@@ -308,7 +337,9 @@ export function createAuth(config: AuthConfig): Auth {
            * passes to the client verbatim.
            */
           before: async (user, context) => {
-            const invited = await config.transactor((tx) => resolveInvitedUser(tx, user.email));
+            const invited = await config.transactor((tx) =>
+              resolveInvitedUser(tx, user.email, superadmins),
+            );
             if (invited === null) {
               throw new APIError("FORBIDDEN", {
                 message: messages(localeOf(context))("error.notInvited"),
