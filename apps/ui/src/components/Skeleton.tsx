@@ -10,10 +10,14 @@
  * full-width bars is the one shape real content never has.
  */
 
+import { useTranslation } from "react-i18next";
+
 export function Skeleton({ rows = 3 }: { rows?: number }) {
+  const { t } = useTranslation();
+
   return (
     <div className="stack" aria-busy="true" aria-live="polite">
-      <span className="visually-hidden">Loading</span>
+      <span className="visually-hidden">{t("common.loading")}</span>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="setting" style={{ width: `${String(94 - ((i * 13) % 38))}%` }} />
       ))}

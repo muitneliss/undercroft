@@ -30,8 +30,10 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth";
 import { Errata } from "@/components/Errata";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Mark } from "@/components/Mark";
 import { DIVISIONS } from "@/lib/divisions";
 
@@ -39,6 +41,7 @@ import { DIVISIONS } from "@/lib/divisions";
 const WHEEL = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "#7f4023"];
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
+  const { t } = useTranslation();
   const emailField = useRef<HTMLInputElement>(null);
   const codeField = useRef<HTMLInputElement>(null);
 
@@ -71,30 +74,36 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
 
         <div className="imprint">
           <Mark size={26} />
-          <span className="imprint__name">Undercroft</span>
+          <span className="imprint__name">{t("app.name")}</span>
+        </div>
+
+        {/* The language pair is on the title page too, and it has to be: this is the first
+            screen anyone sees, and someone who cannot read it has not signed in yet and so
+            has no stored preference for the running head to honour. */}
+        <div className="row">
+          <LanguageSwitcher />
         </div>
 
         <div className="stack stack--tight">
-          <h1>Control plane</h1>
-          <p className="prose prose--lead">Connect your accounts and see what has been synced.</p>
+          <h1>{t("signIn.title")}</h1>
+          <p className="prose prose--lead">{t("signIn.lead")}</p>
         </div>
 
         {reason === "expired" ? (
           <p className="note" role="status">
-            Your session ended. Sign in again to continue.
+            {t("signIn.expired")}
           </p>
         ) : null}
 
         {reason === "denied" ? (
-          <Errata heading="No access" live>
-            That account does not have access. If you were invited, sign in with the exact address
-            the invitation was sent to.
+          <Errata heading={t("signIn.deniedHeading")} live>
+            {t("signIn.denied")}
           </Errata>
         ) : null}
 
         <div className="row">
           <button className="plate plate--primary" type="button" onClick={signInWithGoogle}>
-            Continue with Google
+            {t("signIn.google")}
           </button>
         </div>
 
@@ -109,7 +118,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
           >
             <div className="field">
               <label className="label" htmlFor="signin-email">
-                Or sign in with a code
+                {t("signIn.emailLabel")}
               </label>
               <input
                 className="input"
@@ -118,21 +127,21 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
                 type="email"
                 autoComplete="email"
                 required
-                placeholder="you@example.com"
+                placeholder={t("signIn.emailPlaceholder")}
                 ref={emailField}
                 disabled={sendCode.isPending}
               />
             </div>
 
             {sendCode.isError ? (
-              <Errata heading="Not sent" live>
+              <Errata heading={t("signIn.notSent")} live>
                 {sendCode.error.message}
               </Errata>
             ) : null}
 
             <div className="row">
               <button className="plate" type="submit" disabled={sendCode.isPending}>
-                {sendCode.isPending ? "Sending…" : "Email me a code"}
+                {sendCode.isPending ? t("signIn.sending") : t("signIn.sendCode")}
               </button>
             </div>
           </form>
@@ -147,7 +156,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
           >
             <div className="field">
               <label className="label" htmlFor="signin-code">
-                Six-digit code
+                {t("signIn.codeLabel")}
               </label>
               <input
                 className="input"
@@ -167,20 +176,18 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
                * because that would make this form a list of who does -- so this cannot
                * promise that a code actually went out.
                */}
-              <p className="field__hint">
-                If {sentTo} has access, a code is on its way. It expires in ten minutes.
-              </p>
+              <p className="field__hint">{t("signIn.codeHint", { email: sentTo })}</p>
             </div>
 
             {signIn.isError ? (
-              <Errata heading="Not signed in" live>
+              <Errata heading={t("signIn.notSignedIn")} live>
                 {signIn.error.message}
               </Errata>
             ) : null}
 
             <div className="row">
               <button className="plate plate--primary" type="submit" disabled={signIn.isPending}>
-                {signIn.isPending ? "Signing in…" : "Sign in"}
+                {signIn.isPending ? t("signIn.signingIn") : t("signIn.signIn")}
               </button>
               <button
                 className="plate plate--small"
@@ -189,7 +196,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
                   sendCode.reset();
                 }}
               >
-                Use a different address
+                {t("signIn.useAnotherAddress")}
               </button>
             </div>
           </form>

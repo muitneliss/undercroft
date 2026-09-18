@@ -26,8 +26,10 @@
  */
 
 import { useEffect, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Mark } from "@/components/Mark";
 import { TabRail } from "@/components/TabRail";
 import { applyBoard } from "@/lib/acetate";
@@ -45,6 +47,7 @@ export function Book({
   signedInAs: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   const board = division(current).hue;
 
   useEffect(() => {
@@ -82,13 +85,13 @@ export function Book({
         <div className="leaf__spine" aria-hidden="true">
           <span className="leaf__punch leaf__punch--a" />
           <span className="leaf__punch leaf__punch--b" />
-          <span className="leaf__caption">Undercroft · control plane</span>
+          <span className="leaf__caption">{t("app.caption")}</span>
         </div>
 
         <header className="runhead">
           <Link className="runhead__mark" to="/tenants">
             <Mark />
-            Undercroft
+            {t("app.name")}
           </Link>
 
           {tenantId ? (
@@ -102,13 +105,17 @@ export function Book({
 
           <div className="runhead__right">
             <span className="datum datum--quiet">{signedInAs}</span>
+            {/* Beside the sign-out plate, not buried in a settings page: changing language
+                is something a reader does in their first seconds, before they know where
+                anything else is. */}
+            <LanguageSwitcher />
             <button
               className="plate plate--small"
               type="button"
               onClick={() => signOut.mutate()}
               disabled={signOut.isPending}
             >
-              Sign out
+              {t("app.signOut")}
             </button>
           </div>
         </header>

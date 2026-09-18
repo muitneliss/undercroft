@@ -10,39 +10,49 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { translatorFor } from "@/i18n";
 import { presentVerdict, type Verdict } from "./verdict";
+
+const en = translatorFor("en");
+const vi = translatorFor("vi");
 
 describe("presentVerdict", () => {
   test("renders three genuinely different states", () => {
-    const tones = (["ok", "mismatch", "unverified"] as const).map((v) => presentVerdict(v).tone);
+    const tones = (["ok", "mismatch", "unverified"] as const).map(
+      (v) => presentVerdict(en, v).tone,
+    );
 
     expect(new Set(tones).size).toBe(3);
   });
 
   test("unverified is neither the pass nor the failure treatment", () => {
-    const unverified = presentVerdict("unverified");
+    const unverified = presentVerdict(en, "unverified");
 
-    expect(unverified.tone).not.toBe(presentVerdict("ok").tone);
-    expect(unverified.tone).not.toBe(presentVerdict("mismatch").tone);
+    expect(unverified.tone).not.toBe(presentVerdict(en, "ok").tone);
+    expect(unverified.tone).not.toBe(presentVerdict(en, "mismatch").tone);
   });
 
   test("unverified says no evidence was found, not that a check is pending", () => {
-    // "Pending" or "Unknown" would imply it resolves itself later. It does not.
-    const { label, description } = presentVerdict("unverified");
-
-    expect(label).toBe("Not verified");
-    expect(description).toMatch(/not a match/i);
+    // "Pending" or "Unknown" would imply it resolves itself later. It does not -- and the
+    // Vietnamese wording has to keep that distinction, which is the half a translation is
+    // most likely to lose. "Chưa kiểm chứng" is "not verified", not "đang chờ" ("pending").
+    expect(presentVerdict(en, "unverified").label).toBe("Not verified");
+    expect(presentVerdict(en, "unverified").description).toMatch(/not a match/i);
+    expect(presentVerdict(vi, "unverified").label).toBe("Chưa kiểm chứng");
+    expect(presentVerdict(vi, "unverified").description).toMatch(/không có nghĩa là khớp/i);
   });
 
-  test("every state carries a word and an icon, never colour alone", () => {
+  test("every state carries a word and an icon in both languages, never colour alone", () => {
     for (const verdict of ["ok", "mismatch", "unverified"] as const) {
-      const presented = presentVerdict(verdict);
-      expect(presented.label).not.toBe("");
-      expect(presented.icon).not.toBe("");
+      for (const t of [en, vi]) {
+        const presented = presentVerdict(t, verdict);
+        expect(presented.label).not.toBe("");
+        expect(presented.icon).not.toBe("");
+      }
     }
   });
 
   test("an unrecognised verdict throws rather than rendering as a pass", () => {
-    expect(() => presentVerdict("probably fine" as Verdict)).toThrow(/unhandled verdict/);
+    expect(() => presentVerdict(en, "probably fine" as Verdict)).toThrow(/unhandled verdict/);
   });
 });

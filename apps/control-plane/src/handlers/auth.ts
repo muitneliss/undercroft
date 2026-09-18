@@ -45,12 +45,41 @@
  * where an invitation is actually redeemed into a membership.
  */
 
-import { type EmailSender } from "@undercroft/core";
+import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
+import { messages } from "../i18n/index.ts";
 import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
+
+/**
+ * Which language to answer a Better Auth hook in.
+ *
+ * `/trpc` resolves this once per request in `server.ts`; inside these hooks there is no
+ * `Context`, because they are called from within the library. Better Auth hands each of them
+ * the endpoint context, which carries the originating request -- and therefore the same
+ * `Accept-Language` the browser sent, so the answer is the same one arrived at the same way.
+ *
+ * Structural rather than Better Auth's own `GenericEndpointContext`: the two hooks are given
+ * slightly different shapes, and this depends on the one field both actually carry.
+ *
+ * Everything here is optional in the library's types, because a sign-in driven by something
+ * other than an HTTP call has no request at all. That resolves to Vietnamese, which is the
+ * product's default and not a guess -- `negotiateLocale` records why.
+ */
+interface HookContext {
+  readonly request?: Request | undefined;
+  readonly headers?: Headers | undefined;
+}
+
+function localeOf(context: HookContext | null | undefined): Locale {
+  const asked =
+    context?.request?.headers.get("accept-language") ??
+    context?.headers?.get("accept-language") ??
+    null;
+  return negotiateLocale(asked);
+}
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
@@ -228,7 +257,7 @@ export function createAuth(config: AuthConfig): Auth {
         // Hashed at rest, the same stance app.invitation takes with token_sha256: a
         // database read must not yield something replayable.
         storeOTP: "hashed",
-        sendVerificationOTP: async ({ email, otp }) => {
+        sendVerificationOTP: async ({ email, otp }, context) => {
           // Do not put a code in the post for an address that could never use it. Without
           // this, anyone could make this platform email an arbitrary stranger on demand --
           // our mail reputation spending itself on someone else's spam.
@@ -244,16 +273,21 @@ export function createAuth(config: AuthConfig): Auth {
             return;
           }
 
+          // In the language the browser asked for. This is the one email whose recipient
+          // IS the person at the keyboard, so their choice of language is known exactly --
+          // `apps/ui/src/auth.ts` sends `accept-language` on this very call.
+          const t = messages(localeOf(context));
+
           // Deliberately not awaited: how long the send takes is a signal for whether the
           // address exists, and the response should not carry it.
           void config.email
             .send({
               to: email,
-              subject: "Your Undercroft sign-in code",
-              text:
-                `Your sign-in code is ${otp}\n\n` +
-                `It expires in ${String(OTP_EXPIRES_SECONDS / 60)} minutes. ` +
-                `If you did not ask to sign in, you can ignore this email.`,
+              subject: t("signInCode.subject"),
+              text: t("signInCode.body", {
+                otp,
+                minutes: String(OTP_EXPIRES_SECONDS / 60),
+              }),
             })
             .catch((error: unknown) => config.onEmailError?.(error));
         },
@@ -273,13 +307,11 @@ export function createAuth(config: AuthConfig): Auth {
            * aborts the sign-in, and its message is the one kind of error text Better Auth
            * passes to the client verbatim.
            */
-          before: async (user) => {
+          before: async (user, context) => {
             const invited = await config.transactor((tx) => resolveInvitedUser(tx, user.email));
             if (invited === null) {
               throw new APIError("FORBIDDEN", {
-                message:
-                  "That address has not been invited. Ask an administrator for an " +
-                  "invitation, and sign in with the exact address it was sent to.",
+                message: messages(localeOf(context))("error.notInvited"),
               });
             }
             return { data: user };

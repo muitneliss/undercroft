@@ -11,6 +11,7 @@
  * a procedure is a different question from who may hold a session.
  */
 
+import { DEFAULT_LOCALE, type Locale } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { TRPCError } from "@trpc/server";
@@ -46,11 +47,12 @@ async function seedMember(email: string, role: Role, tenantId = "CASE-0042"): Pr
   return userId;
 }
 
-function caller(user: SessionUser) {
+function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
   const ctx: Context = {
     exec: db,
     user,
     sessionId: "s1",
+    locale,
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(true),
   };
@@ -58,9 +60,19 @@ function caller(user: SessionUser) {
 }
 
 /** An admin of CASE-0042, which is who most of these tests act as. */
-async function admin() {
+async function admin(locale: Locale = DEFAULT_LOCALE) {
   const userId = await seedMember("boss@example.test", "admin");
-  return caller({ userId, email: "boss@example.test" });
+  return caller({ userId, email: "boss@example.test" }, locale);
+}
+
+async function errorMessage(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+  } catch (error) {
+    if (!(error instanceof TRPCError)) throw error;
+    return error.message;
+  }
+  throw new Error("expected a refusal, got a result");
 }
 
 async function errorCode(fn: () => Promise<unknown>): Promise<string> {
@@ -180,6 +192,33 @@ describe("inviting twice does not grant twice", () => {
     );
 
     expect(code).toBe("CONFLICT");
+  });
+
+  test("the refusal is worded in the language the request asked for", async () => {
+    // This message is rendered verbatim by `People.tsx`. If the router ever stops reading
+    // `ctx.locale`, a Vietnamese admin gets one English sentence on the page -- and it
+    // appears precisely when something has gone wrong, which is the worst moment for it.
+    await seedMember("hand@example.test", "member");
+    const invite = { tenantId: "CASE-0042", email: "hand@example.test", role: "admin" as const };
+
+    const api = await admin("vi");
+    const vietnamese = await errorMessage(() => api.people.invite(invite));
+
+    expect(vietnamese).toContain("đã có quyền truy cập");
+    expect(vietnamese).toContain("hand@example.test");
+  });
+
+  test("the same refusal in English, for an auditor who asked for it", async () => {
+    // The guard's other side. One language asserted alone passes against a router that
+    // ignores the locale and answers in that language always.
+    await seedMember("hand@example.test", "member");
+    const api = await admin("en");
+
+    const english = await errorMessage(() =>
+      api.people.invite({ tenantId: "CASE-0042", email: "hand@example.test", role: "admin" }),
+    );
+
+    expect(english).toContain("already has access as member");
   });
 });
 

@@ -23,6 +23,8 @@
  * separate states rather than two shades of "not working".
  */
 
+import { useTranslation } from "react-i18next";
+
 import type { Connection } from "@/api/types";
 import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types";
 import { ArrowRight, Errata as ErrataMark } from "@/components/Icon";
@@ -32,10 +34,10 @@ import { orMissing } from "@/lib/money";
 import { describeSchedule, expiryNote } from "@/lib/when";
 
 const MARK_LABEL = {
-  granted: "Granted",
-  pending: "Awaiting scope",
-  lapsed: "Reconnect needed",
-  absent: "Not granted",
+  granted: "grant.markGranted",
+  pending: "grant.markPending",
+  lapsed: "grant.markLapsed",
+  absent: "grant.markAbsent",
 } as const;
 
 export function ConnectionCard({
@@ -51,7 +53,8 @@ export function ConnectionCard({
   onDisconnect: () => void;
   busy?: boolean;
 }) {
-  const card = presentConnection(connection);
+  const { t } = useTranslation();
+  const card = presentConnection(t, connection);
   const access = SOURCE_ACCESS[connection.source];
   const name = SOURCE_LABEL[connection.source];
   const headingId = `grant-${connection.source}`;
@@ -77,7 +80,7 @@ export function ConnectionCard({
           <h3 id={headingId} className="grant__name">
             {name}
           </h3>
-          <StatusMark mark={card.mark} label={MARK_LABEL[card.mark]} />
+          <StatusMark mark={card.mark} label={t(MARK_LABEL[card.mark])} />
         </div>
 
         <div className="grant__account stack stack--tight">
@@ -86,7 +89,7 @@ export function ConnectionCard({
               account withdrew it, and "Reconnect Xero" alone does not say. */}
           {named && card.state !== "needs_scope" ? (
             <>
-              <span className="label">Account</span>
+              <span className="label">{t("grant.account")}</span>
               <span className="datum">{orMissing(connection.external_account_label)}</span>
             </>
           ) : null}
@@ -99,8 +102,8 @@ export function ConnectionCard({
               live grant would read as though consent were being asked again. */}
           {card.state === "connected" ? (
             <>
-              <span className="label">Reads</span>
-              <span className="datum datum--quiet">{orMissing(scopeSummary(connection))}</span>
+              <span className="label">{t("grant.reads")}</span>
+              <span className="datum datum--quiet">{orMissing(scopeSummary(t, connection))}</span>
             </>
           ) : null}
 
@@ -110,13 +113,13 @@ export function ConnectionCard({
         <div className="grant__when stack stack--tight">
           {card.state === "connected" ? (
             <>
-              <span className="label">Schedule</span>
+              <span className="label">{t("grant.schedule")}</span>
               <span className="datum datum--quiet">
                 {connection.schedule_cron
-                  ? describeSchedule(connection.schedule_cron)
+                  ? describeSchedule(t, connection.schedule_cron)
                   : orMissing("")}
               </span>
-              <span className="datum datum--quiet">{expiryNote(connection.expires_at)}</span>
+              <span className="datum datum--quiet">{expiryNote(t, connection.expires_at)}</span>
             </>
           ) : null}
 
@@ -125,8 +128,8 @@ export function ConnectionCard({
               hours, and the operator is usually on the phone. */}
           {lapsed && connection.expires_at ? (
             <>
-              <span className="label">Since</span>
-              <span className="datum datum--quiet">{expiryNote(connection.expires_at)}</span>
+              <span className="label">{t("grant.since")}</span>
+              <span className="datum datum--quiet">{expiryNote(t, connection.expires_at)}</span>
             </>
           ) : null}
         </div>
@@ -134,34 +137,34 @@ export function ConnectionCard({
         <div className="grant__actions">
           {card.action?.kind === "connect" ? (
             <button className="plate plate--primary" onClick={onConnect} disabled={busy}>
-              Connect {name}
+              {t("grant.connect", { name })}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "scope" ? (
             <button className="plate plate--primary" onClick={onScope} disabled={busy}>
-              Choose what to sync
+              {t("grant.chooseScope")}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "reconnect" ? (
             <button className="plate plate--primary" onClick={onConnect} disabled={busy}>
-              Reconnect {name}
+              {t("grant.reconnect", { name })}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.state === "connected" ? (
             <button className="plate" onClick={onScope} disabled={busy}>
-              Change what syncs
+              {t("grant.changeScope")}
             </button>
           ) : null}
 
           {!unprinted ? (
             <button className="plate" onClick={onDisconnect} disabled={busy}>
-              Disconnect
+              {t("grant.disconnect")}
             </button>
           ) : null}
         </div>
@@ -174,7 +177,7 @@ export function ConnectionCard({
         <div className="errata errata--inline">
           <span className="errata__mark">
             <ErrataMark size={13} />
-            Errata
+            {t("grant.errata")}
           </span>
           <p className="errata__body">{card.detail}</p>
         </div>
@@ -184,10 +187,10 @@ export function ConnectionCard({
           has been made, because repeating it then is noise. */}
       {unprinted ? (
         <dl className="access">
-          <dt>What we read</dt>
-          <dd>{access.reads}</dd>
-          <dt>What we change</dt>
-          <dd>{access.writes}</dd>
+          <dt>{t("grant.whatWeRead")}</dt>
+          <dd>{t(access.reads)}</dd>
+          <dt>{t("grant.whatWeChange")}</dt>
+          <dd>{t(access.writes)}</dd>
         </dl>
       ) : null}
     </article>

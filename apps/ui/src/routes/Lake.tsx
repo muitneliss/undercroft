@@ -8,21 +8,20 @@
  * already in place.
  */
 
+import { useTranslation } from "react-i18next";
+
 import { EmptyState } from "@/components/EmptyState";
 
 export function Lake({ tenantId }: { tenantId: string }) {
+  const { t } = useTranslation();
+
   return (
     <div className="sheet">
-      <div className="head head--division">Lake</div>
+      <div className="head head--division">{t("lake.head")}</div>
       <div className="body stack">
-        <h1>Raw lake</h1>
-        <p className="prose prose--lead">
-          What has actually landed for {tenantId}, before any transform.
-        </p>
-        <EmptyState
-          title="Not available yet"
-          body="Browsing lake objects and their provenance needs endpoints the control plane does not expose yet. This section is in place for when it does."
-        />
+        <h1>{t("lake.title")}</h1>
+        <p className="prose prose--lead">{t("lake.lead", { tenantId })}</p>
+        <EmptyState title={t("lake.emptyTitle")} body={t("lake.emptyBody")} />
       </div>
     </div>
   );

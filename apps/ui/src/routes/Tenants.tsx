@@ -12,23 +12,24 @@
  * "Add" affordance is a plain note rather than a form that would post nowhere.
  */
 
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Errata } from "@/components/Errata";
 import { Skeleton } from "@/components/Skeleton";
-import { formatCount } from "@/lib/money";
 import { trpc } from "@/trpc";
 
 export function Tenants() {
+  const { t } = useTranslation();
   const tenants = trpc.tenants.list.useQuery();
 
   if (tenants.isPending) return <Skeleton rows={4} />;
 
   if (tenants.isError) {
     return (
-      <Errata heading="Not loaded" live>
-        The list of customers could not be loaded. Nothing has been changed.
+      <Errata heading={t("common.notLoaded")} live>
+        {t("tenants.notLoaded")}
       </Errata>
     );
   }
@@ -37,29 +38,25 @@ export function Tenants() {
 
   return (
     <div className="sheet">
-      <div className="head head--division">Customers</div>
+      <div className="head head--division">{t("nav.customers")}</div>
       <div className="body stack">
-        <h1>Member companies</h1>
-        <p className="prose prose--lead">
-          Each customer’s data is stored and accessed separately. Open one to grant, scope or
-          withdraw access to their accounts.
-        </p>
+        <h1>{t("tenants.title")}</h1>
+        <p className="prose prose--lead">{t("tenants.lead")}</p>
 
         {list.length === 0 ? (
-          <EmptyState
-            title="No customers yet"
-            body="A customer is the unit everything else hangs off: their connected accounts, their synced records, and who can see them."
-          />
+          <EmptyState title={t("tenants.emptyTitle")} body={t("tenants.emptyBody")} />
         ) : (
           <table className="table">
-            <caption>
-              {formatCount(list.length)} {list.length === 1 ? "customer" : "customers"}
-            </caption>
+            {/* The noun agrees with the count through i18next's plural forms, not through a
+                ternary: "1 customer" and "4 customers" is an English rule, and hard-coding
+                it here would have produced "1 khách hàngs" the moment a second language
+                arrived. */}
+            <caption>{t("tenants.caption", { count: list.length })}</caption>
             <thead>
               <tr>
-                <th scope="col">Customer</th>
-                <th scope="col">Reference</th>
-                <th scope="col">Your role</th>
+                <th scope="col">{t("tenants.colCustomer")}</th>
+                <th scope="col">{t("tenants.colReference")}</th>
+                <th scope="col">{t("tenants.colRole")}</th>
               </tr>
             </thead>
             <tbody>
@@ -79,12 +76,9 @@ export function Tenants() {
 
       <div className="band-rule" />
 
-      <div className="head">Add</div>
+      <div className="head">{t("tenants.addHead")}</div>
       <div className="body">
-        <p className="note">
-          Adding a customer isn’t available here yet — the control plane exposes no create endpoint.
-          Tenants are provisioned out of band for now.
-        </p>
+        <p className="note">{t("tenants.addNote")}</p>
       </div>
     </div>
   );

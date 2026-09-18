@@ -37,6 +37,7 @@
 // prefix, so `/tenants` stayed active inside `/tenants/CASE-.../lake` and two
 // tabs rendered as the current one -- two punched holes in a strip whose whole
 // job is saying which section you are in. The division is already known here.
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { letteringOn } from "@/lib/acetate";
@@ -49,8 +50,10 @@ export function TabRail({
   tenantId: string | undefined;
   current: DivisionId;
 }) {
+  const { t } = useTranslation();
+
   return (
-    <nav className="rail" aria-label="Sections">
+    <nav className="rail" aria-label={t("nav.sections")}>
       {DIVISIONS.map((div) => {
         const locked = div.scoped && !tenantId;
         // Lettering is chosen per hue rather than fixed: white reads at 2.09:1
@@ -68,10 +71,10 @@ export function TabRail({
               className="rail__tab"
               aria-disabled="true"
               style={{ flexGrow: div.extent }}
-              title="Choose a customer first"
+              title={t("nav.lockedTitle")}
             >
-              {div.label}
-              <span className="visually-hidden"> — choose a customer first</span>
+              {t(div.labelKey)}
+              <span className="visually-hidden">{t("nav.lockedHint")}</span>
             </span>
           );
         }
@@ -84,7 +87,7 @@ export function TabRail({
             to={divisionPath(div.id, tenantId)}
             {...(div.id === current ? { "aria-current": "page" as const } : {})}
           >
-            {div.label}
+            {t(div.labelKey)}
           </Link>
         );
       })}

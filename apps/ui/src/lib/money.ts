@@ -12,7 +12,20 @@
  *
  * `null` is a real value and renders as MISSING, never as `0`. An empty cell is
  * visibly missing; a zero is invisibly false, and only one of those gets caught.
+ *
+ * ## An amount does not change shape with the interface language
+ *
+ * `formatMoney` groups with `,` and points with `.` in every locale, deliberately, while
+ * `formatCount` and `formatBytes` below follow the reader. The asymmetry is the point: a
+ * count is prose, but an amount is a ledger value that gets screenshotted into a runbook,
+ * pasted into a message and read back over the phone. If the separators followed the
+ * interface language, `1.234` would mean one thousand to one reader and one-and-a-bit to
+ * the next, with nothing on the screen to say which -- the same class of silent, invisible
+ * wrongness `.claude/rules/money.md` exists to prevent. The currency is always printed
+ * beside the digits, which is what makes the fixed format unambiguous.
  */
+
+import type { Locale } from "@undercroft/core/locale";
 
 export type Money = { amount: string; currency: string };
 
@@ -58,9 +71,18 @@ export function exactAmount(money: Money | null | undefined): string {
   return money ? `${money.amount} ${money.currency}` : MISSING;
 }
 
-/** Counts, durations and sizes are genuinely numbers and may be formatted as such. */
-export function formatCount(value: number | null | undefined): string {
-  return value === null || value === undefined ? MISSING : value.toLocaleString("en-SG");
+/**
+ * Which CLDR locale groups a plain number for each of our languages. `@/lib/when` holds the
+ * same table for dates; both are small enough that sharing them would cost more than it saves.
+ */
+const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
+
+/**
+ * Counts, durations and sizes are genuinely numbers and may be formatted as such -- and
+ * unlike an amount, they follow the reader's language: a Vietnamese reader groups with `.`.
+ */
+export function formatCount(value: number | null | undefined, locale: Locale): string {
+  return value === null || value === undefined ? MISSING : value.toLocaleString(CLDR[locale]);
 }
 
 /**
@@ -81,9 +103,9 @@ const UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
  * demands. `null` still renders as MISSING: an object whose size was never
  * recorded is not an object of zero bytes.
  */
-export function formatBytes(value: number | null | undefined): string {
+export function formatBytes(value: number | null | undefined, locale: Locale): string {
   if (value === null || value === undefined) return MISSING;
-  if (value < 1000) return `${value.toLocaleString("en-SG")} B`;
+  if (value < 1000) return `${value.toLocaleString(CLDR[locale])} B`;
 
   let size = value;
   let unit = 0;
