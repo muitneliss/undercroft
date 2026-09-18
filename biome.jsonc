@@ -147,12 +147,15 @@
             },
             // `parseFloat` is a name lookup rather than a syntax shape, so the rule engine
             // expresses it better than the money plugin's patterns could.
+            //
+            // `parseInt` is NOT listed, matching the ESLint config this replaced: it is the
+            // sanctioned way to read a port or a key version, and `useNumberNamespace`
+            // rewrites it to `Number.parseInt` anyway. The reasoning is in money.grit.
             "noRestrictedGlobals": {
               "level": "error",
               "options": {
                 "deniedGlobals": {
-                  "parseFloat": "parseFloat produces a float. Money is a string end to end -- parse it with parseAmount() from @undercroft/core and format it with formatMoney().",
-                  "parseInt": "parseInt produces a float. If this is money, use parseAmount() from @undercroft/core."
+                  "parseFloat": "parseFloat produces a float. Money is a string end to end -- parse it with parseAmount() from @undercroft/core and format it with formatMoney()."
                 }
               }
             }

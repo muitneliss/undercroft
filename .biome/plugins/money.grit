@@ -35,9 +35,21 @@ pattern money_coercions() {
     `Number.parseFloat($_)` as $call where {
       register_diagnostic(span=$call, message="Number.parseFloat produces a float. See @undercroft/core/money.", severity="error")
     },
-    `Number.parseInt($...)` as $call where {
-      register_diagnostic(span=$call, message="Number.parseInt produces a float. See @undercroft/core/money.", severity="error")
-    },
+    // `Number.parseInt` is deliberately NOT banned here, though the ESLint rule this file
+    // was ported from did ban it. Under ESLint the legal spelling for parsing an integer
+    // was the bare global `parseInt`, and the codebase uses it for ports, key versions and
+    // the sub-second digits of a stamp -- each with a comment saying "parseInt, not
+    // Number(): a port, not an amount".
+    //
+    // Biome inverts that. `useNumberNamespace` (on under `preset: "all"`) rewrites bare
+    // `parseInt` to `Number.parseInt`, so porting the old ban verbatim left NO legal way to
+    // parse an integer and flagged 14 correct call sites. Banning both spellings of the
+    // same function is not strictness, it is a contradiction, and `money.md` is explicit
+    // that a rule which fights correct code gets worked around and then protects nothing.
+    //
+    // The intent the rule actually encodes survives intact: `Number()` and `parseFloat` are
+    // banned because they produce a float from something that might be an amount. An
+    // integer index is not an amount.
     // `Big#toNumber()` is the float you spent a library avoiding. It exists for charting,
     // and a chart is not a ledger.
     `$_.toNumber()` as $call where {
