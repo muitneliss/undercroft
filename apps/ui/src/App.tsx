@@ -48,7 +48,7 @@ function Opened({
   children: (tenantId: string) => ReactNode;
 }): React.JSX.Element {
   const params = useParams();
-  const tenantId = params["tenantId"];
+  const tenantId = params.tenantId;
 
   if (!tenantId) {
     return <Navigate to="/tenants" replace={true} />;
@@ -63,8 +63,8 @@ function Opened({
 
 function ScopeRoute({ signedInAs }: { signedInAs: string }): React.JSX.Element {
   const params = useParams();
-  const tenantId = params["tenantId"];
-  const source = params["source"];
+  const tenantId = params.tenantId;
+  const source = params.source;
 
   if (!tenantId) {
     return <Navigate to="/tenants" replace={true} />;

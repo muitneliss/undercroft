@@ -25,7 +25,7 @@ const trpcClient = trpc.createClient({
   links: [httpBatchLink({ url: "/trpc" })],
 });
 
-const root = document.getElementById("root");
+const root = document.querySelector("#root");
 if (root !== null) {
   createRoot(root).render(
     <StrictMode>

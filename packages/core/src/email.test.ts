@@ -63,7 +63,7 @@ describe("the HTTP provider sends what it was given, and says so when it cannot"
 
     expect(seen).toHaveLength(1);
     expect(seen[0]?.url).toBe("https://mail.example.test/send");
-    expect(seen[0]?.headers["authorization"]).toBe("Bearer key_test");
+    expect(seen[0]?.headers.authorization).toBe("Bearer key_test");
     expect(seen[0]?.body).toEqual({
       from: "Undercroft <no-reply@example.test>",
       to: ["operator@example.test"],

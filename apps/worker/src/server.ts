@@ -56,6 +56,5 @@ const app = createLakeApi({
 
 // parseInt, not Number(): a port, not an amount (the money lint rule bans Number()).
 const port = Number.parseInt(process.env.UNDERCROFT_WORKER_PORT ?? "8081", 10);
-console.log(`undercroft worker listening on :${port}`);
 
 export default { port, fetch: app.fetch };

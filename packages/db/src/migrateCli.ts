@@ -27,7 +27,7 @@ import { migrate } from "./migrate.ts";
 import { asExecutor, createPool } from "./pool.ts";
 
 async function main(): Promise<void> {
-  const dsn = process.env["UNDERCROFT_POSTGRES_DSN"];
+  const dsn = process.env.UNDERCROFT_POSTGRES_DSN;
   if (dsn === undefined || dsn === "") {
     throw new Error("UNDERCROFT_POSTGRES_DSN is required");
   }

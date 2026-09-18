@@ -90,7 +90,7 @@ async function authHeaders(spec: ConnectorSpec, ctx: RunContext): Promise<Record
     if (ctx.token === undefined) {
       throw new ConnectorError(spec.id, "*", 0, "connector needs a token but none was supplied");
     }
-    headers["authorization"] = `Bearer ${await ctx.token()}`;
+    headers.authorization = `Bearer ${await ctx.token()}`;
   }
   if (spec.auth.kind === "oauth2" && spec.auth.accountHeader !== undefined) {
     // Deliberately left to the caller to fill via defaults.headers; the account id is the

@@ -122,7 +122,7 @@ function buildNotifier(): (email: string, tenantId: string) => Promise<boolean> 
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const dsn = process.env["UNDERCROFT_POSTGRES_DSN"];
+  const dsn = process.env.UNDERCROFT_POSTGRES_DSN;
   if (dsn === undefined || dsn === "") {
     throw new Error("UNDERCROFT_POSTGRES_DSN is required");
   }

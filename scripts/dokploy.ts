@@ -276,7 +276,7 @@ export function releasedServices(
       service = serviceMatch[1];
     }
     const imageMatch = /^\s+image:\s*(\S+)\s*$/u.exec(line);
-    if (imageMatch?.[1] !== undefined && imageMatch[1].startsWith(RELEASED_IMAGE_PREFIX)) {
+    if (imageMatch?.[1]?.startsWith(RELEASED_IMAGE_PREFIX)) {
       found.push({ service, image: expandEnv(imageMatch[1], env) });
     }
   }
