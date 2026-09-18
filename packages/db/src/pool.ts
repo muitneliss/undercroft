@@ -32,8 +32,26 @@ pinTypeParsers();
 export type Pool = pg.Pool;
 export type PoolClient = pg.PoolClient;
 
-export function createPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString });
+export interface PoolOptions {
+  /**
+   * `search_path` for every connection in the pool, e.g. `app`.
+   *
+   * Our own SQL always qualifies its schema (`app.app_user`, `ops.run`), so this is not for
+   * us. It exists for Better Auth, which emits unqualified table names and so needs a
+   * connection on which `auth_user` resolves to `app.auth_user`. Set per pool rather than on
+   * the role, so a library's expectations cannot quietly change what a bare table name
+   * means for everything else.
+   */
+  readonly searchPath?: string;
+}
+
+export function createPool(connectionString: string, options: PoolOptions = {}): pg.Pool {
+  return new pg.Pool({
+    connectionString,
+    ...(options.searchPath === undefined
+      ? {}
+      : { options: `-c search_path=${options.searchPath}` }),
+  });
 }
 
 /** Wrap a `pg` client as the narrow {@link SqlExecutor} the runner and repos speak. */

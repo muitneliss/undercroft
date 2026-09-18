@@ -67,6 +67,51 @@ describe("a table dbt creates at runtime reaches BI, and only BI-safe schemas do
   });
 });
 
+describe("every table in app is granted to the control plane, and to nothing else", () => {
+  // The hazard: `040_grants.sql` grants `ON ALL TABLES IN SCHEMA app`, which Postgres
+  // expands to the tables existing at that moment, and the ledger means it never runs
+  // again. So a table added by a later migration silently has NO grants -- the control
+  // plane gets "permission denied for table" on first use while the whole suite stays
+  // green. This enumerates the schema instead of naming tables, so it covers the next
+  // table too, not just today's.
+  test("no table in app is missing the control plane's DML grants", async () => {
+    const { rows } = await db.query<{
+      table_name: string;
+      can_select: boolean;
+      can_insert: boolean;
+      can_update: boolean;
+      can_delete: boolean;
+    }>(
+      `SELECT c.relname AS table_name,
+              has_table_privilege('undercroft_app', c.oid, 'SELECT') AS can_select,
+              has_table_privilege('undercroft_app', c.oid, 'INSERT') AS can_insert,
+              has_table_privilege('undercroft_app', c.oid, 'UPDATE') AS can_update,
+              has_table_privilege('undercroft_app', c.oid, 'DELETE') AS can_delete
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'app' AND c.relkind = 'r'
+       ORDER BY c.relname`,
+    );
+
+    // The schema is not empty, or the query above would pass by vacuity.
+    expect(rows.length).toBeGreaterThan(0);
+    const ungranted = rows.filter(
+      (r) => !r.can_select || !r.can_insert || !r.can_update || !r.can_delete,
+    );
+    expect(ungranted.map((r) => r.table_name)).toEqual([]);
+  });
+
+  test("BI cannot read a session, a login identity or an OAuth token", async () => {
+    // The quiet side of the same boundary: app is revoked from BI wholesale, so the tables
+    // that hold a live session token are unreachable rather than merely ungranted.
+    await db.asRole("undercroft_bi", async (tx) => {
+      await expectDenied(() => tx.query("SELECT * FROM app.auth_user"));
+      await expectDenied(() => tx.query("SELECT * FROM app.auth_session"));
+      await expectDenied(() => tx.query("SELECT * FROM app.auth_account"));
+      await expectDenied(() => tx.query("SELECT * FROM app.auth_verification"));
+    });
+  });
+});
+
 describe("a user-authored dbt model cannot read a credential", () => {
   test("dbt has no USAGE on app, so a model selecting the secret fails", async () => {
     // The primary control, and it is a privilege rather than a policy: the model fails at

@@ -11,7 +11,7 @@
  */
 
 import type { ReactNode } from "react";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 
 import type { Source } from "@/api/types";
 import { SOURCES } from "@/api/types";
@@ -73,8 +73,9 @@ function ScopeRoute({ signedInAs }: { signedInAs: string }) {
 
 export function App() {
   // The one auth read. `session.me` is an authed procedure, so with no session cookie it
-  // errors -- which, while OAuth is unwired, is always, and the app sits on the title page.
+  // errors and the app sits on the title page.
   const session = trpc.session.me.useQuery(undefined, { retry: false });
+  const [params] = useSearchParams();
 
   if (session.isPending) {
     return (
@@ -87,9 +88,12 @@ export function App() {
   }
 
   if (session.isError) {
-    // No reason is passed: auth is not wired, so "expired"/"denied" would invent a failure
-    // that did not happen. The plain title page is the honest state.
-    return <SignIn />;
+    // The reason comes from the URL, because the only thing that knows why a sign-in failed
+    // is the flow that failed -- Better Auth sends a refused Google sign-in back to
+    // `?reason=denied`. Absent, no reason is passed: inventing "expired" for someone who
+    // simply has not signed in yet would report a failure that did not happen.
+    const reason = params.get("reason");
+    return <SignIn {...(reason === "denied" || reason === "expired" ? { reason } : {})} />;
   }
 
   const signedInAs = session.data.email;

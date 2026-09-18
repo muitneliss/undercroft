@@ -69,10 +69,15 @@ and any BI tool that speaks Postgres.
 ```sh
 bun install
 bun run verify      # typecheck, lint, format, tests -- offline, no credentials needed
+bun run migrate     # apply the schema to a real Postgres (UNDERCROFT_POSTGRES_DSN)
 ```
 
 `verify` is the gate and runs with no Docker, no network and no credentials. `bun run
 itest` adds the Docker-backed integration tier.
+
+Signing in to the control plane is **invite-only**, by Google or a one-time code.
+[docs/runbook/sign-in-setup.md](docs/runbook/sign-in-setup.md) walks through the OAuth client,
+the mail key, the first invitation, and how to check each step actually worked.
 
 ## License
 

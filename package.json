@@ -20,6 +20,7 @@
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "lint:state": "ast-grep scan",
+    "migrate": "bun run packages/db/src/migrateCli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",

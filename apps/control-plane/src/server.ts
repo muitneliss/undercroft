@@ -14,13 +14,14 @@
  */
 
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import type { EmailSender } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { extname, join, normalize, sep } from "node:path";
-import { type Context, userForSession } from "./trpc.ts";
+import type { Auth } from "./auth/auth.ts";
+import { appUserForEmail } from "./auth/invite.ts";
+import type { Context, SessionUser } from "./trpc.ts";
 import { appRouter } from "./router/index.ts";
-
-const SESSION_COOKIE = "undercroft_session";
 
 /**
  * Content types for the handful of extensions a Vite build emits. Explicit rather than
@@ -42,17 +43,20 @@ const CONTENT_TYPES: Record<string, string> = {
   ".map": "application/json",
 };
 
-function readCookie(header: string | undefined, name: string): string {
-  if (header === undefined) return "";
-  for (const part of header.split(";")) {
-    const [key, ...rest] = part.trim().split("=");
-    if (key === name) return rest.join("=");
-  }
-  return "";
-}
-
 export interface ServerDeps {
   readonly exec: SqlExecutor;
+  /**
+   * Sign-in. When unset — a test of static serving, or a process deliberately started with
+   * no way in — `/api/auth/*` does not exist and every request is unauthenticated.
+   */
+  readonly auth?: Auth;
+  /**
+   * Tells an invited person they have access. Optional: with no mail configured an
+   * invitation is still created and still valid, and the admin is told it was not sent.
+   */
+  readonly email?: EmailSender;
+  /** The origin to put in an invitation email. Without it, no invitation mail is sent. */
+  readonly publicUrl?: string;
   /**
    * Absolute path to the built SPA (`apps/ui/dist`). When set, the app serves those files
    * and falls back to `index.html` for client-side routes. When unset — a test, or a
@@ -66,12 +70,21 @@ export function createServer(deps: ServerDeps): Hono {
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 
-  app.all("/trpc/*", async (c) => {
-    const cookies: string[] = [];
-    const sessionId = readCookie(c.req.header("cookie"), SESSION_COOKIE);
-    const user = await userForSession(deps.exec, sessionId);
+  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
+  // matter: the catch-all answers any GET with index.html, so an auth route registered
+  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
+  // the app shell -- a sign-in that silently never completes.
+  if (deps.auth !== undefined) {
+    const auth = deps.auth;
+    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+  }
 
-    const response = await fetchRequestHandler({
+  app.all("/trpc/*", async (c) => {
+    const headers = c.req.raw.headers;
+    const { user, sessionId } = await resolveCaller(deps, headers);
+    const auth = deps.auth;
+
+    return await fetchRequestHandler({
       endpoint: "/trpc",
       req: c.req.raw,
       router: appRouter,
@@ -79,11 +92,12 @@ export function createServer(deps: ServerDeps): Hono {
         exec: deps.exec,
         user,
         sessionId,
-        setCookie: (value) => cookies.push(value),
+        endSession: async () => {
+          if (auth !== undefined) await auth.api.signOut({ headers });
+        },
+        notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId),
       }),
     });
-    for (const cookie of cookies) response.headers.append("set-cookie", cookie);
-    return response;
   });
 
   // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a
@@ -111,6 +125,67 @@ export function createServer(deps: ServerDeps): Hono {
   }
 
   return app;
+}
+
+/**
+ * Tell an invited person they have access, and say whether it went.
+ *
+ * The message carries no token and no link that grants anything: the invitation is keyed by
+ * the address, so this is a nudge to go and sign in, not a credential. That is why it is
+ * safe to email and why losing the email costs nothing but a conversation.
+ *
+ * A failed send is reported as `false`, never raised. The invitation is already written and
+ * already valid; turning a mail outage into a failed invitation would throw away work the
+ * admin would have to repeat.
+ */
+async function sendInvitation(deps: ServerDeps, to: string, tenantId: string): Promise<boolean> {
+  const { email, publicUrl } = deps;
+  if (email === undefined || publicUrl === undefined) return false;
+
+  try {
+    await email.send({
+      to,
+      subject: "You have access to Undercroft",
+      text:
+        `You have been given access to ${tenantId} in Undercroft.\n\n` +
+        `Sign in at ${publicUrl} — use this address (${to}) exactly, either with Google ` +
+        `or by asking for a one-time code.\n\n` +
+        `If you were not expecting this, you can ignore it; nothing happens until you sign in.`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Who is calling, in the two steps that sign-in is made of.
+ *
+ * Better Auth verifies the signed cookie and reads its session row — the database read that
+ * makes a revoked session stop working at once. That yields an *authenticated address*.
+ * `appUserForEmail` then turns the address into the `app_user` uuid that memberships are
+ * keyed by, which is the only id a procedure may act on.
+ *
+ * An authenticated address with no `app_user` resolves to `null`, not to a session. That is
+ * the case where someone's account was removed while they still hold a valid cookie: they
+ * are who they say they are, and they are nobody here.
+ */
+async function resolveCaller(
+  deps: ServerDeps,
+  headers: Headers,
+): Promise<{ user: SessionUser | null; sessionId: string }> {
+  if (deps.auth === undefined) return { user: null, sessionId: "" };
+
+  const resolved = await deps.auth.api.getSession({ headers });
+  if (resolved === null) return { user: null, sessionId: "" };
+
+  const appUser = await appUserForEmail(deps.exec, resolved.user.email);
+  if (appUser === null) return { user: null, sessionId: "" };
+
+  return {
+    user: { userId: appUser.appUserId, email: appUser.email },
+    sessionId: resolved.session.id,
+  };
 }
 
 /**
