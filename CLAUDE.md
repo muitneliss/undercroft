@@ -62,14 +62,27 @@ adding a second is how two definitions of green drift apart.
 **no Docker, no network and no credentials**. `bun run itest` is the Docker-backed tier
 and is deliberately separate.
 
-**A green `verify` is not evidence that the rules above held.** ESLint cannot see "never
+**A green `verify` is not evidence that the rules above held.** A linter cannot see "never
 guess", create-only lake writes, or the one-writer rule; the rule files are their only
 enforcement. Treating green as proof would be rule 2 broken by the harness itself.
 
-Two rules are the exception, because a machine _can_ see them: `no-usestate` and the
-`layer-*` rules are ast-grep rules that fail `bun run lint:rules` inside the gate. Where a
-rule can be made mechanical it is, and `scripts/layering.test.ts` pins each of those guards
-from both sides so the rule cannot quietly stop matching.
+Some rules are the exception, because a machine _can_ see them, and each is pinned from both
+sides — fires, and stays quiet — so it cannot quietly stop matching:
+
+- `no-usestate` and the `layer-*` rules are **ast-grep** rules that fail `bun run lint:rules`.
+  Pinned by `scripts/layering.test.ts`.
+- The money bans, the no-mock bans and the UI's type-only import of the server router are
+  **Biome GritQL plugins** in `.biome/plugins/`, which fail `bun run lint`. Pinned by
+  `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
+  `no-restricted-syntax`; see ADR 0012.
+
+Where a rule can be made mechanical it is.
+
+**Biome is the linter and the formatter**, at `preset: "all"` — every rule it ships, at
+error severity, with every domain on. No rule is switched off in `biome.jsonc`. Where a rule
+cannot apply here it is suppressed at the file it applies to, with the reason written beside
+it, so a reviewer can check each one and delete it when it stops being true. Prettier is kept
+for Markdown and YAML alone, the two languages Biome cannot format.
 
 ## Deploying
 

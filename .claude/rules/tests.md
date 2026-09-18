@@ -9,7 +9,8 @@ globs: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
 
 - **NEVER mock.** No `vi.mock`/`vi.fn`/`vi.spyOn`, no `mock`/`spyOn` from `bun:test`, no
   asserting a function was called. A suite that asserts a mock was called is green whether
-  or not the code works. An ESLint rule enforces this.
+  or not the code works. Enforced by `.biome/plugins/no-mocks.grit` for the member-call
+  spelling and by `noRestrictedImports` in `biome.jsonc` for the import.
 - **NEVER write into the repo from a test.** Use in-memory stores and PGlite.
 
 ## Follow
