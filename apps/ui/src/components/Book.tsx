@@ -90,7 +90,21 @@ export function Book({
     <div className="book">
       <TabRail tenantId={tenantId} current={current} />
 
-      <div className="leaf">
+      {/*
+        Keyed to WHICH BOOK IS OPEN AT WHICH DIVISION, which is the same thing as
+        "is this a different page". React Router reconciles two routes that render
+        the same component in the same position -- every division here goes through
+        `Opened` -- so without a key the leaf is updated rather than remounted and
+        the page turn in `index.css` never fires.
+
+        The key is the pair rather than the division alone because switching
+        customers inside one section is a different book, and a different book has
+        to turn. It deliberately does NOT carry the rest of the path: a scope panel
+        hinging open inside the section it already belongs to is the same leaf, and
+        a leaf that turns to show a panel on the page you were already reading is
+        motion lying about what happened.
+      */}
+      <div className="leaf" key={`${tenantId ?? ""}/${current}`}>
         <div className="leaf__spine" aria-hidden="true">
           <span className="leaf__punch leaf__punch--a" />
           <span className="leaf__punch leaf__punch--b" />

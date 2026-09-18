@@ -121,8 +121,21 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
           </button>
         </div>
 
+        {/*
+         * The two steps are KEYED, and the key is the only reason the step change
+         * is visible.
+         *
+         * Both forms render at the same position, so React reconciles one into the
+         * other: same <form> element, new children, no remount -- and the slip-tip
+         * in `index.css` cannot run on an element that never arrived. A distinct
+         * key per step makes the swap a real mount, which is also the honest shape
+         * of it. This is a different form asking a different question, not the
+         * first one with its fields rewritten, and the uncontrolled inputs behind
+         * it are cleared by the remount rather than by hand.
+         */}
         {sentTo === null ? (
           <form
+            key="address"
             className="stack stack--tight"
             onSubmit={(event): void => {
               event.preventDefault();
@@ -163,6 +176,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
           </form>
         ) : (
           <form
+            key="code"
             className="stack stack--tight"
             onSubmit={(event): void => {
               event.preventDefault();
