@@ -28,6 +28,11 @@ export const vi = {
     name: "Undercroft",
     caption: "Undercroft · bảng điều khiển",
     signOut: "Đăng xuất",
+    /**
+     * Labels the build stamp in the colophon. The tag beside it is never translated and
+     * never reformatted: it is the literal string that rolls the stack back to this build.
+     */
+    release: "Phiên bản",
   },
 
   lang: {

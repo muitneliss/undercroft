@@ -18,7 +18,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DEFAULT_LOCALE } from "@undercroft/core/locale";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -57,6 +57,10 @@ afterEach(() => {
   // The store is a module singleton and `persist` writes to localStorage, so a test that
   // left it in English would hand the next one a language it did not choose.
   useUiStore.getState().setLocale(DEFAULT_LOCALE);
+  // Said here rather than left to Testing Library's own registration, which lands in
+  // whichever file imports it FIRST: a UI test file sorting ahead of this one takes the
+  // cleanup with it, and these renders start leaking into each other a file later.
+  cleanup();
 });
 
 describe("the catalogues", () => {

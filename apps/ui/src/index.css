@@ -422,6 +422,24 @@ time,
   /* Left padding clears the spine, then leaves a gutter. Setting it to exactly
      the spine's width put the hanging heads hard against the spine rule. */
   padding: var(--s-5) var(--s-6) var(--s-8) calc(var(--s-7) + var(--s-4));
+  /* Head, page, foot -- in that order and in that direction, so the colophon can
+     take the free space below the page rather than following the last line of it.
+     A section with two rows on it would otherwise print its imprint a third of the
+     way down the leaf, which reads as a stray line rather than as the foot.
+     The gap owns the space between the three, which is why the running head no
+     longer carries a bottom margin of its own: one value, set once, and the foot
+     is separated from the page by exactly what the page is separated from the
+     head by. */
+  display: flex;
+  flex-direction: column;
+  row-gap: var(--s-6);
+}
+
+/* Block behaviour, restored. The rest of this layout was written against a block
+   leaf, and without this a sheet taller than the viewport is COMPRESSED by the
+   flex container instead of overflowing it into a scroll. */
+.leaf > * {
+  flex: none;
 }
 
 /* The punch holes and the spine caption: the only purely decorative marks in the
@@ -658,7 +676,6 @@ time,
   justify-content: space-between;
   gap: var(--s-4);
   padding-bottom: var(--s-3);
-  margin-bottom: var(--s-6);
   border-bottom: var(--hair) solid var(--rule-strong);
   flex-wrap: wrap;
 }
@@ -728,6 +745,43 @@ time,
   display: flex;
   align-items: baseline;
   gap: var(--s-4);
+  font-size: var(--t-micro);
+}
+
+/* -- the colophon ------------------------------------------------------------ */
+
+/*
+ * Which printing this is, at the foot of the leaf.
+ *
+ * The running head is closed by a rule beneath it; this opens with the same rule
+ * above it, in the lighter weight, and the page is bracketed. The label is flush
+ * left, which puts it on the same axis as every hanging head in the margin column
+ * above -- the foot is set to the page's own structure rather than parked in a
+ * corner.
+ *
+ * `margin-top: auto` is what does the work: it pushes the line to the bottom of
+ * the leaf on a short page, and does nothing at all on a long one or inside the
+ * title page's card, where there is no free space to take.
+ *
+ * The rule stops at the sheet's own measure rather than running to the padding,
+ * so it ends where `.band-rule` and the heads' trailing rules end.
+ */
+.colophon {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: var(--s-4);
+  border-top: var(--hair) solid var(--rule);
+  max-width: 78rem;
+}
+
+/* Set down to the label's size, but deliberately NOT to `.datum--quiet`. The tag is
+   the one string on the page somebody retypes -- into IMAGE_TAG, or into a bug
+   report -- and a figure too faint to read back correctly is a worse defect at the
+   foot of a page than a loud one. The label beside it carries the quiet instead. */
+.colophon .datum {
   font-size: var(--t-micro);
 }
 
