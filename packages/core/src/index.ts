@@ -1,3 +1,4 @@
+export { decodeBase64Url } from "./base64.ts";
 export { canonicalJson, canonicalJsonFromText, parseLossless } from "./canonicalJson.ts";
 export { type Clock, systemClock, TestClock } from "./clock.ts";
 export {
@@ -11,6 +12,15 @@ export {
 } from "./email.ts";
 export { ConnectorError, HttpError, QuotaExhausted, UndercroftError } from "./errors.ts";
 export { getPath, getStringPath, parsePath } from "./getPath.ts";
+export {
+  type ByteFetcher,
+  type ByteRequest,
+  type ByteResponse,
+  createByteFetcher,
+  InMemoryByteFetcher,
+  raiseForByteStatus,
+  type RecordedByteResponse,
+} from "./httpBytes.ts";
 export { newRequestId, newRunId } from "./ids.ts";
 export { DEFAULT_LOCALE, type Locale, LOCALES, negotiateLocale, parseLocale } from "./locale.ts";
 export {
