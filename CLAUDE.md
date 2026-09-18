@@ -43,6 +43,7 @@ about to touch.** That is the only reason this index exists.
 | `privileges.md` | `packages/db/sql/**`                        | the role and grant model; why the BI role cannot read `raw`                              |
 | `tests.md`      | `**/*.test.ts`                              | real in-memory implementations over mocks, a guard needs two tests                       |
 | `state.md`      | `apps/ui/**`                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
+| `layering.md`   | `apps/*/src/**`, `packages/db/src/**`       | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
 | `pii.md`        | `specs/**`, `docs/**`, `*.md`, fixtures     | no real customer data in any tracked file                                                |
 | `deployment.md` | `deploy/**`, `flows/**`, deploy workflows   | the Dokploy API is the only channel, every service declares a memory limit               |
 
@@ -64,6 +65,11 @@ and is deliberately separate.
 **A green `verify` is not evidence that the rules above held.** ESLint cannot see "never
 guess", create-only lake writes, or the one-writer rule; the rule files are their only
 enforcement. Treating green as proof would be rule 2 broken by the harness itself.
+
+Two rules are the exception, because a machine _can_ see them: `no-usestate` and the
+`layer-*` rules are ast-grep rules that fail `bun run lint:rules` inside the gate. Where a
+rule can be made mechanical it is, and `scripts/layering.test.ts` pins each of those guards
+from both sides so the rule cannot quietly stop matching.
 
 ## Deploying
 

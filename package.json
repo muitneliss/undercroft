@@ -19,14 +19,14 @@
   "scripts": {
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
-    "lint:state": "ast-grep scan",
+    "lint:rules": "ast-grep scan",
     "migrate": "bun run packages/db/src/migrateCli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
     "test": "bun test",
-    "verify": "bun run typecheck && bun run lint && bun run lint:state && bun run format:check && bun run spec:validate && bun run test"
+    "verify": "bun run typecheck && bun run lint && bun run lint:rules && bun run format:check && bun run spec:validate && bun run test"
   },
   "type": "module",
   "trustedDependencies": [
