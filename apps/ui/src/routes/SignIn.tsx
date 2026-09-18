@@ -12,6 +12,7 @@
  */
 
 import { Errata } from "@/components/Errata";
+import { Mark } from "@/components/Mark";
 import { DIVISIONS } from "@/lib/divisions";
 
 /** The full wheel, including the three hues no division has claimed yet. */
@@ -27,8 +28,12 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
           ))}
         </div>
 
+        <div className="imprint">
+          <Mark size={26} />
+          <span className="imprint__name">Undercroft</span>
+        </div>
+
         <div className="stack stack--tight">
-          <span className="label">Undercroft</span>
           <h1>Control plane</h1>
           <p className="prose prose--lead">Connect your accounts and see what has been synced.</p>
         </div>

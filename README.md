@@ -1,3 +1,11 @@
+<picture>
+  <source
+    media="(prefers-color-scheme: dark)"
+    srcset="apps/ui/public/mark-reversed.svg"
+  />
+  <img src="apps/ui/public/mark.svg" alt="" width="56" height="56" />
+</picture>
+
 # Undercroft
 
 > An immutable raw lake, declarative connectors, and a schema you define yourself.

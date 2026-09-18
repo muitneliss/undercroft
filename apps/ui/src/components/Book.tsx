@@ -21,6 +21,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { Mark } from "@/components/Mark";
 import { TabRail } from "@/components/TabRail";
 import { applyBoard } from "@/lib/acetate";
 import { division, type DivisionId } from "@/lib/divisions";
@@ -77,6 +78,7 @@ export function Book({
 
         <header className="runhead">
           <Link className="runhead__mark" to="/tenants">
+            <Mark />
             Undercroft
           </Link>
 

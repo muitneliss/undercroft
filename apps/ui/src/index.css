@@ -631,6 +631,28 @@ time,
 }
 
 /*
+ * The device set with the wordmark.
+ *
+ * Sized in em so it tracks the wordmark's own cap height rather than a pixel
+ * value that drifts the moment the face or the type step changes, and left
+ * INLINE rather than made a flex row: the running head sets the wordmark, the
+ * customer's name and the operator's address on one baseline, and an inline-flex
+ * box has no text baseline to give back, so the whole head would come apart to
+ * gain a `gap`. `vertical-align` does the same job and keeps the line.
+ *
+ * The arch is cut through the block rather than painted pale, so it fills with
+ * whatever is actually behind it -- the page stock here, the leaf on the title
+ * page. Same rule as the punch holes down the spine: a hole shows what is under
+ * it, and one painted in a fixed tone is a smudge.
+ */
+.runhead__mark svg {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  margin-right: 0.44em;
+}
+
+/*
  * Which book is open, in the place a book says it: the running head.
  *
  * The primary user holds several member companies at once and is usually
@@ -1414,6 +1436,42 @@ code {
   border-radius: var(--r-leaf);
   padding: var(--s-7) var(--s-7) var(--s-6);
   box-shadow: var(--ply-shadow);
+}
+
+/*
+ * The imprint: the device and the name, closed off by a rule.
+ *
+ * This replaces a micro-caps "Undercroft" stacked directly on top of the H1,
+ * which is an eyebrow -- a word parked above a heading to categorise it, and a
+ * heading that needs categorising is a heading that is not doing its job. The
+ * identity is not a label for "Control plane"; it is the imprint on a title
+ * page, and an imprint is set apart from the title rather than glued to it. The
+ * rule is the same one that closes the running head, so the first screen already
+ * teaches the device that carries every screen after it.
+ */
+.imprint {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding-bottom: var(--s-4);
+  border-bottom: var(--hair) solid var(--rule-strong);
+}
+
+.imprint svg {
+  flex: none;
+}
+
+/* Set larger than the running head's wordmark so the device and the name hold
+   roughly the same proportion here as they do up there. The device grows on the
+   title page; if the name did not grow with it, the lockup would be two
+   different lockups. */
+.imprint__name {
+  font-family: var(--face-display);
+  font-size: var(--t-h3);
+  font-weight: 700;
+  font-variation-settings: "wdth" 78;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .titlepage__wheel {

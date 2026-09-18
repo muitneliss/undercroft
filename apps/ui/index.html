@@ -27,6 +27,16 @@
       crossorigin
     />
 
+    <!-- The device: an inked block with the undercroft's arch cut through it.
+         The SVG is the mark itself and flips its two inks on the reader's colour
+         scheme, so it stays legible in a light tab strip and a dark one; the PNG
+         is there for the browsers that still ignore an SVG icon, and can only be
+         the light cut. The touch icon is full-bleed and square because iOS masks
+         the corners itself. See src/components/Mark.tsx. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
     <title>Undercroft</title>
   </head>
   <body>
