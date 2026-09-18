@@ -5,7 +5,7 @@ date: 2026-09-18
 tags: []
 source: docs/runbook/sign-in-setup.md
 source_path: docs/runbook/sign-in-setup.md
-source_hash: 1c049808bf8ce10292ba7aa05eb692c3373691bb30a91d1e6fb3f0acbea97786
+source_hash: c39a9627b3a13b28bf7943065f7522a6f217bf821da3629e4403b08560460265
 ingested: 2026-09-18
 ---
 
@@ -16,8 +16,8 @@ worked. The decisions behind it are in
 [[ADR 0010 Invite-Only Sign-In with Better Auth]]; the production-specific parts are in
 [[Runbook Deployment]].
 
-Sign-in is **invite-only**: an address gets in only if it has a live invitation or an
-existing account. Two ways in, either or both:
+Sign-in is **invite-only**: an address gets in only if it has a live invitation, an existing
+account, or is named in `UNDERCROFT_SUPERADMINS`. Two ways in, either or both:
 
 * **Google** — needs an OAuth client.
 * **A one-time code by email** — needs a mail API key.
@@ -56,18 +56,35 @@ differ. **`UNDERCROFT_PUBLIC_URL` must be the origin your browser uses**, becaus
    methods. If it says `sign_in_unconfigured` it names exactly which values are missing —
    the process deliberately starts with no way in rather than offering a button that fails
    on click.
-7. **Bootstrap the first admin** with `bun run invite`, using the real address on the
-   account you will click through with. `--create-tenant` is opt-in so a typo cannot invent
-   a customer. This writes an ordinary invitation and does **not** bypass the gate.
-8. **Sign in** — with Google, or by requesting a six-digit code. Verify you land on the
-   customers list with the tenant in it and the address in the running head; the invitation
-   row should now have `accepted_at` set.
+7. **Bootstrap the first admin** — two ways, see below.
+8. **Sign in** — with Google, or by requesting a six-digit code.
 9. **Invite everyone else from the People division — no more SQL.** `viewer` can look;
    `member` can look and trigger a sync; `admin` can do all of it plus connect accounts and
    invite people.
 
-The invitation email is written in Vietnamese unless `--lang en` is passed — see
-[[ADR 0012 Vietnamese First, i18next in Browser and Server]]. There is no browser to
+## Bootstrapping the first admin
+
+**The way that needs no shell: `UNDERCROFT_SUPERADMINS`.** A comma-separated list of
+addresses that sign in with no invitation and administer every customer. On the server, set
+it in Dokploy's environment and redeploy. The boot log counts them
+(`superadmins_configured`), never prints them; `superadmins_none` means the variable did not
+reach the process, and `superadmins_rejected` prints back entries it would not read —
+almost always a semicolon or a space where a comma belongs.
+
+Name more than one: a single address is a single point of lockout. Those addresses then
+create the first customer from the **Add a customer** form on the Customers page, which only
+a superadmin sees, and invite everyone else from People.
+
+The variable **is the authority, not a seed** — remove an address and redeploy and it is
+withdrawn at the next request, which is also the recovery path if every tenant admin leaves.
+It grants authority, never identity: Google or a one-time code still has to prove the
+address. See [[ADR 0013 Superadmins Named in the Environment]].
+
+**The way that needs no deploy: `bun run invite`.** Still the right tool for an ordinary
+invitation to a single customer. `--create-tenant` is opt-in so a typo cannot invent one.
+It writes an ordinary invitation and does **not** bypass the gate. The email is written in
+Vietnamese unless `--lang en` is passed — see
+[[ADR 0012 Vietnamese First, i18next in Browser and Server]]; there is no browser to
 negotiate with here, and `--lang` refuses anything but `vi` or `en` rather than quietly
 falling back.
 
@@ -77,6 +94,8 @@ falling back.
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `redirect_uri_mismatch` from Google      | `UNDERCROFT_PUBLIC_URL` does not match a registered URI exactly — `http` vs `https` and the port both count |
 | Boot log says `sign_in_unconfigured`     | A required value is unset; it names which                                                                   |
+| Boot log says `superadmins_none`         | `UNDERCROFT_SUPERADMINS` did not reach the process                                                          |
+| Boot log says `superadmins_rejected`     | An entry was not an address — usually the wrong separator                                                   |
 | `Database schema mismatch` / 500 on auth | Migrations not applied                                                                                      |
 | "That address has not been invited"      | No live invitation for that exact address — check for a typo or a different case                            |
 | No code ever arrives                     | Either mail is not configured or the address is not invited; the server will not say which, on purpose      |
