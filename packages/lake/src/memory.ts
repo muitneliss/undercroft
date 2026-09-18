@@ -7,7 +7,7 @@
  * suite is green and the code has never run.
  */
 
-import { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
+import { byCodeUnit, ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 
 export class InMemoryObjectStore implements ObjectStore {
   readonly #objects = new Map<string, Uint8Array>();
@@ -32,7 +32,7 @@ export class InMemoryObjectStore implements ObjectStore {
   list(prefix: string): Promise<string[]> {
     // Materialised and sorted, so a caller may delete while iterating -- which prune
     // does, and which a lazy generator over a live map would break.
-    const keys = [...this.#objects.keys()].filter((k) => k.startsWith(prefix)).sort();
+    const keys = [...this.#objects.keys()].filter((k) => k.startsWith(prefix)).sort(byCodeUnit);
     return Promise.resolve(keys);
   }
 

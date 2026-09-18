@@ -13,6 +13,25 @@ export interface ObjectStore {
   delete: (key: string) => Promise<void>;
 }
 
+/**
+ * The order `list` promises: lexicographic by UTF-16 code unit.
+ *
+ * Spelled out rather than left to a bare `.sort()`, which means the same thing but says so
+ * only by omission. It must NOT become `localeCompare`: that orders by locale, so the same
+ * keys would come back in a different order on a different machine, and `list` is what
+ * retention walks to decide what to prune. It is also the order S3 itself returns keys in,
+ * which is what lets the in-memory store stand in for it.
+ */
+export function byCodeUnit(a: string, b: string): number {
+  if (a < b) {
+    return -1;
+  }
+  if (a > b) {
+    return 1;
+  }
+  return 0;
+}
+
 /** Raised when a requested object is not present. */
 export class ObjectNotFound extends Error {
   constructor(key: string) {

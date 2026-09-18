@@ -15,7 +15,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
+import { byCodeUnit, ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 
 export interface S3StoreConfig {
   readonly bucket: string;
@@ -111,7 +111,7 @@ export class S3ObjectStore implements ObjectStore {
     } while (token !== undefined);
     // S3 returns keys in lexicographic order per page; sort to honour the contract across
     // page boundaries, which the in-memory store also guarantees.
-    return keys.sort();
+    return keys.sort(byCodeUnit);
   }
 
   async delete(key: string): Promise<void> {

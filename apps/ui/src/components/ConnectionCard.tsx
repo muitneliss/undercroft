@@ -138,34 +138,34 @@ export function ConnectionCard({
 
         <div className="grant__actions">
           {card.action?.kind === "connect" ? (
-            <button className="plate plate--primary" onClick={onConnect} disabled={busy}>
+            <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
               Connect {name}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "scope" ? (
-            <button className="plate plate--primary" onClick={onScope} disabled={busy}>
+            <button type="button" className="plate plate--primary" onClick={onScope} disabled={busy}>
               Choose what to sync
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "reconnect" ? (
-            <button className="plate plate--primary" onClick={onConnect} disabled={busy}>
+            <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
               Reconnect {name}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.state === "connected" ? (
-            <button className="plate" onClick={onScope} disabled={busy}>
+            <button type="button" className="plate" onClick={onScope} disabled={busy}>
               Change what syncs
             </button>
           ) : null}
 
           {unprinted ? null : (
-            <button className="plate" onClick={onDisconnect} disabled={busy}>
+            <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
               Disconnect
             </button>
           )}
