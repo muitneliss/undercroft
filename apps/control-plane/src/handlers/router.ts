@@ -247,6 +247,20 @@ export const appRouter = router({
       .mutation(({ input }) => ({ triggered: true, source: input.source })),
   }),
 
+  /**
+   * The public halves of the Google client, for the browser's Picker.
+   *
+   * A client id and an API key are public by design -- they identify the app, they do not
+   * authorise anything, and Google's own documentation puts both in page source. The client
+   * SECRET is not here and never crosses this boundary.
+   *
+   * `authedProcedure` rather than public: there is no reason for an anonymous visitor to
+   * learn which Google project a deployment belongs to.
+   */
+  config: router({
+    google: authedProcedure.query(({ ctx }) => ctx.googlePicker),
+  }),
+
   health: publicProcedure.query(() => ({ ok: true })),
 });
 

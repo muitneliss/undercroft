@@ -49,6 +49,7 @@ function caller(user: SessionUser | null) {
     // the placeholder it has always returned, which is what these tests assert.
     startConsent: () => Promise.resolve({ ok: false as const }),
     worker: null,
+    googlePicker: null,
   };
   return appRouter.createCaller(ctx);
 }

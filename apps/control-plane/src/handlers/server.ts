@@ -132,6 +132,16 @@ export function createServer(deps: ServerDeps): Hono {
         },
         notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId, locale),
         worker: deps.worker ?? null,
+        // The id and key only. `clientSecret` is deliberately not spread in here; the
+        // browser never needs it and this object is serialised straight to it.
+        googlePicker:
+          deps.googleIngest === undefined
+            ? null
+            : {
+                clientId: deps.googleIngest.clientId,
+                apiKey: deps.googleIngest.pickerApiKey ?? "",
+                appId: deps.googleIngest.projectNumber ?? "",
+              },
         startConsent: async (start) => {
           const outcome = await startConsent(
             {

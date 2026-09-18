@@ -40,6 +40,9 @@ export type { Connection };
  */
 export const KNOWN_SOURCES = ["hubspot", "xero", "gmail", "drive"] as const;
 
+/** Narrow, so the union survives tRPC inference and the UI can index its label maps. */
+export type KnownSource = (typeof KNOWN_SOURCES)[number];
+
 /** Sources that must be told what to read before a run may read anything. */
 const SCOPED_SOURCES = new Set(["gmail", "drive"]);
 
@@ -54,7 +57,7 @@ const SCOPED_SOURCES = new Set(["gmail", "drive"]);
 export type CardStatus = "disconnected" | "connected" | "needs_scope" | "needs_reconnect";
 
 export interface ConnectionCardView {
-  readonly source: string;
+  readonly source: KnownSource;
   readonly status: CardStatus;
   readonly externalAccountId: string;
   readonly externalAccountLabel: string;

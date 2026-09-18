@@ -89,6 +89,11 @@ export interface Context {
    * the procedures say so rather than failing in a way that reads like an outage.
    */
   readonly worker: WorkerClient | null;
+  /**
+   * The public halves of the ingestion Google client, for the browser's Drive Picker. The
+   * client SECRET is not in here and must never be: it stays in the process.
+   */
+  readonly googlePicker: { clientId: string; apiKey: string; appId: string } | null;
 }
 
 export type { Role };

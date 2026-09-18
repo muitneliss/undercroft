@@ -65,6 +65,12 @@ export interface GoogleIngestConfig {
   readonly clientSecret: string;
   /** The origin the BROWSER uses. Google builds `redirect_uri` from it. */
   readonly publicUrl: string;
+  /**
+   * The browser Picker's API key and the Google project number. Public values -- they
+   * identify the app and authorise nothing -- and only Drive needs them.
+   */
+  readonly pickerApiKey?: string;
+  readonly projectNumber?: string;
   readonly authorizeUrl?: string;
   readonly tokenUrl?: string;
   /**

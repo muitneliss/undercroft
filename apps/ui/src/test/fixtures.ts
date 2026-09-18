@@ -13,13 +13,13 @@ export function connection(source: Source, over: Partial<Connection> = {}): Conn
   return {
     source,
     status: "disconnected",
-    external_account_id: "",
-    external_account_label: "",
+    externalAccountId: "",
+    externalAccountLabel: "",
     scopes: [],
     config: {},
-    schedule_cron: "",
-    last_run_id: "",
-    expires_at: null,
+    scheduleCron: "",
+    lastRunId: "",
+    expiresAt: null,
     ...over,
   };
 }

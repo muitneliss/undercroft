@@ -21,6 +21,7 @@ import type { DivisionId } from "@/lib/divisions";
 import { Lake } from "@/routes/Lake";
 import { People } from "@/routes/People";
 import { SignIn } from "@/routes/SignIn";
+import { ScopePicker } from "@/routes/ScopePicker";
 import { TenantOverview } from "@/routes/TenantOverview";
 import { Tenants } from "@/routes/Tenants";
 import { trpc } from "@/trpc";
@@ -66,7 +67,7 @@ function ScopeRoute({ signedInAs }: { signedInAs: string }) {
 
   return (
     <Book tenantId={tenantId} current="sources" signedInAs={signedInAs}>
-      <TenantOverview tenantId={tenantId} scopeFor={source} />
+      <ScopePicker tenantId={tenantId} source={source} />
     </Book>
   );
 }

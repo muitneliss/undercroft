@@ -31,7 +31,7 @@ describe("presentConnection", () => {
   test("a connected source with a chosen scope is done", () => {
     const card = presentConnection(
       t,
-      connection("xero", { status: "connected", external_account_label: "CASE-A1B2C3 Pte Ltd" }),
+      connection("xero", { status: "connected", externalAccountLabel: "CASE-A1B2C3 Pte Ltd" }),
       NOW,
     );
 
@@ -58,7 +58,7 @@ describe("presentConnection", () => {
     // Xero's refresh token dies after 60 days unused and nothing tells us.
     const card = presentConnection(
       t,
-      connection("xero", { status: "connected", expires_at: "2026-09-17T11:00:00Z" }),
+      connection("xero", { status: "connected", expiresAt: "2026-09-17T11:00:00Z" }),
       NOW,
     );
 
@@ -71,7 +71,7 @@ describe("presentConnection", () => {
     // reconnect for it would break a connection that works.
     const card = presentConnection(
       t,
-      connection("hubspot", { status: "connected", expires_at: null }),
+      connection("hubspot", { status: "connected", expiresAt: null }),
       NOW,
     );
 
@@ -82,7 +82,7 @@ describe("presentConnection", () => {
   test("a credential expiring later today is still fine now", () => {
     const card = presentConnection(
       t,
-      connection("xero", { status: "connected", expires_at: "2026-09-17T23:00:00Z" }),
+      connection("xero", { status: "connected", expiresAt: "2026-09-17T23:00:00Z" }),
       NOW,
     );
 

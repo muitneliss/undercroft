@@ -62,7 +62,19 @@ const ingestClientSecret = optional("UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET");
 const googleIngest =
   ingestClientId === undefined || ingestClientSecret === undefined || publicUrl === undefined
     ? undefined
-    : { clientId: ingestClientId, clientSecret: ingestClientSecret, publicUrl };
+    : {
+        clientId: ingestClientId,
+        clientSecret: ingestClientSecret,
+        publicUrl,
+        // Drive's browser Picker only. Absent means the Gmail half still works and the
+        // Drive picker says so, rather than the whole consent flow disappearing.
+        ...(optional("UNDERCROFT_GOOGLE_PICKER_API_KEY") === undefined
+          ? {}
+          : { pickerApiKey: required("UNDERCROFT_GOOGLE_PICKER_API_KEY") }),
+        ...(optional("UNDERCROFT_GOOGLE_PROJECT_NUMBER") === undefined
+          ? {}
+          : { projectNumber: required("UNDERCROFT_GOOGLE_PROJECT_NUMBER") }),
+      };
 
 /**
  * The worker: the only process holding the master key, and so the only one that may seal a

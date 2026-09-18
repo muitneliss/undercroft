@@ -89,8 +89,6 @@ export const en = {
     grantsHead: "Grants",
     colSource: "Source",
     colStatus: "Status",
-    notWired:
-      "Connecting, scoping, disconnecting and running a sync from here are not wired yet — the control plane exposes the grant list but not those actions. Each source syncs on its own schedule in the meantime.",
     notLoaded:
       "This customer’s grants could not be loaded, or you do not have access to them. Nothing has been changed.",
   },
@@ -158,6 +156,14 @@ export const en = {
     reconnect: "Reconnect {{name}}",
     changeScope: "Change what syncs",
     disconnect: "Disconnect",
+    connecting: "Taking you to Google…",
+    connectFailed: "This source could not be connected.",
+    connectDeclined: "You cancelled at Google’s screen. Nothing was granted.",
+    disconnecting: "Disconnecting…",
+    disconnectFailed: "This could not be disconnected.",
+    disconnected: "Disconnected.",
+    disconnectedNotRevoked:
+      "Disconnected on our side, but Google could not be told. Revoke the grant at myaccount.google.com/permissions.",
     errata: "Errata",
     whatWeRead: "What we read",
     whatWeChange: "What we change",
@@ -176,6 +182,28 @@ export const en = {
     actionConnect: "Connect",
     actionChoose: "Choose",
     actionReconnect: "Reconnect",
+  },
+
+  scopePicker: {
+    title: "Choose what is read",
+    leadGmail:
+      "Choose the labels to read. Only message headers and PDF attachments in those labels are read; no other label is read.",
+    leadDrive:
+      "Choose the folders or documents to read. Google permits us to read exactly what you pick here and nothing else.",
+    wholeMailbox: "Read the whole mailbox",
+    wholeMailboxHint:
+      "Choosing no label means the whole mailbox. That is a deliberate choice, not an empty one.",
+    directChildrenOnly: "Only files directly inside a chosen folder are read. Sub-folders are not.",
+    labelsHead: "Labels",
+    pickFromDrive: "Choose from Google Drive",
+    nothingToChoose: "There is nothing to choose from yet.",
+    notLoaded: "The list could not be loaded from Google. Nothing has been changed.",
+    save: "Save selection",
+    saving: "Saving…",
+    notSaved: "The selection could not be saved.",
+    saved: "Selection saved.",
+    pickerUnavailable:
+      "Google’s picker is not available. Reload the page; if it persists, Google Drive is not configured.",
   },
 
   scope: {

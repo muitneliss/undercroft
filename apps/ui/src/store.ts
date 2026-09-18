@@ -33,6 +33,27 @@ import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/** One item an admin picked, as both the picker and the card need to see it. */
+export interface ChosenFile {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: "folder" | "file";
+}
+
+/**
+ * The selection an admin is part-way through making.
+ *
+ * Client state with no endpoint behind it until Save is pressed, which is exactly what the
+ * store is for -- and `useState` is banned, so there is no third place it could live.
+ * Deliberately NOT persisted: a half-made choice restored days later, after the labels it
+ * referred to may have been renamed, is worse than an empty form.
+ */
+export interface ScopeDraft {
+  readonly source: string;
+  readonly labels: string[];
+  readonly files: ChosenFile[];
+}
+
 interface UiState {
   /** The tenant the operator is currently focused on, or null when none is selected. */
   selectedTenantId: string | null;
@@ -44,6 +65,11 @@ interface UiState {
   locale: Locale;
   /** Change language. The only writer; `@/i18n` follows this, never the other way round. */
   setLocale: (locale: Locale) => void;
+  /** The scope selection in progress, or null when nothing is being edited. */
+  scopeDraft: ScopeDraft | null;
+  setScopeDraft: (draft: ScopeDraft) => void;
+  /** Add or remove one Gmail label. Absent labels mean the whole mailbox, deliberately. */
+  toggleScopeLabel: (source: string, label: string) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -55,6 +81,22 @@ export const useUiStore = create<UiState>()(
       clearTenant: () => set({ selectedTenantId: null }),
       locale: DEFAULT_LOCALE,
       setLocale: (locale) => set({ locale }),
+      scopeDraft: null,
+      setScopeDraft: (scopeDraft) => set({ scopeDraft }),
+      toggleScopeLabel: (source, label) =>
+        set((state) => {
+          const draft = state.scopeDraft?.source === source ? state.scopeDraft : null;
+          const labels = draft?.labels ?? [];
+          return {
+            scopeDraft: {
+              source,
+              files: draft?.files ?? [],
+              labels: labels.includes(label)
+                ? labels.filter((l) => l !== label)
+                : [...labels, label],
+            },
+          };
+        }),
     }),
     {
       name: "undercroft.ui",
