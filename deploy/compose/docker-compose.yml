@@ -179,6 +179,17 @@ services:
       UNDERCROFT_SESSION_SECRET: ${UNDERCROFT_SESSION_SECRET:?set in .env}
       UNDERCROFT_WORKER_URL: http://worker:8081
       UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN}
+      # Sign-in. All optional: with any of them unset the process starts with no way in and
+      # says so once at boot, rather than offering a button that fails at the first click.
+      #
+      # The public URL is the one the BROWSER uses, because Better Auth builds Google's
+      # redirect_uri from it. A container-internal name here is a redirect_uri_mismatch.
+      UNDERCROFT_PUBLIC_URL: ${UNDERCROFT_PUBLIC_URL:-http://localhost:13000}
+      UNDERCROFT_GOOGLE_CLIENT_ID: ${UNDERCROFT_GOOGLE_CLIENT_ID:-}
+      UNDERCROFT_GOOGLE_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_CLIENT_SECRET:-}
+      UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
+      UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
+      UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}
     ports:
       - "127.0.0.1:${UNDERCROFT_PORT_API:-13000}:3000"
     deploy:

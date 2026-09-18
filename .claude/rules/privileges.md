@@ -27,6 +27,13 @@ undercroft_bi`. The `FOR ROLE` clause is load-bearing: without it a default atta
   `_bi`. Migrations `SET ROLE` to the owner; nothing logs in as it.
 - The worker gets `SELECT, UPDATE` on `app.connection_secret` and nothing else in `app`.
 - Every grant is explicit; `PUBLIC` is revoked.
+- **A migration that creates a table must grant that table in the same file.**
+  `040_grants.sql` says `GRANT ... ON ALL TABLES IN SCHEMA app`, which Postgres expands to
+  the tables that existed when it ran — and the ledger means it never runs again. So a table
+  added later has **no grants at all**, and the symptom is "permission denied for table" at
+  runtime while the whole suite stays green. `060_auth.sql` carries its own grants for this
+  reason. The gate test enumerates every table in `app` rather than naming them, so it
+  covers the next table too.
 
 The four layers that close the credential-leak hazard, and the tests that pin them, are in
 `packages/db/sql/040_grants.sql` and `packages/db/src/privileges.test.ts`.

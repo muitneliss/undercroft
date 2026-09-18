@@ -224,6 +224,19 @@ services:
       # The alias, NOT the bare service name: this service has a domain, so it is also on
       # the shared dokploy-network where `worker` is a name other projects use.
       UNDERCROFT_WORKER_URL: http://undercroft-worker:8081
+      # Sign-in. All optional: with any of them unset the process starts with no way in and
+      # says so once at boot, rather than offering a button that fails at the first click.
+      #
+      # The public URL is the one the BROWSER uses — Better Auth builds Google's
+      # redirect_uri from it, so the network alias above would be a redirect_uri_mismatch.
+      # It must match an Authorized redirect URI in the Google client, path included:
+      # <UNDERCROFT_PUBLIC_URL>/api/auth/callback/google.
+      UNDERCROFT_PUBLIC_URL: ${UNDERCROFT_PUBLIC_URL:?set in .env}
+      UNDERCROFT_GOOGLE_CLIENT_ID: ${UNDERCROFT_GOOGLE_CLIENT_ID:-}
+      UNDERCROFT_GOOGLE_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_CLIENT_SECRET:-}
+      UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
+      UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
+      UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}
     networks:
       default:
         aliases:
