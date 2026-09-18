@@ -1,3 +1,6 @@
+# The runner image is pinned rather than `ubuntu-latest` in every workflow here: that label
+# migrates to Ubuntu 26 in October 2026, and a base image that changes under a release build
+# is a variable nobody chose. Bump the pin deliberately, in one commit, across all four files.
 name: ci
 
 on:
@@ -7,9 +10,9 @@ on:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -18,9 +21,9 @@ jobs:
       - run: bun run verify
 
   compose:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Every service must declare a memory limit. A service with no ceiling can starve
       # the others on a small host. This reads compose's own resolved JSON, so a missing
       # parser cannot look like a passing check.
@@ -42,9 +45,9 @@ jobs:
           exit $fail
 
   secrets:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The floor of the PII rule: secret-bearing paths stay untracked. Catches the two
       # ways it breaks by accident; the rule itself covers the ways it breaks by reasoning.
       - name: secret-bearing paths are not tracked

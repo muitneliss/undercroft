@@ -1,0 +1,96 @@
+# Dependabot is the only thing here that keeps a pin moving.
+#
+# Every version in this repo is pinned deliberately -- action majors, base images, the
+# stack's service images -- and a pin with nobody watching it is how a project ends up
+# still running a runtime that was deprecated a year ago. That is precisely what happened
+# to the Node 20 action majors, and it surfaced as a warning on a release build rather
+# than as anything a test could catch.
+#
+# Everything commits as `chore(deps)`. release-please reads Conventional Commits, merging
+# its PR cuts a tag, and a tag deploys (see release.yml) -- so a dependency bump must not
+# be able to cut a release by itself. `chore` keeps the decision to ship a human's.
+version: 2
+updates:
+  # The four workflows under .github/workflows; one directory covers all of them.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # One PR. The action majors move together -- checkout, buildx, login and build-push
+      # all went to their Node 24 majors in the same commit -- and splitting that across
+      # four PRs is four reviews of the same decision.
+      actions:
+        patterns:
+          - "*"
+
+  # The bun workspace. `/` is enough: dependabot reads `workspaces` from the root
+  # package.json and follows it into packages/* and apps/*.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Split by what a bump can break. A toolchain bump fails the gate loudly; a runtime
+      # dependency can change behaviour the gate still calls green, and deserves its own
+      # review rather than being buried in an eslint bump.
+      production-dependencies:
+        dependency-type: production
+        patterns:
+          - "*"
+      development-dependencies:
+        dependency-type: development
+        patterns:
+          - "*"
+
+  # deploy/Dockerfile.worker and deploy/Dockerfile.control-plane. Dependabot matches any
+  # filename containing "dockerfile", so the suffixed names are picked up.
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      # The bun version has one owner: `.bun-version`, which CI reads and `package.json`
+      # `engines` repeats. A PR bumping only the two `FROM oven/bun` lines would leave the
+      # gate running one bun and the shipped images another -- drift that nothing here
+      # tests for. Bump bun by hand, in all four places, in one commit.
+      - dependency-name: oven/bun
+
+  # The stack's service images, in BOTH compose files. Dependabot rewrites every file in
+  # the directory that names the image, which is what keeps the development compose and the
+  # server one in step; a bump landing in only one of them would not survive a deploy.
+  - package-ecosystem: docker-compose
+    directory: /deploy/compose
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      compose-images:
+        patterns:
+          - "*"
+    ignore:
+      # Our own images are not a dependency: which one runs is `IMAGE_TAG` in Dokploy's
+      # environment, and the compose file reads `${IMAGE_TAG:-latest}` precisely so a
+      # rollback needs no file change.
+      - dependency-name: ghcr.io/*/undercroft-*
+      # A postgres major is a data migration, not a merge -- `raw.records`, the app schema
+      # and the sealed credentials all live in this instance. Minor and patch come through
+      # here; a major is planned deliberately.
+      - dependency-name: postgres
+        update-types:
+          - version-update:semver-major
