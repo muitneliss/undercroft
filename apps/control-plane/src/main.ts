@@ -97,6 +97,10 @@ const uiDist = optional("UNDERCROFT_UI_DIST");
 const app = createServer({
   exec,
   ...(auth === undefined ? {} : { auth }),
+  // Passed independently of `auth`: an invitation email is worth sending even on an install
+  // where sign-in itself is not fully configured yet.
+  ...(email === undefined ? {} : { email }),
+  ...(publicUrl === undefined ? {} : { publicUrl }),
   ...(uiDist === undefined ? {} : { uiDist }),
 });
 

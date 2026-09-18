@@ -114,6 +114,8 @@ export interface Auth {
   handler(request: Request): Promise<Response>;
   api: {
     getSession(input: { headers: Headers }): Promise<AuthSession | null>;
+    /** Revoke the caller's session. Better Auth deletes the row rather than flagging it. */
+    signOut(input: { headers: Headers }): Promise<unknown>;
   };
 }
 

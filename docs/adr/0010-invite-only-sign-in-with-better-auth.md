@@ -119,13 +119,36 @@ link you cannot trust.
 - **Login tokens are encrypted at rest** (`account.encryptOAuthTokens`). They are identity
   scopes only; Gmail and Drive access remains a separate per-tenant consent in the sealed
   `app.connection_secret` registry, so signing in never hands over a mailbox.
-- **There is no invitation UI.** After this lands, a working invite-only sign-in admits
-  nobody until a row exists in `app.invitation`. The runbook carries the SQL. That is the
-  obvious next piece of work.
-- **The offline gate proves the gate.** Better Auth boots against its own `memoryAdapter`
-  while `app.app_user` and `app.invitation` live in PGlite, so invite-only is tested end to
-  end with no Docker, no network and no credentials. What is _not_ covered offline is the
-  `Set-Cookie` round trip: invoking `auth.handler` directly returns the session token in the
-  body but no cookie header — for a stock password sign-in too, not only ours — so that is
-  verified against a real deployment rather than pinned to a harness that does not reproduce
-  it.
+- **Invitations are managed in the product**, not in SQL: `people.members`,
+  `people.invitations`, `people.invite` and `people.revokeInvitation`, with the People
+  division as their surface. Inviting is admin-only, re-inviting an address refreshes the one
+  open invitation rather than adding a second, and whether the invitee was actually emailed
+  is **reported** rather than assumed — with no mail configured the invitation still works
+  and the admin is told to pass the address on. Only the very first admin still needs SQL,
+  because there is nobody to invite them; the runbook carries that one insert.
+- **No invitation token is issued.** `app.invitation.token_sha256` is filled with a digest of
+  a random value and never used: Google and a one-time code already prove the person controls
+  the address, which is the only thing a token would have proved. Requiring both would add a
+  step that demonstrates nothing new.
+- **The offline gate proves the whole ring**, over a real loopback `Bun.serve`: an uninvited
+  address is mailed nothing, an invited one gets exactly one code, the code becomes a signed
+  cookie, that cookie resolves `session.me` to the `app_user` uuid, the invitation is redeemed
+  into the promised membership, and signing out stops that same cookie working. Better Auth
+  runs against its own `memoryAdapter` while `app.app_user` and `app.invitation` live in
+  PGlite — no Docker, no egress, no credentials.
+
+  Two harness details are load-bearing and were each a wasted hour. Calling the Hono app
+  in-process does **not** surface `Set-Cookie` (true of a stock Better Auth password sign-in
+  too), so the cookie can only be asserted over a socket. And `bunfig.toml` preloads
+  happy-dom globally, whose `Response` class `Bun.serve` rejects and whose `fetch` cannot
+  parse a real HTTP response — so that test file unregisters it and puts it back.
+
+- **`session.signOut` goes through Better Auth**, not a `DELETE` of ours. The first cut wrote
+  its own SQL, which was correct in production and a silent no-op against any other backing
+  store. The revocation test is what caught it, and the seam now runs through the code that
+  owns the table — which is the "one writer" rule applied to a table this repo does not own.
+- **Still unproven offline: the real `pg` path.** Better Auth emits unqualified table names
+  and is handed a pool with `search_path=app`; the gate exercises the memory adapter, so that
+  resolution is first tried on deploy. It fails loudly
+  (`relation "auth_user" does not exist`), not silently, and `bun run migrate` is the step
+  that prevents it.

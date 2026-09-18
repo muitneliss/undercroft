@@ -14,6 +14,7 @@
  */
 
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import type { EmailSender } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { extname, join, normalize, sep } from "node:path";
@@ -50,6 +51,13 @@ export interface ServerDeps {
    */
   readonly auth?: Auth;
   /**
+   * Tells an invited person they have access. Optional: with no mail configured an
+   * invitation is still created and still valid, and the admin is told it was not sent.
+   */
+  readonly email?: EmailSender;
+  /** The origin to put in an invitation email. Without it, no invitation mail is sent. */
+  readonly publicUrl?: string;
+  /**
    * Absolute path to the built SPA (`apps/ui/dist`). When set, the app serves those files
    * and falls back to `index.html` for client-side routes. When unset — a test, or a
    * process with no UI baked in — only `/api` and `/trpc` exist, and everything else 404s.
@@ -72,13 +80,23 @@ export function createServer(deps: ServerDeps): Hono {
   }
 
   app.all("/trpc/*", async (c) => {
-    const { user, sessionId } = await resolveCaller(deps, c.req.raw.headers);
+    const headers = c.req.raw.headers;
+    const { user, sessionId } = await resolveCaller(deps, headers);
+    const auth = deps.auth;
 
     return await fetchRequestHandler({
       endpoint: "/trpc",
       req: c.req.raw,
       router: appRouter,
-      createContext: (): Context => ({ exec: deps.exec, user, sessionId }),
+      createContext: (): Context => ({
+        exec: deps.exec,
+        user,
+        sessionId,
+        endSession: async () => {
+          if (auth !== undefined) await auth.api.signOut({ headers });
+        },
+        notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId),
+      }),
     });
   });
 
@@ -107,6 +125,37 @@ export function createServer(deps: ServerDeps): Hono {
   }
 
   return app;
+}
+
+/**
+ * Tell an invited person they have access, and say whether it went.
+ *
+ * The message carries no token and no link that grants anything: the invitation is keyed by
+ * the address, so this is a nudge to go and sign in, not a credential. That is why it is
+ * safe to email and why losing the email costs nothing but a conversation.
+ *
+ * A failed send is reported as `false`, never raised. The invitation is already written and
+ * already valid; turning a mail outage into a failed invitation would throw away work the
+ * admin would have to repeat.
+ */
+async function sendInvitation(deps: ServerDeps, to: string, tenantId: string): Promise<boolean> {
+  const { email, publicUrl } = deps;
+  if (email === undefined || publicUrl === undefined) return false;
+
+  try {
+    await email.send({
+      to,
+      subject: "You have access to Undercroft",
+      text:
+        `You have been given access to ${tenantId} in Undercroft.\n\n` +
+        `Sign in at ${publicUrl} — use this address (${to}) exactly, either with Google ` +
+        `or by asking for a one-time code.\n\n` +
+        `If you were not expecting this, you can ignore it; nothing happens until you sign in.`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -33,7 +33,15 @@ async function seedMembership(tenantId: string, userId: string, role: Role): Pro
 }
 
 function caller(user: SessionUser | null) {
-  const ctx: Context = { exec: db, user, sessionId: "s1" };
+  const ctx: Context = {
+    exec: db,
+    user,
+    sessionId: "s1",
+    endSession: () => Promise.resolve(),
+    // No mail in an authorization test: these procedures are being checked for who may
+    // call them, and a sender here would be a second thing under test.
+    notifyInvitation: () => Promise.resolve(false),
+  };
   return appRouter.createCaller(ctx);
 }
 

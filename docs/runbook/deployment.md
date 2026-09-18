@@ -128,10 +128,10 @@ for a mailbox as a side effect of signing in is the thing that arrangement exist
 `UNDERCROFT_SESSION_SECRET`, the email settings and the Google pair are missing. Check that
 line first; a button that fails at the first click is the failure this avoids.
 
-### Issuing the first invitation
+### Bootstrapping the first admin
 
-There is no invitation UI yet, so a freshly deployed control plane admits **nobody** until a
-row exists. Insert one against the platform database:
+Invitations are issued from the **People** division once someone is in. Nobody is, on a fresh
+deployment, and there is no one to invite them — so exactly one insert is needed, once:
 
 ```sql
 INSERT INTO ops.tenant (id, display_name)
@@ -149,6 +149,12 @@ Then sign in with **exactly** that address. The first sign-in creates the `app.a
 row, redeems every live invitation for the address into `app.tenant_member`, and stamps
 `accepted_at`. Signing in with a different address on the same Google account is refused,
 not silently accepted — the invitation is keyed by the address.
+
+From then on, use **People** inside the tenant: invite an address, pick a role, withdraw an
+invitation that has not been accepted. An admin can invite; a member and a viewer cannot, and
+the server refuses regardless of what the browser shows. The page reports whether the
+invitation was actually emailed — with no mail configured it still works, and you have to
+tell the person yourself.
 
 ## Rollback
 
@@ -173,13 +179,13 @@ Two Kestra behaviours that waste time otherwise:
 
 ## Known gaps
 
-- **There is no invitation UI.** Sign-in works and is invite-only, but the only way to admit
-  someone is the SQL under [Sign-in](#sign-in). That is the next piece of work before real
-  onboarding.
-- **The browser cookie round trip is unverified by the offline gate.** Invoking Better Auth's
-  handler in-process returns a session token in the body but no `Set-Cookie`, so the gate
-  asserts the invite decision and provisioning rather than the cookie. Confirm a real
-  browser sign-in after the first deploy that enables it.
+- **Only the first admin needs SQL.** After that, invitations are issued from the People
+  division. The bootstrap insert is under [Sign-in](#sign-in), and it exists because there is
+  nobody to invite the first person.
+- **The real `pg` + `search_path` path is first exercised on deploy.** Better Auth emits
+  unqualified table names against a pool whose `search_path` is `app`; the offline gate uses
+  its memory adapter. A mistake here fails loudly (`relation "auth_user" does not exist`)
+  rather than silently, and `bun run migrate` is what prevents it.
 - The `undercroft_dbt` role that `dbt/profiles.yml` connects as is not created by any
   migration on this branch; the transform verb will fail until it exists.
 - The raw lake is not in a backup set — it is object storage with its own durability story,

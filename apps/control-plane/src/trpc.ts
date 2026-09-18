@@ -39,6 +39,23 @@ export interface Context {
   readonly user: SessionUser | null;
   /** Better Auth's session id, or `""` when unauthenticated. For audit, not for authority. */
   readonly sessionId: string;
+  /**
+   * Revoke the caller's session.
+   *
+   * A closure the HTTP layer builds over the auth instance and this request's headers, so
+   * signing out deletes the session row through the code that owns that table rather than
+   * with a `DELETE` of our own. It also means a procedure never needs the auth instance,
+   * and this module keeps importing nothing but the database and tRPC.
+   */
+  readonly endSession: () => Promise<void>;
+  /**
+   * Tell an invited address that it has access. Resolves `true` if a message was sent.
+   *
+   * It reports rather than throws, because an invitation whose email failed is still a valid
+   * invitation -- the person can be told by any other means. Silently returning `true` would
+   * leave an admin waiting for someone who was never contacted.
+   */
+  readonly notifyInvitation: (email: string, tenantId: string) => Promise<boolean>;
 }
 
 export type Role = "viewer" | "member" | "admin";
