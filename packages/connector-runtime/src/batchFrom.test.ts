@@ -1,7 +1,7 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it, test } from "bun:test";
 import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
 import { TestClock } from "@undercroft/core";
 import type { RawRecordOut } from "./run.ts";
@@ -48,10 +48,12 @@ async function collect(gen: AsyncGenerator<RawRecordOut>): Promise<RawRecordOut[
   return out;
 }
 
-const relation = (spec: ConnectorSpec) => spec.entities[1]!;
+function relation(spec: ConnectorSpec) {
+  return spec.entities[1]!;
+}
 
 describe("batch-from reads a relation against ids from another entity", () => {
-  test("chunks the ids and POSTs each chunk", async () => {
+  it("chunks the ids and POSTs each chunk", async () => {
     const spec = relationSpec(2);
     const fetcher = new InMemoryFetcher()
       .on("POST", `${BASE}/associations/batch/read`, {
@@ -74,7 +76,7 @@ describe("batch-from reads a relation against ids from another entity", () => {
     expect(fetcher.calls.length).toBe(2);
   });
 
-  test("sends the ids as a hubspot-shaped inputs body", async () => {
+  it("sends the ids as a hubspot-shaped inputs body", async () => {
     const spec = relationSpec(10);
     const fetcher = new InMemoryFetcher().on("POST", `${BASE}/associations/batch/read`, {
       body: { results: [{ from: { id: "d1" } }] },
@@ -91,7 +93,7 @@ describe("batch-from reads a relation against ids from another entity", () => {
     expect(JSON.parse(fetcher.calls[0]!.body!)).toEqual({ inputs: [{ id: "d1" }] });
   });
 
-  test("no ids means no requests, and no invented records", async () => {
+  it("no ids means no requests, and no invented records", async () => {
     // A portal with no deals has no associations. That is a real state, not a failure --
     // the relation's failOnEmpty is off for exactly this reason.
     const spec = relationSpec();
@@ -103,7 +105,7 @@ describe("batch-from reads a relation against ids from another entity", () => {
     expect(fetcher.calls.length).toBe(0);
   });
 
-  test("a relation record with no id at its idPath is still fatal", async () => {
+  it("a relation record with no id at its idPath is still fatal", async () => {
     const spec = relationSpec(10);
     const fetcher = new InMemoryFetcher().on("POST", `${BASE}/associations/batch/read`, {
       body: { results: [{ notFrom: { id: "d1" } }] },

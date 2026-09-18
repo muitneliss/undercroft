@@ -10,7 +10,7 @@
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it, test } from "bun:test";
 import { createHttpEmailSender, InMemoryEmailSender, UnsendableEmail } from "./email.ts";
 import { HttpError } from "./errors.ts";
 
@@ -23,7 +23,10 @@ interface Recorded {
 /** A fetch that answers with the given status and records the one request it received. */
 function recordingFetch(status: number, responseBody = "{}") {
   const seen: Recorded[] = [];
-  const fetchImpl = (async (input, init) => {
+  async function recorder(
+    input: Parameters<typeof globalThis.fetch>[0],
+    init: Parameters<typeof globalThis.fetch>[1],
+  ): Promise<Response> {
     // Narrow rather than stringify: `RequestInfo` and `BodyInit` are unions that include
     // objects, and String() on one of those silently yields "[object Object]".
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -34,12 +37,13 @@ function recordingFetch(status: number, responseBody = "{}") {
       body: JSON.parse(body),
     });
     return new Response(responseBody, { status });
-  }) as typeof globalThis.fetch;
+  }
+  const fetchImpl = recorder as typeof globalThis.fetch;
   return { seen, fetchImpl };
 }
 
 describe("the HTTP provider sends what it was given, and says so when it cannot", () => {
-  test("a sign-in code is posted as from/to/subject/text with a bearer key", async () => {
+  it("a sign-in code is posted as from/to/subject/text with a bearer key", async () => {
     // The wire shape is the whole contract with the provider: a renamed field is a mail
     // that is never delivered, with a 200 to say it went fine.
     const { seen, fetchImpl } = recordingFetch(200);
@@ -63,7 +67,7 @@ describe("the HTTP provider sends what it was given, and says so when it cannot"
     });
   });
 
-  test("a rejected send raises with the status rather than resolving", async () => {
+  it("a rejected send raises with the status rather than resolving", async () => {
     // The guard that matters most here. A swallowed failure reads as "code sent" to
     // everything upstream while the person waits for an email that will never come.
     const { fetchImpl } = recordingFetch(422, "address is not valid");
@@ -88,7 +92,7 @@ describe("the HTTP provider sends what it was given, and says so when it cannot"
 });
 
 describe("the in-memory sender refuses what a provider would reject", () => {
-  test("a usable message is recorded", async () => {
+  it("a usable message is recorded", async () => {
     const sender = new InMemoryEmailSender();
     await sender.send({ to: "operator@example.test", subject: "Your code", text: "123456" });
 
@@ -96,7 +100,7 @@ describe("the in-memory sender refuses what a provider would reject", () => {
     expect(sender.last?.to).toBe("operator@example.test");
   });
 
-  test("an address that is not an address is refused, not recorded", async () => {
+  it("an address that is not an address is refused, not recorded", async () => {
     // The quiet side of the test above. A fake that accepted this would let a bug that
     // mails codes to an unsubstituted template variable pass the whole suite.
     const sender = new InMemoryEmailSender();

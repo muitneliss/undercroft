@@ -3,7 +3,7 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it, test } from "bun:test";
 import { migrate } from "../migrate.ts";
 import {
   ConnectionRegistryError,
@@ -31,25 +31,27 @@ afterEach(async () => {
   await db.close();
 });
 
-const cred = (over: Partial<Credential> = {}): Credential => ({
-  accessToken: "access-1",
-  refreshToken: "refresh-1",
-  expiresAt: null,
-  ...over,
-});
+function cred(over: Partial<Credential> = {}): Credential {
+  return {
+    accessToken: "access-1",
+    refreshToken: "refresh-1",
+    expiresAt: null,
+    ...over,
+  };
+}
 
 describe("needsRefresh treats missing expiry as fresh", () => {
-  test("a credential with no expiry never refreshes (the HubSpot private-app case)", () => {
+  it("a credential with no expiry never refreshes (the HubSpot private-app case)", () => {
     expect(needsRefresh(cred({ expiresAt: null }))).toBe(false);
   });
 
-  test("a credential inside the skew window needs a refresh", () => {
+  it("a credential inside the skew window needs a refresh", () => {
     const now = new Date("2026-01-01T00:00:00Z");
     const soon = new Date(now.getTime() + 60_000).toISOString(); // 1 min out, skew is 5
     expect(needsRefresh(cred({ expiresAt: soon }), now)).toBe(true);
   });
 
-  test("a credential well outside the window does not", () => {
+  it("a credential well outside the window does not", () => {
     const now = new Date("2026-01-01T00:00:00Z");
     const later = new Date(now.getTime() + 60 * 60_000).toISOString();
     expect(needsRefresh(cred({ expiresAt: later }), now)).toBe(false);
@@ -57,27 +59,27 @@ describe("needsRefresh treats missing expiry as fresh", () => {
 });
 
 describe("accessToken refreshes and writes the rotated token back", () => {
-  test("returns the stored token when it is still fresh", async () => {
+  it("returns the stored token when it is still fresh", async () => {
     await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: null }), env);
     const token = await accessToken(db, "CASE-1", "xero", { env });
     expect(token).toBe("access-1");
   });
 
-  test("a rotated refresh token is persisted before the access token is returned", async () => {
+  it("a rotated refresh token is persisted before the access token is returned", async () => {
     // Xero's rotation: the token just spent is dead, so the replacement must be stored or
     // the connection is lost. Prove the NEW refresh token is what is now on disk.
     const now = new Date("2026-01-01T00:00:00Z");
     const expired = new Date(now.getTime() + 60_000).toISOString();
     await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: expired }), env);
 
-    const refresher = (old: string): Promise<Credential> => {
+    function refresher(old: string): Promise<Credential> {
       expect(old).toBe("refresh-1");
       return Promise.resolve({
         accessToken: "access-2",
         refreshToken: "refresh-2",
         expiresAt: new Date(now.getTime() + 3_600_000).toISOString(),
       });
-    };
+    }
 
     const token = await accessToken(db, "CASE-1", "xero", { refresher, now, env });
     expect(token).toBe("access-2");
@@ -86,7 +88,7 @@ describe("accessToken refreshes and writes the rotated token back", () => {
     expect(stored.refreshToken).toBe("refresh-2");
   });
 
-  test("an expired token with no refresher marks the connection expired and raises", async () => {
+  it("an expired token with no refresher marks the connection expired and raises", async () => {
     const now = new Date("2026-01-01T00:00:00Z");
     const expired = new Date(now.getTime() + 60_000).toISOString();
     await writeCredential(

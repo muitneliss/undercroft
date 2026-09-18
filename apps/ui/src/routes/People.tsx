@@ -38,10 +38,10 @@ export function People({ tenantId }: { tenantId: string }) {
   const members = trpc.people.members.useQuery({ tenantId });
   const invitations = trpc.people.invitations.useQuery({ tenantId });
 
-  const invalidate = async () => {
+  async function invalidate(): Promise<void> {
     await utils.people.invitations.invalidate({ tenantId });
     await utils.people.members.invalidate({ tenantId });
-  };
+  }
 
   const invite = trpc.people.invite.useMutation({
     onSuccess: async () => {

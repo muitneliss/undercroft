@@ -22,7 +22,16 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test as it,
+  test,
+} from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
@@ -141,7 +150,7 @@ async function sessionMe(cookie: string): Promise<Response> {
 }
 
 describe("a one-time code is only ever posted to an address that could use it", () => {
-  test("an uninvited address is told nothing and mailed nothing", async () => {
+  it("an uninvited address is told nothing and mailed nothing", async () => {
     const response = await requestCode("stranger@example.test");
 
     // Not an error: answering honestly would make this form an oracle for which addresses
@@ -150,7 +159,7 @@ describe("a one-time code is only ever posted to an address that could use it", 
     expect(sender.sent).toHaveLength(0);
   });
 
-  test("a refused address is recorded, so an operator can see who was turned away", async () => {
+  it("a refused address is recorded, so an operator can see who was turned away", async () => {
     // The person on the other side sees only "No access". Without this row nobody can tell a
     // typo from a broken gate -- which is what happened on the first production sign-in, and
     // cost a round of guessing that one query against this table answers.
@@ -162,7 +171,7 @@ describe("a one-time code is only ever posted to an address that could use it", 
     expect(rows).toEqual([{ actor: "stranger@example.test", action: "auth.refused" }]);
   });
 
-  test("an admitted address leaves no refusal behind", async () => {
+  it("an admitted address leaves no refusal behind", async () => {
     // The quiet side. A trail that recorded every attempt would bury the refusals it exists
     // to surface.
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
@@ -173,7 +182,7 @@ describe("a one-time code is only ever posted to an address that could use it", 
     expect(rows).toHaveLength(0);
   });
 
-  test("an invited address is mailed exactly one code", async () => {
+  it("an invited address is mailed exactly one code", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
 
     await requestCode("operator@example.test");
@@ -185,7 +194,7 @@ describe("a one-time code is only ever posted to an address that could use it", 
 });
 
 describe("signing in with a code lands on the platform's own user identity", () => {
-  test("the code becomes a session cookie that resolves to the app_user uuid", async () => {
+  it("the code becomes a session cookie that resolves to the app_user uuid", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
     await requestCode("operator@example.test");
 
@@ -208,7 +217,7 @@ describe("signing in with a code lands on the platform's own user identity", () 
     expect(body.result.data.email).toBe("operator@example.test");
   });
 
-  test("an uninvited address cannot sign in even with a code in hand", async () => {
+  it("an uninvited address cannot sign in even with a code in hand", async () => {
     // The firing case for the whole feature: a code obtained for an invited address, then
     // offered for an uninvited one. No user may be provisioned.
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
@@ -226,7 +235,7 @@ describe("signing in with a code lands on the platform's own user identity", () 
     expect(rows).toHaveLength(0);
   });
 
-  test("the invitation is redeemed into the membership it promised", async () => {
+  it("the invitation is redeemed into the membership it promised", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
     await requestCode("operator@example.test");
 
@@ -242,7 +251,7 @@ describe("signing in with a code lands on the platform's own user identity", () 
 });
 
 describe("a session can be withdrawn before it expires", () => {
-  test("signing out stops the very same cookie from working", async () => {
+  it("signing out stops the very same cookie from working", async () => {
     // The guarantee `trpc.ts` is built around, actually exercised rather than asserted in a
     // docstring. The session row is deleted, so the next request cannot be authenticated by
     // a row that no longer exists -- no cache, no grace window.
@@ -261,7 +270,7 @@ describe("a session can be withdrawn before it expires", () => {
 });
 
 describe("the session and the SPA do not fight over a route", () => {
-  test("an auth path is handled by the auth handler, never by the app shell", async () => {
+  it("an auth path is handled by the auth handler, never by the app shell", async () => {
     // The catch-all answers any GET with index.html, so an auth route registered after it
     // would turn Google's redirect into a 200 serving the shell -- a sign-in that silently
     // never completes. Asserting "not HTML" is the durable form of that.

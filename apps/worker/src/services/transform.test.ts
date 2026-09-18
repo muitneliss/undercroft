@@ -1,12 +1,12 @@
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it, test } from "bun:test";
 import { runTransform } from "./transform.ts";
 
 const dirs = { projectDir: "/app/dbt/undercroft_starter", profilesDir: "/app/dbt" };
 
 describe("runTransform invokes dbt and reports honestly", () => {
-  test("builds the project with the right directories", async () => {
+  it("builds the project with the right directories", async () => {
     let seen: readonly string[] = [];
     const result = await runTransform({
       ...dirs,
@@ -23,7 +23,7 @@ describe("runTransform invokes dbt and reports honestly", () => {
     expect(seen).toContain(dirs.projectDir);
   });
 
-  test("passes a --select through when given one", async () => {
+  it("passes a --select through when given one", async () => {
     let seen: readonly string[] = [];
     await runTransform(
       {
@@ -39,7 +39,7 @@ describe("runTransform invokes dbt and reports honestly", () => {
     expect(seen).toContain("stg_hubspot_deals");
   });
 
-  test("a non-zero exit raises rather than reporting success", async () => {
+  it("a non-zero exit raises rather than reporting success", async () => {
     // A failed transform must not report success: the previous tables keep serving, which
     // is stale rather than wrong, and only an error says so.
     await expect(
@@ -50,7 +50,7 @@ describe("runTransform invokes dbt and reports honestly", () => {
     ).rejects.toThrow(/exited 1/u);
   });
 
-  test("only the tail of dbt output is returned, never the whole log", async () => {
+  it("only the tail of dbt output is returned, never the whole log", async () => {
     // dbt's log can echo row values from a failing test; those belong in `dq`, not in an
     // HTTP response.
     const long = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n");

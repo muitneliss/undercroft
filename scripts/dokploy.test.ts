@@ -13,7 +13,7 @@
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-import { expect, test } from "bun:test";
+import { expect, test as it, test } from "bun:test";
 
 import { type Config, type Deps, oneShotServices, verify } from "./dokploy.ts";
 
@@ -128,7 +128,7 @@ function routes(scenario: Scenario = {}): Record<string, unknown> {
   };
 }
 
-test("a one-shot service that exited 0 is a success, not a dead container", async () => {
+it("a one-shot service that exited 0 is a success, not a dead container", async () => {
   const { deps, lines } = recorder(routes({ tag: "v1.3.0" }));
 
   await verify(CFG, deps, "", "v1.3.0");
@@ -136,7 +136,7 @@ test("a one-shot service that exited 0 is a success, not a dead container", asyn
   expect(lines).toContain("verify ok");
 });
 
-test("a one-shot service that exited non-zero fails the release", async () => {
+it("a one-shot service that exited non-zero fails the release", async () => {
   const { deps } = recorder(
     routes({ tag: "v1.3.0", migrateState: { Status: "exited", ExitCode: 1 } }),
   );
@@ -146,7 +146,7 @@ test("a one-shot service that exited non-zero fails the release", async () => {
   );
 });
 
-test("a one-shot service still running when verify asks fails the release", async () => {
+it("a one-shot service still running when verify asks fails the release", async () => {
   const { deps } = recorder(
     routes({ tag: "v1.3.0", migrateState: { Status: "running", ExitCode: 0 } }),
   );
@@ -156,7 +156,7 @@ test("a one-shot service still running when verify asks fails the release", asyn
   );
 });
 
-test("a one-shot service whose inspect carries no State is refused, not assumed complete", async () => {
+it("a one-shot service whose inspect carries no State is refused, not assumed complete", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", migrateState: "omitted" }));
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
@@ -164,7 +164,7 @@ test("a one-shot service whose inspect carries no State is refused, not assumed 
   );
 });
 
-test("a one-shot service that exited 0 on the wrong image still fails", async () => {
+it("a one-shot service that exited 0 on the wrong image still fails", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", migrateDigest: STALE_DIGEST }));
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
@@ -172,13 +172,13 @@ test("a one-shot service that exited 0 on the wrong image still fails", async ()
   );
 });
 
-test("a long-running service that is not running still fails the release", async () => {
+it("a long-running service that is not running still fails the release", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", workerState: "exited" }));
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(/worker: container is exited/u);
 });
 
-test("a long-running service on a stale digest fails the release", async () => {
+it("a long-running service on a stale digest fails the release", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", workerDigest: STALE_DIGEST }));
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
@@ -186,7 +186,7 @@ test("a long-running service on a stale digest fails the release", async () => {
   );
 });
 
-test("the release tag, not the panel's moving pointer, is what ghcr is asked for", async () => {
+it("the release tag, not the panel's moving pointer, is what ghcr is asked for", async () => {
   // The recorded routes answer only `v1.3.0`, so reaching for `latest` is a refusal rather
   // than a pass -- which is the whole point of the fetcher refusing unmodelled requests.
   const { deps, asked } = recorder(routes({ tag: "v1.3.0" }));
@@ -197,11 +197,11 @@ test("the release tag, not the panel's moving pointer, is what ghcr is asked for
   expect(asked).not.toContain("https://ghcr.io/v2/muitneliss/undercroft-worker/manifests/latest");
 });
 
-test("oneShotServices names what the compose file declares runs to completion", () => {
+it("oneShotServices names what the compose file declares runs to completion", () => {
   expect([...oneShotServices(COMPOSE)]).toEqual(["db-migrate"]);
 });
 
-test("oneShotServices names nothing when no service is declared to complete", () => {
+it("oneShotServices names nothing when no service is declared to complete", () => {
   const noJobs = [
     "services:",
     "  worker:",

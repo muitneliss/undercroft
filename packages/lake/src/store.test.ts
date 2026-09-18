@@ -1,13 +1,15 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test as it, test } from "bun:test";
 import { createStampSource, TestClock } from "@undercroft/core";
 import { InMemoryObjectStore } from "./memory.ts";
 import { LakeStore, ObjectExists } from "./store.ts";
 
 const encoder = new TextEncoder();
-const bytes = (text: string) => encoder.encode(text);
+function bytes(text: string) {
+  return encoder.encode(text);
+}
 
 let backing: InMemoryObjectStore;
 let clock: TestClock;
@@ -25,13 +27,13 @@ beforeEach(() => {
 });
 
 describe("create-only", () => {
-  test("a first write is created", async () => {
+  it("a first write is created", async () => {
     const result = await lake().put("hubspot/deals/1", bytes("a"), { runId: "r1" });
     expect(result.status).toBe("created");
     expect(result.versionKey).not.toBe("");
   });
 
-  test("the manifest for an observation is never overwritten", async () => {
+  it("the manifest for an observation is never overwritten", async () => {
     // Two different payloads land as two observations. A stamp collision that tried to
     // reuse a manifest key would raise; the monotonic stamp source prevents it, and this
     // asserts the create-only guard holds even so.
@@ -43,7 +45,7 @@ describe("create-only", () => {
 });
 
 describe("idempotent by content", () => {
-  test("re-storing identical bytes reports unchanged and writes nothing", async () => {
+  it("re-storing identical bytes reports unchanged and writes nothing", async () => {
     const store = lake();
     await store.put("hubspot/deals/1", bytes("same"), { runId: "r1" });
     const sizeAfterFirst = backing.size;
@@ -55,7 +57,7 @@ describe("idempotent by content", () => {
     expect((await store.versions("hubspot/deals/1")).length).toBe(1);
   });
 
-  test("a changed payload creates one new observation and reuses shared blobs", async () => {
+  it("a changed payload creates one new observation and reuses shared blobs", async () => {
     const store = lake();
     await store.put("hubspot/deals/1", bytes("v1"), { runId: "r1" });
     const blobsAfterFirst = (await backing.list("_blobs/")).length;
@@ -65,7 +67,7 @@ describe("idempotent by content", () => {
     expect((await backing.list("_blobs/")).length).toBe(blobsAfterFirst + 1);
   });
 
-  test("the same bytes at two keys are stored once", async () => {
+  it("the same bytes at two keys are stored once", async () => {
     // The whole reason content addressing is the default: one document in fifty mailboxes
     // is one blob, not fifty.
     const store = lake();
@@ -76,14 +78,14 @@ describe("idempotent by content", () => {
 });
 
 describe("reading verifies the digest", () => {
-  test("reads back the newest observation", async () => {
+  it("reads back the newest observation", async () => {
     const store = lake();
     await store.put("hubspot/deals/1", bytes("v1"), { runId: "r1" });
     await store.put("hubspot/deals/1", bytes("v2"), { runId: "r2" });
     expect(new TextDecoder().decode(await store.read("hubspot/deals/1"))).toBe("v2");
   });
 
-  test("a corrupted blob raises rather than returning suspect bytes", async () => {
+  it("a corrupted blob raises rather than returning suspect bytes", async () => {
     const store = lake();
     const put = await store.put("hubspot/deals/1", bytes("real"), { runId: "r1" });
     // Tamper with the blob behind the store's back.
@@ -91,13 +93,13 @@ describe("reading verifies the digest", () => {
     await expect(store.read("hubspot/deals/1")).rejects.toBeInstanceOf(ObjectExists);
   });
 
-  test("reading a key with no observations raises", async () => {
+  it("reading a key with no observations raises", async () => {
     await expect(lake().read("hubspot/deals/absent")).rejects.toThrow(/no observations/u);
   });
 });
 
 describe("source key shape is enforced", () => {
-  test.each([
+  it.each([
     ["an empty key", ""],
     ["a traversal", "hubspot/../secrets/1"],
     ["a reserved blob prefix", "_blobs/aa/deadbeef"],
@@ -109,14 +111,14 @@ describe("source key shape is enforced", () => {
     await expect(lake().put(key, bytes("x"), { runId: "r1" })).rejects.toBeInstanceOf(RangeError);
   });
 
-  test("accepts a well-formed leaf key", async () => {
+  it("accepts a well-formed leaf key", async () => {
     const result = await lake().put("xero/invoices/INV-001", bytes("x"), { runId: "r1" });
     expect(result.status).toBe("created");
   });
 });
 
 describe("retention is bounded and reported", () => {
-  test("keeps everything by default", async () => {
+  it("keeps everything by default", async () => {
     const store = lake();
     for (const v of ["a", "b", "c", "d"]) {
       await store.put("hubspot/deals/1", bytes(v), { runId: "r" });
@@ -124,7 +126,7 @@ describe("retention is bounded and reported", () => {
     expect((await store.versions("hubspot/deals/1")).length).toBe(4);
   });
 
-  test("prune trims to the limit oldest-first and names what it removed", async () => {
+  it("prune trims to the limit oldest-first and names what it removed", async () => {
     const store = lake(2);
     const stamps: string[] = [];
     for (const v of ["a", "b", "c"]) {
@@ -138,11 +140,11 @@ describe("retention is bounded and reported", () => {
     expect(remaining).toContain(stamps[2]!);
   });
 
-  test("a retention below 1 is refused", () => {
+  it("a retention below 1 is refused", () => {
     expect(() => new LakeStore(backing, { retention: 0 })).toThrow(/at least 1/u);
   });
 
-  test("blobs are never pruned, because another key may reference them", async () => {
+  it("blobs are never pruned, because another key may reference them", async () => {
     const store = lake(1);
     await store.put("hubspot/deals/1", bytes("a"), { runId: "r" });
     await store.put("hubspot/deals/1", bytes("b"), { runId: "r" });
@@ -152,7 +154,7 @@ describe("retention is bounded and reported", () => {
 });
 
 describe("the journal is a per-stream cursor", () => {
-  test("records observations for a stream in stamp order", async () => {
+  it("records observations for a stream in stamp order", async () => {
     const store = lake();
     const stream = "records/hubspot/CASE-1/deals";
     await store.put("records/hubspot/CASE-1/deals/1", bytes("d1"), { runId: "r1", stream });
@@ -165,7 +167,7 @@ describe("the journal is a per-stream cursor", () => {
     ]);
   });
 
-  test("returns only entries after the cursor", async () => {
+  it("returns only entries after the cursor", async () => {
     const store = lake();
     const stream = "records/hubspot/CASE-1/deals";
     const first = await store.put("records/hubspot/CASE-1/deals/1", bytes("d1"), {
@@ -179,7 +181,7 @@ describe("the journal is a per-stream cursor", () => {
     expect(after.map((e) => e.sourceKey)).toEqual(["records/hubspot/CASE-1/deals/2"]);
   });
 
-  test("unchanged re-observations add no journal entry", async () => {
+  it("unchanged re-observations add no journal entry", async () => {
     const store = lake();
     const stream = "records/hubspot/CASE-1/deals";
     await store.put("records/hubspot/CASE-1/deals/1", bytes("d1"), { runId: "r1", stream });
@@ -187,7 +189,7 @@ describe("the journal is a per-stream cursor", () => {
     expect((await store.journalSince(stream, null)).length).toBe(1);
   });
 
-  test("streams do not see each other's entries", async () => {
+  it("streams do not see each other's entries", async () => {
     const store = lake();
     await store.put("records/hubspot/CASE-1/deals/1", bytes("d"), {
       runId: "r1",

@@ -34,6 +34,7 @@
 // biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
 
 import process from "node:process";
+
 const POLL_INTERVAL_MS = 10_000;
 const DEPLOYMENT_APPEARS_WITHIN_MS = 300_000;
 const DEPLOYMENT_SETTLES_WITHIN_MS = 3_600_000;
@@ -363,7 +364,7 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
   }
   const bearer = ((await pull.json()) as { token: string }).token;
 
-  const get = async (reference: string): Promise<Record<string, unknown>> => {
+  async function get(reference: string): Promise<Record<string, unknown>> {
     const response = await deps.fetch(`https://ghcr.io/v2/${repo}/manifests/${reference}`, {
       headers: { Authorization: `Bearer ${bearer}`, Accept: accept },
     });
@@ -371,7 +372,7 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
       throw new Error(`ghcr manifest ${repo}:${reference}: HTTP ${response.status}`);
     }
     return (await response.json()) as Record<string, unknown>;
-  };
+  }
 
   let manifest = await get(tag);
   const manifests = manifest.manifests as

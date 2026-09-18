@@ -1,16 +1,16 @@
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it, test } from "bun:test";
 import { TestClock } from "./clock.ts";
 import { createStampSource, formatStamp, isStamp, parseStamp } from "./stamp.ts";
 
 describe("stamp format", () => {
-  test("has microsecond precision, not millisecond", () => {
+  it("has microsecond precision, not millisecond", () => {
     const stamp = formatStamp(Date.UTC(2026, 8, 17, 10, 15, 1) * 1000 + 4213);
     expect(stamp).toBe("20260917T101501.004213Z");
   });
 
-  test("recognises its own shape and rejects a millisecond one", () => {
+  it("recognises its own shape and rejects a millisecond one", () => {
     expect(isStamp("20260917T101501.004213Z")).toBe(true);
     // Three digits would be a Date-shaped stamp: the exact mistake that
     // reintroduces the collision microseconds were adopted to fix.
@@ -18,12 +18,12 @@ describe("stamp format", () => {
     expect(isStamp("not-a-stamp")).toBe(false);
   });
 
-  test("round-trips through parse", () => {
+  it("round-trips through parse", () => {
     const micros = Date.UTC(2026, 8, 17, 10, 15, 1) * 1000 + 4213;
     expect(parseStamp(formatStamp(micros))).toBe(micros);
   });
 
-  test("sorts lexically in the same order as chronologically", () => {
+  it("sorts lexically in the same order as chronologically", () => {
     // The loader pages the journal with a plain `StartAfter`, so this is not a
     // nicety -- it is what makes incremental load correct.
     const base = Date.UTC(2026, 8, 17, 10, 15, 1) * 1000;
@@ -35,7 +35,7 @@ describe("stamp format", () => {
 });
 
 describe("StampSource is strictly monotonic", () => {
-  test("advances even when the clock has not moved", () => {
+  it("advances even when the clock has not moved", () => {
     const clock = new TestClock();
     const stamps = createStampSource(clock);
     const first = stamps.next();
@@ -44,7 +44,7 @@ describe("StampSource is strictly monotonic", () => {
     expect(second > first).toBe(true);
   });
 
-  test("100,000 stamps in a tight loop are all distinct and ascending", () => {
+  it("100,000 stamps in a tight loop are all distinct and ascending", () => {
     // The test that would have caught a `Date`-based implementation: with
     // millisecond resolution this loop produces thousands of duplicates, and a
     // create-only store rejects real data on the second of each pair.
@@ -60,7 +60,7 @@ describe("StampSource is strictly monotonic", () => {
     expect(seen.size).toBe(100_000);
   });
 
-  test("follows the clock forward when it does move", async () => {
+  it("follows the clock forward when it does move", async () => {
     const clock = new TestClock();
     const stamps = createStampSource(clock);
     const before = stamps.next();

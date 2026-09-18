@@ -20,7 +20,7 @@
 // biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as it, test } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -162,71 +162,71 @@ afterAll(() => {
 });
 
 describe("the dependency direction is enforced, not described", () => {
-  test("a handler importing a repo is refused", () => {
+  it("a handler importing a repo is refused", () => {
     expect(rulesOn("apps/demo/src/handlers/reachesRepo.ts")).toContain("layer-handler-no-repo");
   });
 
-  test("a handler importing a service is not", () => {
+  it("a handler importing a service is not", () => {
     expect(rulesOn("apps/demo/src/handlers/viaService.ts")).toEqual([]);
   });
 
-  test("a service importing a transport library is refused", () => {
+  it("a service importing a transport library is refused", () => {
     expect(rulesOn("apps/demo/src/services/importsTransport.ts")).toContain(
       "layer-service-no-upward",
     );
   });
 
-  test("a service importing a repo is not", () => {
+  it("a service importing a repo is not", () => {
     expect(rulesOn("apps/demo/src/services/tenants.ts")).toEqual([]);
   });
 
-  test("a repo importing a service is refused", () => {
+  it("a repo importing a service is refused", () => {
     expect(rulesOn("apps/demo/src/repos/importsService.ts")).toContain("layer-repo-no-upward");
   });
 
-  test("a repo importing only the executor seam is not", () => {
+  it("a repo importing only the executor seam is not", () => {
     expect(rulesOn("apps/demo/src/repos/tenant.ts")).toEqual([]);
   });
 
-  test("a shared package importing a layer is refused", () => {
+  it("a shared package importing a layer is refused", () => {
     expect(rulesOn("packages/core/src/reachesLayer.ts")).toContain("layer-shared-no-layer");
   });
 
-  test("a shared package that imports no layer is not", () => {
+  it("a shared package that imports no layer is not", () => {
     expect(rulesOn("packages/core/src/pure.ts")).toEqual([]);
   });
 });
 
 describe("SQL is confined to the repo layer", () => {
-  test("a statement in a service is refused", () => {
+  it("a statement in a service is refused", () => {
     expect(rulesOn("apps/demo/src/services/withSql.ts")).toContain("layer-sql-in-repos");
   });
 
-  test("the same statement inside a repo is not", () => {
+  it("the same statement inside a repo is not", () => {
     expect(rulesOn("apps/demo/src/repos/tenant.ts")).toEqual([]);
   });
 
-  test("a tRPC procedure's .query is not a database call", () => {
+  it("a tRPC procedure's .query is not a database call", () => {
     // The whole router matched before the receiver was constrained.
     expect(rulesOn("apps/demo/src/handlers/trpcStyle.ts")).toEqual([]);
   });
 
-  test("prose that reads like SQL is not a statement", () => {
+  it("prose that reads like SQL is not a statement", () => {
     // "Select a source from the list" has no schema-qualified table, so it is not ours.
     expect(rulesOn("apps/demo/src/services/prose.ts")).toEqual([]);
   });
 });
 
 describe("dependencies arrive as arguments", () => {
-  test("a service reading process.env is refused", () => {
+  it("a service reading process.env is refused", () => {
     expect(rulesOn("apps/demo/src/services/readsEnv.ts")).toContain("layer-injected-deps");
   });
 
-  test("a service reading an injected env is not", () => {
+  it("a service reading an injected env is not", () => {
     expect(rulesOn("apps/demo/src/services/takesDeps.ts")).toEqual([]);
   });
 
-  test("importing the pg driver outside its seam is refused", () => {
+  it("importing the pg driver outside its seam is refused", () => {
     expect(rulesOn("apps/demo/src/repos/usesDriver.ts")).toContain("layer-no-driver-import");
   });
 });

@@ -1,6 +1,6 @@
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it, test } from "bun:test";
 import { createTestDatabase, type TestDatabase } from "./testing.ts";
 
 let db: TestDatabase;
@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 describe("money-shaped types come back as strings", () => {
-  test("numeric is a string, not a float", async () => {
+  it("numeric is a string, not a float", async () => {
     // The whole point: a numeric(18,4) that arrives as a JS number has already lost
     // precision past a double, and one careless read turns it into a float.
     const { rows } = await db.query<{ amount: string }>(
@@ -24,14 +24,14 @@ describe("money-shaped types come back as strings", () => {
     expect(rows[0]?.amount).toBe("8500.0001");
   });
 
-  test("a 25-digit numeric survives", async () => {
+  it("a 25-digit numeric survives", async () => {
     const { rows } = await db.query<{ big: string }>(
       "SELECT 1234567890123456789012345::numeric AS big",
     );
     expect(rows[0]?.big).toBe("1234567890123456789012345");
   });
 
-  test("int8 is never a lossy float, so a large id is not rounded", async () => {
+  it("int8 is never a lossy float, so a large id is not rounded", async () => {
     // The rule is "never a float", not "always a string". PGlite returns int8 as a JS
     // `bigint` (exact); `pg` returns it as a string via the pinned parser. Both are
     // lossless. This gate test asserts the safety property that holds in both; the

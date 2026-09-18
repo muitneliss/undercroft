@@ -1,7 +1,7 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it, test } from "bun:test";
 import { canonicalJson, createStampSource, TestClock } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
@@ -45,7 +45,7 @@ afterEach(async () => {
 });
 
 describe("landing records into the lake", () => {
-  test("a first landing creates; re-landing the same records writes nothing", async () => {
+  it("a first landing creates; re-landing the same records writes nothing", async () => {
     const records = [record("1", { id: "1", n: 10n }), record("2", { id: "2", n: 20n })];
     const first = await landRecords(lake, {
       source: "hubspot",
@@ -70,7 +70,9 @@ describe("landing records into the lake", () => {
 });
 
 describe("the lake records API", () => {
-  const api = () => createLakeApi({ lake, exec: db, serviceToken: "svc-token" });
+  function api() {
+    return createLakeApi({ lake, exec: db, serviceToken: "svc-token" });
+  }
 
   async function post(body: unknown, token = "svc-token") {
     return api().request("/v1/lake/records", {
@@ -80,7 +82,7 @@ describe("the lake records API", () => {
     });
   }
 
-  test("lands a valid batch and reports created", async () => {
+  it("lands a valid batch and reports created", async () => {
     const res = await post({
       source: "hubspot",
       tenantId: "CASE-1",
@@ -94,7 +96,7 @@ describe("the lake records API", () => {
     expect(json.created).toBe(1);
   });
 
-  test("an unauthenticated caller is refused before anything is written", async () => {
+  it("an unauthenticated caller is refused before anything is written", async () => {
     const res = await post(
       {
         source: "hubspot",
@@ -110,7 +112,7 @@ describe("the lake records API", () => {
     expect((await backing.list("_blobs/")).length).toBe(0);
   });
 
-  test("a malformed request is a 400 with the offending path", async () => {
+  it("a malformed request is a 400 with the offending path", async () => {
     const res = await post({ source: "hubspot" }); // missing tenantId, runId, records
     expect(res.status).toBe(400);
     const json = (await res.json()) as { code: string; details: string[] };
@@ -122,7 +124,7 @@ describe("the lake records API", () => {
 describe("loading the lake into raw.records", () => {
   const identity = { source: "hubspot", tenantId: "CASE-1", entity: "deals" };
 
-  test("first load inserts; a second load over an unchanged lake updates nothing", async () => {
+  it("first load inserts; a second load over an unchanged lake updates nothing", async () => {
     await landRecords(lake, {
       source: "hubspot",
       tenantId: "CASE-1",
@@ -139,7 +141,7 @@ describe("loading the lake into raw.records", () => {
     expect(second.changed).toBe(0);
   });
 
-  test("a changed payload is loaded as a change, keeping the newest", async () => {
+  it("a changed payload is loaded as a change, keeping the newest", async () => {
     await landRecords(lake, {
       source: "hubspot",
       tenantId: "CASE-1",
@@ -163,7 +165,7 @@ describe("loading the lake into raw.records", () => {
     expect(rows[0]?.stage).toBe("won");
   });
 
-  test("payload numbers are stored exactly, not through a float", async () => {
+  it("payload numbers are stored exactly, not through a float", async () => {
     await landRecords(lake, {
       source: "hubspot",
       tenantId: "CASE-1",

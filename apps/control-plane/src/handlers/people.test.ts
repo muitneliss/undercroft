@@ -15,7 +15,7 @@
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it, test } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
@@ -77,7 +77,7 @@ async function errorCode(fn: () => Promise<unknown>): Promise<string> {
 }
 
 describe("only an admin may grant access to a tenant", () => {
-  test("a member cannot invite", async () => {
+  it("a member cannot invite", async () => {
     // The firing case. An invitation grants a role inside a customer's tenant, and the
     // buttons behind that role mint OAuth tokens into their accounting system.
     const userId = await seedMember("hand@example.test", "member");
@@ -90,7 +90,7 @@ describe("only an admin may grant access to a tenant", () => {
     expect(code).toBe("FORBIDDEN");
   });
 
-  test("an admin can invite", async () => {
+  it("an admin can invite", async () => {
     const api = await admin();
 
     const result = await api.people.invite({
@@ -102,7 +102,7 @@ describe("only an admin may grant access to a tenant", () => {
     expect(result.email).toBe("new@example.test");
   });
 
-  test("a non-member is told the tenant does not exist", async () => {
+  it("a non-member is told the tenant does not exist", async () => {
     // Consistent with every other tenant procedure: a 403 would confirm the tenant is real
     // and turn this endpoint into a way to enumerate customers.
     const userId = await seedMember("other@example.test", "admin", "CASE-0043");
@@ -117,7 +117,7 @@ describe("only an admin may grant access to a tenant", () => {
 });
 
 describe("an invitation issued through the API is one the sign-in gate accepts", () => {
-  test("inviting an address lets it sign in, with the role it was invited as", async () => {
+  it("inviting an address lets it sign in, with the role it was invited as", async () => {
     // The assertion that ties the two halves together. If this passes, the product works
     // end to end: an admin clicks invite, and that person can sign in.
     const api = await admin();
@@ -138,7 +138,7 @@ describe("an invitation issued through the API is one the sign-in gate accepts",
     expect(rows).toEqual([{ tenant_id: "CASE-0042", role: "member" }]);
   });
 
-  test("an address that was never invited is still refused", async () => {
+  it("an address that was never invited is still refused", async () => {
     // The quiet side: issuing one invitation must not open the door generally.
     const api = await admin();
     await api.people.invite({
@@ -150,7 +150,7 @@ describe("an invitation issued through the API is one the sign-in gate accepts",
     expect(await resolveInvitedUser(db, "stranger@example.test")).toBeNull();
   });
 
-  test("an address invited in mixed case can sign in as itself", async () => {
+  it("an address invited in mixed case can sign in as itself", async () => {
     const api = await admin();
     await api.people.invite({
       tenantId: "CASE-0042",
@@ -163,7 +163,7 @@ describe("an invitation issued through the API is one the sign-in gate accepts",
 });
 
 describe("inviting twice does not grant twice", () => {
-  test("re-inviting refreshes the invitation rather than adding a second", async () => {
+  it("re-inviting refreshes the invitation rather than adding a second", async () => {
     // Two open invitations for one address would both be redeemed at first sign-in, which
     // is a confusing way to grant a single membership.
     const api = await admin();
@@ -175,7 +175,7 @@ describe("inviting twice does not grant twice", () => {
     expect(open[0]?.role).toBe("admin");
   });
 
-  test("inviting someone who already has access is refused, not duplicated", async () => {
+  it("inviting someone who already has access is refused, not duplicated", async () => {
     const api = await admin();
     await seedMember("hand@example.test", "member");
 
@@ -188,7 +188,7 @@ describe("inviting twice does not grant twice", () => {
 });
 
 describe("an invitation can be withdrawn before it is used", () => {
-  test("revoking an open invitation stops it being accepted", async () => {
+  it("revoking an open invitation stops it being accepted", async () => {
     const api = await admin();
     const invited = await api.people.invite({
       tenantId: "CASE-0042",
@@ -201,7 +201,7 @@ describe("an invitation can be withdrawn before it is used", () => {
     expect(await resolveInvitedUser(db, "new@example.test")).toBeNull();
   });
 
-  test("an admin of one tenant cannot revoke another tenant's invitation", async () => {
+  it("an admin of one tenant cannot revoke another tenant's invitation", async () => {
     // The scoping guard. Without `tenant_id` in the DELETE, a guessed uuid would be enough.
     const api = await admin();
     const elsewhere = await seedMember("far@example.test", "admin", "CASE-0043");
@@ -222,7 +222,7 @@ describe("an invitation can be withdrawn before it is used", () => {
 });
 
 describe("the roster says who has access", () => {
-  test("members are listed with their roles", async () => {
+  it("members are listed with their roles", async () => {
     const api = await admin();
     await seedMember("hand@example.test", "viewer");
 

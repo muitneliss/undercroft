@@ -1,7 +1,7 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it, test } from "bun:test";
 import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
 import { ConnectorError, parseLossless, TestClock } from "@undercroft/core";
 import type { RawRecordOut } from "./run.ts";
@@ -41,14 +41,16 @@ async function collect(gen: AsyncGenerator<RawRecordOut>): Promise<RawRecordOut[
   return out;
 }
 
-const ctx = (fetcher: InMemoryFetcher) => ({
-  fetcher,
-  clock: new TestClock(),
-  token: () => Promise.resolve("t"),
-});
+function ctx(fetcher: InMemoryFetcher) {
+  return {
+    fetcher,
+    clock: new TestClock(),
+    token: () => Promise.resolve("t"),
+  };
+}
 
 describe("pagination and extraction", () => {
-  test("follows json next-links across pages", async () => {
+  it("follows json next-links across pages", async () => {
     const fetcher = new InMemoryFetcher()
       .on("GET", `${BASE}/things`, {
         body: {
@@ -64,7 +66,7 @@ describe("pagination and extraction", () => {
     expect(records.map((r) => r.sourceRecordId)).toEqual(["1", "2", "3"]);
   });
 
-  test("a next-link equal to the current URL stops rather than looping forever", async () => {
+  it("a next-link equal to the current URL stops rather than looping forever", async () => {
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [{ id: "1" }], paging: { next: { link: `${BASE}/things` } } },
     });
@@ -72,7 +74,7 @@ describe("pagination and extraction", () => {
     expect(records.map((r) => r.sourceRecordId)).toEqual(["1"]);
   });
 
-  test("preserves large numbers in the payload without turning them into floats", async () => {
+  it("preserves large numbers in the payload without turning them into floats", async () => {
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       // A raw JSON string so the big number is never a JS number in the test either.
       body: '{"results":[{"id":"1","amount":8500.0001,"big":1234567890123456789012345}],"paging":{}}',
@@ -83,7 +85,7 @@ describe("pagination and extraction", () => {
     expect(String(payload.big)).toBe("1234567890123456789012345");
   });
 
-  test("reads the updatedAt path when present", async () => {
+  it("reads the updatedAt path when present", async () => {
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [{ id: "1", updatedAt: "2026-01-01T00:00:00Z" }], paging: {} },
     });
@@ -93,7 +95,7 @@ describe("pagination and extraction", () => {
 });
 
 describe("a record with no id is fatal, not skipped", () => {
-  test("raises rather than landing a record under a guessed key", async () => {
+  it("raises rather than landing a record under a guessed key", async () => {
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [{ id: "1" }, { notId: "2" }], paging: {} },
     });
@@ -104,7 +106,7 @@ describe("a record with no id is fatal, not skipped", () => {
 });
 
 describe("guards", () => {
-  test("failOnEmpty raises when a source yields nothing", async () => {
+  it("failOnEmpty raises when a source yields nothing", async () => {
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [], paging: {} },
     });
@@ -113,7 +115,7 @@ describe("guards", () => {
     );
   });
 
-  test("failOnEmpty=false lets an empty source pass", async () => {
+  it("failOnEmpty=false lets an empty source pass", async () => {
     const s = spec({ failOnEmpty: false });
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [], paging: {} },
@@ -121,7 +123,7 @@ describe("guards", () => {
     expect(await collect(readEntity(s, s.entities[0]!, ctx(fetcher)))).toEqual([]);
   });
 
-  test("failOnExactCount raises on exactly the ceiling", async () => {
+  it("failOnExactCount raises on exactly the ceiling", async () => {
     const s = spec({ failOnExactCount: 2 });
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [{ id: "1" }, { id: "2" }], paging: {} },
@@ -131,7 +133,7 @@ describe("guards", () => {
     );
   });
 
-  test("failOnExactCount does not fire one below the ceiling", async () => {
+  it("failOnExactCount does not fire one below the ceiling", async () => {
     const s = spec({ failOnExactCount: 2 });
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [{ id: "1" }], paging: {} },
@@ -141,7 +143,7 @@ describe("guards", () => {
 });
 
 describe("an unmodelled request is an error", () => {
-  test("the fetcher refuses a request nobody recorded", async () => {
+  it("the fetcher refuses a request nobody recorded", async () => {
     const fetcher = new InMemoryFetcher(); // nothing recorded
     await expect(collect(readEntity(spec(), spec().entities[0]!, ctx(fetcher)))).rejects.toThrow(
       /no recorded response/u,

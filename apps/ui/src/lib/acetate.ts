@@ -73,10 +73,11 @@ export function parseHex(hex: string): Rgb | null {
 }
 
 export function toHex({ r, g, b }: Rgb): string {
-  const channel = (c: number) =>
-    Math.max(0, Math.min(255, Math.round(c)))
+  function channel(c: number): string {
+    return Math.max(0, Math.min(255, Math.round(c)))
       .toString(16)
       .padStart(2, "0");
+  }
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 

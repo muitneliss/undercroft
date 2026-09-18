@@ -11,7 +11,7 @@
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it, test } from "bun:test";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { appUserForEmail, resolveInvitedUser } from "./invite.ts";
@@ -53,7 +53,7 @@ async function membershipsOf(email: string): Promise<{ tenant_id: string; role: 
 }
 
 describe("only an invited address may become a user", () => {
-  test("an address with no invitation and no account is refused", async () => {
+  it("an address with no invitation and no account is refused", async () => {
     // The firing case, and the one that matters: without it, anyone with a Google account
     // reaches the control plane's shell.
     const resolved = await resolveInvitedUser(db, "stranger@example.test");
@@ -63,7 +63,7 @@ describe("only an invited address may become a user", () => {
     expect(rows).toHaveLength(0);
   });
 
-  test("an invited address is provisioned with the role it was invited as", async () => {
+  it("an invited address is provisioned with the role it was invited as", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
 
     const resolved = await resolveInvitedUser(db, "operator@example.test");
@@ -74,7 +74,7 @@ describe("only an invited address may become a user", () => {
     ]);
   });
 
-  test("accepting an invitation consumes it, so it cannot be reused", async () => {
+  it("accepting an invitation consumes it, so it cannot be reused", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "member");
     await resolveInvitedUser(db, "operator@example.test");
 
@@ -85,14 +85,14 @@ describe("only an invited address may become a user", () => {
     expect(rows[0]?.accepted_at).not.toBeNull();
   });
 
-  test("an expired invitation is a no, not a weaker yes", async () => {
+  it("an expired invitation is a no, not a weaker yes", async () => {
     await seedInvitation("CASE-0042", "late@example.test", "member", "now() - interval '1 day'");
 
     expect(await resolveInvitedUser(db, "late@example.test")).toBeNull();
     expect(await membershipsOf("late@example.test")).toEqual([]);
   });
 
-  test("every live invitation is accepted, not just the first", async () => {
+  it("every live invitation is accepted, not just the first", async () => {
     // Someone invited to two tenants before their first sign-in must land in both, or the
     // second membership stays pending with nothing to trigger it.
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
@@ -106,7 +106,7 @@ describe("only an invited address may become a user", () => {
     ]);
   });
 
-  test("a returning user signs in again with no invitation left to accept", async () => {
+  it("a returning user signs in again with no invitation left to accept", async () => {
     // The quiet case for the refusal above. The invitation is consumed by the first
     // sign-in, so if that were the only way through, every second login would be denied.
     await seedInvitation("CASE-0042", "operator@example.test", "member");
@@ -117,7 +117,7 @@ describe("only an invited address may become a user", () => {
     expect(second?.appUserId).toBe(first?.appUserId);
   });
 
-  test("an address differing only in case is the same person", async () => {
+  it("an address differing only in case is the same person", async () => {
     // Two app_user rows for one person is a session whose tenant list is mysteriously
     // empty, and `app_user.email` is UNIQUE on exact text.
     await seedInvitation("CASE-0042", "operator@example.test", "member");
@@ -130,7 +130,7 @@ describe("only an invited address may become a user", () => {
 });
 
 describe("resolving a session's address to its authorization identity", () => {
-  test("a provisioned address resolves to its app_user id", async () => {
+  it("a provisioned address resolves to its app_user id", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "member");
     const provisioned = await resolveInvitedUser(db, "operator@example.test");
 
@@ -139,7 +139,7 @@ describe("resolving a session's address to its authorization identity", () => {
     expect(found?.appUserId).toBe(provisioned?.appUserId);
   });
 
-  test("an unknown address resolves to nothing and provisions nothing", async () => {
+  it("an unknown address resolves to nothing and provisions nothing", async () => {
     // Read-only on purpose: if this created an app_user, deleting an account would not
     // revoke access, it would just delay it until the next request.
     expect(await appUserForEmail(db, "stranger@example.test")).toBeNull();

@@ -203,8 +203,8 @@ export async function* readEntity(
   let seen = 0;
 
   /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
-  const fetchJson = async (request: HttpRequest): Promise<unknown> =>
-    withRetry(
+  async function fetchJson(request: HttpRequest): Promise<unknown> {
+    return withRetry(
       async () => {
         await pacer.acquire();
         const response = await ctx.fetcher.send(request);
@@ -216,9 +216,10 @@ export async function* readEntity(
     ).catch((error: unknown) => {
       throw new ConnectorError(spec.id, entity.name, seen, describe(error), { cause: error });
     });
+  }
 
   /** Turn one decoded page into records, refusing any that cannot be keyed. */
-  const emit = function* (parsed: unknown): Generator<RawRecordOut> {
+  function* emit(parsed: unknown): Generator<RawRecordOut> {
     for (const record of extractRecords(entity, spec, parsed)) {
       const id = getStringPath(record, entity.idPath);
       if (id === null) {
@@ -241,7 +242,7 @@ export async function* readEntity(
       };
       seen += 1;
     }
-  };
+  }
 
   if (entity.request.kind === "batch-from") {
     // A relation read: ids harvested from another entity, POSTed in chunks. This exists

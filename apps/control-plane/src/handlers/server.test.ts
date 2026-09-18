@@ -11,7 +11,7 @@
 // biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as it, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,7 +36,7 @@ afterAll(async () => {
 });
 
 describe("the SPA is served without shadowing the API", () => {
-  test("an unknown route falls back to index.html so the browser router can resolve it", async () => {
+  it("an unknown route falls back to index.html so the browser router can resolve it", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     const response = await app.fetch(new Request("http://c/tenants/42"));
@@ -45,7 +45,7 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.text()).toContain("Undercroft");
   });
 
-  test("a real built asset is served as itself, not the index fallback", async () => {
+  it("a real built asset is served as itself, not the index fallback", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     const response = await app.fetch(new Request("http://c/app.js"));
@@ -54,7 +54,7 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.text()).toContain("bundle");
   });
 
-  test("the health route still answers with the SPA mounted", async () => {
+  it("the health route still answers with the SPA mounted", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     const response = await app.fetch(new Request("http://c/api/health"));
@@ -63,7 +63,7 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
-  test("a traversal out of the dist directory is refused, not served", async () => {
+  it("a traversal out of the dist directory is refused, not served", async () => {
     const app = createServer({ exec: noDatabase, uiDist: dist });
 
     // Encoded so it reaches the handler intact rather than being collapsed by the URL parser.

@@ -2,7 +2,7 @@
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it } from "bun:test";
 import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
 import { TestClock } from "@undercroft/core";
 import type { RawRecordOut } from "./run.ts";
@@ -39,7 +39,7 @@ async function collect(gen: AsyncGenerator<RawRecordOut>): Promise<RawRecordOut[
 }
 
 describe("page-number pagination stops on an empty page", () => {
-  test("reads successive pages until one comes back empty", async () => {
+  it("reads successive pages until one comes back empty", async () => {
     const fetcher = new InMemoryFetcher()
       .on("GET", `${BASE}/Invoices`, {
         body: { Invoices: [{ InvoiceID: "a" }, { InvoiceID: "b" }] },

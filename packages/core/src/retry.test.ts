@@ -1,12 +1,14 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it, test } from "bun:test";
 import { TestClock } from "./clock.ts";
 import { HttpError } from "./errors.ts";
 import { DEFAULT_RETRY, parseRetryAfter, withRetry } from "./retry.ts";
 
-const noJitter = () => 0.999_999;
+function noJitter() {
+  return 0.999_999;
+}
 
 function attemptCounter(failures: number, status = 429) {
   let calls = 0;
@@ -50,7 +52,7 @@ async function drive<T>(
 }
 
 describe("what retries and what does not", () => {
-  test("retries a listed status and eventually succeeds", async () => {
+  it("retries a listed status and eventually succeeds", async () => {
     const clock = new TestClock();
     const op = attemptCounter(2);
     const result = withRetry(op.run, DEFAULT_RETRY, { clock, random: noJitter });
@@ -61,7 +63,7 @@ describe("what retries and what does not", () => {
     expect(op.calls).toBe(3);
   });
 
-  test("does not retry an unlisted status", async () => {
+  it("does not retry an unlisted status", async () => {
     // A 401 is not transient. Retrying turns a clear credential failure into a slow
     // one, and on some providers into a lockout.
     const op = attemptCounter(5, 401);
@@ -71,7 +73,7 @@ describe("what retries and what does not", () => {
     expect(op.calls).toBe(1);
   });
 
-  test("gives up after the configured number of attempts", async () => {
+  it("gives up after the configured number of attempts", async () => {
     const clock = new TestClock();
     const op = attemptCounter(99);
     const result = withRetry(
@@ -87,7 +89,7 @@ describe("what retries and what does not", () => {
 });
 
 describe("backoff", () => {
-  test("grows exponentially and is capped", async () => {
+  it("grows exponentially and is capped", async () => {
     const clock = new TestClock();
     const delays: number[] = [];
     const op = attemptCounter(99);
@@ -101,7 +103,7 @@ describe("backoff", () => {
     expect(delays).toEqual([1000, 2000, 4000, 4000, 4000]);
   });
 
-  test("full jitter scales the delay by the injected randomness", async () => {
+  it("full jitter scales the delay by the injected randomness", async () => {
     const clock = new TestClock();
     const delays: number[] = [];
     const op = attemptCounter(99);
@@ -117,7 +119,7 @@ describe("backoff", () => {
 });
 
 describe("Retry-After", () => {
-  test.each([
+  it.each([
     ["120", 120_000],
     ["0", 0],
     ["not-a-header", null],
@@ -126,27 +128,27 @@ describe("Retry-After", () => {
     expect(parseRetryAfter(header, new Date("2026-01-01T00:00:00Z"))).toBe(expected as never);
   });
 
-  test("parses an HTTP-date, which is equally legal", () => {
+  it("parses an HTTP-date, which is equally legal", () => {
     const now = new Date("2026-01-01T00:00:00Z");
     expect(parseRetryAfter("Thu, 01 Jan 2026 00:00:30 GMT", now)).toBe(30_000);
   });
 
-  test("never returns a negative wait for a date already past", () => {
+  it("never returns a negative wait for a date already past", () => {
     const now = new Date("2026-01-01T00:01:00Z");
     expect(parseRetryAfter("Thu, 01 Jan 2026 00:00:00 GMT", now)).toBe(0);
   });
 
-  test("is honoured when the server asks", async () => {
+  it("is honoured when the server asks", async () => {
     const clock = new TestClock();
     const delays: number[] = [];
     let calls = 0;
-    const op = async () => {
+    async function op() {
       calls += 1;
       if (calls === 1) {
         throw new HttpError(429, "https://example.test/x", "", 5000);
       }
       return "ok";
-    };
+    }
     const result = withRetry(op, DEFAULT_RETRY, {
       clock,
       onRetry: ({ delayMs }) => delays.push(delayMs),
@@ -156,17 +158,17 @@ describe("Retry-After", () => {
     expect(delays).toEqual([5000]);
   });
 
-  test("is clamped, so a hostile header cannot park a run for hours", async () => {
+  it("is clamped, so a hostile header cannot park a run for hours", async () => {
     const clock = new TestClock();
     const delays: number[] = [];
     let calls = 0;
-    const op = async () => {
+    async function op() {
       calls += 1;
       if (calls === 1) {
         throw new HttpError(429, "https://example.test/x", "", 86_400_000);
       }
       return "ok";
-    };
+    }
     const result = withRetry(op, DEFAULT_RETRY, {
       clock,
       onRetry: ({ delayMs }) => delays.push(delayMs),

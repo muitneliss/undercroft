@@ -127,6 +127,21 @@
       "includes": ["**"],
       "linter": {
         "rules": {
+          "nursery": {
+            // This rule enforces CONSISTENCY, not one particular spelling -- `style` picks
+            // which one. Left at its default (`"expression"`) it reported 261 findings,
+            // because it wants `const f = () => {}` and this codebase is written in
+            // `function f() {}` throughout. Pointing it at the convention the repo already
+            // follows takes that to 16, and those 16 are the real inconsistencies.
+            //
+            // This is the rule at full strength, aimed correctly. Rewriting 261 declarations
+            // into arrow consts to satisfy a default would be a large diff that changes
+            // hoisting behaviour and buys nothing.
+            "useConsistentFunctionStyle": {
+              "level": "error",
+              "options": { "style": "declaration" }
+            }
+          },
           "style": {
             // Ported from ESLint `no-restricted-imports`. The three decimal libraries are
             // banned for the same reason, stated per-entry below: each one turns an

@@ -11,7 +11,7 @@
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test as it, test } from "bun:test";
 
 import { connection } from "@/test/fixtures.ts";
 import { presentConnection, setupProgress } from "./connectionState.ts";
@@ -19,7 +19,7 @@ import { presentConnection, setupProgress } from "./connectionState.ts";
 const NOW = new Date("2026-09-17T12:00:00Z");
 
 describe("presentConnection", () => {
-  test("an unconnected source offers to connect", () => {
+  it("an unconnected source offers to connect", () => {
     const card = presentConnection(connection("xero"), NOW);
 
     expect(card.state).toBe("not_connected");
@@ -27,7 +27,7 @@ describe("presentConnection", () => {
     expect(card.complete).toBe(false);
   });
 
-  test("a connected source with a chosen scope is done", () => {
+  it("a connected source with a chosen scope is done", () => {
     const card = presentConnection(
       connection("xero", { status: "connected", external_account_label: "CASE-A1B2C3 Pte Ltd" }),
       NOW,
@@ -38,21 +38,21 @@ describe("presentConnection", () => {
     expect(card.complete).toBe(true);
   });
 
-  test("a source awaiting its scope asks for a decision, not a reconnect", () => {
+  it("a source awaiting its scope asks for a decision, not a reconnect", () => {
     const card = presentConnection(connection("drive", { status: "needs_scope" }), NOW);
 
     expect(card.state).toBe("needs_scope");
     expect(card.action?.kind).toBe("scope");
   });
 
-  test("a revoked grant asks for a reconnect, not a decision", () => {
+  it("a revoked grant asks for a reconnect, not a decision", () => {
     const card = presentConnection(connection("gmail", { status: "needs_reconnect" }), NOW);
 
     expect(card.state).toBe("needs_reconnect");
     expect(card.action?.kind).toBe("reconnect");
   });
 
-  test("an expired credential needs reconnecting even if the status still says connected", () => {
+  it("an expired credential needs reconnecting even if the status still says connected", () => {
     // Xero's refresh token dies after 60 days unused and nothing tells us.
     const card = presentConnection(
       connection("xero", { status: "connected", expires_at: "2026-09-17T11:00:00Z" }),
@@ -63,7 +63,7 @@ describe("presentConnection", () => {
     expect(card.action?.kind).toBe("reconnect");
   });
 
-  test("a credential with no recorded expiry is not treated as expired", () => {
+  it("a credential with no recorded expiry is not treated as expired", () => {
     // A HubSpot private-app token genuinely does not expire. Demanding a
     // reconnect for it would break a connection that works.
     const card = presentConnection(
@@ -75,7 +75,7 @@ describe("presentConnection", () => {
     expect(card.complete).toBe(true);
   });
 
-  test("a credential expiring later today is still fine now", () => {
+  it("a credential expiring later today is still fine now", () => {
     const card = presentConnection(
       connection("xero", { status: "connected", expires_at: "2026-09-17T23:00:00Z" }),
       NOW,
@@ -84,7 +84,7 @@ describe("presentConnection", () => {
     expect(card.state).toBe("connected");
   });
 
-  test("every state offers exactly one next action, or none when complete", () => {
+  it("every state offers exactly one next action, or none when complete", () => {
     const states = ["disconnected", "connected", "needs_scope", "needs_reconnect"] as const;
 
     for (const status of states) {
@@ -100,7 +100,7 @@ describe("presentConnection", () => {
 });
 
 describe("setupProgress", () => {
-  test("counts only the sources that are actually usable", () => {
+  it("counts only the sources that are actually usable", () => {
     const progress = setupProgress([
       connection("hubspot", { status: "connected" }),
       connection("xero", { status: "needs_scope" }),
@@ -111,7 +111,7 @@ describe("setupProgress", () => {
     expect(progress).toEqual({ done: 1, total: 4, finished: false });
   });
 
-  test("is finished only when every source is connected", () => {
+  it("is finished only when every source is connected", () => {
     const all = (["hubspot", "xero", "gmail", "drive"] as const).map((s) =>
       connection(s, { status: "connected" }),
     );
@@ -119,7 +119,7 @@ describe("setupProgress", () => {
     expect(setupProgress(all).finished).toBe(true);
   });
 
-  test("an empty list is not finished", () => {
+  it("an empty list is not finished", () => {
     // Otherwise a tenant whose connections failed to load renders as complete.
     expect(setupProgress([]).finished).toBe(false);
   });
