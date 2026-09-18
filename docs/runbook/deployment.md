@@ -143,19 +143,17 @@ line first; a button that fails at the first click is the failure this avoids.
 ### Bootstrapping the first admin
 
 Invitations are issued from the **People** division once someone is in. Nobody is, on a fresh
-deployment, and there is no one to invite them — so exactly one insert is needed, once:
+deployment, and there is no one to invite them — so one command is needed, once. Run it in
+the control-plane container, which already has the DSN:
 
-```sql
-INSERT INTO ops.tenant (id, display_name)
-VALUES ('CASE-0001', 'First tenant') ON CONFLICT DO NOTHING;
-
--- The token column is unused by this flow (Google and a one-time code already prove the
--- person controls the address), but it is NOT NULL, so it gets a digest of a random value.
-INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
-VALUES ('CASE-0001', 'you@example.test', 'admin',
-        encode(sha256(gen_random_uuid()::text::bytea), 'hex'),
-        now() + interval '7 days');
+```sh
+docker exec -it undercroft-<stack>-control-plane-1 bun run invite -- \
+  you@example.test --tenant CASE-0001 --role admin --create-tenant
 ```
+
+`--create-tenant` is opt-in, so a mistyped tenant id cannot invent a customer. It writes an
+ordinary invitation and grants nothing on its own; it also emails the invitee, using the
+same wording the People page does, when the mail variables are set.
 
 Then sign in with **exactly** that address. The first sign-in creates the `app.app_user`
 row, redeems every live invitation for the address into `app.tenant_member`, and stamps
@@ -191,9 +189,8 @@ Two Kestra behaviours that waste time otherwise:
 
 ## Known gaps
 
-- **Only the first admin needs SQL.** After that, invitations are issued from the People
-  division. The bootstrap insert is under [Sign-in](#sign-in), and it exists because there is
-  nobody to invite the first person.
+- **Nobody needs SQL.** The first admin comes from `bun run invite` (see
+  [Sign-in](#sign-in)); everyone after that is invited from the People division.
 - **The real `pg` + `search_path` path is exercised on deploy, not in the gate.** Better Auth
   emits unqualified table names against a pool whose `search_path` is `app`; the offline gate
   uses its memory adapter. A mistake here fails loudly (`Database schema mismatch`)

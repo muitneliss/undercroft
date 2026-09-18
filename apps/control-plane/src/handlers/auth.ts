@@ -50,7 +50,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
-import { isAdmissible, resolveInvitedUser } from "../services/invite.ts";
+import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
@@ -150,6 +150,12 @@ export function createAuth(config: AuthConfig): Auth {
         // An identity with no address cannot be matched to an invitation, so it is refused:
         // `isAdmissible("")` is false. Failing closed on a missing email is the point.
         if (await isAdmissible(config.exec, user.email ?? "")) return;
+
+        // Recorded, because the person on the other side sees only "No access" and the
+        // operator needs to know WHICH address was turned away -- usually a typo or the
+        // wrong Google account.
+        await recordRefusal(config.exec, { email: user.email ?? "", via: "google" });
+
         return {
           error: "not_invited",
           errorDescription:
@@ -231,7 +237,12 @@ export function createAuth(config: AuthConfig): Auth {
           // from "sent". Answering honestly here would turn the sign-in form into an
           // oracle for which addresses have access, which is the same enumeration argument
           // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
-          if (!(await isAdmissible(config.exec, email))) return;
+          if (!(await isAdmissible(config.exec, email))) {
+            // Silent to the caller, not to the operator: the response must not reveal that
+            // this address has no access, but the trail must say so.
+            await recordRefusal(config.exec, { email, via: "email-otp" });
+            return;
+          }
 
           // Deliberately not awaited: how long the send takes is a signal for whether the
           // address exists, and the response should not carry it.

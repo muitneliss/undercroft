@@ -17,6 +17,7 @@
  * of a random value is stored so the column keeps its shape and nothing replayable exists.
  */
 
+import type { EmailMessage } from "@undercroft/core";
 import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { record as recordAudit } from "../repos/auditLog.ts";
@@ -35,6 +36,29 @@ export type InviteResult =
   | { readonly ok: false; readonly reason: "already-member"; readonly role: string }
   /** The insert returned no row. Not expected; reported rather than assumed away. */
   | { readonly ok: false; readonly reason: "not-created" };
+
+/**
+ * What an invited person is told, in one place.
+ *
+ * A pure value: composing the words is a decision, sending them is transport. Both callers
+ * that can send — the People page and `bun run invite` — build their own sender and use this
+ * wording, so the two cannot drift into saying different things about the same invitation.
+ *
+ * The message carries no token and no link that grants anything: the invitation is keyed by
+ * the address, so this is a nudge to go and sign in, not a credential. That is why it is
+ * safe to email, and why losing the email costs nothing but a conversation.
+ */
+export function invitationMessage(to: string, tenantId: string, publicUrl: string): EmailMessage {
+  return {
+    to,
+    subject: "You have access to Undercroft",
+    text:
+      `You have been given access to ${tenantId} in Undercroft.\n\n` +
+      `Sign in at ${publicUrl} — use this address (${to}) exactly, either with Google ` +
+      `or by asking for a one-time code.\n\n` +
+      `If you were not expecting this, you can ignore it; nothing happens until you sign in.`,
+  };
+}
 
 export function members(exec: SqlExecutor, tenantId: string): Promise<Member[]> {
   return listMembers(exec, tenantId);
