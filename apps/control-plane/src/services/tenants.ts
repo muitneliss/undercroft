@@ -7,6 +7,8 @@
  * second authorization decision in a second place -- the way the two drift apart.
  */
 
+// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
+
 import type { SqlExecutor } from "@undercroft/db";
 import { listForUser, type MemberTenant } from "../repos/membership.ts";
 import { findTenant, type Tenant } from "../repos/tenant.ts";

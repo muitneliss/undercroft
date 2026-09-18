@@ -13,6 +13,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
   <title>Undercroft</title>
   <style>
+    /* biome-ignore-all lint/nursery/useLayeredStyles: a cascade layer orders one sheet against another, and this file IS the sheet -- an icon has nothing to cascade with. */
+    /* biome-ignore-all lint/nursery/noUnusedClasses: the classes are used by the <rect> and <path> in this same file; the rule only looks in HTML and JSX. */
+    /* biome-ignore-all lint/style/noHexColors: the same two house colours as index.css, which must stay hex so the contrast solver can parse them back. */
     .block { fill: #16150f }
     .arch { fill: #efe9d9 }
     @media (prefers-color-scheme: dark) {

@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noDefaultExport: The default export IS this entry point's contract -- Bun reads a server object and Vite reads a config that way, by name.
+
 // biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
 
 import { fileURLToPath, URL } from "node:url";

@@ -6,6 +6,12 @@
  * integration-tier concern against real Postgres with real login roles.
  */
 
+// biome-ignore-all lint/nursery/noConditionalExpect: These assert inside a callback the code under test invokes -- a refresher, an onRetry hook -- which is how you check what a collaborator was handed without mocking it. `.claude/rules/tests.md` bans the mock alternative outright.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useExpect: Test bodies whose assertion is that the call did not throw. The guard style `.claude/rules/tests.md` prescribes puts the check in a conditional throw rather than an expect().
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/suspicious/noMisplacedAssertion: Assertions inside a helper that several tests call, which is how the repeated part of a check is named once.
+
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.

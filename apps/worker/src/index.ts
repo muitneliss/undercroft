@@ -5,6 +5,8 @@
  * a caller outside this app gets the verb, not the tables it writes.
  */
 
+// biome-ignore-all lint/performance/noBarrelFile: `index.ts` is each package's public entry point, which is the seam `.claude/rules/layering.md` is built on and what `.claude/rules/tests.md` means by testing through the public API. The re-export cost the rule is about applies to a bundle; these are workspace packages consumed by name.
+
 export { createLakeApi, type LakeApiDeps } from "./handlers/lake.ts";
 export { type AuthOutcome, authenticate } from "./services/auth.ts";
 export { type IngestResult, type RunDeps, runIngest } from "./services/ingest.ts";

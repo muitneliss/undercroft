@@ -1,3 +1,9 @@
+// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
+
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
 import { describe, expect, test as it } from "bun:test";
@@ -78,7 +84,7 @@ describe("strings are escaped to ASCII", () => {
 
   it("output is pure ASCII whatever went in", () => {
     const serialised = canonicalJson({ "\u{1F5FF}": "café", plain: "ok" });
-    // eslint-disable-next-line no-control-regex -- asserting the absence of non-ASCII is the point
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the control range IS the assertion -- this checks canonicalJson emitted pure ASCII.
     expect(/^[\x00-\x7F]*$/u.test(serialised)).toBe(true);
   });
 

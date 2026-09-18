@@ -23,6 +23,11 @@
  * separate states rather than two shades of "not working".
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
+// biome-ignore-all lint/style/noJsxLiterals: This would move all 77 pieces of UI copy into constants declared away from the markup that gives them meaning. That trade is worth making when a translation layer needs a key for every string; this app has none, so it buys nothing and costs the ability to read a component and see what it says.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
 // biome-ignore-all lint/nursery/noReactNativeRawText: React Native rule: it requires text to sit inside a <Text> component, because RN has no text nodes. This is a web React app rendering to the DOM, where a string inside a <p> is exactly right. On under reactNative: all in biome.jsonc, suppressed where it does not apply.
 
 // biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
@@ -138,21 +143,36 @@ export function ConnectionCard({
 
         <div className="grant__actions">
           {card.action?.kind === "connect" ? (
-            <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
+            <button
+              type="button"
+              className="plate plate--primary"
+              onClick={onConnect}
+              disabled={busy}
+            >
               Connect {name}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "scope" ? (
-            <button type="button" className="plate plate--primary" onClick={onScope} disabled={busy}>
+            <button
+              type="button"
+              className="plate plate--primary"
+              onClick={onScope}
+              disabled={busy}
+            >
               Choose what to sync
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.action?.kind === "reconnect" ? (
-            <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
+            <button
+              type="button"
+              className="plate plate--primary"
+              onClick={onConnect}
+              disabled={busy}
+            >
               Reconnect {name}
               <ArrowRight size={13} />
             </button>
