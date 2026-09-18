@@ -10,6 +10,7 @@
         "@types/bun": "1.4.2",
         "prettier": "3.9.7",
         "typescript": "5.9.3",
+        "yaml": "2.6.1",
       },
     },
     "apps/control-plane": {
