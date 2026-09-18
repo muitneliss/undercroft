@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.4.0](https://github.com/muitneliss/undercroft/compare/v1.3.0...v1.4.0) (2026-09-18)
+
+
+### Features
+
+* **control-plane:** record refused sign-ins, and invite the first admin without SQL ([f2cb01f](https://github.com/muitneliss/undercroft/commit/f2cb01f12bc205686b969eb7b01d6631dedfc019))
+* **i18n:** translate the control plane, Vietnamese first and English second ([ab5513c](https://github.com/muitneliss/undercroft/commit/ab5513c9257f07b2435f6bf6887da3f602628b2e))
+* **i18n:** translate the control plane, Vietnamese first and English second ([80323a6](https://github.com/muitneliss/undercroft/commit/80323a6cb28c24a158c4b60ea277cc09d7db3a12))
+* record refused sign-ins, and invite the first admin without SQL ([3e05843](https://github.com/muitneliss/undercroft/commit/3e05843e81a03a2bf65c9438c62bba1bd63fc75b))
+* **ui:** set the division tabs upright across the head ([d8c6992](https://github.com/muitneliss/undercroft/commit/d8c699264c44cec45be75c096928badcca27a53f))
+* **ui:** set the division tabs upright across the head ([8d0dfa0](https://github.com/muitneliss/undercroft/commit/8d0dfa05e2d07bfc641893570a20e2916b1a74e0))
+
+
+### Bug Fixes
+
+* **deploy:** verify a one-shot migration by its exit code, not its liveness ([550840d](https://github.com/muitneliss/undercroft/commit/550840d65fca00c40be1092a699c79b1e78d644d))
+* **deploy:** verify a one-shot migration by its exit code, not its liveness ([698f8fd](https://github.com/muitneliss/undercroft/commit/698f8fdd59843b59f3a9e9eaf2b21e128acb5b22))
+
 ## [1.3.0](https://github.com/muitneliss/undercroft/compare/v1.2.0...v1.3.0) (2026-09-18)
 
 
