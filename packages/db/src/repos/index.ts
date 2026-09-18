@@ -9,12 +9,16 @@
 
 export {
   type Connection,
+  type ConnectionDetail,
   ConnectionRegistryError,
   type Credential,
+  deleteCredential,
   getConnection,
   listConnections,
+  readConnectionDetail,
   readCredential,
   setStatus,
   upsertConnection,
+  writeConnectionDetail,
   writeCredential,
 } from "./connections.ts";

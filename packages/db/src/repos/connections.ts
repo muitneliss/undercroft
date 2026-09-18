@@ -179,3 +179,97 @@ export async function readCredential(
   const opened = unseal({ blob: row.ciphertext, keyVersion: row.key_version }, opts.env);
   return credentialFromJson(opened);
 }
+
+/**
+ * What the admin chose to share, and the account it belongs to.
+ *
+ * `app.connection_detail` rather than a column on `ops.connection`, because BI holds
+ * `SELECT ON ops.connection` and a table-level grant covers columns added later -- a label
+ * named "Invoices/Acme Pte Ltd" on that table would be one dbt model from a dashboard. See
+ * `packages/db/sql/070_google_ingestion.sql`.
+ *
+ * `selection` comes back as JSON *text*, not a parsed object. The caller decides what shape
+ * it expects and parses it there; a repo that interpreted it would have to know what a Gmail
+ * label is.
+ */
+export interface ConnectionDetail {
+  readonly accountLabel: string;
+  readonly selectionJson: string;
+  readonly chosenAt: string | null;
+}
+
+export async function readConnectionDetail(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+): Promise<ConnectionDetail | null> {
+  const { rows } = await exec.query<{
+    account_label: string;
+    selection: unknown;
+    chosen_at: Date | string | null;
+  }>(
+    `SELECT account_label, selection::text AS selection, chosen_at
+     FROM app.connection_detail WHERE tenant_id = $1 AND source = $2`,
+    [tenantId, source],
+  );
+  const row = rows[0];
+  if (row === undefined) return null;
+  return {
+    accountLabel: row.account_label,
+    selectionJson: typeof row.selection === "string" ? row.selection : "{}",
+    chosenAt: row.chosen_at === null ? null : new Date(row.chosen_at).toISOString(),
+  };
+}
+
+/**
+ * Record what an admin chose.
+ *
+ * `selectionJson` is passed through as text and cast by Postgres, never re-serialised here:
+ * the same rule the raw loader follows, for the same reason.
+ */
+export async function writeConnectionDetail(
+  exec: SqlExecutor,
+  input: {
+    tenantId: string;
+    source: string;
+    accountLabel?: string;
+    selectionJson?: string;
+    chosenBy?: string;
+  },
+): Promise<void> {
+  await exec.query(
+    `INSERT INTO app.connection_detail
+       (tenant_id, source, account_label, selection, chosen_at, chosen_by, updated_at)
+     -- The COALESCEs here are the column defaults. A first write that sets only a selection
+     -- must not put NULL into account_label, which is NOT NULL.
+     VALUES ($1, $2, COALESCE($3, ''), COALESCE($4::jsonb, '{}'::jsonb), $5, COALESCE($6, ''), now())
+     ON CONFLICT (tenant_id, source) DO UPDATE SET
+       -- COALESCE on the incoming value, so writing a selection does not blank the account
+       -- label the OAuth callback recorded, and vice versa.
+       account_label = COALESCE($3, app.connection_detail.account_label),
+       selection     = COALESCE($4::jsonb, app.connection_detail.selection),
+       chosen_at     = COALESCE($5, app.connection_detail.chosen_at),
+       chosen_by     = COALESCE($6, app.connection_detail.chosen_by),
+       updated_at    = now()`,
+    [
+      input.tenantId,
+      input.source,
+      input.accountLabel ?? null,
+      input.selectionJson ?? null,
+      input.selectionJson === undefined ? null : new Date().toISOString(),
+      input.chosenBy ?? null,
+    ],
+  );
+}
+
+/** Forget a connection's credential. The connection row and its history stay. */
+export async function deleteCredential(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+): Promise<void> {
+  await exec.query("DELETE FROM app.connection_secret WHERE tenant_id = $1 AND source = $2", [
+    tenantId,
+    source,
+  ]);
+}

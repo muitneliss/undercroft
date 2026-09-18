@@ -11,7 +11,7 @@
  */
 
 import { parseSpec } from "@undercroft/contracts";
-import { newRunId } from "@undercroft/core";
+import { type ByteFetcher, createByteFetcher, newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
@@ -24,6 +24,8 @@ import {
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ConnectionRegistryError, type Credential, setStatus } from "@undercroft/db/repos";
+import { createGoogleApi } from "./google/api.ts";
+import { type GoogleSource, isGoogleSource, runGoogleCollect } from "./google/collect.ts";
 import { landRecords, type RecordToLand } from "./land.ts";
 import { loadStreamToRaw } from "./loadToRaw.ts";
 
@@ -52,6 +54,8 @@ export interface RunDeps {
   readonly env?: NodeJS.ProcessEnv;
   /** Injected in tests; the process wires the real `fetch`-backed fetcher. */
   readonly fetcher?: Fetcher;
+  /** The byte-returning seam the Google collectors use. Injected in tests, as above. */
+  readonly byteFetcher?: ByteFetcher;
   /**
    * Exchanges a refresh token for a fresh credential. Absent means this source cannot
    * refresh -- correct for a HubSpot private app, which has nothing to refresh with.
@@ -127,8 +131,60 @@ export async function resolveToken(
  *
  * A token resolver is passed to the runtime that opens the sealed per-tenant credential
  * under a row lock; the worker holds the master key, the scheduler never sees it.
+ *
+ * Gmail and Drive take a different path from the same door. They are collectors rather than
+ * specs -- see `google/collect.ts` and ADR 0013 -- so the caller still says
+ * `{source, tenantId}` and does not have to know which kind of source it asked for.
  */
 export async function runIngest(
+  deps: RunDeps,
+  input: { source: string; tenantId: string },
+): Promise<IngestResult> {
+  if (isGoogleSource(input.source)) {
+    return runGoogleIngest(deps, { source: input.source, tenantId: input.tenantId });
+  }
+  return runSpecIngest(deps, input);
+}
+
+/**
+ * The Google path, reported in the same shape as a spec run.
+ *
+ * Documents are counted into `landed` alongside records: from the caller's side one run
+ * landed a number of things, and a scheduler that saw a green run with a zero count would
+ * have no way to tell "the mailbox is empty" from "the PDFs all failed".
+ */
+async function runGoogleIngest(
+  deps: RunDeps,
+  input: { source: GoogleSource; tenantId: string },
+): Promise<IngestResult> {
+  const api = createGoogleApi(input.source, {
+    fetcher: deps.byteFetcher ?? createByteFetcher(),
+    token: () => resolveToken(deps, input),
+  });
+
+  const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api }, input);
+
+  return {
+    runId: result.runId,
+    source: result.source,
+    entities: [
+      {
+        entity: input.source === "gmail" ? "messages" : "files",
+        landed: result.records.landed,
+        loadedCreated: result.records.loadedCreated,
+        loadedChanged: result.records.loadedChanged,
+      },
+      {
+        entity: "documents",
+        landed: result.documents.created + result.documents.unchanged,
+        loadedCreated: result.documents.created,
+        loadedChanged: 0,
+      },
+    ],
+  };
+}
+
+async function runSpecIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string },
 ): Promise<IngestResult> {

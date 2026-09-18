@@ -4,6 +4,7 @@ export {
   type ConnectorPagination,
   ConnectorSpec,
 } from "./connectorSpec.ts";
+export { ConnectionScope, DriveScope, GmailScope, parseScope } from "./connectionScope.ts";
 export {
   ApiError,
   LandRecordInput,
