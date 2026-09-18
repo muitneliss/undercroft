@@ -7,9 +7,8 @@
  * formatMoney into something that parses.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
 
 import { describe, expect, test as it } from "bun:test";
 
@@ -58,14 +57,18 @@ describe("formatMoney", () => {
 });
 
 describe("counts and absences", () => {
-  it("a count is a real number and may be grouped", () => {
-    expect(formatCount(1234)).toBe("1,234");
+  it("a count is grouped the reader's way, unlike an amount", () => {
+    // The asymmetry is deliberate and is the module's docstring in one assertion: a count
+    // is prose and follows the language, an amount is a ledger value and does not.
+    expect(formatCount(1234, "en")).toBe("1,234");
+    expect(formatCount(1234, "vi")).toBe("1.234");
+    expect(formatMoney({ amount: "1234", currency: "SGD" })).toBe("1,234.00 SGD");
   });
 
   it("zero rows is zero, not missing", () => {
     // The distinction that matters: a count of 0 is a fact. A null is not.
-    expect(formatCount(0)).toBe("0");
-    expect(formatCount(null)).toBe(MISSING);
+    expect(formatCount(0, "vi")).toBe("0");
+    expect(formatCount(null, "vi")).toBe(MISSING);
   });
 
   it("an empty string renders as missing rather than as blank space", () => {

@@ -11,17 +11,16 @@
  * a procedure is a different question from who may hold a session.
  */
 
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
+import { DEFAULT_LOCALE, type Locale } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { resolveInvitedUser } from "../services/invite.ts";
@@ -55,11 +54,12 @@ async function seedMember(email: string, role: Role, tenantId = "CASE-0042"): Pr
   return userId;
 }
 
-function caller(user: SessionUser) {
+function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
   const ctx: Context = {
     exec: db,
     user,
     sessionId: "s1",
+    locale,
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(true),
   };
@@ -67,9 +67,21 @@ function caller(user: SessionUser) {
 }
 
 /** An admin of CASE-0042, which is who most of these tests act as. */
-async function admin() {
+async function admin(locale: Locale = DEFAULT_LOCALE) {
   const userId = await seedMember("boss@example.test", "admin");
-  return caller({ userId, email: "boss@example.test" });
+  return caller({ userId, email: "boss@example.test" }, locale);
+}
+
+async function errorMessage(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+  } catch (error) {
+    if (!(error instanceof TRPCError)) {
+      throw error;
+    }
+    return error.message;
+  }
+  throw new Error("expected a refusal, got a result");
 }
 
 async function errorCode(fn: () => Promise<unknown>): Promise<string> {
@@ -189,6 +201,33 @@ describe("inviting twice does not grant twice", () => {
     );
 
     expect(code).toBe("CONFLICT");
+  });
+
+  it("the refusal is worded in the language the request asked for", async () => {
+    // This message is rendered verbatim by `People.tsx`. If the router ever stops reading
+    // `ctx.locale`, a Vietnamese admin gets one English sentence on the page -- and it
+    // appears precisely when something has gone wrong, which is the worst moment for it.
+    await seedMember("hand@example.test", "member");
+    const invite = { tenantId: "CASE-0042", email: "hand@example.test", role: "admin" as const };
+
+    const api = await admin("vi");
+    const vietnamese = await errorMessage(() => api.people.invite(invite));
+
+    expect(vietnamese).toContain("đã có quyền truy cập");
+    expect(vietnamese).toContain("hand@example.test");
+  });
+
+  it("the same refusal in English, for an auditor who asked for it", async () => {
+    // The guard's other side. One language asserted alone passes against a router that
+    // ignores the locale and answers in that language always.
+    await seedMember("hand@example.test", "member");
+    const api = await admin("en");
+
+    const english = await errorMessage(() =>
+      api.people.invite({ tenantId: "CASE-0042", email: "hand@example.test", role: "admin" }),
+    );
+
+    expect(english).toContain("already has access as member");
   });
 });
 

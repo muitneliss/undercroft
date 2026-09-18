@@ -1,12 +1,23 @@
 /**
- * The fore-edge tab rail: this application's entire navigation.
+ * The tab strip: this application's entire navigation.
  *
- * In a tabbed reference manual the divisions are on the fore edge, and their tab
- * heights are proportional to how much of the book each one occupies -- so the
- * rail is a picture of the book as well as a control. Putting the navigation
- * there rather than in a left sidebar is the single most consequential decision
- * in this design, and it is the form's, not a preference: a sidebar would make
- * this a dashboard wearing a manual's colours.
+ * In a tabbed reference manual the divisions are cut into the board, sized in
+ * proportion to how much of the book each one occupies -- so the strip is a
+ * picture of the book as well as a control. Putting the navigation in a tab
+ * strip rather than a left sidebar is the single most consequential decision in
+ * this design, and it is the form's, not a preference: a sidebar would make this
+ * a dashboard wearing a manual's colours.
+ *
+ * These are TOP tabs, across the head. They were side tabs down the fore edge
+ * until a 3.25rem edge proved it could only carry a word by turning it on its
+ * side, and a rotated word leaves the eye no shape to catch -- on the one
+ * control whose whole job is answering which section is open. The top tab is the
+ * other real divider form, and the one whose lettering was always printed
+ * upright. ADR 0012 records the change and the alternatives rejected with it.
+ *
+ * `extent` therefore drives WIDTH rather than height. It is still a property of
+ * the division and not a count of the current customer's rows (see
+ * `@/lib/divisions`), so the navigation never resizes under the cursor.
  *
  * FACE-DOWN, NOT HIDDEN. Three of the four divisions are sections of one
  * customer's book and cannot be opened until a customer is chosen. They render
@@ -22,20 +33,17 @@
  * from the form.
  */
 
-// biome-ignore-all lint/nursery/noInlineStyles: Every one of these is data becoming a style: the tab rail's flexGrow IS the division's extent, the skeleton's width varies per row, the colour wheel paints each swatch its own hue. Biome's fix deletes the attribute rather than relocating it, which removes the feature.
-// biome-ignore-all lint/style/noJsxLiterals: This would move all 77 pieces of UI copy into constants declared away from the markup that gives them meaning. That trade is worth making when a translation layer needs a key for every string; this app has none, so it buys nothing and costs the ability to read a component and see what it says.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/nursery/noReactNativeRawText: React Native rule: it requires text to sit inside a <Text> component, because RN has no text nodes. This is a web React app rendering to the DOM, where a string inside a <p> is exactly right. On under reactNative: all in biome.jsonc, suppressed where it does not apply.
-
 // biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/nursery/noInlineStyles: Every one of these is data becoming a style: the tab rail's flexGrow IS the division's extent, the skeleton's width varies per row, the colour wheel paints each swatch its own hue. Biome's fix deletes the attribute rather than relocating it, which removes the feature.
 // biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
 // A plain Link, deliberately not a NavLink. NavLink decides "active" by path
 // prefix, so `/tenants` stayed active inside `/tenants/CASE-.../lake` and two
-// tabs rendered as the current one -- two punched holes in a rail whose whole
+// tabs rendered as the current one -- two punched holes in a strip whose whole
 // job is saying which section you are in. The division is already known here.
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { letteringOn } from "@/lib/acetate.ts";
@@ -48,8 +56,10 @@ export function TabRail({
   tenantId: string | undefined;
   current: DivisionId;
 }): React.JSX.Element {
+  const { t } = useTranslation();
+
   return (
-    <nav className="rail" aria-label="Sections">
+    <nav className="rail" aria-label={t("nav.sections")}>
       {DIVISIONS.map((div) => {
         const locked = div.scoped && !tenantId;
         // Lettering is chosen per hue rather than fixed: white reads at 2.09:1
@@ -67,10 +77,10 @@ export function TabRail({
               className="rail__tab"
               aria-disabled="true"
               style={{ flexGrow: div.extent }}
-              title="Choose a customer first"
+              title={t("nav.lockedTitle")}
             >
-              {div.label}
-              <span className="visually-hidden"> — choose a customer first</span>
+              {t(div.labelKey)}
+              <span className="visually-hidden">{t("nav.lockedHint")}</span>
             </span>
           );
         }
@@ -83,7 +93,7 @@ export function TabRail({
             to={divisionPath(div.id, tenantId)}
             {...(div.id === current ? { "aria-current": "page" as const } : {})}
           >
-            {div.label}
+            {t(div.labelKey)}
           </Link>
         );
       })}

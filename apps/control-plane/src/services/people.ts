@@ -19,11 +19,12 @@
 
 // biome-ignore-all lint/performance/noNamespaceImport: `import pg from "pg"` and friends: these packages have no useful named exports, and the namespace import is the documented way to consume them.
 // biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
 
-import type { EmailMessage } from "@undercroft/core";
+import type { EmailMessage, Locale } from "@undercroft/core";
 import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
+import { messages } from "../i18n/index.ts";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import * as invitations from "../repos/invitation.ts";
 import { listMembers, type Member, roleForEmail } from "../repos/membership.ts";
@@ -51,16 +52,28 @@ export type InviteResult =
  * The message carries no token and no link that grants anything: the invitation is keyed by
  * the address, so this is a nudge to go and sign in, not a credential. That is why it is
  * safe to email, and why losing the email costs nothing but a conversation.
+ *
+ * `locale` is the admin's, because it is the only language anyone knows: an invited address
+ * has never signed in, so this platform holds no preference for it. The admin inviting a
+ * Vietnamese colleague is reading Vietnamese, and their colleague almost certainly does too.
+ * It is a guess about a *language*, not about a value, and it is recoverable in a way rule 2
+ * is about -- an invitation in the wrong language still says who sent it and where to sign
+ * in, where a guessed amount just reads as a fact.
  */
-export function invitationMessage(to: string, tenantId: string, publicUrl: string): EmailMessage {
+export function invitationMessage(
+  to: string,
+  tenantId: string,
+  publicUrl: string,
+  locale: Locale,
+): EmailMessage {
+  const t = messages(locale);
   return {
     to,
-    subject: "You have access to Undercroft",
-    text:
-      `You have been given access to ${tenantId} in Undercroft.\n\n` +
-      `Sign in at ${publicUrl} — use this address (${to}) exactly, either with Google ` +
-      "or by asking for a one-time code.\n\n" +
-      "If you were not expecting this, you can ignore it; nothing happens until you sign in.",
+    subject: t("invitation.subject"),
+    // One catalogue entry per language rather than three concatenated fragments: Vietnamese
+    // and English do not share word order, and a sentence assembled from pieces can only be
+    // right in the language it was assembled in.
+    text: t("invitation.body", { tenantId, publicUrl, email: to }),
   };
 }
 

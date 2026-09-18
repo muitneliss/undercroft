@@ -1,5 +1,9 @@
 <!doctype html>
-<html lang="en">
+<!-- Vietnamese is the shipped default, so the shell says so before any JavaScript runs;
+     src/i18n/index.ts then keeps this attribute following the reader's choice. A document
+     that claimed `en` until the bundle loaded would have a screen reader start Vietnamese
+     copy in an English voice. -->
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

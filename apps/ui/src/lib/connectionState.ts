@@ -13,10 +13,19 @@
  *
  * Expiry is computed here rather than in a component so it is testable without
  * rendering, and so "expired" is decided in one place.
+ *
+ * ## Which state it is, and what that state is called, are two questions
+ *
+ * `connectionFacts` answers the first and knows no words at all; `presentConnection` adds
+ * the second from the catalogue it is handed. Keeping them apart is what lets
+ * `setupProgress` count finished sources without a translator in scope -- a progress count
+ * that needed a language to be computed would be a decision taken in the wrong place.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+
+import type { TFunction } from "i18next";
 
 import type { Connection } from "@/api/types.ts";
 
@@ -27,12 +36,13 @@ export type CardState =
   | "needs_reconnect"
   | "expired";
 
-export interface CardPresentation {
+/** The single thing to do next, as a decision rather than as a button label. */
+export type ActionKind = "connect" | "scope" | "reconnect";
+
+export interface CardFacts {
   state: CardState;
-  headline: string;
-  detail: string;
-  /** The single thing to do next. Null when there is nothing to do. */
-  action: { label: string; kind: "connect" | "scope" | "reconnect" } | null;
+  /** What to do next, or null when there is nothing to do. */
+  actionKind: ActionKind | null;
   /**
    * Which printed mark this state carries.
    *
@@ -46,7 +56,15 @@ export interface CardPresentation {
   complete: boolean;
 }
 
-export function presentConnection(connection: Connection, now = new Date()): CardPresentation {
+export type CardPresentation = CardFacts & {
+  headline: string;
+  detail: string;
+  /** The next action, named for the reader. Null when there is nothing to do. */
+  action: { label: string; kind: ActionKind } | null;
+};
+
+/** Which state a grant is in. No words, and therefore no language. */
+export function connectionFacts(connection: Connection, now = new Date()): CardFacts {
   const expiry = connection.expires_at ? new Date(connection.expires_at) : null;
   // A null expiry means "no expiry recorded" -- a HubSpot private-app token
   // genuinely never expires. Treating null as expired would demand a reconnect
@@ -59,10 +77,7 @@ export function presentConnection(connection: Connection, now = new Date()): Car
   ) {
     return {
       state: hasExpired && connection.status !== "needs_reconnect" ? "expired" : "needs_reconnect",
-      headline: "Reconnect needed",
-      detail:
-        "The access we were granted has lapsed or been withdrawn. Nothing has been lost — reconnecting picks up where the last sync finished.",
-      action: { label: "Reconnect", kind: "reconnect" },
+      actionKind: "reconnect",
       mark: "lapsed",
       complete: false,
     };
@@ -70,41 +85,81 @@ export function presentConnection(connection: Connection, now = new Date()): Car
 
   switch (connection.status) {
     case "disconnected":
-      return {
-        state: "not_connected",
-        headline: "Not connected",
-        detail: "",
-        action: { label: "Connect", kind: "connect" },
-        mark: "absent",
-        complete: false,
-      };
+      return { state: "not_connected", actionKind: "connect", mark: "absent", complete: false };
 
     case "needs_scope":
-      return {
-        state: "needs_scope",
-        headline: "Choose what to sync",
-        detail:
-          connection.external_account_label === ""
-            ? "Connected. Tell us which account to read before the first sync."
-            : `Connected to ${connection.external_account_label}. Choose what to sync before the first run.`,
-        action: { label: "Choose", kind: "scope" },
-        mark: "pending",
-        complete: false,
-      };
+      return { state: "needs_scope", actionKind: "scope", mark: "pending", complete: false };
 
     case "connected":
-      return {
-        state: "connected",
-        headline: connection.external_account_label || "Connected",
-        detail: "Syncing on schedule.",
-        action: null,
-        mark: "granted",
-        complete: true,
-      };
+      return { state: "connected", actionKind: null, mark: "granted", complete: true };
 
     default: {
       const exhaustive: never = connection.status;
       throw new Error(`unhandled connection status ${String(exhaustive)}`);
+    }
+  }
+}
+
+const ACTION_LABEL: Record<
+  ActionKind,
+  "grantState.actionConnect" | "grantState.actionChoose" | "grantState.actionReconnect"
+> = {
+  connect: "grantState.actionConnect",
+  scope: "grantState.actionChoose",
+  reconnect: "grantState.actionReconnect",
+};
+
+/** The card's state, with the words a reader of `t`'s language sees. */
+export function presentConnection(
+  t: TFunction,
+  connection: Connection,
+  now = new Date(),
+): CardPresentation {
+  const card = connectionFacts(connection, now);
+  const action =
+    card.actionKind === null
+      ? null
+      : { label: t(ACTION_LABEL[card.actionKind]), kind: card.actionKind };
+
+  switch (card.state) {
+    case "needs_reconnect":
+    case "expired":
+      return {
+        ...card,
+        headline: t("grantState.lapsedHeadline"),
+        detail: t("grantState.lapsedDetail"),
+        action,
+      };
+
+    case "not_connected":
+      return { ...card, headline: t("grantState.notConnectedHeadline"), detail: "", action };
+
+    case "needs_scope":
+      return {
+        ...card,
+        headline: t("grantState.needsScopeHeadline"),
+        detail:
+          connection.external_account_label === ""
+            ? t("grantState.needsScopeDetail")
+            : t("grantState.needsScopeDetailNamed", {
+                account: connection.external_account_label,
+              }),
+        action,
+      };
+
+    case "connected":
+      return {
+        ...card,
+        // The account's own name where there is one: an operator on a call needs to know
+        // *which* mailbox is connected, not merely that one is.
+        headline: connection.external_account_label || t("grantState.connectedHeadline"),
+        detail: t("grantState.connectedDetail"),
+        action,
+      };
+
+    default: {
+      const exhaustive: never = card.state;
+      throw new Error(`unhandled card state ${String(exhaustive)}`);
     }
   }
 }
@@ -121,7 +176,7 @@ export function presentConnection(connection: Connection, now = new Date()): Car
  * possible reading. A scope we cannot name is not a scope of everything, and the
  * caller renders the absence as MISSING.
  */
-export function scopeSummary(connection: Connection): string | null {
+export function scopeSummary(t: TFunction, connection: Connection): string | null {
   const folders = connection.config.folder_ids ?? [];
   const labels = connection.config.labels ?? [];
   const entities = connection.config.entities ?? [];
@@ -131,16 +186,14 @@ export function scopeSummary(connection: Connection): string | null {
       if (folders.length === 0) {
         return null;
       }
-      return folders.length === 1
-        ? "PDFs in 1 selected folder"
-        : `PDFs in ${String(folders.length)} selected folders`;
+      return t("scope.driveFolders", { count: folders.length });
 
     case "gmail":
       // An empty label list is a recorded decision here, not a missing one: the
       // scope form says so in as many words before it saves.
       return labels.length === 0
-        ? "Headers and PDF attachments, whole mailbox"
-        : `Headers and PDF attachments in ${labels.join(", ")}`;
+        ? t("scope.gmailWholeMailbox")
+        : t("scope.gmailLabels", { labels: labels.join(", ") });
 
     case "hubspot":
     case "xero":
@@ -154,11 +207,14 @@ export function scopeSummary(connection: Connection): string | null {
 }
 
 /** How far through setup this tenant is. Drives the checklist's headline. */
-export function setupProgress(connections: Connection[]): {
+export function setupProgress(
+  connections: Connection[],
+  now = new Date(),
+): {
   done: number;
   total: number;
   finished: boolean;
 } {
-  const done = connections.filter((c) => presentConnection(c).complete).length;
+  const done = connections.filter((c) => connectionFacts(c, now).complete).length;
   return { done, total: connections.length, finished: done === connections.length && done > 0 };
 }

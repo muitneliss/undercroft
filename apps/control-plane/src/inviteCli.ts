@@ -19,16 +19,22 @@
  */
 
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/performance/noNamespaceImport: `import pg from "pg"` and friends: these packages have no useful named exports, and the namespace import is the documented way to consume them.
+// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useForOf: One indexed loop that needs its index.
 
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
-
 import process from "node:process";
-import { createHttpEmailSender, type EmailSender } from "@undercroft/core";
+import {
+  createHttpEmailSender,
+  DEFAULT_LOCALE,
+  type EmailSender,
+  LOCALES,
+  type Locale,
+  parseLocale,
+} from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { ensureTenant, findTenant } from "./repos/tenant.ts";
 import * as people from "./services/people.ts";
@@ -42,14 +48,25 @@ interface Args {
   readonly role: string;
   /** Create the tenant if it is missing. Off by default: a typo must not invent a customer. */
   readonly createTenant: boolean;
+  /**
+   * Which language to write the invitation email in.
+   *
+   * A flag rather than a negotiated header, because a CLI has no browser to ask. It defaults
+   * to Vietnamese like everything else, and it is here because the very first admin of a
+   * deployment is invited from this command and by nothing else -- so without it, exactly one
+   * person on the platform gets an email in a language nobody chose.
+   */
+  readonly locale: Locale;
 }
 
 function usage(message: string): never {
   process.stderr.write(
     `${message}\n\n` +
-      "usage: bun run invite -- <email> --tenant <id> [--role viewer|member|admin] [--create-tenant]\n" +
+      "usage: bun run invite -- <email> --tenant <id> [--role viewer|member|admin]\n" +
+      "                       [--create-tenant] [--lang vi|en]\n" +
       "\n" +
-      "  --create-tenant   create the tenant if it does not exist (for the first admin)\n",
+      "  --create-tenant   create the tenant if it does not exist (for the first admin)\n" +
+      `  --lang            language for the invitation email (default ${DEFAULT_LOCALE})\n`,
   );
   process.exit(2);
 }
@@ -59,6 +76,7 @@ function parseArgs(argv: readonly string[]): Args {
   let tenantId = "";
   let role = "admin";
   let createTenant = false;
+  let locale: Locale = DEFAULT_LOCALE;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -68,6 +86,15 @@ function parseArgs(argv: readonly string[]): Args {
     } else if (arg === "--role") {
       i += 1;
       role = argv[i] ?? "";
+    } else if (arg === "--lang") {
+      i += 1;
+      const asked = parseLocale(argv[i]);
+      // Refused, not defaulted. `--lang fr` is somebody expecting French; silently sending
+      // Vietnamese would look like the flag worked.
+      if (asked === null) {
+        usage(`--lang must be one of ${LOCALES.join(", ")}`);
+      }
+      locale = asked;
     } else if (arg === "--create-tenant") {
       createTenant = true;
     } else if (arg !== undefined && !arg.startsWith("--")) {
@@ -86,7 +113,7 @@ function parseArgs(argv: readonly string[]): Args {
   if (!ROLES.has(role)) {
     usage(`--role must be one of ${[...ROLES].join(", ")}`);
   }
-  return { email, tenantId, role, createTenant };
+  return { email, tenantId, role, createTenant, locale };
 }
 
 function optional(name: string): string | undefined {
@@ -101,7 +128,7 @@ function optional(name: string): string | undefined {
  * told it was not sent, so they know to pass the address on themselves. Reported, never
  * assumed: an admin who thinks an email went out will wait for someone who was never told.
  */
-function buildNotifier(): (email: string, tenantId: string) => Promise<boolean> {
+function buildNotifier(locale: Locale): (email: string, tenantId: string) => Promise<boolean> {
   const apiKey = optional("UNDERCROFT_EMAIL_API_KEY");
   const from = optional("UNDERCROFT_EMAIL_FROM");
   const publicUrl = optional("UNDERCROFT_PUBLIC_URL");
@@ -118,7 +145,7 @@ function buildNotifier(): (email: string, tenantId: string) => Promise<boolean> 
 
   return async (to, tenantId): Promise<boolean> => {
     try {
-      await sender.send(invitationMessage(to, tenantId, publicUrl));
+      await sender.send(invitationMessage(to, tenantId, publicUrl, locale));
       return true;
     } catch {
       return false;
@@ -154,7 +181,7 @@ async function main(): Promise<void> {
         email: args.email,
         role: args.role,
         actor: "cli",
-        notify: buildNotifier(),
+        notify: buildNotifier(args.locale),
       }),
     );
 

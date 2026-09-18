@@ -48,17 +48,45 @@
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
 // biome-ignore-all lint/correctness/useSingleJsDocAsterisk: Bullet lists inside module docstrings. Biome's fix flattens them, which destroyed the list recording how invite-only is enforced in three independent places -- exactly the documentation that must not be damaged by a formatter.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
 
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
-import type { EmailSender } from "@undercroft/core";
+import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
+import { messages } from "../i18n/index.ts";
 import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
+
+/**
+ * Which language to answer a Better Auth hook in.
+ *
+ * `/trpc` resolves this once per request in `server.ts`; inside these hooks there is no
+ * `Context`, because they are called from within the library. Better Auth hands each of them
+ * the endpoint context, which carries the originating request -- and therefore the same
+ * `Accept-Language` the browser sent, so the answer is the same one arrived at the same way.
+ *
+ * Structural rather than Better Auth's own `GenericEndpointContext`: the two hooks are given
+ * slightly different shapes, and this depends on the one field both actually carry.
+ *
+ * Everything here is optional in the library's types, because a sign-in driven by something
+ * other than an HTTP call has no request at all. That resolves to Vietnamese, which is the
+ * product's default and not a guess -- `negotiateLocale` records why.
+ */
+interface HookContext {
+  readonly request?: Request | undefined;
+  readonly headers?: Headers | undefined;
+}
+
+function localeOf(context: HookContext | null | undefined): Locale {
+  const asked =
+    context?.request?.headers.get("accept-language") ??
+    context?.headers?.get("accept-language") ??
+    null;
+  return negotiateLocale(asked);
+}
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
@@ -154,9 +182,7 @@ export function createAuth(config: AuthConfig): Auth {
        * it runs on paths where nothing should be provisioned. The library fails this hook
        * CLOSED: if it throws, the sign-in is refused rather than allowed.
        */
-      validateUserInfo: async ({
-        user,
-      }): Promise<{ error: string; errorDescription: string } | undefined> => {
+      validateUserInfo: async ({ user }) => {
         // An identity with no address cannot be matched to an invitation, so it is refused:
         // `isAdmissible("")` is false. Failing closed on a missing email is the point.
         if (await isAdmissible(config.exec, user.email ?? "")) {
@@ -240,7 +266,7 @@ export function createAuth(config: AuthConfig): Auth {
         // Hashed at rest, the same stance app.invitation takes with token_sha256: a
         // database read must not yield something replayable.
         storeOTP: "hashed",
-        sendVerificationOTP: async ({ email, otp }): Promise<void> => {
+        sendVerificationOTP: async ({ email, otp }, context): Promise<void> => {
           // Do not put a code in the post for an address that could never use it. Without
           // this, anyone could make this platform email an arbitrary stranger on demand --
           // our mail reputation spending itself on someone else's spam.
@@ -256,16 +282,21 @@ export function createAuth(config: AuthConfig): Auth {
             return;
           }
 
+          // In the language the browser asked for. This is the one email whose recipient
+          // IS the person at the keyboard, so their choice of language is known exactly --
+          // `apps/ui/src/auth.ts` sends `accept-language` on this very call.
+          const t = messages(localeOf(context));
+
           // Deliberately not awaited: how long the send takes is a signal for whether the
           // address exists, and the response should not carry it.
           void config.email
             .send({
               to: email,
-              subject: "Your Undercroft sign-in code",
-              text:
-                `Your sign-in code is ${otp}\n\n` +
-                `It expires in ${String(OTP_EXPIRES_SECONDS / 60)} minutes. ` +
-                "If you did not ask to sign in, you can ignore this email.",
+              subject: t("signInCode.subject"),
+              text: t("signInCode.body", {
+                otp,
+                minutes: String(OTP_EXPIRES_SECONDS / 60),
+              }),
             })
             .catch((error: unknown) => config.onEmailError?.(error));
         },
@@ -285,25 +316,11 @@ export function createAuth(config: AuthConfig): Auth {
            * aborts the sign-in, and its message is the one kind of error text Better Auth
            * passes to the client verbatim.
            */
-          before: async (
-            user,
-          ): Promise<{
-            data: {
-              id: string;
-              createdAt: Date;
-              updatedAt: Date;
-              email: string;
-              emailVerified: boolean;
-              name: string;
-              image?: string | null | undefined;
-            } & Record<string, unknown>;
-          }> => {
+          before: async (user, context) => {
             const invited = await config.transactor((tx) => resolveInvitedUser(tx, user.email));
             if (invited === null) {
               throw new APIError("FORBIDDEN", {
-                message:
-                  "That address has not been invited. Ask an administrator for an " +
-                  "invitation, and sign in with the exact address it was sent to.",
+                message: messages(localeOf(context))("error.notInvited"),
               });
             }
             return { data: user };

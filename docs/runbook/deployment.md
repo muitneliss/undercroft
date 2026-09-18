@@ -187,6 +187,10 @@ tell the person yourself.
 
 ## Rollback
 
+**Which release is on screen is printed at the foot of every page of the control plane**, and
+on the sign-in page too, so it can be read by someone who cannot get in. That stamp is the
+tag the bundle was built from — paste it into `IMAGE_TAG` verbatim to come back to it.
+
 Set `IMAGE_TAG=vX.Y.Z` (a previously published tag) in Dokploy's environment and redeploy.
 The curated layer is a projection rebuilt from the raw lake, so a rollback needs no database
 restore unless the schema changed.

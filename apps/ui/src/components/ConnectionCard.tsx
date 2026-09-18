@@ -23,15 +23,13 @@
  * separate states rather than two shades of "not working".
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/style/noJsxLiterals: This would move all 77 pieces of UI copy into constants declared away from the markup that gives them meaning. That trade is worth making when a translation layer needs a key for every string; this app has none, so it buys nothing and costs the ability to read a component and see what it says.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/nursery/noReactNativeRawText: React Native rule: it requires text to sit inside a <Text> component, because RN has no text nodes. This is a web React app rendering to the DOM, where a string inside a <p> is exactly right. On under reactNative: all in biome.jsonc, suppressed where it does not apply.
-
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
+import { useTranslation } from "react-i18next";
 
 import type { Connection } from "@/api/types.ts";
 import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types.ts";
@@ -42,10 +40,10 @@ import { orMissing } from "@/lib/money.ts";
 import { describeSchedule, expiryNote } from "@/lib/when.ts";
 
 const MARK_LABEL = {
-  granted: "Granted",
-  pending: "Awaiting scope",
-  lapsed: "Reconnect needed",
-  absent: "Not granted",
+  granted: "grant.markGranted",
+  pending: "grant.markPending",
+  lapsed: "grant.markLapsed",
+  absent: "grant.markAbsent",
 } as const;
 
 export function ConnectionCard({
@@ -61,7 +59,8 @@ export function ConnectionCard({
   onDisconnect: () => void;
   busy?: boolean;
 }): React.JSX.Element {
-  const card = presentConnection(connection);
+  const { t } = useTranslation();
+  const card = presentConnection(t, connection);
   const access = SOURCE_ACCESS[connection.source];
   const name = SOURCE_LABEL[connection.source];
   const headingId = `grant-${connection.source}`;
@@ -87,7 +86,7 @@ export function ConnectionCard({
           <h3 id={headingId} className="grant__name">
             {name}
           </h3>
-          <StatusMark mark={card.mark} label={MARK_LABEL[card.mark]} />
+          <StatusMark mark={card.mark} label={t(MARK_LABEL[card.mark])} />
         </div>
 
         <div className="grant__account stack stack--tight">
@@ -96,7 +95,7 @@ export function ConnectionCard({
               account withdrew it, and "Reconnect Xero" alone does not say. */}
           {named && card.state !== "needs_scope" ? (
             <>
-              <span className="label">Account</span>
+              <span className="label">{t("grant.account")}</span>
               <span className="datum">{orMissing(connection.external_account_label)}</span>
             </>
           ) : null}
@@ -109,8 +108,8 @@ export function ConnectionCard({
               live grant would read as though consent were being asked again. */}
           {card.state === "connected" ? (
             <>
-              <span className="label">Reads</span>
-              <span className="datum datum--quiet">{orMissing(scopeSummary(connection))}</span>
+              <span className="label">{t("grant.reads")}</span>
+              <span className="datum datum--quiet">{orMissing(scopeSummary(t, connection))}</span>
             </>
           ) : null}
 
@@ -120,13 +119,13 @@ export function ConnectionCard({
         <div className="grant__when stack stack--tight">
           {card.state === "connected" ? (
             <>
-              <span className="label">Schedule</span>
+              <span className="label">{t("grant.schedule")}</span>
               <span className="datum datum--quiet">
                 {connection.schedule_cron
-                  ? describeSchedule(connection.schedule_cron)
+                  ? describeSchedule(t, connection.schedule_cron)
                   : orMissing("")}
               </span>
-              <span className="datum datum--quiet">{expiryNote(connection.expires_at)}</span>
+              <span className="datum datum--quiet">{expiryNote(t, connection.expires_at)}</span>
             </>
           ) : null}
 
@@ -135,8 +134,8 @@ export function ConnectionCard({
               hours, and the operator is usually on the phone. */}
           {lapsed && connection.expires_at ? (
             <>
-              <span className="label">Since</span>
-              <span className="datum datum--quiet">{expiryNote(connection.expires_at)}</span>
+              <span className="label">{t("grant.since")}</span>
+              <span className="datum datum--quiet">{expiryNote(t, connection.expires_at)}</span>
             </>
           ) : null}
         </div>
@@ -149,7 +148,7 @@ export function ConnectionCard({
               onClick={onConnect}
               disabled={busy}
             >
-              Connect {name}
+              {t("grant.connect", { name })}
               <ArrowRight size={13} />
             </button>
           ) : null}
@@ -161,7 +160,7 @@ export function ConnectionCard({
               onClick={onScope}
               disabled={busy}
             >
-              Choose what to sync
+              {t("grant.chooseScope")}
               <ArrowRight size={13} />
             </button>
           ) : null}
@@ -173,20 +172,20 @@ export function ConnectionCard({
               onClick={onConnect}
               disabled={busy}
             >
-              Reconnect {name}
+              {t("grant.reconnect", { name })}
               <ArrowRight size={13} />
             </button>
           ) : null}
 
           {card.state === "connected" ? (
             <button type="button" className="plate" onClick={onScope} disabled={busy}>
-              Change what syncs
+              {t("grant.changeScope")}
             </button>
           ) : null}
 
           {unprinted ? null : (
             <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
-              Disconnect
+              {t("grant.disconnect")}
             </button>
           )}
         </div>
@@ -199,7 +198,7 @@ export function ConnectionCard({
         <div className="errata errata--inline">
           <span className="errata__mark">
             <ErrataMark size={13} />
-            Errata
+            {t("grant.errata")}
           </span>
           <p className="errata__body">{card.detail}</p>
         </div>
@@ -209,10 +208,10 @@ export function ConnectionCard({
           has been made, because repeating it then is noise. */}
       {unprinted ? (
         <dl className="access">
-          <dt>What we read</dt>
-          <dd>{access.reads}</dd>
-          <dt>What we change</dt>
-          <dd>{access.writes}</dd>
+          <dt>{t("grant.whatWeRead")}</dt>
+          <dd>{t(access.reads)}</dd>
+          <dt>{t("grant.whatWeChange")}</dt>
+          <dd>{t(access.writes)}</dd>
         </dl>
       ) : null}
     </article>

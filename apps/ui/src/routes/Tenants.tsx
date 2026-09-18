@@ -12,23 +12,20 @@
  * "Add" affordance is a plain note rather than a form that would post nowhere.
  */
 
-// biome-ignore-all lint/style/noJsxLiterals: This would move all 77 pieces of UI copy into constants declared away from the markup that gives them meaning. That trade is worth making when a translation layer needs a key for every string; this app has none, so it buys nothing and costs the ability to read a component and see what it says.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/nursery/noReactNativeRawText: React Native rule: it requires text to sit inside a <Text> component, because RN has no text nodes. This is a web React app rendering to the DOM, where a string inside a <p> is exactly right. On under reactNative: all in biome.jsonc, suppressed where it does not apply.
-
 // biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { formatCount } from "@/lib/money.ts";
 import { trpc } from "@/trpc.ts";
 
 export function Tenants(): React.JSX.Element {
+  const { t } = useTranslation();
   const tenants = trpc.tenants.list.useQuery();
 
   if (tenants.isPending) {
@@ -37,8 +34,8 @@ export function Tenants(): React.JSX.Element {
 
   if (tenants.isError) {
     return (
-      <Errata heading="Not loaded" live={true}>
-        The list of customers could not be loaded. Nothing has been changed.
+      <Errata heading={t("common.notLoaded")} live={true}>
+        {t("tenants.notLoaded")}
       </Errata>
     );
   }
@@ -47,29 +44,25 @@ export function Tenants(): React.JSX.Element {
 
   return (
     <div className="sheet">
-      <div className="head head--division">Customers</div>
+      <div className="head head--division">{t("nav.customers")}</div>
       <div className="body stack">
-        <h1>Member companies</h1>
-        <p className="prose prose--lead">
-          Each customer’s data is stored and accessed separately. Open one to grant, scope or
-          withdraw access to their accounts.
-        </p>
+        <h1>{t("tenants.title")}</h1>
+        <p className="prose prose--lead">{t("tenants.lead")}</p>
 
         {list.length === 0 ? (
-          <EmptyState
-            title="No customers yet"
-            body="A customer is the unit everything else hangs off: their connected accounts, their synced records, and who can see them."
-          />
+          <EmptyState title={t("tenants.emptyTitle")} body={t("tenants.emptyBody")} />
         ) : (
           <table className="table">
-            <caption>
-              {formatCount(list.length)} {list.length === 1 ? "customer" : "customers"}
-            </caption>
+            {/* The noun agrees with the count through i18next's plural forms, not through a
+                ternary: "1 customer" and "4 customers" is an English rule, and hard-coding
+                it here would have produced "1 khách hàngs" the moment a second language
+                arrived. */}
+            <caption>{t("tenants.caption", { count: list.length })}</caption>
             <thead>
               <tr>
-                <th scope="col">Customer</th>
-                <th scope="col">Reference</th>
-                <th scope="col">Your role</th>
+                <th scope="col">{t("tenants.colCustomer")}</th>
+                <th scope="col">{t("tenants.colReference")}</th>
+                <th scope="col">{t("tenants.colRole")}</th>
               </tr>
             </thead>
             <tbody>
@@ -89,12 +82,9 @@ export function Tenants(): React.JSX.Element {
 
       <div className="band-rule" />
 
-      <div className="head">Add</div>
+      <div className="head">{t("tenants.addHead")}</div>
       <div className="body">
-        <p className="note">
-          Adding a customer isn’t available here yet — the control plane exposes no create endpoint.
-          Tenants are provisioned out of band for now.
-        </p>
+        <p className="note">{t("tenants.addNote")}</p>
       </div>
     </div>
   );

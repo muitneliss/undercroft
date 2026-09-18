@@ -8,28 +8,23 @@
  * already in place.
  */
 
-// biome-ignore-all lint/style/noJsxLiterals: This would move all 77 pieces of UI copy into constants declared away from the markup that gives them meaning. That trade is worth making when a translation layer needs a key for every string; this app has none, so it buys nothing and costs the ability to read a component and see what it says.
-
-// biome-ignore-all lint/nursery/noReactNativeRawText: React Native rule: it requires text to sit inside a <Text> component, because RN has no text nodes. This is a web React app rendering to the DOM, where a string inside a <p> is exactly right. On under reactNative: all in biome.jsonc, suppressed where it does not apply.
-
 // biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
+
+import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
 
 export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
+  const { t } = useTranslation();
+
   return (
     <div className="sheet">
-      <div className="head head--division">Lake</div>
+      <div className="head head--division">{t("lake.head")}</div>
       <div className="body stack">
-        <h1>Raw lake</h1>
-        <p className="prose prose--lead">
-          What has actually landed for {tenantId}, before any transform.
-        </p>
-        <EmptyState
-          title="Not available yet"
-          body="Browsing lake objects and their provenance needs endpoints the control plane does not expose yet. This section is in place for when it does."
-        />
+        <h1>{t("lake.title")}</h1>
+        <p className="prose prose--lead">{t("lake.lead", { tenantId })}</p>
+        <EmptyState title={t("lake.emptyTitle")} body={t("lake.emptyBody")} />
       </div>
     </div>
   );

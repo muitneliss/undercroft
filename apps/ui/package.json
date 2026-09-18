@@ -13,8 +13,10 @@
     "@trpc/react-query": "11.0.0",
     "@undercroft/core": "workspace:*",
     "better-auth": "1.7.5",
+    "i18next": "26.4.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react-i18next": "17.0.14",
     "react-router-dom": "7.9.5",
     "zustand": "5.0.15"
   },

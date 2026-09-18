@@ -1,6 +1,6 @@
 {
   "name": "undercroft",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "devDependencies": {
     "@ast-grep/cli": "0.45.3",
     "@biomejs/biome": "2.5.14",
@@ -24,8 +24,9 @@
     "format:check": "biome format . && prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
+    "build:ui": "bun run --filter '@undercroft/ui' build",
     "test": "bun test",
-    "verify": "bun run typecheck && bun run lint && bun run lint:rules && bun run format:check && bun run spec:validate && bun run test"
+    "verify": "bun run typecheck && bun run lint && bun run lint:rules && bun run format:check && bun run spec:validate && bun run build:ui && bun run test"
   },
   "type": "module",
   "trustedDependencies": [

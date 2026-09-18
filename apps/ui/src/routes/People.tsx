@@ -19,29 +19,29 @@
 
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
 // biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on the two single-instance forms in the app -- a sign-in panel and an invite form, neither of which can appear twice on a page. The id is what the <label> points at.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/nursery/useReactNamingConvention: Fires on props named for the domain rather than for React's conventions. The domain names are the ones the design documents use.
 // biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on components that render a handful of rows. The re-render the rule is about matters under a memoised list of hundreds; these lists are bounded by how many connections a tenant has.
-// biome-ignore-all lint/style/noJsxLiterals: This would move all 77 pieces of UI copy into constants declared away from the markup that gives them meaning. That trade is worth making when a translation layer needs a key for every string; this app has none, so it buys nothing and costs the ability to read a component and see what it says.
+// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
 // biome-ignore-all lint/style/noNestedTernary: Three chained conditions that map one value onto three outcomes. Written as nested if/else they occupy fifteen lines to say the same thing.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/nursery/noReactNativeRawText: React Native rule: it requires text to sit inside a <Text> component, because RN has no text nodes. This is a web React app rendering to the DOM, where a string inside a <p> is exactly right. On under reactNative: all in biome.jsonc, suppressed where it does not apply.
-
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { formatDate } from "@/lib/when.ts";
+import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
   const utils = trpc.useUtils();
   const emailField = useRef<HTMLInputElement>(null);
   const roleField = useRef<HTMLSelectElement>(null);
@@ -72,8 +72,8 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   if (members.isError || invitations.isError) {
     return (
-      <Errata heading="Not loaded" live={true}>
-        The roster for {tenantId} could not be loaded. Nothing has been changed.
+      <Errata heading={t("common.notLoaded")} live={true}>
+        {t("people.notLoaded", { tenantId })}
       </Errata>
     );
   }
@@ -84,25 +84,20 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   return (
     <div className="sheet">
-      <div className="head head--division">People</div>
+      <div className="head head--division">{t("nav.people")}</div>
       <div className="body stack">
-        <h1>People</h1>
-        <p className="prose prose--lead">Who may see {tenantId}, and how they were invited.</p>
+        <h1>{t("people.title")}</h1>
+        <p className="prose prose--lead">{t("people.lead", { tenantId })}</p>
 
         {roster.length === 0 ? (
-          <EmptyState
-            title="Nobody has access yet"
-            body="Invite an address below. Whoever controls it can then sign in with Google or a one-time code — the invitation is what admits them."
-          />
+          <EmptyState title={t("people.emptyTitle")} body={t("people.emptyBody")} />
         ) : (
           <table className="table">
-            <caption>
-              {roster.length} {roster.length === 1 ? "person" : "people"} with access
-            </caption>
+            <caption>{t("people.caption", { count: roster.length })}</caption>
             <thead>
               <tr>
-                <th scope="col">Address</th>
-                <th scope="col">Role</th>
+                <th scope="col">{t("people.colAddress")}</th>
+                <th scope="col">{t("people.colRole")}</th>
               </tr>
             </thead>
             <tbody>
@@ -119,19 +114,19 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
 
       <div className="band-rule" />
 
-      <div className="head">Invitations</div>
+      <div className="head">{t("people.invitationsHead")}</div>
       <div className="body stack">
         {open.length === 0 ? (
-          <p className="note">No invitations are waiting to be accepted.</p>
+          <p className="note">{t("people.noneWaiting")}</p>
         ) : (
           <table className="table">
-            <caption>{open.length} waiting to be accepted</caption>
+            <caption>{t("people.waitingCaption", { count: open.length })}</caption>
             <thead>
               <tr>
-                <th scope="col">Address</th>
-                <th scope="col">Invited as</th>
-                <th scope="col">Expires</th>
-                {isAdmin ? <th scope="col">Withdraw</th> : null}
+                <th scope="col">{t("people.colAddress")}</th>
+                <th scope="col">{t("people.colInvitedAs")}</th>
+                <th scope="col">{t("people.colExpires")}</th>
+                {isAdmin ? <th scope="col">{t("people.colWithdraw")}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -139,9 +134,10 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
                 <tr key={invitation.id}>
                   <td className="datum datum--quiet">{invitation.email}</td>
                   <td>{invitation.role}</td>
-                  <td className="datum datum--quiet">
-                    {new Date(invitation.expiresAt).toISOString().slice(0, 10)}
-                  </td>
+                  {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
+                      the date in UTC while every other date on the schedule is in Singapore
+                      time, so an invitation expiring at 07:00 SGT showed the previous day. */}
+                  <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
                   {isAdmin ? (
                     <td>
                       <button
@@ -152,7 +148,7 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
                           revoke.mutate({ tenantId, id: invitation.id });
                         }}
                       >
-                        Withdraw
+                        {t("people.withdraw")}
                       </button>
                     </td>
                   ) : null}
@@ -163,7 +159,7 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
         )}
 
         {revoke.isError ? (
-          <Errata heading="Not withdrawn" live={true}>
+          <Errata heading={t("people.notWithdrawn")} live={true}>
             {revoke.error.message}
           </Errata>
         ) : null}
@@ -187,7 +183,7 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
           >
             <div className="field">
               <label className="label" htmlFor="invite-email">
-                Invite an address
+                {t("people.inviteLabel")}
               </label>
               <input
                 className="input"
@@ -196,19 +192,16 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
                 type="email"
                 autoComplete="off"
                 required={true}
-                placeholder="colleague@example.com"
+                placeholder={t("people.invitePlaceholder")}
                 ref={emailField}
                 disabled={invite.isPending}
               />
-              <p className="field__hint">
-                They must sign in with this exact address. An invitation is not a password — it
-                grants nothing until they prove they control the mailbox.
-              </p>
+              <p className="field__hint">{t("people.inviteHint")}</p>
             </div>
 
             <div className="field">
               <label className="label" htmlFor="invite-role">
-                Role
+                {t("people.roleLabel")}
               </label>
               <select
                 className="input"
@@ -218,14 +211,23 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
                 disabled={invite.isPending}
                 defaultValue="viewer"
               >
-                <option value="viewer">viewer — can look</option>
-                <option value="member">member — can trigger a sync</option>
-                <option value="admin">admin — can connect accounts and invite</option>
+                {/* The role names themselves stay in English in both catalogues: `viewer`,
+                    `member` and `admin` are the values the API takes and the words the
+                    roster column prints, so translating the option but not the row would
+                    make the two disagree. What is translated is the explanation after the
+                    dash, which is the part that has to be understood. */}
+                <option value="viewer">{t("people.roleViewer")}</option>
+                <option value="member">{t("people.roleMember")}</option>
+                <option value="admin">{t("people.roleAdmin")}</option>
               </select>
             </div>
 
             {invite.isError ? (
-              <Errata heading="Not invited" live={true}>
+              <Errata heading={t("people.notInvited")} live={true}>
+                {/* The server's own words. It composes them in the language this browser
+                    asked for -- `main.tsx` sends `accept-language` on every tRPC call --
+                    so this renders a Vietnamese sentence for a Vietnamese reader without
+                    the UI having to know what went wrong. */}
                 {invite.error.message}
               </Errata>
             ) : null}
@@ -238,24 +240,23 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
             {invite.isSuccess ? (
               invite.data.notified ? (
                 <p className="note" role="status">
-                  Invited {invite.data.email}. They have been emailed.
+                  {t("people.invitedAndEmailed", { email: invite.data.email })}
                 </p>
               ) : (
-                <Errata heading="Invited, but not emailed">
-                  {invite.data.email} can sign in now, but no email was sent — mail is not
-                  configured. Tell them to sign in with that exact address.
+                <Errata heading={t("people.invitedNotEmailedHeading")}>
+                  {t("people.invitedNotEmailed", { email: invite.data.email })}
                 </Errata>
               )
             ) : null}
 
             <div className="row">
               <button className="plate plate--primary" type="submit" disabled={invite.isPending}>
-                {invite.isPending ? "Inviting…" : "Send invitation"}
+                {invite.isPending ? t("people.inviting") : t("people.sendInvitation")}
               </button>
             </div>
           </form>
         ) : (
-          <p className="note">Only an admin of {tenantId} can invite someone.</p>
+          <p className="note">{t("people.adminOnly", { tenantId })}</p>
         )}
       </div>
     </div>

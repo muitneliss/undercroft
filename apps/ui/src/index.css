@@ -42,33 +42,37 @@
  * `@/lib/acetate` reads `--leaf` and `--ink` back out of the computed styles and
  * parses them with `parseHex`, which accepts `#rgb`/`#rrggbb` and returns null for
  * anything else rather than guessing. Rewriting these as oklch() would make that
- * parse fail, and the solver would silently fall back to its hardcoded defaults --
- * a guessed colour in the code path that guarantees WCAG contrast, which is
- * exactly the failure `.claude/rules/money.md` rule 2 is about. Moving off hex
- * means rewriting the colour pipeline and its tests, not editing this file.
+ * parse fail, and the solver would fall back to its hardcoded defaults -- a guessed
+ * colour in the code path that guarantees WCAG contrast, which is exactly the
+ * failure rule 2 is about. Moving off hex means rewriting the colour pipeline and
+ * its tests, not editing this file.
  */
 
 /**
  * biome-ignore-all lint/nursery/noUnusedClasses: The rule cannot see a class name
- * that is assembled at runtime, and this UI assembles them -- `className={`mark
- * mark--${mark}`}` in StatusMark.tsx builds one per state. Every name it reports
- * here is reachable that way, so acting on this rule would delete live styles.
+ * assembled at runtime, and this UI assembles them -- `className={`mark mark--${mark}`}`
+ * in StatusMark.tsx builds one per state. Every name it reports is reachable that
+ * way, so acting on this rule would delete live styles.
  */
 
 /**
  * biome-ignore-all lint/nursery/useBaseline: Three progressive enhancements --
- * `scrollbar-color`, `::selection` and `user-select`. Each degrades to the
- * browser default where it is unsupported; none of them carries meaning that the
- * form depends on, and the form's own redundancy rules mean no state is told by
- * one of these alone.
+ * `scrollbar-color`, `::selection` and `user-select`. Each degrades to the browser
+ * default where it is unsupported, and the form tells no state by one of these alone.
  */
 
 /**
- * biome-ignore-all lint/style/noExcessiveLinesPerFile: This is one document, not
- * a module that grew. The board, the leaf and the rail are defined against each
- * other -- the comments here argue contrast ratios across sections -- and cutting
- * it at 300 lines would split a single argument across files without making any
- * part of it easier to read.
+ * biome-ignore-all lint/style/noExcessiveLinesPerFile: This is one document, not a
+ * module that grew. The board, the leaf and the rail are defined against each other
+ * -- the comments argue contrast ratios across sections -- and cutting it at 300
+ * lines would split a single argument across files.
+ */
+
+/**
+ * biome-ignore-all lint/style/noDescendingSpecificity: `.colophon .datum` is grouped
+ * with the colophon, which puts it above the generic `.datum`. The specific rule
+ * still wins -- specificity decides this, not source order -- so the cascade is what
+ * it reads as; moving the block would separate it from the component it belongs to.
  */
 
 /* -- faces ------------------------------------------------------------------
@@ -315,7 +319,12 @@
     --ply-shadow: 0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13);
 
     --head-col: 9.5rem;
-    --rail-w: 3.25rem;
+
+    /* The tab strip's own measurements. Named because the punch has to land
+     inside the label's indent at both edges the strip is used at, and a punch
+     that drifts onto its own lettering is the defect the rotation replaced. */
+    --tab-indent: 2.4rem;
+    --tab-punch-x: 1.05rem;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -443,20 +452,46 @@
   .book {
     min-height: 100vh;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--rail-w);
+    /* The strip is at the head and the leaf fills the rest. Placed by area rather
+     than by source order, because the phone moves the strip to the foot without
+     moving it in the DOM -- navigation stays ahead of the page it navigates. */
+    grid-template-areas: "rail" "leaf";
+    grid-template-rows: auto minmax(0, 1fr);
     background: var(--board);
   }
 
   /* The leaf: a sheet of milk acetate lying on the section board, punched twice at
    its binding edge, with the running foot set down the spine. */
   .leaf {
+    grid-area: leaf;
     position: relative;
+    /* Above the strip, so a tab pushed back tucks under the leaf rather than
+     poking out below it. This is the only thing holding the retracted tabs
+     down; without it they draw over the running head. */
+    z-index: 1;
     background: var(--page);
     min-width: 0;
     /* Left padding clears the spine, then leaves a gutter. Setting it to exactly
      the spine's width put the hanging heads hard against the spine rule. */
     padding: var(--s-5) var(--s-6) var(--s-8) calc(var(--s-7) + var(--s-4));
-    border-right: var(--hair) solid var(--rule-strong);
+    /* Head, page, foot -- in that order and in that direction, so the colophon can
+     take the free space below the page rather than following the last line of it.
+     A section with two rows on it would otherwise print its imprint a third of the
+     way down the leaf, which reads as a stray line rather than as the foot.
+     The gap owns the space between the three, which is why the running head no
+     longer carries a bottom margin of its own: one value, set once, and the foot
+     is separated from the page by exactly what the page is separated from the
+     head by. */
+    display: flex;
+    flex-direction: column;
+    row-gap: var(--s-6);
+  }
+
+  /* Block behaviour, restored. The rest of this layout was written against a block
+   leaf, and without this a sheet taller than the viewport is COMPRESSED by the
+   flex container instead of overflowing it into a scroll. */
+  .leaf > * {
+    flex: none;
   }
 
   /* The punch holes and the spine caption: the only purely decorative marks in the
@@ -501,12 +536,23 @@
     white-space: nowrap;
   }
 
-  /* -- the tab rail ----------------------------------------------------------- */
+  /* -- the tab strip ---------------------------------------------------------- */
 
   /*
- * Navigation lives on the fore edge, because in this form that is where it
- * lives. Height is proportional to each division's extent, so the rail is a
- * picture of the book as well as a control.
+ * The divisions are top tabs, across the head of the book.
+ *
+ * They were side tabs down the fore edge, and the placement was the right
+ * instinct badly served: a 3.25rem fore edge can only carry a word by turning it
+ * on its side, and a rotated word has no word shape for the eye to catch. On the
+ * one control whose entire job is answering WHICH SECTION IS OPEN, that is the
+ * wrong thing to charge a reader for. ADR 0012 has the argument and the two
+ * rejected alternatives.
+ *
+ * This is not a retreat from the form to a category default. The top tab is the
+ * other real divider -- the exhibit binder, the index-card box -- and the one
+ * whose lettering is printed upright, which the fore-edge thumb index never was.
+ * Extent now drives WIDTH instead of height, so the strip is still a picture of
+ * the book as well as a control.
  *
  * The source's divider boards "carry no mark at all". These carry a mark. This
  * is an Operate surface, and unlabelled navigation is not a stylistic position,
@@ -515,10 +561,10 @@
  */
 
   .rail {
+    grid-area: rail;
     display: flex;
-    flex-direction: column;
     gap: 2px;
-    padding: var(--s-5) 0;
+    padding: var(--s-4) var(--s-5) 0;
     background: var(--bone);
   }
 
@@ -526,38 +572,45 @@
     position: relative;
     display: flex;
     align-items: center;
-    justify-content: center;
+    /* Left-aligned from a constant indent, so the labels hold one column whether
+     a tab is out, pushed back, or face-down. Centring them made the open
+     section's word jump sideways as the tab slid, which reads as the label
+     moving rather than the tab. */
+    justify-content: flex-start;
     border: none;
-    border-left: var(--hair) solid var(--rule-strong);
-    border-radius: 0 var(--r-leaf) var(--r-leaf) 0;
-    /* No `background` here on purpose. Every tab gets one from somewhere more
-       specific: an open division takes its hue as an inline style from
-       `TabRail.tsx`, because the hue is data, and a face-down one takes the
-       hatch from `[aria-disabled="true"]` below. A `var(--tab-hue)` sat here
-       until the linter pointed out that nothing ever declares `--tab-hue`, so
-       the declaration had always resolved to nothing. */
+    /* The rule goes on the edge that meets the leaf, as it did on the fore edge. */
+    border-bottom: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-leaf) var(--r-leaf) 0 0;
     color: #fff;
     font-family: var(--face-display);
     font-size: var(--t-micro);
     font-weight: 700;
-    font-variation-settings: "wdth" 82;
-    letter-spacing: 0.16em;
+    font-variation-settings: "wdth" 86;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
     text-decoration: none;
-    writing-mode: vertical-rl;
+    white-space: nowrap;
     cursor: pointer;
-    padding: var(--s-4) 0;
+    /* Bottom-heavy on purpose, and it is load-bearing rather than taste.
+   *
+   * A tab that is not the current one slides toward the leaf to retract, so the
+   * leaf covers its lower edge -- which means the label has to live in the upper
+   * part or the page eats it. At the symmetric 0.75rem this shipped with, the
+   * tab stood 40px and the face-down ones lost the bottom of their own lettering
+   * under the leaf. The label needs (retract + half its line) of clearance, so
+   * the deep bottom padding is the room the tab retracts INTO. */
+    padding: var(--s-4) var(--s-4) var(--s-5) var(--tab-indent);
     /* Slid with a transform, never a margin. Animating margin reflows the whole
-     rail on every hover; a transform is composited and costs nothing. */
-    transform: translateX(var(--s-3));
+     strip on every hover; a transform is composited and costs nothing. */
+    transform: translateY(var(--s-3));
     transition: transform var(--hinge);
   }
 
   .rail__tab:hover:not([aria-disabled="true"]) {
-    transform: translateX(var(--s-2));
+    transform: translateY(var(--s-2));
   }
 
-  /* The current tab extends past the others and becomes the board. */
+  /* The current tab stands proud of the others and becomes the board. */
   .rail__tab[aria-current="page"] {
     transform: none;
   }
@@ -566,22 +619,29 @@
   .rail__tab[aria-current="page"]::after {
     content: "";
     position: absolute;
-    top: var(--s-3);
-    left: 50%;
+    /* On the label's line, not on the tab's centre. The padding is asymmetric, so
+     a hole at 50% would sit visibly below the word it belongs to. */
+    top: var(--s-4);
+    margin-top: 0.34em;
+    left: var(--tab-punch-x);
     width: 9px;
     height: 9px;
-    margin-left: -4.5px;
     border-radius: 50%;
     background: var(--page);
     box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
   }
 
-  /* Disabled is face-down: the leaf turned over, showing unprinted board back. */
+  /* Disabled is face-down: the leaf turned over, showing unprinted board back.
+ *
+ * The lettering is #524a37, not the #5f5844 this shipped with. That measured
+ * 4.37:1 on the hatch -- under the floor, on the one label that says why a
+ * section will not open. WCAG exempts a disabled control; the note on --ink-3
+ * above already answers that, and 5.42:1 costs nothing. */
   .rail__tab[aria-disabled="true"] {
     background: repeating-linear-gradient(135deg, #d6cfba, #d6cfba 3px, #cec7b1 3px, #cec7b1 6px);
-    color: #5f5844;
+    color: #524a37;
     cursor: not-allowed;
-    transform: translateX(var(--s-4));
+    transform: translateY(var(--s-4));
   }
 
   /* -- the page inside the leaf ------------------------------------------------ */
@@ -668,7 +728,6 @@
     justify-content: space-between;
     gap: var(--s-4);
     padding-bottom: var(--s-3);
-    margin-bottom: var(--s-6);
     border-bottom: var(--hair) solid var(--rule-strong);
     flex-wrap: wrap;
   }
@@ -738,6 +797,43 @@
     display: flex;
     align-items: baseline;
     gap: var(--s-4);
+    font-size: var(--t-micro);
+  }
+
+  /* -- the colophon ------------------------------------------------------------ */
+
+  /*
+ * Which printing this is, at the foot of the leaf.
+ *
+ * The running head is closed by a rule beneath it; this opens with the same rule
+ * above it, in the lighter weight, and the page is bracketed. The label is flush
+ * left, which puts it on the same axis as every hanging head in the margin column
+ * above -- the foot is set to the page's own structure rather than parked in a
+ * corner.
+ *
+ * `margin-top: auto` is what does the work: it pushes the line to the bottom of
+ * the leaf on a short page, and does nothing at all on a long one or inside the
+ * title page's card, where there is no free space to take.
+ *
+ * The rule stops at the sheet's own measure rather than running to the padding,
+ * so it ends where `.band-rule` and the heads' trailing rules end.
+ */
+  .colophon {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+    margin-top: auto;
+    padding-top: var(--s-4);
+    border-top: var(--hair) solid var(--rule);
+    max-width: 78rem;
+  }
+
+  /* Set down to the label's size, but deliberately NOT to `.datum--quiet`. The tag is
+   the one string on the page somebody retypes -- into IMAGE_TAG, or into a bug
+   report -- and a figure too faint to read back correctly is a worse defect at the
+   foot of a page than a loud one. The label beside it carries the quiet instead. */
+  .colophon .datum {
     font-size: var(--t-micro);
   }
 
@@ -872,6 +968,42 @@
   .plate--small {
     padding: 0.3rem 0.6rem;
     font-size: 10px;
+  }
+
+  /* -- the language pair -------------------------------------------------------- */
+
+  /*
+ * Two plates bound into one control, the way a two-language manual is bound as one
+ * book rather than shelved as two. Both faces stay on the page: a dropdown would hide
+ * the language from the one reader who cannot find it any other way -- someone who
+ * opened the app in a language they do not read.
+ *
+ * The chosen face is inked rather than merely outlined, so which language you are in
+ * survives greyscale exactly as the status marks do. `aria-pressed` carries the same
+ * fact to a screen reader.
+ */
+
+  .langset {
+    display: inline-flex;
+  }
+
+  .langset .plate {
+    border-radius: 0;
+  }
+
+  .langset .plate:first-child {
+    border-radius: var(--r-plate) 0 0 var(--r-plate);
+  }
+
+  .langset .plate:last-child {
+    border-radius: 0 var(--r-plate) var(--r-plate) 0;
+    /* The two borders overlap into one rule, so the pair reads as one control. */
+    margin-left: calc(-1 * var(--hair));
+  }
+
+  .langset .plate[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--leaf);
   }
 
   /* -- fields ------------------------------------------------------------------ */
@@ -1547,11 +1679,18 @@
 
   /* -- adaptation ---------------------------------------------------------------
  *
- * "Width deals fewer leaves, four columns to two to one." The fore-edge rail
- * cannot be a fore edge on a phone, so it becomes a stepped tab strip at the
- * foot of the leaf: same hues, same punch, same extend. At the foot rather than
- * the head because that is where a thumb is, and because the leaf's own heading
- * should be the first thing on the screen rather than the navigation.
+ * "Width deals fewer leaves, four columns to two to one." The tab strip moves to
+ * the foot of the leaf: same hues, same punch, same extent, same upright
+ * lettering, and only the edge it hangs from changes. At the foot because that
+ * is where a thumb is, and because the leaf's own heading should be the first
+ * thing on the screen rather than the navigation.
+ *
+ * It stays FIRST in the DOM, so navigation still precedes the page it navigates
+ * for a keyboard and for assistive technology; `grid-template-areas` is what
+ * moves it, and nothing about the reading order moves with it.
+ *
+ * This block used to turn the rail from vertical to horizontal and reletter it.
+ * It no longer does: the head and the foot are now the same object.
  */
 
   @media (max-width: 1100px) {
@@ -1579,46 +1718,26 @@
     }
 
     .book {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto minmax(0, 1fr);
+      grid-template-areas: "leaf" "rail";
+      grid-template-rows: minmax(0, 1fr) auto;
     }
 
     .rail {
-      flex-direction: row;
       padding: var(--s-3) var(--s-3) env(safe-area-inset-bottom, 0);
       overflow-x: auto;
     }
 
+    /* The only thing that flips: the rule moves to the edge that now meets the
+     leaf. The tab still hangs its rounded head toward the page and still slides
+     down to retract, so the gesture is identical at either edge. */
     .rail__tab {
-      writing-mode: horizontal-tb;
-      white-space: nowrap;
-      border-left: none;
+      border-bottom: none;
       border-top: var(--hair) solid var(--rule-strong);
-      border-radius: var(--r-leaf) var(--r-leaf) 0 0;
-      /* Room on the left for the punch, so the hole never sits on the label. */
-      padding: var(--s-3) var(--s-4) var(--s-3) var(--s-6);
       flex: 1 1 auto;
-      transform: translateY(var(--s-3));
-    }
-    .rail__tab:hover:not([aria-disabled="true"]) {
-      transform: translateY(var(--s-2));
-    }
-    .rail__tab[aria-current="page"] {
-      transform: none;
-    }
-    .rail__tab[aria-current="page"]::after {
-      top: 50%;
-      left: var(--s-3);
-      margin-top: -4.5px;
-      margin-left: 0;
-    }
-    .rail__tab[aria-disabled="true"] {
-      transform: translateY(var(--s-4));
     }
 
     .leaf {
       padding: var(--s-5) var(--s-4) var(--s-7);
-      border-right: none;
     }
 
     .leaf__spine,

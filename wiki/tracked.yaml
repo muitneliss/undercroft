@@ -1,0 +1,9 @@
+# Which project files this wiki must cover.
+#
+# Scope is deliberately `docs/` only. The path-scoped rules in `.claude/rules/` are
+# already auto-discovered by Claude Code at the moment they bite, so copying them here
+# would create a second owner for normative text that could then drift from the original.
+# The ADRs are the opposite case: they carry reasoning that nothing loads automatically,
+# which is exactly what a searchable wiki is for.
+include:
+  - "docs/**/*.md"

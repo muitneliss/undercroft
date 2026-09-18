@@ -29,6 +29,12 @@ specs/schema/
 # Owned by release-please, which does not emit prettier-formatted markdown.
 # Formatting it here would fight the release tooling and re-break every release.
 CHANGELOG.md
+# Owned by the Ymir wiki CLI, which writes and formats every page itself (`wiki fmt`) and
+# validates them (`wiki check`). A PreToolUse hook blocks hand-edits for the same reason.
+# Letting Prettier reformat them would put two formatters on one file -- the CHANGELOG.md
+# argument above, with the added cost that a reformat can move a page's `[[link]]` lines
+# and is not what `wiki validate` was run against.
+wiki/
 # Vendored, self-hosted webfont assets and their upstream licence/readme.
 apps/ui/public/fonts/
 # Untracked local tool state (gitignored too). Listed again because the Prettier CLI

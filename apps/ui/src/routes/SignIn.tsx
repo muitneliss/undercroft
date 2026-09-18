@@ -29,26 +29,25 @@
  */
 
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
 // biome-ignore-all lint/correctness/useSingleJsDocAsterisk: Bullet lists inside module docstrings. Biome's fix flattens them, which destroyed the list recording how invite-only is enforced in three independent places -- exactly the documentation that must not be damaged by a formatter.
 // biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on the two single-instance forms in the app -- a sign-in panel and an invite form, neither of which can appear twice on a page. The id is what the <label> points at.
 // biome-ignore-all lint/nursery/noInlineStyles: Every one of these is data becoming a style: the tab rail's flexGrow IS the division's extent, the skeleton's width varies per row, the colour wheel paints each swatch its own hue. Biome's fix deletes the attribute rather than relocating it, which removes the feature.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/nursery/useReactNamingConvention: Fires on props named for the domain rather than for React's conventions. The domain names are the ones the design documents use.
 // biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on components that render a handful of rows. The re-render the rule is about matters under a memoised list of hundreds; these lists are bounded by how many connections a tenant has.
-// biome-ignore-all lint/style/noJsxLiterals: This would move all 77 pieces of UI copy into constants declared away from the markup that gives them meaning. That trade is worth making when a translation layer needs a key for every string; this app has none, so it buys nothing and costs the ability to read a component and see what it says.
+// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useGlobalThis: Reading `process` in a composition root on Bun, where it is the documented global.
-
-// biome-ignore-all lint/nursery/noReactNativeRawText: React Native rule: it requires text to sit inside a <Text> component, because RN has no text nodes. This is a web React app rendering to the DOM, where a string inside a <p> is exactly right. On under reactNative: all in biome.jsonc, suppressed where it does not apply.
-
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
+// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth.ts";
+import { Colophon } from "@/components/Colophon.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
 import { DIVISIONS } from "@/lib/divisions.ts";
 
@@ -56,6 +55,7 @@ import { DIVISIONS } from "@/lib/divisions.ts";
 const WHEEL = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "#7f4023"];
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
+  const { t } = useTranslation();
   const emailField = useRef<HTMLInputElement>(null);
   const codeField = useRef<HTMLInputElement>(null);
 
@@ -88,30 +88,36 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
 
         <div className="imprint">
           <Mark size={26} />
-          <span className="imprint__name">Undercroft</span>
+          <span className="imprint__name">{t("app.name")}</span>
+        </div>
+
+        {/* The language pair is on the title page too, and it has to be: this is the first
+            screen anyone sees, and someone who cannot read it has not signed in yet and so
+            has no stored preference for the running head to honour. */}
+        <div className="row">
+          <LanguageSwitcher />
         </div>
 
         <div className="stack stack--tight">
-          <h1>Control plane</h1>
-          <p className="prose prose--lead">Connect your accounts and see what has been synced.</p>
+          <h1>{t("signIn.title")}</h1>
+          <p className="prose prose--lead">{t("signIn.lead")}</p>
         </div>
 
         {reason === "expired" ? (
           <p className="note" role="status">
-            Your session ended. Sign in again to continue.
+            {t("signIn.expired")}
           </p>
         ) : null}
 
         {reason === "denied" ? (
-          <Errata heading="No access" live={true}>
-            That account does not have access. If you were invited, sign in with the exact address
-            the invitation was sent to.
+          <Errata heading={t("signIn.deniedHeading")} live={true}>
+            {t("signIn.denied")}
           </Errata>
         ) : null}
 
         <div className="row">
           <button className="plate plate--primary" type="button" onClick={signInWithGoogle}>
-            Continue with Google
+            {t("signIn.google")}
           </button>
         </div>
 
@@ -128,7 +134,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
           >
             <div className="field">
               <label className="label" htmlFor="signin-email">
-                Or sign in with a code
+                {t("signIn.emailLabel")}
               </label>
               <input
                 className="input"
@@ -137,21 +143,21 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
                 type="email"
                 autoComplete="email"
                 required={true}
-                placeholder="you@example.com"
+                placeholder={t("signIn.emailPlaceholder")}
                 ref={emailField}
                 disabled={sendCode.isPending}
               />
             </div>
 
             {sendCode.isError ? (
-              <Errata heading="Not sent" live={true}>
+              <Errata heading={t("signIn.notSent")} live={true}>
                 {sendCode.error.message}
               </Errata>
             ) : null}
 
             <div className="row">
               <button className="plate" type="submit" disabled={sendCode.isPending}>
-                {sendCode.isPending ? "Sending…" : "Email me a code"}
+                {sendCode.isPending ? t("signIn.sending") : t("signIn.sendCode")}
               </button>
             </div>
           </form>
@@ -168,7 +174,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
           >
             <div className="field">
               <label className="label" htmlFor="signin-code">
-                Six-digit code
+                {t("signIn.codeLabel")}
               </label>
               <input
                 className="input"
@@ -188,20 +194,18 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
                * because that would make this form a list of who does -- so this cannot
                * promise that a code actually went out.
                */}
-              <p className="field__hint">
-                If {sentTo} has access, a code is on its way. It expires in ten minutes.
-              </p>
+              <p className="field__hint">{t("signIn.codeHint", { email: sentTo })}</p>
             </div>
 
             {signIn.isError ? (
-              <Errata heading="Not signed in" live={true}>
+              <Errata heading={t("signIn.notSignedIn")} live={true}>
                 {signIn.error.message}
               </Errata>
             ) : null}
 
             <div className="row">
               <button className="plate plate--primary" type="submit" disabled={signIn.isPending}>
-                {signIn.isPending ? "Signing in…" : "Sign in"}
+                {signIn.isPending ? t("signIn.signingIn") : t("signIn.signIn")}
               </button>
               <button
                 className="plate plate--small"
@@ -210,11 +214,16 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
                   sendCode.reset();
                 }}
               >
-                Use a different address
+                {t("signIn.useAnotherAddress")}
               </button>
             </div>
           </form>
         )}
+
+        {/* The imprint opens this page and the colophon closes it, on the same hairline
+            rule. It is here rather than only inside the book because the person who most
+            needs to name a build is the one who cannot get past this screen. */}
+        <Colophon />
       </div>
     </main>
   );

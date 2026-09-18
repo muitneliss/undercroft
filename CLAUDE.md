@@ -43,6 +43,7 @@ about to touch.** That is the only reason this index exists.
 | `privileges.md` | `packages/db/sql/**`                        | the role and grant model; why the BI role cannot read `raw`                              |
 | `tests.md`      | `**/*.test.ts`                              | real in-memory implementations over mocks, a guard needs two tests                       |
 | `state.md`      | `apps/ui/**`                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
+| `i18n.md`       | `apps/ui/**`, `apps/control-plane/src/**`   | Vietnamese default, English second; no user-facing string written in place               |
 | `layering.md`   | `apps/*/src/**`, `packages/db/src/**`       | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
 | `pii.md`        | `specs/**`, `docs/**`, `*.md`, fixtures     | no real customer data in any tracked file                                                |
 | `deployment.md` | `deploy/**`, `flows/**`, deploy workflows   | the Dokploy API is the only channel, every service declares a memory limit               |
@@ -58,9 +59,15 @@ adding a second is how two definitions of green drift apart.
 
 ## The gate
 
-`bun run verify` — typecheck, lint, format check, then the test suite. It must pass with
-**no Docker, no network and no credentials**. `bun run itest` is the Docker-backed tier
-and is deliberately separate.
+`bun run verify` — typecheck, lint, format check, the SPA build, then the test suite. It
+must pass with **no Docker, no network and no credentials**. `bun run itest` is the
+Docker-backed tier and is deliberately separate.
+
+`bun run build:ui` is in the gate because `tsc` cannot see what a bundler refuses. Importing
+a module that reaches a Node built-in — `@undercroft/core`'s root barrel pulls `node:crypto`
+through `ids.ts` — typechecks perfectly and fails Rollup outright, and without this step the
+first thing to notice would be the release image build, long after the merge. That is why
+the browser imports `@undercroft/core/locale` rather than the barrel.
 
 **A green `verify` is not evidence that the rules above held.** A linter cannot see "never
 guess", create-only lake writes, or the one-writer rule; the rule files are their only
@@ -104,3 +111,10 @@ ADR 0008.
 - Lint rules that fight the codebase get disabled **with a written reason**, not worked
   around file by file.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).
+
+## Wiki / Context
+
+This project has an LLM-maintained wiki under `wiki/`. You MUST NOT hand-edit
+wiki docs (`wiki/sources`, `wiki/notes`, `index.md`, `log.md`) — they are
+managed by the Ymir wiki CLI and a PreToolUse hook blocks direct edits. See
+`wiki/SCHEMA.md` for the rules and command reference.

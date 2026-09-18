@@ -30,14 +30,16 @@
  */
 
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
 // biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
 
 import { initTRPC, TRPCError } from "@trpc/server";
+import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { z } from "zod";
+import { messages } from "../i18n/index.ts";
 import { outranks, type Role, roleFor } from "../services/authz.ts";
 
 export interface SessionUser {
@@ -67,6 +69,14 @@ export interface Context {
    * leave an admin waiting for someone who was never contacted.
    */
   readonly notifyInvitation: (email: string, tenantId: string) => Promise<boolean>;
+  /**
+   * The language to answer this request in, negotiated from its `Accept-Language`.
+   *
+   * On the context rather than resolved inside a procedure, because it is a property of the
+   * request and not of any one endpoint -- and because the authorization middleware below
+   * has to word a refusal before any procedure runs.
+   */
+  readonly locale: Locale;
 }
 
 export type { Role };
@@ -110,7 +120,13 @@ export const tenantProcedure = authedProcedure
 export function requireRole(min: Role) {
   return tenantProcedure.use(({ ctx, next }) => {
     if (!outranks(ctx.role, min)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: `requires ${min}` });
+      // Worded, because the UI shows this message to the caller verbatim. The two refusals
+      // above it -- UNAUTHORIZED, and NOT_FOUND for a non-member -- deliberately carry no
+      // message at all: what they must not do is confirm that the tenant exists.
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: messages(ctx.locale)("error.requiresRole", { role: min }),
+      });
     }
     return next();
   });

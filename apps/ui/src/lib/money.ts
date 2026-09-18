@@ -12,14 +12,27 @@
  *
  * `null` is a real value and renders as MISSING, never as `0`. An empty cell is
  * visibly missing; a zero is invisibly false, and only one of those gets caught.
+ *
+ * ## An amount does not change shape with the interface language
+ *
+ * `formatMoney` groups with `,` and points with `.` in every locale, deliberately, while
+ * `formatCount` and `formatBytes` below follow the reader. The asymmetry is the point: a
+ * count is prose, but an amount is a ledger value that gets screenshotted into a runbook,
+ * pasted into a message and read back over the phone. If the separators followed the
+ * interface language, `1.234` would mean one thousand to one reader and one-and-a-bit to
+ * the next, with nothing on the screen to say which -- the same class of silent, invisible
+ * wrongness `.claude/rules/money.md` exists to prevent. The currency is always printed
+ * beside the digits, which is what makes the fixed format unambiguous.
  */
 
 // biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
 // biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
+
+import type { Locale } from "@undercroft/core/locale";
 
 export interface Money {
   amount: string;
@@ -74,9 +87,18 @@ export function exactAmount(money: Money | null | undefined): string {
   return money ? `${money.amount} ${money.currency}` : MISSING;
 }
 
-/** Counts, durations and sizes are genuinely numbers and may be formatted as such. */
-export function formatCount(value: number | null | undefined): string {
-  return value === null || value === undefined ? MISSING : value.toLocaleString("en-SG");
+/**
+ * Which CLDR locale groups a plain number for each of our languages. `@/lib/when` holds the
+ * same table for dates; both are small enough that sharing them would cost more than it saves.
+ */
+const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
+
+/**
+ * Counts, durations and sizes are genuinely numbers and may be formatted as such -- and
+ * unlike an amount, they follow the reader's language: a Vietnamese reader groups with `.`.
+ */
+export function formatCount(value: number | null | undefined, locale: Locale): string {
+  return value === null || value === undefined ? MISSING : value.toLocaleString(CLDR[locale]);
 }
 
 /**
@@ -97,12 +119,12 @@ const UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
  * demands. `null` still renders as MISSING: an object whose size was never
  * recorded is not an object of zero bytes.
  */
-export function formatBytes(value: number | null | undefined): string {
+export function formatBytes(value: number | null | undefined, locale: Locale): string {
   if (value === null || value === undefined) {
     return MISSING;
   }
   if (value < 1000) {
-    return `${value.toLocaleString("en-SG")} B`;
+    return `${value.toLocaleString(CLDR[locale])} B`;
   }
 
   let size = value;

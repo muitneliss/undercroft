@@ -14,20 +14,19 @@
  */
 
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
 // biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
 // biome-ignore-all lint/performance/noBarrelFile: `index.ts` is each package's public entry point, which is the seam `.claude/rules/layering.md` is built on and what `.claude/rules/tests.md` means by testing through the public API. The re-export cost the rule is about applies to a bundle; these are workspace packages consumed by name.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
 
 import { extname, join, normalize, sep } from "node:path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { EmailSender } from "@undercroft/core";
+import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { appUserForEmail } from "../services/invite.ts";
@@ -96,6 +95,10 @@ export function createServer(deps: ServerDeps): Hono {
     const headers = c.req.raw.headers;
     const { user, sessionId } = await resolveCaller(deps, headers);
     const auth = deps.auth;
+    // Resolved once, from the request, and carried on the context. Every refusal this
+    // request produces and every email it causes to be sent is worded in it -- including the
+    // invitation, which goes to somebody whose own language nobody here knows. See `../i18n`.
+    const locale = negotiateLocale(headers.get("accept-language"));
 
     return await fetchRequestHandler({
       endpoint: "/trpc",
@@ -105,12 +108,14 @@ export function createServer(deps: ServerDeps): Hono {
         exec: deps.exec,
         user,
         sessionId,
+        locale,
         endSession: async () => {
           if (auth !== undefined) {
             await auth.api.signOut({ headers });
           }
         },
-        notifyInvitation: (to, tenantId): Promise<boolean> => sendInvitation(deps, to, tenantId),
+        notifyInvitation: (to, tenantId): Promise<boolean> =>
+          sendInvitation(deps, to, tenantId, locale),
       }),
     });
   });
@@ -155,14 +160,19 @@ export function createServer(deps: ServerDeps): Hono {
  * already valid; turning a mail outage into a failed invitation would throw away work the
  * admin would have to repeat.
  */
-async function sendInvitation(deps: ServerDeps, to: string, tenantId: string): Promise<boolean> {
+async function sendInvitation(
+  deps: ServerDeps,
+  to: string,
+  tenantId: string,
+  locale: Locale,
+): Promise<boolean> {
   const { email, publicUrl } = deps;
   if (email === undefined || publicUrl === undefined) {
     return false;
   }
 
   try {
-    await email.send(invitationMessage(to, tenantId, publicUrl));
+    await email.send(invitationMessage(to, tenantId, publicUrl, locale));
     return true;
   } catch {
     return false;

@@ -194,6 +194,12 @@ NOT emailed (mail is not configured) — tell them to sign in with that exact ad
 after the first. With the mail variables set it sends the same message the People page sends
 and prints `an email has been sent` instead.
 
+The invitation email is written in Vietnamese unless you ask otherwise — add `--lang en` for
+an English one. There is no browser to negotiate with here, and this is the one invitation on
+a fresh deployment that nobody can send from the People page, so the flag is how that first
+person gets an email in a language somebody chose. `--lang` refuses anything but `vi` or `en`
+rather than quietly falling back. See ADR 0012.
+
 This writes an ordinary invitation — it does **not** bypass the gate. Whoever holds the
 address still has to prove it, through Google or a one-time code. No token is issued: those
 two already prove control of the mailbox, which is all a token would have proved.
