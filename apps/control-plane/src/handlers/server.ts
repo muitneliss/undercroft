@@ -18,10 +18,10 @@ import type { EmailSender } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { extname, join, normalize, sep } from "node:path";
-import type { Auth } from "./auth/auth.ts";
-import { appUserForEmail } from "./auth/invite.ts";
+import { appUserForEmail } from "../services/invite.ts";
+import type { Auth } from "./auth.ts";
+import { appRouter } from "./router.ts";
 import type { Context, SessionUser } from "./trpc.ts";
-import { appRouter } from "./router/index.ts";
 
 /**
  * Content types for the handful of extensions a Vite build emits. Explicit rather than
@@ -201,5 +201,5 @@ async function resolveAsset(dist: string, urlPath: string): Promise<string | nul
   return (await Bun.file(candidate).exists()) ? candidate : null;
 }
 
-export { appRouter } from "./router/index.ts";
-export type { AppRouter } from "./router/index.ts";
+export { appRouter } from "./router.ts";
+export type { AppRouter } from "./router.ts";

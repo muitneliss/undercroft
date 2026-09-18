@@ -23,8 +23,8 @@ import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createServer } from "../server.ts";
 import { createAuth } from "./auth.ts";
+import { createServer } from "./server.ts";
 
 /**
  * Give this file back the real `Response` and `fetch`.

@@ -11,10 +11,10 @@ import { Hono } from "hono";
 import { LandRecordsRequest, MAX_BATCH_BYTES } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
-import { authenticate } from "./auth.ts";
-import { landRecords } from "./land.ts";
-import { runIngest } from "./runs.ts";
-import { runTransform } from "./transform.ts";
+import { authenticate } from "../services/auth.ts";
+import { runIngest } from "../services/ingest.ts";
+import { landRecords } from "../services/land.ts";
+import { runTransform } from "../services/transform.ts";
 
 export interface LakeApiDeps {
   readonly lake: LakeStore;

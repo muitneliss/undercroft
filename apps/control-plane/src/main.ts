@@ -11,8 +11,8 @@
 
 import { createHttpEmailSender, createLogger, type EmailSender } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
-import { createAuth } from "./auth/auth.ts";
-import { createServer } from "./server.ts";
+import { createAuth } from "./handlers/auth.ts";
+import { createServer } from "./handlers/server.ts";
 
 function required(name: string): string {
   const value = process.env[name];

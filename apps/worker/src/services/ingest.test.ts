@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { runIngest } from "./runs.ts";
+import { runIngest } from "./ingest.ts";
 
 const BASE = "https://demo.test";
 

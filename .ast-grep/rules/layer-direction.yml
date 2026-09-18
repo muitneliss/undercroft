@@ -1,0 +1,105 @@
+# One direction: handlers -> services -> repos. Nothing points back, nothing skips a step.
+#
+# A layer is a DIRECTORY, so a file's folder is its layer and moving between layers is a
+# rename a reviewer cannot miss. These four rules read the import statements; the coupling
+# half of the convention (SQL only in repos, injected dependencies, no driver leakage) is
+# in layer-coupling.yml. Both are the hard gate for .claude/rules/layering.md -- a rule
+# file is a convention a reader can skip, an ast-grep rule fails `bun run verify`.
+#
+# Matching is on the import specifier STRING, not on a resolved module, so it catches the
+# bare specifier (`@undercroft/db/repos`) and the relative path (`../repos/session.ts`)
+# alike. That is also why `packages/db` exports `./repos` and `./services` as subpaths: a
+# single root barrel would hide a repo behind `@undercroft/db` where no rule can see it.
+# See docs/adr/0011.
+#
+# `language: typescript` covers `.ts`; the layers are backend-only and contain no `.tsx`.
+# A `.tsx` handler would need a second document here, as no-usestate.yml has.
+#
+# All four ignore `**/*.test.ts`: a test IS a composition root. It wires the layers it
+# exercises, so a handler test that seeds rows through a repo is doing its job, not breaking
+# the direction. The code under test is still governed -- the rule is about what ships.
+id: layer-handler-no-repo
+language: typescript
+severity: error
+message: >-
+  A handler must not reach a repo. Call a service (services/), which owns the decision, and
+  let it call the repo. Transport parses input and maps the result to a status code; it does
+  not know which tables exist. See .claude/rules/layering.md.
+files:
+  - "**/handlers/**"
+ignores:
+  - "**/*.test.ts"
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    regex: "(/repos/|/repos\\.ts|@undercroft/db/repos)"
+---
+# A service is callable from an HTTP handler, a CLI or a scheduled job. The moment it
+# imports `hono` or `@trpc/server` it is callable from exactly one of them, and its
+# decisions come back as status codes instead of values. Return a value or `null`; the
+# handler turns `null` into 404.
+id: layer-service-no-upward
+language: typescript
+severity: error
+message: >-
+  A service must not import a handler or a transport library (hono, @trpc/server). Return
+  values and null; let the handler map them to a status code or a TRPCError. See
+  .claude/rules/layering.md.
+files:
+  - "**/services/**"
+ignores:
+  - "**/*.test.ts"
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    regex: "(/handlers/|/handlers\\.ts|^\"hono|^\"@hono/|^\"@trpc/)"
+---
+# A repo is the bottom of the stack: tables in, values out. An import of a service is a
+# cycle, and an import of a transport library means an error condition is being decided
+# two layers below where the caller can see it.
+id: layer-repo-no-upward
+language: typescript
+severity: error
+message: >-
+  A repo must not import a service, a handler, or a transport library. It takes a
+  SqlExecutor and returns rows; everything above it decides what those rows mean. See
+  .claude/rules/layering.md.
+files:
+  - "**/repos/**"
+ignores:
+  - "**/*.test.ts"
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    regex: "(/services/|/services\\.ts|/handlers/|/handlers\\.ts|^\"hono|^\"@hono/|^\"@trpc/)"
+---
+# The shared packages sit BELOW all three layers: core, contracts, crypto, lake and the
+# connector runtime are imported by every layer and know about none. A shared package that
+# imports a layer inverts that and drags an app's wiring into a library every other app
+# depends on.
+#
+# `packages/db` is deliberately absent: it is the one package that *holds* layers
+# (src/repos, src/services) around the SqlExecutor seam, and the three rules above already
+# govern those directories.
+id: layer-shared-no-layer
+language: typescript
+severity: error
+message: >-
+  A shared package must not import a handler, service or repo. It is below every layer:
+  anything app-specific belongs in the app. See .claude/rules/layering.md.
+files:
+  - "packages/core/**"
+  - "packages/contracts/**"
+  - "packages/crypto/**"
+  - "packages/lake/**"
+  - "packages/connector-runtime/**"
+ignores:
+  - "**/*.test.ts"
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    regex: "(/handlers/|/services/|/repos/|@undercroft/db/(repos|services))"

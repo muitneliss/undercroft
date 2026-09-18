@@ -15,9 +15,9 @@ import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { resolveInvitedUser } from "../auth/invite.ts";
-import { type Context, type Role, type SessionUser } from "../trpc.ts";
-import { appRouter } from "./index.ts";
+import { resolveInvitedUser } from "../services/invite.ts";
+import { appRouter } from "./router.ts";
+import { type Context, type Role, type SessionUser } from "./trpc.ts";
 
 let db: TestDatabase;
 

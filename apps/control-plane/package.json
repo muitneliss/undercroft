@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/server.ts",
-    "./router": "./src/router/index.ts"
+    ".": "./src/handlers/server.ts",
+    "./router": "./src/handlers/router.ts"
   },
   "dependencies": {
     "@trpc/server": "11.0.0",

@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./repos": "./src/repos/index.ts",
+    "./services": "./src/services/index.ts",
     "./testing": "./src/testing.ts"
   },
   "dependencies": {

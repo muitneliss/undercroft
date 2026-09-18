@@ -16,6 +16,9 @@
 import { hashToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { timingSafeEqual } from "node:crypto";
+import { findByDigest, type IngestKeyRow } from "../repos/ingestKey.ts";
+
+export type { IngestKeyRow };
 
 export type AuthOutcome =
   | { ok: true; scope: "service" | { tenantId: string } }
@@ -26,13 +29,6 @@ function constantTimeEquals(a: string, b: string): boolean {
   const bb = Buffer.from(b);
   if (ba.byteLength !== bb.byteLength) return false;
   return timingSafeEqual(ba, bb);
-}
-
-export interface IngestKeyRow {
-  readonly tenant_id: string;
-  readonly allowed_sources: string[];
-  readonly expires_at: string | null;
-  readonly revoked_at: string | null;
 }
 
 /**
@@ -54,14 +50,8 @@ export async function authenticate(
 
   // Look the key up by its digest. The `id` prefix is not required to match; the digest
   // is the credential.
-  const digest = hashToken(bearer);
-  const { rows } = await exec.query<IngestKeyRow>(
-    `SELECT tenant_id, allowed_sources, expires_at, revoked_at
-     FROM app.ingest_key WHERE token_sha256 = $1`,
-    [digest],
-  );
-  const key = rows[0];
-  if (key === undefined) {
+  const key = await findByDigest(exec, hashToken(bearer));
+  if (key === null) {
     return { ok: false, code: "unauthenticated", message: "unknown or invalid token" };
   }
 

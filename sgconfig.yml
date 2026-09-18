@@ -1,6 +1,8 @@
-# ast-grep project config. `bun run lint:state` (`ast-grep scan`) reads this and runs every
-# rule under ruleDirs. This is the HARD gate for `.claude/rules/state.md`: a rule file is a
-# convention a reader can miss, but an ast-grep rule fails the build. It is wired into
-# `bun run verify`, which CI runs, so a banned `useState` cannot merge.
+# ast-grep project config. `bun run lint:rules` (`ast-grep scan`) reads this and runs every
+# rule under ruleDirs. These are the HARD gate for the rule files that cannot be enforced any
+# other way -- `.claude/rules/state.md` (no `useState`) and `.claude/rules/layering.md`
+# (handler -> service -> repo). A rule file is a convention a reader can miss; an ast-grep
+# rule fails the build. It is wired into `bun run verify`, which CI runs, so neither a banned
+# `useState` nor a `SELECT` in a handler can merge.
 ruleDirs:
   - .ast-grep/rules

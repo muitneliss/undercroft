@@ -20,7 +20,7 @@ The UI has exactly two homes for state, and `useState` is neither.
 - **NEVER call `useState` (or `React.useState`).** It creates a third, unowned source of
   truth that competes with the query cache and the store, and the bug it causes — two
   values that should be one drifting apart — is invisible until a user hits it. Put the
-  state in the store instead. This is enforced: `bun run lint:state` (ast-grep, rule
+  state in the store instead. This is enforced: `bun run lint:rules` (ast-grep, rule
   `no-usestate`) fails the build, and it runs inside `bun run verify` and CI.
 
 ## Follow

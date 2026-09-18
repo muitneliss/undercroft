@@ -1,0 +1,131 @@
+# Loose coupling: SQL lives in one layer, dependencies arrive as arguments, and the driver
+# stays behind its seam. The direction rules (layer-direction.yml) keep the arrows pointing
+# one way; these three keep a layer from reaching around them.
+#
+# Every exemption below is written down with its reason, per CLAUDE.md -- a rule worked
+# around file by file is a rule nobody can trust.
+#
+# SQL belongs to `repos/` alone. A `SELECT` in a handler couples the transport to the
+# schema: the next reader has to open the router to learn which tables exist, and a column
+# rename becomes an HTTP change. It is also how an authorization check drifts away from the
+# query it was supposed to guard.
+#
+# Exempt, and why:
+#   **/repos/**                  -- the point of the rule.
+#   **/*.test.ts                 -- tests stand up PGlite and assert against fixture SQL;
+#                                   packages/db/src/privileges.test.ts is nothing else.
+#   packages/db/src/migrate.ts   -- the migration RUNNER. It executes the .sql files in
+#                                   packages/db/sql; it composes no statement of its own.
+#   packages/db/src/pool.ts      -- the `pg` seam itself (SET ROLE, type-parser pinning).
+#   packages/db/src/testing.ts   -- the PGlite seam that makes the offline tier possible.
+id: layer-sql-in-repos
+language: typescript
+severity: error
+message: >-
+  SQL belongs in a repo (repos/). Move the statement into a repo function and call it from
+  the service; a handler must not know the schema. See .claude/rules/layering.md.
+files:
+  - "apps/**"
+  - "packages/**"
+  - "scripts/**"
+ignores:
+  - "**/repos/**"
+  - "**/*.test.ts"
+  - "packages/db/src/migrate.ts"
+  - "packages/db/src/pool.ts"
+  - "packages/db/src/testing.ts"
+rule:
+  any:
+    # The executor seam, called from outside a repo. Three spellings, because none of them
+    # is the same pattern to ast-grep: `query(...)`, the generically-typed `query<Row>(...)`,
+    # and `exec(...)`.
+    #
+    # All of them share the `$E` receiver constraint below, and both halves of it are
+    # load-bearing. `.query` is ALSO how a tRPC procedure is declared
+    # (`authedProcedure.query(...)`) and `.exec` is also `RegExp#exec` -- an unconstrained
+    # pattern flags every endpoint in the router and every regex in the codebase, which is
+    # a rule that gets switched off within a day.
+    - pattern: $E.query($$$ARGS)
+    - pattern: $E.query<$$$T>($$$ARGS)
+    - pattern: $E.exec($SQL)
+    # The statement itself, in a literal -- the check that does not depend on how it is run.
+    # A query string assembled in a service and passed to a repo is the same coupling with
+    # an extra hop, and this catches it.
+    #
+    # A schema qualifier is required (`FROM app.session`, not `from the list`), which is
+    # what keeps English prose out: every table in this database lives in a named schema by
+    # the grant model, so an unqualified statement is not one of ours. `.claude/rules/privileges.md`.
+    - kind: string
+      regex: "(?is)(select\\s+.*?\\sfrom\\s+\"?\\w+\"?\\.|insert\\s+into\\s+\"?\\w+\"?\\.|update\\s+\"?\\w+\"?\\.\\w+|delete\\s+from\\s+\"?\\w+\"?\\.)"
+    - kind: template_string
+      regex: "(?is)(select\\s+.*?\\sfrom\\s+\"?\\w+\"?\\.|insert\\s+into\\s+\"?\\w+\"?\\.|update\\s+\"?\\w+\"?\\.\\w+|delete\\s+from\\s+\"?\\w+\"?\\.)"
+constraints:
+  E:
+    # `exec`, `db`, `pool`, `client`, `tx`, and one level of qualification (`ctx.exec`,
+    # `deps.exec`). Anything else calling `.query` or `.exec` is not the SqlExecutor seam.
+    regex: "^([A-Za-z_$][\\w$]*\\.)?(exec|pool|client|db|tx)$"
+---
+# Dependencies arrive as arguments. Every layer already takes them that way -- `RunDeps`,
+# `LakeApiDeps`, `ServerDeps`, and a bare `SqlExecutor` in the repos -- which is what lets
+# the whole stack run against PGlite and an in-memory object store with no Docker.
+#
+# Two ways that breaks, both banned here:
+#   - `process.env` below the entrypoint. Ambient configuration cannot be overridden by a
+#     caller, so a test has to set a global to steer the code it is testing.
+#   - constructing infrastructure in place. A pool or an S3 client built inside a layer is a
+#     hidden singleton: the caller cannot substitute it and cannot close it.
+#
+# The composition root -- apps/*/src/main.ts and apps/worker/src/server.ts -- is where both
+# belong, and it is outside these directories by construction.
+#
+# Test files are exempt: a test IS a composition root, and wiring a fixture is its job.
+id: layer-injected-deps
+language: typescript
+severity: error
+message: >-
+  A handler, service or repo takes its dependencies as arguments. Read configuration and
+  construct infrastructure in the entrypoint (main.ts / server.ts) and pass it in. See
+  .claude/rules/layering.md.
+files:
+  - "**/handlers/**"
+  - "**/services/**"
+  - "**/repos/**"
+ignores:
+  - "**/*.test.ts"
+rule:
+  any:
+    - pattern: process.env
+    - pattern: createPool($$$ARGS)
+    - pattern: new Pool($$$ARGS)
+    - pattern: new PGlite($$$ARGS)
+    - pattern: new S3ObjectStore($$$ARGS)
+    - pattern: new LakeStore($$$ARGS)
+---
+# The database driver has exactly one importer, and PGlite exactly one. Everything else --
+# every repo, every migration, every test -- speaks the `SqlExecutor` seam in
+# packages/db/src/executor.ts.
+#
+# That is what makes the privilege tests runnable offline: the same repo code, the same
+# migrations and the same grant assertions execute against a real `pg` pool in production
+# and against Postgres-compiled-to-WASM in the gate. A second `new Pool` anywhere would be
+# a second definition of how this codebase talks to Postgres.
+id: layer-no-driver-import
+language: typescript
+severity: error
+message: >-
+  Import the SqlExecutor seam from @undercroft/db, not the driver. `pg` belongs to
+  packages/db/src/pool.ts and PGlite to packages/db/src/testing.ts. See
+  .claude/rules/layering.md.
+files:
+  - "apps/**"
+  - "packages/**"
+  - "scripts/**"
+ignores:
+  - "packages/db/src/pool.ts"
+  - "packages/db/src/testing.ts"
+  - "**/*.test.ts"
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    regex: '^"(pg|pg-[a-z-]+|@electric-sql/pglite)"$'

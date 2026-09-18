@@ -50,7 +50,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
-import { isAdmissible, resolveInvitedUser } from "./invite.ts";
+import { isAdmissible, resolveInvitedUser } from "../services/invite.ts";
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
