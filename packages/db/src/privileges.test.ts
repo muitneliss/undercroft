@@ -10,7 +10,7 @@
 
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterEach, beforeEach, describe, expect, test as it, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import type { SqlExecutor } from "./executor.ts";
 import { migrate } from "./migrate.ts";
 import { createTestDatabase, type TestDatabase } from "./testing.ts";

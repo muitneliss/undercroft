@@ -1,7 +1,7 @@
 // biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { describe, expect, test as it, test } from "bun:test";
+import { describe, expect, test as it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseSpec, SpecError } from "./loadSpec.ts";

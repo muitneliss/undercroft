@@ -1,7 +1,7 @@
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 
-import { afterEach, beforeEach, describe, expect, test as it, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { canonicalJson, createStampSource, TestClock } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
