@@ -5,9 +5,11 @@ date: 2026-09-18
 tags: []
 source: docs/runbook/sign-in-setup.md
 source_path: docs/runbook/sign-in-setup.md
-source_hash: c39a9627b3a13b28bf7943065f7522a6f217bf821da3629e4403b08560460265
+source_hash: f17a2a9ded01c39934c24f682078538bbebd5f703a07f5fdcf9dca997beb76e7
 ingested: 2026-09-18
 ---
+
+# Runbook Sign-In Setup
 
 # Runbook Sign-In Setup
 
@@ -23,9 +25,10 @@ account, or is named in `UNDERCROFT_SUPERADMINS`. Two ways in, either or both:
 * **A one-time code by email** — needs a mail API key.
 
 > **Gmail and Drive ingestion are not this.** Signing in asks for identity scopes only
-> (`openid email profile`). Pulling mail or files is a separate per-tenant consent whose
-> credentials are sealed in `app.connection_secret`. Adding Gmail or Drive scopes to the
-> login client would hand over a mailbox as a side effect of signing in.
+> (`openid email profile`). Pulling mail or files is a separate per-tenant consent, through a
+> **separate Google client**, whose credentials are sealed in `app.connection_secret` by the
+> worker. Adding Gmail or Drive scopes to the login client would hand over a mailbox as a side
+> effect of signing in. Setting that up is [[Runbook Google Ingestion Setup]].
 
 ## Two paths
 
