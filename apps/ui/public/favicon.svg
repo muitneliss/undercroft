@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The device, as a tab-strip tile. Same geometry as `src/components/Mark.tsx`;
+  the reasoning for the form lives in that module's docstring.
+
+  Painted opaque rather than cut through. In the app the arch is a hole, because
+  the app knows what is behind it; browser chrome is not ours, and a hole there
+  would fill with whatever tone the tab strip happens to be. So the block and the
+  arch are both inked, and the pair flips on `prefers-color-scheme`: an inked
+  block is the high-contrast choice against a light tab strip, a bone block
+  against a dark one. Same block, same cutting, opposite ink.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <style>
+    .block { fill: #16150f }
+    .arch { fill: #efe9d9 }
+    @media (prefers-color-scheme: dark) {
+      .block { fill: #efe9d9 }
+      .arch { fill: #16150f }
+    }
+  </style>
+  <rect class="block" width="32" height="32" rx="3" />
+  <path
+    class="arch"
+    fill-rule="evenodd"
+    d="M5 27.5V15.5a11 11 0 0 1 22 0V27.5ZM9 27.5V15.5a7 7 0 0 1 14 0V27.5ZM12.5 27.5V15.5a3.5 3.5 0 0 1 7 0V27.5ZM5 15.5h4v1.5H5ZM23 15.5h4v1.5h-4Z"
+  />
+</svg>
