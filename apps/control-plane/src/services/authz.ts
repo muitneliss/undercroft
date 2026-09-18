@@ -24,6 +24,7 @@
 import type { SqlExecutor } from "@undercroft/db";
 import { type Role, roleFor as roleForMember } from "../repos/membership.ts";
 import { findTenant } from "../repos/tenant.ts";
+import { isSuperadmin, type Superadmins } from "./superadmin.ts";
 
 export type { Role };
 
@@ -59,6 +60,33 @@ export async function authorityIn(
     return null;
   }
   return "admin";
+}
+
+/**
+ * May this caller act as an admin of this tenant? Membership or platform, one answer.
+ *
+ * The whole question in one call, because the caller that needs it most is outside tRPC.
+ * `tenantProcedure` reaches `authorityIn` through the middleware and cannot get this wrong;
+ * the OAuth callback has no middleware, and the first cut of it asked `roleFor` instead --
+ * a membership lookup, which a superadmin deliberately has no row in. The effect was a
+ * consent that a platform administrator could start, that Google would grant, and that the
+ * final step then refused as `not-admin`, every time.
+ *
+ * So the composition lives here beside `authorityIn` rather than at the wiring, where each
+ * call site gets to decide again whether platform authority counts. It takes the address
+ * because that, not the uuid, is what `UNDERCROFT_SUPERADMINS` names.
+ */
+export async function isAdminIn(
+  exec: SqlExecutor,
+  superadmins: Superadmins,
+  caller: { tenantId: string; userId: string; email: string },
+): Promise<boolean> {
+  const role = await authorityIn(exec, {
+    tenantId: caller.tenantId,
+    userId: caller.userId,
+    superadmin: isSuperadmin(superadmins, caller.email),
+  });
+  return role === "admin";
 }
 
 /** Whether `held` carries at least the authority of `min`. */

@@ -56,5 +56,13 @@ export const vi = {
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     scopeNotUnderstood: "Không đọc được lựa chọn cho nguồn {{source}}.",
+    /**
+     * Points at a person, not at a variable, for the same reason `requiresSuperadmin` does:
+     * the administrator reading this cannot fix it from any screen, and naming the
+     * environment key would describe our deployment to a customer.
+     */
+    ingestNotConfigured:
+      "Bản triển khai này chưa được cấu hình để kết nối tài khoản Google. Hãy báo người quản trị hệ thống.",
+    sourceNotConnectable: "Nguồn {{source}} chưa kết nối tự động được.",
   },
 };

@@ -29,7 +29,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
-import { roleFor } from "../services/authz.ts";
+import { isAdminIn } from "../services/authz.ts";
 import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
@@ -125,7 +125,13 @@ export function createServer(deps: ServerDeps): Hono {
     exec: deps.exec,
     ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
     ...(deps.worker === undefined ? {} : { worker: deps.worker }),
-    isAdminOf: async (tenantId, userId) => (await roleFor(deps.exec, tenantId, userId)) === "admin",
+    // Through `authz.isAdminIn`, which is the same policy `tenantProcedure` resolves. Asking
+    // `roleFor` here instead -- as this line first did -- reads a `tenant_member` row that a
+    // superadmin deliberately does not have, so the platform administrator who is the only
+    // person able to set a fresh deployment up was the one person who could never finish a
+    // consent.
+    hasAdminAuthority: (tenantId, caller) =>
+      isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
     resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
   });
 
@@ -166,16 +172,17 @@ export function createServer(deps: ServerDeps): Hono {
                 apiKey: deps.googleIngest.pickerApiKey ?? "",
                 appId: deps.googleIngest.projectNumber ?? "",
               },
-        startConsent: async (start) => {
-          const outcome = await startConsent(
+        // The outcome is passed through whole, refusal reason included. It used to be
+        // narrowed to a bare `{ ok: false }`, and the procedure then had nothing to say
+        // except a URL it invented -- see `router.ts`.
+        startConsent: (start) =>
+          startConsent(
             {
               exec: deps.exec,
               ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
             },
             start,
-          );
-          return outcome.ok ? { ok: true, authorizeUrl: outcome.authorizeUrl } : { ok: false };
-        },
+          ),
       }),
     });
   });

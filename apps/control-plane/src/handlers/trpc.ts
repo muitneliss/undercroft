@@ -98,12 +98,18 @@ export interface Context {
    * A closure the HTTP layer builds, for the same reason `endSession` is one: the
    * composition root owns the Google client, and a procedure reaching for it would be a
    * transport layer holding infrastructure (`layer-injected-deps`).
+   *
+   * A refusal carries WHY. The narrower `{ ok: false }` this replaced left the procedure
+   * nothing to report, and what it reported instead was a made-up URL -- see `router.ts`.
    */
   readonly startConsent: (input: {
     tenantId: string;
     source: string;
     startedBy: string;
-  }) => Promise<{ ok: true; authorizeUrl: string } | { ok: false }>;
+  }) => Promise<
+    | { ok: true; authorizeUrl: string }
+    | { ok: false; reason: "not-configured" | "unsupported-source" }
+  >;
   /**
    * The worker, for the two procedures needing a live token. `null` when unconfigured, and
    * the procedures say so rather than failing in a way that reads like an outage.

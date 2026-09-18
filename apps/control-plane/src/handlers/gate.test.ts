@@ -32,6 +32,7 @@
 
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: What this file is long with is one harness -- a loopback `Bun.serve`, Better Auth on its memory adapter, PGlite, and the happy-dom dance that lets a real socket be spoken to at all. Every test here needs a genuine session cookie, and that is the only way to get one. Splitting it would clone the harness rather than divide the subject, and two copies of a fixture this delicate is how the copies stop agreeing.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test as it } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -39,8 +40,62 @@ import { InMemoryEmailSender } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { startConsent } from "../services/oauth.ts";
+import { InMemoryWorkerClient } from "../services/workerClient.ts";
 import { createAuth } from "./auth.ts";
 import { createServer } from "./server.ts";
+
+/**
+ * Named in `UNDERCROFT_SUPERADMINS`, and a member of nothing.
+ *
+ * Both halves matter. The list is what lets this address sign in with no invitation, and the
+ * absent `tenant_member` row is what ADR 0013 provisions -- so this fixture is the platform
+ * administrator of a fresh deployment, exactly as one really exists.
+ */
+const SUPERADMIN = "root@example.test";
+const SUPERADMINS: ReadonlySet<string> = new Set([SUPERADMIN]);
+
+const TOKEN_URL = "https://oauth2.googleapis.test/token";
+const ID_TOKEN = `header.${Buffer.from(
+  JSON.stringify({ sub: "108134092834092834", email: "ops@acme.test" }),
+).toString("base64url")}.signature`;
+
+interface IngestClient {
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly publicUrl: string;
+  readonly tokenUrl: string;
+  readonly fetch: (url: string) => Promise<Response>;
+}
+
+/**
+ * The ingestion Google client, pointed at a token endpoint inside this process.
+ *
+ * `fetch` is a real function that answers one known URL and rejects every other, so a request
+ * this fixture did not model fails loudly instead of returning something plausible.
+ */
+function ingestClientFor(publicUrl: string): IngestClient {
+  return {
+    clientId: "ingest.apps.googleusercontent.test",
+    clientSecret: "ingest-secret",
+    publicUrl,
+    tokenUrl: TOKEN_URL,
+    fetch: (url: string): Promise<Response> => {
+      if (url !== TOKEN_URL) {
+        return Promise.reject(new Error(`unexpected fetch to ${url}`));
+      }
+      return Promise.resolve(
+        Response.json({
+          access_token: "at",
+          refresh_token: "rt",
+          expires_in: 3599,
+          scope: "https://www.googleapis.com/auth/gmail.readonly",
+          id_token: ID_TOKEN,
+        }),
+      );
+    },
+  };
+}
 
 /**
  * Give this file back the real `Response` and `fetch`.
@@ -64,11 +119,15 @@ let db: TestDatabase;
 let sender: InMemoryEmailSender;
 let server: ReturnType<typeof Bun.serve>;
 let origin: string;
+let worker: InMemoryWorkerClient;
+/** The ingestion client, pointed at a token endpoint that never leaves this process. */
+let googleIngest: IngestClient;
 
 beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
   sender = new InMemoryEmailSender();
+  worker = new InMemoryWorkerClient().backedBy(db);
 
   // Port 0 for an ephemeral port, so tests never collide with a running dev server. The
   // handler is reached through a mutable reference because Better Auth needs its `baseUrl`
@@ -99,9 +158,20 @@ beforeEach(async () => {
     secret: "a-test-secret-that-is-long-enough-to-sign",
     baseUrl: origin,
     email: sender,
+    // The same list the server below is given. Three gates read one list in production and
+    // must not be able to disagree; handing them two lists here would hide that.
+    superadmins: SUPERADMINS,
   });
 
-  handler = createServer({ exec: db, auth }).fetch;
+  googleIngest = ingestClientFor(origin);
+
+  handler = createServer({
+    exec: db,
+    auth,
+    superadmins: SUPERADMINS,
+    googleIngest,
+    worker,
+  }).fetch;
 });
 
 afterEach(async () => {
@@ -271,6 +341,66 @@ describe("a session can be withdrawn before it expires", () => {
     const after = await sessionMe(cookie);
     const body = (await after.json()) as { error?: { data?: { code?: string } } };
     expect(body.error?.data?.code).toBe("UNAUTHORIZED");
+  });
+});
+
+describe("a platform administrator can finish what the platform lets them start", () => {
+  /** The `app_user` uuid behind a signed-in address. */
+  async function appUserId(email: string): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
+      "SELECT id FROM app.app_user WHERE email = $1",
+      [email],
+    );
+    return rows[0]?.id ?? "";
+  }
+
+  /** Start a real consent and return the `state` Google would hand back. */
+  async function beginConsent(startedBy: string): Promise<string> {
+    const started = await startConsent(
+      { exec: db, google: googleIngest },
+      { tenantId: "CASE-0042", source: "gmail", startedBy },
+    );
+    if (!started.ok) {
+      throw new Error("expected the consent to start");
+    }
+    return new URL(started.authorizeUrl).searchParams.get("state") ?? "";
+  }
+
+  function callback(state: string, cookie: string): Promise<Response> {
+    return Bun.fetch(`${origin}/oauth/google/callback?state=${state}&code=auth-code`, {
+      headers: { cookie },
+      redirect: "manual",
+    });
+  }
+
+  it("a superadmin who is a member of nothing completes the Google callback", async () => {
+    // Through the REAL server, which is the only place the bug this pins ever lived. The
+    // route's admin check was wired to a `tenant_member` lookup while the button that starts
+    // the flow asked `authorityIn`, so a platform administrator -- who by design has no such
+    // row -- was sent to Google, granted access, and refused on the way back every time. The
+    // unit test beside this one injects the policy and so could never have seen it.
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042') ON CONFLICT DO NOTHING");
+    await requestCode(SUPERADMIN);
+    const cookie = await signInWithCode(SUPERADMIN);
+
+    const response = await callback(await beginConsent(await appUserId(SUPERADMIN)), cookie);
+
+    expect(response.headers.get("location")).toBe("/tenants/CASE-0042/connect/gmail/scope");
+  });
+
+  it("an ordinary member of the same tenant is still refused", async () => {
+    // The quiet half. Platform authority is what admitted the caller above, not the mere
+    // fact of holding a session -- without this, code that stopped checking would pass.
+    await seedInvitation("CASE-0042", "operator@example.test", "member");
+    await requestCode("operator@example.test");
+    const cookie = await signInWithCode("operator@example.test");
+
+    const response = await callback(
+      await beginConsent(await appUserId("operator@example.test")),
+      cookie,
+    );
+
+    expect(response.headers.get("location")).toContain("reason=not-admin");
   });
 });
 

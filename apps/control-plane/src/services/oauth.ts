@@ -150,8 +150,22 @@ export type CompleteOutcome =
     };
 
 export interface CompleteDeps extends OAuthDeps {
-  /** Answers whether the caller is an admin of the tenant. Injected, so this stays pure-ish. */
-  isAdminOf: (tenantId: string, userId: string) => Promise<boolean>;
+  /**
+   * Answers whether the caller may act as an admin of the tenant. Injected, so this stays
+   * pure-ish.
+   *
+   * It takes the whole caller rather than a uuid because "admin" here means **authority**,
+   * not membership, and platform authority is named by address in `UNDERCROFT_SUPERADMINS`.
+   * Handed only a `userId`, the one honest implementation left is a `tenant_member` lookup --
+   * which is exactly the bug this signature exists to make unwritable: a superadmin holds
+   * admin in every tenant and has a row in none of them, so the consent they started was
+   * refused here as `not-admin` after Google had already granted it. `authz.isAdminIn` is
+   * the implementation; the type is what stops a caller inventing a narrower one.
+   */
+  hasAdminAuthority: (
+    tenantId: string,
+    caller: { userId: string; email: string },
+  ) => Promise<boolean>;
 }
 
 /**
@@ -180,7 +194,7 @@ export async function completeConsent(
   }
 
   const caller = input.caller;
-  if (caller === null || !(await deps.isAdminOf(handshake.tenantId, caller.userId))) {
+  if (caller === null || !(await deps.hasAdminAuthority(handshake.tenantId, caller))) {
     return {
       ok: false,
       reason: "not-admin",
