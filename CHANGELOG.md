@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/muitneliss/undercroft/compare/v1.2.0...v1.3.0) (2026-09-18)
+
+
+### Features
+
+* **lint:** enforce handler -&gt; service -&gt; repo with ast-grep ([c0b3abb](https://github.com/muitneliss/undercroft/commit/c0b3abbf082ecf0284a318f0b5bffb6efd0d74d8))
+* **lint:** one direction — handler → service → repo, enforced by ast-grep ([417be68](https://github.com/muitneliss/undercroft/commit/417be686b1ab277806db17ca8169409613491867))
+
+
+### Bug Fixes
+
+* **deploy:** apply the schema on deploy via a db-migrate service ([ea105ec](https://github.com/muitneliss/undercroft/commit/ea105eca8bf2ee57ff690672dff6dcf7c060f6ab))
+* **deploy:** apply the schema on deploy, so services never start without their tables ([0312b0c](https://github.com/muitneliss/undercroft/commit/0312b0cfca4c7585ae7754736f0c83333e9dbdba))
+
 ## [1.2.0](https://github.com/muitneliss/undercroft/compare/v1.1.0...v1.2.0) (2026-09-18)
 
 
