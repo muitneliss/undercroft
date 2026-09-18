@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/muitneliss/undercroft/compare/v1.6.0...v1.6.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **control-plane:** let a superadmin finish a per-tenant consent ([#42](https://github.com/muitneliss/undercroft/issues/42)) ([2270a88](https://github.com/muitneliss/undercroft/commit/2270a88914c0594726c53e52f1ce057ee544b186))
+
 ## [1.6.0](https://github.com/muitneliss/undercroft/compare/v1.5.0...v1.6.0) (2026-09-18)
 
 
