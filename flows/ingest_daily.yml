@@ -24,6 +24,12 @@ inputs:
   - id: source
     type: STRING
     defaults: hubspot
+  # Required, with no default. `/v1/runs/ingest` refuses a body without it, and this flow
+  # has been sending one since it was written -- every scheduled execution would have ended
+  # in a 400 the moment a real source was attached. A credential is per tenant, so there is
+  # no sensible default to invent here: an execution says whose data it is reading.
+  - id: tenantId
+    type: STRING
 
 tasks:
   - id: ingest
@@ -31,7 +37,7 @@ tasks:
     uri: http://worker:8081/v1/runs/ingest
     method: POST
     contentType: application/json
-    body: '{{ ''{'' }}"source": "{{ inputs.source }}"{{ ''}'' }}'
+    body: '{{ ''{'' }}"source": "{{ inputs.source }}", "tenantId": "{{ inputs.tenantId }}"{{ ''}'' }}'
     headers:
       Authorization: "Bearer {{ envs.trigger_token }}"
     options:

@@ -12,9 +12,11 @@ the production-specific parts are in [deployment.md](./deployment.md). This page
 walkthrough.
 
 > **Gmail and Drive ingestion are not this.** Signing in asks for identity scopes only
-> (`openid email profile`). Pulling mail or files is a separate, per-tenant consent whose
-> credentials are sealed in `app.connection_secret`. Do not add Gmail or Drive scopes to the
-> login client — that would hand over a mailbox as a side effect of signing in.
+> (`openid email profile`). Pulling mail or files is a separate, per-tenant consent, through a
+> **separate Google client**, whose credentials are sealed in `app.connection_secret` by the
+> worker. Do not add Gmail or Drive scopes to the login client — that would hand over a
+> mailbox as a side effect of signing in. Setting that up is
+> [google-ingestion-setup.md](./google-ingestion-setup.md).
 
 ---
 

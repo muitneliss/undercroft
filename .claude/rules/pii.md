@@ -16,6 +16,15 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   substring ignore rules are banned — they once swallowed a legitimate secrets module.
 - **NEVER commit real data.** `data/` and any `fixtures/live/` are gitignored.
 
+- **NEVER put a name a human wrote into `raw.documents` or a lake key.** That table is
+  granted to `undercroft_dbt`, so every column in it -- `lake_key` included -- is one
+  `dbt run` from a dashboard. A filename, a mail subject, an address or a folder name goes
+  in the **lake manifest** (`extra` on `LakeStore.put`), which lives in the access-controlled
+  object store that dbt and BI cannot reach at all. `raw.documents.metadata` carries only
+  opaque provider ids, timestamps, enumerated types and counts. `landDocuments` takes
+  `metadata` and `manifest` as two separate arguments so the split is visible at every call
+  site; see `apps/worker/src/services/landDocument.ts` and ADR 0013.
+
 ## Follow
 
 - Fixtures are **invented, not anonymised.** Anonymising preserves shapes, amounts and
