@@ -104,7 +104,10 @@ Sign-in needs `060_auth.sql`. Until it is applied, every login fails with
 
 ## Sign-in
 
-Invite-only, by Google or by a one-time code emailed to the address. See ADR 0010.
+Invite-only, by Google or by a one-time code emailed to the address. See ADR 0010 for the
+reasoning, and **[sign-in-setup.md](./sign-in-setup.md) for a step-by-step walkthrough** of
+standing it up from nothing, including local development. What follows is the
+production-specific part.
 
 **Google client** — Cloud Console → APIs & Services → Credentials → OAuth client ID, type
 _Web application_. Authorized redirect URIs, one per origin anyone signs in from:
