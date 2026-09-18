@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/muitneliss/undercroft/compare/v1.5.0...v1.6.0) (2026-09-18)
+
+
+### Features
+
+* Gmail and Google Drive ingestion, per tenant ([#40](https://github.com/muitneliss/undercroft/issues/40)) ([fd4007a](https://github.com/muitneliss/undercroft/commit/fd4007a081705789211d4128a598f74c2b756d79))
+
 ## [1.5.0](https://github.com/muitneliss/undercroft/compare/v1.4.0...v1.5.0) (2026-09-18)
 
 
