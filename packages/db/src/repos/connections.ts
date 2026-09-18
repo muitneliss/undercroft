@@ -16,18 +16,18 @@
  * **Refreshing takes a row lock.** Xero rotates its refresh token and invalidates the old
  * one the instant it is used, so two concurrent refreshes do not race -- they destroy the
  * connection and the customer must re-consent. `SELECT ... FOR UPDATE`, inside a
- * transaction, is what makes that impossible rather than unlikely. `accessToken` must be
- * called within `withTransaction`; the FOR UPDATE only holds a lock inside one.
+ * transaction, is what makes that impossible rather than unlikely. `readCredential` with
+ * `forUpdate` must be called within `withTransaction`; the FOR UPDATE only holds a lock
+ * inside one.
  *
- * This module holds no HTTP. The provider adapters supply a `refresher` callback, which
- * keeps the registry testable offline against a real in-memory refresher.
+ * This module holds no HTTP and decides nothing. *When* a credential is too old to use, and
+ * what to do when it cannot be refreshed, is one layer up in
+ * `../services/credentials.ts` -- that decision is worth testing with no database, and this
+ * SQL is worth reading with no policy mixed into it.
  */
 
 import { seal, unseal } from "@undercroft/crypto";
-import type { SqlExecutor } from "./executor.ts";
-
-/** Refresh this far before the token actually expires -- a run takes minutes. */
-export const REFRESH_SKEW_MS = 5 * 60 * 1000;
+import type { SqlExecutor } from "../executor.ts";
 
 export class ConnectionRegistryError extends Error {
   constructor(message: string) {
@@ -178,56 +178,4 @@ export async function readCredential(
   }
   const opened = unseal({ blob: row.ciphertext, keyVersion: row.key_version }, opts.env);
   return credentialFromJson(opened);
-}
-
-/**
- * Whether a credential is too close to expiry to start a run with.
- *
- * Pure, and separated from the SQL on purpose: this is the decision worth testing, with no
- * database and no clock to monkeypatch. A credential with no recorded expiry is fresh --
- * the HubSpot private-app case, where guessing an expiry would refresh a token that has no
- * refresh token and turn a working connection into a broken one.
- */
-export function needsRefresh(credential: Credential, now: Date = new Date()): boolean {
-  if (credential.expiresAt === null) return false;
-  return new Date(credential.expiresAt).getTime() - REFRESH_SKEW_MS <= now.getTime();
-}
-
-/**
- * A usable access token, refreshing first if the stored one is close to expiry.
- *
- * Must run inside `withTransaction`: it reads the credential FOR UPDATE and, on Xero,
- * writes the rotated token back before returning it -- the token just spent is already
- * dead, so losing the replacement would cost the connection. A connection with no refresh
- * capability and an expired token raises rather than returning a stale value that would
- * 401 deep inside a sync and read as "the source is down".
- */
-export async function accessToken(
-  exec: SqlExecutor,
-  tenantId: string,
-  source: string,
-  opts: {
-    refresher?: (refreshToken: string) => Promise<Credential>;
-    now?: Date;
-    env?: NodeJS.ProcessEnv;
-  } = {},
-): Promise<string> {
-  const credential = await readCredential(exec, tenantId, source, {
-    forUpdate: true,
-    ...(opts.env !== undefined ? { env: opts.env } : {}),
-  });
-
-  if (!needsRefresh(credential, opts.now)) return credential.accessToken;
-
-  if (opts.refresher === undefined || credential.refreshToken === "") {
-    await setStatus(exec, tenantId, source, "expired");
-    throw new ConnectionRegistryError(
-      `${source} credential for tenant ${JSON.stringify(tenantId)} expired and cannot be ` +
-        "refreshed; the connection needs re-consent",
-    );
-  }
-
-  const refreshed = await opts.refresher(credential.refreshToken);
-  await writeCredential(exec, tenantId, source, refreshed, opts.env);
-  return refreshed.accessToken;
 }
