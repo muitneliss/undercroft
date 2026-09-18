@@ -14,4 +14,5 @@ export {
   MAX_RECORDS_PER_BATCH,
 } from "./lakeApi.ts";
 export { parseSpec, SpecError } from "./loadSpec.ts";
+export { documentKeyOf, documentPrefixOf, RawDocument } from "./rawDocument.ts";
 export { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";
