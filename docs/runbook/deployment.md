@@ -64,12 +64,31 @@ export DOKPLOY_COMPOSE_ID=...        # the undercroft compose
 
 bun run scripts/dokploy.ts preflight   # panel points at published images and pulls them
 bun run scripts/dokploy.ts deploy      # trigger, then wait for the record THIS run created
-bun run scripts/dokploy.ts verify      # every released container runs the published digest
+bun run scripts/dokploy.ts verify v1.2.3  # every released container runs that tag's digest
 bun run scripts/dokploy.ts smoke https://undercroft.lowbit.link/api/health https://undercroft-bi.lowbit.link/api/health
 ```
 
 The API is the only channel for a change. SSH is for reading state, never making one: a
 direct edit on the host is drift the next deploy silently reverts.
+
+### What `verify` proves
+
+It asks the host for the config digest each released container is actually running, and
+compares it to what ghcr serves — because Dokploy reports `done` for a deploy that changed
+nothing, and every smoke probe passes against the old images.
+
+The tag argument is which ghcr manifest to compare against. The **host** pulls `latest` (the
+panel's `IMAGE_TAG`); passing `v1.2.3` makes the other side of the comparison that release's
+immutable manifest, so a pass means "the host runs this release" rather than "a moving
+pointer equals itself". A release publishes both tags to one digest, so they agree unless
+something is wrong. Omit the tag and it falls back to `latest`, which is the honest question
+when there is no release being rolled out.
+
+Two services need different questions, and `verify` reads which is which from the compose
+file's own `condition: service_completed_successfully` declarations rather than from a list
+it keeps: a long-running service must be `running`, while a one-shot job (`db-migrate`) must
+have **exited 0**. Both still have their digest checked — a migration that exited 0 on last
+release's image is still the wrong thing having run.
 
 ## Environment variables
 
@@ -171,6 +190,11 @@ tell the person yourself.
 Set `IMAGE_TAG=vX.Y.Z` (a previously published tag) in Dokploy's environment and redeploy.
 The curated layer is a projection rebuilt from the raw lake, so a rollback needs no database
 restore unless the schema changed.
+
+**Put `IMAGE_TAG` back to `latest` once the fix ships.** While it is pinned, the host keeps
+serving the pinned release, so the next release's deploy will fail `verify` — the running
+digest is not the one ghcr serves for the tag being rolled out. That is the drift being
+reported, not a bug in the check: the release genuinely did not reach the host.
 
 ## Administering Kestra
 
