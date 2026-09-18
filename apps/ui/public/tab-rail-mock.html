@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fore-edge tab rail — three ways out of the rotation</title>
+
+    <style>
+      /* Real faces, from the app's own public/fonts. Subset ranges trimmed to
+         latin for the mock; the shipped @font-face block is unchanged. */
+      @font-face {
+        font-family: "Archivo";
+        font-weight: 400 700;
+        font-stretch: 62% 125%;
+        font-display: swap;
+        src: url("/fonts/archivo-latin.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "EB Garamond";
+        font-weight: 400 600;
+        font-display: swap;
+        src: url("/fonts/garamond-latin.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Spline Sans Mono";
+        font-weight: 400 700;
+        font-display: swap;
+        src: url("/fonts/mono-latin.woff2") format("woff2");
+      }
+
+      /* ---- tokens, copied verbatim from apps/ui/src/index.css ------------- */
+      :root {
+        --face-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+        --face-prose: "EB Garamond", ui-serif, Georgia, serif;
+        --face-mono: "Spline Sans Mono", ui-monospace, Menlo, monospace;
+
+        --bone: #efe9d9;
+        --leaf: #fbf8f0;
+        --ink: #16150f;
+        --ink-2: #56513f;
+        --ink-3: #6b6450;
+
+        --rule: rgba(22, 21, 15, 0.16);
+        --rule-strong: rgba(22, 21, 15, 0.44);
+        --hair: 1px;
+
+        --hue-oxide: #b24b1a;
+        --hue-chrome: #eda600;
+        --hue-teal: #0f7673;
+        --hue-ultramarine: #234c9e;
+        --errata: #cf2f16;
+
+        --board: var(--hue-chrome);
+        --page: #f7f3e7;
+
+        --t-micro: 0.6875rem;
+        --t-small: 0.8125rem;
+        --t-body: 0.9375rem;
+        --t-prose: 1.0625rem;
+        --t-h3: 1.25rem;
+        --t-h1: 2.5rem;
+
+        --s-1: 0.25rem;
+        --s-2: 0.5rem;
+        --s-3: 0.75rem;
+        --s-4: 1rem;
+        --s-5: 1.5rem;
+        --s-6: 2rem;
+        --s-7: 3rem;
+        --s-8: 4.5rem;
+
+        --r-leaf: 3px;
+        --r-plate: 2px;
+        --hinge: 90ms steps(2, end);
+        --ply-shadow: 0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13);
+
+        --head-col: 9.5rem;
+        --rail-w: 3.25rem;
+
+        /* Face-down lettering. #5f5844 on the hatch measures 4.37:1 — under the
+           floor, on the one label that tells an operator why a section will not
+           open. Every option below darkens it to 5.4:1. */
+        --facedown-ink: #524a37;
+        --facedown-a: #d6cfba;
+        --facedown-b: #cec7b1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        :root {
+          --hinge: 1ms steps(1, end);
+        }
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        font-size: 16px;
+        scrollbar-color: var(--rule-strong) var(--bone);
+        /* The controls bar is sticky, so anything scrolled to must clear it --
+           otherwise Option C's rail lands underneath it and reads as unlabelled. */
+        scroll-padding-top: 4.5rem;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bone);
+        color: var(--ink);
+        font-family: var(--face-display);
+        font-size: var(--t-body);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      ::selection {
+        background: var(--hue-chrome);
+        color: var(--ink);
+      }
+      ::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bone);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--rule-strong);
+        border: 3px solid var(--bone);
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+      }
+
+      .mono,
+      .datum {
+        font-family: var(--face-mono);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---- the mock's own chrome ------------------------------------------ */
+
+      .masthead {
+        padding: var(--s-7) var(--s-6) var(--s-5);
+        max-width: 68rem;
+      }
+
+      .masthead h1 {
+        margin: 0 0 var(--s-4);
+        font-size: var(--t-h1);
+        font-weight: 700;
+        font-variation-settings: "wdth" 92;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        text-transform: uppercase;
+      }
+
+      .masthead p {
+        margin: 0 0 var(--s-3);
+        font-family: var(--face-prose);
+        font-size: var(--t-prose);
+        line-height: 1.53;
+        max-width: 64ch;
+        color: var(--ink);
+      }
+
+      .controls {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        gap: var(--s-5);
+        flex-wrap: wrap;
+        padding: var(--s-3) var(--s-6);
+        background: var(--bone);
+        border-top: var(--hair) solid var(--rule-strong);
+        border-bottom: var(--hair) solid var(--rule-strong);
+      }
+
+      .controls__group {
+        display: flex;
+        align-items: center;
+        gap: var(--s-2);
+      }
+
+      .controls__label {
+        font-size: var(--t-micro);
+        font-weight: 700;
+        font-variation-settings: "wdth" 80;
+        letter-spacing: 0.17em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+        margin-right: var(--s-1);
+      }
+
+      .plate {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s-2);
+        padding: 0.3rem 0.6rem;
+        border: var(--hair) solid var(--ink);
+        border-radius: var(--r-plate);
+        background: transparent;
+        color: var(--ink);
+        font-family: var(--face-display);
+        font-size: var(--t-micro);
+        font-weight: 700;
+        font-variation-settings: "wdth" 86;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: background var(--hinge), color var(--hinge);
+      }
+      .plate:hover {
+        background: var(--ink);
+        color: var(--leaf);
+      }
+      .plate[aria-pressed="true"] {
+        background: var(--hue-chrome);
+        color: var(--ink);
+      }
+      .plate[aria-pressed="true"]:hover {
+        background: var(--ink);
+        color: var(--hue-chrome);
+      }
+
+      .frame {
+        padding: var(--s-7) var(--s-6) 0;
+      }
+
+      .frame__head {
+        max-width: 64rem;
+        padding-bottom: var(--s-4);
+        margin-bottom: var(--s-4);
+        border-bottom: var(--hair) solid var(--rule-strong);
+      }
+
+
+      .frame__head h2 {
+        margin: 0 0 var(--s-3);
+        font-size: 1.75rem;
+        font-weight: 700;
+        font-variation-settings: "wdth" 88;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        text-transform: uppercase;
+      }
+
+      .frame__head p {
+        margin: 0 0 var(--s-2);
+        font-family: var(--face-prose);
+        font-size: var(--t-prose);
+        line-height: 1.53;
+        max-width: 64ch;
+      }
+
+      .frame__cost {
+        font-family: var(--face-prose);
+        font-size: var(--t-prose);
+        line-height: 1.5;
+        color: var(--ink-2);
+        max-width: 64ch;
+      }
+      .frame__cost b {
+        font-family: var(--face-display);
+        font-size: var(--t-micro);
+        font-weight: 700;
+        font-variation-settings: "wdth" 80;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+        margin-right: var(--s-2);
+      }
+
+      /* The frame crops a viewport so the rail's proportions read true. */
+      .stage {
+        height: 540px;
+        scroll-margin-top: 4.5rem;
+        border: var(--hair) solid var(--rule-strong);
+        border-radius: var(--r-leaf);
+        overflow: hidden;
+        box-shadow: var(--ply-shadow);
+      }
+
+      body.is-grey .stage {
+        filter: grayscale(1);
+      }
+
+      /* ---- the book ------------------------------------------------------- */
+
+      .book {
+        height: 100%;
+        display: grid;
+        grid-template-areas: "leaf rail";
+        grid-template-columns: minmax(0, 1fr) var(--rail-w);
+        background: var(--board);
+        /* `clip`, not `hidden`: a retracted tab slides past the fore edge by
+           design, and `hidden` would make the whole book a scroll container. */
+        overflow-x: clip;
+      }
+
+      .leaf {
+        grid-area: leaf;
+        position: relative;
+        background: var(--page);
+        min-width: 0;
+        padding: var(--s-5) var(--s-6) var(--s-8) calc(var(--s-7) + var(--s-4));
+        border-right: var(--hair) solid var(--rule-strong);
+      }
+
+      .leaf__spine {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--s-7);
+        border-right: var(--hair) solid var(--rule);
+        pointer-events: none;
+      }
+
+      .leaf__punch {
+        position: absolute;
+        left: 50%;
+        width: 11px;
+        height: 11px;
+        margin-left: -5.5px;
+        border-radius: 50%;
+        background: var(--board);
+        box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.35);
+      }
+      .leaf__punch--a {
+        top: 14%;
+      }
+      .leaf__punch--b {
+        top: 62%;
+      }
+
+      .leaf__caption {
+        position: absolute;
+        bottom: var(--s-5);
+        left: 50%;
+        transform: translateX(-50%) rotate(180deg);
+        writing-mode: vertical-rl;
+        font-family: var(--face-mono);
+        font-size: 9px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+
+      .runhead {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--s-4);
+        padding-bottom: var(--s-3);
+        margin-bottom: var(--s-6);
+        border-bottom: var(--hair) solid var(--rule-strong);
+        flex-wrap: wrap;
+      }
+
+      .runhead__mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.44em;
+        font-size: var(--t-body);
+        font-weight: 700;
+        font-variation-settings: "wdth" 78;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      .runhead__record {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-3);
+        margin-right: auto;
+        padding-left: var(--s-5);
+        min-width: 0;
+      }
+
+      .runhead__customer {
+        font-size: var(--t-h3);
+        font-weight: 700;
+        font-variation-settings: "wdth" 86;
+        letter-spacing: -0.015em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .runhead__right {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-4);
+        font-size: var(--t-micro);
+      }
+
+      .datum--quiet {
+        color: var(--ink-2);
+        font-size: var(--t-small);
+      }
+
+      .sheet {
+        display: grid;
+        grid-template-columns: var(--head-col) repeat(4, minmax(0, 1fr));
+        column-gap: var(--s-5);
+        align-content: start;
+      }
+
+      .head {
+        grid-column: 1;
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-3);
+        padding-top: 0.4rem;
+        font-size: var(--t-micro);
+        font-weight: 700;
+        font-variation-settings: "wdth" 80;
+        letter-spacing: 0.17em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+      .head::after {
+        content: "";
+        flex: 1;
+        height: 0;
+        border-top: var(--hair) solid var(--rule);
+        transform: translateY(-0.3em);
+      }
+
+      .body {
+        grid-column: 2 / -1;
+        min-width: 0;
+      }
+
+      .body h1 {
+        margin: 0 0 var(--s-4);
+        font-size: 2rem;
+        font-weight: 700;
+        font-variation-settings: "wdth" 92;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        text-transform: uppercase;
+      }
+
+      .schedule {
+        border-top: var(--hair) solid var(--rule-strong);
+        margin-top: var(--s-5);
+      }
+
+      .grant {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(0, 0.95fr);
+        gap: var(--s-4);
+        align-items: baseline;
+        border-bottom: var(--hair) solid var(--rule);
+        padding: var(--s-4) 0;
+      }
+
+      .grant__name {
+        font-size: var(--t-h3);
+        font-weight: 700;
+        font-variation-settings: "wdth" 88;
+        text-transform: uppercase;
+      }
+
+      .grant__when {
+        text-align: right;
+        font-family: var(--face-mono);
+        font-size: var(--t-small);
+        color: var(--ink-2);
+      }
+
+      .mark {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s-2);
+        font-size: var(--t-micro);
+        font-weight: 700;
+        font-variation-settings: "wdth" 84;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .mark--granted {
+        color: #1c5c33;
+      }
+      .mark--lapsed {
+        color: #8c1c09;
+      }
+
+      .prose {
+        font-family: var(--face-prose);
+        font-size: var(--t-prose);
+        line-height: 1.53;
+        max-width: 62ch;
+      }
+
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* ---- the rail: shared skeleton -------------------------------------- */
+
+      .rail {
+        grid-area: rail;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: var(--s-5) 0;
+        background: var(--bone);
+      }
+
+      .rail__tab {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-left: var(--hair) solid var(--rule-strong);
+        border-radius: 0 var(--r-leaf) var(--r-leaf) 0;
+        color: #fff;
+        font-family: var(--face-display);
+        font-size: var(--t-micro);
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform var(--hinge);
+      }
+
+      /* Selected is a punched hole. Not a colour change and not a bar: the hole. */
+      .rail__tab[aria-current="page"]::after {
+        content: "";
+        position: absolute;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--page);
+        box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+      }
+
+      /* Face-down: the leaf turned over, showing unprinted board back. */
+      .rail__tab[aria-disabled="true"] {
+        background: repeating-linear-gradient(
+          135deg,
+          var(--facedown-a),
+          var(--facedown-a) 3px,
+          var(--facedown-b) 3px,
+          var(--facedown-b) 6px
+        ) !important;
+        color: var(--facedown-ink) !important;
+        cursor: not-allowed;
+      }
+
+      /* ==== 0 · SHIPPING TODAY ============================================= */
+
+      .opt--now .rail__tab {
+        writing-mode: vertical-rl;
+        font-variation-settings: "wdth" 82;
+        padding: var(--s-4) 0;
+        transform: translateX(var(--s-3));
+      }
+      .opt--now .rail__tab:hover:not([aria-disabled="true"]) {
+        transform: translateX(var(--s-2));
+      }
+      .opt--now .rail__tab[aria-current="page"] {
+        transform: none;
+      }
+      .opt--now .rail__tab[aria-current="page"]::after {
+        top: var(--s-3);
+        left: 50%;
+        margin-left: -4.5px;
+      }
+      .opt--now .rail__tab[aria-disabled="true"] {
+        transform: translateX(var(--s-4));
+      }
+
+      /* ==== A · THE PRINTED DIVIDER ======================================== */
+      /* Same fore edge, same extent-driven heights, same punch and same
+         face-down. The rail widens to the width a divider tab is actually
+         printed at, and the lettering stands up. */
+
+      .opt--a {
+        --rail-w: 9.25rem;
+      }
+      .opt--a .rail__tab {
+        justify-content: flex-start;
+        /* Constant left padding on every tab, so the labels align down a column
+           whether the tab is out, back, or face-down. */
+        padding: var(--s-4) var(--s-4) var(--s-4) 2.4rem;
+        font-variation-settings: "wdth" 86;
+        letter-spacing: 0.15em;
+        text-align: left;
+        transform: translateX(var(--s-5));
+      }
+      .opt--a .rail__tab:hover:not([aria-disabled="true"]) {
+        transform: translateX(var(--s-3));
+      }
+      .opt--a .rail__tab[aria-current="page"] {
+        transform: none;
+      }
+      .opt--a .rail__tab[aria-current="page"]::after {
+        top: 50%;
+        left: 1.05rem;
+        margin-top: -4.5px;
+      }
+      .opt--a .rail__tab[aria-disabled="true"] {
+        transform: translateX(var(--s-6));
+      }
+      /* ==== B · THE NARROW FORE EDGE ======================================= */
+      /* The 3.25rem rail keeps its width to within a few pixels; the label is
+         set upright in condensed caps and allowed to wrap. */
+
+      .opt--b {
+        --rail-w: 4.5rem;
+      }
+      .opt--b .rail__tab {
+        flex-direction: column;
+        text-align: center;
+        padding: var(--s-6) var(--s-2) var(--s-4);
+        font-variation-settings: "wdth" 62;
+        letter-spacing: 0.04em;
+        line-height: 1.16;
+        hyphens: none;
+        transform: translateX(var(--s-2));
+      }
+      .opt--b .rail__tab:hover:not([aria-disabled="true"]) {
+        transform: translateX(var(--s-1));
+      }
+      .opt--b .rail__tab[aria-current="page"] {
+        transform: none;
+      }
+      .opt--b .rail__tab[aria-current="page"]::after {
+        top: var(--s-3);
+        left: 50%;
+        margin-left: -4.5px;
+      }
+      .opt--b .rail__tab[aria-disabled="true"] {
+        transform: translateX(var(--s-3));
+      }
+
+      /* ==== C · TOP TABS =================================================== */
+      /* The exhibit-binder index rather than the fore-edge one. Width carries
+         the extent instead of height, and this is already exactly what the
+         phone breakpoint does — so the app stops having two navigations. */
+
+      .opt--c .book {
+        grid-template-areas: "rail" "leaf";
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+      .opt--c .leaf {
+        z-index: 1;
+        border-right: none;
+      }
+      .opt--c .rail {
+        z-index: 0;
+        flex-direction: row;
+        gap: 2px;
+        padding: var(--s-4) var(--s-5) 0;
+      }
+      .opt--c .rail__tab {
+        justify-content: flex-start;
+        border-left: none;
+        border-bottom: var(--hair) solid var(--rule-strong);
+        border-radius: var(--r-leaf) var(--r-leaf) 0 0;
+        padding: var(--s-3) var(--s-4) var(--s-3) 2.4rem;
+        font-variation-settings: "wdth" 86;
+        letter-spacing: 0.15em;
+        white-space: nowrap;
+        transform: translateY(var(--s-3));
+      }
+      .opt--c .rail__tab:hover:not([aria-disabled="true"]) {
+        transform: translateY(var(--s-2));
+      }
+      .opt--c .rail__tab[aria-current="page"] {
+        transform: none;
+      }
+      .opt--c .rail__tab[aria-current="page"]::after {
+        top: 50%;
+        left: 1.05rem;
+        margin-top: -4.5px;
+      }
+      .opt--c .rail__tab[aria-disabled="true"] {
+        transform: translateY(var(--s-4));
+      }
+
+      /* ---- the mock at narrow widths --------------------------------------
+       *
+       * The frames keep their desktop composition and scroll sideways rather
+       * than reflowing. Squeezing a 9 rem rail and a five-column sheet into a
+       * phone shows neither one honestly, and the question on the table is what
+       * the rail does at the width it is actually used at. The app's own phone
+       * breakpoint is a separate design and already sets its labels upright. */
+
+      .swipe {
+        display: none;
+        margin-top: var(--s-2);
+        font-family: var(--face-mono);
+        font-size: var(--t-micro);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+
+      @media (max-width: 860px) {
+        .masthead,
+        .controls,
+        .frame,
+        .colophon {
+          padding-left: var(--s-4);
+          padding-right: var(--s-4);
+        }
+        .controls {
+          gap: var(--s-3);
+        }
+        .stage {
+          height: 440px;
+          overflow-x: auto;
+          overflow-y: hidden;
+          overscroll-behavior-x: contain;
+        }
+        .stage > .book {
+          width: 1080px;
+        }
+        .swipe {
+          display: block;
+        }
+      }
+
+      .colophon {
+        padding: var(--s-7) var(--s-6) var(--s-8);
+        max-width: 64rem;
+      }
+      .colophon h2 {
+        margin: 0 0 var(--s-4);
+        font-size: 1.75rem;
+        font-weight: 700;
+        font-variation-settings: "wdth" 88;
+        letter-spacing: -0.025em;
+        text-transform: uppercase;
+      }
+      .colophon table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: var(--t-small);
+      }
+      .colophon th {
+        text-align: left;
+        font-size: var(--t-micro);
+        font-weight: 700;
+        font-variation-settings: "wdth" 80;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+        padding: var(--s-2) var(--s-4) var(--s-2) 0;
+        border-bottom: var(--hair) solid var(--rule-strong);
+      }
+      .colophon td {
+        padding: var(--s-3) var(--s-4) var(--s-3) 0;
+        border-bottom: var(--hair) solid var(--rule);
+        vertical-align: top;
+      }
+      .colophon td:first-child {
+        font-weight: 700;
+        font-variation-settings: "wdth" 84;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-size: var(--t-micro);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="masthead">
+      <h1>The fore edge, without the rotation</h1>
+      <p>
+        The rail is right where it belongs — a tabbed manual puts its divisions on the fore
+        edge, and a sidebar here would make this a dashboard wearing a manual's colours. The
+        defect is narrower than that: the labels are laid on their side in a 52&nbsp;pixel
+        column, and a rotated word is read appreciably slower than an upright one. On the one
+        control whose entire job is answering <em>which section am I in</em>, that is the
+        wrong place to spend a reader's attention.
+      </p>
+      <p>
+        Worth saying plainly, because it decides the whole question: a real tabbed divider does
+        not rotate its lettering either. Rotation belongs to the thumb index cut into a
+        dictionary's fore edge, not to the tab card standing out of a binder. Every option here
+        is <em>more</em> faithful to the form than what ships today, not a concession made to
+        legibility.
+      </p>
+      <p>
+        All four frames below are driven by one set of controls, so they can be compared on the
+        same state. Nothing in the app has been changed yet; this is for review.
+      </p>
+    </div>
+
+    <div class="controls">
+      <div class="controls__group">
+        <span class="controls__label">Open at</span>
+        <button class="plate" type="button" data-division="customers">Customers</button>
+        <button class="plate" type="button" data-division="sources">Sources</button>
+        <button class="plate" type="button" data-division="lake">Raw lake</button>
+        <button class="plate" type="button" data-division="people">People</button>
+      </div>
+      <div class="controls__group">
+        <span class="controls__label">Customer</span>
+        <button class="plate" type="button" id="toggle-tenant">Chosen</button>
+      </div>
+      <div class="controls__group">
+        <span class="controls__label">Greyscale</span>
+        <button class="plate" type="button" id="toggle-grey" aria-pressed="false">Off</button>
+      </div>
+    </div>
+
+    <section class="frame">
+      <div class="frame__head">
+        <h2>Shipping today: rotated lettering in a 52&nbsp;px rail</h2>
+        <p>
+          Here for comparison. Turn greyscale on and read the four labels: the hue tells you
+          more than the word does, which is backwards for navigation.
+        </p>
+      </div>
+      <p class="swipe">Swipe the frame sideways &rarr;</p>
+      <div class="stage opt--now"><div class="book" data-book></div></div>
+    </section>
+
+    <section class="frame">
+      <div class="frame__head">
+        <h2>Option&nbsp;A · The printed divider</h2>
+        <p>
+          <strong>This is the one to ship.</strong> The rail widens to 9.25&nbsp;rem, the width
+          a divider tab is actually printed at, and the lettering stands up. Everything
+          load-bearing survives untouched: navigation
+          stays on the fore edge, tab height stays proportional to each division's extent so
+          the rail is still a picture of the book, selection is still the punched hole, locked
+          divisions are still face-down rather than hidden. The punch moves to the tab's
+          leading edge, where a binder is actually punched, and the label sets from a constant
+          left margin, so the open section reads as a card pulled further out of the book,
+          which is the one thing the extension was always trying to say.
+        </p>
+        <p class="frame__cost">
+          <b>Cost</b> 6&nbsp;rem of page width. The leaf is capped at 78&nbsp;rem, so on
+          anything from a laptop up it comes out of margin rather than out of content.
+        </p>
+      </div>
+      <p class="swipe">Swipe the frame sideways &rarr;</p>
+      <div class="stage opt--a"><div class="book" data-book></div></div>
+    </section>
+
+    <section class="frame">
+      <div class="frame__head">
+        <h2>Option&nbsp;B · The narrow fore edge</h2>
+        <p>
+          The smallest change that fixes the defect. The rail grows by 20&nbsp;pixels, to
+          4.5&nbsp;rem, and the label is set upright in Archivo at width&nbsp;62, which is
+          exactly enough for all four current labels to sit on one line, including
+          <span class="mono">RAW&nbsp;LAKE</span>. Upright and small beats sideways and large:
+          the eye reads word shapes, and a rotated word does not have one.
+        </p>
+        <p class="frame__cost">
+          <b>Cost</b> No headroom. <span class="mono">CUSTOMERS</span> measures 53&nbsp;px in a
+          55&nbsp;px column: it fits and nothing more. A longer division name wraps to two
+          lines or has to be renamed, so the wheel's three spare hues come with a naming
+          constraint attached that nothing in the code will remind anyone about.
+        </p>
+      </div>
+      <p class="swipe">Swipe the frame sideways &rarr;</p>
+      <div class="stage opt--b"><div class="book" data-book></div></div>
+    </section>
+
+    <section class="frame">
+      <div class="frame__head">
+        <h2>Option&nbsp;C · Top tabs</h2>
+        <p>
+          The other real divider form: the exhibit-binder index, tabs across the head. Extent
+          drives width instead of height, so the rail is still the picture. The argument for it
+          is not legibility. It is that the phone breakpoint <em>already renders this</em>, at
+          the foot of the leaf. Adopt it on desktop and the app stops maintaining two
+          navigations that behave differently and get tested separately.
+        </p>
+        <p class="frame__cost">
+          <b>Cost</b> The fore edge goes, and with it the strongest thing the interface says
+          about what it is. This is the option to pick only if the width in&nbsp;A is genuinely
+          unaffordable.
+        </p>
+      </div>
+      <p class="swipe">Swipe the frame sideways &rarr;</p>
+      <div class="stage opt--c"><div class="book" data-book></div></div>
+    </section>
+
+    <div class="colophon">
+      <h2>What every option holds</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Invariant</th>
+            <th>How it survives</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Extent</td>
+            <td>
+              Still <span class="mono">flex-grow</span> from
+              <span class="mono">DIVISIONS[].extent</span> — height in A and B, width in C.
+              Never measured from the current customer's rows, so the navigation cannot move
+              under the cursor.
+            </td>
+          </tr>
+          <tr>
+            <td>Selection</td>
+            <td>
+              Still the punched hole, never a colour change and never a bar — so
+              <span class="mono">aria-current</span> has a visible partner that survives
+              greyscale.
+            </td>
+          </tr>
+          <tr>
+            <td>Face-down</td>
+            <td>
+              A locked division still renders turned over, with the reason in its accessible
+              name. Nothing vanishes, so nobody has to already know the People tab exists.
+            </td>
+          </tr>
+          <tr>
+            <td>Lettering</td>
+            <td>
+              Still chosen per hue by <span class="mono">letteringOn</span>: ink on chrome
+              yellow at 8.75:1, paper on oxide 4.98, teal 5.05, ultramarine 7.50. A hue added
+              later is lettered correctly without anyone remembering to think about it.
+            </td>
+          </tr>
+          <tr>
+            <td>Face-down ink</td>
+            <td>
+              Darkened from <span class="mono">#5f5844</span> to
+              <span class="mono">#524a37</span>, 4.37:1&nbsp;&rarr;&nbsp;5.42:1 on the hatch.
+              A disabled control is WCAG-exempt, but this one carries the sentence explaining
+              why a section will not open, and the stylesheet's own note says an unreadable
+              label is a defect whatever the exemption says.
+            </td>
+          </tr>
+          <tr>
+            <td>Motion</td>
+            <td>
+              Still the two-frame hinge on a transform, still nothing animated that would
+              reflow the rail, still nothing at all under
+              <span class="mono">prefers-reduced-motion</span>.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <script type="module">
+      // apps/ui/src/lib/divisions.ts, verbatim.
+      const DIVISIONS = [
+        { id: "customers", label: "Customers", hue: "#b24b1a", extent: 2, scoped: false },
+        { id: "sources", label: "Sources", hue: "#eda600", extent: 4, scoped: true },
+        { id: "lake", label: "Raw lake", hue: "#0f7673", extent: 3, scoped: true },
+        { id: "people", label: "People", hue: "#234c9e", extent: 2, scoped: true },
+      ];
+
+      // apps/ui/src/lib/acetate.ts, the parts the rail depends on.
+      const PAPER = { r: 251, g: 248, b: 240 };
+      const INK = { r: 22, g: 21, b: 15 };
+
+      const parseHex = (hex) => ({
+        r: parseInt(hex.slice(1, 3), 16),
+        g: parseInt(hex.slice(3, 5), 16),
+        b: parseInt(hex.slice(5, 7), 16),
+      });
+      const linearise = (c) =>
+        c / 255 <= 0.04045 ? c / 255 / 12.92 : Math.pow((c / 255 + 0.055) / 1.055, 2.4);
+      const luminance = ({ r, g, b }) =>
+        0.2126 * linearise(r) + 0.7152 * linearise(g) + 0.0722 * linearise(b);
+      const contrast = (a, b) => {
+        const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+      const toHex = ({ r, g, b }) =>
+        `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+      const letteringOn = (hex) => {
+        const board = parseHex(hex);
+        return contrast(board, INK) >= contrast(board, PAPER) ? toHex(INK) : toHex(PAPER);
+      };
+
+      const state = { current: "sources", tenant: true };
+
+      const stages = [...document.querySelectorAll(".stage")];
+
+      function railMarkup(option) {
+        return DIVISIONS.map((div) => {
+          const locked = div.scoped && !state.tenant;
+          const current = div.id === state.current && !locked;
+
+          if (locked) {
+            return `<span class="rail__tab" aria-disabled="true" style="flex-grow:${div.extent}" title="Choose a customer first">${div.label}<span class="visually-hidden"> — choose a customer first</span></span>`;
+          }
+
+          return `<a class="rail__tab" href="#" data-goto="${div.id}"${
+            current ? ' aria-current="page"' : ""
+          } style="flex-grow:${div.extent};background:${div.hue};color:${letteringOn(div.hue)}">${
+            div.label
+          }</a>`;
+        }).join("");
+      }
+
+      function leafMarkup() {
+        const open = DIVISIONS.find((d) => d.id === state.current);
+        const locked = open.scoped && !state.tenant;
+        const shown = locked ? DIVISIONS[0] : open;
+
+        const record = state.tenant
+          ? `<span class="runhead__record"><span class="runhead__customer">Acme Trading</span><span class="datum datum--quiet">CASE-0042</span></span>`
+          : "";
+
+        const page =
+          shown.id === "customers"
+            ? `<h1>Customers</h1><p class="prose">Every member company whose authorities this control plane holds. Open one to see what it has granted, and until when.</p>
+               <div class="schedule">
+                 <div class="grant"><span class="grant__name">Acme Trading</span><span class="mark mark--granted">3 granted</span><span class="grant__when">CASE-0042</span></div>
+                 <div class="grant"><span class="grant__name">Borough Mills</span><span class="mark mark--lapsed">1 lapsed</span><span class="grant__when">CASE-0043</span></div>
+               </div>`
+            : shown.id === "lake"
+              ? `<h1>Raw lake</h1><p class="prose">Immutable, create-only, and the only durable layer here. Everything downstream is a projection that may be dropped and rebuilt.</p>
+               <div class="schedule">
+                 <div class="grant"><span class="grant__name">xero / invoices</span><span class="datum datum--quiet">14,208 objects</span><span class="grant__when">2026-09-18 04:12Z</span></div>
+                 <div class="grant"><span class="grant__name">drive / statements</span><span class="datum datum--quiet">311 objects</span><span class="grant__when">2026-09-17 23:40Z</span></div>
+               </div>`
+              : shown.id === "people"
+                ? `<h1>People</h1><p class="prose">Who may open this customer's book, and who invited them.</p>
+               <div class="schedule">
+                 <div class="grant"><span class="grant__name">R. Okonkwo</span><span class="datum datum--quiet">admin</span><span class="grant__when">invited 2026-08-02</span></div>
+                 <div class="grant"><span class="grant__name">L. Farrow</span><span class="datum datum--quiet">operator</span><span class="grant__when">invited 2026-09-11</span></div>
+               </div>`
+                : `<h1>Sources</h1><p class="prose">What each source will read, what it will never write, and when the authority lapses. A grant nobody has made yet carries the access statement instead of a status.</p>
+               <div class="schedule">
+                 <div class="grant"><span class="grant__name">Xero</span><span class="mark mark--granted">Granted</span><span class="grant__when">lapses 2026-11-04</span></div>
+                 <div class="grant"><span class="grant__name">Google Drive</span><span class="mark mark--lapsed">Lapsed</span><span class="grant__when">lapsed 2026-09-02</span></div>
+               </div>`;
+
+        return `<div class="leaf">
+          <div class="leaf__spine" aria-hidden="true">
+            <span class="leaf__punch leaf__punch--a"></span>
+            <span class="leaf__punch leaf__punch--b"></span>
+            <span class="leaf__caption">Undercroft · control plane</span>
+          </div>
+          <header class="runhead">
+            <span class="runhead__mark">Undercroft</span>
+            ${record}
+            <div class="runhead__right">
+              <span class="datum datum--quiet">bacuongtr@gmail.com</span>
+              <button class="plate" type="button">Sign out</button>
+            </div>
+          </header>
+          <div class="sheet">
+            <div class="head">${shown.label}</div>
+            <div class="body">${page}</div>
+          </div>
+        </div>`;
+      }
+
+      function render() {
+        const open = DIVISIONS.find((d) => d.id === state.current);
+        const locked = open.scoped && !state.tenant;
+        const board = (locked ? DIVISIONS[0] : open).hue;
+
+        for (const stage of stages) {
+          const option = [...stage.classList]
+            .find((c) => c.startsWith("opt--"))
+            .slice(5);
+          const book = stage.querySelector("[data-book]");
+          book.style.setProperty("--board", board);
+          book.innerHTML = `${leafMarkup()}<nav class="rail" aria-label="Sections">${railMarkup(option)}</nav>`;
+        }
+
+        for (const button of document.querySelectorAll("[data-division]")) {
+          button.setAttribute(
+            "aria-pressed",
+            String(button.dataset.division === state.current),
+          );
+        }
+        const tenantButton = document.getElementById("toggle-tenant");
+        tenantButton.setAttribute("aria-pressed", String(state.tenant));
+        tenantButton.textContent = state.tenant ? "Chosen" : "None chosen";
+      }
+
+      document.addEventListener("click", (event) => {
+        const division = event.target.closest("[data-division]");
+        if (division) {
+          state.current = division.dataset.division;
+          render();
+          return;
+        }
+
+        const tab = event.target.closest("[data-goto]");
+        if (tab) {
+          event.preventDefault();
+          state.current = tab.dataset.goto;
+          render();
+        }
+      });
+
+      document.getElementById("toggle-tenant").addEventListener("click", () => {
+        state.tenant = !state.tenant;
+        if (!state.tenant) state.current = "customers";
+        render();
+      });
+
+      document.getElementById("toggle-grey").addEventListener("click", (event) => {
+        const on = document.body.classList.toggle("is-grey");
+        event.currentTarget.setAttribute("aria-pressed", String(on));
+        event.currentTarget.textContent = on ? "On" : "Off";
+      });
+
+      render();
+    </script>
+  </body>
+</html>
