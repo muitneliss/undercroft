@@ -131,8 +131,17 @@ apply  060_auth.sql
 applied 6 migration(s)
 ```
 
-Re-running prints `already up to date`. If you skip this step, every sign-in fails with
-`relation "auth_user" does not exist`.
+Re-running prints `already up to date`.
+
+On the **server** you never run this by hand: the `db-migrate` compose service applies the
+schema on every deploy, and both the control plane and the worker wait for it to finish. With
+Path A that service runs here too; the command above is for Path B, or for a database you
+restored yourself.
+
+If the schema is behind, sign-in does not degrade — it **stops**. Better Auth answers 500 to
+every `/api/auth/*` request and logs `Database schema mismatch` naming the missing tables,
+while still logging `sign_in_configured` at boot. So "configured" in the log does not mean
+"working"; look for the mismatch line too.
 
 ## 6. Start the control plane
 
@@ -230,16 +239,16 @@ button yet.
 
 ## When it does not work
 
-| What you see                            | What it means                                                                   | Fix                                                                                                                           |
-| --------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `redirect_uri_mismatch` from Google     | `UNDERCROFT_PUBLIC_URL` does not match a registered URI, exactly, path included | Re-check step 2; `http` vs `https` and the port both count                                                                    |
-| Boot log says `sign_in_unconfigured`    | A required value is unset; it names which                                       | Step 4                                                                                                                        |
-| `relation "auth_user" does not exist`   | Migrations not applied                                                          | Step 5                                                                                                                        |
-| "That address has not been invited"     | No live invitation for that exact address                                       | Step 7, and check for a typo or a different case                                                                              |
-| No code ever arrives                    | Either mail is not configured, or the address is not invited                    | Check the boot log; the server will not say which, on purpose — telling you would let anyone test which addresses have access |
-| Signed in, but no customers listed      | You have a session but no membership                                            | Check `app.tenant_member`; the invitation may have been for another tenant                                                    |
-| `permission denied for table auth_user` | The auth tables exist without grants                                            | Re-run step 5; `060_auth.sql` carries its own grants                                                                          |
-| Sign-in worked, then a blank page       | Stale bundle from before the router fix                                         | Hard-reload, or rebuild the UI                                                                                                |
+| What you see                             | What it means                                                                   | Fix                                                                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `redirect_uri_mismatch` from Google      | `UNDERCROFT_PUBLIC_URL` does not match a registered URI, exactly, path included | Re-check step 2; `http` vs `https` and the port both count                                                                    |
+| Boot log says `sign_in_unconfigured`     | A required value is unset; it names which                                       | Step 4                                                                                                                        |
+| `Database schema mismatch` / 500 on auth | Migrations not applied                                                          | Step 5                                                                                                                        |
+| "That address has not been invited"      | No live invitation for that exact address                                       | Step 7, and check for a typo or a different case                                                                              |
+| No code ever arrives                     | Either mail is not configured, or the address is not invited                    | Check the boot log; the server will not say which, on purpose — telling you would let anyone test which addresses have access |
+| Signed in, but no customers listed       | You have a session but no membership                                            | Check `app.tenant_member`; the invitation may have been for another tenant                                                    |
+| `permission denied for table auth_user`  | The auth tables exist without grants                                            | Re-run step 5; `060_auth.sql` carries its own grants                                                                          |
+| Sign-in worked, then a blank page        | Stale bundle from before the router fix                                         | Hard-reload, or rebuild the UI                                                                                                |
 
 Two by-design behaviours that look like bugs:
 
