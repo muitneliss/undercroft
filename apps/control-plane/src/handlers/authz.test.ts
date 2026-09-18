@@ -40,11 +40,14 @@ async function seedMembership(tenantId: string, userId: string, role: Role): Pro
   ]);
 }
 
-function caller(user: SessionUser | null) {
+function caller(user: SessionUser | null, superadmin = false) {
   const ctx: Context = {
     exec: db,
     user,
     sessionId: "s1",
+    // Defaulted off, so every test written before platform authority existed still asks the
+    // question it was asking: what an ordinary member may do. A superadmin is opted into.
+    superadmin,
     // The product default, as a request with no `Accept-Language` would resolve to. These
     // tests assert which code a refusal carries, never its wording.
     locale: DEFAULT_LOCALE,
@@ -152,5 +155,149 @@ describe("models.preview keeps money as a string", () => {
       table: "fct_demo",
     });
     expect(typeof (result.rows[0] as { amount: unknown }).amount).toBe("string");
+  });
+});
+
+/**
+ * Platform authority: what `UNDERCROFT_SUPERADMINS` buys, and what it must not.
+ *
+ * Each of these is paired with the same call made by a caller who is NOT a superadmin, so
+ * a bug that granted authority unconditionally -- the failure mode that matters, because it
+ * is silent -- cannot pass. `.claude/rules/tests.md`: a guard needs two tests.
+ */
+describe("a superadmin holds admin in every tenant", () => {
+  it("reaches a tenant they are not a member of", async () => {
+    const user = await seedUser("root@example.test");
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
+
+    const tenant = await caller({ userId: user, email: "root@example.test" }, true).tenants.get({
+      tenantId: "CASE-1",
+    });
+
+    expect(tenant.role).toBe("admin");
+  });
+
+  it("the same caller without platform authority is told the tenant does not exist", async () => {
+    const user = await seedUser("root@example.test");
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
+
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "root@example.test" }).tenants.get({ tenantId: "CASE-1" }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+
+  it("a tenant that does not exist is still NOT_FOUND for a superadmin", async () => {
+    // Otherwise every tenant-scoped procedure would run against a customer that is not
+    // there, and report an empty connection list rather than a 404 -- plausible and wrong.
+    const user = await seedUser("root@example.test");
+
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "root@example.test" }, true).tenants.get({
+          tenantId: "CASE-nonexistent",
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+});
+
+describe("a superadmin can act in a tenant, not only see it", () => {
+  it("may invite to a tenant they have no membership in", async () => {
+    // `people.invite` is requireRole("admin"). Platform authority has to satisfy it, or a
+    // superadmin can see a customer and do nothing about who may reach it.
+    const user = await seedUser("root@example.test");
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
+
+    const result = await caller({ userId: user, email: "root@example.test" }, true).people.invite({
+      tenantId: "CASE-1",
+      email: "new@example.test",
+      role: "viewer",
+    });
+
+    expect(result.email).toBe("new@example.test");
+  });
+
+  it("the list view shows every tenant, including ones with no membership", async () => {
+    const user = await seedUser("root@example.test");
+    await seedMembership("CASE-1", user, "member");
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-other')");
+
+    const tenants = await caller({ userId: user, email: "root@example.test" }, true).tenants.list();
+
+    // `admin` for both, matching what `tenants.get` grants above: the list and the page must
+    // not disagree about what may be done there.
+    expect(tenants.map((tenant) => `${tenant.id}:${tenant.role}`)).toEqual([
+      "CASE-1:admin",
+      "CASE-other:admin",
+    ]);
+  });
+});
+
+describe("creating a customer is platform authority, not a tenant role", () => {
+  it("a superadmin creates one and it appears in the list", async () => {
+    const user = await seedUser("root@example.test");
+
+    const created = await caller({ userId: user, email: "root@example.test" }, true).tenants.create(
+      { tenantId: "CASE-0001", displayName: "Acme" },
+    );
+
+    expect(created.displayName).toBe("Acme");
+    const tenants = await caller({ userId: user, email: "root@example.test" }, true).tenants.list();
+    expect(tenants.map((tenant) => tenant.id)).toEqual(["CASE-0001"]);
+  });
+
+  it("a tenant admin cannot, however senior in their own customer", async () => {
+    // The point of the pairing: `admin` is the top of ROLE_RANK and still is not this.
+    const user = await seedUser("admin@example.test");
+    await seedMembership("CASE-1", user, "admin");
+
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "admin@example.test" }).tenants.create({
+          tenantId: "CASE-0002",
+          displayName: "",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+});
+
+describe("a customer reference is refused rather than reinterpreted", () => {
+  it("a reference already in use is a CONFLICT, and does not rename the existing customer", async () => {
+    const user = await seedUser("root@example.test");
+    const root = caller({ userId: user, email: "root@example.test" }, true);
+    await root.tenants.create({ tenantId: "CASE-0001", displayName: "First" });
+
+    expect(
+      await errorCode(() => root.tenants.create({ tenantId: "CASE-0001", displayName: "Second" })),
+    ).toBe("CONFLICT");
+
+    const tenants = await root.tenants.list();
+    expect(tenants[0]?.displayName).toBe("First");
+  });
+
+  it("an empty display name falls back to the reference rather than a blank row", async () => {
+    const user = await seedUser("root@example.test");
+    const root = caller({ userId: user, email: "root@example.test" }, true);
+
+    const created = await root.tenants.create({ tenantId: "CASE-0003", displayName: "" });
+
+    expect(created.displayName).toBe("CASE-0003");
+  });
+
+  it("a reference with a space in it is refused before it reaches the database", async () => {
+    // It becomes an S3 key prefix in the raw lake, which cannot be renamed afterwards.
+    const user = await seedUser("root@example.test");
+
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "root@example.test" }, true).tenants.create({
+          tenantId: "CASE 0001",
+          displayName: "",
+        }),
+      ),
+    ).toBe("BAD_REQUEST");
   });
 });

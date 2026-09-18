@@ -16,7 +16,7 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { appUserForEmail, resolveInvitedUser } from "./invite.ts";
+import { appUserForEmail, isAdmissible, resolveInvitedUser } from "./invite.ts";
 
 let db: TestDatabase;
 
@@ -148,5 +148,64 @@ describe("resolving a session's address to its authorization identity", () => {
 
     const { rows } = await db.query("SELECT id FROM app.app_user");
     expect(rows).toHaveLength(0);
+  });
+});
+
+/**
+ * The superadmin exception to invite-only.
+ *
+ * Paired throughout with the same address absent from the list, because the whole hazard
+ * here is a gate that opens unconditionally: a bug that admitted everyone would satisfy
+ * every "a superadmin gets in" test on its own.
+ */
+describe("a superadmin needs no invitation", () => {
+  const roots = new Set(["root@example.test"]);
+
+  it("is admissible with no invitation and no account", async () => {
+    expect(await isAdmissible(db, "root@example.test", roots)).toBe(true);
+  });
+
+  it("the same address is refused when it is not on the list", async () => {
+    expect(await isAdmissible(db, "root@example.test")).toBe(false);
+  });
+
+  it("an address not on the list is still refused while the list is populated", async () => {
+    // The list must admit its members and nobody else -- not "anyone, once one is named".
+    expect(await isAdmissible(db, "stranger@example.test", roots)).toBe(false);
+  });
+
+  it("first sign-in provisions an app_user, so audit rows and memberships have a uuid", async () => {
+    const resolved = await resolveInvitedUser(db, "root@example.test", roots);
+
+    expect(resolved?.email).toBe("root@example.test");
+    const found = await appUserForEmail(db, "root@example.test");
+    expect(found?.appUserId).toBe(resolved?.appUserId ?? "");
+  });
+
+  it("and gives them no memberships at all", async () => {
+    // Their authority is the environment, resolved per request. A membership row here would
+    // be a copy of it in the database that outlives removal from the variable.
+    await resolveInvitedUser(db, "root@example.test", roots);
+
+    expect(await membershipsOf("root@example.test")).toEqual([]);
+  });
+
+  it("an uninvited address off the list is still provisioned nothing", async () => {
+    expect(await resolveInvitedUser(db, "stranger@example.test", roots)).toBeNull();
+
+    const { rows } = await db.query("SELECT id FROM app.app_user");
+    expect(rows).toHaveLength(0);
+  });
+
+  it("a superadmin who was also invited still gets that membership", async () => {
+    // The two are independent: being on the list must not swallow an invitation that
+    // grants a role somebody deliberately set.
+    await seedInvitation("CASE-0042", "root@example.test", "viewer");
+
+    await resolveInvitedUser(db, "root@example.test", roots);
+
+    expect(await membershipsOf("root@example.test")).toEqual([
+      { tenant_id: "CASE-0042", role: "viewer" },
+    ]);
   });
 });

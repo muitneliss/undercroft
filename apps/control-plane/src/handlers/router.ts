@@ -10,9 +10,32 @@ import * as connections from "../services/connections.ts";
 import * as models from "../services/models.ts";
 import * as people from "../services/people.ts";
 import * as tenants from "../services/tenants.ts";
-import { authedProcedure, publicProcedure, requireRole, router, tenantProcedure } from "./trpc.ts";
+import {
+  authedProcedure,
+  publicProcedure,
+  requireRole,
+  router,
+  superadminProcedure,
+  tenantProcedure,
+} from "./trpc.ts";
 
 const Role = z.enum(["viewer", "member", "admin"]);
+
+/**
+ * A tenant reference, as typed into the create form.
+ *
+ * Constrained to the shape `.claude/rules/pii.md` requires -- letters, digits, hyphen and
+ * underscore, no spaces -- because this value becomes an S3 key prefix in the raw lake and
+ * a directory name, and because a reference is a CASE-id and never a customer's name. The
+ * refusal is worth more than the convenience: a reference cannot be renamed once the lake
+ * has written under it.
+ */
+const TenantId = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/u);
 
 /**
  * Addresses are stored and compared lowercased.
@@ -35,7 +58,16 @@ const Email = z.string().trim().toLowerCase().email().max(320); // the longest a
  */
 export const appRouter = router({
   session: router({
-    me: authedProcedure.query(({ ctx }) => ({ userId: ctx.user.userId, email: ctx.user.email })),
+    // `superadmin` is here so the SPA can leave out an affordance the caller cannot use --
+    // courtesy, never the control. `superadminProcedure` refuses regardless of what the
+    // browser chose to render, and this flag answers "am I one" and never "who are they",
+    // which is the question that would turn this into a directory of the platform's
+    // administrators.
+    me: authedProcedure.query(({ ctx }) => ({
+      userId: ctx.user.userId,
+      email: ctx.user.email,
+      superadmin: ctx.superadmin,
+    })),
 
     signOut: authedProcedure.mutation(async ({ ctx }) => {
       // The session row is DELETED, not flagged: the session is gone the instant this
@@ -53,7 +85,9 @@ export const appRouter = router({
   }),
 
   tenants: router({
-    list: authedProcedure.query(({ ctx }) => tenants.listForCaller(ctx.exec, ctx.user.userId)),
+    list: authedProcedure.query(({ ctx }) =>
+      tenants.listForCaller(ctx.exec, { userId: ctx.user.userId, superadmin: ctx.superadmin }),
+    ),
 
     get: tenantProcedure.query(async ({ ctx, input }) => {
       const tenant = await tenants.get(ctx.exec, input.tenantId);
@@ -62,6 +96,41 @@ export const appRouter = router({
       }
       return { ...tenant, role: ctx.role };
     }),
+
+    /**
+     * Create a customer. Superadmin only.
+     *
+     * Not `requireRole("admin")`, which would read as the stricter choice and is in fact the
+     * wrong axis entirely: a tenant `admin` is senior *inside one customer*, and nothing
+     * about that authority implies the right to bring another customer into existence. This
+     * is the one procedure in the router whose authority is not tenant-scoped, and ADR 0013
+     * is what permits it to exist at all.
+     *
+     * CONFLICT for a reference already in use, worded, because the operator is looking at a
+     * form and has to be told which of the two things happened: a 409 that read like a
+     * success would have them believe they created a customer they merely collided with.
+     */
+    create: superadminProcedure
+      .input(z.object({ tenantId: TenantId, displayName: z.string().trim().max(200) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await tenants.create(ctx.exec, {
+          tenantId: input.tenantId,
+          // The reference doubles as the name until somebody gives it one, which is what
+          // `bun run invite --create-tenant` already does. An empty display name would
+          // render as a blank row in the list.
+          displayName: input.displayName || input.tenantId,
+          actor: ctx.user.email,
+        });
+
+        if (!result.ok) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: messages(ctx.locale)("error.tenantExists", { tenantId: input.tenantId }),
+          });
+        }
+
+        return result.tenant;
+      }),
   }),
 
   connections: router({

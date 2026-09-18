@@ -8,14 +8,28 @@
  * Every name here is a CASE-ID. `.claude/rules/pii.md` -- real client names live only in
  * restricted storage, never in a tracked file, a fixture or a screenshot.
  *
- * Adding a customer has no endpoint yet (the control-plane router exposes no create), so the
- * "Add" affordance is a plain note rather than a form that would post nowhere.
+ * The "Add" affordance is a real form since ADR 0013, and it is shown only to a platform
+ * superadmin. Hiding it from everyone else is courtesy and not the control: `tenants.create`
+ * is a `superadminProcedure` and refuses whatever the browser decided to render. The note in
+ * its place says who *can* do it, because a dead end the reader cannot act on is worse than
+ * no affordance at all.
+ *
+ * No `useState`, per `state.md`. Both inputs are uncontrolled and read through refs on
+ * submit; whether the request is in flight and why it failed are read off the mutation,
+ * which is the only thing that actually knows either.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on the two single-instance forms in the app -- a sign-in panel and a create-customer form, neither of which can appear twice on a page. The id is what the <label> points at.
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType: what remains are contextually-typed callbacks whose inferred type is a React or tRPC shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- React's event handlers, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/nursery/useReactNamingConvention: Fires on the two `useRef` handles, which it wants suffixed `Ref`. They are named for what they hold -- the reference field and the name field -- which is how the form reads, and the convention this file follows is People.tsx's beside it.
+// biome-ignore-all lint/performance/noJsxPropsBind: An inline submit handler on a single form. The re-render the rule is about matters under a memoised list of hundreds; this is one <form>.
 // biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -26,7 +40,26 @@ import { trpc } from "@/trpc.ts";
 
 export function Tenants(): React.JSX.Element {
   const { t } = useTranslation();
+  const utils = trpc.useUtils();
+  const idField = useRef<HTMLInputElement>(null);
+  const nameField = useRef<HTMLInputElement>(null);
+
   const tenants = trpc.tenants.list.useQuery();
+  const session = trpc.session.me.useQuery();
+
+  const addTenant = trpc.tenants.create.useMutation({
+    onSuccess: async () => {
+      if (idField.current !== null) {
+        idField.current.value = "";
+      }
+      if (nameField.current !== null) {
+        nameField.current.value = "";
+      }
+      // The new customer belongs in the list beside the others, and the cache is the only
+      // copy of that list -- there is no second one here to keep in step.
+      await utils.tenants.list.invalidate();
+    },
+  });
 
   if (tenants.isPending) {
     return <Skeleton rows={4} />;
@@ -83,8 +116,75 @@ export function Tenants(): React.JSX.Element {
       <div className="band-rule" />
 
       <div className="head">{t("tenants.addHead")}</div>
-      <div className="body">
-        <p className="note">{t("tenants.addNote")}</p>
+      <div className="body stack">
+        {session.data?.superadmin === true ? (
+          <>
+            <p className="note">{t("tenants.addLead")}</p>
+
+            <form
+              className="stack stack--tight"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const tenantId = idField.current?.value.trim() ?? "";
+                const displayName = nameField.current?.value.trim() ?? "";
+                if (tenantId === "") {
+                  return;
+                }
+                addTenant.mutate({ tenantId, displayName });
+              }}
+            >
+              <div className="field">
+                <label className="label" htmlFor="tenant-id">
+                  {t("tenants.idLabel")}
+                </label>
+                <input
+                  autoComplete="off"
+                  className="input"
+                  disabled={addTenant.isPending}
+                  id="tenant-id"
+                  name="tenantId"
+                  placeholder={t("tenants.idPlaceholder")}
+                  ref={idField}
+                  required={true}
+                  type="text"
+                />
+                <p className="field__hint">{t("tenants.idHint")}</p>
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="tenant-name">
+                  {t("tenants.nameLabel")}
+                </label>
+                <input
+                  autoComplete="off"
+                  className="input"
+                  disabled={addTenant.isPending}
+                  id="tenant-name"
+                  name="displayName"
+                  placeholder={t("tenants.namePlaceholder")}
+                  ref={nameField}
+                  type="text"
+                />
+              </div>
+
+              <button className="plate" disabled={addTenant.isPending} type="submit">
+                {addTenant.isPending ? t("tenants.adding") : t("tenants.add")}
+              </button>
+            </form>
+
+            {/* The server's own words. A reference already in use is the one failure an
+                operator can act on, and it arrives worded in their language from
+                `error.tenantExists` -- restating it here would be a second copy to keep in
+                step with the refusal that actually happened. */}
+            {addTenant.isError ? (
+              <Errata heading={t("tenants.notAdded")} live={true}>
+                {addTenant.error.message}
+              </Errata>
+            ) : null}
+          </>
+        ) : (
+          <p className="note">{t("tenants.addNote")}</p>
+        )}
       </div>
     </div>
   );
