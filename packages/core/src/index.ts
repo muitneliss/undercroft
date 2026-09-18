@@ -1,5 +1,14 @@
 export { canonicalJson, canonicalJsonFromText, parseLossless } from "./canonicalJson.ts";
 export { type Clock, systemClock, TestClock } from "./clock.ts";
+export {
+  createHttpEmailSender,
+  DEFAULT_EMAIL_ENDPOINT,
+  type EmailMessage,
+  type EmailSender,
+  type HttpEmailSenderOptions,
+  InMemoryEmailSender,
+  UnsendableEmail,
+} from "./email.ts";
 export { ConnectorError, HttpError, QuotaExhausted, UndercroftError } from "./errors.ts";
 export { getPath, getStringPath, parsePath } from "./getPath.ts";
 export { newRequestId, newRunId } from "./ids.ts";
