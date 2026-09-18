@@ -1,5 +1,6 @@
 // biome-ignore-all lint/performance/noBarrelFile: `index.ts` is each package's public entry point, which is the seam `.claude/rules/layering.md` is built on and what `.claude/rules/tests.md` means by testing through the public API. The re-export cost the rule is about applies to a bundle; these are workspace packages consumed by name.
 
+export { decodeBase64Url } from "./base64.ts";
 export { canonicalJson, canonicalJsonFromText, parseLossless } from "./canonicalJson.ts";
 export { type Clock, systemClock, TestClock } from "./clock.ts";
 export {
@@ -13,6 +14,15 @@ export {
 } from "./email.ts";
 export { ConnectorError, HttpError, QuotaExhausted, UndercroftError } from "./errors.ts";
 export { getPath, getStringPath, parsePath } from "./getPath.ts";
+export {
+  type ByteFetcher,
+  type ByteRequest,
+  type ByteResponse,
+  createByteFetcher,
+  InMemoryByteFetcher,
+  raiseForByteStatus,
+  type RecordedByteResponse,
+} from "./httpBytes.ts";
 export { newRequestId, newRunId } from "./ids.ts";
 export { DEFAULT_LOCALE, LOCALES, type Locale, negotiateLocale, parseLocale } from "./locale.ts";
 export {

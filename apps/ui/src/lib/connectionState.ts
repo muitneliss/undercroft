@@ -65,7 +65,7 @@ export type CardPresentation = CardFacts & {
 
 /** Which state a grant is in. No words, and therefore no language. */
 export function connectionFacts(connection: Connection, now = new Date()): CardFacts {
-  const expiry = connection.expires_at ? new Date(connection.expires_at) : null;
+  const expiry = connection.expiresAt ? new Date(connection.expiresAt) : null;
   // A null expiry means "no expiry recorded" -- a HubSpot private-app token
   // genuinely never expires. Treating null as expired would demand a reconnect
   // for a connection that works.
@@ -139,10 +139,10 @@ export function presentConnection(
         ...card,
         headline: t("grantState.needsScopeHeadline"),
         detail:
-          connection.external_account_label === ""
+          connection.externalAccountLabel === ""
             ? t("grantState.needsScopeDetail")
             : t("grantState.needsScopeDetailNamed", {
-                account: connection.external_account_label,
+                account: connection.externalAccountLabel,
               }),
         action,
       };
@@ -152,7 +152,7 @@ export function presentConnection(
         ...card,
         // The account's own name where there is one: an operator on a call needs to know
         // *which* mailbox is connected, not merely that one is.
-        headline: connection.external_account_label || t("grantState.connectedHeadline"),
+        headline: connection.externalAccountLabel || t("grantState.connectedHeadline"),
         detail: t("grantState.connectedDetail"),
         action,
       };
@@ -177,7 +177,7 @@ export function presentConnection(
  * caller renders the absence as MISSING.
  */
 export function scopeSummary(t: TFunction, connection: Connection): string | null {
-  const folders = connection.config.folder_ids ?? [];
+  const folders = connection.config.folderIds ?? [];
   const labels = connection.config.labels ?? [];
   const entities = connection.config.entities ?? [];
 

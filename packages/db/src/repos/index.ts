@@ -11,12 +11,19 @@
 
 export {
   type Connection,
+  type ConnectionDetail,
   ConnectionRegistryError,
   type Credential,
+  deleteCredential,
+  type ConnectionView,
   getConnection,
   listConnections,
+  listConnectionViews,
+  readConnectionDetail,
   readCredential,
   setStatus,
   upsertConnection,
+  writeConnectionDetail,
   writeCredential,
 } from "./connections.ts";
+export { tenantExists } from "./tenants.ts";

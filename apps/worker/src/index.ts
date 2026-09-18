@@ -16,5 +16,12 @@ export {
   landRecords,
   type RecordToLand,
 } from "./services/land.ts";
+export {
+  type DocumentToLand,
+  type LandDocumentsResult,
+  type LandedDocument,
+  landDocuments,
+  MAX_DOCUMENT_BYTES,
+} from "./services/landDocument.ts";
 export { type LoadResult, loadStreamToRaw } from "./services/loadToRaw.ts";
 export { runTransform, type TransformDeps, type TransformResult } from "./services/transform.ts";

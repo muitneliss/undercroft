@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+
 // biome-ignore-all lint/performance/noNamespaceImport: `import pg from "pg"` and friends: these packages have no useful named exports, and the namespace import is the documented way to consume them.
 // biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
 
@@ -143,11 +145,92 @@ export const appRouter = router({
     // Starting an OAuth flow mints tokens into a customer's account, so it is admin-only.
     // The redirect itself is a plain HTTP route (a provider cannot speak tRPC); this
     // returns the URL for the UI to navigate to.
+    //
+    // Gmail and Drive now get a real Google URL with a handshake row recorded behind it.
+    // HubSpot and Xero keep the placeholder they have always returned: neither has a consent
+    // flow yet, and inventing one here would be a button that posts nowhere. The same
+    // placeholder is what an unconfigured ingest client falls back to, which is why the
+    // return shape is unchanged.
     startOAuth: requireRole("admin")
       .input(z.object({ source: z.string().min(1) }))
-      .mutation(({ input }) => ({
-        authorizeUrl: `/oauth/${input.source}/start?tenant=__set_by_server__`,
-      })),
+      .mutation(async ({ ctx, input }) => {
+        const started = await ctx.startConsent({
+          tenantId: ctx.tenantId,
+          source: input.source,
+          startedBy: ctx.user.userId,
+        });
+        if (started.ok) {
+          return { authorizeUrl: started.authorizeUrl };
+        }
+        return { authorizeUrl: `/oauth/${input.source}/start?tenant=__set_by_server__` };
+      }),
+
+    /**
+     * What an admin may choose from, for the scope picker.
+     *
+     * Proxied to the worker because it needs a live token, which only the worker can open.
+     * Gmail only: under `drive.file` the choosing happens in the browser through Google's own
+     * Picker, so there is nothing for the server to list.
+     */
+    browseScope: requireRole("admin")
+      .input(z.object({ source: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        const outcome = await ctx.worker.browseScope({
+          source: input.source,
+          tenantId: ctx.tenantId,
+          kind: "labels",
+        });
+        if (!outcome.ok) {
+          throw new TRPCError({
+            code: outcome.reason === "unreachable" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        return outcome.value;
+      }),
+
+    /** Record what may be read. Admin-only: it widens or narrows a live grant. */
+    setScope: requireRole("admin")
+      .input(z.object({ source: z.string().min(1), selection: z.unknown() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await connections.setScope(ctx.exec, {
+          tenantId: ctx.tenantId,
+          source: input.source,
+          selectionJson: JSON.stringify(input.selection ?? {}),
+          actor: ctx.user.email,
+          actorId: ctx.user.userId,
+        });
+        if (!result.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: messages(ctx.locale)("error.scopeNotUnderstood", { source: input.source }),
+          });
+        }
+        return { ok: true };
+      }),
+
+    /**
+     * End a grant.
+     *
+     * Reports whether the provider was actually told rather than assuming it: our row
+     * disappearing while Google's grant stands would make "you can disconnect at any time"
+     * -- copy already on the consent card -- a half-truth.
+     */
+    disconnect: requireRole("admin")
+      .input(z.object({ source: z.string().min(1) }))
+      .mutation(({ ctx, input }) =>
+        connections.disconnect(ctx.exec, ctx.worker, {
+          tenantId: ctx.tenantId,
+          source: input.source,
+          actor: ctx.user.email,
+        }),
+      ),
   }),
 
   /**
@@ -242,6 +325,20 @@ export const appRouter = router({
     trigger: requireRole("member")
       .input(z.object({ source: z.string().min(1) }))
       .mutation(({ input }) => ({ triggered: true, source: input.source })),
+  }),
+
+  /**
+   * The public halves of the Google client, for the browser's Picker.
+   *
+   * A client id and an API key are public by design -- they identify the app, they do not
+   * authorise anything, and Google's own documentation puts both in page source. The client
+   * SECRET is not here and never crosses this boundary.
+   *
+   * `authedProcedure` rather than public: there is no reason for an anonymous visitor to
+   * learn which Google project a deployment belongs to.
+   */
+  config: router({
+    google: authedProcedure.query(({ ctx }) => ctx.googlePicker),
   }),
 
   health: publicProcedure.query(() => ({ ok: true })),

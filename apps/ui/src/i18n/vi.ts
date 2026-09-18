@@ -125,8 +125,6 @@ export const vi = {
     grantsHead: "Quyền đã cấp",
     colSource: "Nguồn",
     colStatus: "Trạng thái",
-    notWired:
-      "Kết nối, chọn phạm vi, ngắt kết nối và chạy đồng bộ từ đây chưa được nối dây — bảng điều khiển mới chỉ cung cấp danh sách quyền, chưa có các thao tác đó. Trong lúc này mỗi nguồn vẫn đồng bộ theo lịch riêng.",
     notLoaded:
       "Không tải được các quyền của khách hàng này, hoặc bạn không có quyền xem chúng. Không có gì bị thay đổi.",
   },
@@ -192,6 +190,14 @@ export const vi = {
     reconnect: "Kết nối lại {{name}}",
     changeScope: "Đổi dữ liệu đồng bộ",
     disconnect: "Ngắt kết nối",
+    connecting: "Đang chuyển tới Google…",
+    connectFailed: "Chưa kết nối được nguồn này.",
+    connectDeclined: "Bạn đã huỷ ở màn hình của Google. Không có gì được cấp.",
+    disconnecting: "Đang ngắt kết nối…",
+    disconnectFailed: "Chưa ngắt kết nối được.",
+    disconnected: "Đã ngắt kết nối.",
+    disconnectedNotRevoked:
+      "Đã ngắt kết nối phía chúng tôi, nhưng chưa báo được cho Google. Hãy thu hồi quyền tại myaccount.google.com/permissions.",
     errata: "Đính chính",
     whatWeRead: "Chúng tôi đọc gì",
     whatWeChange: "Chúng tôi thay đổi gì",
@@ -215,6 +221,29 @@ export const vi = {
   },
 
   /** What a live grant permits, in the customer's words. `@/lib/connectionState`. */
+  scopePicker: {
+    title: "Chọn những gì được đọc",
+    leadGmail:
+      "Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp PDF đính kèm trong những nhãn đó được đọc; không nhãn nào khác được đọc.",
+    leadDrive:
+      "Chọn thư mục hoặc tài liệu cần đọc. Google chỉ cho phép đọc đúng những gì bạn chọn ở đây.",
+    wholeMailbox: "Đọc toàn bộ hòm thư",
+    wholeMailboxHint:
+      "Không chọn nhãn nào nghĩa là đọc toàn bộ hòm thư. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
+    directChildrenOnly:
+      "Chỉ đọc tệp nằm trực tiếp trong thư mục đã chọn. Thư mục con không được đọc.",
+    labelsHead: "Nhãn",
+    pickFromDrive: "Chọn từ Google Drive",
+    nothingToChoose: "Chưa có mục nào để chọn.",
+    notLoaded: "Không tải được danh sách từ Google. Không có gì bị thay đổi.",
+    save: "Lưu lựa chọn",
+    saving: "Đang lưu…",
+    notSaved: "Không lưu được lựa chọn.",
+    saved: "Đã lưu lựa chọn.",
+    pickerUnavailable:
+      "Bộ chọn của Google chưa sẵn sàng. Hãy tải lại trang; nếu vẫn vậy, kết nối Google Drive chưa được cấu hình.",
+  },
+
   scope: {
     driveFolders_other: "PDF trong {{count, number}} thư mục đã chọn",
     gmailWholeMailbox: "Tiêu đề thư và tệp PDF đính kèm, toàn bộ hòm thư",

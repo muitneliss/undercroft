@@ -67,7 +67,7 @@ export function ConnectionCard({
 
   const unprinted = card.state === "not_connected";
   const lapsed = card.mark === "lapsed";
-  const named = connection.external_account_label !== "";
+  const named = connection.externalAccountLabel !== "";
 
   const className = [
     "grant",
@@ -96,7 +96,7 @@ export function ConnectionCard({
           {named && card.state !== "needs_scope" ? (
             <>
               <span className="label">{t("grant.account")}</span>
-              <span className="datum">{orMissing(connection.external_account_label)}</span>
+              <span className="datum">{orMissing(connection.externalAccountLabel)}</span>
             </>
           ) : null}
 
@@ -121,21 +121,21 @@ export function ConnectionCard({
             <>
               <span className="label">{t("grant.schedule")}</span>
               <span className="datum datum--quiet">
-                {connection.schedule_cron
-                  ? describeSchedule(t, connection.schedule_cron)
+                {connection.scheduleCron
+                  ? describeSchedule(t, connection.scheduleCron)
                   : orMissing("")}
               </span>
-              <span className="datum datum--quiet">{expiryNote(t, connection.expires_at)}</span>
+              <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
             </>
           ) : null}
 
           {/* How long the data has been standing still. A lapse is not an
               instant; six days of it is a different conversation from six
               hours, and the operator is usually on the phone. */}
-          {lapsed && connection.expires_at ? (
+          {lapsed && connection.expiresAt ? (
             <>
               <span className="label">{t("grant.since")}</span>
-              <span className="datum datum--quiet">{expiryNote(t, connection.expires_at)}</span>
+              <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
             </>
           ) : null}
         </div>

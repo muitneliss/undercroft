@@ -6,6 +6,9 @@
  * Postgres grants and rows.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One design document and one deploy client, each of which argues with itself across its length. Splitting at 300 lines would cut a single argument in half.
+
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 // biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
@@ -55,6 +58,11 @@ function caller(user: SessionUser | null, superadmin = false) {
     // No mail in an authorization test: these procedures are being checked for who may
     // call them, and a sender here would be a second thing under test.
     notifyInvitation: () => Promise.resolve(false),
+    // No Google client and no worker, for the same reason. `startOAuth` then falls back to
+    // the placeholder it has always returned, which is what these tests assert.
+    startConsent: () => Promise.resolve({ ok: false as const }),
+    worker: null,
+    googlePicker: null,
   };
   return appRouter.createCaller(ctx);
 }
@@ -127,6 +135,69 @@ describe("role ranks gate privileged actions once membership is established", ()
       source: "hubspot",
     });
     expect(result.authorizeUrl).toContain("/oauth/hubspot/");
+  });
+
+  it("a member cannot change what a connection reads", async () => {
+    // Narrowing or widening a live grant is an admin's decision. A member may see the
+    // schedule; they may not alter what a customer shares.
+    const user = await seedUser("member@example.test");
+    await seedMembership("CASE-1", user, "member");
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "member@example.test" }).connections.setScope({
+          tenantId: "CASE-1",
+          source: "gmail",
+          selection: { labels: [] },
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("an admin may change what a connection reads", async () => {
+    const user = await seedUser("admin2@example.test");
+    await seedMembership("CASE-1", user, "admin");
+    await db.query(
+      "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-1','gmail','connected')",
+    );
+
+    const result = await caller({
+      userId: user,
+      email: "admin2@example.test",
+    }).connections.setScope({
+      tenantId: "CASE-1",
+      source: "gmail",
+      selection: { labels: [] },
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("a member cannot end a grant", async () => {
+    const user = await seedUser("member2@example.test");
+    await seedMembership("CASE-1", user, "member");
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "member2@example.test" }).connections.disconnect({
+          tenantId: "CASE-1",
+          source: "gmail",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("browsing a scope with no worker configured says so rather than failing obscurely", async () => {
+    // `ctx.worker` is null in these tests. A PRECONDITION_FAILED names the cause; letting it
+    // through would surface as a network error that reads like a Google outage.
+    const user = await seedUser("admin3@example.test");
+    await seedMembership("CASE-1", user, "admin");
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "admin3@example.test" }).connections.browseScope({
+          tenantId: "CASE-1",
+          source: "gmail",
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
   });
 });
 

@@ -19,7 +19,10 @@
 - [ADR 0012 Vietnamese First, i18next in Browser and Server](sources/adr-0012-vietnamese-first-i18next-in-browser-and-server.md)
 - [ADR 0013 Superadmins Named in the Environment](sources/adr-0013-superadmins-named-in-the-environment.md)
 - [ADR 0014 Frames Are Size, Nothing Eases](sources/adr-0014-frames-are-size-nothing-eases.md)
+- [ADR 0015 A First-Party Collector for Byte Sources](sources/adr-0015-a-first-party-collector-for-byte-sources.md)
+- [ADR 0016 The Worker Seals the Control Plane Consents](sources/adr-0016-the-worker-seals-the-control-plane-consents.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
+- [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
 
 ## Notes

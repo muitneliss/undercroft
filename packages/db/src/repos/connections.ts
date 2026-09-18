@@ -187,3 +187,172 @@ export async function readCredential(
   const opened = unseal({ blob: row.ciphertext, keyVersion: row.key_version }, opts.env);
   return credentialFromJson(opened);
 }
+
+/**
+ * What the admin chose to share, and the account it belongs to.
+ *
+ * `app.connection_detail` rather than a column on `ops.connection`, because BI holds
+ * `SELECT ON ops.connection` and a table-level grant covers columns added later -- a label
+ * named "Invoices/Acme Pte Ltd" on that table would be one dbt model from a dashboard. See
+ * `packages/db/sql/070_google_ingestion.sql`.
+ *
+ * `selection` comes back as JSON *text*, not a parsed object. The caller decides what shape
+ * it expects and parses it there; a repo that interpreted it would have to know what a Gmail
+ * label is.
+ */
+export interface ConnectionDetail {
+  readonly accountLabel: string;
+  readonly selectionJson: string;
+  readonly chosenAt: string | null;
+}
+
+export async function readConnectionDetail(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+): Promise<ConnectionDetail | null> {
+  const { rows } = await exec.query<{
+    account_label: string;
+    selection: unknown;
+    chosen_at: Date | string | null;
+  }>(
+    `SELECT account_label, selection::text AS selection, chosen_at
+     FROM app.connection_detail WHERE tenant_id = $1 AND source = $2`,
+    [tenantId, source],
+  );
+  const row = rows[0];
+  if (row === undefined) {
+    return null;
+  }
+  return {
+    accountLabel: row.account_label,
+    selectionJson: typeof row.selection === "string" ? row.selection : "{}",
+    chosenAt: row.chosen_at === null ? null : new Date(row.chosen_at).toISOString(),
+  };
+}
+
+/**
+ * Record what an admin chose.
+ *
+ * `selectionJson` is passed through as text and cast by Postgres, never re-serialised here:
+ * the same rule the raw loader follows, for the same reason.
+ */
+export async function writeConnectionDetail(
+  exec: SqlExecutor,
+  input: {
+    tenantId: string;
+    source: string;
+    accountLabel?: string;
+    selectionJson?: string;
+    chosenBy?: string;
+  },
+): Promise<void> {
+  await exec.query(
+    `INSERT INTO app.connection_detail
+       (tenant_id, source, account_label, selection, chosen_at, chosen_by, updated_at)
+     -- The COALESCEs here are the column defaults. A first write that sets only a selection
+     -- must not put NULL into account_label, which is NOT NULL.
+     VALUES ($1, $2, COALESCE($3, ''), COALESCE($4::jsonb, '{}'::jsonb), $5, COALESCE($6, ''), now())
+     ON CONFLICT (tenant_id, source) DO UPDATE SET
+       -- COALESCE on the incoming value, so writing a selection does not blank the account
+       -- label the OAuth callback recorded, and vice versa.
+       account_label = COALESCE($3, app.connection_detail.account_label),
+       selection     = COALESCE($4::jsonb, app.connection_detail.selection),
+       chosen_at     = COALESCE($5, app.connection_detail.chosen_at),
+       chosen_by     = COALESCE($6, app.connection_detail.chosen_by),
+       updated_at    = now()`,
+    [
+      input.tenantId,
+      input.source,
+      input.accountLabel ?? null,
+      input.selectionJson ?? null,
+      input.selectionJson === undefined ? null : new Date().toISOString(),
+      input.chosenBy ?? null,
+    ],
+  );
+}
+
+/** Forget a connection's credential. The connection row and its history stay. */
+export async function deleteCredential(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+): Promise<void> {
+  await exec.query("DELETE FROM app.connection_secret WHERE tenant_id = $1 AND source = $2", [
+    tenantId,
+    source,
+  ]);
+}
+
+/**
+ * A connection with everything the operator UI renders, in one read.
+ *
+ * Three LEFT JOINs, because all three are genuinely optional: a connection may have no
+ * chosen scope, no credential and no run yet, and each absence is a state the card has copy
+ * for rather than an error.
+ *
+ * **`ciphertext` is not in the select list, and that is the whole licence for this join.**
+ * The control plane may know WHEN a credential expires -- that is what turns "which
+ * connections need attention" into a query instead of a decrypt-everything loop -- and it
+ * may not know what the credential is. It could not open one anyway: it holds no master
+ * key. Adding `ciphertext` here would not merely widen a row, it would move a secret into
+ * the internet-facing process.
+ */
+export interface ConnectionView extends Connection {
+  readonly accountLabel: string;
+  /** The chosen scope as JSON text. The service parses it; this decides nothing. */
+  readonly selectionJson: string;
+  readonly chosenAt: string | null;
+  readonly expiresAt: string | null;
+  readonly lastRunId: string;
+}
+
+export async function listConnectionViews(
+  exec: SqlExecutor,
+  tenantId: string,
+): Promise<ConnectionView[]> {
+  const { rows } = await exec.query<{
+    tenantId: string;
+    source: string;
+    status: Connection["status"];
+    externalAccountId: string | null;
+    scope: string;
+    accountLabel: string | null;
+    selectionJson: string | null;
+    chosenAt: Date | string | null;
+    expiresAt: Date | string | null;
+    lastRunId: string | null;
+  }>(
+    `SELECT c.tenant_id AS "tenantId", c.source, c.status,
+            c.external_account_id AS "externalAccountId", c.scope,
+            d.account_label       AS "accountLabel",
+            d.selection::text     AS "selectionJson",
+            d.chosen_at           AS "chosenAt",
+            s.expires_at          AS "expiresAt",
+            r.id                  AS "lastRunId"
+     FROM ops.connection c
+     LEFT JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
+     LEFT JOIN app.connection_secret s ON s.tenant_id = c.tenant_id AND s.source = c.source
+     LEFT JOIN LATERAL (
+       SELECT id FROM ops.run
+       WHERE tenant_id = c.tenant_id AND source = c.source
+       ORDER BY started_at DESC LIMIT 1
+     ) r ON true
+     WHERE c.tenant_id = $1
+     ORDER BY c.source`,
+    [tenantId],
+  );
+
+  return rows.map((row) => ({
+    tenantId: row.tenantId,
+    source: row.source,
+    status: row.status,
+    externalAccountId: row.externalAccountId,
+    scope: row.scope,
+    accountLabel: row.accountLabel ?? "",
+    selectionJson: row.selectionJson ?? "{}",
+    chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),
+    expiresAt: row.expiresAt === null ? null : new Date(row.expiresAt).toISOString(),
+    lastRunId: row.lastRunId ?? "",
+  }));
+}

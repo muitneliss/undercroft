@@ -198,6 +198,14 @@ services:
       UNDERCROFT_S3_SECRET_KEY: ${UNDERCROFT_S3_SECRET_KEY:?set in .env}
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY:?set in .env}
       UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN:?set in .env}
+      # Per-tenant Gmail and Drive ingestion. A SECOND Google client, never the sign-in
+      # one above: signing in asks for `openid email profile`, this asks for a customer's
+      # mailbox. One client carrying both scope lists is one misconfiguration away from
+      # handing over a mailbox as a side effect of signing in. See docs/adr/0016.
+      # Unset means the consent flow does not exist and every Google source reads
+      # "not connected" -- the right state while Google verification is pending.
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET:-}
       # dbt runs as a subprocess in this image (ADR 0007) and connects as `undercroft_dbt`,
       # never as the platform role. dbt/profiles.yml reads these three; without the password
       # the transform verb fails at the point of use, far from anything that names it.
@@ -269,6 +277,19 @@ services:
       UNDERCROFT_PUBLIC_URL: ${UNDERCROFT_PUBLIC_URL:?set in .env}
       UNDERCROFT_GOOGLE_CLIENT_ID: ${UNDERCROFT_GOOGLE_CLIENT_ID:-}
       UNDERCROFT_GOOGLE_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_CLIENT_SECRET:-}
+      # Per-tenant Gmail and Drive ingestion. A SECOND Google client, never the sign-in
+      # one above: signing in asks for `openid email profile`, this asks for a customer's
+      # mailbox. One client carrying both scope lists is one misconfiguration away from
+      # handing over a mailbox as a side effect of signing in. See docs/adr/0016.
+      # Unset means the consent flow does not exist and every Google source reads
+      # "not connected" -- the right state while Google verification is pending.
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET:-}
+      # Public values, for Drive's browser Picker only: they identify the app and
+      # authorise nothing. Without them the Gmail half still works and the Drive picker
+      # says it is unavailable.
+      UNDERCROFT_GOOGLE_PICKER_API_KEY: ${UNDERCROFT_GOOGLE_PICKER_API_KEY:-}
+      UNDERCROFT_GOOGLE_PROJECT_NUMBER: ${UNDERCROFT_GOOGLE_PROJECT_NUMBER:-}
       UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
       UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
       UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}

@@ -33,3 +33,7 @@
 ## [2026-09-18] ingest | Runbook Deployment
 ## [2026-09-18] ingest | ADR 0014 Frames Are Size, Nothing Eases
 ## [2026-09-18] ingest | ADR 0012 Biome Replaces ESLint and Prettier
+## [2026-09-18] ingest | ADR 0015 A First-Party Collector for Byte Sources
+## [2026-09-18] ingest | ADR 0016 The Worker Seals the Control Plane Consents
+## [2026-09-18] ingest | Runbook Google Ingestion Setup
+## [2026-09-18] ingest | Runbook Sign-In Setup

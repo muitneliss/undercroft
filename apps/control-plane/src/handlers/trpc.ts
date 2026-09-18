@@ -41,6 +41,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import { authorityIn, outranks, type Role } from "../services/authz.ts";
+import type { WorkerClient } from "../services/workerClient.ts";
 
 export interface SessionUser {
   readonly userId: string;
@@ -91,6 +92,28 @@ export interface Context {
    * has to word a refusal before any procedure runs.
    */
   readonly locale: Locale;
+  /**
+   * Begin a per-tenant Google consent, returning the URL to send the browser to.
+   *
+   * A closure the HTTP layer builds, for the same reason `endSession` is one: the
+   * composition root owns the Google client, and a procedure reaching for it would be a
+   * transport layer holding infrastructure (`layer-injected-deps`).
+   */
+  readonly startConsent: (input: {
+    tenantId: string;
+    source: string;
+    startedBy: string;
+  }) => Promise<{ ok: true; authorizeUrl: string } | { ok: false }>;
+  /**
+   * The worker, for the two procedures needing a live token. `null` when unconfigured, and
+   * the procedures say so rather than failing in a way that reads like an outage.
+   */
+  readonly worker: WorkerClient | null;
+  /**
+   * The public halves of the ingestion Google client, for the browser's Drive Picker. The
+   * client SECRET is not in here and must never be: it stays in the process.
+   */
+  readonly googlePicker: { clientId: string; apiKey: string; appId: string } | null;
 }
 
 export type { Role };

@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import type { DivisionId } from "@/lib/divisions.ts";
 import { Lake } from "@/routes/Lake.tsx";
 import { People } from "@/routes/People.tsx";
+import { ScopePicker } from "@/routes/ScopePicker.tsx";
 import { SignIn } from "@/routes/SignIn.tsx";
 import { TenantOverview } from "@/routes/TenantOverview.tsx";
 import { Tenants } from "@/routes/Tenants.tsx";
@@ -81,7 +82,7 @@ function ScopeRoute({ signedInAs }: { signedInAs: string }): React.JSX.Element {
 
   return (
     <Book tenantId={tenantId} current="sources" signedInAs={signedInAs}>
-      <TenantOverview tenantId={tenantId} scopeFor={source} />
+      <ScopePicker tenantId={tenantId} source={source} />
     </Book>
   );
 }
