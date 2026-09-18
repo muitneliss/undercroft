@@ -21,6 +21,7 @@
     "lint": "eslint .",
     "lint:rules": "ast-grep scan",
     "migrate": "bun run packages/db/src/migrateCli.ts",
+    "invite": "bun run apps/control-plane/src/inviteCli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",

@@ -19,6 +19,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { extname, join, normalize, sep } from "node:path";
 import { appUserForEmail } from "../services/invite.ts";
+import { invitationMessage } from "../services/people.ts";
 import type { Auth } from "./auth.ts";
 import { appRouter } from "./router.ts";
 import type { Context, SessionUser } from "./trpc.ts";
@@ -130,9 +131,9 @@ export function createServer(deps: ServerDeps): Hono {
 /**
  * Tell an invited person they have access, and say whether it went.
  *
- * The message carries no token and no link that grants anything: the invitation is keyed by
- * the address, so this is a nudge to go and sign in, not a credential. That is why it is
- * safe to email and why losing the email costs nothing but a conversation.
+ * The wording is `people.invitationMessage`, shared with `bun run invite` so the two ways of
+ * inviting cannot drift into saying different things. What is left here is the transport:
+ * which sender, and what a failure means.
  *
  * A failed send is reported as `false`, never raised. The invitation is already written and
  * already valid; turning a mail outage into a failed invitation would throw away work the
@@ -143,15 +144,7 @@ async function sendInvitation(deps: ServerDeps, to: string, tenantId: string): P
   if (email === undefined || publicUrl === undefined) return false;
 
   try {
-    await email.send({
-      to,
-      subject: "You have access to Undercroft",
-      text:
-        `You have been given access to ${tenantId} in Undercroft.\n\n` +
-        `Sign in at ${publicUrl} — use this address (${to}) exactly, either with Google ` +
-        `or by asking for a one-time code.\n\n` +
-        `If you were not expecting this, you can ignore it; nothing happens until you sign in.`,
-    });
+    await email.send(invitationMessage(to, tenantId, publicUrl));
     return true;
   } catch {
     return false;

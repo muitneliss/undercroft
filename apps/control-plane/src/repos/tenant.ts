@@ -1,8 +1,11 @@
 /**
  * `ops.tenant`: the customer record, with no secret material in it.
  *
- * Reads only. A tenant is created by an operator applying SQL, not by an endpoint, so there
- * is deliberately no writer here to call by accident.
+ * One writer, and it is not reachable over HTTP. `ensureTenant` exists for the bootstrap
+ * CLI (`bun run invite`), which has to be able to create the first tenant: nobody is signed
+ * in yet to create it through the product, and the alternative — an operator pasting SQL —
+ * is how the first production sign-in got stuck. The router still exposes no create
+ * endpoint, so "a tenant is not created by a request" holds exactly as before.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -20,4 +23,21 @@ export async function findTenant(exec: SqlExecutor, tenantId: string): Promise<T
   );
   const row = rows[0];
   return row === undefined ? null : { id: row.id, displayName: row.display_name };
+}
+
+/**
+ * Create the tenant if it is not there. Idempotent, and never renames an existing one.
+ *
+ * `DO NOTHING` rather than `DO UPDATE`: running the bootstrap command twice must not
+ * silently retitle a tenant that is already in use.
+ */
+export async function ensureTenant(
+  exec: SqlExecutor,
+  tenantId: string,
+  displayName: string,
+): Promise<void> {
+  await exec.query(
+    "INSERT INTO ops.tenant (id, display_name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+    [tenantId, displayName],
+  );
 }

@@ -27,6 +27,7 @@
 
 import type { SqlExecutor } from "@undercroft/db";
 import { findIdByEmail, provisionByEmail } from "../repos/appUser.ts";
+import { record as recordAudit } from "../repos/auditLog.ts";
 import { isKnownOrInvited, listLiveForEmail, markAccepted } from "../repos/invitation.ts";
 import { addMember } from "../repos/membership.ts";
 
@@ -107,6 +108,44 @@ export async function isAdmissible(exec: SqlExecutor, rawEmail: string): Promise
   const email = normalizeEmail(rawEmail);
   if (email === "") return false;
   return await isKnownOrInvited(exec, email);
+}
+
+/** How the person was trying to get in, so the trail distinguishes the two doors. */
+export type RefusedVia = "google" | "email-otp";
+
+/**
+ * Record that an address was turned away.
+ *
+ * Deliberately NOT folded into `isAdmissible`: that function is the read-only gate, and a
+ * gate that also writes is one refactor away from writing the wrong thing. This is a
+ * separate call the caller makes once it has decided to refuse.
+ *
+ * It exists because the refusal was previously silent. A correct gate that leaves no trace
+ * is indistinguishable from a broken one, and the first production sign-in cost a round of
+ * guessing that one `SELECT` on this table would have answered: *which* address was
+ * refused, which is exactly the thing a typo or the wrong Google account gets wrong.
+ *
+ * `tenantId` is null and `actor` is the address itself: a refused caller belongs to no
+ * tenant and is not a user, so anything else here would be invented.
+ *
+ * Never allowed to break a sign-in. If the audit insert fails, the refusal still stands --
+ * it is already decided -- and losing the log line is strictly better than turning a
+ * deliberate "no" into a 500 that reads like an outage.
+ */
+export async function recordRefusal(
+  exec: SqlExecutor,
+  input: { email: string; via: RefusedVia },
+): Promise<void> {
+  try {
+    await recordAudit(exec, {
+      tenantId: null,
+      actor: normalizeEmail(input.email),
+      action: "auth.refused",
+      detail: JSON.stringify({ via: input.via }),
+    });
+  } catch {
+    // Intentionally swallowed; see above.
+  }
 }
 
 /**

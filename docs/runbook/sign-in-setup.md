@@ -176,26 +176,34 @@ process deliberately starts with no way in rather than offering a button that fa
 ## 7. Bootstrap the first admin
 
 Invitations are issued from the **People** page, but nobody is signed in yet and there is no
-one to invite you. So exactly one insert, once. Use **your own real email address** — the one
-on the Google account you will click through with.
+one to invite you. So one command, once. Use **your own real email address** — the one on the
+Google account you will click through with.
 
 ```sh
-docker compose -f deploy/compose/docker-compose.yml exec postgres \
-  psql -U undercroft -d undercroft
+UNDERCROFT_POSTGRES_DSN='postgres://undercroft:<password>@localhost:15432/undercroft' \
+  bun run invite -- you@yourdomain.com --tenant CASE-0001 --role admin --create-tenant
 ```
 
-```sql
-INSERT INTO ops.tenant (id, display_name)
-VALUES ('CASE-0001', 'First tenant') ON CONFLICT DO NOTHING;
-
-INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
-VALUES ('CASE-0001', 'you@yourdomain.com', 'admin',
-        encode(sha256(gen_random_uuid()::text::bytea), 'hex'),
-        now() + interval '7 days');
+```
+created tenant CASE-0001
+invited you@yourdomain.com to CASE-0001 as admin
+NOT emailed (mail is not configured) — tell them to sign in with that exact address
 ```
 
-The token column is filled with a digest of a random value and never used: Google and a
-one-time code already prove you control the address, which is all a token would have proved.
+`--create-tenant` is opt-in so a typo cannot invent a customer; leave it off for everyone
+after the first. With the mail variables set it sends the same message the People page sends
+and prints `an email has been sent` instead.
+
+This writes an ordinary invitation — it does **not** bypass the gate. Whoever holds the
+address still has to prove it, through Google or a one-time code. No token is issued: those
+two already prove control of the mailbox, which is all a token would have proved.
+
+On the server, run it inside the control-plane container, which already has the DSN:
+
+```sh
+docker exec -it undercroft-<stack>-control-plane-1 bun run invite -- \
+  you@yourdomain.com --tenant CASE-0001 --role admin --create-tenant
+```
 
 ## 8. Sign in
 

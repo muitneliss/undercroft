@@ -124,8 +124,17 @@ link you cannot trust.
   division as their surface. Inviting is admin-only, re-inviting an address refreshes the one
   open invitation rather than adding a second, and whether the invitee was actually emailed
   is **reported** rather than assumed — with no mail configured the invitation still works
-  and the admin is told to pass the address on. Only the very first admin still needs SQL,
-  because there is nobody to invite them; the runbook carries that one insert.
+  and the admin is told to pass the address on. The **first** admin — the one nobody is
+  signed in to invite — comes from `bun run invite`, a second caller of the same
+  `people.invite` service, which is why that service returns values rather than `TRPCError`.
+  No path needs SQL.
+- **A refused sign-in is recorded.** It was not at first, and that cost real time: the first
+  production sign-in showed "No access" with nothing written anywhere, so a correct gate and
+  a broken one looked identical from outside. `auth.refused` now lands in `ops.audit_log`
+  with the address as `actor` and no tenant — the one fact that tells a typo or the wrong
+  Google account from a bug. The refusal stays silent to the _caller_, because saying "not
+  invited" would turn the form into an oracle for who has access; the trail is therefore the
+  only place the truth is written down, which is exactly why it has to be.
 - **No invitation token is issued.** `app.invitation.token_sha256` is filled with a digest of
   a random value and never used: Google and a one-time code already prove the person controls
   the address, which is the only thing a token would have proved. Requiring both would add a

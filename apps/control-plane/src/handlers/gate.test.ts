@@ -145,6 +145,29 @@ describe("a one-time code is only ever posted to an address that could use it", 
     expect(sender.sent).toHaveLength(0);
   });
 
+  test("a refused address is recorded, so an operator can see who was turned away", async () => {
+    // The person on the other side sees only "No access". Without this row nobody can tell a
+    // typo from a broken gate -- which is what happened on the first production sign-in, and
+    // cost a round of guessing that one query against this table answers.
+    await requestCode("stranger@example.test");
+
+    const { rows } = await db.query<{ actor: string; action: string }>(
+      "SELECT actor, action FROM ops.audit_log WHERE action = 'auth.refused'",
+    );
+    expect(rows).toEqual([{ actor: "stranger@example.test", action: "auth.refused" }]);
+  });
+
+  test("an admitted address leaves no refusal behind", async () => {
+    // The quiet side. A trail that recorded every attempt would bury the refusals it exists
+    // to surface.
+    await seedInvitation("CASE-0042", "operator@example.test", "admin");
+
+    await requestCode("operator@example.test");
+
+    const { rows } = await db.query("SELECT 1 FROM ops.audit_log WHERE action = 'auth.refused'");
+    expect(rows).toHaveLength(0);
+  });
+
   test("an invited address is mailed exactly one code", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "admin");
 
