@@ -1,9 +1,16 @@
 /**
- * The book: a leaf lying open on a section board, with the tab rail on the fore
- * edge.
+ * The book: a leaf lying open on a section board, with the tab strip across the
+ * head.
+ *
+ * The strip comes FIRST here, before the leaf, and that is the whole reason the
+ * layout is placed by `grid-template-areas` rather than by source order: the
+ * phone shows the strip at the foot without moving it in the DOM, so navigation
+ * precedes the page it navigates for a keyboard and for a screen reader at every
+ * width. Ordering it to match the phone visually would bury the section links
+ * behind a long schedule of grants on the surface where that costs most.
  *
  * This is the whole application chrome, and it is deliberately almost nothing --
- * a running head, a spine, two punch holes and the rail. Everything an operator
+ * a running head, a spine, two punch holes and the strip. Everything an operator
  * came to do happens on the leaf.
  *
  * The board hue is solved rather than set. `applyBoard` binary-searches the
@@ -69,6 +76,8 @@ export function Book({
 
   return (
     <div className="book">
+      <TabRail tenantId={tenantId} current={current} />
+
       <div className="leaf">
         <div className="leaf__spine" aria-hidden="true">
           <span className="leaf__punch leaf__punch--a" />
@@ -106,8 +115,6 @@ export function Book({
 
         {children}
       </div>
-
-      <TabRail tenantId={tenantId} current={current} />
     </div>
   );
 }
