@@ -111,11 +111,11 @@ export interface AuthSession {
  * without reaching into a nested `node_modules`.
  */
 export interface Auth {
-  handler(request: Request): Promise<Response>;
+  handler: (request: Request) => Promise<Response>;
   api: {
-    getSession(input: { headers: Headers }): Promise<AuthSession | null>;
+    getSession: (input: { headers: Headers }) => Promise<AuthSession | null>;
     /** Revoke the caller's session. Better Auth deletes the row rather than flagging it. */
-    signOut(input: { headers: Headers }): Promise<unknown>;
+    signOut: (input: { headers: Headers }) => Promise<unknown>;
   };
 }
 
@@ -149,7 +149,9 @@ export function createAuth(config: AuthConfig): Auth {
       validateUserInfo: async ({ user }) => {
         // An identity with no address cannot be matched to an invitation, so it is refused:
         // `isAdmissible("")` is false. Failing closed on a missing email is the point.
-        if (await isAdmissible(config.exec, user.email ?? "")) return;
+        if (await isAdmissible(config.exec, user.email ?? "")) {
+          return;
+        }
 
         // Recorded, because the person on the other side sees only "No access" and the
         // operator needs to know WHICH address was turned away -- usually a typo or the

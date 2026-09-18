@@ -14,7 +14,9 @@ import { createLakeApi } from "./handlers/lake.ts";
 
 function required(name: string): string {
   const value = process.env[name];
-  if (value === undefined || value === "") throw new Error(`${name} is required`);
+  if (value === undefined || value === "") {
+    throw new Error(`${name} is required`);
+  }
   return value;
 }
 

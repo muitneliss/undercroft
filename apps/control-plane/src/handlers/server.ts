@@ -94,7 +94,9 @@ export function createServer(deps: ServerDeps): Hono {
         user,
         sessionId,
         endSession: async () => {
-          if (auth !== undefined) await auth.api.signOut({ headers });
+          if (auth !== undefined) {
+            await auth.api.signOut({ headers });
+          }
         },
         notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId),
       }),
@@ -112,7 +114,9 @@ export function createServer(deps: ServerDeps): Hono {
       const asset = await resolveAsset(dist, c.req.path);
       const path = asset ?? indexHtml;
       const file = Bun.file(path);
-      if (!(await file.exists())) return c.notFound();
+      if (!(await file.exists())) {
+        return c.notFound();
+      }
       // A hashed asset filename is immutable; index.html must never be, or a deploy ships a
       // shell that keeps pointing at the previous build's bundles.
       const immutable = asset !== null && asset !== indexHtml;
@@ -141,7 +145,9 @@ export function createServer(deps: ServerDeps): Hono {
  */
 async function sendInvitation(deps: ServerDeps, to: string, tenantId: string): Promise<boolean> {
   const { email, publicUrl } = deps;
-  if (email === undefined || publicUrl === undefined) return false;
+  if (email === undefined || publicUrl === undefined) {
+    return false;
+  }
 
   try {
     await email.send(invitationMessage(to, tenantId, publicUrl));
@@ -167,13 +173,19 @@ async function resolveCaller(
   deps: ServerDeps,
   headers: Headers,
 ): Promise<{ user: SessionUser | null; sessionId: string }> {
-  if (deps.auth === undefined) return { user: null, sessionId: "" };
+  if (deps.auth === undefined) {
+    return { user: null, sessionId: "" };
+  }
 
   const resolved = await deps.auth.api.getSession({ headers });
-  if (resolved === null) return { user: null, sessionId: "" };
+  if (resolved === null) {
+    return { user: null, sessionId: "" };
+  }
 
   const appUser = await appUserForEmail(deps.exec, resolved.user.email);
-  if (appUser === null) return { user: null, sessionId: "" };
+  if (appUser === null) {
+    return { user: null, sessionId: "" };
+  }
 
   return {
     user: { userId: appUser.appUserId, email: appUser.email },
@@ -188,9 +200,13 @@ async function resolveCaller(
  */
 async function resolveAsset(dist: string, urlPath: string): Promise<string | null> {
   const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.(\/|\\|$))+/u, "");
-  if (rel === "/" || rel === "." || rel === sep) return null;
+  if (rel === "/" || rel === "." || rel === sep) {
+    return null;
+  }
   const candidate = join(dist, rel);
-  if (candidate !== dist && !candidate.startsWith(dist + sep)) return null;
+  if (candidate !== dist && !candidate.startsWith(dist + sep)) {
+    return null;
+  }
   return (await Bun.file(candidate).exists()) ? candidate : null;
 }
 

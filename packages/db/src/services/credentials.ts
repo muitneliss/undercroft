@@ -35,7 +35,9 @@ export const REFRESH_SKEW_MS = 5 * 60 * 1000;
  * refresh token and turn a working connection into a broken one.
  */
 export function needsRefresh(credential: Credential, now: Date = new Date()): boolean {
-  if (credential.expiresAt === null) return false;
+  if (credential.expiresAt === null) {
+    return false;
+  }
   return new Date(credential.expiresAt).getTime() - REFRESH_SKEW_MS <= now.getTime();
 }
 
@@ -63,7 +65,9 @@ export async function accessToken(
     ...(opts.env === undefined ? {} : { env: opts.env }),
   });
 
-  if (!needsRefresh(credential, opts.now)) return credential.accessToken;
+  if (!needsRefresh(credential, opts.now)) {
+    return credential.accessToken;
+  }
 
   if (opts.refresher === undefined || credential.refreshToken === "") {
     await setStatus(exec, tenantId, source, "expired");

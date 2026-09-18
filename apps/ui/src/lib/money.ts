@@ -14,7 +14,10 @@
  * visibly missing; a zero is invisibly false, and only one of those gets caught.
  */
 
-export type Money = { amount: string; currency: string };
+export interface Money {
+  amount: string;
+  currency: string;
+}
 
 /** What a missing value looks like. An em dash, never a zero. */
 export const MISSING = "—";
@@ -27,7 +30,9 @@ export const MISSING = "—";
  */
 function parts(amount: string): { sign: string; whole: string; fraction: string } | null {
   const match = /^(-?)(\d+)(?:\.(\d*))?$/u.exec(amount.trim());
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   return { sign: match[1] ?? "", whole: match[2] ?? "0", fraction: match[3] ?? "" };
 }
 
@@ -43,10 +48,14 @@ function group(whole: string): string {
  *   stays available through {@link exactAmount}.
  */
 export function formatMoney(money: Money | null | undefined, dp = 2): string {
-  if (!money) return MISSING;
+  if (!money) {
+    return MISSING;
+  }
 
   const split = parts(money.amount);
-  if (!split) return MISSING;
+  if (!split) {
+    return MISSING;
+  }
 
   const fraction = split.fraction.padEnd(dp, "0").slice(0, dp);
   const digits = dp > 0 ? `${group(split.whole)}.${fraction}` : group(split.whole);
@@ -82,8 +91,12 @@ const UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
  * recorded is not an object of zero bytes.
  */
 export function formatBytes(value: number | null | undefined): string {
-  if (value === null || value === undefined) return MISSING;
-  if (value < 1000) return `${value.toLocaleString("en-SG")} B`;
+  if (value === null || value === undefined) {
+    return MISSING;
+  }
+  if (value < 1000) {
+    return `${value.toLocaleString("en-SG")} B`;
+  }
 
   let size = value;
   let unit = 0;

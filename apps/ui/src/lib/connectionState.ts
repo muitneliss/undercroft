@@ -24,7 +24,7 @@ export type CardState =
   | "needs_reconnect"
   | "expired";
 
-export type CardPresentation = {
+export interface CardPresentation {
   state: CardState;
   headline: string;
   detail: string;
@@ -41,7 +41,7 @@ export type CardPresentation = {
   mark: "granted" | "pending" | "lapsed" | "absent";
   /** Whether this card counts as done on the setup checklist. */
   complete: boolean;
-};
+}
 
 export function presentConnection(connection: Connection, now = new Date()): CardPresentation {
   const expiry = connection.expires_at ? new Date(connection.expires_at) : null;
@@ -125,7 +125,9 @@ export function scopeSummary(connection: Connection): string | null {
 
   switch (connection.source) {
     case "drive":
-      if (folders.length === 0) return null;
+      if (folders.length === 0) {
+        return null;
+      }
       return folders.length === 1
         ? "PDFs in 1 selected folder"
         : `PDFs in ${String(folders.length)} selected folders`;

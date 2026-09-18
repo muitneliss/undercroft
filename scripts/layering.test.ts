@@ -130,7 +130,9 @@ beforeAll(async () => {
   const rules = join(project, ".ast-grep", "rules");
   mkdirSync(rules, { recursive: true });
   const source = join(REPO, ".ast-grep", "rules");
-  for (const name of readdirSync(source)) copyFileSync(join(source, name), join(rules, name));
+  for (const name of readdirSync(source)) {
+    copyFileSync(join(source, name), join(rules, name));
+  }
   copyFileSync(join(REPO, "sgconfig.yml"), join(project, "sgconfig.yml"));
 
   for (const [path, body] of Object.entries(FIXTURES)) {
@@ -151,7 +153,9 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  if (project !== "") rmSync(project, { recursive: true, force: true });
+  if (project !== "") {
+    rmSync(project, { recursive: true, force: true });
+  }
 });
 
 describe("the dependency direction is enforced, not described", () => {

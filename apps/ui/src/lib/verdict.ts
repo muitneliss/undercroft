@@ -13,13 +13,13 @@
 
 export type Verdict = "ok" | "mismatch" | "unverified";
 
-export type VerdictPresentation = {
+export interface VerdictPresentation {
   label: string;
   /** Screen-reader text: the badge must not rely on colour alone (WCAG AA). */
   description: string;
   tone: "positive" | "negative" | "neutral";
   icon: string;
-};
+}
 
 export function presentVerdict(verdict: Verdict): VerdictPresentation {
   switch (verdict) {

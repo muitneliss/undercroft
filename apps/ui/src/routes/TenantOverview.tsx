@@ -21,7 +21,9 @@ import { trpc } from "@/trpc.ts";
 export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: string }) {
   const connections = trpc.connections.list.useQuery({ tenantId });
 
-  if (connections.isPending) return <Skeleton rows={5} />;
+  if (connections.isPending) {
+    return <Skeleton rows={5} />;
+  }
 
   if (connections.isError) {
     return (

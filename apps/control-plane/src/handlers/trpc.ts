@@ -80,7 +80,9 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 export const authedProcedure = t.procedure.use(({ ctx, next }) => {
-  if (ctx.user === null) throw new TRPCError({ code: "UNAUTHORIZED" });
+  if (ctx.user === null) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
@@ -92,7 +94,9 @@ export const tenantProcedure = authedProcedure
   .input(z.object({ tenantId: z.string().min(1) }))
   .use(async ({ ctx, input, next }) => {
     const role = await roleFor(ctx.exec, input.tenantId, ctx.user.userId);
-    if (role === null) throw new TRPCError({ code: "NOT_FOUND" });
+    if (role === null) {
+      throw new TRPCError({ code: "NOT_FOUND" });
+    }
     return next({ ctx: { ...ctx, role, tenantId: input.tenantId } });
   });
 

@@ -14,7 +14,9 @@ export class InMemoryObjectStore implements ObjectStore {
 
   get(key: string): Promise<Uint8Array> {
     const value = this.#objects.get(key);
-    if (value === undefined) return Promise.reject(new ObjectNotFound(key));
+    if (value === undefined) {
+      return Promise.reject(new ObjectNotFound(key));
+    }
     return Promise.resolve(value);
   }
 
@@ -47,7 +49,9 @@ export class InMemoryObjectStore implements ObjectStore {
 
   get totalBytes(): number {
     let total = 0;
-    for (const value of this.#objects.values()) total += value.byteLength;
+    for (const value of this.#objects.values()) {
+      total += value.byteLength;
+    }
     return total;
   }
 }

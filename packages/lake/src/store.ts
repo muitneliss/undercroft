@@ -83,7 +83,9 @@ export interface JournalEntry {
  */
 function validateStream(stream: string): string {
   const s = stream.replace(/^\/+|\/+$/gu, "");
-  if (s === "") throw new RangeError("journal stream must not be empty");
+  if (s === "") {
+    throw new RangeError("journal stream must not be empty");
+  }
   if (s.split("/").includes("..")) {
     throw new RangeError(`journal stream must not traverse: ${JSON.stringify(stream)}`);
   }
@@ -99,7 +101,9 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", data);
   const bytes = new Uint8Array(digest);
   let hex = "";
-  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
+  for (const b of bytes) {
+    hex += b.toString(16).padStart(2, "0");
+  }
   return hex;
 }
 
@@ -147,7 +151,9 @@ export class LakeStore {
    */
   static validateSourceKey(sourceKey: string): string {
     const key = sourceKey.replace(/^\/+|\/+$/gu, "");
-    if (key === "") throw new RangeError("source_key must not be empty");
+    if (key === "") {
+      throw new RangeError("source_key must not be empty");
+    }
     const segments = key.split("/");
     if (segments.includes("..")) {
       throw new RangeError(`source_key must not traverse: ${JSON.stringify(sourceKey)}`);
@@ -266,7 +272,9 @@ export class LakeStore {
     for (const obj of await this.#store.list(`${key}/`)) {
       const rest = obj.slice(key.length + 1);
       const head = rest.split("/", 1)[0] ?? "";
-      if (isStamp(head)) stamps.add(head);
+      if (isStamp(head)) {
+        stamps.add(head);
+      }
     }
     return [...stamps].sort();
   }
@@ -280,7 +288,9 @@ export class LakeStore {
   async newestSha(sourceKey: string): Promise<string | null> {
     const stamps = await this.versions(sourceKey);
     const newest = stamps.at(-1);
-    if (newest === undefined) return null;
+    if (newest === undefined) {
+      return null;
+    }
     const man = await this.manifest(sourceKey, newest);
     return typeof man.sha256 === "string" ? man.sha256 : null;
   }
@@ -296,11 +306,14 @@ export class LakeStore {
     const key = LakeStore.validateSourceKey(sourceKey);
     const stamps = await this.versions(key);
     const chosen = stamp ?? stamps.at(-1);
-    if (chosen === undefined) throw new RangeError(`no observations at ${key}`);
+    if (chosen === undefined) {
+      throw new RangeError(`no observations at ${key}`);
+    }
     const man = await this.manifest(key, chosen);
     const blobKey = man.blobKey;
-    if (typeof blobKey !== "string")
+    if (typeof blobKey !== "string") {
       throw new Error(`manifest for ${key}/${chosen} has no blobKey`);
+    }
     const data = await this.#store.get(blobKey);
     const actual = await sha256Hex(data);
     if (actual !== man.sha256) {
@@ -322,8 +335,12 @@ export class LakeStore {
     const entries: JournalEntry[] = [];
     for (const obj of await this.#store.list(prefix)) {
       const stamp = obj.slice(prefix.length).split("/", 1)[0] ?? "";
-      if (!isStamp(stamp)) continue;
-      if (afterStamp !== null && stamp <= afterStamp) continue;
+      if (!isStamp(stamp)) {
+        continue;
+      }
+      if (afterStamp !== null && stamp <= afterStamp) {
+        continue;
+      }
       const bytes = await this.#store.get(obj);
       entries.push(JSON.parse(decoder.decode(bytes)) as JournalEntry);
     }
@@ -341,11 +358,15 @@ export class LakeStore {
    * garbage-collection step -- not a retention side effect.
    */
   async prune(sourceKey: string): Promise<string[]> {
-    if (this.#retention === undefined) return [];
+    if (this.#retention === undefined) {
+      return [];
+    }
     const key = LakeStore.validateSourceKey(sourceKey);
     const stamps = await this.versions(key);
     const excess = stamps.length - this.#retention;
-    if (excess <= 0) return [];
+    if (excess <= 0) {
+      return [];
+    }
     const removed: string[] = [];
     for (const stamp of stamps.slice(0, excess)) {
       for (const obj of await this.#store.list(`${key}/${stamp}/`)) {

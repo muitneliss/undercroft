@@ -18,10 +18,10 @@
  * announcing the mark as well would say everything twice.
  */
 
-type IconProps = {
+interface IconProps {
   size?: number;
   className?: string;
-};
+}
 
 function Frame({ size = 16, className, children }: IconProps & { children: React.ReactNode }) {
   return (

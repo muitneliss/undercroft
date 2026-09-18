@@ -13,7 +13,9 @@ function attemptCounter(failures: number, status = 429) {
     },
     run: async (): Promise<string> => {
       calls += 1;
-      if (calls <= failures) throw new HttpError(status, "https://example.test/x");
+      if (calls <= failures) {
+        throw new HttpError(status, "https://example.test/x");
+      }
       return "ok";
     },
   };
@@ -38,7 +40,9 @@ async function drive<T>(
     (value) => ({ ok: true as const, value }),
     (error: unknown) => ({ ok: false as const, error }),
   );
-  for (let i = 0; i < steps; i++) await clock.advance(stepMs);
+  for (let i = 0; i < steps; i++) {
+    await clock.advance(stepMs);
+  }
   return outcome;
 }
 
@@ -47,7 +51,9 @@ describe("what retries and what does not", () => {
     const clock = new TestClock();
     const op = attemptCounter(2);
     const result = withRetry(op.run, DEFAULT_RETRY, { clock, random: noJitter });
-    for (let i = 0; i < 3; i++) await clock.advance(60_000);
+    for (let i = 0; i < 3; i++) {
+      await clock.advance(60_000);
+    }
     expect(await result).toBe("ok");
     expect(op.calls).toBe(3);
   });
@@ -133,7 +139,9 @@ describe("Retry-After", () => {
     let calls = 0;
     const op = async () => {
       calls += 1;
-      if (calls === 1) throw new HttpError(429, "https://example.test/x", "", 5000);
+      if (calls === 1) {
+        throw new HttpError(429, "https://example.test/x", "", 5000);
+      }
       return "ok";
     };
     const result = withRetry(op, DEFAULT_RETRY, {
@@ -151,7 +159,9 @@ describe("Retry-After", () => {
     let calls = 0;
     const op = async () => {
       calls += 1;
-      if (calls === 1) throw new HttpError(429, "https://example.test/x", "", 86_400_000);
+      if (calls === 1) {
+        throw new HttpError(429, "https://example.test/x", "", 86_400_000);
+      }
       return "ok";
     };
     const result = withRetry(op, DEFAULT_RETRY, {

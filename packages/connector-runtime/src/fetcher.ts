@@ -23,7 +23,7 @@ export interface HttpResponse {
 }
 
 export interface Fetcher {
-  send(request: HttpRequest): Promise<HttpResponse>;
+  send: (request: HttpRequest) => Promise<HttpResponse>;
 }
 
 /** A fetcher over the platform's real `fetch`, with a timeout. */
@@ -54,7 +54,9 @@ export function createFetcher(timeoutMs = 60_000): Fetcher {
 
 /** Turn a non-2xx response into the {@link HttpError} the retry policy understands. */
 export function raiseForStatus(request: HttpRequest, response: HttpResponse): void {
-  if (response.status >= 200 && response.status < 300) return;
+  if (response.status >= 200 && response.status < 300) {
+    return;
+  }
   const retryAfter = response.headers["retry-after"] ?? null;
   // parseInt, not Number(): the money lint rule bans Number() everywhere, and this is a
   // seconds count, not an amount.

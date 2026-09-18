@@ -24,14 +24,22 @@ import { isLosslessNumber } from "lossless-json";
 const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
 
 export function parsePath(path: string): string[] {
-  if (path === "") return [];
+  if (path === "") {
+    return [];
+  }
   const segments: string[] = [];
   for (const part of path.split(".")) {
     const match = /^([^[\]]*)((?:\[\d+\])*)$/u.exec(part);
-    if (match === null) throw new TypeError(`unreadable path segment ${JSON.stringify(part)}`);
+    if (match === null) {
+      throw new TypeError(`unreadable path segment ${JSON.stringify(part)}`);
+    }
     const [, name = "", indices = ""] = match;
-    if (name !== "") segments.push(name);
-    for (const index of indices.matchAll(/\[(\d+)\]/gu)) segments.push(index[1]!);
+    if (name !== "") {
+      segments.push(name);
+    }
+    for (const index of indices.matchAll(/\[(\d+)\]/gu)) {
+      segments.push(index[1]!);
+    }
   }
   return segments;
 }
@@ -40,16 +48,26 @@ export function parsePath(path: string): string[] {
 export function getPath(root: unknown, path: string): unknown {
   let current = root;
   for (const segment of parsePath(path)) {
-    if (current === null || current === undefined) return undefined;
-    if (FORBIDDEN.has(segment)) return undefined;
+    if (current === null || current === undefined) {
+      return undefined;
+    }
+    if (FORBIDDEN.has(segment)) {
+      return undefined;
+    }
     if (Array.isArray(current)) {
       const index = Number.parseInt(segment, 10);
-      if (Number.isNaN(index)) return undefined;
+      if (Number.isNaN(index)) {
+        return undefined;
+      }
       current = current[index];
       continue;
     }
-    if (typeof current !== "object") return undefined;
-    if (!Object.hasOwn(current, segment)) return undefined;
+    if (typeof current !== "object") {
+      return undefined;
+    }
+    if (!Object.hasOwn(current, segment)) {
+      return undefined;
+    }
     current = (current as Record<string, unknown>)[segment];
   }
   return current;
@@ -63,10 +81,16 @@ export function getPath(root: unknown, path: string): unknown {
  */
 export function getStringPath(root: unknown, path: string): string | null {
   const value = getPath(root, path);
-  if (typeof value === "string") return value === "" ? null : value;
-  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "string") {
+    return value === "" ? null : value;
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
   // A number that arrived through `lossless-json` keeps its digits as a string; return
   // them rather than coercing to a `number` and losing anything past a double.
-  if (isLosslessNumber(value)) return value.toString();
+  if (isLosslessNumber(value)) {
+    return value.toString();
+  }
   return null;
 }

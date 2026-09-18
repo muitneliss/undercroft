@@ -23,7 +23,9 @@ import { trpc } from "@/trpc.ts";
 export function Tenants() {
   const tenants = trpc.tenants.list.useQuery();
 
-  if (tenants.isPending) return <Skeleton rows={4} />;
+  if (tenants.isPending) {
+    return <Skeleton rows={4} />;
+  }
 
   if (tenants.isError) {
     return (

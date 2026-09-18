@@ -76,8 +76,11 @@ export async function landRecords(
         stream: streamOf(identity),
         extra: { sourceUpdatedAt: record.sourceUpdatedAt },
       });
-      if (put.status === "created") created += 1;
-      else unchanged += 1;
+      if (put.status === "created") {
+        created += 1;
+      } else {
+        unchanged += 1;
+      }
       results.push({
         entity: record.entity,
         sourceRecordId: record.sourceRecordId,

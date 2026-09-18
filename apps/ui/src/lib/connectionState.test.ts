@@ -86,8 +86,11 @@ describe("presentConnection", () => {
     for (const status of states) {
       const card = presentConnection(connection("xero", { status }), NOW);
       expect(card.headline).not.toBe("");
-      if (card.complete) expect(card.action).toBeNull();
-      else expect(card.action).not.toBeNull();
+      if (card.complete) {
+        expect(card.action).toBeNull();
+      } else {
+        expect(card.action).not.toBeNull();
+      }
     }
   });
 });

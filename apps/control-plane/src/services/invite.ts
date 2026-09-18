@@ -69,14 +69,18 @@ export async function resolveInvitedUser(
   rawEmail: string,
 ): Promise<InvitedUser | null> {
   const email = normalizeEmail(rawEmail);
-  if (email === "") return null;
+  if (email === "") {
+    return null;
+  }
 
   let appUserId = await findIdByEmail(exec, email);
   const invitations = await listLiveForEmail(exec, email);
 
   // Neither known nor invited. An expired invitation lands here too, which is the point:
   // an invitation that has run out is not a weaker yes, it is a no.
-  if (appUserId === null && invitations.length === 0) return null;
+  if (appUserId === null && invitations.length === 0) {
+    return null;
+  }
 
   if (appUserId === null) {
     appUserId = await provisionByEmail(exec, email);
@@ -106,7 +110,9 @@ export async function resolveInvitedUser(
  */
 export async function isAdmissible(exec: SqlExecutor, rawEmail: string): Promise<boolean> {
   const email = normalizeEmail(rawEmail);
-  if (email === "") return false;
+  if (email === "") {
+    return false;
+  }
   return await isKnownOrInvited(exec, email);
 }
 
@@ -160,7 +166,9 @@ export async function appUserForEmail(
   rawEmail: string,
 ): Promise<InvitedUser | null> {
   const email = normalizeEmail(rawEmail);
-  if (email === "") return null;
+  if (email === "") {
+    return null;
+  }
 
   const id = await findIdByEmail(exec, email);
   return id === null ? null : { appUserId: id, email };

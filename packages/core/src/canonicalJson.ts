@@ -93,17 +93,29 @@ function byCodePoint(a: string, b: string): number {
   const shared = Math.min(left.length, right.length);
   for (let i = 0; i < shared; i++) {
     const diff = left[i]!.codePointAt(0)! - right[i]!.codePointAt(0)!;
-    if (diff !== 0) return diff;
+    if (diff !== 0) {
+      return diff;
+    }
   }
   return left.length - right.length;
 }
 
 function serialise(value: unknown): string {
-  if (value === null) return "null";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "string") return escapeString(value);
-  if (typeof value === "bigint") return value.toString();
-  if (isLosslessNumber(value)) return value.toString();
+  if (value === null) {
+    return "null";
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (typeof value === "string") {
+    return escapeString(value);
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (isLosslessNumber(value)) {
+    return value.toString();
+  }
 
   if (typeof value === "number") {
     // Reachable only if a caller parsed with `JSON.parse` instead of `losslessParse`.

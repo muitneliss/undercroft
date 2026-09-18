@@ -47,7 +47,9 @@ function Opened({
   const params = useParams();
   const tenantId = params["tenantId"];
 
-  if (!tenantId) return <Navigate to="/tenants" replace={true} />;
+  if (!tenantId) {
+    return <Navigate to="/tenants" replace={true} />;
+  }
 
   return (
     <Book tenantId={tenantId} current={division} signedInAs={signedInAs}>
@@ -61,8 +63,12 @@ function ScopeRoute({ signedInAs }: { signedInAs: string }) {
   const tenantId = params["tenantId"];
   const source = params["source"];
 
-  if (!tenantId) return <Navigate to="/tenants" replace={true} />;
-  if (!isSource(source)) return <Navigate to={`/tenants/${tenantId}`} replace={true} />;
+  if (!tenantId) {
+    return <Navigate to="/tenants" replace={true} />;
+  }
+  if (!isSource(source)) {
+    return <Navigate to={`/tenants/${tenantId}`} replace={true} />;
+  }
 
   return (
     <Book tenantId={tenantId} current="sources" signedInAs={signedInAs}>

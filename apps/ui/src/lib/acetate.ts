@@ -28,7 +28,11 @@
  */
 
 /** A gamma-encoded sRGB colour, 0-255 per channel. */
-export type Rgb = { r: number; g: number; b: number };
+export interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
 
 /**
  * The contrast the reading field must clear against the ink.
@@ -123,18 +127,20 @@ export const INK: Rgb = { r: 22, g: 21, b: 15 };
  */
 export function letteringOn(boardHex: string): string {
   const board = parseHex(boardHex);
-  if (!board) return toHex(INK);
+  if (!board) {
+    return toHex(INK);
+  }
   return contrast(board, INK) >= contrast(board, PAPER) ? toHex(INK) : toHex(PAPER);
 }
 
-export type Solution = {
+export interface Solution {
   /** Coverage of the leaf over the board, 0-1. */
   alpha: number;
   /** The composite at that alpha, as an opaque hex. */
   ground: string;
   /** What the solved field actually achieves against the ink. */
   contrast: number;
-};
+}
 
 /**
  * The lowest leaf coverage whose composite still clears `target` against `ink`.
@@ -205,7 +211,9 @@ export function applyBoard(element: HTMLElement, boardHex: string): Solution | n
   const leaf = parseHex(styles.getPropertyValue("--leaf")) ?? { r: 251, g: 248, b: 240 };
   const ink = parseHex(styles.getPropertyValue("--ink")) ?? { r: 22, g: 21, b: 15 };
   const board = parseHex(boardHex);
-  if (!board) return null;
+  if (!board) {
+    return null;
+  }
 
   const solution = solveLeaf(leaf, board, ink);
   element.style.setProperty("--board", boardHex);

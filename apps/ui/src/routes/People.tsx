@@ -40,14 +40,18 @@ export function People({ tenantId }: { tenantId: string }) {
 
   const invite = trpc.people.invite.useMutation({
     onSuccess: async () => {
-      if (emailField.current !== null) emailField.current.value = "";
+      if (emailField.current !== null) {
+        emailField.current.value = "";
+      }
       await invalidate();
     },
   });
 
   const revoke = trpc.people.revokeInvitation.useMutation({ onSuccess: invalidate });
 
-  if (members.isPending || invitations.isPending) return <Skeleton rows={4} />;
+  if (members.isPending || invitations.isPending) {
+    return <Skeleton rows={4} />;
+  }
 
   if (members.isError || invitations.isError) {
     return (
@@ -154,7 +158,9 @@ export function People({ tenantId }: { tenantId: string }) {
               event.preventDefault();
               const email = emailField.current?.value.trim() ?? "";
               const role = roleField.current?.value ?? "viewer";
-              if (email === "") return;
+              if (email === "") {
+                return;
+              }
               invite.mutate({
                 tenantId,
                 email,

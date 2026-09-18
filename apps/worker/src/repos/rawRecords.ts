@@ -88,7 +88,9 @@ export async function upsertRecords(
   identity: StreamIdentity,
   batch: readonly RawRecordRow[],
 ): Promise<UpsertCounts> {
-  if (batch.length === 0) return { created: 0, changed: 0, unchanged: 0 };
+  if (batch.length === 0) {
+    return { created: 0, changed: 0, unchanged: 0 };
+  }
 
   const cols = [
     batch.map(() => identity.source),

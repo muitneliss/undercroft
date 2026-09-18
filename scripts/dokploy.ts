@@ -142,10 +142,14 @@ export async function callApi<T>(
       ...(isWrite ? { body: JSON.stringify(options.payload) } : {}),
     });
 
-    if (response.ok) return (await response.json()) as T;
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
 
     lastError = `${endpoint} -> HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`;
-    if (!RETRYABLE_STATUS.has(response.status) || attempt === attempts) break;
+    if (!RETRYABLE_STATUS.has(response.status) || attempt === attempts) {
+      break;
+    }
     await deps.sleep(POLL_INTERVAL_MS);
   }
   throw new Error(lastError);
@@ -261,7 +265,9 @@ export function releasedServices(
   let service = "";
   for (const line of composeFile.split("\n")) {
     const serviceMatch = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
-    if (serviceMatch?.[1] !== undefined) service = serviceMatch[1];
+    if (serviceMatch?.[1] !== undefined) {
+      service = serviceMatch[1];
+    }
     const imageMatch = /^\s+image:\s*(\S+)\s*$/u.exec(line);
     if (imageMatch?.[1] !== undefined && imageMatch[1].startsWith(RELEASED_IMAGE_PREFIX)) {
       found.push({ service, image: expandEnv(imageMatch[1], env) });
@@ -286,7 +292,9 @@ export function oneShotServices(composeFile: string): Set<string> {
   let candidate = "";
   for (const line of composeFile.split("\n")) {
     const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
-    if (nameMatch?.[1] !== undefined) candidate = nameMatch[1];
+    if (nameMatch?.[1] !== undefined) {
+      candidate = nameMatch[1];
+    }
     if (/^\s+condition:\s*service_completed_successfully\s*$/u.test(line) && candidate !== "") {
       found.add(candidate);
     }
@@ -313,7 +321,9 @@ export async function preflight(cfg: Config, deps: Deps): Promise<void> {
         "Dokploy raw compose has no checkout, so a `build:` context cannot work there.",
     );
   }
-  for (const { service, image } of services) deps.log(`  ${service} -> ${image}`);
+  for (const { service, image } of services) {
+    deps.log(`  ${service} -> ${image}`);
+  }
 
   const missing = REQUIRED_COMMAND_FLAGS.filter((flag) => !compose.command.includes(flag));
   if (missing.length > 0) {
@@ -342,15 +352,18 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
     `https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`,
     { headers: token === "" ? {} : { Authorization: `Basic ${token}` } },
   );
-  if (!pull.ok) throw new Error(`ghcr token for ${repo}: HTTP ${pull.status}`);
+  if (!pull.ok) {
+    throw new Error(`ghcr token for ${repo}: HTTP ${pull.status}`);
+  }
   const bearer = ((await pull.json()) as { token: string }).token;
 
   const get = async (reference: string): Promise<Record<string, unknown>> => {
     const response = await deps.fetch(`https://ghcr.io/v2/${repo}/manifests/${reference}`, {
       headers: { Authorization: `Bearer ${bearer}`, Accept: accept },
     });
-    if (!response.ok)
+    if (!response.ok) {
       throw new Error(`ghcr manifest ${repo}:${reference}: HTTP ${response.status}`);
+    }
     return (await response.json()) as Record<string, unknown>;
   };
 
@@ -362,11 +375,15 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
     const amd64 = manifests.find(
       (m) => m.platform?.os === "linux" && m.platform.architecture === "amd64",
     );
-    if (amd64 === undefined) throw new Error(`${image} has no linux/amd64 manifest`);
+    if (amd64 === undefined) {
+      throw new Error(`${image} has no linux/amd64 manifest`);
+    }
     manifest = await get(amd64.digest);
   }
   const config = manifest.config as { digest: string } | undefined;
-  if (config === undefined) throw new Error(`${image} manifest carries no config digest`);
+  if (config === undefined) {
+    throw new Error(`${image} manifest carries no config digest`);
+  }
   return config.digest;
 }
 
@@ -396,7 +413,9 @@ export async function verify(
   const compose = await composeRecord(cfg, deps);
   const env = releaseTag === "" ? process.env : { ...process.env, IMAGE_TAG: releaseTag };
   const services = releasedServices(compose.composeFile, env);
-  if (services.length === 0) throw new Error("nothing to verify: no released images in compose");
+  if (services.length === 0) {
+    throw new Error("nothing to verify: no released images in compose");
+  }
   const oneShot = oneShotServices(compose.composeFile);
 
   const containers = await callApi<Container[]>(cfg, deps, "docker.getContainersByAppNameMatch", {
@@ -536,7 +555,9 @@ async function main(): Promise<void> {
     }
     case "smoke": {
       const urls = process.argv.slice(3);
-      if (urls.length === 0) throw new Error("usage: smoke <url> [url...]");
+      if (urls.length === 0) {
+        throw new Error("usage: smoke <url> [url...]");
+      }
       await smoke(deps, urls);
       return;
     }

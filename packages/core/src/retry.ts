@@ -56,11 +56,17 @@ export interface RetryDeps {
  * about it.
  */
 export function parseRetryAfter(header: string | null, now: Date): number | null {
-  if (header === null) return null;
+  if (header === null) {
+    return null;
+  }
   const trimmed = header.trim();
-  if (/^\d+$/u.test(trimmed)) return Number.parseInt(trimmed, 10) * 1000;
+  if (/^\d+$/u.test(trimmed)) {
+    return Number.parseInt(trimmed, 10) * 1000;
+  }
   const at = Date.parse(trimmed);
-  if (Number.isNaN(at)) return null;
+  if (Number.isNaN(at)) {
+    return null;
+  }
   return Math.max(0, at - now.getTime());
 }
 
@@ -86,7 +92,9 @@ export async function withRetry<T>(
     try {
       return await operation(attempt);
     } catch (error) {
-      if (attempt >= policy.attempts || !isRetryable(error, policy)) throw error;
+      if (attempt >= policy.attempts || !isRetryable(error, policy)) {
+        throw error;
+      }
 
       const asked =
         policy.respectRetryAfter && error instanceof HttpError ? error.retryAfterMs : null;

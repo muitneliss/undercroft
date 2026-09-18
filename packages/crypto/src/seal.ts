@@ -70,7 +70,9 @@ function keys(env: NodeJS.ProcessEnv = process.env): Map<number, Buffer> {
   const out = new Map<number, Buffer>();
   for (const entry of raw.split(",")) {
     const part = entry.trim();
-    if (part === "") continue;
+    if (part === "") {
+      continue;
+    }
     const colon = part.lastIndexOf(":");
     const versionText = colon === -1 ? "" : part.slice(0, colon);
     const material = colon === -1 ? part : part.slice(colon + 1);
@@ -95,7 +97,9 @@ function keys(env: NodeJS.ProcessEnv = process.env): Map<number, Buffer> {
     }
     out.set(version, key);
   }
-  if (out.size === 0) throw new SecretKeyMissing(`${KEY_ENV} is set but contains no key`);
+  if (out.size === 0) {
+    throw new SecretKeyMissing(`${KEY_ENV} is set but contains no key`);
+  }
   return out;
 }
 
@@ -110,7 +114,9 @@ export function seal(
   const table = keys(opts.env);
   const version = opts.keyVersion ?? Math.max(...table.keys());
   const key = table.get(version);
-  if (key === undefined) throw new SecretKeyMissing(`${KEY_ENV} has no key for version ${version}`);
+  if (key === undefined) {
+    throw new SecretKeyMissing(`${KEY_ENV} has no key for version ${version}`);
+  }
 
   // A nonce is never reused: GCM's confidentiality and its authentication both collapse if
   // one is, so it is random per call rather than derived from anything about the row.

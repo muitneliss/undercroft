@@ -56,12 +56,16 @@ export function formatStamp(micros: number): string {
 
 /** Parse a stamp back to microseconds since the epoch, or `null` if it is not one. */
 export function parseStamp(stamp: string): number | null {
-  if (!isStamp(stamp)) return null;
+  if (!isStamp(stamp)) {
+    return null;
+  }
   const iso =
     `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}` +
     `T${stamp.slice(9, 11)}:${stamp.slice(11, 13)}:${stamp.slice(13, 15)}Z`;
   const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return null;
+  if (Number.isNaN(ms)) {
+    return null;
+  }
   // `iso` carries whole seconds only, so `ms` is exactly seconds-in-milliseconds and
   // the full sub-second part comes from the stamp's own six digits.
   return ms * MICROS_PER_MS + Number.parseInt(stamp.slice(16, 22), 10);
@@ -69,7 +73,7 @@ export function parseStamp(stamp: string): number | null {
 
 export interface StampSource {
   /** The next stamp. Strictly greater than every stamp this source has returned. */
-  next(): string;
+  next: () => string;
 }
 
 export function createStampSource(clock: Clock = systemClock): StampSource {

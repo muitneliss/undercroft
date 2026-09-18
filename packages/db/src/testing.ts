@@ -17,8 +17,8 @@ import type { QueryResult, SqlExecutor } from "./executor.ts";
 
 export interface TestDatabase extends SqlExecutor {
   /** Run a block as another role, resetting afterwards even on failure. */
-  asRole<T>(role: string, fn: (tx: SqlExecutor) => Promise<T>): Promise<T>;
-  close(): Promise<void>;
+  asRole: <T>(role: string, fn: (tx: SqlExecutor) => Promise<T>) => Promise<T>;
+  close: () => Promise<void>;
 }
 
 export async function createTestDatabase(): Promise<TestDatabase> {

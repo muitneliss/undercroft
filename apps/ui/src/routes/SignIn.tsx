@@ -104,7 +104,9 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
             onSubmit={(event) => {
               event.preventDefault();
               const email = emailField.current?.value.trim() ?? "";
-              if (email !== "") sendCode.mutate({ email });
+              if (email !== "") {
+                sendCode.mutate({ email });
+              }
             }}
           >
             <div className="field">
@@ -142,7 +144,9 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
             onSubmit={(event) => {
               event.preventDefault();
               const otp = codeField.current?.value.trim() ?? "";
-              if (otp !== "") signIn.mutate({ email: sentTo, otp });
+              if (otp !== "") {
+                signIn.mutate({ email: sentTo, otp });
+              }
             }}
           >
             <div className="field">

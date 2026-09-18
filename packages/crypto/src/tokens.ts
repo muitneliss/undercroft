@@ -22,7 +22,9 @@ export function hashToken(token: string): string {
 export function tokenMatches(token: string, storedDigest: string): boolean {
   const a = Buffer.from(hashToken(token), "hex");
   const b = Buffer.from(storedDigest, "hex");
-  if (a.byteLength !== b.byteLength) return false;
+  if (a.byteLength !== b.byteLength) {
+    return false;
+  }
   return timingSafeEqual(a, b);
 }
 

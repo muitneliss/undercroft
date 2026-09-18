@@ -99,7 +99,9 @@ async function authHeaders(spec: ConnectorSpec, ctx: RunContext): Promise<Record
 
 function buildUrl(baseUrl: string, path: string, query: Record<string, string>): string {
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(query)) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 }
 
@@ -119,17 +121,23 @@ function nextPageUrl(
     case "json-link": {
       const next = getStringPath(parsed, pagination.nextPath);
       // A next-link equal to the current URL is an infinite loop wearing a cursor.
-      if (next === null || next === currentUrl) return null;
+      if (next === null || next === currentUrl) {
+        return null;
+      }
       return next;
     }
     case "page-number": {
-      if (pagination.stopOn === "empty-page" && recordsThisPage === 0) return null;
+      if (pagination.stopOn === "empty-page" && recordsThisPage === 0) {
+        return null;
+      }
       const url = new URL(currentUrl);
       url.searchParams.set(pagination.param, String(pagination.startAt + pageIndex + 1));
       return url.toString();
     }
     case "offset": {
-      if (recordsThisPage === 0) return null;
+      if (recordsThisPage === 0) {
+        return null;
+      }
       const url = new URL(currentUrl);
       // parseInt, not Number(): an offset index, not an amount.
       const prev = Number.parseInt(url.searchParams.get(pagination.param) ?? "0", 10);
@@ -138,7 +146,9 @@ function nextPageUrl(
     }
     case "cursor": {
       const cursor = getStringPath(parsed, pagination.cursorPath);
-      if (cursor === null) return null;
+      if (cursor === null) {
+        return null;
+      }
       const url = new URL(currentUrl);
       url.searchParams.set(pagination.param, cursor);
       return url.toString();
@@ -250,7 +260,9 @@ export async function* readEntity(
       });
       for (const record of emit(parsed)) {
         yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) return;
+        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
+          return;
+        }
       }
     }
   } else {
@@ -266,12 +278,16 @@ export async function* readEntity(
       const pageSize = extractRecords(entity, spec, parsed).length;
       for (const record of emit(parsed)) {
         yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) return;
+        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
+          return;
+        }
       }
 
       const next = nextPageUrl(entity, spec, parsed, pageIndex, pageSize, currentUrl);
       pageIndex += 1;
-      if (next === null) break;
+      if (next === null) {
+        break;
+      }
       url = next;
     }
   }

@@ -113,9 +113,15 @@ export function currency(code: string): Iso4217 {
  * defect into everything downstream.
  */
 export function parseAmount(value: string | Big | bigint | null | undefined): Big | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (value instanceof Big) return value;
-  if (typeof value === "bigint") return new Big(value.toString());
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (value instanceof Big) {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    return new Big(value.toString());
+  }
 
   if (typeof value === "number") {
     throw new TypeError(
@@ -128,19 +134,29 @@ export function parseAmount(value: string | Big | bigint | null | undefined): Bi
     // through to the Big constructor, and a coerced 1 is a fabricated amount.
     return null;
   }
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
 
   let text = value.replace(CLEANUP, "");
-  if (EURO_NOTATION.test(text)) return null;
+  if (EURO_NOTATION.test(text)) {
+    return null;
+  }
 
   text = text.replace(/,/gu, "");
   // Strip a leading currency symbol and a trailing code; keep sign and digits.
   text = text.replace(/^[^\d\-+.]+/u, "");
-  if (!/\d$/u.test(text)) text = text.replace(/[^\d]+$/u, "");
-  if (text === "" || text === "-" || text === "+" || text === ".") return null;
+  if (!/\d$/u.test(text)) {
+    text = text.replace(/[^\d]+$/u, "");
+  }
+  if (text === "" || text === "-" || text === "+" || text === ".") {
+    return null;
+  }
   // `Decimal("+42")` is legal in Python; `new Big("+42")` throws. An explicit plus
   // is a sign, not a defect, so strip it rather than refusing the amount.
-  if (text.startsWith("+")) text = text.slice(1);
+  if (text.startsWith("+")) {
+    text = text.slice(1);
+  }
 
   try {
     return new Big(text);
@@ -151,7 +167,9 @@ export function parseAmount(value: string | Big | bigint | null | undefined): Bi
 
 /** Build a `Money`, or `null` if there was no amount to build it from. */
 export function money(amount: Big | null, code: Iso4217): Money | null {
-  if (amount === null) return null;
+  if (amount === null) {
+    return null;
+  }
   return { amount: amount.toFixed(SCALE_DP) as Amount, currency: code };
 }
 
@@ -196,8 +214,12 @@ export function compare(
   expected: Money | null,
   tolerance = "0.02",
 ): Verdict {
-  if (observed === null || expected === null) return "unverified";
-  if (observed.currency !== expected.currency) return "unverified";
+  if (observed === null || expected === null) {
+    return "unverified";
+  }
+  if (observed.currency !== expected.currency) {
+    return "unverified";
+  }
   return toBig(observed).minus(toBig(expected)).abs().lte(new Big(tolerance)) ? "ok" : "mismatch";
 }
 
@@ -209,7 +231,9 @@ export function compare(
  * caller can surface it in a tooltip. `null` renders as MISSING, never as `0`.
  */
 export function formatMoney(value: Money | null, locale = "en-US"): string {
-  if (value === null) return MISSING;
+  if (value === null) {
+    return MISSING;
+  }
   const fixed = toBig(value).round(2, Big.roundDown).toFixed(2);
   const negative = fixed.startsWith("-");
   const [whole = "0", fraction = "00"] = (negative ? fixed.slice(1) : fixed).split(".");

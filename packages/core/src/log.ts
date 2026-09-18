@@ -26,12 +26,12 @@ export interface LogFields {
 }
 
 export interface Logger {
-  write(level: LogLevel, event: string, fields?: LogFields): void;
-  info(event: string, fields?: LogFields): void;
-  warn(event: string, fields?: LogFields): void;
-  error(event: string, fields?: LogFields): void;
+  write: (level: LogLevel, event: string, fields?: LogFields) => void;
+  info: (event: string, fields?: LogFields) => void;
+  warn: (event: string, fields?: LogFields) => void;
+  error: (event: string, fields?: LogFields) => void;
   /** A logger carrying extra fields on every line. Used per run, per tenant, per entity. */
-  child(fields: LogFields): Logger;
+  child: (fields: LogFields) => Logger;
 }
 
 export interface LoggerOptions {

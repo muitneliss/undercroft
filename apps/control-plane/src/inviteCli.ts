@@ -68,9 +68,15 @@ function parseArgs(argv: readonly string[]): Args {
     }
   }
 
-  if (email === "") usage("an email address is required");
-  if (tenantId === "") usage("--tenant is required");
-  if (!ROLES.has(role)) usage(`--role must be one of ${[...ROLES].join(", ")}`);
+  if (email === "") {
+    usage("an email address is required");
+  }
+  if (tenantId === "") {
+    usage("--tenant is required");
+  }
+  if (!ROLES.has(role)) {
+    usage(`--role must be one of ${[...ROLES].join(", ")}`);
+  }
   return { email, tenantId, role, createTenant };
 }
 
@@ -114,7 +120,9 @@ function buildNotifier(): (email: string, tenantId: string) => Promise<boolean> 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const dsn = process.env["UNDERCROFT_POSTGRES_DSN"];
-  if (dsn === undefined || dsn === "") throw new Error("UNDERCROFT_POSTGRES_DSN is required");
+  if (dsn === undefined || dsn === "") {
+    throw new Error("UNDERCROFT_POSTGRES_DSN is required");
+  }
 
   const pool = createPool(dsn);
   try {

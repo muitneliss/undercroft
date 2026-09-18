@@ -27,7 +27,9 @@ export type AuthOutcome =
 function constantTimeEquals(a: string, b: string): boolean {
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
-  if (ba.byteLength !== bb.byteLength) return false;
+  if (ba.byteLength !== bb.byteLength) {
+    return false;
+  }
   return timingSafeEqual(ba, bb);
 }
 

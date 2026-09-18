@@ -105,7 +105,7 @@ describe("golden bytes", () => {
   });
 
   test("parseLossless keeps numbers out of float", () => {
-    const parsed = parseLossless('{"n":8500.0001}') as { n: { toString(): string } };
+    const parsed = parseLossless('{"n":8500.0001}') as { n: { toString: () => string } };
     expect(parsed.n.toString()).toBe("8500.0001");
   });
 });

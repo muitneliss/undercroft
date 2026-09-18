@@ -12,8 +12,8 @@
  */
 
 export interface Clock {
-  now(): Date;
-  sleep(ms: number): Promise<void>;
+  now: () => Date;
+  sleep: (ms: number) => Promise<void>;
 }
 
 export const systemClock: Clock = {
@@ -52,7 +52,9 @@ export class TestClock implements Clock {
   }
 
   sleep(ms: number): Promise<void> {
-    if (ms <= 0) return Promise.resolve();
+    if (ms <= 0) {
+      return Promise.resolve();
+    }
     return new Promise<void>((resolve) => {
       this.#sleepers.push({ dueAt: this.#nowMs + ms, resolve });
     });
@@ -73,9 +75,13 @@ export class TestClock implements Clock {
     // already elapsed -- a retry whose backoff is shorter than the step just taken.
     for (let guard = 0; guard < 1000; guard++) {
       const due = this.#sleepers.filter((s) => s.dueAt <= this.#nowMs);
-      if (due.length === 0) return;
+      if (due.length === 0) {
+        return;
+      }
       this.#sleepers = this.#sleepers.filter((s) => s.dueAt > this.#nowMs);
-      for (const sleeper of due) sleeper.resolve();
+      for (const sleeper of due) {
+        sleeper.resolve();
+      }
       await drain();
     }
     throw new Error("TestClock.advance did not settle: a sleeper is rescheduling forever");

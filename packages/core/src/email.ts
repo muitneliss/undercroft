@@ -28,7 +28,7 @@ export interface EmailMessage {
 }
 
 export interface EmailSender {
-  send(message: EmailMessage): Promise<void>;
+  send: (message: EmailMessage) => Promise<void>;
 }
 
 /** A message that no provider would accept. Raised before anything is sent. */
@@ -116,6 +116,10 @@ function assertSendable(message: EmailMessage): void {
   if (message.to === "" || !message.to.includes("@")) {
     throw new UnsendableEmail(`not a usable recipient address: ${JSON.stringify(message.to)}`);
   }
-  if (message.subject === "") throw new UnsendableEmail("an email with no subject");
-  if (message.text === "") throw new UnsendableEmail("an email with no body");
+  if (message.subject === "") {
+    throw new UnsendableEmail("an email with no subject");
+  }
+  if (message.text === "") {
+    throw new UnsendableEmail("an email with no body");
+  }
 }

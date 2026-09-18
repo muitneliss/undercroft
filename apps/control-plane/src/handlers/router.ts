@@ -51,7 +51,9 @@ export const appRouter = router({
 
     get: tenantProcedure.query(async ({ ctx, input }) => {
       const tenant = await tenants.get(ctx.exec, input.tenantId);
-      if (tenant === null) throw new TRPCError({ code: "NOT_FOUND" });
+      if (tenant === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
       return { ...tenant, role: ctx.role };
     }),
   }),

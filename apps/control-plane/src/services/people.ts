@@ -92,7 +92,9 @@ export async function invite(
   },
 ): Promise<InviteResult> {
   const held = await roleForEmail(exec, input.tenantId, input.email);
-  if (held !== null) return { ok: false, reason: "already-member", role: held };
+  if (held !== null) {
+    return { ok: false, reason: "already-member", role: held };
+  }
 
   const id = await invitations.create(exec, {
     tenantId: input.tenantId,
@@ -101,7 +103,9 @@ export async function invite(
     tokenDigest: hashToken(randomToken()),
     days: INVITATION_DAYS,
   });
-  if (id === null) return { ok: false, reason: "not-created" };
+  if (id === null) {
+    return { ok: false, reason: "not-created" };
+  }
 
   await invitations.supersedeOthers(exec, input.tenantId, input.email, id);
 

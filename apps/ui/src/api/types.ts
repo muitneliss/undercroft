@@ -41,7 +41,7 @@ export const SOURCE_ACCESS: Record<Source, { reads: string; writes: string }> = 
 
 export type ConnectionStatus = "disconnected" | "connected" | "needs_scope" | "needs_reconnect";
 
-export type Connection = {
+export interface Connection {
   source: Source;
   status: ConnectionStatus;
   external_account_id: string;
@@ -51,36 +51,36 @@ export type Connection = {
   schedule_cron: string;
   last_run_id: string;
   expires_at: string | null;
-};
+}
 
-export type Tenant = {
+export interface Tenant {
   id: string;
   display_name: string;
   status: string;
   created_at: string;
-};
+}
 
-export type Member = {
+export interface Member {
   id: string;
   email: string;
   display_name: string;
   is_staff: boolean;
   role: string | null;
-};
+}
 
-export type SessionUser = {
+export interface SessionUser {
   id: string;
   email: string;
   display_name: string;
   is_staff: boolean;
-};
+}
 
-export type LakeObject = {
+export interface LakeObject {
   key: string;
   versions: number;
   newest_sha256: string | null;
   bytes: number | null;
-};
+}
 
 /**
  * One observation of an object, from `vcdo/lake/store.py`.
@@ -91,7 +91,7 @@ export type LakeObject = {
  * lake's oldest contents, and the interface renders each absence as MISSING
  * rather than as a zero or an empty cell.
  */
-export type LakeManifest = {
+export interface LakeManifest {
   stamp: string;
   source_key?: string;
   sha256?: string;
@@ -100,12 +100,12 @@ export type LakeManifest = {
   run_id?: string;
   observed_at?: string;
   reason?: string;
-};
+}
 
-export type LakeManifests = {
+export interface LakeManifests {
   key: string;
   versions: LakeManifest[];
-};
+}
 
 /**
  * Totals for one customer.
@@ -118,8 +118,8 @@ export type LakeManifests = {
  * against a UI already rendering floats, is how the rule gets broken once and
  * for good.
  */
-export type CustomerTotals = {
+export interface CustomerTotals {
   customer: string;
   invoiced: Money | null;
   outstanding: Money | null;
-};
+}

@@ -34,7 +34,9 @@ const DATE_TIME = new Intl.DateTimeFormat("en-SG", {
 });
 
 function parse(iso: string | null | undefined): Date | null {
-  if (!iso) return null;
+  if (!iso) {
+    return null;
+  }
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -59,7 +61,9 @@ const DAY_MS = 86_400_000;
  */
 export function daysUntil(iso: string | null | undefined, now = new Date()): number | null {
   const date = parse(iso);
-  if (!date) return null;
+  if (!date) {
+    return null;
+  }
   return Math.round((date.getTime() - now.getTime()) / DAY_MS);
 }
 
@@ -71,16 +75,24 @@ export function daysUntil(iso: string | null | undefined, now = new Date()): num
  * looks like missing data.
  */
 export function expiryNote(iso: string | null | undefined, now = new Date()): string {
-  if (!iso) return "No expiry recorded";
+  if (!iso) {
+    return "No expiry recorded";
+  }
 
   const days = daysUntil(iso, now);
-  if (days === null) return MISSING;
+  if (days === null) {
+    return MISSING;
+  }
   if (days < 0) {
     const ago = Math.abs(days);
     return ago === 1 ? "Lapsed yesterday" : `Lapsed ${String(ago)} days ago`;
   }
-  if (days === 0) return "Expires today";
-  if (days === 1) return "Expires tomorrow";
+  if (days === 0) {
+    return "Expires today";
+  }
+  if (days === 1) {
+    return "Expires tomorrow";
+  }
   return `Expires in ${String(days)} days`;
 }
 
@@ -94,12 +106,16 @@ export function expiryNote(iso: string | null | undefined, now = new Date()): st
  */
 export function describeSchedule(cron: string): string {
   const fields = cron.trim().split(/\s+/u);
-  if (fields.length !== 5) return cron.trim();
+  if (fields.length !== 5) {
+    return cron.trim();
+  }
 
   const [minute, hour, dayOfMonth, month, dayOfWeek] = fields;
   const everyDay = dayOfMonth === "*" && month === "*" && dayOfWeek === "*";
 
-  if (everyDay && hour === "*" && minute === "0") return "Hourly";
+  if (everyDay && hour === "*" && minute === "0") {
+    return "Hourly";
+  }
 
   if (everyDay && /^\d{1,2}$/u.test(hour ?? "") && /^\d{1,2}$/u.test(minute ?? "")) {
     const hh = (hour ?? "0").padStart(2, "0");

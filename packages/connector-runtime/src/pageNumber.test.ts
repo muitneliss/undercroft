@@ -28,7 +28,9 @@ entities:
 
 async function collect(gen: AsyncGenerator<RawRecordOut>): Promise<RawRecordOut[]> {
   const out: RawRecordOut[] = [];
-  for await (const r of gen) out.push(r);
+  for await (const r of gen) {
+    out.push(r);
+  }
   return out;
 }
 

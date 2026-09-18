@@ -32,8 +32,12 @@ async function main(): Promise<void> {
   const pool = createPool(dsn);
   try {
     const result = await migrate(asExecutor(pool));
-    for (const name of result.skipped) process.stdout.write(`skip   ${name}\n`);
-    for (const name of result.applied) process.stdout.write(`apply  ${name}\n`);
+    for (const name of result.skipped) {
+      process.stdout.write(`skip   ${name}\n`);
+    }
+    for (const name of result.applied) {
+      process.stdout.write(`apply  ${name}\n`);
+    }
     process.stdout.write(
       result.applied.length === 0
         ? "already up to date\n"

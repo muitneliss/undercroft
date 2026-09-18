@@ -56,7 +56,9 @@ export async function migrate(
   migrations: Migration[] = loadMigrations(),
 ): Promise<MigrateResult> {
   const roles = migrations[0];
-  if (roles === undefined) return { applied: [], skipped: [] };
+  if (roles === undefined) {
+    return { applied: [], skipped: [] };
+  }
 
   // Bootstrap: roles, then the ledger. Both are idempotent.
   await executor.exec(roles.sql);
@@ -74,7 +76,9 @@ export async function migrate(
     }
     // The roles file was already exec'd above during bootstrap; every other file runs
     // here. Recording it is what keeps a second `migrate()` from re-running it.
-    if (m !== roles) await executor.exec(m.sql);
+    if (m !== roles) {
+      await executor.exec(m.sql);
+    }
     await executor.query("INSERT INTO ops.schema_migration (name) VALUES ($1)", [m.name]);
     applied.push(m.name);
   }

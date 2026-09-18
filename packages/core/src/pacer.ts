@@ -27,7 +27,7 @@ export interface PacerOptions {
 
 export interface Pacer {
   /** Resolves when it is this caller's turn. */
-  acquire(): Promise<void>;
+  acquire: () => Promise<void>;
   /** How many requests this pacer has let through. */
   readonly granted: number;
 }

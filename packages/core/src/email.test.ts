@@ -76,7 +76,9 @@ describe("the HTTP provider sends what it was given, and says so when it cannot"
       await sender.send({ to: "operator@example.test", subject: "Your code", text: "123456" });
       throw new Error("expected the send to raise");
     } catch (error) {
-      if (!(error instanceof HttpError)) throw error;
+      if (!(error instanceof HttpError)) {
+        throw error;
+      }
       expect(error.status).toBe(422);
       expect(error.bodyExcerpt).toBe("address is not valid");
     }
@@ -101,7 +103,9 @@ describe("the in-memory sender refuses what a provider would reject", () => {
       await sender.send({ to: "operator", subject: "Your code", text: "123456" });
       throw new Error("expected an unusable recipient to be refused");
     } catch (error) {
-      if (!(error instanceof UnsendableEmail)) throw error;
+      if (!(error instanceof UnsendableEmail)) {
+        throw error;
+      }
       expect(sender.sent).toHaveLength(0);
     }
   });

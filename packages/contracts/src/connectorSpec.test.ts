@@ -46,7 +46,9 @@ entities:
       parseSpec(broken);
       throw new Error("expected parseSpec to throw");
     } catch (error) {
-      if (!(error instanceof SpecError)) throw error;
+      if (!(error instanceof SpecError)) {
+        throw error;
+      }
       expect(error.issues.some((i) => i.includes("entities.0.idPath"))).toBe(true);
     }
   });
@@ -73,7 +75,9 @@ entities:
       parseSpec(broken);
       throw new Error("expected parseSpec to throw");
     } catch (error) {
-      if (!(error instanceof SpecError)) throw error;
+      if (!(error instanceof SpecError)) {
+        throw error;
+      }
       expect(error.issues.some((i) => i.includes("unknown entity 'nonexistent'"))).toBe(true);
     }
   });

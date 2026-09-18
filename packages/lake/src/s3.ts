@@ -26,7 +26,9 @@ export interface S3StoreConfig {
 }
 
 function isNoSuchKey(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
   const name = (error as { name?: unknown }).name;
   const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
   return name === "NoSuchKey" || name === "NotFound" || status === 404;
@@ -59,10 +61,14 @@ export class S3ObjectStore implements ObjectStore {
         new GetObjectCommand({ Bucket: this.#bucket, Key: key }),
       );
       const body = response.Body;
-      if (body === undefined) throw new ObjectNotFound(key);
+      if (body === undefined) {
+        throw new ObjectNotFound(key);
+      }
       return await body.transformToByteArray();
     } catch (error) {
-      if (isNoSuchKey(error)) throw new ObjectNotFound(key);
+      if (isNoSuchKey(error)) {
+        throw new ObjectNotFound(key);
+      }
       throw error;
     }
   }
@@ -76,7 +82,9 @@ export class S3ObjectStore implements ObjectStore {
       await this.#client.send(new HeadObjectCommand({ Bucket: this.#bucket, Key: key }));
       return true;
     } catch (error) {
-      if (isNoSuchKey(error)) return false;
+      if (isNoSuchKey(error)) {
+        return false;
+      }
       throw error;
     }
   }
@@ -93,7 +101,9 @@ export class S3ObjectStore implements ObjectStore {
         }),
       );
       for (const item of response.Contents ?? []) {
-        if (item.Key !== undefined) keys.push(item.Key);
+        if (item.Key !== undefined) {
+          keys.push(item.Key);
+        }
       }
       token = response.IsTruncated === true ? response.NextContinuationToken : undefined;
     } while (token !== undefined);
