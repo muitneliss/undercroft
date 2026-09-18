@@ -12,7 +12,7 @@ import { LandRecordsRequest, MAX_BATCH_BYTES } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
 import { authenticate } from "../services/auth.ts";
-import { runIngest } from "../services/ingest.ts";
+import { type Refresher, runIngest, type Transactor } from "../services/ingest.ts";
 import { landRecords } from "../services/land.ts";
 import { runTransform } from "../services/transform.ts";
 
@@ -23,6 +23,16 @@ export interface LakeApiDeps {
   /** Directory of connector specs, for the ingest verb. Absent disables /v1/runs/ingest. */
   readonly specsDir?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Per-source token refreshers. A source with no entry cannot refresh -- correct for a
+   * HubSpot private app, which has nothing to refresh with.
+   */
+  readonly refreshers?: Readonly<Record<string, Refresher>>;
+  /**
+   * Runs the credential read and its refresh in one transaction, so the `FOR UPDATE` in
+   * `accessToken` actually holds a lock. See `services/ingest.ts`.
+   */
+  readonly transactor?: Transactor;
   /** dbt project and profiles directories. Absent disables /v1/runs/transform. */
   readonly dbt?: { projectDir: string; profilesDir: string };
 }
@@ -111,12 +121,15 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
         400,
       );
     }
+    const refresher = deps.refreshers?.[raw.source];
     const result = await runIngest(
       {
         lake: deps.lake,
         exec: deps.exec,
         specsDir: deps.specsDir,
         ...(deps.env ? { env: deps.env } : {}),
+        ...(refresher === undefined ? {} : { refresher }),
+        ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
       },
       { source: raw.source, tenantId: raw.tenantId },
     );
