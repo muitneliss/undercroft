@@ -69,4 +69,16 @@ describe("the SPA is served without shadowing the API", () => {
     // Refused as a file: it falls through to the SPA shell, never to a path outside dist.
     expect(await response.text()).toContain("Undercroft");
   });
+
+  test("Google's consent callback is not swallowed by the SPA fallback", async () => {
+    // The exact hazard `/api/auth/*` carries a comment about, now for a second OAuth route.
+    // Registered after the catch-all this would answer 200 with index.html: a consent that
+    // appears to work, never completes, and leaves nothing anywhere explaining why.
+    const app = createServer({ exec: noDatabase, uiDist: dist });
+
+    const response = await app.fetch(new Request("http://c/oauth/google/callback?error=denied"));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("connect=failed");
+  });
 });

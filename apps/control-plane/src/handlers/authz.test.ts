@@ -45,6 +45,10 @@ function caller(user: SessionUser | null) {
     // No mail in an authorization test: these procedures are being checked for who may
     // call them, and a sender here would be a second thing under test.
     notifyInvitation: () => Promise.resolve(false),
+    // No Google client and no worker, for the same reason. `startOAuth` then falls back to
+    // the placeholder it has always returned, which is what these tests assert.
+    startConsent: () => Promise.resolve({ ok: false as const }),
+    worker: null,
   };
   return appRouter.createCaller(ctx);
 }

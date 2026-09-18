@@ -18,9 +18,13 @@ import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { extname, join, normalize, sep } from "node:path";
+import { roleFor } from "../services/authz.ts";
 import { appUserForEmail } from "../services/invite.ts";
+import { type GoogleIngestConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
+import type { WorkerClient } from "../services/workerClient.ts";
 import type { Auth } from "./auth.ts";
+import { registerOAuthRoutes } from "./oauth.ts";
 import { appRouter } from "./router.ts";
 import type { Context, SessionUser } from "./trpc.ts";
 
@@ -64,6 +68,18 @@ export interface ServerDeps {
    * process with no UI baked in — only `/api` and `/trpc` exist, and everything else 404s.
    */
   readonly uiDist?: string;
+  /**
+   * The INGESTION Google client, a different client from the sign-in one. Absent means the
+   * per-tenant consent does not exist: `startOAuth` keeps its placeholder and every Google
+   * source reads "not connected", which is better than a button ending at a Google error
+   * page while verification is still pending.
+   */
+  readonly googleIngest?: GoogleIngestConfig;
+  /**
+   * The worker: the only process holding the master key, and so the only one that can seal
+   * a credential. Absent disables the consent flow with it. ADR 0014.
+   */
+  readonly worker?: WorkerClient;
 }
 
 export function createServer(deps: ServerDeps): Hono {
@@ -79,6 +95,19 @@ export function createServer(deps: ServerDeps): Hono {
     const auth = deps.auth;
     app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
   }
+
+  // The per-tenant consent callback, and the same hazard: registered here so it wins over
+  // the catch-all at the foot of this function. Unconditional, because a callback that 404s
+  // is a diagnosable misconfiguration whereas one that serves the app shell is a consent
+  // that appears to work and never completes. With no client or worker configured the
+  // service refuses it, which is the honest answer.
+  registerOAuthRoutes(app, {
+    exec: deps.exec,
+    ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
+    ...(deps.worker === undefined ? {} : { worker: deps.worker }),
+    isAdminOf: async (tenantId, userId) => (await roleFor(deps.exec, tenantId, userId)) === "admin",
+    resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
+  });
 
   app.all("/trpc/*", async (c) => {
     const headers = c.req.raw.headers;
@@ -102,6 +131,17 @@ export function createServer(deps: ServerDeps): Hono {
           if (auth !== undefined) await auth.api.signOut({ headers });
         },
         notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId, locale),
+        worker: deps.worker ?? null,
+        startConsent: async (start) => {
+          const outcome = await startConsent(
+            {
+              exec: deps.exec,
+              ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
+            },
+            start,
+          );
+          return outcome.ok ? { ok: true, authorizeUrl: outcome.authorizeUrl } : { ok: false };
+        },
       }),
     });
   });

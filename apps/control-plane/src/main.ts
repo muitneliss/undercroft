@@ -13,6 +13,7 @@ import { createHttpEmailSender, createLogger, type EmailSender } from "@undercro
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
+import { createHttpWorkerClient } from "./services/workerClient.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -45,6 +46,35 @@ const mailApiKey = optional("UNDERCROFT_EMAIL_API_KEY");
 const mailFrom = optional("UNDERCROFT_EMAIL_FROM");
 const googleClientId = optional("UNDERCROFT_GOOGLE_CLIENT_ID");
 const googleClientSecret = optional("UNDERCROFT_GOOGLE_CLIENT_SECRET");
+
+/**
+ * A SECOND Google client, for ingestion.
+ *
+ * Separate from the sign-in one above on purpose. Signing in asks for `openid email
+ * profile`; this asks for a customer's mailbox or documents. One client carrying both scope
+ * lists is one misconfiguration away from handing over a mailbox as a side effect of signing
+ * in -- which is the failure `docs/runbook/sign-in-setup.md` warns about and ADR 0014
+ * records. Unset means the per-tenant consent does not exist and every Google source reads
+ * "not connected", which is the right state while Google verification is pending.
+ */
+const ingestClientId = optional("UNDERCROFT_GOOGLE_INGEST_CLIENT_ID");
+const ingestClientSecret = optional("UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET");
+const googleIngest =
+  ingestClientId === undefined || ingestClientSecret === undefined || publicUrl === undefined
+    ? undefined
+    : { clientId: ingestClientId, clientSecret: ingestClientSecret, publicUrl };
+
+/**
+ * The worker: the only process holding the master key, and so the only one that may seal a
+ * credential. The control plane runs the browser half of a consent and hands the bundle over
+ * on the trigger-token allowlist. ADR 0014.
+ */
+const workerUrl = optional("UNDERCROFT_WORKER_URL");
+const triggerToken = optional("UNDERCROFT_TRIGGER_TOKEN");
+const worker =
+  workerUrl === undefined || triggerToken === undefined
+    ? undefined
+    : createHttpWorkerClient({ baseUrl: workerUrl, triggerToken });
 
 const email: EmailSender | undefined =
   mailApiKey === undefined || mailFrom === undefined
@@ -102,6 +132,8 @@ const app = createServer({
   ...(email === undefined ? {} : { email }),
   ...(publicUrl === undefined ? {} : { publicUrl }),
   ...(uiDist === undefined ? {} : { uiDist }),
+  ...(googleIngest === undefined ? {} : { googleIngest }),
+  ...(worker === undefined ? {} : { worker }),
 });
 
 // parseInt, not Number(): a port, not an amount.

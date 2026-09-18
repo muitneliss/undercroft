@@ -67,11 +67,23 @@ export const appRouter = router({
     // Starting an OAuth flow mints tokens into a customer's account, so it is admin-only.
     // The redirect itself is a plain HTTP route (a provider cannot speak tRPC); this
     // returns the URL for the UI to navigate to.
+    //
+    // Gmail and Drive now get a real Google URL with a handshake row recorded behind it.
+    // HubSpot and Xero keep the placeholder they have always returned: neither has a consent
+    // flow yet, and inventing one here would be a button that posts nowhere. The same
+    // placeholder is what an unconfigured ingest client falls back to, which is why the
+    // return shape is unchanged.
     startOAuth: requireRole("admin")
       .input(z.object({ source: z.string().min(1) }))
-      .mutation(({ input }) => ({
-        authorizeUrl: `/oauth/${input.source}/start?tenant=__set_by_server__`,
-      })),
+      .mutation(async ({ ctx, input }) => {
+        const started = await ctx.startConsent({
+          tenantId: ctx.tenantId,
+          source: input.source,
+          startedBy: ctx.user.userId,
+        });
+        if (started.ok) return { authorizeUrl: started.authorizeUrl };
+        return { authorizeUrl: `/oauth/${input.source}/start?tenant=__set_by_server__` };
+      }),
   }),
 
   /**

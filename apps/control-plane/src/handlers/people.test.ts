@@ -55,6 +55,8 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
     locale,
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(true),
+    startConsent: () => Promise.resolve({ ok: false as const }),
+    worker: null,
   };
   return appRouter.createCaller(ctx);
 }
