@@ -69,7 +69,13 @@ const ARCH = [
   "M23 15.5h4v1.5h-4Z",
 ].join("");
 
-export function Mark({ size = 16, className }: { size?: number; className?: string }) {
+export function Mark({
+  size = 16,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}): React.JSX.Element {
   return (
     <svg
       width={size}

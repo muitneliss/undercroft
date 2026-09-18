@@ -33,7 +33,7 @@ const GLYPH: Record<Mark, typeof MarkGranted> = {
   absent: MarkAbsent,
 };
 
-export function StatusMark({ mark, label }: { mark: Mark; label: string }) {
+export function StatusMark({ mark, label }: { mark: Mark; label: string }): React.JSX.Element {
   const Glyph = GLYPH[mark];
 
   return (

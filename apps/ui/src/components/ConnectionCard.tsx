@@ -55,7 +55,7 @@ export function ConnectionCard({
   onScope: () => void;
   onDisconnect: () => void;
   busy?: boolean;
-}) {
+}): React.JSX.Element {
   const card = presentConnection(connection);
   const access = SOURCE_ACCESS[connection.source];
   const name = SOURCE_LABEL[connection.source];

@@ -15,7 +15,7 @@
 
 import { EmptyState } from "@/components/EmptyState.tsx";
 
-export function Lake({ tenantId }: { tenantId: string }) {
+export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
   return (
     <div className="sheet">
       <div className="head head--division">Lake</div>

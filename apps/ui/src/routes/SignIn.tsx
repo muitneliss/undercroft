@@ -44,7 +44,7 @@ import { DIVISIONS } from "@/lib/divisions.ts";
 /** The full wheel, including the three hues no division has claimed yet. */
 const WHEEL = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "#7f4023"];
 
-export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
+export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const emailField = useRef<HTMLInputElement>(null);
   const codeField = useRef<HTMLInputElement>(null);
 

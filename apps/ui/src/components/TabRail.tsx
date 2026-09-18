@@ -43,7 +43,7 @@ export function TabRail({
 }: {
   tenantId: string | undefined;
   current: DivisionId;
-}) {
+}): React.JSX.Element {
   return (
     <nav className="rail" aria-label="Sections">
       {DIVISIONS.map((div) => {

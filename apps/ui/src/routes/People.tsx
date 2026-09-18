@@ -31,7 +31,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { trpc } from "@/trpc.ts";
 
-export function People({ tenantId }: { tenantId: string }) {
+export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
   const utils = trpc.useUtils();
   const emailField = useRef<HTMLInputElement>(null);
   const roleField = useRef<HTMLSelectElement>(null);

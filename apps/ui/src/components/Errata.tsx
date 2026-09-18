@@ -34,7 +34,7 @@ export function Errata({
   action?: ReactNode;
   /** Announce it when it appears. For a state that arrived, not one already on the page. */
   live?: boolean;
-}) {
+}): React.JSX.Element {
   return (
     <div className="errata" {...(live ? { role: "alert" } : {})}>
       <span className="errata__mark">

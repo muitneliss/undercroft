@@ -23,7 +23,12 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import { formatCount } from "@/lib/money.ts";
 import { trpc } from "@/trpc.ts";
 
-export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: string }) {
+export function TenantOverview({
+  tenantId,
+}: {
+  tenantId: string;
+  scopeFor?: string;
+}): React.JSX.Element {
   const connections = trpc.connections.list.useQuery({ tenantId });
 
   if (connections.isPending) {

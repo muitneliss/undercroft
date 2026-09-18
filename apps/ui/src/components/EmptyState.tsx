@@ -23,7 +23,7 @@ export function EmptyState({
   title: string;
   body: string;
   action?: ReactNode;
-}) {
+}): React.JSX.Element {
   return (
     <div className="unprinted stack">
       <p className="unprinted__title">{title}</p>

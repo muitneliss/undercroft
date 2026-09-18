@@ -25,7 +25,7 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import { formatCount } from "@/lib/money.ts";
 import { trpc } from "@/trpc.ts";
 
-export function Tenants() {
+export function Tenants(): React.JSX.Element {
   const tenants = trpc.tenants.list.useQuery();
 
   if (tenants.isPending) {

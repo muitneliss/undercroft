@@ -46,7 +46,7 @@ function Opened({
   division: DivisionId;
   signedInAs: string;
   children: (tenantId: string) => ReactNode;
-}) {
+}): React.JSX.Element {
   const params = useParams();
   const tenantId = params["tenantId"];
 
@@ -61,7 +61,7 @@ function Opened({
   );
 }
 
-function ScopeRoute({ signedInAs }: { signedInAs: string }) {
+function ScopeRoute({ signedInAs }: { signedInAs: string }): React.JSX.Element {
   const params = useParams();
   const tenantId = params["tenantId"];
   const source = params["source"];
@@ -80,7 +80,7 @@ function ScopeRoute({ signedInAs }: { signedInAs: string }) {
   );
 }
 
-export function App() {
+export function App(): React.JSX.Element {
   // The one auth read. `session.me` is an authed procedure, so with no session cookie it
   // errors and the app sits on the title page.
   const session = trpc.session.me.useQuery(undefined, { retry: false });

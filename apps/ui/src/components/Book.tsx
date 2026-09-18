@@ -42,7 +42,7 @@ export function Book({
   current: DivisionId;
   signedInAs: string;
   children: ReactNode;
-}) {
+}): React.JSX.Element {
   const board = division(current).hue;
 
   useEffect(() => {
