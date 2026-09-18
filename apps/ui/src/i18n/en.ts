@@ -77,9 +77,19 @@ export const en = {
     colCustomer: "Customer",
     colReference: "Reference",
     colRole: "Your role",
-    addHead: "Add",
+    addHead: "Add a customer",
     addNote:
-      "Adding a customer isn’t available here yet — the control plane exposes no create endpoint. Tenants are provisioned out of band for now.",
+      "Only a platform administrator can add a customer. Ask whoever runs this control plane to create the reference.",
+    addLead:
+      "The reference is a CASE-id and cannot be changed once the first raw data has landed under it — choose it carefully.",
+    idLabel: "Reference",
+    idPlaceholder: "CASE-0001",
+    idHint: "Letters, digits, hyphens and underscores. Never a real customer name.",
+    nameLabel: "Display name",
+    namePlaceholder: "Leave empty to use the reference",
+    add: "Add customer",
+    adding: "Adding…",
+    notAdded: "Not added",
     notLoaded: "The list of customers could not be loaded. Nothing has been changed.",
   },
 

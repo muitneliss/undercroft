@@ -31,6 +31,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { appUserForEmail } from "../services/invite.ts";
 import { invitationMessage } from "../services/people.ts";
+import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 import type { Auth } from "./auth.ts";
 import { appRouter } from "./router.ts";
 import type { Context, SessionUser } from "./trpc.ts";
@@ -70,6 +71,14 @@ export interface ServerDeps {
   /** The origin to put in an invitation email. Without it, no invitation mail is sent. */
   readonly publicUrl?: string;
   /**
+   * The addresses from `UNDERCROFT_SUPERADMINS`, which hold `admin` in every tenant.
+   *
+   * Absent means none, and an install that names none behaves exactly as it did before
+   * ADR 0013. Passed in rather than read here: this is a layer, and `layer-injected-deps`
+   * keeps configuration substitutable by the composition root that owns it.
+   */
+  readonly superadmins?: Superadmins;
+  /**
    * Absolute path to the built SPA (`apps/ui/dist`). When set, the app serves those files
    * and falls back to `index.html` for client-side routes. When unset — a test, or a
    * process with no UI baked in — only `/api` and `/trpc` exist, and everything else 404s.
@@ -93,7 +102,7 @@ export function createServer(deps: ServerDeps): Hono {
 
   app.all("/trpc/*", async (c) => {
     const headers = c.req.raw.headers;
-    const { user, sessionId } = await resolveCaller(deps, headers);
+    const { user, sessionId, superadmin } = await resolveCaller(deps, headers);
     const auth = deps.auth;
     // Resolved once, from the request, and carried on the context. Every refusal this
     // request produces and every email it causes to be sent is worded in it -- including the
@@ -108,6 +117,7 @@ export function createServer(deps: ServerDeps): Hono {
         exec: deps.exec,
         user,
         sessionId,
+        superadmin,
         locale,
         endSession: async () => {
           if (auth !== undefined) {
@@ -190,26 +200,34 @@ async function sendInvitation(
  * An authenticated address with no `app_user` resolves to `null`, not to a session. That is
  * the case where someone's account was removed while they still hold a valid cookie: they
  * are who they say they are, and they are nobody here.
+ *
+ * Platform authority is decided here too, and only here. It is read off the environment
+ * list against the address in the session on **every request**, which is what makes removal
+ * from `UNDERCROFT_SUPERADMINS` take effect at the next request rather than whenever a
+ * session happens to expire. `superadmin` is false whenever `user` is null -- including for
+ * a superadmin whose `app_user` row is missing -- because a caller the platform cannot
+ * identify must not carry authority over it.
  */
 async function resolveCaller(
   deps: ServerDeps,
   headers: Headers,
-): Promise<{ user: SessionUser | null; sessionId: string }> {
+): Promise<{ user: SessionUser | null; sessionId: string; superadmin: boolean }> {
   if (deps.auth === undefined) {
-    return { user: null, sessionId: "" };
+    return { user: null, sessionId: "", superadmin: false };
   }
 
   const resolved = await deps.auth.api.getSession({ headers });
   if (resolved === null) {
-    return { user: null, sessionId: "" };
+    return { user: null, sessionId: "", superadmin: false };
   }
 
   const appUser = await appUserForEmail(deps.exec, resolved.user.email);
   if (appUser === null) {
-    return { user: null, sessionId: "" };
+    return { user: null, sessionId: "", superadmin: false };
   }
 
   return {
+    superadmin: isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, appUser.email),
     user: { userId: appUser.appUserId, email: appUser.email },
     sessionId: resolved.session.id,
   };

@@ -32,5 +32,7 @@ export const en = {
     alreadyMember: "{{email}} already has access as {{role}}.",
     noOpenInvitation: "No open invitation with that id.",
     requiresRole: "This action requires the {{role}} role.",
+    requiresSuperadmin: "This action requires platform administrator access.",
+    tenantExists: "The reference {{tenantId}} is already in use by another customer.",
   },
 };

@@ -272,6 +272,14 @@ services:
       UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
       UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
       UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}
+      # The platform administrators: a comma-separated list of addresses that may sign in
+      # with no invitation and hold admin in every tenant. Set it in Dokploy's environment,
+      # by hand — `preflight` asserts the panel's config and CI never writes it.
+      #
+      # This variable IS the authority. There is no row anywhere saying who is one, so
+      # removing an address and redeploying withdraws it at the next request, and a database
+      # restore can never disagree with it. ADR 0013.
+      UNDERCROFT_SUPERADMINS: ${UNDERCROFT_SUPERADMINS:-}
     networks:
       default:
         aliases:

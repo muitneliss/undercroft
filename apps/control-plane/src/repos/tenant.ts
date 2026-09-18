@@ -1,11 +1,18 @@
 /**
  * `ops.tenant`: the customer record, with no secret material in it.
  *
- * One writer, and it is not reachable over HTTP. `ensureTenant` exists for the bootstrap
- * CLI (`bun run invite`), which has to be able to create the first tenant: nobody is signed
- * in yet to create it through the product, and the alternative — an operator pasting SQL —
- * is how the first production sign-in got stuck. The router still exposes no create
- * endpoint, so "a tenant is not created by a request" holds exactly as before.
+ * Two writers, and since ADR 0013 one of them IS reachable over HTTP. `ensureTenant` is the
+ * bootstrap CLI's (`bun run invite`), which has to be able to create the first tenant when
+ * nobody is signed in; `createTenant` is the superadmin-only `tenants.create` procedure's.
+ *
+ * They differ only in what they report, and that difference is why there are two of them:
+ * the CLI is idempotent by design -- re-running the bootstrap command must not fail -- while
+ * a person typing a reference into a form has to be TOLD it is already taken, or they will
+ * believe they created a customer they in fact merely named.
+ *
+ * "A tenant is not created by a request" held until ADR 0013 and no longer does. What
+ * replaces it is narrower and enforced one layer up: only a platform superadmin may create
+ * one, and no tenant-scoped role can, however senior.
  */
 
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
@@ -45,4 +52,40 @@ export async function ensureTenant(
     "INSERT INTO ops.tenant (id, display_name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
     [tenantId, displayName],
   );
+}
+
+/**
+ * Create the tenant, reporting whether this call is what created it.
+ *
+ * `DO NOTHING ... RETURNING id` yields a row only on the insert, which is the whole point:
+ * `false` means the reference was already in use and the caller must say so rather than
+ * report a success that renamed nothing. Never `DO UPDATE` -- an operator who mistypes an
+ * existing reference must not retitle a live customer as a side effect of being told "no".
+ */
+export async function createTenant(
+  exec: SqlExecutor,
+  tenantId: string,
+  displayName: string,
+): Promise<boolean> {
+  const { rows } = await exec.query<{ id: string }>(
+    `INSERT INTO ops.tenant (id, display_name) VALUES ($1, $2)
+     ON CONFLICT (id) DO NOTHING RETURNING id`,
+    [tenantId, displayName],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Every tenant on the platform.
+ *
+ * The counterpart to `membership.listForUser`, and the ONLY query in the control plane that
+ * ignores membership. It is reachable from exactly one caller -- `tenants.listForCaller`,
+ * for a superadmin -- and it is written here rather than as a flag on `listForUser` so that
+ * the query which IS the visibility boundary stays a query with no way to widen it.
+ */
+export async function listAllTenants(exec: SqlExecutor): Promise<Tenant[]> {
+  const { rows } = await exec.query<{ id: string; display_name: string }>(
+    "SELECT id, display_name FROM ops.tenant ORDER BY id",
+  );
+  return rows.map((row) => ({ id: row.id, displayName: row.display_name }));
 }

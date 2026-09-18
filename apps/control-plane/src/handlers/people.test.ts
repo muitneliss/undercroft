@@ -59,6 +59,10 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
     exec: db,
     user,
     sessionId: "s1",
+    // These tests are about what a tenant `admin` may do. Platform authority is a different
+    // axis, exercised in `authz.test.ts`; keeping it off here means every admin in this file
+    // is an ordinary one.
+    superadmin: false,
     locale,
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(true),

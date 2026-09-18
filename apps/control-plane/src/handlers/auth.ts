@@ -43,6 +43,13 @@
  *
  * `databaseHooks.user.create.before` is the provisioning step, not a fourth gate: it is
  * where an invitation is actually redeemed into a membership.
+ *
+ * All three consult the same superadmin list, resolved once in `createAuth`. An address in
+ * `UNDERCROFT_SUPERADMINS` passes all three with no invitation -- it is the one way in that
+ * does not require somebody already inside, which is what makes a fresh deployment usable.
+ * It weakens none of them: the address still has to prove it controls the mailbox or the
+ * Google account, and three gates reading one list cannot disagree about who is on it.
+ * ADR 0013.
  */
 
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
@@ -59,6 +66,7 @@ import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { messages } from "../i18n/index.ts";
 import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
+import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 
 /**
  * Which language to answer a Better Auth hook in.
@@ -126,6 +134,15 @@ export interface AuthConfig {
   /** The origin the browser reaches this control plane on, e.g. `https://app.example.test`. */
   readonly baseUrl: string;
   readonly email: EmailSender;
+  /**
+   * The addresses from `UNDERCROFT_SUPERADMINS`, which are admissible with no invitation.
+   *
+   * Optional, and absent means "none": an install that names no superadmin is invite-only
+   * exactly as it was before ADR 0013. It is here rather than read from the environment
+   * inside the gate because this is a layer, and `layer-injected-deps` is the rule that
+   * keeps a configuration substitutable by its caller.
+   */
+  readonly superadmins?: Superadmins;
   /** Omitted for an install that signs in by emailed code only. */
   readonly google?: GoogleCredentials;
   /** Where a failed OTP send is reported. Sending is not awaited, so this is the only trace. */
@@ -156,6 +173,9 @@ export interface Auth {
 }
 
 export function createAuth(config: AuthConfig): Auth {
+  // Resolved once, so the three gates below cannot end up consulting different lists.
+  const superadmins = config.superadmins ?? NO_SUPERADMINS;
+
   return betterAuth({
     database: config.database,
     secret: config.secret,
@@ -185,7 +205,7 @@ export function createAuth(config: AuthConfig): Auth {
       validateUserInfo: async ({ user }) => {
         // An identity with no address cannot be matched to an invitation, so it is refused:
         // `isAdmissible("")` is false. Failing closed on a missing email is the point.
-        if (await isAdmissible(config.exec, user.email ?? "")) {
+        if (await isAdmissible(config.exec, user.email ?? "", superadmins)) {
           return;
         }
 
@@ -275,7 +295,7 @@ export function createAuth(config: AuthConfig): Auth {
           // from "sent". Answering honestly here would turn the sign-in form into an
           // oracle for which addresses have access, which is the same enumeration argument
           // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
-          if (!(await isAdmissible(config.exec, email))) {
+          if (!(await isAdmissible(config.exec, email, superadmins))) {
             // Silent to the caller, not to the operator: the response must not reveal that
             // this address has no access, but the trail must say so.
             await recordRefusal(config.exec, { email, via: "email-otp" });
@@ -317,7 +337,9 @@ export function createAuth(config: AuthConfig): Auth {
            * passes to the client verbatim.
            */
           before: async (user, context) => {
-            const invited = await config.transactor((tx) => resolveInvitedUser(tx, user.email));
+            const invited = await config.transactor((tx) =>
+              resolveInvitedUser(tx, user.email, superadmins),
+            );
             if (invited === null) {
               throw new APIError("FORBIDDEN", {
                 message: messages(localeOf(context))("error.notInvited"),

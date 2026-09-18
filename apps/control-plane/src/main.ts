@@ -21,6 +21,7 @@ import { createHttpEmailSender, createLogger, type EmailSender } from "@undercro
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
+import { parseSuperadmins } from "./services/superadmin.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -56,6 +57,14 @@ const mailFrom = optional("UNDERCROFT_EMAIL_FROM");
 const googleClientId = optional("UNDERCROFT_GOOGLE_CLIENT_ID");
 const googleClientSecret = optional("UNDERCROFT_GOOGLE_CLIENT_SECRET");
 
+/**
+ * The platform administrators, read here and consulted on every request thereafter.
+ *
+ * Parsed at boot rather than per request so a malformed entry is reported once, at the
+ * moment somebody can still connect it to the deploy they just made, instead of never.
+ */
+const superadmins = parseSuperadmins(optional("UNDERCROFT_SUPERADMINS"));
+
 const email: EmailSender | undefined =
   mailApiKey === undefined || mailFrom === undefined
     ? undefined
@@ -77,6 +86,7 @@ const auth =
         secret: sessionSecret,
         baseUrl: publicUrl,
         email,
+        superadmins: superadmins.addresses,
         ...(googleClientId === undefined || googleClientSecret === undefined
           ? {}
           : { google: { clientId: googleClientId, clientSecret: googleClientSecret } }),
@@ -100,12 +110,42 @@ if (auth === undefined) {
   log.info("sign_in_configured", { methods: "google,email-otp" });
 }
 
+/**
+ * How many platform administrators this process will honour, and what it would not read.
+ *
+ * The COUNT, never the addresses: a log line is the one artefact that reliably leaves the
+ * host, and a list of the platform's most privileged accounts is exactly the thing not to
+ * put in one. `rejected` is the exception and it is deliberate -- an entry that matches
+ * nobody is not an administrator's address, it is a typo, and printing it back is the only
+ * way the person who wrote it finds out.
+ *
+ * Zero is logged at `warn` rather than passed over. It is a legitimate configuration -- an
+ * install that bootstrapped long ago and now manages access by invitation needs none -- but
+ * it is also exactly what a variable set on the wrong service looks like, and the two are
+ * indistinguishable until somebody is locked out.
+ */
+if (superadmins.rejected.length > 0) {
+  log.warn("superadmins_rejected", {
+    entries: superadmins.rejected.join(","),
+    hint: "UNDERCROFT_SUPERADMINS is a comma-separated list of email addresses",
+  });
+}
+
+if (superadmins.addresses.size === 0) {
+  log.warn("superadmins_none", { variable: "UNDERCROFT_SUPERADMINS" });
+} else {
+  log.info("superadmins_configured", { count: superadmins.addresses.size });
+}
+
 // The image bakes the built SPA in and points here; a bare `bun run` with the variable
 // unset serves the API alone. Spread so the optional stays absent rather than `undefined`,
 // which exactOptionalPropertyTypes forbids.
 const uiDist = optional("UNDERCROFT_UI_DIST");
 const app = createServer({
   exec,
+  // Not spread conditionally: an empty set is the honest answer for an install that names
+  // none, and it means `resolveCaller` has one code path rather than two.
+  superadmins: superadmins.addresses,
   ...(auth === undefined ? {} : { auth }),
   // Passed independently of `auth`: an invitation email is worth sending even on an install
   // where sign-in itself is not fully configured yet.

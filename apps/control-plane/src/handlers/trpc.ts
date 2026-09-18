@@ -40,7 +40,7 @@ import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
-import { outranks, type Role, roleFor } from "../services/authz.ts";
+import { authorityIn, outranks, type Role } from "../services/authz.ts";
 
 export interface SessionUser {
   readonly userId: string;
@@ -52,6 +52,20 @@ export interface Context {
   readonly user: SessionUser | null;
   /** Better Auth's session id, or `""` when unauthenticated. For audit, not for authority. */
   readonly sessionId: string;
+  /**
+   * Whether the caller is named in `UNDERCROFT_SUPERADMINS`, and therefore holds `admin` in
+   * every tenant.
+   *
+   * A boolean rather than the list itself: the list is a *configuration*, and putting it on
+   * the context would let any procedure ask a question of it that this layer has not
+   * sanctioned -- "is this OTHER address a superadmin", which is the shape of an
+   * enumeration endpoint. The only question a procedure may ask is about its own caller,
+   * and this is that question already answered, once, in `handlers/server.ts`.
+   *
+   * `false` for an unauthenticated caller, because `user` is `null` there and there is
+   * nobody for it to be true of.
+   */
+  readonly superadmin: boolean;
   /**
    * Revoke the caller's session.
    *
@@ -103,18 +117,51 @@ export const authedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
- * A procedure scoped to a tenant the caller is a member of. Resolves the caller's role and
- * puts it on the context; a non-member gets NOT_FOUND, never FORBIDDEN.
+ * A procedure scoped to a tenant the caller holds authority in. Resolves that authority and
+ * puts it on the context; a caller with none gets NOT_FOUND, never FORBIDDEN.
+ *
+ * "Authority", not "membership", since ADR 0013: a superadmin resolves to `admin` in any
+ * tenant that exists, and to `null` in one that does not. `authorityIn` makes both paths
+ * answer in the same shape, so the 404-not-403 reasoning above still happens exactly here
+ * and exactly once -- which is the property that mattered before a second kind of caller
+ * existed, and matters more now there is.
  */
 export const tenantProcedure = authedProcedure
   .input(z.object({ tenantId: z.string().min(1) }))
   .use(async ({ ctx, input, next }) => {
-    const role = await roleFor(ctx.exec, input.tenantId, ctx.user.userId);
+    const role = await authorityIn(ctx.exec, {
+      tenantId: input.tenantId,
+      userId: ctx.user.userId,
+      superadmin: ctx.superadmin,
+    });
     if (role === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
     return next({ ctx: { ...ctx, role, tenantId: input.tenantId } });
   });
+
+/**
+ * A procedure only a platform superadmin may call.
+ *
+ * FORBIDDEN, not NOT_FOUND, and the difference is deliberate: these procedures are not
+ * scoped to a tenant, so refusing one reveals nothing about which customers exist. There is
+ * no enumeration oracle to protect here, and telling a signed-in operator plainly that they
+ * lack platform authority is what lets the UI leave the affordance out rather than present
+ * a button that fails.
+ *
+ * Note what this does NOT accept: a tenant `admin`. Platform authority is not the top of the
+ * role ladder, it is beside it -- `ROLE_RANK` orders authority *within* a customer, and no
+ * amount of it adds up to the right to create another one.
+ */
+export const superadminProcedure = authedProcedure.use(({ ctx, next }) => {
+  if (!ctx.superadmin) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: messages(ctx.locale)("error.requiresSuperadmin"),
+    });
+  }
+  return next();
+});
 
 /** Require at least `min` authority. FORBIDDEN here is correct: membership is established. */
 export function requireRole(min: Role) {
