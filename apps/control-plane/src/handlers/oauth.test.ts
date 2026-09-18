@@ -18,13 +18,18 @@ import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { Hono } from "hono";
 
+import { isAdminIn } from "../services/authz.ts";
 import { startConsent } from "../services/oauth.ts";
+import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { InMemoryWorkerClient } from "../services/workerClient.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
 
 const TENANT = "CASE-0042";
 const ADMIN = { userId: "", email: "ada@example.test" };
 const MEMBER = { userId: "", email: "bo@example.test" };
+/** Named in UNDERCROFT_SUPERADMINS, and a member of nothing -- which is the whole point. */
+const SUPERADMIN = { userId: "", email: "root@example.test" };
+const SUPERADMINS: ReadonlySet<string> = new Set([SUPERADMIN.email]);
 const TOKEN_URL = "https://oauth2.googleapis.test/token";
 
 let db: TestDatabase;
@@ -60,6 +65,9 @@ beforeEach(async () => {
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   ADMIN.userId = await seedUser(ADMIN.email, "admin");
   MEMBER.userId = await seedUser(MEMBER.email, "member");
+  // No `tenant_member` row, deliberately: ADR 0013 provisions a superadmin with none, and a
+  // fixture that quietly gave them one would test a person who does not exist.
+  SUPERADMIN.userId = await seedAppUser(SUPERADMIN.email);
   // Backed by the database, so it has the side effect the real worker has: a stored
   // credential leaves a connected `ops.connection` row, which `app.connection_detail` has a
   // foreign key to.
@@ -80,12 +88,16 @@ afterEach(async () => {
   await db.close();
 });
 
-async function seedUser(email: string, role: string): Promise<string> {
+async function seedAppUser(email: string): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
     "INSERT INTO app.app_user (email) VALUES ($1) RETURNING id",
     [email],
   );
-  const id = rows[0]?.id ?? "";
+  return rows[0]?.id ?? "";
+}
+
+async function seedUser(email: string, role: string): Promise<string> {
+  const id = await seedAppUser(email);
   await db.query("INSERT INTO app.tenant_member (tenant_id, user_id, role) VALUES ($1, $2, $3)", [
     TENANT,
     id,
@@ -94,20 +106,25 @@ async function seedUser(email: string, role: string): Promise<string> {
   return id;
 }
 
-/** Build the app with a given signed-in caller. `null` is nobody signed in. */
-function appFor(caller: { userId: string; email: string } | null): Hono {
+/**
+ * Build the app with a given signed-in caller. `null` is nobody signed in.
+ *
+ * `hasAdminAuthority` is the REAL policy, not a lookup written here. The first version of
+ * this helper ran its own `SELECT role FROM app.tenant_member`, which happened to be what
+ * the wiring in `server.ts` also did -- so the suite agreed with production about a rule
+ * neither of them had right, and stayed green while a superadmin could not finish a consent.
+ * A test that re-implements the thing under test can only ever confirm itself.
+ */
+function appFor(
+  caller: { userId: string; email: string } | null,
+  superadmins: ReadonlySet<string> = NO_SUPERADMINS,
+): Hono {
   const app = new Hono();
   registerOAuthRoutes(app, {
     exec: db,
     google,
     worker,
-    isAdminOf: async (tenantId, userId) => {
-      const { rows } = await db.query<{ role: string }>(
-        "SELECT role FROM app.tenant_member WHERE tenant_id = $1 AND user_id = $2",
-        [tenantId, userId],
-      );
-      return rows[0]?.role === "admin";
-    },
+    hasAdminAuthority: (tenantId, who) => isAdminIn(db, superadmins, { tenantId, ...who }),
     resolveCaller: () => Promise.resolve(caller),
   });
   return app;
@@ -191,6 +208,37 @@ describe("completing a consent", () => {
     const state = await beginConsent();
 
     const response = await callback(appFor(MEMBER), { state, code: "auth-code" });
+
+    expect(response.headers.get("location")).toContain("reason=not-admin");
+    expect(worker.stored).toHaveLength(0);
+  });
+
+  it("a superadmin with no membership completes the consent", async () => {
+    // The bug this pins: `server.ts` asked `roleFor`, a `tenant_member` lookup, while the
+    // button that starts the flow asked `authorityIn`. So the platform administrator -- the
+    // one person who can set a fresh deployment up, and who by design is a member of nothing
+    // -- got all the way through Google's dialog and was then refused `not-admin`.
+    const state = await beginConsent();
+
+    const response = await callback(appFor(SUPERADMIN, SUPERADMINS), {
+      state,
+      code: "auth-code",
+    });
+
+    expect(response.headers.get("location")).toBe("/tenants/CASE-0042/connect/gmail/scope");
+    expect(worker.stored).toHaveLength(1);
+  });
+
+  it("the same address is refused when it is not on the superadmin list", async () => {
+    // The quiet half of the guard above. Platform authority comes from the environment, so
+    // the identical caller with an empty list must get nowhere -- otherwise the test above
+    // would pass against code that simply stopped checking.
+    const state = await beginConsent();
+
+    const response = await callback(appFor(SUPERADMIN, NO_SUPERADMINS), {
+      state,
+      code: "auth-code",
+    });
 
     expect(response.headers.get("location")).toContain("reason=not-admin");
     expect(worker.stored).toHaveLength(0);

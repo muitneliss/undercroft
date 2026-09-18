@@ -37,5 +37,8 @@ export const en = {
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
     scopeNotUnderstood: "The selection for {{source}} could not be read.",
+    ingestNotConfigured:
+      "This deployment is not set up to connect Google accounts. Tell whoever administers it.",
+    sourceNotConnectable: "{{source}} cannot be connected automatically yet.",
   },
 };

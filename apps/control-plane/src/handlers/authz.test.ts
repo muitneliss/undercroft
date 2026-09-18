@@ -58,9 +58,11 @@ function caller(user: SessionUser | null, superadmin = false) {
     // No mail in an authorization test: these procedures are being checked for who may
     // call them, and a sender here would be a second thing under test.
     notifyInvitation: () => Promise.resolve(false),
-    // No Google client and no worker, for the same reason. `startOAuth` then falls back to
-    // the placeholder it has always returned, which is what these tests assert.
-    startConsent: () => Promise.resolve({ ok: false as const }),
+    // No Google client and no worker, for the same reason. `startOAuth` therefore refuses
+    // every caller who gets past the role gate -- which is what makes PRECONDITION_FAILED
+    // the proof of authorization here: it is the answer only a caller the gate ADMITTED can
+    // receive.
+    startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
     worker: null,
     googlePicker: null,
   };
@@ -124,17 +126,24 @@ describe("role ranks gate privileged actions once membership is established", ()
     ).toBe("FORBIDDEN");
   });
 
-  it("an admin may start an OAuth flow", async () => {
+  it("an admin gets past the role gate on startOAuth", async () => {
+    // PRECONDITION_FAILED, not a URL: this fixture configures no Google client, so the
+    // furthest an admitted caller can get is the procedure telling them so. That is the
+    // point -- the viewer above never reaches this answer, and the difference between the
+    // two codes IS the authorization fact under test.
+    //
+    // It used to assert a `/oauth/hubspot/` URL, which the procedure fabricated for a
+    // refusal it had no way to report. A test can only be as honest as the value it reads.
     const user = await seedUser("admin@example.test");
     await seedMembership("CASE-1", user, "admin");
-    const result = await caller({
-      userId: user,
-      email: "admin@example.test",
-    }).connections.startOAuth({
-      tenantId: "CASE-1",
-      source: "hubspot",
-    });
-    expect(result.authorizeUrl).toContain("/oauth/hubspot/");
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "admin@example.test" }).connections.startOAuth({
+          tenantId: "CASE-1",
+          source: "hubspot",
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
   });
 
   it("a member cannot change what a connection reads", async () => {

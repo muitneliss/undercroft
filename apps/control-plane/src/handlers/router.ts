@@ -146,11 +146,16 @@ export const appRouter = router({
     // The redirect itself is a plain HTTP route (a provider cannot speak tRPC); this
     // returns the URL for the UI to navigate to.
     //
-    // Gmail and Drive now get a real Google URL with a handshake row recorded behind it.
-    // HubSpot and Xero keep the placeholder they have always returned: neither has a consent
-    // flow yet, and inventing one here would be a button that posts nowhere. The same
-    // placeholder is what an unconfigured ingest client falls back to, which is why the
-    // return shape is unchanged.
+    // Gmail and Drive get a real Google URL with a handshake row recorded behind it.
+    // Anything else is a refusal, and it is reported as one.
+    //
+    // This used to answer a refusal with `/oauth/{source}/start?tenant=__set_by_server__`,
+    // a path no route has ever served. The browser was sent there, the SPA catch-all
+    // answered with `index.html`, and the router's `*` rule bounced the operator to
+    // /tenants with no message -- a dead end that reads exactly like a broken button, and
+    // cost an afternoon to tell apart from one. A procedure that cannot do the thing says
+    // so; `.claude/rules/money.md` calls this never guessing, and a fabricated URL is a
+    // guess with a 200 on it.
     startOAuth: requireRole("admin")
       .input(z.object({ source: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
@@ -162,7 +167,20 @@ export const appRouter = router({
         if (started.ok) {
           return { authorizeUrl: started.authorizeUrl };
         }
-        return { authorizeUrl: `/oauth/${input.source}/start?tenant=__set_by_server__` };
+
+        // PRECONDITION_FAILED for both, as `browseScope` already answers for an absent
+        // worker: nothing about the request is wrong, the deployment simply cannot serve
+        // it yet. The two reasons are worded apart because the remedies are: one is an
+        // operator's environment, the other is a source this build does not connect.
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)(
+            started.reason === "not-configured"
+              ? "error.ingestNotConfigured"
+              : "error.sourceNotConnectable",
+            { source: input.source },
+          ),
+        });
       }),
 
     /**

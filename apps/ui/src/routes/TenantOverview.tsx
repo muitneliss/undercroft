@@ -92,6 +92,17 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
           </Errata>
         ) : null}
 
+        {/*
+          A refusal to START a consent, which the server now words rather than answering with
+          a URL it made up. Without this the navigation below simply never happened and the
+          page sat there looking like a dead button.
+        */}
+        {startOAuth.isError ? (
+          <Errata heading={t("grant.connectFailed")} live={true}>
+            {startOAuth.error.message}
+          </Errata>
+        ) : null}
+
         {disconnect.isError ? (
           <Errata heading={t("grant.disconnectFailed")} live={true}>
             {disconnect.error.message}
