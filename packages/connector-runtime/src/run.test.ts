@@ -41,11 +41,15 @@ async function collect(gen: AsyncGenerator<RawRecordOut>): Promise<RawRecordOut[
   return out;
 }
 
-function ctx(fetcher: InMemoryFetcher) {
+function ctx(fetcher: InMemoryFetcher): {
+  fetcher: InMemoryFetcher;
+  clock: TestClock;
+  token: () => Promise<string>;
+} {
   return {
     fetcher,
     clock: new TestClock(),
-    token: () => Promise.resolve("t"),
+    token: (): Promise<string> => Promise.resolve("t"),
   };
 }
 

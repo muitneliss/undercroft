@@ -7,14 +7,14 @@ import { InMemoryObjectStore } from "./memory.ts";
 import { LakeStore, ObjectExists } from "./store.ts";
 
 const encoder = new TextEncoder();
-function bytes(text: string) {
+function bytes(text: string): Uint8Array<ArrayBuffer> {
   return encoder.encode(text);
 }
 
 let backing: InMemoryObjectStore;
 let clock: TestClock;
 
-function lake(retention?: number) {
+function lake(retention?: number): LakeStore {
   return new LakeStore(backing, {
     stamps: createStampSource(clock),
     ...(retention === undefined ? {} : { retention }),

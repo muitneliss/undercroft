@@ -57,11 +57,14 @@ export function createPool(connectionString: string, options: PoolOptions = {}):
 /** Wrap a `pg` client as the narrow {@link SqlExecutor} the runner and repos speak. */
 export function asExecutor(client: pg.PoolClient | pg.Pool): SqlExecutor {
   return {
-    async query<T = Record<string, unknown>>(text: string, params?: readonly unknown[]) {
+    async query<T = Record<string, unknown>>(
+      text: string,
+      params?: readonly unknown[],
+    ): Promise<{ rows: T[] }> {
       const result = await client.query(text, params as unknown[] | undefined);
       return { rows: result.rows as T[] };
     },
-    async exec(sql: string) {
+    async exec(sql: string): Promise<void> {
       // No parameters, so the simple query protocol runs every statement in the string.
       await client.query(sql);
     },

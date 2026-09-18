@@ -100,7 +100,7 @@ export function createServer(deps: ServerDeps): Hono {
             await auth.api.signOut({ headers });
           }
         },
-        notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId),
+        notifyInvitation: (to, tenantId): Promise<boolean> => sendInvitation(deps, to, tenantId),
       }),
     });
   });

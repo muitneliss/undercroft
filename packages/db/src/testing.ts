@@ -26,11 +26,14 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   await db.waitReady;
 
   const base: SqlExecutor = {
-    async query<T = Record<string, unknown>>(text: string, params?: readonly unknown[]) {
+    async query<T = Record<string, unknown>>(
+      text: string,
+      params?: readonly unknown[],
+    ): Promise<{ rows: T[] }> {
       const result = await db.query<T>(text, params as unknown[] | undefined);
       return { rows: result.rows } satisfies QueryResult<T>;
     },
-    async exec(sql: string) {
+    async exec(sql: string): Promise<void> {
       await db.exec(sql);
     },
   };
@@ -45,7 +48,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         await base.query("RESET ROLE");
       }
     },
-    async close() {
+    async close(): Promise<void> {
       await db.close();
     },
   };

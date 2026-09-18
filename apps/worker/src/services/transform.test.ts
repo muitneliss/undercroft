@@ -10,7 +10,7 @@ describe("runTransform invokes dbt and reports honestly", () => {
     let seen: readonly string[] = [];
     const result = await runTransform({
       ...dirs,
-      spawn: (cmd) => {
+      spawn: (cmd): Promise<{ exitCode: number; output: string }> => {
         seen = cmd;
         return Promise.resolve({ exitCode: 0, output: "Completed successfully" });
       },
@@ -28,7 +28,7 @@ describe("runTransform invokes dbt and reports honestly", () => {
     await runTransform(
       {
         ...dirs,
-        spawn: (cmd) => {
+        spawn: (cmd): Promise<{ exitCode: number; output: string }> => {
           seen = cmd;
           return Promise.resolve({ exitCode: 0, output: "ok" });
         },

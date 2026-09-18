@@ -27,7 +27,7 @@ interface UiState {
 
 export const useUiStore = create<UiState>((set) => ({
   selectedTenantId: null,
-  selectTenant: (id) =>
+  selectTenant: (id): void =>
     set((state) => ({ selectedTenantId: state.selectedTenantId === id ? null : id })),
   clearTenant: () => set({ selectedTenantId: null }),
 }));

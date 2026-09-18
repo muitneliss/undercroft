@@ -138,7 +138,7 @@ export function People({ tenantId }: { tenantId: string }) {
                         className="plate plate--small"
                         type="button"
                         disabled={revoke.isPending}
-                        onClick={() => {
+                        onClick={(): void => {
                           revoke.mutate({ tenantId, id: invitation.id });
                         }}
                       >
@@ -161,7 +161,7 @@ export function People({ tenantId }: { tenantId: string }) {
         {isAdmin ? (
           <form
             className="stack stack--tight"
-            onSubmit={(event) => {
+            onSubmit={(event): void => {
               event.preventDefault();
               const email = emailField.current?.value.trim() ?? "";
               const role = roleField.current?.value ?? "viewer";

@@ -21,7 +21,10 @@ interface Recorded {
 }
 
 /** A fetch that answers with the given status and records the one request it received. */
-function recordingFetch(status: number, responseBody = "{}") {
+function recordingFetch(
+  status: number,
+  responseBody = "{}",
+): { seen: Recorded[]; fetchImpl: typeof fetch } {
   const seen: Recorded[] = [];
   async function recorder(
     input: Parameters<typeof globalThis.fetch>[0],

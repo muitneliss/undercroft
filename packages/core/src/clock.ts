@@ -18,7 +18,7 @@ export interface Clock {
 
 export const systemClock: Clock = {
   now: () => new Date(),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep: (ms): Promise<void> => new Promise((resolve): NodeJS.Timeout => setTimeout(resolve, ms)),
 };
 
 interface Sleeper {

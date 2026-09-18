@@ -58,12 +58,12 @@ function describeError(value: unknown): LogFields {
 
 export function createLogger(options: LoggerOptions): Logger {
   const clock = options.clock ?? systemClock;
-  const sink = options.sink ?? ((line: string) => process.stdout.write(`${line}\n`));
+  const sink = options.sink ?? ((line: string): boolean => process.stdout.write(`${line}\n`));
   const base = options.fields ?? {};
 
   function make(fields: LogFields): Logger {
     const logger: Logger = {
-      write(level, event, extra) {
+      write(level, event, extra): void {
         const line = {
           at: clock.now().toISOString(),
           level,
@@ -74,10 +74,10 @@ export function createLogger(options: LoggerOptions): Logger {
         };
         sink(JSON.stringify(line));
       },
-      info: (event, extra) => logger.write("info", event, extra),
-      warn: (event, extra) => logger.write("warn", event, extra),
-      error: (event, extra) => logger.write("error", event, extra),
-      child: (extra) => make({ ...fields, ...extra }),
+      info: (event, extra): void => logger.write("info", event, extra),
+      warn: (event, extra): void => logger.write("warn", event, extra),
+      error: (event, extra): void => logger.write("error", event, extra),
+      child: (extra): Logger => make({ ...fields, ...extra }),
     };
     return logger;
   }

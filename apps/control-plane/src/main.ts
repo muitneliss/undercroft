@@ -76,7 +76,7 @@ const auth =
         ...(googleClientId === undefined || googleClientSecret === undefined
           ? {}
           : { google: { clientId: googleClientId, clientSecret: googleClientSecret } }),
-        onEmailError: (error) =>
+        onEmailError: (error): void =>
           log.error("otp_send_failed", {
             errorMessage: error instanceof Error ? error.message : String(error),
           }),

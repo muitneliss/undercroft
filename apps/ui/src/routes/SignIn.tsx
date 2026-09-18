@@ -107,7 +107,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
         {sentTo === null ? (
           <form
             className="stack stack--tight"
-            onSubmit={(event) => {
+            onSubmit={(event): void => {
               event.preventDefault();
               const email = emailField.current?.value.trim() ?? "";
               if (email !== "") {
@@ -147,7 +147,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
         ) : (
           <form
             className="stack stack--tight"
-            onSubmit={(event) => {
+            onSubmit={(event): void => {
               event.preventDefault();
               const otp = codeField.current?.value.trim() ?? "";
               if (otp !== "") {
@@ -195,7 +195,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
               <button
                 className="plate plate--small"
                 type="button"
-                onClick={() => {
+                onClick={(): void => {
                   sendCode.reset();
                 }}
               >

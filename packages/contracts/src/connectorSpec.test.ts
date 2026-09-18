@@ -9,7 +9,7 @@ import { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 
-function hubspotYaml() {
+function hubspotYaml(): string {
   return readFileSync(join(repoRoot, "specs", "connectors", "hubspot.yaml"), "utf8");
 }
 

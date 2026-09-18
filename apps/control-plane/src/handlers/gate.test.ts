@@ -64,7 +64,10 @@ beforeEach(async () => {
   // -- which is also its only trusted origin -- and that is not known until the socket is
   // bound.
   let handler: (request: Request) => Response | Promise<Response> = () => new Response(null);
-  server = Bun.serve({ port: 0, fetch: (request) => handler(request) });
+  server = Bun.serve({
+    port: 0,
+    fetch: (request): Response | Promise<Response> => handler(request),
+  });
   origin = server.url.origin;
 
   const auth = createAuth({

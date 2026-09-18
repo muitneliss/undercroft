@@ -110,7 +110,7 @@ function buildNotifier(): (email: string, tenantId: string) => Promise<boolean> 
     ...(endpoint === undefined ? {} : { endpoint }),
   });
 
-  return async (to, tenantId) => {
+  return async (to, tenantId): Promise<boolean> => {
     try {
       await sender.send(invitationMessage(to, tenantId, publicUrl));
       return true;

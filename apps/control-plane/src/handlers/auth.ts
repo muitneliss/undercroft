@@ -148,7 +148,9 @@ export function createAuth(config: AuthConfig): Auth {
        * it runs on paths where nothing should be provisioned. The library fails this hook
        * CLOSED: if it throws, the sign-in is refused rather than allowed.
        */
-      validateUserInfo: async ({ user }) => {
+      validateUserInfo: async ({
+        user,
+      }): Promise<{ error: string; errorDescription: string } | undefined> => {
         // An identity with no address cannot be matched to an invitation, so it is refused:
         // `isAdmissible("")` is false. Failing closed on a missing email is the point.
         if (await isAdmissible(config.exec, user.email ?? "")) {
@@ -232,7 +234,7 @@ export function createAuth(config: AuthConfig): Auth {
         // Hashed at rest, the same stance app.invitation takes with token_sha256: a
         // database read must not yield something replayable.
         storeOTP: "hashed",
-        sendVerificationOTP: async ({ email, otp }) => {
+        sendVerificationOTP: async ({ email, otp }): Promise<void> => {
           // Do not put a code in the post for an address that could never use it. Without
           // this, anyone could make this platform email an arbitrary stranger on demand --
           // our mail reputation spending itself on someone else's spam.
@@ -277,7 +279,19 @@ export function createAuth(config: AuthConfig): Auth {
            * aborts the sign-in, and its message is the one kind of error text Better Auth
            * passes to the client verbatim.
            */
-          before: async (user) => {
+          before: async (
+            user,
+          ): Promise<{
+            data: {
+              id: string;
+              createdAt: Date;
+              updatedAt: Date;
+              email: string;
+              emailVerified: boolean;
+              name: string;
+              image?: string | null | undefined;
+            } & Record<string, unknown>;
+          }> => {
             const invited = await config.transactor((tx) => resolveInvitedUser(tx, user.email));
             if (invited === null) {
               throw new APIError("FORBIDDEN", {

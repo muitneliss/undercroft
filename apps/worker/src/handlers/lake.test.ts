@@ -14,7 +14,10 @@ let backing: InMemoryObjectStore;
 let lake: LakeStore;
 let db: TestDatabase;
 
-function record(id: string, payload: object) {
+function record(
+  id: string,
+  payload: object,
+): { entity: string; sourceRecordId: string; sourceUpdatedAt: null; payloadText: string } {
   return {
     entity: "deals",
     sourceRecordId: id,
@@ -25,7 +28,10 @@ function record(id: string, payload: object) {
 
 // For payloads with non-integer numbers: canonicalJson refuses a JS float (correctly), so
 // the record's text is built from raw JSON where the number never becomes a JS number.
-function recordText(id: string, payloadText: string) {
+function recordText(
+  id: string,
+  payloadText: string,
+): { entity: string; sourceRecordId: string; sourceUpdatedAt: null; payloadText: string } {
   return { entity: "deals", sourceRecordId: id, sourceUpdatedAt: null, payloadText };
 }
 
@@ -74,7 +80,7 @@ describe("the lake records API", () => {
     return createLakeApi({ lake, exec: db, serviceToken: "svc-token" });
   }
 
-  async function post(body: unknown, token = "svc-token") {
+  async function post(body: unknown, token = "svc-token"): Promise<Response> {
     return api().request("/v1/lake/records", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },

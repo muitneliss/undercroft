@@ -6,11 +6,14 @@ import { TestClock } from "./clock.ts";
 import { HttpError } from "./errors.ts";
 import { DEFAULT_RETRY, parseRetryAfter, withRetry } from "./retry.ts";
 
-function noJitter() {
+function noJitter(): number {
   return 0.999_999;
 }
 
-function attemptCounter(failures: number, status = 429) {
+function attemptCounter(
+  failures: number,
+  status = 429,
+): { readonly calls: number; run: () => Promise<string> } {
   let calls = 0;
   return {
     get calls() {
@@ -96,7 +99,7 @@ describe("backoff", () => {
     const result = withRetry(
       op.run,
       { ...DEFAULT_RETRY, attempts: 6, baseMs: 1000, maxMs: 4000, jitter: "none" },
-      { clock, random: noJitter, onRetry: ({ delayMs }) => delays.push(delayMs) },
+      { clock, random: noJitter, onRetry: ({ delayMs }): number => delays.push(delayMs) },
     );
     const outcome = await drive(clock, result, 6, 10_000);
     expect(outcome.ok).toBe(false);
@@ -110,7 +113,7 @@ describe("backoff", () => {
     const result = withRetry(
       op.run,
       { ...DEFAULT_RETRY, attempts: 3, baseMs: 1000, jitter: "full" },
-      { clock, random: () => 0.5, onRetry: ({ delayMs }) => delays.push(delayMs) },
+      { clock, random: (): number => 0.5, onRetry: ({ delayMs }): number => delays.push(delayMs) },
     );
     const outcome = await drive(clock, result, 3, 10_000);
     expect(outcome.ok).toBe(false);
@@ -142,7 +145,7 @@ describe("Retry-After", () => {
     const clock = new TestClock();
     const delays: number[] = [];
     let calls = 0;
-    async function op() {
+    async function op(): Promise<string> {
       calls += 1;
       if (calls === 1) {
         throw new HttpError(429, "https://example.test/x", "", 5000);
@@ -151,7 +154,7 @@ describe("Retry-After", () => {
     }
     const result = withRetry(op, DEFAULT_RETRY, {
       clock,
-      onRetry: ({ delayMs }) => delays.push(delayMs),
+      onRetry: ({ delayMs }): number => delays.push(delayMs),
     });
     await clock.advance(5000);
     expect(await result).toBe("ok");
@@ -162,7 +165,7 @@ describe("Retry-After", () => {
     const clock = new TestClock();
     const delays: number[] = [];
     let calls = 0;
-    async function op() {
+    async function op(): Promise<string> {
       calls += 1;
       if (calls === 1) {
         throw new HttpError(429, "https://example.test/x", "", 86_400_000);
@@ -171,7 +174,7 @@ describe("Retry-After", () => {
     }
     const result = withRetry(op, DEFAULT_RETRY, {
       clock,
-      onRetry: ({ delayMs }) => delays.push(delayMs),
+      onRetry: ({ delayMs }): number => delays.push(delayMs),
     });
     await clock.advance(DEFAULT_RETRY.maxRetryAfterMs);
     expect(await result).toBe("ok");
