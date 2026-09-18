@@ -31,3 +31,5 @@
 ## [2026-09-18] ingest | ADR 0013 Superadmins Named in the Environment
 ## [2026-09-18] ingest | Runbook Sign-In Setup
 ## [2026-09-18] ingest | Runbook Deployment
+## [2026-09-18] ingest | ADR 0014 Frames Are Size, Nothing Eases
+## [2026-09-18] ingest | ADR 0012 Biome Replaces ESLint and Prettier
