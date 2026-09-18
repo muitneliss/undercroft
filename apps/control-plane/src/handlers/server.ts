@@ -14,7 +14,7 @@
  */
 
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { EmailSender } from "@undercroft/core";
+import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { extname, join, normalize, sep } from "node:path";
@@ -84,6 +84,10 @@ export function createServer(deps: ServerDeps): Hono {
     const headers = c.req.raw.headers;
     const { user, sessionId } = await resolveCaller(deps, headers);
     const auth = deps.auth;
+    // Resolved once, from the request, and carried on the context. Every refusal this
+    // request produces and every email it causes to be sent is worded in it -- including the
+    // invitation, which goes to somebody whose own language nobody here knows. See `../i18n`.
+    const locale = negotiateLocale(headers.get("accept-language"));
 
     return await fetchRequestHandler({
       endpoint: "/trpc",
@@ -93,10 +97,11 @@ export function createServer(deps: ServerDeps): Hono {
         exec: deps.exec,
         user,
         sessionId,
+        locale,
         endSession: async () => {
           if (auth !== undefined) await auth.api.signOut({ headers });
         },
-        notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId),
+        notifyInvitation: (to, tenantId) => sendInvitation(deps, to, tenantId, locale),
       }),
     });
   });
@@ -139,12 +144,17 @@ export function createServer(deps: ServerDeps): Hono {
  * already valid; turning a mail outage into a failed invitation would throw away work the
  * admin would have to repeat.
  */
-async function sendInvitation(deps: ServerDeps, to: string, tenantId: string): Promise<boolean> {
+async function sendInvitation(
+  deps: ServerDeps,
+  to: string,
+  tenantId: string,
+  locale: Locale,
+): Promise<boolean> {
   const { email, publicUrl } = deps;
   if (email === undefined || publicUrl === undefined) return false;
 
   try {
-    await email.send(invitationMessage(to, tenantId, publicUrl));
+    await email.send(invitationMessage(to, tenantId, publicUrl, locale));
     return true;
   } catch {
     return false;

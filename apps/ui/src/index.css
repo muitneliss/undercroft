@@ -821,6 +821,42 @@ time,
   font-size: 10px;
 }
 
+/* -- the language pair -------------------------------------------------------- */
+
+/*
+ * Two plates bound into one control, the way a two-language manual is bound as one
+ * book rather than shelved as two. Both faces stay on the page: a dropdown would hide
+ * the language from the one reader who cannot find it any other way -- someone who
+ * opened the app in a language they do not read.
+ *
+ * The chosen face is inked rather than merely outlined, so which language you are in
+ * survives greyscale exactly as the status marks do. `aria-pressed` carries the same
+ * fact to a screen reader.
+ */
+
+.langset {
+  display: inline-flex;
+}
+
+.langset .plate {
+  border-radius: 0;
+}
+
+.langset .plate:first-child {
+  border-radius: var(--r-plate) 0 0 var(--r-plate);
+}
+
+.langset .plate:last-child {
+  border-radius: 0 var(--r-plate) var(--r-plate) 0;
+  /* The two borders overlap into one rule, so the pair reads as one control. */
+  margin-left: calc(-1 * var(--hair));
+}
+
+.langset .plate[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--leaf);
+}
+
 /* -- fields ------------------------------------------------------------------ */
 
 .field {

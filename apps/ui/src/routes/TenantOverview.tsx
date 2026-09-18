@@ -13,21 +13,22 @@
  * actionable, rather than rendering buttons that post nowhere.
  */
 
+import { useTranslation } from "react-i18next";
+
 import { Errata } from "@/components/Errata";
 import { Skeleton } from "@/components/Skeleton";
-import { formatCount } from "@/lib/money";
 import { trpc } from "@/trpc";
 
 export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: string }) {
+  const { t } = useTranslation();
   const connections = trpc.connections.list.useQuery({ tenantId });
 
   if (connections.isPending) return <Skeleton rows={5} />;
 
   if (connections.isError) {
     return (
-      <Errata heading="Not loaded" live>
-        This customer’s grants could not be loaded, or you do not have access to them. Nothing has
-        been changed.
+      <Errata heading={t("common.notLoaded")} live>
+        {t("sources.notLoaded")}
       </Errata>
     );
   }
@@ -36,28 +37,26 @@ export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: stri
 
   return (
     <div className="sheet">
-      <div className="head head--division">Sources</div>
+      <div className="head head--division">{t("nav.sources")}</div>
       <div className="body stack">
-        <h1>Connected sources</h1>
+        <h1>{t("sources.title")}</h1>
         <p className="prose prose--lead">
-          {list.length === 0
-            ? "No sources are connected for this customer yet."
-            : `${formatCount(list.length)} ${list.length === 1 ? "source" : "sources"} on record.`}
+          {list.length === 0 ? t("sources.none") : t("sources.count", { count: list.length })}
         </p>
       </div>
 
       <div className="band-rule" />
 
-      <div className="head">Grants</div>
+      <div className="head">{t("sources.grantsHead")}</div>
       <div className="body">
         {list.length === 0 ? (
-          <p className="note">Nothing to show.</p>
+          <p className="note">{t("common.nothingToShow")}</p>
         ) : (
           <table className="table">
             <thead>
               <tr>
-                <th scope="col">Source</th>
-                <th scope="col">Status</th>
+                <th scope="col">{t("sources.colSource")}</th>
+                <th scope="col">{t("sources.colStatus")}</th>
               </tr>
             </thead>
             <tbody>
@@ -71,11 +70,7 @@ export function TenantOverview({ tenantId }: { tenantId: string; scopeFor?: stri
           </table>
         )}
 
-        <p className="note">
-          Connecting, scoping, disconnecting and running a sync from here are not wired yet — the
-          control plane exposes the grant list but not those actions. Each source syncs on its own
-          schedule in the meantime.
-        </p>
+        <p className="note">{t("sources.notWired")}</p>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@
  * Postgres grants and rows.
  */
 
+import { DEFAULT_LOCALE } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { TRPCError } from "@trpc/server";
@@ -37,6 +38,9 @@ function caller(user: SessionUser | null) {
     exec: db,
     user,
     sessionId: "s1",
+    // The product default, as a request with no `Accept-Language` would resolve to. These
+    // tests assert which code a refusal carries, never its wording.
+    locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
     // No mail in an authorization test: these procedures are being checked for who may
     // call them, and a sender here would be a second thing under test.

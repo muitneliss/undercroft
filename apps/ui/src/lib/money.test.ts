@@ -54,14 +54,18 @@ describe("formatMoney", () => {
 });
 
 describe("counts and absences", () => {
-  test("a count is a real number and may be grouped", () => {
-    expect(formatCount(1234)).toBe("1,234");
+  test("a count is grouped the reader's way, unlike an amount", () => {
+    // The asymmetry is deliberate and is the module's docstring in one assertion: a count
+    // is prose and follows the language, an amount is a ledger value and does not.
+    expect(formatCount(1234, "en")).toBe("1,234");
+    expect(formatCount(1234, "vi")).toBe("1.234");
+    expect(formatMoney({ amount: "1234", currency: "SGD" })).toBe("1,234.00 SGD");
   });
 
   test("zero rows is zero, not missing", () => {
     // The distinction that matters: a count of 0 is a fact. A null is not.
-    expect(formatCount(0)).toBe("0");
-    expect(formatCount(null)).toBe(MISSING);
+    expect(formatCount(0, "vi")).toBe("0");
+    expect(formatCount(null, "vi")).toBe(MISSING);
   });
 
   test("an empty string renders as missing rather than as blank space", () => {

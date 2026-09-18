@@ -9,14 +9,19 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { translatorFor } from "@/i18n";
 import { connection } from "@/test/fixtures";
 import { presentConnection, setupProgress } from "./connectionState";
 
 const NOW = new Date("2026-09-17T12:00:00Z");
 
+// The real catalogue, not a stub that answers anything asked of it. A key these functions
+// reach for that no catalogue carries would pass against a stub and render raw on the page.
+const t = translatorFor("vi");
+
 describe("presentConnection", () => {
   test("an unconnected source offers to connect", () => {
-    const card = presentConnection(connection("xero"), NOW);
+    const card = presentConnection(t, connection("xero"), NOW);
 
     expect(card.state).toBe("not_connected");
     expect(card.action?.kind).toBe("connect");
@@ -25,6 +30,7 @@ describe("presentConnection", () => {
 
   test("a connected source with a chosen scope is done", () => {
     const card = presentConnection(
+      t,
       connection("xero", { status: "connected", external_account_label: "CASE-A1B2C3 Pte Ltd" }),
       NOW,
     );
@@ -35,14 +41,14 @@ describe("presentConnection", () => {
   });
 
   test("a source awaiting its scope asks for a decision, not a reconnect", () => {
-    const card = presentConnection(connection("drive", { status: "needs_scope" }), NOW);
+    const card = presentConnection(t, connection("drive", { status: "needs_scope" }), NOW);
 
     expect(card.state).toBe("needs_scope");
     expect(card.action?.kind).toBe("scope");
   });
 
   test("a revoked grant asks for a reconnect, not a decision", () => {
-    const card = presentConnection(connection("gmail", { status: "needs_reconnect" }), NOW);
+    const card = presentConnection(t, connection("gmail", { status: "needs_reconnect" }), NOW);
 
     expect(card.state).toBe("needs_reconnect");
     expect(card.action?.kind).toBe("reconnect");
@@ -51,6 +57,7 @@ describe("presentConnection", () => {
   test("an expired credential needs reconnecting even if the status still says connected", () => {
     // Xero's refresh token dies after 60 days unused and nothing tells us.
     const card = presentConnection(
+      t,
       connection("xero", { status: "connected", expires_at: "2026-09-17T11:00:00Z" }),
       NOW,
     );
@@ -63,6 +70,7 @@ describe("presentConnection", () => {
     // A HubSpot private-app token genuinely does not expire. Demanding a
     // reconnect for it would break a connection that works.
     const card = presentConnection(
+      t,
       connection("hubspot", { status: "connected", expires_at: null }),
       NOW,
     );
@@ -73,6 +81,7 @@ describe("presentConnection", () => {
 
   test("a credential expiring later today is still fine now", () => {
     const card = presentConnection(
+      t,
       connection("xero", { status: "connected", expires_at: "2026-09-17T23:00:00Z" }),
       NOW,
     );
@@ -84,7 +93,7 @@ describe("presentConnection", () => {
     const states = ["disconnected", "connected", "needs_scope", "needs_reconnect"] as const;
 
     for (const status of states) {
-      const card = presentConnection(connection("xero", { status }), NOW);
+      const card = presentConnection(t, connection("xero", { status }), NOW);
       expect(card.headline).not.toBe("");
       if (card.complete) expect(card.action).toBeNull();
       else expect(card.action).not.toBeNull();

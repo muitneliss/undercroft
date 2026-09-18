@@ -26,8 +26,9 @@
     "format:check": "prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
+    "build:ui": "bun run --filter '@undercroft/ui' build",
     "test": "bun test",
-    "verify": "bun run typecheck && bun run lint && bun run lint:rules && bun run format:check && bun run spec:validate && bun run test"
+    "verify": "bun run typecheck && bun run lint && bun run lint:rules && bun run format:check && bun run spec:validate && bun run build:ui && bun run test"
   },
   "type": "module",
   "trustedDependencies": [

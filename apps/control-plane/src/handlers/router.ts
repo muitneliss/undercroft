@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import * as models from "../services/models.ts";
 import * as people from "../services/people.ts";
@@ -109,7 +110,13 @@ export const appRouter = router({
           if (result.reason === "already-member") {
             throw new TRPCError({
               code: "CONFLICT",
-              message: `${input.email} already has access as ${result.role}.`,
+              // In the caller's language: `People.tsx` renders this message verbatim in an
+              // errata slip, so an English sentence would be the one untranslated thing on
+              // a Vietnamese page -- appearing exactly when something has gone wrong.
+              message: messages(ctx.locale)("error.alreadyMember", {
+                email: input.email,
+                role: result.role,
+              }),
             });
           }
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -136,7 +143,7 @@ export const appRouter = router({
         if (!revoked) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "No open invitation with that id.",
+            message: messages(ctx.locale)("error.noOpenInvitation"),
           });
         }
         return { ok: true };

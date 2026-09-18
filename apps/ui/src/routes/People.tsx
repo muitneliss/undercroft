@@ -18,13 +18,18 @@
  */
 
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Errata } from "@/components/Errata";
 import { Skeleton } from "@/components/Skeleton";
+import { useUiStore } from "@/store";
 import { trpc } from "@/trpc";
+import { formatDate } from "@/lib/when";
 
 export function People({ tenantId }: { tenantId: string }) {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
   const utils = trpc.useUtils();
   const emailField = useRef<HTMLInputElement>(null);
   const roleField = useRef<HTMLSelectElement>(null);
@@ -51,8 +56,8 @@ export function People({ tenantId }: { tenantId: string }) {
 
   if (members.isError || invitations.isError) {
     return (
-      <Errata heading="Not loaded" live>
-        The roster for {tenantId} could not be loaded. Nothing has been changed.
+      <Errata heading={t("common.notLoaded")} live>
+        {t("people.notLoaded", { tenantId })}
       </Errata>
     );
   }
@@ -63,25 +68,20 @@ export function People({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="sheet">
-      <div className="head head--division">People</div>
+      <div className="head head--division">{t("nav.people")}</div>
       <div className="body stack">
-        <h1>People</h1>
-        <p className="prose prose--lead">Who may see {tenantId}, and how they were invited.</p>
+        <h1>{t("people.title")}</h1>
+        <p className="prose prose--lead">{t("people.lead", { tenantId })}</p>
 
         {roster.length === 0 ? (
-          <EmptyState
-            title="Nobody has access yet"
-            body="Invite an address below. Whoever controls it can then sign in with Google or a one-time code — the invitation is what admits them."
-          />
+          <EmptyState title={t("people.emptyTitle")} body={t("people.emptyBody")} />
         ) : (
           <table className="table">
-            <caption>
-              {roster.length} {roster.length === 1 ? "person" : "people"} with access
-            </caption>
+            <caption>{t("people.caption", { count: roster.length })}</caption>
             <thead>
               <tr>
-                <th scope="col">Address</th>
-                <th scope="col">Role</th>
+                <th scope="col">{t("people.colAddress")}</th>
+                <th scope="col">{t("people.colRole")}</th>
               </tr>
             </thead>
             <tbody>
@@ -98,19 +98,19 @@ export function People({ tenantId }: { tenantId: string }) {
 
       <div className="band-rule" />
 
-      <div className="head">Invitations</div>
+      <div className="head">{t("people.invitationsHead")}</div>
       <div className="body stack">
         {open.length === 0 ? (
-          <p className="note">No invitations are waiting to be accepted.</p>
+          <p className="note">{t("people.noneWaiting")}</p>
         ) : (
           <table className="table">
-            <caption>{open.length} waiting to be accepted</caption>
+            <caption>{t("people.waitingCaption", { count: open.length })}</caption>
             <thead>
               <tr>
-                <th scope="col">Address</th>
-                <th scope="col">Invited as</th>
-                <th scope="col">Expires</th>
-                {isAdmin ? <th scope="col">Withdraw</th> : null}
+                <th scope="col">{t("people.colAddress")}</th>
+                <th scope="col">{t("people.colInvitedAs")}</th>
+                <th scope="col">{t("people.colExpires")}</th>
+                {isAdmin ? <th scope="col">{t("people.colWithdraw")}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -118,9 +118,10 @@ export function People({ tenantId }: { tenantId: string }) {
                 <tr key={invitation.id}>
                   <td className="datum datum--quiet">{invitation.email}</td>
                   <td>{invitation.role}</td>
-                  <td className="datum datum--quiet">
-                    {new Date(invitation.expiresAt).toISOString().slice(0, 10)}
-                  </td>
+                  {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
+                      the date in UTC while every other date on the schedule is in Singapore
+                      time, so an invitation expiring at 07:00 SGT showed the previous day. */}
+                  <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
                   {isAdmin ? (
                     <td>
                       <button
@@ -131,7 +132,7 @@ export function People({ tenantId }: { tenantId: string }) {
                           revoke.mutate({ tenantId, id: invitation.id });
                         }}
                       >
-                        Withdraw
+                        {t("people.withdraw")}
                       </button>
                     </td>
                   ) : null}
@@ -142,7 +143,7 @@ export function People({ tenantId }: { tenantId: string }) {
         )}
 
         {revoke.isError ? (
-          <Errata heading="Not withdrawn" live>
+          <Errata heading={t("people.notWithdrawn")} live>
             {revoke.error.message}
           </Errata>
         ) : null}
@@ -164,7 +165,7 @@ export function People({ tenantId }: { tenantId: string }) {
           >
             <div className="field">
               <label className="label" htmlFor="invite-email">
-                Invite an address
+                {t("people.inviteLabel")}
               </label>
               <input
                 className="input"
@@ -173,19 +174,16 @@ export function People({ tenantId }: { tenantId: string }) {
                 type="email"
                 autoComplete="off"
                 required
-                placeholder="colleague@example.com"
+                placeholder={t("people.invitePlaceholder")}
                 ref={emailField}
                 disabled={invite.isPending}
               />
-              <p className="field__hint">
-                They must sign in with this exact address. An invitation is not a password — it
-                grants nothing until they prove they control the mailbox.
-              </p>
+              <p className="field__hint">{t("people.inviteHint")}</p>
             </div>
 
             <div className="field">
               <label className="label" htmlFor="invite-role">
-                Role
+                {t("people.roleLabel")}
               </label>
               <select
                 className="input"
@@ -195,14 +193,23 @@ export function People({ tenantId }: { tenantId: string }) {
                 disabled={invite.isPending}
                 defaultValue="viewer"
               >
-                <option value="viewer">viewer — can look</option>
-                <option value="member">member — can trigger a sync</option>
-                <option value="admin">admin — can connect accounts and invite</option>
+                {/* The role names themselves stay in English in both catalogues: `viewer`,
+                    `member` and `admin` are the values the API takes and the words the
+                    roster column prints, so translating the option but not the row would
+                    make the two disagree. What is translated is the explanation after the
+                    dash, which is the part that has to be understood. */}
+                <option value="viewer">{t("people.roleViewer")}</option>
+                <option value="member">{t("people.roleMember")}</option>
+                <option value="admin">{t("people.roleAdmin")}</option>
               </select>
             </div>
 
             {invite.isError ? (
-              <Errata heading="Not invited" live>
+              <Errata heading={t("people.notInvited")} live>
+                {/* The server's own words. It composes them in the language this browser
+                    asked for -- `main.tsx` sends `accept-language` on every tRPC call --
+                    so this renders a Vietnamese sentence for a Vietnamese reader without
+                    the UI having to know what went wrong. */}
                 {invite.error.message}
               </Errata>
             ) : null}
@@ -215,24 +222,23 @@ export function People({ tenantId }: { tenantId: string }) {
             {invite.isSuccess ? (
               invite.data.notified ? (
                 <p className="note" role="status">
-                  Invited {invite.data.email}. They have been emailed.
+                  {t("people.invitedAndEmailed", { email: invite.data.email })}
                 </p>
               ) : (
-                <Errata heading="Invited, but not emailed">
-                  {invite.data.email} can sign in now, but no email was sent — mail is not
-                  configured. Tell them to sign in with that exact address.
+                <Errata heading={t("people.invitedNotEmailedHeading")}>
+                  {t("people.invitedNotEmailed", { email: invite.data.email })}
                 </Errata>
               )
             ) : null}
 
             <div className="row">
               <button className="plate plate--primary" type="submit" disabled={invite.isPending}>
-                {invite.isPending ? "Inviting…" : "Send invitation"}
+                {invite.isPending ? t("people.inviting") : t("people.sendInvitation")}
               </button>
             </div>
           </form>
         ) : (
-          <p className="note">Only an admin of {tenantId} can invite someone.</p>
+          <p className="note">{t("people.adminOnly", { tenantId })}</p>
         )}
       </div>
     </div>

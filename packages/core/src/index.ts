@@ -12,6 +12,7 @@ export {
 export { ConnectorError, HttpError, QuotaExhausted, UndercroftError } from "./errors.ts";
 export { getPath, getStringPath, parsePath } from "./getPath.ts";
 export { newRequestId, newRunId } from "./ids.ts";
+export { DEFAULT_LOCALE, type Locale, LOCALES, negotiateLocale, parseLocale } from "./locale.ts";
 export {
   createLogger,
   describeError,

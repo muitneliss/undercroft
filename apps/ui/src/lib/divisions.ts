@@ -21,7 +21,14 @@ export type DivisionId = "customers" | "sources" | "lake" | "people";
 
 export type Division = {
   id: DivisionId;
-  label: string;
+  /**
+   * The catalogue key for this division's name, not the name itself.
+   *
+   * A tab label is drawn in more than one place -- the rail, and a running head or a
+   * division list that comes later -- and a table that held English would make each of
+   * those its own translation. See `@/i18n`.
+   */
+  labelKey: `nav.${DivisionId}`;
   /** Wheel hue, as a literal so `@/lib/acetate` can solve against it. */
   hue: string;
   /** Relative height on the fore-edge rail. */
@@ -31,10 +38,10 @@ export type Division = {
 };
 
 export const DIVISIONS: readonly Division[] = [
-  { id: "customers", label: "Customers", hue: "#b24b1a", extent: 2, scoped: false },
-  { id: "sources", label: "Sources", hue: "#eda600", extent: 4, scoped: true },
-  { id: "lake", label: "Raw lake", hue: "#0f7673", extent: 3, scoped: true },
-  { id: "people", label: "People", hue: "#234c9e", extent: 2, scoped: true },
+  { id: "customers", labelKey: "nav.customers", hue: "#b24b1a", extent: 2, scoped: false },
+  { id: "sources", labelKey: "nav.sources", hue: "#eda600", extent: 4, scoped: true },
+  { id: "lake", labelKey: "nav.lake", hue: "#0f7673", extent: 3, scoped: true },
+  { id: "people", labelKey: "nav.people", hue: "#234c9e", extent: 2, scoped: true },
 ] as const;
 
 export function division(id: DivisionId): Division {

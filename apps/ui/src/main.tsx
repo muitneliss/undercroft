@@ -4,7 +4,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.tsx";
+import { useUiStore } from "./store.ts";
 import { trpc } from "./trpc.ts";
+// Side-effect import: builds the i18next singleton and starts following the store's locale.
+// It must be imported before anything renders, or the first paint is unlocalised.
+import "./i18n/index.ts";
 // Side-effect import: Vite extracts this into a hashed CSS asset the control plane serves.
 import "./index.css";
 
@@ -21,8 +25,17 @@ const queryClient = new QueryClient({
 
 // Same-origin: the browser sends the session cookie automatically, so no custom fetch is
 // needed. The control plane serves /trpc on the same origin the SPA is served from.
+//
+// `accept-language` is read per request rather than captured once, so a language chosen
+// mid-session applies to the next call: the server composes an invitation email and a
+// refusal message in it, and those must be in the language the operator is looking at.
 const trpcClient = trpc.createClient({
-  links: [httpBatchLink({ url: "/trpc" })],
+  links: [
+    httpBatchLink({
+      url: "/trpc",
+      headers: () => ({ "accept-language": useUiStore.getState().locale }),
+    }),
+  ],
 });
 
 const root = document.getElementById("root");

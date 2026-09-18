@@ -6,6 +6,11 @@ export type Source = "hubspot" | "xero" | "gmail" | "drive";
 
 export const SOURCES: readonly Source[] = ["hubspot", "xero", "gmail", "drive"] as const;
 
+/**
+ * Not in the catalogue, and deliberately: these are the vendors' own names for their own
+ * products. "HubSpot" is HubSpot in every language, and a translated product name is how an
+ * operator fails to find the button they were told to press.
+ */
 export const SOURCE_LABEL: Record<Source, string> = {
   hubspot: "HubSpot",
   xero: "Xero",
@@ -19,24 +24,20 @@ export const SOURCE_LABEL: Record<Source, string> = {
  * Shown on the card BEFORE the redirect. Someone is about to hand over access to
  * their company email and their accounting system; "Connect Gmail" with no
  * statement of what that means is not consent, it is a dark pattern.
+ *
+ * Catalogue keys rather than sentences, because consent has to be given in a language the
+ * person giving it reads. `source.readOnly` is one key shared by all four sources on
+ * purpose: "we change nothing" is the same promise everywhere, and four copies of it are
+ * four chances for one translation to weaken it.
  */
-export const SOURCE_ACCESS: Record<Source, { reads: string; writes: string }> = {
-  hubspot: {
-    reads: "Companies, contacts and deals from your CRM.",
-    writes: "Nothing. Read-only access, and you can disconnect at any time.",
-  },
-  xero: {
-    reads: "Invoices, payments, credit notes and contacts from one organisation you choose.",
-    writes: "Nothing. Read-only access, and you can disconnect at any time.",
-  },
-  gmail: {
-    reads: "Message headers and PDF attachments from the mailbox you connect.",
-    writes: "Nothing. Read-only access, and you can disconnect at any time.",
-  },
-  drive: {
-    reads: "PDF documents inside the folders you select. No other folder is read.",
-    writes: "Nothing. Read-only access, and you can disconnect at any time.",
-  },
+export const SOURCE_ACCESS: Record<
+  Source,
+  { reads: `source.${Source}Reads`; writes: "source.readOnly" }
+> = {
+  hubspot: { reads: "source.hubspotReads", writes: "source.readOnly" },
+  xero: { reads: "source.xeroReads", writes: "source.readOnly" },
+  gmail: { reads: "source.gmailReads", writes: "source.readOnly" },
+  drive: { reads: "source.driveReads", writes: "source.readOnly" },
 };
 
 export type ConnectionStatus = "disconnected" | "connected" | "needs_scope" | "needs_reconnect";
