@@ -1,0 +1,78 @@
+// Enforces `.claude/rules/money.md`: a monetary amount never becomes a `number`.
+//
+// This is the most load-bearing lint rule in the repo, and it lives in a plugin rather than
+// in `biome.jsonc` because Biome ships no `no-restricted-syntax` equivalent -- GritQL
+// plugins are the replacement for the ESLint rule this file was ported from.
+//
+// Why a machine has to hold this: the platform goes to real lengths to keep money out of a
+// float -- `big.js` end to end, NUMERIC(18,4), Postgres type parsers pinned to return
+// `numeric` as a string, wire types carrying the digits as a string, and a gate test that
+// walks every schema looking for a bare number under a money-shaped key. All of it is undone
+// by one `Number(invoice.total)`, because JavaScript's only numeric type IS a float. That
+// mistake does not raise. It arrives in a dashboard looking exactly like a fact, and a
+// reviewer cannot reliably catch it.
+//
+// `parseFloat` as a bare global is handled by `noRestrictedGlobals` in `biome.jsonc`; it is
+// a name lookup, not a syntax shape, so the rule engine expresses it better than a pattern.
+//
+// A ban on `.toFixed()` was tried in the ESLint original and removed deliberately: a syntax
+// pattern cannot tell `Number#toFixed` (rounds an already-lossy float) from `Big#toFixed`
+// (exact, and the correct way to render) without type information, so it fired on every
+// legitimate `toBig(m).plus(x).toFixed(4)`. A rule that fights correct code gets worked
+// around, and then it protects nothing. The coercions banned below already stop a `number`
+// from existing in a money path, and payload numbers are read through lossless-json rather
+// than `JSON.parse`.
+
+language js
+
+pattern money_coercions() {
+  or {
+    // `Number(x)`. Matched as a call so `Number` as a type annotation, or as a namespace
+    // (`Number.isInteger`), is untouched -- only the coercion is.
+    `Number($_)` as $call where {
+      register_diagnostic(
+        span = $call,
+        message = "Number() produces a float. Money is a string end to end -- parse it with parseAmount() from @undercroft/core and format it with formatMoney().",
+        severity = "error"
+      )
+    },
+    `Number.parseFloat($_)` as $call where {
+      register_diagnostic(
+        span = $call,
+        message = "Number.parseFloat produces a float. See @undercroft/core/money.",
+        severity = "error"
+      )
+    },
+    `Number.parseInt($...)` as $call where {
+      register_diagnostic(
+        span = $call,
+        message = "Number.parseInt produces a float. See @undercroft/core/money.",
+        severity = "error"
+      )
+    },
+    // `Big#toNumber()` is the float you spent a library avoiding. It exists for charting,
+    // and a chart is not a ledger.
+    `$_.toNumber()` as $call where {
+      register_diagnostic(
+        span = $call,
+        message = "toNumber() discards precision. Keep the Big, or render with toFixed(); see @undercroft/core/money.",
+        severity = "error"
+      )
+    },
+    // Unary `+`. The literal exclusion is carried over from the ESLint selector
+    // (`[argument.type!='Literal']`): `+1` is a number that was always a number, while
+    // `+row.amount` is a coercion and the thing this ban exists for.
+    `+$operand` as $coercion where {
+      // Non-capturing groups are required: GritQL reads a regex capture group as a variable
+      // binding and refuses the pattern ("matched 1 variables, but expected 0").
+      $operand <: not r"(?:[0-9][0-9._e]*|\"[^\"]*\"|'[^']*')",
+      register_diagnostic(
+        span = $coercion,
+        message = "Unary + coerces to a float. If this is money, use formatMoney(); if it is a count, it is already a number.",
+        severity = "error"
+      )
+    }
+  }
+}
+
+money_coercions()

@@ -1,0 +1,29 @@
+// Enforces `.claude/rules/tests.md`: do not mock.
+//
+// A suite that asserts a mock was called is green whether or not the code works -- it pins
+// the shape of a call, which is the thing most likely to change for good reasons, and says
+// nothing about the behaviour that shape was supposed to produce.
+//
+// Every port in this repo has a real in-memory implementation that REFUSES what it has not
+// modelled: `InMemoryObjectStore`, `InMemoryFetcher`, `TestClock`, and PGlite (real Postgres
+// in WASM). A fake that never refuses makes a broken boundary look fine, which is the same
+// failure as a mock with extra steps.
+//
+// The import half of this ban -- `import { mock } from "bun:test"` -- is in `biome.jsonc`
+// under `noRestrictedImports`, which expresses it directly. This file covers the member-call
+// spelling, which has no rule equivalent.
+
+language js
+
+pattern mock_calls() {
+  or {
+    `vi.mock($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
+    `vi.spyOn($...)` as $call where { register_diagnostic(span = $call, message = "Do not spy. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
+    `vi.fn($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
+    `jest.mock($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
+    `jest.spyOn($...)` as $call where { register_diagnostic(span = $call, message = "Do not spy. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") },
+    `jest.fn($...)` as $call where { register_diagnostic(span = $call, message = "Do not mock. Use the real in-memory implementation from @undercroft/testing and assert on observable behaviour.", severity = "error") }
+  }
+}
+
+mock_calls()

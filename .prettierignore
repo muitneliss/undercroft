@@ -1,3 +1,24 @@
+# Prettier is no longer the repo's formatter. Biome owns every language it can parse --
+# JS, TS, JSX, TSX, JSON, JSONC, CSS, GraphQL, HTML -- and Prettier is kept for exactly the
+# two it cannot: Markdown and YAML. That is 37 .md and 18 .yaml/.yml files, including
+# docs/adr/, the Kestra flows and the CI workflows, which would otherwise stop being
+# format-checked entirely.
+#
+# The split is written HERE rather than as a glob in the `format` script because the
+# Prettier CLI reads this file and nothing else. Handing one file to two formatters is how
+# two definitions of "formatted" drift apart and the gate starts flapping.
+*.ts
+*.tsx
+*.js
+*.jsx
+*.mjs
+*.cjs
+*.json
+*.jsonc
+*.css
+*.html
+*.graphql
+
 node_modules/
 dist/
 build/

@@ -3,12 +3,10 @@
   "version": "1.3.0",
   "devDependencies": {
     "@ast-grep/cli": "0.45.3",
-    "@eslint/js": "10.0.1",
+    "@biomejs/biome": "2.5.14",
     "@types/bun": "1.4.2",
-    "eslint": "10.10.0",
     "prettier": "3.9.7",
-    "typescript": "5.9.3",
-    "typescript-eslint": "8.70.0"
+    "typescript": "5.9.3"
   },
   "description": "An immutable raw lake with declarative connectors and user-defined transforms.",
   "engines": {
@@ -18,12 +16,12 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc -b --pretty false",
-    "lint": "eslint .",
+    "lint": "biome lint .",
     "lint:rules": "ast-grep scan",
     "migrate": "bun run packages/db/src/migrateCli.ts",
     "invite": "bun run apps/control-plane/src/inviteCli.ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "biome format --write . && prettier --write .",
+    "format:check": "biome format . && prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
     "test": "bun test",
