@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.0](https://github.com/muitneliss/undercroft/compare/v1.4.0...v1.5.0) (2026-09-18)
+
+
+### Features
+
+* **auth:** bootstrap platform superadmins from UNDERCROFT_SUPERADMINS ([#34](https://github.com/muitneliss/undercroft/issues/34)) ([2749010](https://github.com/muitneliss/undercroft/commit/27490108598b8700c1e1b91ddfb1aecc2dcc8e89))
+* **ui:** extend the stepped motion doctrine so the book actually turns ([#36](https://github.com/muitneliss/undercroft/issues/36)) ([e294324](https://github.com/muitneliss/undercroft/commit/e2943244b2e1448d6009418ebdcc6826e11e32a7))
+* **ui:** print the release tag in the colophon at the foot of every page ([#31](https://github.com/muitneliss/undercroft/issues/31)) ([0a89b0b](https://github.com/muitneliss/undercroft/commit/0a89b0b6b1536c90916d7024d2eb083e3ed77841))
+
 ## [1.4.0](https://github.com/muitneliss/undercroft/compare/v1.3.0...v1.4.0) (2026-09-18)
 
 
