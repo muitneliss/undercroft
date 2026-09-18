@@ -90,7 +90,7 @@ services:
 
   kestra:
     <<: *restart
-    image: kestra/kestra:v0.24.1
+    image: kestra/kestra:v2.0.2
     command: server standalone
     depends_on:
       kestra-postgres:
@@ -199,7 +199,7 @@ services:
 
   metabase:
     <<: *restart
-    image: metabase/metabase:v0.56.8
+    image: metabase/metabase:v0.64.x
     depends_on:
       postgres:
         condition: service_healthy
