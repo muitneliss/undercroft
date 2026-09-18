@@ -1,18 +1,19 @@
 /**
- * The worker's run verbs, and the HTTP allowlist that fronts them.
+ * Ingest: the whole vertical slice in one call.
  *
- * Kestra and the control plane trigger runs by POSTing to a *fixed set of named verbs*
- * with a bearer token. That allowlist is the privilege boundary: a compromised scheduler
- * can start these verbs and nothing else, which is why Kestra needs no Docker socket.
+ * Read a connector spec, drive the generic runtime, land into the lake, project into
+ * `raw.records`. One of the two verbs the worker exposes -- `handlers/lake.ts` holds the
+ * allowlist that fronts them, which is the privilege boundary: a compromised scheduler can
+ * start these verbs and nothing else, which is why Kestra needs no Docker socket.
  *
- * `ingest` is the whole vertical slice in one call: read a connector spec, drive the
- * generic runtime, land into the lake, project into raw.records. `transform` hands off to
- * dbt, which runs in its own container -- the worker does not embed dbt.
+ * The other verb, `transform`, hands off to dbt in its own container; the worker does not
+ * embed dbt.
  */
 
 import { parseSpec } from "@undercroft/contracts";
 import { newRunId } from "@undercroft/core";
-import { accessToken, type SqlExecutor } from "@undercroft/db";
+import type { SqlExecutor } from "@undercroft/db";
+import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
 import {
   createFetcher,

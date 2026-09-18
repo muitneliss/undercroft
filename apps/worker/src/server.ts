@@ -9,7 +9,7 @@
 import { asExecutor, createPool } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { join } from "node:path";
-import { createLakeApi } from "./lakeApi.ts";
+import { createLakeApi } from "./handlers/lake.ts";
 
 function required(name: string): string {
   const value = process.env[name];
