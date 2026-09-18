@@ -13,7 +13,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: "The release being rolled out, e.g. v1.2.3. Logged; the panel decides which images to pull."
+        description: "The release being rolled out, e.g. v1.2.3. The panel decides which images to pull; this is the tag `verify` proves the running digest against."
         required: true
         type: string
     secrets:
@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Label for this run. Which images get pulled is the panel's to decide via IMAGE_TAG."
+        description: "Which images get pulled is the panel's to decide via IMAGE_TAG; this is the tag `verify` proves the running digest against. Leave as latest unless rolling out a specific release."
         default: "latest"
         type: string
 
@@ -80,8 +80,12 @@ jobs:
       # BEFORE the smoke probes: Dokploy reports `done` for a deploy that changed nothing,
       # and every probe passes against the old images. This asks the host which image digest
       # each released container is actually running and compares it to what ghcr serves.
+      #
+      # The tag is passed so the ghcr side is the immutable `vX.Y.Z` manifest. The host pulls
+      # `latest` (the panel's IMAGE_TAG), and comparing `latest` to itself would prove only
+      # that a moving pointer equals itself.
       - name: Verify the host runs the published images
-        run: bun run scripts/dokploy.ts verify
+        run: bun run scripts/dokploy.ts verify ${{ inputs.tag }}
 
       - name: Smoke-test the public surfaces
         run: |

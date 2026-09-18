@@ -75,6 +75,19 @@ export interface Container {
   readonly status: string;
 }
 
+/**
+ * `docker.getConfig` is Docker's container inspect. `Image` is the image ID -- the config
+ * digest, which is what ghcr's manifest serves and what makes two builds of an identical
+ * image compare equal. `State` is optional because it is read to decide whether a one-shot
+ * job succeeded, and a payload that does not carry it must fail loudly rather than be
+ * treated as "fine".
+ */
+export interface ContainerConfig {
+  readonly Image: string;
+  readonly Config: { readonly Image: string };
+  readonly State?: { readonly Status: string; readonly ExitCode: number };
+}
+
 export function configFromEnv(env: Record<string, string | undefined>): Config {
   const endpoint = env.DOKPLOY_API_ENDPOINT ?? "";
   const apiKey = env.DOKPLOY_API_KEY ?? "";
@@ -257,6 +270,30 @@ export function releasedServices(
 }
 
 /**
+ * Services the compose file declares are expected to run to completion, rather than to stay
+ * up -- `db-migrate` applies the schema and exits, and `verify` must not read that as a dead
+ * container.
+ *
+ * Derived from the `depends_on: { <name>: { condition: service_completed_successfully } }`
+ * entries rather than from a list of names kept here. That declaration is what already makes
+ * the stack wait for the job, so it is the one place the intent is stated; a list here would
+ * be a second source of truth, and the failure when they disagree is a green deploy that
+ * never ran its migration. Line-wise for the same reason as `releasedServices` above.
+ */
+export function oneShotServices(composeFile: string): Set<string> {
+  const found = new Set<string>();
+  let candidate = "";
+  for (const line of composeFile.split("\n")) {
+    const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/.exec(line);
+    if (nameMatch?.[1] !== undefined) candidate = nameMatch[1];
+    if (/^\s+condition:\s*service_completed_successfully\s*$/.test(line) && candidate !== "") {
+      found.add(candidate);
+    }
+  }
+  return found;
+}
+
+/**
  * The gate before anything is queued, when failing is free: the panel must be pointed at
  * published images and must be told to pull them.
  *
@@ -334,11 +371,31 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
 /**
  * Prove the host runs what was published. Dokploy reports `done` for a deploy that changed
  * nothing, and every smoke probe passes against the old images, so this runs first.
+ *
+ * `releaseTag` is the release being rolled out. The HOST resolves `${IMAGE_TAG:-latest}` from
+ * the panel's environment and so pulls `latest`; passing the tag here makes the ghcr side of
+ * the comparison the IMMUTABLE `vX.Y.Z` manifest instead. A pass then means "the running
+ * digest is the digest ghcr serves for this release", which is the claim worth making --
+ * comparing `latest` against `latest` proves only that a moving pointer equals itself.
+ *
+ * The release publishes both tags to one digest, so they must agree. Two ways they do not,
+ * and both should fail here rather than pass quietly: `latest` moved after this deploy
+ * pulled, or an operator pinned `IMAGE_TAG` to an older tag for a rollback and never put it
+ * back, in which case the host is knowingly not running this release.
+ *
+ * Empty `releaseTag` keeps the old behaviour for an operator running `verify` by hand.
  */
-export async function verify(cfg: Config, deps: Deps, ghcrToken: string): Promise<void> {
+export async function verify(
+  cfg: Config,
+  deps: Deps,
+  ghcrToken: string,
+  releaseTag = "",
+): Promise<void> {
   const compose = await composeRecord(cfg, deps);
-  const services = releasedServices(compose.composeFile);
+  const env = releaseTag === "" ? process.env : { ...process.env, IMAGE_TAG: releaseTag };
+  const services = releasedServices(compose.composeFile, env);
   if (services.length === 0) throw new Error("nothing to verify: no released images in compose");
+  const oneShot = oneShotServices(compose.composeFile);
 
   const containers = await callApi<Container[]>(cfg, deps, "docker.getContainersByAppNameMatch", {
     query: { appName: compose.appName },
@@ -352,17 +409,36 @@ export async function verify(cfg: Config, deps: Deps, ghcrToken: string): Promis
       problems.push(`${service}: no container matching ${compose.appName}-${service}-*`);
       continue;
     }
-    if (container.state !== "running") {
+
+    const config = await callApi<ContainerConfig>(cfg, deps, "docker.getConfig", {
+      query: { containerId: container.containerId },
+      retries: 3,
+    });
+
+    // A one-shot service is meant to exit; a long-running one is meant not to. Reading the
+    // wrong expectation either way is a false verdict, so they are asked different questions.
+    if (oneShot.has(service)) {
+      const state = config.State;
+      if (state === undefined) {
+        // Never infer success from the absence of evidence: without State there is no exit
+        // code, and "it is not running" is exactly what a completed job and a crashed one
+        // have in common.
+        problems.push(`${service}: docker.getConfig returned no State, so no exit code to read`);
+        continue;
+      }
+      if (state.Status !== "exited" || state.ExitCode !== 0) {
+        problems.push(
+          `${service}: one-shot service is ${state.Status} with exit code ${state.ExitCode}, expected exited 0`,
+        );
+        continue;
+      }
+    } else if (container.state !== "running") {
       problems.push(`${service}: container is ${container.state} (${container.status})`);
       continue;
     }
 
-    const config = await callApi<{ Image: string; Config: { Image: string } }>(
-      cfg,
-      deps,
-      "docker.getConfig",
-      { query: { containerId: container.containerId }, retries: 3 },
-    );
+    // Reached by both kinds: a migration that exited 0 on last release's image is still the
+    // wrong thing running, and the digest is the only way to see it.
     const expected = await publishedConfigDigest(deps, image, ghcrToken);
     if (config.Image !== expected) {
       problems.push(
@@ -370,7 +446,8 @@ export async function verify(cfg: Config, deps: Deps, ghcrToken: string): Promis
       );
       continue;
     }
-    deps.log(`  ${service} runs the published image (${expected.slice(0, 19)}...)`);
+    const ran = oneShot.has(service) ? "ran to completion on" : "runs";
+    deps.log(`  ${service} ${ran} the published image ${image} (${expected.slice(0, 19)}...)`);
   }
 
   if (problems.length > 0) {
@@ -450,7 +527,9 @@ async function main(): Promise<void> {
       const githubToken = process.env.GITHUB_TOKEN ?? "";
       const basic =
         githubToken === "" ? "" : Buffer.from(`x-access-token:${githubToken}`).toString("base64");
-      await verify(cfg, deps, basic);
+      // The release being rolled out, which is what the ghcr side is looked up under. Absent
+      // by hand, where there is no release to name and `latest` is the honest question.
+      await verify(cfg, deps, basic, process.argv[3] ?? "");
       return;
     }
     case "smoke": {
