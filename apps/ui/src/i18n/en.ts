@@ -14,6 +14,7 @@ export const en = {
     name: "Undercroft",
     caption: "Undercroft · control plane",
     signOut: "Sign out",
+    release: "Version",
   },
 
   lang: {

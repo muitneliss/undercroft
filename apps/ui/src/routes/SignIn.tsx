@@ -32,6 +32,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth";
+import { Colophon } from "@/components/Colophon";
 import { Errata } from "@/components/Errata";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Mark } from "@/components/Mark";
@@ -201,6 +202,11 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }) {
             </div>
           </form>
         )}
+
+        {/* The imprint opens this page and the colophon closes it, on the same hairline
+            rule. It is here rather than only inside the book because the person who most
+            needs to name a build is the one who cannot get past this screen. */}
+        <Colophon />
       </div>
     </main>
   );

@@ -29,6 +29,7 @@ import { useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { Colophon } from "@/components/Colophon";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Mark } from "@/components/Mark";
 import { TabRail } from "@/components/TabRail";
@@ -121,6 +122,10 @@ export function Book({
         </header>
 
         {children}
+
+        {/* Last on the leaf, and last in the DOM: the page is what the reader came for,
+            and the printing it came from is the footnote to it. */}
+        <Colophon />
       </div>
     </div>
   );
