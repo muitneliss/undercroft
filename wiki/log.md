@@ -28,3 +28,6 @@
 ## [2026-09-18] ingest | ADR 0008 Deploy on Release from CI
 ## [2026-09-18] ingest | ADR 0010 Invite-Only Sign-In with Better Auth
 ## [2026-09-18] ingest | Runbook Sign-In Setup
+## [2026-09-18] ingest | ADR 0013 Superadmins Named in the Environment
+## [2026-09-18] ingest | Runbook Sign-In Setup
+## [2026-09-18] ingest | Runbook Deployment
