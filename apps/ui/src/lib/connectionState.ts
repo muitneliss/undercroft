@@ -1,7 +1,7 @@
 /**
  * What a connection card says, in each state it can be in.
  *
- * Six states, each with its own copy and its own next action — not one badge
+ * Four states, each with its own copy and its own next action — not one badge
  * whose colour changes. The distinction that earns its keep is between
  * `needs_scope` and `needs_reconnect`: both look like "not working yet" and they
  * ask the operator for completely different things.
@@ -11,8 +11,18 @@
  * grant from their own account page without telling anyone. So it gets the
  * clearest recovery path, not the smallest badge.
  *
- * Expiry is computed here rather than in a component so it is testable without
- * rendering, and so "expired" is decided in one place.
+ * ## Whether a grant is finished is not decided here
+ *
+ * There used to be a fifth state, `expired`, derived from `connection.expiresAt` being in
+ * the past. It was a second owner for a decision that already had one, and it was wrong: the
+ * timestamp it read is the access token's hourly rotation, not the grant's end. Every
+ * freshly consented Google connection turned itself into "reconnect" about an hour later,
+ * for a credential the worker refreshes on its own.
+ *
+ * A grant is finished when a refresh FAILS, which is a fact only the worker can observe. It
+ * records that by setting the connection `expired`, `services/connections.ts` presents it as
+ * `needs_reconnect`, and this module believes the status it is handed. A clock in the browser
+ * cannot see a revocation and must not guess at one.
  *
  * ## Which state it is, and what that state is called, are two questions
  *
@@ -29,12 +39,7 @@ import type { TFunction } from "i18next";
 
 import type { Connection } from "@/api/types.ts";
 
-export type CardState =
-  | "not_connected"
-  | "connected"
-  | "needs_scope"
-  | "needs_reconnect"
-  | "expired";
+export type CardState = "not_connected" | "connected" | "needs_scope" | "needs_reconnect";
 
 /** The single thing to do next, as a decision rather than as a button label. */
 export type ActionKind = "connect" | "scope" | "reconnect";
@@ -63,27 +68,18 @@ export type CardPresentation = CardFacts & {
   action: { label: string; kind: ActionKind } | null;
 };
 
-/** Which state a grant is in. No words, and therefore no language. */
-export function connectionFacts(connection: Connection, now = new Date()): CardFacts {
-  const expiry = connection.expiresAt ? new Date(connection.expiresAt) : null;
-  // A null expiry means "no expiry recorded" -- a HubSpot private-app token
-  // genuinely never expires. Treating null as expired would demand a reconnect
-  // for a connection that works.
-  const hasExpired = expiry !== null && expiry.getTime() <= now.getTime();
-
-  if (
-    connection.status === "needs_reconnect" ||
-    (hasExpired && connection.status !== "disconnected")
-  ) {
-    return {
-      state: hasExpired && connection.status !== "needs_reconnect" ? "expired" : "needs_reconnect",
-      actionKind: "reconnect",
-      mark: "lapsed",
-      complete: false,
-    };
-  }
-
+/**
+ * Which state a grant is in. No words, and therefore no language.
+ *
+ * Takes no clock, deliberately. Every question it answers is already decided in the status
+ * it is handed, and the parameter it used to take was the seam the expiry bug came in
+ * through. See the module docstring.
+ */
+export function connectionFacts(connection: Connection): CardFacts {
   switch (connection.status) {
+    case "needs_reconnect":
+      return { state: "needs_reconnect", actionKind: "reconnect", mark: "lapsed", complete: false };
+
     case "disconnected":
       return { state: "not_connected", actionKind: "connect", mark: "absent", complete: false };
 
@@ -110,12 +106,8 @@ const ACTION_LABEL: Record<
 };
 
 /** The card's state, with the words a reader of `t`'s language sees. */
-export function presentConnection(
-  t: TFunction,
-  connection: Connection,
-  now = new Date(),
-): CardPresentation {
-  const card = connectionFacts(connection, now);
+export function presentConnection(t: TFunction, connection: Connection): CardPresentation {
+  const card = connectionFacts(connection);
   const action =
     card.actionKind === null
       ? null
@@ -123,7 +115,6 @@ export function presentConnection(
 
   switch (card.state) {
     case "needs_reconnect":
-    case "expired":
       return {
         ...card,
         headline: t("grantState.lapsedHeadline"),
@@ -207,14 +198,11 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
 }
 
 /** How far through setup this tenant is. Drives the checklist's headline. */
-export function setupProgress(
-  connections: Connection[],
-  now = new Date(),
-): {
+export function setupProgress(connections: Connection[]): {
   done: number;
   total: number;
   finished: boolean;
 } {
-  const done = connections.filter((c) => connectionFacts(c, now).complete).length;
+  const done = connections.filter((c) => connectionFacts(c).complete).length;
   return { done, total: connections.length, finished: done === connections.length && done > 0 };
 }

@@ -303,7 +303,19 @@ export interface ConnectionView extends Connection {
   /** The chosen scope as JSON text. The service parses it; this decides nothing. */
   readonly selectionJson: string;
   readonly chosenAt: string | null;
-  readonly expiresAt: string | null;
+  /**
+   * When the stored ACCESS TOKEN stops working -- an hour after consent for Google, half an
+   * hour for Xero. **Not when the grant lapses**, which is a different fact with a different
+   * cause: a grant ends when the refresh token is revoked or goes unused too long, and no
+   * provider tells us a date for that in advance.
+   *
+   * Named in full because the short name is what caused the bug. The card view also has an
+   * `expiresAt`, meaning the grant's, and `expiresAt: row.expiresAt` read as obviously
+   * correct while wiring one to the other -- every freshly consented Google connection
+   * announced "expires today" on the schedule and then flipped itself to "reconnect" an hour
+   * later, for a credential the worker refreshes without anybody being asked.
+   */
+  readonly credentialExpiresAt: string | null;
   readonly lastRunId: string;
 }
 
@@ -320,7 +332,7 @@ export async function listConnectionViews(
     accountLabel: string | null;
     selectionJson: string | null;
     chosenAt: Date | string | null;
-    expiresAt: Date | string | null;
+    credentialExpiresAt: Date | string | null;
     lastRunId: string | null;
   }>(
     `SELECT c.tenant_id AS "tenantId", c.source, c.status,
@@ -328,7 +340,7 @@ export async function listConnectionViews(
             d.account_label       AS "accountLabel",
             d.selection::text     AS "selectionJson",
             d.chosen_at           AS "chosenAt",
-            s.expires_at          AS "expiresAt",
+            s.expires_at          AS "credentialExpiresAt",
             r.id                  AS "lastRunId"
      FROM ops.connection c
      LEFT JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
@@ -352,7 +364,8 @@ export async function listConnectionViews(
     accountLabel: row.accountLabel ?? "",
     selectionJson: row.selectionJson ?? "{}",
     chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),
-    expiresAt: row.expiresAt === null ? null : new Date(row.expiresAt).toISOString(),
+    credentialExpiresAt:
+      row.credentialExpiresAt === null ? null : new Date(row.credentialExpiresAt).toISOString(),
     lastRunId: row.lastRunId ?? "",
   }));
 }

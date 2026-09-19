@@ -11,6 +11,10 @@
  * the control plane could not open it anyway: it holds no master key. What it MAY know is
  * *when* a credential expires, which is what turns "which connections need attention" into a
  * query rather than a decrypt-everything loop.
+ *
+ * Knowing it is not the same as showing it. `credentialExpiresAt` is when the access token
+ * rotates -- an hour after consent, on a schedule the worker keeps by itself -- and it is
+ * deliberately not what the card's `expiresAt` carries. See that field.
  */
 
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
@@ -69,6 +73,22 @@ export interface ConnectionCardView {
   readonly externalAccountLabel: string;
   readonly scopes: string[];
   readonly config: { labels?: string[]; folderIds?: string[]; entities?: string[] };
+  /**
+   * When this GRANT lapses -- the date after which the customer has to consent again.
+   *
+   * Always `null` for now, and honestly so: no provider we speak to tells us one. Google's
+   * refresh token has no announced end (a project still in Testing loses it after seven days,
+   * which is a property of the console setting rather than of the grant, and nothing in the
+   * token response says which); Xero's dies after sixty days unused, which is a date that
+   * moves every time a run succeeds; HubSpot's private-app token genuinely never expires. The
+   * card renders the absence as "no expiry recorded", which is the true statement.
+   *
+   * **It is NOT `credentialExpiresAt`.** That is the access token's hourly rotation, which
+   * the worker handles without telling anybody, and feeding it to this field is what made a
+   * healthy connection announce "expires today" and then demand a reconnect an hour later.
+   * Rule 2 cuts both ways: a value we do not have is left empty rather than filled with the
+   * nearest number to hand.
+   */
   readonly expiresAt: string | null;
   readonly lastRunId: string;
   /**
@@ -164,7 +184,8 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Connect
       // Google returns what it granted as one space-delimited string.
       scopes: row.scope === "" ? [] : row.scope.split(" "),
       config: configOf(row.source, row.selectionJson),
-      expiresAt: row.expiresAt,
+      // Not `row.credentialExpiresAt`. See the field.
+      expiresAt: null,
       lastRunId: row.lastRunId,
       scheduleCron: "",
     };
