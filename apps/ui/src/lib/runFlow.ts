@@ -39,7 +39,10 @@ function outcomeStage(t: TFunction, locale: Locale, run: RunDetail): RunStage {
   return {
     key: "outcome",
     kind: "outcome",
-    label: runMarkLabel(t, run.status),
+    // What the stage IS, not how it went. The status is already the mark beside it, and a
+    // plate printing "Succeeded" above "Succeeded" says one thing twice and the stage's own
+    // name not at all.
+    label: t("journal.flow.outcome"),
     mark,
     markLabel: runMarkLabel(t, run.status),
     detail:
