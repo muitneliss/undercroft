@@ -68,6 +68,11 @@ export interface ScopeDraft {
   readonly organisation: { readonly id: string; readonly name: string } | null;
   /** Xero: which entities to read. Empty means every one the spec declares, deliberately. */
   readonly entities: string[];
+  /**
+   * Gmail and Drive: which MIME types to land. Empty means every type -- the same
+   * recorded-decision idiom as empty labels or entities, not an absent choice.
+   */
+  readonly fileTypes: string[];
 }
 
 interface UiState {
@@ -93,6 +98,25 @@ interface UiState {
   setScopeOrganisation: (source: string, organisation: { id: string; name: string }) => void;
   /** Xero: add or remove one entity. No entity chosen means every one, deliberately. */
   toggleScopeEntity: (source: string, entity: string) => void;
+  /** Gmail and Drive: add or remove one file type. No type chosen means every one, deliberately. */
+  toggleScopeFileType: (source: string, fileType: string) => void;
+  /**
+   * Put the file-type choice back to none, which means every file type.
+   *
+   * A verb of its own for the reason `clearScopeLabels` is: one step an operator took once,
+   * read back beside the control it changed, rather than a loop of individual removals.
+   */
+  clearScopeFileTypes: (source: string) => void;
+  /**
+   * What the admin has typed into the custom-file-type field, and which source they typed it
+   * against.
+   *
+   * The same reasoning as `scopeFilter` below: `useState` is banned, this value has no
+   * endpoint until Add is pressed, and it carries its `source` so a half-typed MIME type
+   * against Gmail cannot survive a move to Drive's picker.
+   */
+  fileTypeInput: { source: string; value: string };
+  setFileTypeInput: (source: string, value: string) => void;
   /**
    * What the admin has typed into the label index's filter, and which source they typed it
    * against.
@@ -162,7 +186,7 @@ function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
   if (held !== null && held.source === source) {
     return held;
   }
-  return { source, labels: [], files: [], organisation: null, entities: [] };
+  return { source, labels: [], files: [], organisation: null, entities: [], fileTypes: [] };
 }
 
 /** How a slice writes: Zustand's partial setter, narrowed to this store. */
@@ -187,6 +211,10 @@ function scopeSlice(
   | "clearScopeLabels"
   | "setScopeOrganisation"
   | "toggleScopeEntity"
+  | "toggleScopeFileType"
+  | "clearScopeFileTypes"
+  | "fileTypeInput"
+  | "setFileTypeInput"
   | "scopeFilter"
   | "setScopeFilter"
 > {
@@ -221,6 +249,22 @@ function scopeSlice(
           },
         };
       }),
+    toggleScopeFileType: (source, fileType): unknown =>
+      set((state) => {
+        const draft = draftFor(state.scopeDraft, source);
+        return {
+          scopeDraft: {
+            ...draft,
+            fileTypes: draft.fileTypes.includes(fileType)
+              ? draft.fileTypes.filter((f) => f !== fileType)
+              : [...draft.fileTypes, fileType],
+          },
+        };
+      }),
+    clearScopeFileTypes: (source): unknown =>
+      set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), fileTypes: [] } })),
+    fileTypeInput: { source: "", value: "" },
+    setFileTypeInput: (source, value): unknown => set({ fileTypeInput: { source, value } }),
     scopeFilter: { source: "", query: "" },
     setScopeFilter: (source, query): unknown => set({ scopeFilter: { source, query } }),
   };

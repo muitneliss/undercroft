@@ -7,7 +7,7 @@
  * server.
  */
 
-import type { Connection, RunView, Source } from "@/api/types.ts";
+import type { Connection, RunDetail, RunView, Source } from "@/api/types.ts";
 import type { LastRun } from "@/lib/runs.ts";
 
 /** One line of the journal: an ingest that landed, a little before the when-tests' `NOW`. */
@@ -25,6 +25,33 @@ export function run(over: Partial<RunView> = {}): RunView {
     testsFailed: null,
     error: null,
     parentRunId: null,
+    ...over,
+  };
+}
+
+/** A run's full detail, as its leaf reads it: the line above plus an empty closed record. */
+export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
+  return {
+    ...run(),
+    entityCounts: [],
+    refusals: [],
+    steps: [],
+    parentRun: null,
+    childRun: null,
+    ...over,
+  };
+}
+
+/** The other end of a chain: enough to name a run and link to it, never its own full detail. */
+export function runLink(
+  over: Partial<NonNullable<RunDetail["parentRun"]>> = {},
+): NonNullable<RunDetail["parentRun"]> {
+  return {
+    id: "run-2",
+    kind: "transform",
+    source: null,
+    status: "ok",
+    testsFailed: null,
     ...over,
   };
 }

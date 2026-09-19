@@ -42,6 +42,28 @@ afterEach(async () => {
   await db.close();
 });
 
+describe("a run's place in its chain", () => {
+  it("names the run it chained into and the run it chained from, once both exist", async () => {
+    await db.query(
+      `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, parent_run_id, status)
+       VALUES ('run-child', $1, '*', 'transform', 'schedule', 'run-mine', 'ok')`,
+      [TENANT],
+    );
+
+    const parent = await get(db, TENANT, "run-mine");
+    expect(parent?.childRun).toMatchObject({ id: "run-child", kind: "transform", status: "ok" });
+
+    const child = await get(db, TENANT, "run-child");
+    expect(child?.parentRun).toMatchObject({ id: "run-mine", kind: "ingest" });
+  });
+
+  it("is null on both sides of a run nothing has chained with", async () => {
+    const detail = await get(db, TENANT, "run-mine");
+    expect(detail?.parentRun).toBeNull();
+    expect(detail?.childRun).toBeNull();
+  });
+});
+
 describe("a run's feed", () => {
   it("comes back oldest first, with what each line counted", async () => {
     const feed = await events(db, TENANT, "run-mine");

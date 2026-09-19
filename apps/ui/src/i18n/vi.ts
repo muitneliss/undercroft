@@ -344,7 +344,7 @@ export const vi = {
   scopePicker: {
     title: "Chọn những gì được đọc",
     leadGmail:
-      "Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp PDF đính kèm trong những nhãn đó được đọc; không nhãn nào khác được đọc.",
+      "Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp đính kèm phù hợp trong những nhãn đó được đọc; không nhãn nào khác được đọc.",
     leadDrive:
       "Chọn thư mục hoặc tài liệu cần đọc. Google chỉ cho phép đọc đúng những gì bạn chọn ở đây.",
     leadXero:
@@ -376,7 +376,7 @@ export const vi = {
     noMatch: "Không có nhãn nào khớp với từ đã gõ.",
     /** The standing line under the list: what this selection permits, while it is made. */
     echoHead: "Sẽ đọc",
-    echoChosen_other: "Tiêu đề thư và tệp PDF đính kèm trong {{count, number}} nhãn đã chọn",
+    echoChosen_other: "Tiêu đề thư và tệp đính kèm phù hợp trong {{count, number}} nhãn đã chọn",
     clearAll: "Bỏ chọn tất cả",
     pickFromDrive: "Chọn từ Google Drive",
     nothingToChoose: "Chưa có mục nào để chọn.",
@@ -385,12 +385,19 @@ export const vi = {
     notSaved: "Không lưu được lựa chọn.",
     pickerUnavailable:
       "Bộ chọn của Google chưa sẵn sàng. Hãy tải lại trang; nếu vẫn vậy, kết nối Google Drive chưa được cấu hình.",
+    fileTypesHead: "Loại tệp",
+    anyFileTypeHint:
+      "Không chọn loại tệp nào nghĩa là đọc mọi loại tệp. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
+    fileTypesCustomLabel: "Thêm loại tệp khác",
+    fileTypesCustomPlaceholder: "vd: image/png",
+    fileTypesCustomAdd: "Thêm",
+    fileTypesCustomInvalid: "Nhập loại tệp theo dạng loại/loại-con, ví dụ image/png.",
   },
 
   scope: {
-    driveFolders_other: "PDF trong {{count, number}} thư mục đã chọn",
-    gmailWholeMailbox: "Tiêu đề thư và tệp PDF đính kèm, toàn bộ hòm thư",
-    gmailLabels: "Tiêu đề thư và tệp PDF đính kèm trong {{labels}}",
+    driveFolders_other: "Tệp phù hợp trong {{count, number}} thư mục đã chọn",
+    gmailWholeMailbox: "Tiêu đề thư và tệp đính kèm phù hợp, toàn bộ hòm thư",
+    gmailLabels: "Tiêu đề thư và tệp đính kèm phù hợp trong {{labels}}",
     /** Xero's entities, by the spec's ids. The ids are recorded; these are the words. */
     xeroContacts: "Liên hệ",
     xeroInvoices: "Hóa đơn",
@@ -398,6 +405,17 @@ export const vi = {
     xeroCreditNotes: "Giấy báo có",
     xeroAll: "Mọi loại dữ liệu: liên hệ, hóa đơn, thanh toán, giấy báo có",
     xeroEntities: "{{entities}}",
+    anyFileType: "Mọi loại tệp",
+    fileTypesChosen_other: "Đã chọn {{count, number}} loại tệp",
+    fileTypePdf: "PDF",
+    fileTypeDocx: "Tài liệu Word (.docx)",
+    fileTypeDoc: "Tài liệu Word (.doc)",
+    fileTypeXlsx: "Bảng tính Excel (.xlsx)",
+    fileTypeXls: "Bảng tính Excel (.xls)",
+    fileTypeCsv: "Tệp CSV",
+    fileTypeTxt: "Văn bản thuần",
+    fileTypeJpeg: "Ảnh JPEG",
+    fileTypePng: "Ảnh PNG",
   },
 
   /** Dates in the operator's terms. Chosen by `@/lib/when`. */
@@ -498,7 +516,7 @@ export const vi = {
       entityDone:
         "Xong {{entity}}: {{landed}} về, {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối.",
       picksListed:
-        "Đã xem {{folders}} thư mục được chọn, thấy {{pdfs}} tệp PDF. Thư mục con không được đọc.",
+        "Đã xem {{folders}} thư mục được chọn, thấy {{matched}} tệp phù hợp. Thư mục con không được đọc.",
       documentsLanded:
         "Tài liệu: {{created}} mới, {{unchanged}} không đổi, {{skipped}} bỏ qua, {{failed}} lỗi.",
       noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
@@ -509,6 +527,21 @@ export const vi = {
       runFailed: "Lần chạy hỏng ({{errorType}}). Lý do đầy đủ ở phần Lỗi phía trên.",
       truncated: "Đã ghi {{at}} dòng; từ đây chỉ ghi cảnh báo và lỗi.",
       unknown: "Sự kiện {{event}}.",
+    },
+
+    /** The graph beside the feed: the run's own shape, not what it said about itself. */
+    flow: {
+      head: "Sơ đồ",
+      models: "Mô hình",
+      modelsNone: "Chưa có mô hình",
+      modelsSummary: "{{models}} mô hình · {{tests}} kiểm tra",
+      modelsSummaryFailed: "{{models}} mô hình · {{tests}} kiểm tra · {{testsFailed}} không đạt",
+      entityDone: "Xong",
+      entityActive: "Đang xử lý",
+      entityInterrupted: "Dừng ở đây",
+      entityLandedRefused: "{{landed}} · {{refused}} bị từ chối",
+      chainedFrom: "Nối từ lần đồng bộ {{source}}",
+      chainedTo: "Nối sang việc dựng mô hình",
     },
   },
 
@@ -802,7 +835,8 @@ export const vi = {
     readOnly: "Không gì cả. Quyền chỉ đọc, và bạn có thể ngắt kết nối bất cứ lúc nào.",
     hubspotReads: "Công ty, liên hệ và giao dịch từ CRM của bạn.",
     xeroReads: "Hóa đơn, thanh toán, giấy báo có và liên hệ từ một tổ chức bạn chọn.",
-    gmailReads: "Tiêu đề thư và tệp PDF đính kèm từ hòm thư bạn kết nối.",
-    driveReads: "Tài liệu PDF trong các thư mục bạn chọn. Không thư mục nào khác được đọc.",
+    gmailReads: "Tiêu đề thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
+    driveReads:
+      "Tài liệu trong các thư mục bạn chọn, theo loại tệp bạn cho phép. Không thư mục nào khác được đọc.",
   },
 };

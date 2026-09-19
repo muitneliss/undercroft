@@ -114,6 +114,34 @@ function message(id: string, labelIds: string[], withPdf = true): unknown {
   };
 }
 
+/** A message carrying whichever attachment parts a file-type test asks for, not just a PDF. */
+function messageWithAttachments(
+  id: string,
+  labelIds: string[],
+  attachments: readonly { mimeType: string; filename: string }[],
+): unknown {
+  return {
+    id,
+    threadId: `t-${id}`,
+    labelIds,
+    internalDate: "1789400000000",
+    payload: {
+      headers: [
+        { name: "Subject", value: `Invoice ${id}` },
+        { name: "From", value: "billing@acme.test" },
+      ],
+      parts: [
+        { mimeType: "text/plain", body: { size: "12" } },
+        ...attachments.map((attachment, index) => ({
+          mimeType: attachment.mimeType,
+          filename: attachment.filename,
+          body: { size: String(PDF.byteLength), attachmentId: `att-${id}-${index}` },
+        })),
+      ],
+    },
+  };
+}
+
 describe("a scope is required, never assumed", () => {
   it("a connection with no recorded scope is refused rather than defaulted", async () => {
     // The firing side. "Nobody has chosen yet" and "somebody chose everything" are
@@ -128,7 +156,7 @@ describe("a scope is required, never assumed", () => {
 
   it("an empty label list is a recorded decision and does run", async () => {
     // The quiet side: empty labels means the whole mailbox, which the card renders as
-    // "Headers and PDF attachments, whole mailbox".
+    // "Headers and matching attachments, whole mailbox".
     await connect("gmail", { labels: [] });
     fetcher.on("GET", listUrl(null), { body: { messages: [] } });
 
@@ -257,15 +285,95 @@ describe("gmail", () => {
 
     expect(result.documents.skipped).toBe(1);
   });
+
+  it("an attachment outside the allow-list is excluded, but a matching one still lands", async () => {
+    // Default scope: PDF only. The Excel part must not widen what is stored beyond it.
+    await connect("gmail", { labels: [] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments(
+          "m1",
+          ["Label_A"],
+          [
+            { mimeType: "application/pdf", filename: "invoice-m1.pdf" },
+            { mimeType: "application/vnd.ms-excel", filename: "budget-m1.xlsx" },
+          ],
+        ),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } });
+
+    const result = await collect("gmail");
+
+    expect(result.documents.created).toBe(1);
+    const { rows } = await db.query<{ document_id: string }>(
+      "SELECT document_id FROM raw.documents",
+    );
+    expect(rows.map((r) => r.document_id)).toEqual(["m1:002"]);
+  });
+
+  it("an allow-listed non-PDF attachment lands with its own content type", async () => {
+    await connect("gmail", { labels: [], fileTypes: ["application/vnd.ms-excel"] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments(
+          "m1",
+          ["Label_A"],
+          [{ mimeType: "application/vnd.ms-excel", filename: "budget-m1.xlsx" }],
+        ),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } });
+
+    const result = await collect("gmail");
+
+    expect(result.documents.created).toBe(1);
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  it("an empty allow-list lands attachments of every type in one message", async () => {
+    await connect("gmail", { labels: [], fileTypes: [] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments(
+          "m1",
+          ["Label_A"],
+          [
+            { mimeType: "application/pdf", filename: "invoice-m1.pdf" },
+            { mimeType: "application/vnd.ms-excel", filename: "budget-m1.xlsx" },
+          ],
+        ),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-1`, { body: { data: PDF_B64 } });
+
+    const result = await collect("gmail");
+
+    expect(result.documents.created).toBe(2);
+  });
 });
 
 describe("drive", () => {
-  function listUrlFor(folderId: string): string {
+  /** Reproduces the collector's own query, so a test proves the allow-list actually threads
+   * through rather than merely trusting it did: the default one-type case must stay
+   * byte-identical to what shipped before file types were configurable. */
+  function listUrlFor(
+    folderId: string,
+    fileTypes: readonly string[] = ["application/pdf"],
+  ): string {
+    const joined = fileTypes.map((type) => `mimeType='${type}'`).join(" or ");
+    const typeClause = fileTypes.length > 1 ? `(${joined})` : joined;
+    const q =
+      fileTypes.length === 0
+        ? `'${folderId}' in parents and trashed=false`
+        : `'${folderId}' in parents and ${typeClause} and trashed=false`;
+
     const url = new URL(DRIVE);
-    url.searchParams.set(
-      "q",
-      `'${folderId}' in parents and mimeType='application/pdf' and trashed=false`,
-    );
+    url.searchParams.set("q", q);
     url.searchParams.set(
       "fields",
       "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)",
@@ -276,11 +384,11 @@ describe("drive", () => {
     return url.toString();
   }
 
-  function file(id: string) {
+  function file(id: string, mimeType = "application/pdf") {
     return {
       id,
       name: `statement-${id}.pdf`,
-      mimeType: "application/pdf",
+      mimeType,
       size: String(PDF.byteLength),
       modifiedTime: "2026-09-17T12:00:00.000Z",
       md5Checksum: "abc",
@@ -357,7 +465,7 @@ describe("drive", () => {
     return url.toString();
   }
 
-  it("a picked file that is not a PDF is refused with its reason, not dropped", async () => {
+  it("a picked file outside the allow-list is refused with its reason, not dropped", async () => {
     // It used to be dropped where it was found, so the run landed 0 and said nothing --
     // indistinguishable from "the picker gave us nothing". CLAUDE.md rule 2.
     await connect("drive", { files: [{ id: "x1", name: "budget", kind: "file" }] });
@@ -368,7 +476,7 @@ describe("drive", () => {
     const result = await collect("drive");
 
     expect(result.refusals).toEqual([
-      { entity: "files", sourceRecordId: "x1", reason: "not-a-pdf" },
+      { entity: "files", sourceRecordId: "x1", reason: "not-an-allowed-type" },
     ]);
   });
 
@@ -381,6 +489,74 @@ describe("drive", () => {
     const result = await collect("drive");
 
     expect(result.refusals).toEqual([]);
+    expect(result.documents.created).toBe(1);
+  });
+
+  it("a directly-picked file matching a custom allow-list lands with its own content type", async () => {
+    await connect("drive", {
+      files: [{ id: "x1", name: "budget", kind: "file" }],
+      fileTypes: ["application/vnd.ms-excel"],
+    });
+    fetcher
+      .on("GET", fileUrlFor("x1"), { body: file("x1", "application/vnd.ms-excel") })
+      .on("GET", `${DRIVE}/x1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([]);
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  it("an empty allow-list accepts a directly-picked file of any type", async () => {
+    await connect("drive", { files: [{ id: "x1", name: "budget", kind: "file" }], fileTypes: [] });
+    fetcher
+      .on("GET", fileUrlFor("x1"), { body: file("x1", "application/vnd.ms-excel") })
+      .on("GET", `${DRIVE}/x1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([]);
+    expect(result.documents.created).toBe(1);
+  });
+
+  it("a folder listing's query is built from the chosen allow-list", async () => {
+    // If the implementation forgot to thread `fileTypes` into the query, this listing's URL
+    // would not match anything registered and the refusing fetcher would fail the test loudly.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      fileTypes: ["application/vnd.ms-excel"],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", ["application/vnd.ms-excel"]), {
+        body: { files: [file("f1", "application/vnd.ms-excel")] },
+      })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(1);
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  it("an empty allow-list's folder query omits the type filter", async () => {
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      fileTypes: [],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", []), {
+        body: { files: [file("f1", "application/vnd.ms-excel")] },
+      })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
     expect(result.documents.created).toBe(1);
   });
 });
