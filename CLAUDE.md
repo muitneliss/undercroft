@@ -35,18 +35,19 @@ the moment its rule actually bites. **Claude Code discovers these automatically.
 agents do not — if you are not Claude Code, read the ones matching the files you are
 about to touch.** That is the only reason this index exists.
 
-| Rule file       | Applies to                                  | Governs                                                                                  |
-| --------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `money.md`      | everywhere                                  | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
-| `raw-lake.md`   | `packages/lake/**`                          | create-only writes, idempotent by content, retention bounded and reported                |
-| `connectors.md` | `packages/connector-runtime/**`, `specs/**` | the spec contract; a failure raises, never an empty stream                               |
-| `privileges.md` | `packages/db/sql/**`                        | the role and grant model; why the BI role cannot read `raw`                              |
-| `tests.md`      | `**/*.test.ts`                              | real in-memory implementations over mocks, a guard needs two tests                       |
-| `state.md`      | `apps/ui/**`                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
-| `i18n.md`       | `apps/ui/**`, `apps/control-plane/src/**`   | Vietnamese default, English second; no user-facing string written in place               |
-| `layering.md`   | `apps/*/src/**`, `packages/db/src/**`       | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
-| `pii.md`        | `specs/**`, `docs/**`, `*.md`, fixtures     | no real customer data in any tracked file                                                |
-| `deployment.md` | `deploy/**`, `flows/**`, deploy workflows   | the Dokploy API is the only channel, every service declares a memory limit               |
+| Rule file         | Applies to                                  | Governs                                                                                  |
+| ----------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `money.md`        | everywhere                                  | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
+| `raw-lake.md`     | `packages/lake/**`                          | create-only writes, idempotent by content, retention bounded and reported                |
+| `connectors.md`   | `packages/connector-runtime/**`, `specs/**` | the spec contract; a failure raises, never an empty stream                               |
+| `privileges.md`   | `packages/db/sql/**`                        | the role and grant model; why the BI role cannot read `raw`                              |
+| `tests.md`        | `**/*.test.ts`                              | real in-memory implementations over mocks, a guard needs two tests                       |
+| `state.md`        | `apps/ui/**`                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
+| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`   | Vietnamese default, English second; no user-facing string written in place               |
+| `layering.md`     | `apps/*/src/**`, `packages/db/src/**`       | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
+| `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures     | no real customer data in any tracked file                                                |
+| `deployment.md`   | `deploy/**`, `flows/**`, deploy workflows   | the Dokploy API is the only channel, every service declares a memory limit               |
+| `suppressions.md` | everywhere                                  | where a lint decision goes; `biome-ignore-all` is banned outside a test file             |
 
 ## Language and runtime
 
@@ -78,6 +79,10 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
 
 - `no-usestate` and the `layer-*` rules are **ast-grep** rules that fail `bun run lint:rules`.
   Pinned by `scripts/layering.test.ts`.
+- `no-biome-ignore-all` is the same kind of rule and bans the lint bypass itself: no
+  `biome-ignore-all` outside a test file, no group-wide `lint:` / `lint/plugin:` spelling
+  anywhere (both reach the money plugin), no `ast-grep-ignore` at all. Pinned by
+  `scripts/suppressions.test.ts`, whose last two tests run Biome to prove the hole is real.
 - The money bans, the no-mock bans and the UI's type-only import of the server router are
   **Biome GritQL plugins** in `.biome/plugins/`, which fail `bun run lint`. Pinned by
   `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
@@ -85,11 +90,18 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
 
 Where a rule can be made mechanical it is.
 
-**Biome is the linter and the formatter**, at `preset: "all"` — every rule it ships, at
-error severity, with every domain on. Where a rule cannot apply here it is suppressed at the
-file it applies to, with the reason written beside it, so a reviewer can check each one and
-delete it when it stops being true. Prettier is kept for Markdown and YAML alone, the two
-languages Biome cannot format.
+**Biome is the linter and the formatter**, at `preset: "all"` — every rule it ships, at error
+severity. `domains` names the four frameworks actually in `package.json`; the other eleven are
+`none`, which costs no coverage because a Solid rule only ever fires on Solid code.
+
+Where a rule cannot apply here it is answered in `biome.jsonc`, with the reason beside it —
+repo-wide when it can never hold, and as a path entry naming the files when it is an
+exception, so it stays on everywhere else. **Not** as a header in the source: a
+`biome-ignore-all` permits the whole file rather than the line, and Biome never reports one
+that has stopped being needed, which is how 17 of the repo's 679 headers came to be dead with
+the gate green. `.claude/rules/suppressions.md` and ADR 0018; ADR 0018 supersedes ADR 0012 on
+this point. Prettier is kept for Markdown and YAML alone, the two languages Biome cannot
+format.
 
 **One exception, and it is scoped to test files.** Ten rules whose whole answer is "because
 it is a test" — `noBunModules`, `noMagicNumbers`, `useExpect`, the two length rules, and five
