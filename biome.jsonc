@@ -574,6 +574,7 @@
         "apps/ui/src/test/setup.ts",
         "apps/ui/vite.config.ts",
         "apps/worker/src/handlers/lake.ts",
+        "apps/worker/src/handlers/analytics.ts",
         "apps/worker/src/services/google/refresh.ts",
         "apps/worker/src/services/loadToRaw.ts",
         "apps/control-plane/src/services/oauth.ts",

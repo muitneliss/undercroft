@@ -165,162 +165,243 @@ function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
   return { source, labels: [], files: [], organisation: null, entities: [] };
 }
 
+/** How a slice writes: Zustand's partial setter, narrowed to this store. */
+type Setter = (partial: Partial<UiState> | ((state: UiState) => Partial<UiState>)) => void;
+
+/** The interface language, and the only slice that is persisted. */
+function localeSlice(set: Setter): Pick<UiState, "locale" | "setLocale"> {
+  return {
+    locale: DEFAULT_LOCALE,
+    setLocale: (locale): unknown => set({ locale }),
+  };
+}
+
+/** What an admin is choosing a source may read, before they save it. */
+function scopeSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  | "scopeDraft"
+  | "setScopeDraft"
+  | "toggleScopeLabel"
+  | "clearScopeLabels"
+  | "setScopeOrganisation"
+  | "toggleScopeEntity"
+  | "scopeFilter"
+  | "setScopeFilter"
+> {
+  return {
+    scopeDraft: null,
+    setScopeDraft: (scopeDraft): unknown => set({ scopeDraft }),
+    toggleScopeLabel: (source, label): unknown =>
+      set((state) => {
+        const draft = draftFor(state.scopeDraft, source);
+        return {
+          scopeDraft: {
+            ...draft,
+            labels: draft.labels.includes(label)
+              ? draft.labels.filter((l) => l !== label)
+              : [...draft.labels, label],
+          },
+        };
+      }),
+    clearScopeLabels: (source): unknown =>
+      set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), labels: [] } })),
+    setScopeOrganisation: (source, organisation): unknown =>
+      set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), organisation } })),
+    toggleScopeEntity: (source, entity): unknown =>
+      set((state) => {
+        const draft = draftFor(state.scopeDraft, source);
+        return {
+          scopeDraft: {
+            ...draft,
+            entities: draft.entities.includes(entity)
+              ? draft.entities.filter((e) => e !== entity)
+              : [...draft.entities, entity],
+          },
+        };
+      }),
+    scopeFilter: { source: "", query: "" },
+    setScopeFilter: (source, query): unknown => set({ scopeFilter: { source, query } }),
+  };
+}
+
+/** A dbt model being edited: its SQL and the tests on each column. */
+function modelSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  | "modelDraft"
+  | "setModelDraft"
+  | "setModelSql"
+  | "setModelTest"
+  | "addModelTestColumn"
+  | "removeModelTestColumn"
+  | "markModelSaved"
+> {
+  return {
+    modelDraft: null,
+    setModelDraft: (modelDraft): unknown => set({ modelDraft }),
+    setModelSql: (sql): unknown =>
+      set((state) =>
+        state.modelDraft === null ? {} : { modelDraft: { ...state.modelDraft, sql } },
+      ),
+    setModelTest: (column, kind, on): unknown =>
+      set((state) => {
+        const draft = state.modelDraft;
+        if (draft === null) {
+          return {};
+        }
+        const held = draft.tests[column] ?? [];
+        const kinds = on ? [...new Set([...held, kind])] : held.filter((k) => k !== kind);
+        return { modelDraft: { ...draft, tests: { ...draft.tests, [column]: kinds } } };
+      }),
+    addModelTestColumn: (column): unknown =>
+      set((state) => {
+        const draft = state.modelDraft;
+        if (draft === null || column in draft.tests) {
+          return {};
+        }
+        return { modelDraft: { ...draft, tests: { ...draft.tests, [column]: [] } } };
+      }),
+    removeModelTestColumn: (column): unknown =>
+      set((state) => {
+        const draft = state.modelDraft;
+        if (draft === null) {
+          return {};
+        }
+        const tests = Object.fromEntries(
+          Object.entries(draft.tests).filter(([held]) => held !== column),
+        );
+        return { modelDraft: { ...draft, tests } };
+      }),
+    markModelSaved: (): unknown =>
+      set((state) => {
+        const draft = state.modelDraft;
+        if (draft === null) {
+          return {};
+        }
+        return { modelDraft: { ...draft, saved: { sql: draft.sql, tests: draft.tests } } };
+      }),
+  };
+}
+
+/** A question being built: its name, its visual, and the SQL behind it. */
+function questionSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  | "questionDraft"
+  | "setQuestionDraft"
+  | "setQuestionName"
+  | "patchQuestionVisual"
+  | "setQuestionSql"
+  | "switchQuestionToSql"
+  | "setQuestionChart"
+  | "markQuestionSaved"
+> {
+  return {
+    questionDraft: null,
+    setQuestionDraft: (questionDraft): unknown => set({ questionDraft }),
+    setQuestionName: (name): unknown =>
+      set((state) =>
+        state.questionDraft === null ? {} : { questionDraft: { ...state.questionDraft, name } },
+      ),
+    patchQuestionVisual: (patch): unknown =>
+      set((state) =>
+        state.questionDraft === null
+          ? {}
+          : { questionDraft: patchVisual(state.questionDraft, patch) },
+      ),
+    setQuestionSql: (sql): unknown =>
+      set((state) =>
+        state.questionDraft === null || state.questionDraft.definition.kind !== "sql"
+          ? {}
+          : { questionDraft: { ...state.questionDraft, definition: { kind: "sql", sql } } },
+      ),
+    switchQuestionToSql: (sql): unknown =>
+      set((state) =>
+        state.questionDraft === null
+          ? {}
+          : { questionDraft: switchToSql(state.questionDraft, sql) },
+      ),
+    setQuestionChart: (chart): unknown =>
+      set((state) =>
+        state.questionDraft === null ? {} : { questionDraft: { ...state.questionDraft, chart } },
+      ),
+    markQuestionSaved: (id): unknown =>
+      set((state) => {
+        const draft = state.questionDraft;
+        if (draft === null) {
+          return {};
+        }
+        return {
+          questionDraft: {
+            ...draft,
+            id,
+            saved: { name: draft.name, definition: draft.definition, chart: draft.chart },
+          },
+        };
+      }),
+  };
+}
+
+/** A dashboard being arranged: its name, its filters and its layout. */
+function dashboardSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  | "dashboardDraft"
+  | "setDashboardDraft"
+  | "setDashboardName"
+  | "setDashboardLayout"
+  | "setDashboardFilters"
+  | "markDashboardSaved"
+> {
+  return {
+    dashboardDraft: null,
+    setDashboardDraft: (dashboardDraft): unknown => set({ dashboardDraft }),
+    setDashboardName: (name): unknown =>
+      set((state) =>
+        state.dashboardDraft === null ? {} : { dashboardDraft: { ...state.dashboardDraft, name } },
+      ),
+    setDashboardLayout: (layout): unknown =>
+      set((state) =>
+        state.dashboardDraft === null
+          ? {}
+          : { dashboardDraft: { ...state.dashboardDraft, layout } },
+      ),
+    setDashboardFilters: (filters): unknown =>
+      set((state) =>
+        state.dashboardDraft === null
+          ? {}
+          : { dashboardDraft: { ...state.dashboardDraft, filters } },
+      ),
+    markDashboardSaved: (id): unknown =>
+      set((state) => {
+        const draft = state.dashboardDraft;
+        if (draft === null) {
+          return {};
+        }
+        return {
+          dashboardDraft: {
+            ...draft,
+            id,
+            saved: { name: draft.name, layout: draft.layout, filters: draft.filters },
+          },
+        };
+      }),
+  };
+}
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
-      locale: DEFAULT_LOCALE,
-      setLocale: (locale): unknown => set({ locale }),
-      scopeDraft: null,
-      setScopeDraft: (scopeDraft): unknown => set({ scopeDraft }),
-      toggleScopeLabel: (source, label): unknown =>
-        set((state) => {
-          const draft = draftFor(state.scopeDraft, source);
-          return {
-            scopeDraft: {
-              ...draft,
-              labels: draft.labels.includes(label)
-                ? draft.labels.filter((l) => l !== label)
-                : [...draft.labels, label],
-            },
-          };
-        }),
-      clearScopeLabels: (source): unknown =>
-        set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), labels: [] } })),
-      setScopeOrganisation: (source, organisation): unknown =>
-        set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), organisation } })),
-      toggleScopeEntity: (source, entity): unknown =>
-        set((state) => {
-          const draft = draftFor(state.scopeDraft, source);
-          return {
-            scopeDraft: {
-              ...draft,
-              entities: draft.entities.includes(entity)
-                ? draft.entities.filter((e) => e !== entity)
-                : [...draft.entities, entity],
-            },
-          };
-        }),
-      scopeFilter: { source: "", query: "" },
-      setScopeFilter: (source, query): unknown => set({ scopeFilter: { source, query } }),
-      modelDraft: null,
-      setModelDraft: (modelDraft): unknown => set({ modelDraft }),
-      setModelSql: (sql): unknown =>
-        set((state) =>
-          state.modelDraft === null ? {} : { modelDraft: { ...state.modelDraft, sql } },
-        ),
-      setModelTest: (column, kind, on): unknown =>
-        set((state) => {
-          const draft = state.modelDraft;
-          if (draft === null) {
-            return {};
-          }
-          const held = draft.tests[column] ?? [];
-          const kinds = on ? [...new Set([...held, kind])] : held.filter((k) => k !== kind);
-          return { modelDraft: { ...draft, tests: { ...draft.tests, [column]: kinds } } };
-        }),
-      addModelTestColumn: (column): unknown =>
-        set((state) => {
-          const draft = state.modelDraft;
-          if (draft === null || column in draft.tests) {
-            return {};
-          }
-          return { modelDraft: { ...draft, tests: { ...draft.tests, [column]: [] } } };
-        }),
-      removeModelTestColumn: (column): unknown =>
-        set((state) => {
-          const draft = state.modelDraft;
-          if (draft === null) {
-            return {};
-          }
-          const tests = Object.fromEntries(
-            Object.entries(draft.tests).filter(([held]) => held !== column),
-          );
-          return { modelDraft: { ...draft, tests } };
-        }),
-      markModelSaved: (): unknown =>
-        set((state) => {
-          const draft = state.modelDraft;
-          if (draft === null) {
-            return {};
-          }
-          return { modelDraft: { ...draft, saved: { sql: draft.sql, tests: draft.tests } } };
-        }),
-      questionDraft: null,
-      setQuestionDraft: (questionDraft): unknown => set({ questionDraft }),
-      setQuestionName: (name): unknown =>
-        set((state) =>
-          state.questionDraft === null ? {} : { questionDraft: { ...state.questionDraft, name } },
-        ),
-      patchQuestionVisual: (patch): unknown =>
-        set((state) =>
-          state.questionDraft === null
-            ? {}
-            : { questionDraft: patchVisual(state.questionDraft, patch) },
-        ),
-      setQuestionSql: (sql): unknown =>
-        set((state) =>
-          state.questionDraft === null || state.questionDraft.definition.kind !== "sql"
-            ? {}
-            : { questionDraft: { ...state.questionDraft, definition: { kind: "sql", sql } } },
-        ),
-      switchQuestionToSql: (sql): unknown =>
-        set((state) =>
-          state.questionDraft === null
-            ? {}
-            : { questionDraft: switchToSql(state.questionDraft, sql) },
-        ),
-      setQuestionChart: (chart): unknown =>
-        set((state) =>
-          state.questionDraft === null ? {} : { questionDraft: { ...state.questionDraft, chart } },
-        ),
-      markQuestionSaved: (id): unknown =>
-        set((state) => {
-          const draft = state.questionDraft;
-          if (draft === null) {
-            return {};
-          }
-          return {
-            questionDraft: {
-              ...draft,
-              id,
-              saved: { name: draft.name, definition: draft.definition, chart: draft.chart },
-            },
-          };
-        }),
-      dashboardDraft: null,
-      setDashboardDraft: (dashboardDraft): unknown => set({ dashboardDraft }),
-      setDashboardName: (name): unknown =>
-        set((state) =>
-          state.dashboardDraft === null
-            ? {}
-            : { dashboardDraft: { ...state.dashboardDraft, name } },
-        ),
-      setDashboardLayout: (layout): unknown =>
-        set((state) =>
-          state.dashboardDraft === null
-            ? {}
-            : { dashboardDraft: { ...state.dashboardDraft, layout } },
-        ),
-      setDashboardFilters: (filters): unknown =>
-        set((state) =>
-          state.dashboardDraft === null
-            ? {}
-            : { dashboardDraft: { ...state.dashboardDraft, filters } },
-        ),
-      markDashboardSaved: (id): unknown =>
-        set((state) => {
-          const draft = state.dashboardDraft;
-          if (draft === null) {
-            return {};
-          }
-          return {
-            dashboardDraft: {
-              ...draft,
-              id,
-              saved: { name: draft.name, layout: draft.layout, filters: draft.filters },
-            },
-          };
-        }),
+      ...localeSlice(set),
+      ...scopeSlice(set),
+      ...modelSlice(set),
+      ...questionSlice(set),
+      ...dashboardSlice(set),
     }),
     {
       name: "undercroft.ui",
