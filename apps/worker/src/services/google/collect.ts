@@ -23,11 +23,11 @@ import {
   tombstoneMissing,
 } from "../../repos/rawDocuments.ts";
 import { landRecords } from "../land.ts";
-import { landDocuments } from "../landDocument.ts";
+import { type DocumentToLand, landDocuments, type LandedDocument } from "../landDocument.ts";
 import { loadStreamToRaw } from "../loadToRaw.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
-import { harvestGmail } from "./gmail.ts";
+import { type GmailHarvest, harvestGmail } from "./gmail.ts";
 
 export const GOOGLE_SOURCES = ["gmail", "drive"] as const;
 export type GoogleSource = (typeof GOOGLE_SOURCES)[number];
@@ -80,6 +80,110 @@ export interface CollectResult {
   readonly refusals: RunRefusal[];
 }
 
+/**
+ * Catalogue rows for the documents that actually reached the lake.
+ *
+ * A skipped or failed document has no bytes to point at, and a row claiming otherwise is
+ * worse than no row. `metadata`, never `manifest`: this row reaches `raw.documents`, which is
+ * granted to `undercroft_dbt`. See `pii.md` and ADR 0015.
+ */
+function catalogueRows(
+  landed: readonly LandedDocument[],
+  documents: readonly DocumentToLand[],
+  stamp: { observedAt: string; runId: string },
+): RawDocumentRow[] {
+  const rows: RawDocumentRow[] = [];
+  for (const result of landed) {
+    if (result.status !== "created" && result.status !== "unchanged") {
+      continue;
+    }
+    const source = documents.find((d) => d.documentId === result.documentId);
+    if (source === undefined) {
+      continue;
+    }
+    rows.push({
+      documentId: result.documentId,
+      lakeKey: result.lakeKey ?? "",
+      sha256: result.sha256 ?? "",
+      byteLength: result.byteLength ?? "0",
+      contentType: source.contentType,
+      metadataJson: JSON.stringify({
+        ...source.metadata,
+        sourceUpdatedAt: source.sourceUpdatedAt,
+      }),
+      observedAt: stamp.observedAt,
+      runId: stamp.runId,
+    });
+  }
+  return rows;
+}
+
+/** Every record and document the run refused, in the shape the ledger records them. */
+function refusalsFrom(
+  entity: string,
+  records: readonly { status: string; sourceRecordId: string; reason?: string }[],
+  documents: readonly LandedDocument[],
+): RunRefusal[] {
+  const refusals: RunRefusal[] = [];
+  for (const result of records) {
+    if (result.status === "failed") {
+      refusals.push({
+        entity,
+        sourceRecordId: result.sourceRecordId,
+        reason: result.reason ?? "refused",
+      });
+    }
+  }
+  for (const result of documents) {
+    if (result.status === "skipped" || result.status === "failed") {
+      refusals.push({
+        entity: "documents",
+        sourceRecordId: result.documentId,
+        reason: result.reason ?? result.status,
+      });
+    }
+  }
+  return refusals;
+}
+
+/**
+ * The scope an admin recorded, or a refusal.
+ *
+ * A run never invents one. "Nobody has chosen yet" and "somebody chose everything" are
+ * different facts, and collapsing the first into the second reads a whole mailbox on an
+ * authority nobody granted.
+ */
+async function requireScope(
+  deps: CollectDeps,
+  input: { source: GoogleSource; tenantId: string },
+): Promise<Exclude<NonNullable<ReturnType<typeof parseScope>>, { kind: "xero" }>> {
+  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
+  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
+  // A Google source parses to a Google scope or to nothing; the third shape belongs to
+  // another collector and would mean a row written under the wrong source.
+  if (scope === null || scope.kind === "xero") {
+    throw new ScopeNotChosen(input.source, input.tenantId);
+  }
+
+  return scope;
+}
+
+/**
+ * Harvest under the chosen scope.
+ *
+ * `seenIds` is Drive's alone and null for Gmail, deliberately: a message that stops matching
+ * a label selection has been relabelled, not deleted, and the tombstone pass must not be
+ * handed a set that would report a deletion which never happened.
+ */
+async function harvestFor(
+  api: GoogleApi,
+  scope: Exclude<NonNullable<ReturnType<typeof parseScope>>, { kind: "xero" }>,
+): Promise<GmailHarvest & { seenIds: readonly string[] | null }> {
+  return scope.kind === "gmail"
+    ? { ...(await harvestGmail(api, scope)), seenIds: null }
+    : await harvestDrive(api, scope);
+}
+
 export async function runGoogleCollect(
   deps: CollectDeps,
   input: { source: GoogleSource; tenantId: string; runId?: string },
@@ -89,18 +193,9 @@ export async function runGoogleCollect(
   const runId = input.runId ?? newRunId();
   const observedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
 
-  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
-  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
-  // A Google source parses to a Google scope or to nothing; the third shape belongs to
-  // another collector and would mean a row written under the wrong source.
-  if (scope === null || scope.kind === "xero") {
-    throw new ScopeNotChosen(input.source, input.tenantId);
-  }
+  const scope = await requireScope(deps, input);
 
-  const harvest =
-    scope.kind === "gmail"
-      ? { ...(await harvestGmail(deps.api, scope)), seenIds: null }
-      : await harvestDrive(deps.api, scope);
+  const harvest = await harvestFor(deps.api, scope);
 
   const entity = scope.kind === "gmail" ? "messages" : "files";
 
@@ -125,29 +220,7 @@ export async function runGoogleCollect(
 
   // Catalogue only what actually reached the lake. A skipped or failed document has no
   // bytes to point at, and a row claiming otherwise is worse than no row.
-  const rows: RawDocumentRow[] = [];
-  for (const result of landedDocuments.results) {
-    if (result.status !== "created" && result.status !== "unchanged") {
-      continue;
-    }
-    const source = harvest.documents.find((d) => d.documentId === result.documentId);
-    if (source === undefined) {
-      continue;
-    }
-    rows.push({
-      documentId: result.documentId,
-      lakeKey: result.lakeKey ?? "",
-      sha256: result.sha256 ?? "",
-      byteLength: result.byteLength ?? "0",
-      contentType: source.contentType,
-      metadataJson: JSON.stringify({
-        ...source.metadata,
-        sourceUpdatedAt: source.sourceUpdatedAt,
-      }),
-      observedAt,
-      runId,
-    });
-  }
+  const rows = catalogueRows(landedDocuments.results, harvest.documents, { observedAt, runId });
   await upsertDocuments(deps.exec, { source: input.source, tenantId: input.tenantId }, rows);
 
   // Drive only. A Gmail message that stops matching a label selection has been relabelled,
@@ -161,25 +234,7 @@ export async function runGoogleCollect(
           { keptIds: harvest.seenIds, observedAt },
         );
 
-  const refusals: RunRefusal[] = [];
-  for (const result of landedRecords.results) {
-    if (result.status === "failed") {
-      refusals.push({
-        entity,
-        sourceRecordId: result.sourceRecordId,
-        reason: result.reason ?? "refused",
-      });
-    }
-  }
-  for (const result of landedDocuments.results) {
-    if (result.status === "skipped" || result.status === "failed") {
-      refusals.push({
-        entity: "documents",
-        sourceRecordId: result.documentId,
-        reason: result.reason ?? result.status,
-      });
-    }
-  }
+  const refusals = refusalsFrom(entity, landedRecords.results, landedDocuments.results);
 
   return {
     runId,
