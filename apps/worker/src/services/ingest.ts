@@ -24,22 +24,17 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  createFetcher,
-  type Fetcher,
-  type RunContext,
-  readEntity,
-} from "@undercroft/connector-runtime";
-import { needsScope, parseScope, parseSpec, SCOPED_SOURCES } from "@undercroft/contracts";
+import { type Fetcher } from "@undercroft/connector-runtime";
+import { SCOPED_SOURCES, needsScope, parseScope, parseSpec } from "@undercroft/contracts";
 import {
   type ByteFetcher,
-  createByteFetcher,
   describeError,
   type Logger,
   newRunId,
   UndercroftError,
 } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
+import { runGoogleIngest, runSpecIngest } from "./runPaths.ts";
 import {
   closeRun,
   ConnectionRegistryError,
@@ -57,15 +52,7 @@ import {
 } from "@undercroft/db/repos";
 import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
-import { createGoogleApi } from "./google/api.ts";
-import {
-  type GoogleSource,
-  isGoogleSource,
-  runGoogleCollect,
-  ScopeNotChosen,
-} from "./google/collect.ts";
-import { landRecords, type RecordToLand } from "./land.ts";
-import { loadStreamToRaw } from "./loadToRaw.ts";
+import { isGoogleSource, ScopeNotChosen } from "./google/collect.ts";
 
 /**
  * Run `fn` inside one transaction on one connection.
@@ -213,7 +200,7 @@ export async function resolveToken(
 }
 
 /** What a run has done so far, gathered as it goes so a failure still records the rest. */
-interface Ledger {
+export interface Ledger {
   readonly entities: IngestResult["entities"];
   readonly refusals: RunRefusal[];
 }
@@ -385,7 +372,7 @@ async function settle(
  * entities the admin chose. `null` for each means "the spec decides" -- a source with no
  * organisation to name, or a choice that named no entities and so means all of them.
  */
-async function chosenFor(
+export async function chosenFor(
   deps: Pick<RunDeps, "exec">,
   input: { source: string; tenantId: string },
 ): Promise<{ accountId: string | null; entities: string[] | null }> {
@@ -395,129 +382,4 @@ async function chosenFor(
   const entities = scope?.kind === "xero" && scope.entities.length > 0 ? scope.entities : null;
   const accountId = connection?.externalAccountId ?? null;
   return { accountId: accountId === "" ? null : accountId, entities };
-}
-
-/**
- * The Google path, reported in the same shape as a spec run.
- *
- * Documents are counted as their own entity beside the records: from the caller's side one
- * run landed a number of things, and a scheduler that saw a green run with a zero count
- * would have no way to tell "the mailbox is empty" from "the PDFs all failed".
- */
-async function runGoogleIngest(
-  deps: RunDeps,
-  input: { source: GoogleSource; tenantId: string; runId: string },
-  ledger: Ledger,
-): Promise<void> {
-  const api = createGoogleApi(input.source, {
-    fetcher: deps.byteFetcher ?? createByteFetcher(),
-    token: () => resolveToken(deps, input),
-  });
-
-  const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api }, input);
-
-  const records = result.refusals.filter((r) => r.entity !== "documents").length;
-  ledger.entities.push(
-    {
-      entity: input.source === "gmail" ? "messages" : "files",
-      landed: result.records.landed,
-      loadedCreated: result.records.loadedCreated,
-      loadedChanged: result.records.loadedChanged,
-      loadedUnchanged: result.records.loadedUnchanged,
-      refused: records,
-    },
-    {
-      entity: "documents",
-      landed: result.documents.created + result.documents.unchanged,
-      loadedCreated: result.documents.created,
-      loadedChanged: 0,
-      loadedUnchanged: result.documents.unchanged,
-      refused: result.refusals.length - records,
-    },
-  );
-  ledger.refusals.push(...result.refusals);
-}
-
-async function runSpecIngest(
-  deps: RunDeps,
-  input: { source: string; tenantId: string; runId: string },
-  ledger: Ledger,
-): Promise<void> {
-  const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
-  const chosen = await chosenFor(deps, input);
-
-  const ctx: RunContext = {
-    fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),
-    // Only attach a token resolver when the connector authenticates. Under
-    // exactOptionalPropertyTypes an explicit `undefined` is not the same as omitting it.
-    ...(spec.auth.kind === "none"
-      ? {}
-      : {
-          token: () => resolveToken(deps, input),
-        }),
-    // The provider's account id -- the Xero organisation chosen after consent -- for the
-    // header the spec names. The runtime refuses to send a request without it.
-    ...(chosen.accountId === null ? {} : { accountId: chosen.accountId }),
-  };
-
-  // Ids per entity, so a `batch-from` relation can read against the entity it references.
-  // Spec order matters: the referenced entity must be declared before the relation, which
-  // the spec schema checks by refusing an unknown reference.
-  const idsByEntity = new Map<string, string[]>();
-
-  // What the admin chose to read, where they chose. Spec order is kept, so a relation still
-  // follows the entity it reads against.
-  const entities =
-    chosen.entities === null
-      ? spec.entities
-      : spec.entities.filter((entity) => chosen.entities?.includes(entity.name) === true);
-
-  for (const entity of entities) {
-    const entityCtx: RunContext =
-      entity.request.kind === "batch-from"
-        ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }
-        : ctx;
-
-    const batch: RecordToLand[] = [];
-    for await (const record of readEntity(spec, entity, entityCtx)) {
-      batch.push({
-        entity: record.entity,
-        sourceRecordId: record.sourceRecordId,
-        sourceUpdatedAt: record.sourceUpdatedAt,
-        payloadText: record.payloadText,
-      });
-    }
-    idsByEntity.set(
-      entity.name,
-      batch.map((r) => r.sourceRecordId),
-    );
-    const landed = await landRecords(deps.lake, {
-      source: input.source,
-      tenantId: input.tenantId,
-      runId: input.runId,
-      records: batch,
-    });
-    const loaded = await loadStreamToRaw(deps.exec, deps.lake, {
-      source: input.source,
-      tenantId: input.tenantId,
-      entity: entity.name,
-    });
-    for (const result of landed.results) {
-      if (result.status === "failed") {
-        ledger.refusals.push({
-          entity: result.entity,
-          sourceRecordId: result.sourceRecordId,
-          reason: result.reason ?? "refused",
-        });
-      }
-    }
-    ledger.entities.push({
-      entity: entity.name,
-      landed: landed.created + landed.unchanged,
-      loadedCreated: loaded.created,
-      loadedChanged: loaded.changed,
-      loadedUnchanged: loaded.unchanged,
-      refused: landed.failed,
-    });
-  }
 }

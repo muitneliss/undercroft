@@ -18,7 +18,7 @@ import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
-import { type WorkerClient } from "../services/workerClient.ts";
+import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
 
