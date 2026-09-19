@@ -1,17 +1,17 @@
 /**
- * The connection procedures: what a tenant has connected, and the two ends of a consent.
+ * The `connections` procedures.
  *
- * Split from `router.ts` because it is the largest group there and the only one whose
- * procedures span three services -- `connections` for the schedule, `oauth` for starting a
- * consent, `browseScope`/`setScope` for what a source may read. Same layer and same rules:
- * validate the input, call one service, decide what its answer means over HTTP.
+ * Split from `router.ts`, which had grown past what one file may be. Same layer and the
+ * same rules: validate the input, call one service, decide what its answer means over HTTP.
  */
 
 import { TRPCError } from "@trpc/server";
+import { Cadence } from "@undercroft/contracts";
 import { z } from "zod";
-import * as connections from "../services/connections.ts";
 import { messages } from "../i18n/index.ts";
+import * as connections from "../services/connections.ts";
 import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import { tokenRefusalKey } from "./answers.ts";
 
 export const connectionsRouter = router({
   list: tenantProcedure.query(({ ctx, input }) => connections.list(ctx.exec, input.tenantId)),
@@ -62,11 +62,12 @@ export const connectionsRouter = router({
     }),
 
   /**
-   * What an admin may choose from, for the scope picker.
+   * What an admin may choose from, for the scope picker: Gmail's labels, or the
+   * organisations a Xero consent can see.
    *
    * Proxied to the worker because it needs a live token, which only the worker can open.
-   * Gmail only: under `drive.file` the choosing happens in the browser through Google's own
-   * Picker, so there is nothing for the server to list.
+   * Drive has no listing: under `drive.file` the choosing happens in the browser through
+   * Google's own Picker, so there is nothing for the server to list.
    */
   browseScope: requireRole("admin")
     .input(z.object({ source: z.string().min(1) }))
@@ -80,7 +81,7 @@ export const connectionsRouter = router({
       const outcome = await ctx.worker.browseScope({
         source: input.source,
         tenantId: ctx.tenantId,
-        kind: "labels",
+        kind: input.source === "xero" ? "organisations" : "labels",
       });
       if (!outcome.ok) {
         // Three outcomes, three sentences. One message for all of them told an
@@ -120,6 +121,60 @@ export const connectionsRouter = router({
           code: "BAD_REQUEST",
           message: messages(ctx.locale)("error.scopeNotUnderstood", { source: input.source }),
         });
+      }
+      return { ok: true };
+    }),
+
+  /**
+   * Connect a source with a pasted token. Admin-only: it is a credential into a customer's
+   * account. The worker proves the token before sealing it, so a refusal here is worded
+   * for the person who pasted it -- the token is wrong, not the platform.
+   */
+  setToken: requireRole("admin")
+    .input(z.object({ source: z.string().min(1), token: z.string().min(1).max(512) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.worker === null) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.workerUnavailable"),
+        });
+      }
+      const result = await connections.setToken(ctx.exec, ctx.worker, {
+        tenantId: ctx.tenantId,
+        source: input.source,
+        token: input.token,
+        actor: ctx.user.email,
+      });
+      if (result.ok) {
+        return { ok: true };
+      }
+      if (result.reason === "unreachable") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.workerUnavailable"),
+        });
+      }
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: messages(ctx.locale)(tokenRefusalKey(result.reason), { source: input.source }),
+      });
+    }),
+
+  /**
+   * How often a source is read. Admin-only, like every change to a live grant. A source
+   * nobody has connected has nothing to set it on, and says so as NOT_FOUND.
+   */
+  setCadence: requireRole("admin")
+    .input(z.object({ source: z.string().min(1), cadence: Cadence }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await connections.setCadence(ctx.exec, {
+        tenantId: ctx.tenantId,
+        source: input.source,
+        cadence: input.cadence,
+        actor: ctx.user.email,
+      });
+      if (!result.ok) {
+        throw new TRPCError({ code: "NOT_FOUND" });
       }
       return { ok: true };
     }),

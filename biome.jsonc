@@ -752,6 +752,11 @@
       "includes": [
         "apps/control-plane/src/handlers/router.ts",
         "apps/control-plane/src/handlers/connectionsRouter.ts",
+        "apps/control-plane/src/handlers/answers.ts",
+        "apps/control-plane/src/handlers/biRouter.ts",
+        "apps/control-plane/src/handlers/modelsRouter.ts",
+        "apps/control-plane/src/handlers/peopleRouter.ts",
+        "apps/control-plane/src/handlers/tenantsRouter.ts",
         "apps/control-plane/src/inviteCli.ts",
         "apps/control-plane/src/services/people.ts"
       ],
