@@ -9,14 +9,18 @@
 import { TRPCError } from "@trpc/server";
 import {
   Cadence,
-  DEFAULT_QUERY_ROWS,
+  ChartConfig,
+  DashboardFilters,
+  DashboardLayout,
   MAX_MODEL_SQL_BYTES,
   MAX_PREVIEW_ROWS,
   MAX_QUERY_ROWS,
-  MAX_QUERY_SQL_BYTES,
   ModelName,
   ModelTests,
+  QueryParams,
+  QuestionDefinition,
 } from "@undercroft/contracts";
+import type { Locale } from "@undercroft/core/locale";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as bi from "../services/bi.ts";
@@ -54,6 +58,37 @@ function tokenRefusalKey(
       const exhaustive: never = reason;
       throw new Error(`unhandled refusal ${String(exhaustive)}`);
     }
+  }
+}
+
+/**
+ * Which refusal a question that was not answered gets. A parameter with no value and SQL
+ * Postgres refused are both BAD_REQUEST -- the request was the fault, and the sentence says
+ * what to change -- while a worker that did not answer is a precondition nobody at the
+ * screen can fix.
+ */
+function answerRefusal(
+  locale: Locale,
+  outcome: Exclude<bi.AnswerOutcome, { ok: true }>,
+): TRPCError {
+  switch (outcome.reason) {
+    case "param-missing":
+      return new TRPCError({
+        code: "BAD_REQUEST",
+        message: messages(locale)("error.paramMissing", { name: outcome.param }),
+      });
+    case "query-failed":
+      return new TRPCError({
+        code: "BAD_REQUEST",
+        message: messages(locale)("error.queryFailed", { message: outcome.message ?? "" }),
+      });
+    case "question-not-found":
+      return new TRPCError({ code: "NOT_FOUND" });
+    default:
+      return new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: messages(locale)("error.queryNotRun"),
+      });
   }
 }
 
@@ -661,16 +696,17 @@ export const appRouter = router({
 
   bi: router({
     /**
-     * Run SQL as the tenant's read-only login, through the worker. Members and admins
-     * author; a viewer's reads come through saved questions, not raw SQL. A query that did
-     * not run is BAD_REQUEST carrying Postgres's own sentence, because that sentence is
-     * what lets the author fix it.
+     * Answer a definition -- the builder's or raw SQL -- as the tenant's read-only login,
+     * through the worker. Members and admins author; a viewer's reads come through saved
+     * questions. A query that did not run is BAD_REQUEST carrying Postgres's own sentence,
+     * because that sentence is what lets the author fix it; so is a parameter with no value.
      */
-    run: requireRole("member")
+    answer: requireRole("member")
       .input(
         z.object({
-          sql: z.string().min(1).max(MAX_QUERY_SQL_BYTES),
-          limit: z.number().int().min(1).max(MAX_QUERY_ROWS).default(DEFAULT_QUERY_ROWS),
+          definition: QuestionDefinition,
+          params: QueryParams.default({}),
+          limit: z.number().int().min(1).max(MAX_QUERY_ROWS).optional(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -680,23 +716,154 @@ export const appRouter = router({
             message: messages(ctx.locale)("error.workerUnavailable"),
           });
         }
-        const outcome = await bi.run(ctx.worker, { ...input, tenantId: ctx.tenantId });
+        const outcome = await bi.answer(ctx.worker, {
+          tenantId: ctx.tenantId,
+          definition: input.definition,
+          params: input.params,
+          ...(input.limit === undefined ? {} : { limit: input.limit }),
+        });
         if (!outcome.ok) {
-          if (outcome.reason === "query-failed") {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: messages(ctx.locale)("error.queryFailed", {
-                message: outcome.message ?? "",
-              }),
-            });
-          }
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: messages(ctx.locale)("error.queryNotRun"),
-          });
+          throw answerRefusal(ctx.locale, outcome);
         }
         return outcome.value;
       }),
+
+    /** Answer a saved question. Any member of the tenant: the question was saved for them. */
+    runQuestion: tenantProcedure
+      .input(z.object({ questionId: z.string().uuid(), params: QueryParams.default({}) }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        const outcome = await bi.answerQuestion(ctx.exec, ctx.worker, {
+          tenantId: input.tenantId,
+          questionId: input.questionId,
+          params: input.params,
+        });
+        if (!outcome.ok) {
+          throw answerRefusal(ctx.locale, outcome);
+        }
+        return outcome.value;
+      }),
+
+    /** What a definition compiles to, for the builder to show beside itself. Pure. */
+    compile: requireRole("member")
+      .input(z.object({ definition: QuestionDefinition }))
+      .query(({ input }) => ({ sql: bi.compileDefinition(input.definition) })),
+
+    questions: router({
+      list: tenantProcedure.query(({ ctx, input }) =>
+        bi.listQuestionViews(ctx.exec, input.tenantId),
+      ),
+
+      get: tenantProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+          const question = await bi.getQuestionView(ctx.exec, input.tenantId, input.id);
+          if (question === null) {
+            throw new TRPCError({ code: "NOT_FOUND" });
+          }
+          return question;
+        }),
+
+      /** Store a question. Executes nothing; a member or an admin, never a viewer. */
+      save: requireRole("member")
+        .input(
+          z.object({
+            id: z.string().uuid().optional(),
+            name: z.string().trim().min(1).max(120),
+            definition: QuestionDefinition,
+            chart: ChartConfig,
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          const outcome = await bi.saveQuestion(ctx.exec, {
+            tenantId: ctx.tenantId,
+            ...(input.id === undefined ? {} : { id: input.id }),
+            name: input.name,
+            definition: input.definition,
+            chart: input.chart,
+            actor: ctx.user.email,
+            actorId: ctx.user.userId,
+          });
+          if (!outcome.ok) {
+            throw new TRPCError({ code: "NOT_FOUND" });
+          }
+          return { id: outcome.id };
+        }),
+
+      delete: requireRole("member")
+        .input(z.object({ id: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+          const removed = await bi.removeQuestion(ctx.exec, {
+            tenantId: ctx.tenantId,
+            id: input.id,
+            actor: ctx.user.email,
+          });
+          if (!removed) {
+            throw new TRPCError({ code: "NOT_FOUND" });
+          }
+          return { ok: true };
+        }),
+    }),
+
+    dashboards: router({
+      list: tenantProcedure.query(({ ctx, input }) =>
+        bi.listDashboardViews(ctx.exec, input.tenantId),
+      ),
+
+      get: tenantProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .query(async ({ ctx, input }) => {
+          const dashboard = await bi.getDashboardView(ctx.exec, input.tenantId, input.id);
+          if (dashboard === null) {
+            throw new TRPCError({ code: "NOT_FOUND" });
+          }
+          return dashboard;
+        }),
+
+      save: requireRole("member")
+        .input(
+          z.object({
+            id: z.string().uuid().optional(),
+            name: z.string().trim().min(1).max(120),
+            layout: DashboardLayout,
+            filters: DashboardFilters,
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          const outcome = await bi.saveDashboard(ctx.exec, {
+            tenantId: ctx.tenantId,
+            ...(input.id === undefined ? {} : { id: input.id }),
+            name: input.name,
+            layout: input.layout,
+            filters: input.filters,
+            actor: ctx.user.email,
+            actorId: ctx.user.userId,
+          });
+          if (!outcome.ok) {
+            throw new TRPCError({ code: "NOT_FOUND" });
+          }
+          return { id: outcome.id };
+        }),
+
+      delete: requireRole("member")
+        .input(z.object({ id: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+          const removed = await bi.removeDashboard(ctx.exec, {
+            tenantId: ctx.tenantId,
+            id: input.id,
+            actor: ctx.user.email,
+          });
+          if (!removed) {
+            throw new TRPCError({ code: "NOT_FOUND" });
+          }
+          return { ok: true };
+        }),
+    }),
 
     /** The tables and columns a question can name. Any member may read the shape. */
     schema: tenantProcedure.query(async ({ ctx, input }) => {

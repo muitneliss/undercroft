@@ -1,9 +1,11 @@
 /**
- * Reports over tRPC: who may run SQL, and what a query that did not run is told.
+ * Reports over tRPC: who may author and who may only read, and what a question that was
+ * not answered is told.
  *
- * The role gate is pinned from both sides -- a viewer is refused, a member is answered --
- * and the one worded refusal, Postgres's sentence about bad SQL, reaches the caller in the
- * caller's language with the sentence intact.
+ * The role gate is pinned from both sides -- a viewer is refused a definition and answered
+ * a saved question, a member is answered both -- and the two worded refusals, Postgres's
+ * sentence about bad SQL and a parameter with no value, reach the caller in the caller's
+ * language.
  */
 
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
@@ -20,6 +22,8 @@ import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
 
 const TENANT = "CASE-0042";
+const SQL = { kind: "sql" as const, sql: "select 1 as n" };
+const CHART = { type: "table" as const, y: [], options: {} };
 
 let db: TestDatabase;
 
@@ -76,8 +80,8 @@ afterEach(async () => {
   await db.close();
 });
 
-describe("bi.run", () => {
-  it("a viewer is refused; a member's SQL reaches the worker and the rows come back", async () => {
+describe("bi.answer and bi.runQuestion", () => {
+  it("a viewer is refused a definition but answered a saved question; a member is answered both", async () => {
     const viewer = await seedMember("v@example.test", "viewer");
     const member = await seedMember("m@example.test", "member");
     const worker = new InMemoryWorkerClient().answering({
@@ -87,37 +91,70 @@ describe("bi.run", () => {
     });
 
     const got = await refusal(() =>
-      caller(viewer, "v@example.test", worker).bi.run({ tenantId: TENANT, sql: "select 1 as n" }),
+      caller(viewer, "v@example.test", worker).bi.answer({ tenantId: TENANT, definition: SQL }),
     );
     expect(got.code).toBe("FORBIDDEN");
 
-    const result = await caller(member, "m@example.test", worker).bi.run({
+    const result = await caller(member, "m@example.test", worker).bi.answer({
       tenantId: TENANT,
-      sql: "select 1 as n",
+      definition: SQL,
     });
     expect(result.rows).toEqual([[1]]);
-    expect(worker.queries).toEqual([{ tenantId: TENANT, sql: "select 1 as n", limit: 1000 }]);
+
+    const saved = await caller(member, "m@example.test", worker).bi.questions.save({
+      tenantId: TENANT,
+      name: "One",
+      definition: SQL,
+      chart: CHART,
+    });
+    const answered = await caller(viewer, "v@example.test", worker).bi.runQuestion({
+      tenantId: TENANT,
+      questionId: saved.id,
+    });
+    expect(answered.rows).toEqual([[1]]);
+    expect(worker.queries.map((q) => q.sql)).toEqual(["select 1 as n", "select 1 as n"]);
   });
 
-  it("SQL that did not run is a BAD_REQUEST carrying Postgres's sentence, in the caller's language", async () => {
+  it("SQL that did not run, and a parameter with no value, are BAD_REQUEST worded in the caller's language", async () => {
     const member = await seedMember("m@example.test", "member");
     const worker = new InMemoryWorkerClient().refusingQueries('relation "nope" does not exist');
 
-    const got = await refusal(() =>
-      caller(member, "m@example.test", worker, "en").bi.run({
+    const failed = await refusal(() =>
+      caller(member, "m@example.test", worker, "en").bi.answer({
         tenantId: TENANT,
-        sql: "select * from nope",
+        definition: { kind: "sql", sql: "select * from nope" },
       }),
     );
-    expect(got.code).toBe("BAD_REQUEST");
-    expect(got.message).toBe('The query did not run: relation "nope" does not exist');
+    expect(failed.code).toBe("BAD_REQUEST");
+    expect(failed.message).toBe('The query did not run: relation "nope" does not exist');
+
+    const unbound = await refusal(() =>
+      caller(member, "m@example.test", worker, "en").bi.answer({
+        tenantId: TENANT,
+        definition: { kind: "sql", sql: "select * from t where d > {{since}}" },
+      }),
+    );
+    expect(unbound.code).toBe("BAD_REQUEST");
+    expect(unbound.message).toBe(
+      "The question needs a value for since. Set that filter and run again.",
+    );
   });
 
-  it("the schema is readable by a viewer: the shape of the data is not the data", async () => {
+  it("a viewer cannot save a question, and the schema is readable by anyone in the tenant", async () => {
     const viewer = await seedMember("v@example.test", "viewer");
-    const schema = await caller(viewer, "v@example.test", new InMemoryWorkerClient()).bi.schema({
-      tenantId: TENANT,
+    const worker = new InMemoryWorkerClient();
+
+    const got = await refusal(() =>
+      caller(viewer, "v@example.test", worker).bi.questions.save({
+        tenantId: TENANT,
+        name: "One",
+        definition: SQL,
+        chart: CHART,
+      }),
+    );
+    expect(got.code).toBe("FORBIDDEN");
+    expect(await caller(viewer, "v@example.test", worker).bi.schema({ tenantId: TENANT })).toEqual({
+      tables: [],
     });
-    expect(schema).toEqual({ tables: [] });
   });
 });

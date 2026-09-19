@@ -12,6 +12,7 @@
 // biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { bindParams, compileVisual } from "@undercroft/contracts";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -135,6 +136,29 @@ describe("runQuery", () => {
       limit: 1,
     });
     expect(after.rows).toEqual([[3]]);
+  });
+});
+
+describe("a compiled question", () => {
+  it("runs as the tenant's login exactly as the compiler wrote it", async () => {
+    const sql = bindParams(
+      compileVisual({
+        kind: "visual",
+        table: "stg_deals",
+        fields: [
+          { column: "*", aggregate: "count", alias: "deals" },
+          { column: "amount", aggregate: "sum" },
+        ],
+        filters: [{ column: "amount", op: "gte", value: "{{floor}}" }],
+        groupBy: [],
+        orderBy: [],
+        limit: 10,
+      }),
+      { floor: "10" },
+    );
+    const result = await runQuery(deps, { tenantId: TENANT, sql, limit: 10 });
+    expect(result.columns.map((c) => c.name)).toEqual(["deals", "sum_amount"]);
+    expect(result.rows).toEqual([[2, "12345678901244.5678"]]);
   });
 });
 
