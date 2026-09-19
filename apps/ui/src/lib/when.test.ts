@@ -8,8 +8,6 @@
  * here against a locale that is NOT Singapore's.
  */
 
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-
 import { describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";

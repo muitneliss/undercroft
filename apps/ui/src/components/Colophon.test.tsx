@@ -15,7 +15,6 @@
  * same stamp a Vite build writes (`src/test/setup.ts` reads the version the build reads).
  */
 
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 // biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
 // biome-ignore-all lint/style/useFilenamingConvention: One file named for the thing it exports, matching every other module in its directory.
 
