@@ -410,7 +410,10 @@
     {
       "includes": [
         "apps/ui/src/main.tsx",
-        "apps/ui/src/App.tsx",
+        // `App.tsx` was here until the route table moved to `routeTable.tsx`, which took
+        // `lazy` and `Suspense` with it. The shell imports nothing from react now, so the
+        // rule is back on for it.
+        "apps/ui/src/routeTable.tsx",
         "apps/ui/src/components/QuestionBands.tsx",
         "apps/ui/src/components/QuestionResult.tsx",
         "apps/ui/src/components/QuestionCard.tsx",
