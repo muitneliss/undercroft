@@ -48,15 +48,17 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
-import type { Source } from "@/api/types.ts";
+import type { Connection, Source } from "@/api/types.ts";
 import { SOURCE_LABEL } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
+import { LabelIndex } from "@/components/LabelIndex.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { openDrivePicker } from "@/lib/drivePicker.ts";
-import { type BrowsedLabel, indexLabels, type LabelOwner } from "@/lib/labelIndex.ts";
+import type { BrowsedLabel } from "@/lib/labelIndex.ts";
 import { describeXeroEntity, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
-import { useUiStore } from "@/store.ts";
+import { type ChosenFile, type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 /** Which lead each source's picker opens with. HubSpot never reaches this leaf. */
@@ -70,57 +72,24 @@ const LEAD_KEY = {
 /** Sources whose choices are listed by the worker, because listing needs a live token. */
 const BROWSED: ReadonlySet<Source> = new Set<Source>(["gmail", "xero"]);
 
+/** An empty choice, for a source whose draft has not been made yet. */
+const NOTHING_CHOSEN: Omit<ScopeDraft, "source"> = {
+  labels: [],
+  files: [],
+  organisation: null,
+  entities: [],
+};
+
 /**
- * How many labels before the index needs to be searchable rather than merely readable.
+ * Seed the draft from what is already stored, once the grants arrive.
  *
- * Below this the whole index fits in the frame without scrolling, and a filter over twelve
- * entries is a control that costs a glance and saves nothing.
+ * An admin changing a selection should see what they chose last time, not an empty form that
+ * silently means "everything".
  */
-const FILTER_FROM = 12;
-
-/** What each run of the index is called. Gmail says which run; the catalogue says the word. */
-const RUN_HEAD = {
-  user: "scopePicker.labelsMine",
-  system: "scopePicker.labelsSystem",
-  unclassified: "scopePicker.labelsUnclassified",
-} as const;
-
-export function ScopePicker({
-  tenantId,
-  source,
-}: {
-  tenantId: string;
-  source: Source;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const utils = trpc.useUtils();
-
-  const draft = useUiStore((s) => s.scopeDraft);
+function useStoredScope(source: Source, connections: readonly Connection[] | undefined): void {
   const setDraft = useUiStore((s) => s.setScopeDraft);
-  const clearLabels = useUiStore((s) => s.clearScopeLabels);
+  const current = connections?.find((c) => c.source === source);
 
-  const connections = trpc.connections.list.useQuery({ tenantId });
-  const labels = trpc.connections.browseScope.useQuery(
-    { tenantId, source },
-    // Drive has no server-side listing to fetch; asking for one would be a guaranteed 400.
-    { enabled: BROWSED.has(source) },
-  );
-  const config = trpc.config.google.useQuery(undefined, { enabled: source === "drive" });
-
-  const setScope = trpc.connections.setScope.useMutation({
-    onSuccess: async () => {
-      await utils.connections.list.invalidate({ tenantId });
-      // `navigate` returns a promise in react-router 7; nothing here waits on the
-      // transition, and the component unmounts when it lands.
-      void navigate(divisionPath("sources", tenantId));
-    },
-  });
-
-  // Seed the draft from what is already stored, once the grants arrive. An admin changing a
-  // selection should see what they chose last time, not an empty form that silently means
-  // "everything".
-  const current = connections.data?.find((c) => c.source === source);
   useEffect(() => {
     if (current === undefined) {
       return;
@@ -137,6 +106,62 @@ export function ScopePicker({
       entities: current.config.entities ?? [],
     });
   }, [current, source, setDraft]);
+}
+
+/**
+ * What gets recorded, in the shape `connections.setScope` validates for this source.
+ *
+ * Gmail's labels travel by id as well as by name: the id is what a run asks Gmail for, and a
+ * selection recorded by name alone would start reading nothing the day a label is renamed.
+ */
+function selectionFor(
+  source: Source,
+  chosen: Omit<ScopeDraft, "source">,
+  items: readonly { id: string; name: string }[],
+): unknown {
+  if (source === "gmail") {
+    return {
+      labels: chosen.labels.map((name) => ({
+        id: items.find((i) => i.name === name)?.id ?? name,
+        name,
+      })),
+    };
+  }
+  if (source === "xero") {
+    return { organisation: chosen.organisation, entities: chosen.entities };
+  }
+  return { files: chosen.files };
+}
+
+export function ScopePicker({
+  tenantId,
+  source,
+}: {
+  tenantId: string;
+  source: Source;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const utils = trpc.useUtils();
+  const draft = useUiStore((s) => s.scopeDraft);
+
+  const connections = trpc.connections.list.useQuery({ tenantId });
+  const labels = trpc.connections.browseScope.useQuery(
+    { tenantId, source },
+    // Drive has no server-side listing to fetch; asking for one would be a guaranteed 400.
+    { enabled: BROWSED.has(source) },
+  );
+
+  const setScope = trpc.connections.setScope.useMutation({
+    onSuccess: async () => {
+      await utils.connections.list.invalidate({ tenantId });
+      // `navigate` returns a promise in react-router 7; nothing here waits on the
+      // transition, and the component unmounts when it lands.
+      void navigate(divisionPath("sources", tenantId));
+    },
+  });
+
+  useStoredScope(source, connections.data);
 
   if (connections.isPending || (BROWSED.has(source) && labels.isPending)) {
     return <Skeleton rows={4} />;
@@ -150,130 +175,26 @@ export function ScopePicker({
     );
   }
 
-  const chosenLabels = draft?.source === source ? draft.labels : [];
-  const chosenFiles = draft?.source === source ? draft.files : [];
-  const chosenOrganisation = draft?.source === source ? draft.organisation : null;
-  const chosenEntities = draft?.source === source ? draft.entities : [];
-
-  function selection(): unknown {
-    if (source === "gmail") {
-      return {
-        labels: chosenLabels.map((name) => ({
-          id: labels.data?.items.find((i) => i.name === name)?.id ?? name,
-          name,
-        })),
-      };
-    }
-    if (source === "xero") {
-      return { organisation: chosenOrganisation, entities: chosenEntities };
-    }
-    return { files: chosenFiles };
-  }
-
-  function save(): void {
-    setScope.mutate({ tenantId, source, selection: selection() });
-  }
-
+  const chosen = draft?.source === source ? draft : NOTHING_CHOSEN;
   // Xero cannot be saved without an organisation: the server would refuse it, and the
   // plate saying so beforehand is cheaper than the errata afterwards.
-  const unsaveable = source === "xero" && chosenOrganisation === null;
+  const unsaveable = source === "xero" && chosen.organisation === null;
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("nav.sources")}</div>
-      <div className="body stack">
-        <h1>{t("scopePicker.title")}</h1>
-        <p className="prose prose--lead">{t(LEAD_KEY[source])}</p>
-
-        {source === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
-        {source === "drive" ? <p className="note">{t("scopePicker.directChildrenOnly")}</p> : null}
-        {source === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
-      </div>
+      <ScopeLead source={source} />
 
       <div className="band-rule" />
 
       <div className="head">{SOURCE_LABEL[source]}</div>
       <div className="body stack">
-        {source === "xero" ? (
-          labels.isError ? (
-            <Errata heading={t("common.notLoaded")} live={true}>
-              {labels.error.message}
-            </Errata>
-          ) : (
-            <XeroChoice
-              source={source}
-              organisations={labels.data?.items ?? []}
-              organisation={chosenOrganisation}
-              entities={chosenEntities}
-            />
-          )
-        ) : null}
-
-        {source === "gmail" ? (
-          labels.isError ? (
-            <Errata heading={t("common.notLoaded")} live={true}>
-              {labels.error.message}
-            </Errata>
-          ) : (labels.data?.items.length ?? 0) === 0 ? (
-            <p className="note">{t("scopePicker.nothingToChoose")}</p>
-          ) : (
-            <>
-              <LabelIndex source={source} items={labels.data?.items ?? []} chosen={chosenLabels} />
-
-              <div className="echo">
-                <span className="label">{t("scopePicker.echoHead")}</span>
-                <p className="note echo__says" role="status">
-                  {chosenLabels.length === 0
-                    ? t("scope.gmailWholeMailbox")
-                    : t("scopePicker.echoChosen", { count: chosenLabels.length })}
-                </p>
-                {chosenLabels.length > 0 ? (
-                  <button
-                    type="button"
-                    className="plate plate--small"
-                    onClick={(): void => {
-                      clearLabels(source);
-                    }}
-                  >
-                    {t("scopePicker.clearAll")}
-                  </button>
-                ) : null}
-              </div>
-            </>
-          )
-        ) : null}
-
-        {source === "drive" ? (
-          <>
-            <button
-              type="button"
-              className="plate"
-              disabled={config.data === undefined || config.data === null}
-              onClick={(): void => {
-                // Null when no ingestion client is configured; the button is disabled then,
-                // and this guard is what makes that a type-level fact rather than a habit.
-                const picker = config.data;
-                if (picker === undefined || picker === null) {
-                  return;
-                }
-                void openDrivePicker(picker, (picked) => {
-                  setDraft({ source, labels: [], files: picked, organisation: null, entities: [] });
-                });
-              }}
-            >
-              {t("scopePicker.pickFromDrive")}
-            </button>
-            {config.isError ? (
-              <p className="note">{t("scopePicker.pickerUnavailable")}</p>
-            ) : (
-              <ul className="stack stack--tight">
-                {chosenFiles.map((file) => (
-                  <li key={file.id}>{file.name}</li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : null}
+        <SourceChoice
+          source={source}
+          items={labels.data?.items ?? []}
+          loadError={labels.isError ? labels.error.message : null}
+          chosen={chosen}
+        />
 
         {setScope.isError ? (
           <Errata heading={t("scopePicker.notSaved")} live={true}>
@@ -287,7 +208,13 @@ export function ScopePicker({
           type="button"
           className="plate plate--primary"
           disabled={setScope.isPending || unsaveable}
-          onClick={save}
+          onClick={(): void => {
+            setScope.mutate({
+              tenantId,
+              source,
+              selection: selectionFor(source, chosen, labels.data?.items ?? []),
+            });
+          }}
         >
           {setScope.isPending ? t("scopePicker.saving") : t("scopePicker.save")}
         </button>
@@ -296,104 +223,78 @@ export function ScopePicker({
   );
 }
 
-/**
- * Xero's choice: one organisation, and which entities.
- *
- * Both halves are read from the store and written to it, for the reason the label index
- * gives. The entity list is the spec's, in the spec's order, with the words a reader sees
- * translated and the ids that get recorded left as they are.
- */
-function XeroChoice({
-  source,
-  organisations,
-  organisation,
-  entities,
-}: {
-  source: Source;
-  organisations: readonly { id: string; name: string }[];
-  organisation: { id: string; name: string } | null;
-  entities: readonly string[];
-}): React.JSX.Element {
+/** What this source is about to be asked, in the words its own consent card uses. */
+function ScopeLead({ source }: { source: Source }): React.JSX.Element {
   const { t } = useTranslation();
-  const setOrganisation = useUiStore((s) => s.setScopeOrganisation);
-  const toggleEntity = useUiStore((s) => s.toggleScopeEntity);
-
-  if (organisations.length === 0) {
-    return <p className="note">{t("scopePicker.noOrganisations")}</p>;
-  }
 
   return (
-    <>
-      <fieldset className="index">
-        <legend className="label index__legend">{t("scopePicker.organisationsHead")}</legend>
-        <div className="index__field">
-          <div className="index__cols">
-            {organisations.map((candidate) => (
-              <label key={candidate.id} className="punch">
-                <input
-                  type="radio"
-                  name="organisation"
-                  checked={organisation?.id === candidate.id}
-                  onChange={(): void => {
-                    setOrganisation(source, { id: candidate.id, name: candidate.name });
-                  }}
-                />
-                <span className="punch__box" />
-                <span>{candidate.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </fieldset>
+    <div className="body stack">
+      <h1>{t("scopePicker.title")}</h1>
+      <p className="prose prose--lead">{t(LEAD_KEY[source])}</p>
 
-      <fieldset className="index">
-        <legend className="label index__legend">{t("scopePicker.entitiesHead")}</legend>
-        <div className="index__field">
-          <div className="index__cols">
-            {XERO_ENTITIES.map((entity) => (
-              <label key={entity} className="punch">
-                <input
-                  type="checkbox"
-                  checked={entities.includes(entity)}
-                  onChange={(): void => {
-                    toggleEntity(source, entity);
-                  }}
-                />
-                <span className="punch__box" />
-                <span>{describeXeroEntity(t, entity)}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </fieldset>
-
-      <div className="echo">
-        <span className="label">{t("scopePicker.echoHead")}</span>
-        <p className="note echo__says" role="status">
-          {entities.length === 0
-            ? t("scope.xeroAll")
-            : t("scope.xeroEntities", {
-                entities: entities.map((entity) => describeXeroEntity(t, entity)).join(", "),
-              })}
-        </p>
-      </div>
-    </>
+      {source === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
+      {source === "drive" ? <p className="note">{t("scopePicker.directChildrenOnly")}</p> : null}
+      {source === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
+    </div>
   );
 }
 
 /**
- * The index of labels: a filter, then the runs, inside one bounded frame.
+ * Which picker this source gets. Three shapes, for the three reasons the file header gives.
  *
- * Both pieces of state it reads belong to the store rather than to this component -- the
- * ticks because Save has to find them, the filter because `useState` is banned and a second
- * owner of "what is on screen" is how a list and its filter drift apart. Each is read back
- * against the source it was recorded for, so neither can be left over from another one.
- *
- * The tally is said twice on purpose. `14 / 62` beside the field is legible in either
- * language and costs one glance; the sentence beside it is hidden from the page and live for
- * a screen reader, because a pair of bare numerals announced on their own names nothing.
+ * HubSpot never reaches this leaf -- it has nothing to choose -- and renders nothing rather
+ * than an empty frame that reads as a list which failed to load. Drive is never listed by the
+ * worker, so a browse error is not its error to report.
  */
-function LabelIndex({
+function SourceChoice({
+  source,
+  items,
+  loadError,
+  chosen,
+}: {
+  source: Source;
+  items: readonly BrowsedLabel[];
+  loadError: string | null;
+  chosen: Omit<ScopeDraft, "source">;
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+
+  if (loadError !== null && BROWSED.has(source)) {
+    return (
+      <Errata heading={t("common.notLoaded")} live={true}>
+        {loadError}
+      </Errata>
+    );
+  }
+  if (source === "xero") {
+    return (
+      <XeroChoice
+        source={source}
+        organisations={items}
+        organisation={chosen.organisation}
+        entities={chosen.entities}
+      />
+    );
+  }
+  if (source === "gmail") {
+    return <GmailChoice source={source} items={items} chosen={chosen.labels} />;
+  }
+  if (source === "drive") {
+    return <DriveChoice source={source} files={chosen.files} />;
+  }
+  return null;
+}
+
+/**
+ * Gmail's choice: which labels, and what choosing none means said as it is chosen.
+ *
+ * "Choosing no label means the whole mailbox" is printed above the list, and a hint above a
+ * long list is read once and then scrolled away from. So the consequence also stands beneath
+ * the control, as a line that changes as the ticks change, in the consent card's own
+ * sentence -- and it carries `role="status"`, so a screen reader is told the same thing at
+ * the same moment instead of being left to infer it from a checkbox.
+ */
+function GmailChoice({
   source,
   items,
   chosen,
@@ -403,76 +304,86 @@ function LabelIndex({
   chosen: readonly string[];
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const locale = useUiStore((s) => s.locale);
-  const typed = useUiStore((s) => s.scopeFilter);
-  const setFilter = useUiStore((s) => s.setScopeFilter);
-  const toggleLabel = useUiStore((s) => s.toggleScopeLabel);
+  const clearLabels = useUiStore((s) => s.clearScopeLabels);
 
-  // Derived, not copied: a word typed against Gmail's labels narrows Gmail's labels and
-  // nothing else, and this is what makes that true without an effect to clear it up after.
-  const filter = typed.source === source ? typed.query : "";
-  const runs = indexLabels(items, filter, locale);
-  const shown = runs.reduce((count, run) => count + run.items.length, 0);
-  const tally = { shown, total: items.length };
+  if (items.length === 0) {
+    return <p className="note">{t("scopePicker.nothingToChoose")}</p>;
+  }
 
   return (
-    <fieldset className="index">
-      <legend className="label index__legend">{t("scopePicker.labelsHead")}</legend>
+    <>
+      <LabelIndex source={source} items={items} chosen={chosen} />
 
-      {items.length >= FILTER_FROM ? (
-        <div className="index__seek">
-          <input
-            type="search"
-            className="input index__filter"
-            value={filter}
-            placeholder={t("scopePicker.filterPlaceholder")}
-            aria-label={t("scopePicker.filterLabel")}
-            onChange={(event): void => {
-              setFilter(source, event.target.value);
+      <div className="echo">
+        <span className="label">{t("scopePicker.echoHead")}</span>
+        <p className="note echo__says" role="status">
+          {chosen.length === 0
+            ? t("scope.gmailWholeMailbox")
+            : t("scopePicker.echoChosen", { count: chosen.length })}
+        </p>
+        {chosen.length > 0 ? (
+          <button
+            type="button"
+            className="plate plate--small"
+            onClick={(): void => {
+              clearLabels(source);
             }}
-          />
-          <span aria-hidden="true" className="datum datum--quiet">
-            {/* A ratio only once there is something to be a ratio of. Unfiltered, `62 / 62`
-                says the same figure twice; `62 nhãn` says how big the mailbox is, which is
-                the fact somebody arriving at this screen does not yet have. */}
-            {filter === ""
-              ? t("scopePicker.filterTotal", { count: items.length })
-              : t("scopePicker.filterTally", tally)}
-          </span>
-          <span className="visually-hidden" aria-live="polite">
-            {t("scopePicker.filterTallyRead", tally)}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="index__field">
-        {runs.map((run) => (
-          <section key={runKey(run.kind)} className="index__run">
-            <h2 className="label index__head">{t(RUN_HEAD[runKey(run.kind)])}</h2>
-            <div className="index__cols">
-              {run.items.map((label) => (
-                <label key={label.id} className="punch">
-                  <input
-                    type="checkbox"
-                    checked={chosen.includes(label.name)}
-                    onChange={(): void => {
-                      toggleLabel(source, label.name);
-                    }}
-                  />
-                  <span className="punch__box" />
-                  <span>{label.name}</span>
-                </label>
-              ))}
-            </div>
-          </section>
-        ))}
-        {shown === 0 ? <p className="note index__none">{t("scopePicker.noMatch")}</p> : null}
+          >
+            {t("scopePicker.clearAll")}
+          </button>
+        ) : null}
       </div>
-    </fieldset>
+    </>
   );
 }
 
-/** The null run needs a name to be keyed and headed by; it does not need a third meaning. */
-function runKey(kind: LabelOwner): keyof typeof RUN_HEAD {
-  return kind ?? "unclassified";
+/**
+ * Drive's choice: Google's own Picker, running in the browser.
+ *
+ * Under the `drive.file` scope a server-side folder listing is not merely unnecessary, it is
+ * impossible -- the credential cannot see anything that has not been picked. That is the
+ * point: Google enforces the promise instead of our query filter.
+ */
+function DriveChoice({
+  source,
+  files,
+}: {
+  source: Source;
+  files: readonly ChosenFile[];
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const setDraft = useUiStore((s) => s.setScopeDraft);
+  const config = trpc.config.google.useQuery();
+
+  return (
+    <>
+      <button
+        type="button"
+        className="plate"
+        disabled={config.data === undefined || config.data === null}
+        onClick={(): void => {
+          // Null when no ingestion client is configured; the button is disabled then,
+          // and this guard is what makes that a type-level fact rather than a habit.
+          const picker = config.data;
+          if (picker === undefined || picker === null) {
+            return;
+          }
+          void openDrivePicker(picker, (picked) => {
+            setDraft({ source, labels: [], files: picked, organisation: null, entities: [] });
+          });
+        }}
+      >
+        {t("scopePicker.pickFromDrive")}
+      </button>
+      {config.isError ? (
+        <p className="note">{t("scopePicker.pickerUnavailable")}</p>
+      ) : (
+        <ul className="stack stack--tight">
+          {files.map((file) => (
+            <li key={file.id}>{file.name}</li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
 }
