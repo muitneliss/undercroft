@@ -415,6 +415,76 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
  *
  * Empty `releaseTag` keeps the old behaviour for an operator running `verify` by hand.
  */
+interface ServiceCheck {
+  readonly cfg: Config;
+  readonly deps: Deps;
+  readonly ghcrToken: string;
+  readonly service: string;
+  readonly image: string;
+  readonly appName: string;
+  readonly containers: readonly Container[];
+  /** Whether this service is meant to run to completion rather than stay up. */
+  readonly oneShot: boolean;
+}
+
+/**
+ * One service, checked. Returns what is wrong with it, or null when it is right.
+ *
+ * A one-shot service is meant to exit and a long-running one is meant not to, so they are
+ * asked different questions -- reading the wrong expectation either way is a false verdict.
+ * Absence of evidence is never success: without `State` there is no exit code, and "not
+ * running" is exactly what a completed job and a crashed one have in common.
+ *
+ * The digest check is reached by BOTH kinds, because a migration that exited 0 on last
+ * release's image is still the wrong thing having run, and the digest is the only way to see
+ * it. Config digest, not index digest: see the module docstring.
+ */
+type VerifiedService = { ok: true; digest: string } | { ok: false; problem: string };
+
+async function verifyService(check: ServiceCheck): Promise<VerifiedService> {
+  const { cfg, deps, service, image, appName, containers, oneShot } = check;
+
+  const container = containers.find((c) => c.name.includes(`-${service}-`));
+  if (container === undefined) {
+    return { ok: false, problem: `${service}: no container matching ${appName}-${service}-*` };
+  }
+
+  const config = await callApi<ContainerConfig>(cfg, deps, "docker.getConfig", {
+    query: { containerId: container.containerId },
+    retries: 3,
+  });
+
+  if (oneShot) {
+    const state = config.State;
+    if (state === undefined) {
+      return {
+        ok: false,
+        problem: `${service}: docker.getConfig returned no State, so no exit code to read`,
+      };
+    }
+    if (state.Status !== "exited" || state.ExitCode !== 0) {
+      return {
+        ok: false,
+        problem: `${service}: one-shot service is ${state.Status} with exit code ${state.ExitCode}, expected exited 0`,
+      };
+    }
+  } else if (container.state !== "running") {
+    return {
+      ok: false,
+      problem: `${service}: container is ${container.state} (${container.status})`,
+    };
+  }
+
+  const expected = await publishedConfigDigest(deps, image, check.ghcrToken);
+  if (config.Image !== expected) {
+    return {
+      ok: false,
+      problem: `${service}: running ${config.Image} (from ${config.Config.Image}), ghcr serves ${expected} for ${image}`,
+    };
+  }
+  return { ok: true, digest: expected };
+}
+
 export async function verify(
   cfg: Config,
   deps: Deps,
@@ -436,50 +506,24 @@ export async function verify(
 
   const problems: string[] = [];
   for (const { service, image } of services) {
-    const container = containers.find((c) => c.name.includes(`-${service}-`));
-    if (container === undefined) {
-      problems.push(`${service}: no container matching ${compose.appName}-${service}-*`);
-      continue;
-    }
-
-    const config = await callApi<ContainerConfig>(cfg, deps, "docker.getConfig", {
-      query: { containerId: container.containerId },
-      retries: 3,
+    const checked = await verifyService({
+      cfg,
+      deps,
+      ghcrToken,
+      service,
+      image,
+      appName: compose.appName,
+      containers,
+      oneShot: oneShot.has(service),
     });
-
-    // A one-shot service is meant to exit; a long-running one is meant not to. Reading the
-    // wrong expectation either way is a false verdict, so they are asked different questions.
-    if (oneShot.has(service)) {
-      const state = config.State;
-      if (state === undefined) {
-        // Never infer success from the absence of evidence: without State there is no exit
-        // code, and "it is not running" is exactly what a completed job and a crashed one
-        // have in common.
-        problems.push(`${service}: docker.getConfig returned no State, so no exit code to read`);
-        continue;
-      }
-      if (state.Status !== "exited" || state.ExitCode !== 0) {
-        problems.push(
-          `${service}: one-shot service is ${state.Status} with exit code ${state.ExitCode}, expected exited 0`,
-        );
-        continue;
-      }
-    } else if (container.state !== "running") {
-      problems.push(`${service}: container is ${container.state} (${container.status})`);
-      continue;
-    }
-
-    // Reached by both kinds: a migration that exited 0 on last release's image is still the
-    // wrong thing running, and the digest is the only way to see it.
-    const expected = await publishedConfigDigest(deps, image, ghcrToken);
-    if (config.Image !== expected) {
-      problems.push(
-        `${service}: running ${config.Image} (from ${config.Config.Image}), ghcr serves ${expected} for ${image}`,
-      );
+    if (!checked.ok) {
+      problems.push(checked.problem);
       continue;
     }
     const ran = oneShot.has(service) ? "ran to completion on" : "runs";
-    deps.log(`  ${service} ${ran} the published image ${image} (${expected.slice(0, 19)}...)`);
+    deps.log(
+      `  ${service} ${ran} the published image ${image} (${checked.digest.slice(0, 19)}...)`,
+    );
   }
 
   if (problems.length > 0) {
