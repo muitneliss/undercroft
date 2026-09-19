@@ -244,16 +244,38 @@
             "noSecrets": "off"
           },
           "style": {
+            // A guard at the top of a loop -- `if (result.status !== "created") continue;` --
+            // is the shape that keeps the body at one level of indent. What the rule wants
+            // instead is that body wrapped in an `if`, which buys nothing and costs a level
+            // everywhere it is applied.
+            "noContinue": "off",
             // Money aside, the numbers left after the domain constants were named are
             // structural: slice offsets, a `padStart` width, the radix argument, an HTTP
             // status. `SLICE_START_OF_GREEN_CHANNEL` tells a reader nothing the expression
             // did not, and the rule ships no allow-list option, so it is all or nothing.
             "noMagicNumbers": "off",
+            // Nested only inside JSX, where the alternative is lifting a two-branch choice
+            // out of the element it belongs to. Same argument as `noTernary` above.
+            "noNestedTernary": "off",
+            // Every one of these asserts something the type system cannot see but the
+            // expression guarantees: `char.codePointAt(0)!` on a character that came from
+            // iterating a string, `split("/").at(-1)!` where `split` always yields at least
+            // one element. The fix is a branch that cannot be reached, which is worse than
+            // the assertion -- it is untestable, and `tests.md` asks for a test on both
+            // sides of a guard. `noUnsafeTypeAssertion` still covers the assertions that
+            // genuinely can be wrong, and those are being fixed rather than suppressed.
+            "noNonNullAssertion": "off",
             // A ternary selects between two VALUES. What the rule wants instead is a mutable
             // temporary plus a statement, which separates the condition from the value it
             // chooses. Inside JSX it is additionally the only way to render conditionally
             // inline, and 251 of these are in `.tsx`.
             "noTernary": "off",
+            // A module puts the type it is about at the top, then what operates on it --
+            // the order CLAUDE.md names as the convention. Satisfying this rule means moving
+            // 51 exported types and interfaces to the BOTTOM of their files, away from the
+            // code they describe, in 51 separate places. The rule has one ordering in mind
+            // and this repo has a different one, deliberately.
+            "useExportsLast": "off",
             // Most of what it flags is not ours to name: `access_token`, `refresh_token`,
             // `hs_object_id`, `grant_type` are field names on the wire, and renaming them is
             // breaking the contract with HubSpot, Xero and Google rather than tidying a
