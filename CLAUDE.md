@@ -35,19 +35,20 @@ the moment its rule actually bites. **Claude Code discovers these automatically.
 agents do not — if you are not Claude Code, read the ones matching the files you are
 about to touch.** That is the only reason this index exists.
 
-| Rule file         | Applies to                                  | Governs                                                                                  |
-| ----------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `money.md`        | everywhere                                  | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
-| `raw-lake.md`     | `packages/lake/**`                          | create-only writes, idempotent by content, retention bounded and reported                |
-| `connectors.md`   | `packages/connector-runtime/**`, `specs/**` | the spec contract; a failure raises, never an empty stream                               |
-| `privileges.md`   | `packages/db/sql/**`                        | the role and grant model; why the BI role cannot read `raw`                              |
-| `tests.md`        | `**/*.test.ts`                              | real in-memory implementations over mocks, a guard needs two tests                       |
-| `state.md`        | `apps/ui/**`                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
-| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`   | Vietnamese default, English second; no user-facing string written in place               |
-| `layering.md`     | `apps/*/src/**`, `packages/db/src/**`       | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
-| `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures     | no real customer data in any tracked file                                                |
-| `deployment.md`   | `deploy/**`, `flows/**`, deploy workflows   | the Dokploy API is the only channel, every service declares a memory limit               |
-| `suppressions.md` | everywhere                                  | where a lint decision goes; `biome-ignore-all` is banned outside a test file             |
+| Rule file         | Applies to                                                               | Governs                                                                                  |
+| ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `money.md`        | everywhere                                                               | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
+| `raw-lake.md`     | `packages/lake/**`                                                       | create-only writes, idempotent by content, retention bounded and reported                |
+| `connectors.md`   | `packages/connector-runtime/**`, `specs/**`                              | the spec contract; a failure raises, never an empty stream                               |
+| `privileges.md`   | `packages/db/sql/**`                                                     | the role and grant model; why the BI role cannot read `raw`                              |
+| `tests.md`        | `**/*.test.ts`                                                           | real in-memory implementations over mocks, a guard needs two tests                       |
+| `state.md`        | `apps/ui/**`                                                             | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
+| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`                                | Vietnamese default, English second; no user-facing string written in place               |
+| `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                    | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
+| `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures                                  | no real customer data in any tracked file                                                |
+| `deployment.md`   | `deploy/**`, `flows/**`, deploy workflows                                | the Dokploy API is the only channel, every service declares a memory limit               |
+| `suppressions.md` | everywhere                                                               | where a lint decision goes; `biome-ignore-all` is banned outside a test file             |
+| `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
 
 ## Language and runtime
 
@@ -58,11 +59,31 @@ category as Postgres or Kestra. We never import it, ship it, or maintain it.
 Bun is the runtime, package manager, workspace manager and test runner. One toolchain;
 adding a second is how two definitions of green drift apart.
 
+## Operations
+
+Every operation goes through [Task](https://taskfile.dev) — never a bare `bun run` or a raw
+shell/docker command typed by hand. `task --list-all` enumerates everything that exists; the
+surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
+
+| Namespace | Lives in                | Covers                                                                    |
+| --------- | ----------------------- | ------------------------------------------------------------------------- |
+| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included    |
+| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, generated assets/schemas, local Docker images             |
+| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs      |
+| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand                             |
+| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one |
+
+Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —
+Task is the mandated way to invoke it, never a second place that redefines what it does. A
+new operation gets a task in the matching namespace before it gets used, the same turn it's
+added. See `.claude/rules/tooling.md` and ADR 0023.
+
 ## The gate
 
-`bun run verify` — typecheck, lint, format check, the SPA build, then the test suite. It
-must pass with **no Docker, no network and no credentials**. `bun run itest` is the
-Docker-backed tier and is deliberately separate.
+`task ci:verify` — typecheck, lint, format check, the SPA build, then the test suite (it
+wraps `bun run verify`: one definition of the gate, Task is just how you invoke it). It must
+pass with **no Docker, no network and no credentials**. `task ci:itest` is the Docker-backed
+tier and is deliberately separate.
 
 `bun run build:ui` is in the gate because `tsc` cannot see what a bundler refuses. Importing
 a module that reaches a Node built-in — `@undercroft/core`'s root barrel pulls `node:crypto`
@@ -77,15 +98,15 @@ enforcement. Treating green as proof would be rule 2 broken by the harness itsel
 Some rules are the exception, because a machine _can_ see them, and each is pinned from both
 sides — fires, and stays quiet — so it cannot quietly stop matching:
 
-- `no-usestate` and the `layer-*` rules are **ast-grep** rules that fail `bun run lint:rules`.
-  Pinned by `scripts/layering.test.ts`.
+- `no-usestate` and the `layer-*` rules are **ast-grep** rules that fail `task ci:lint-rules`
+  (`bun run lint:rules`). Pinned by `scripts/layering.test.ts`.
 - `no-biome-ignore-all` is the same kind of rule and bans the lint bypass itself: no
   `biome-ignore-all` **anywhere**, test files included, no group-wide `lint:` /
   `lint/plugin:` spelling (both reach the money plugin), no `ast-grep-ignore` at all. Pinned
   by `scripts/suppressions.test.ts`, whose last two tests run Biome to prove the hole is real.
 - The money bans, the no-mock bans and the UI's type-only import of the server router are
-  **Biome GritQL plugins** in `.biome/plugins/`, which fail `bun run lint`. Pinned by
-  `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
+  **Biome GritQL plugins** in `.biome/plugins/`, which fail `task ci:lint` (`bun run lint`).
+  Pinned by `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
   `no-restricted-syntax`; see ADR 0012.
 
 Where a rule can be made mechanical it is.
@@ -122,9 +143,11 @@ One Dokploy raw-compose stack on `lowbit.link`; the control plane is the only pu
 surface — the Reports division inside it is the BI, and Metabase is gone (ADR 0020).
 Merging the release-please PR cuts a tag, which builds the images and deploys them,
 Kestra's flows included — nothing else does. The Dokploy API is the only channel for a
-change (SSH is read-only), and `scripts/dokploy.ts` verifies a rollout landed rather than
-trusting Dokploy's `done`. See `.claude/rules/deployment.md`, `docs/runbook/deployment.md`,
-and ADR 0008.
+change (SSH is read-only), and `task cd:verify` (wrapping `scripts/dokploy.ts`) checks a
+rollout landed rather than trusting Dokploy's `done`. A manual deploy or rollback is
+`task cd:release TAG=vX.Y.Z`, never a `bun run scripts/dokploy.ts` typed by hand. See
+`.claude/rules/deployment.md`, `.claude/rules/tooling.md`, `docs/runbook/deployment.md`, and
+ADR 0008.
 
 ## Conventions
 

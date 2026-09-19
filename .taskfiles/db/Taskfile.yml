@@ -1,0 +1,16 @@
+# Generic, DSN-parameterised database operations -- used directly when
+# UNDERCROFT_POSTGRES_DSN is already set in the environment (e.g. against a remote/staging
+# database). For the local compose Postgres, use the dev:migrate / dev:invite wrappers
+# instead, which point at localhost for you.
+version: "3"
+
+tasks:
+  migrate:
+    desc: Apply the schema to whatever UNDERCROFT_POSTGRES_DSN points at.
+    cmds:
+      - bun run migrate
+
+  invite:
+    desc: "Invite a user. Usage: UNDERCROFT_POSTGRES_DSN=... task db:invite -- you@x.test --tenant CASE-0001 --role admin [--create-tenant]"
+    cmds:
+      - bun run invite -- {{.CLI_ARGS}}

@@ -1,0 +1,32 @@
+# Producing artifacts: the SPA bundle, generated assets/schemas, and local Docker images.
+version: "3"
+
+tasks:
+  ui:
+    desc: Build the SPA bundle (vite build). Also the build:ui step of the gate.
+    cmds:
+      - bun run build:ui
+
+  spec-schema:
+    desc: Emit the connector spec's JSON Schema to specs/schema/connector.v1.json.
+    cmds:
+      - bun run spec:schema
+
+  geo:
+    desc: Regenerate the UI's static geo assets (world + Vietnam provinces topology).
+    cmds:
+      - bun run geo:build
+
+  worker-image:
+    desc: Build the worker's Docker image locally, for testing the Dockerfile (tag undercroft-worker:local).
+    cmds:
+      - docker build -f {{.ROOT_DIR}}/deploy/Dockerfile.worker -t undercroft-worker:local {{.ROOT_DIR}}
+
+  control-plane-image:
+    desc: Build the control plane's Docker image locally (tag undercroft-control-plane:local).
+    cmds:
+      - docker build -f {{.ROOT_DIR}}/deploy/Dockerfile.control-plane -t undercroft-control-plane:local {{.ROOT_DIR}}
+
+  images:
+    desc: Build both first-party Docker images locally. CI publishes the real ones via build-images.yml.
+    deps: [worker-image, control-plane-image]
