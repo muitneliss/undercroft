@@ -74,7 +74,7 @@ export function Book({
     onSuccess: () => {
       // The opaque session is revoked server-side; a full reload drops back to the title
       // page rather than leaving a stale cache pointed at a dead session.
-      window.location.assign("/");
+      globalThis.location.assign("/");
     },
   });
 

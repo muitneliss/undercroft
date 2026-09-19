@@ -56,7 +56,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
     onSuccess: () => {
       // A full reload rather than a route change: the identity just changed, and every
       // cached query was answered for the previous one. The same idiom as signing out.
-      window.location.assign("/");
+      globalThis.location.assign("/");
     },
   });
 

@@ -91,7 +91,7 @@ export async function withRetry<T>(
   const clock = deps.clock ?? systemClock;
   const random = deps.random ?? Math.random;
 
-  for (let attempt = 1; ; attempt++) {
+  for (let attempt = 1; ; attempt += 1) {
     try {
       return await operation(attempt);
     } catch (error) {

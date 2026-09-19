@@ -91,7 +91,7 @@ function byCodePoint(a: string, b: string): number {
   const left = [...a];
   const right = [...b];
   const shared = Math.min(left.length, right.length);
-  for (let i = 0; i < shared; i++) {
+  for (let i = 0; i < shared; i += 1) {
     const diff = left[i]!.codePointAt(0)! - right[i]!.codePointAt(0)!;
     if (diff !== 0) {
       return diff;

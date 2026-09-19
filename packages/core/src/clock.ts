@@ -73,7 +73,7 @@ export class TestClock implements Clock {
 
     // Loop, because a woken caller may immediately sleep again for a duration that is
     // already elapsed -- a retry whose backoff is shorter than the step just taken.
-    for (let guard = 0; guard < 1000; guard++) {
+    for (let guard = 0; guard < 1000; guard += 1) {
       const due = this.#sleepers.filter((s) => s.dueAt <= this.#nowMs);
       if (due.length === 0) {
         return;
