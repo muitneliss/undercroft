@@ -12,7 +12,7 @@ import type { Fetcher } from "@undercroft/connector-runtime";
 import { type ByteFetcher, describeError, type Logger, newRequestId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { UNAUTHENTICATED, bearerOf, jobDepsFor, serviceTokenOk } from "./bearer.ts";
 import { registerAnalyticsRoutes } from "./analytics.ts";
 import { registerConnectionRoutes } from "./connections.ts";
@@ -118,30 +118,56 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
   return app;
 }
 
-function registerLakeRecordsRoute(app: Hono, deps: LakeApiDeps): void {
-  app.post("/v1/lake/records", async (c) => {
-    const raw = await c.req.json().catch(() => null);
-    const parsed = LandRecordsRequest.safeParse(raw);
-    if (!parsed.success) {
-      return c.json(
+/**
+ * Read a batch off the wire, or say why it cannot be read.
+ *
+ * Two refusals, and they are different: a body that does not match the schema is a 400, and
+ * one that is simply too large is a 413 telling the caller to make more calls. Both are
+ * answered before the credential is even looked at, because neither depends on who is asking.
+ */
+type LandRecordsBody = ReturnType<typeof LandRecordsRequest.parse>;
+
+async function admitBatch(
+  c: Context,
+): Promise<{ ok: true; body: LandRecordsBody } | { ok: false; response: Response }> {
+  const raw = await c.req.json().catch(() => null);
+  const parsed = LandRecordsRequest.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: c.json(
         {
           code: "invalid_request",
           message: "request did not match the lake records schema",
           details: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`),
         },
         400,
-      );
-    }
-    const body = parsed.data;
+      ),
+    };
+  }
 
-    // Size ceiling on the decoded text. A batch larger than this makes more calls.
-    const bytes = body.records.reduce((sum, r) => sum + r.payloadText.length, 0);
-    if (bytes > MAX_BATCH_BYTES) {
-      return c.json(
+  // Size ceiling on the decoded text. A batch larger than this makes more calls.
+  const bytes = parsed.data.records.reduce((sum, r) => sum + r.payloadText.length, 0);
+  if (bytes > MAX_BATCH_BYTES) {
+    return {
+      ok: false,
+      response: c.json(
         { code: "payload_too_large", message: "batch exceeds the size limit", details: [] },
         413,
-      );
+      ),
+    };
+  }
+
+  return { ok: true, body: parsed.data };
+}
+
+function registerLakeRecordsRoute(app: Hono, deps: LakeApiDeps): void {
+  app.post("/v1/lake/records", async (c) => {
+    const admitted = await admitBatch(c);
+    if (!admitted.ok) {
+      return admitted.response;
     }
+    const { body } = admitted;
 
     const auth = await authenticate(deps.exec, bearerOf(c.req.header("authorization")), {
       serviceToken: deps.serviceToken,

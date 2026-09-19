@@ -234,6 +234,72 @@ function runContextFor(
   };
 }
 
+/**
+ * Read one entity, land it, load it into `raw`, and record what happened.
+ *
+ * `idsByEntity` is carried because a `batch-from` relation reads against the entity it
+ * references, and spec order is what guarantees the referenced one has already run.
+ */
+async function readOneEntity(
+  deps: RunDeps,
+  input: { source: string; tenantId: string; runId: string },
+  run: {
+    spec: ConnectorSpec;
+    entity: ConnectorSpec["entities"][number];
+    ctx: RunContext;
+    idsByEntity: Map<string, string[]>;
+    ledger: Ledger;
+  },
+): Promise<void> {
+  const { spec, entity, ctx, idsByEntity, ledger } = run;
+  const entityCtx: RunContext =
+    entity.request.kind === "batch-from"
+      ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }
+      : ctx;
+
+  const batch: RecordToLand[] = [];
+  for await (const record of readEntity(spec, entity, entityCtx)) {
+    batch.push({
+      entity: record.entity,
+      sourceRecordId: record.sourceRecordId,
+      sourceUpdatedAt: record.sourceUpdatedAt,
+      payloadText: record.payloadText,
+    });
+  }
+  idsByEntity.set(
+    entity.name,
+    batch.map((r) => r.sourceRecordId),
+  );
+  const landed = await landRecords(deps.lake, {
+    source: input.source,
+    tenantId: input.tenantId,
+    runId: input.runId,
+    records: batch,
+  });
+  const loaded = await loadStreamToRaw(deps.exec, deps.lake, {
+    source: input.source,
+    tenantId: input.tenantId,
+    entity: entity.name,
+  });
+  for (const result of landed.results) {
+    if (result.status === "failed") {
+      ledger.refusals.push({
+        entity: result.entity,
+        sourceRecordId: result.sourceRecordId,
+        reason: result.reason ?? "refused",
+      });
+    }
+  }
+  ledger.entities.push({
+    entity: entity.name,
+    landed: landed.created + landed.unchanged,
+    loadedCreated: loaded.created,
+    loadedChanged: loaded.changed,
+    loadedUnchanged: loaded.unchanged,
+    refused: landed.failed,
+  });
+}
+
 export async function runSpecIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string; runId: string },
@@ -257,51 +323,6 @@ export async function runSpecIngest(
       : spec.entities.filter((entity) => chosen.entities?.includes(entity.name) === true);
 
   for (const entity of entities) {
-    const entityCtx: RunContext =
-      entity.request.kind === "batch-from"
-        ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }
-        : ctx;
-
-    const batch: RecordToLand[] = [];
-    for await (const record of readEntity(spec, entity, entityCtx)) {
-      batch.push({
-        entity: record.entity,
-        sourceRecordId: record.sourceRecordId,
-        sourceUpdatedAt: record.sourceUpdatedAt,
-        payloadText: record.payloadText,
-      });
-    }
-    idsByEntity.set(
-      entity.name,
-      batch.map((r) => r.sourceRecordId),
-    );
-    const landed = await landRecords(deps.lake, {
-      source: input.source,
-      tenantId: input.tenantId,
-      runId: input.runId,
-      records: batch,
-    });
-    const loaded = await loadStreamToRaw(deps.exec, deps.lake, {
-      source: input.source,
-      tenantId: input.tenantId,
-      entity: entity.name,
-    });
-    for (const result of landed.results) {
-      if (result.status === "failed") {
-        ledger.refusals.push({
-          entity: result.entity,
-          sourceRecordId: result.sourceRecordId,
-          reason: result.reason ?? "refused",
-        });
-      }
-    }
-    ledger.entities.push({
-      entity: entity.name,
-      landed: landed.created + landed.unchanged,
-      loadedCreated: loaded.created,
-      loadedChanged: loaded.changed,
-      loadedUnchanged: loaded.unchanged,
-      refused: landed.failed,
-    });
+    await readOneEntity(deps, input, { spec, entity, ctx, idsByEntity, ledger });
   }
 }

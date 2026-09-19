@@ -33,6 +33,41 @@ export function registerConnectionRoutes(app: Hono, deps: LakeApiDeps): void {
   registerConnectionsRevokeRoute(app, deps);
 }
 
+/**
+ * What a refused credential means over HTTP.
+ *
+ * Three different answers, deliberately: a provider that rejected the token is a 400 the
+ * admin can act on, a provider we could not reach is a 502 that says try again, and anything
+ * else is a plain invalid request. Collapsing them would tell an operator to re-paste a token
+ * that was fine.
+ */
+/**
+ * What a refused credential means over HTTP.
+ *
+ * Three refusals, three statuses, because the remedies differ: a token the provider turned
+ * away is a 422 (the body was well-formed and wrong), a source nobody can probe is a 400, and
+ * a tenant that does not exist is a 404. Collapsing them would tell an operator to re-paste a
+ * token that was fine.
+ */
+function credentialRefusal(
+  reason: string,
+  source: string,
+): [{ code: string; message: string; details: string[] }, 422 | 400 | 404] {
+  if (reason === "credential-rejected") {
+    return [
+      { code: "credential_rejected", message: "the provider refused this credential", details: [] },
+      422,
+    ];
+  }
+  if (reason === "cannot-validate") {
+    return [
+      { code: "invalid_request", message: `${source} cannot be validated`, details: [] },
+      400,
+    ];
+  }
+  return [{ code: "invalid_request", message: "unknown tenant", details: [] }, 404];
+}
+
 function registerConnectionsCredentialRoute(app: Hono, deps: LakeApiDeps): void {
   app.post("/v1/connections/credential", async (c) => {
     if (!serviceTokenOk(deps, c)) {
@@ -62,30 +97,7 @@ function registerConnectionsCredentialRoute(app: Hono, deps: LakeApiDeps): void 
       parsed.data,
     );
     if (!outcome.ok) {
-      // Three refusals, three statuses, because the remedies differ: a tenant that does not
-      // exist, a token the provider turned away (422: the body was well-formed and wrong),
-      // and a source nobody can probe.
-      if (outcome.reason === "credential-rejected") {
-        return c.json(
-          {
-            code: "credential_rejected",
-            message: "the provider refused this credential",
-            details: [],
-          },
-          422,
-        );
-      }
-      if (outcome.reason === "cannot-validate") {
-        return c.json(
-          {
-            code: "invalid_request",
-            message: `${parsed.data.source} cannot be validated`,
-            details: [],
-          },
-          400,
-        );
-      }
-      return c.json({ code: "invalid_request", message: "unknown tenant", details: [] }, 404);
+      return c.json(...credentialRefusal(outcome.reason, parsed.data.source));
     }
     return c.json(
       {

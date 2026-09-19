@@ -184,21 +184,29 @@ async function harvestFor(
     : await harvestDrive(api, scope);
 }
 
-export async function runGoogleCollect(
+/**
+ * Land what was harvested: the records, the stream into `raw`, the documents, and the
+ * catalogue row for each document that actually arrived.
+ *
+ * One function because the ORDER is what matters -- the catalogue is written from what
+ * landing reported, never from what harvesting found, so a skipped or failed document
+ * cannot leave a row pointing at bytes that are not there.
+ */
+async function landHarvest(
   deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string; runId?: string },
-): Promise<CollectResult> {
-  // The caller that opened an `ops.run` row hands its id down; a caller with no ledger
-  // still gets a run id on every object it lands.
-  const runId = input.runId ?? newRunId();
-  const observedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
-
-  const scope = await requireScope(deps, input);
-
-  const harvest = await harvestFor(deps.api, scope);
-
-  const entity = scope.kind === "gmail" ? "messages" : "files";
-
+  input: { source: GoogleSource; tenantId: string },
+  run: {
+    harvest: GmailHarvest & { seenIds: readonly string[] | null };
+    entity: string;
+    runId: string;
+    observedAt: string;
+  },
+): Promise<{
+  landedRecords: Awaited<ReturnType<typeof landRecords>>;
+  loaded: Awaited<ReturnType<typeof loadStreamToRaw>>;
+  landedDocuments: Awaited<ReturnType<typeof landDocuments>>;
+}> {
+  const { harvest, entity, runId, observedAt } = run;
   const landedRecords = await landRecords(deps.lake, {
     source: input.source,
     tenantId: input.tenantId,
@@ -222,6 +230,30 @@ export async function runGoogleCollect(
   // bytes to point at, and a row claiming otherwise is worse than no row.
   const rows = catalogueRows(landedDocuments.results, harvest.documents, { observedAt, runId });
   await upsertDocuments(deps.exec, { source: input.source, tenantId: input.tenantId }, rows);
+  return { landedRecords, loaded, landedDocuments };
+}
+
+export async function runGoogleCollect(
+  deps: CollectDeps,
+  input: { source: GoogleSource; tenantId: string; runId?: string },
+): Promise<CollectResult> {
+  // The caller that opened an `ops.run` row hands its id down; a caller with no ledger
+  // still gets a run id on every object it lands.
+  const runId = input.runId ?? newRunId();
+  const observedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
+
+  const scope = await requireScope(deps, input);
+
+  const harvest = await harvestFor(deps.api, scope);
+
+  const entity = scope.kind === "gmail" ? "messages" : "files";
+
+  const { landedRecords, loaded, landedDocuments } = await landHarvest(deps, input, {
+    harvest,
+    entity,
+    runId,
+    observedAt,
+  });
 
   // Drive only. A Gmail message that stops matching a label selection has been relabelled,
   // not deleted, and tombstoning it would report a deletion that never happened.
