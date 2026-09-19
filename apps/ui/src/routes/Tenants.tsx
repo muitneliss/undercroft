@@ -121,7 +121,7 @@ export function Tenants(): React.JSX.Element {
 
             <form
               className="stack stack--tight"
-              onSubmit={(event) => {
+              onSubmit={(event): void => {
                 event.preventDefault();
                 const tenantId = idField.current?.value.trim() ?? "";
                 const displayName = nameField.current?.value.trim() ?? "";

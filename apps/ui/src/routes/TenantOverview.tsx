@@ -147,15 +147,15 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
                 key={connection.source}
                 connection={connection}
                 busy={startOAuth.isPending || disconnect.isPending || !isAdmin}
-                onConnect={() => {
+                onConnect={(): void => {
                   startOAuth.mutate({ tenantId, source: connection.source });
                 }}
-                onScope={() => {
+                onScope={(): void => {
                   window.location.assign(
                     `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
                   );
                 }}
-                onDisconnect={() => {
+                onDisconnect={(): void => {
                   disconnect.mutate({ tenantId, source: connection.source });
                 }}
               />

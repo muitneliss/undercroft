@@ -68,7 +68,13 @@ const RUN_HEAD = {
   unclassified: "scopePicker.labelsUnclassified",
 } as const;
 
-export function ScopePicker({ tenantId, source }: { tenantId: string; source: Source }) {
+export function ScopePicker({
+  tenantId,
+  source,
+}: {
+  tenantId: string;
+  source: Source;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const utils = trpc.useUtils();
@@ -182,7 +188,7 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
                   <button
                     type="button"
                     className="plate plate--small"
-                    onClick={() => {
+                    onClick={(): void => {
                       clearLabels(source);
                     }}
                   >
@@ -198,7 +204,7 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
               type="button"
               className="plate"
               disabled={config.data === undefined || config.data === null}
-              onClick={() => {
+              onClick={(): void => {
                 // Null when no ingestion client is configured; the button is disabled then,
                 // and this guard is what makes that a type-level fact rather than a habit.
                 const picker = config.data;
@@ -263,7 +269,7 @@ function LabelIndex({
   source: Source;
   items: readonly BrowsedLabel[];
   chosen: readonly string[];
-}) {
+}): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((s) => s.locale);
   const typed = useUiStore((s) => s.scopeFilter);
@@ -289,7 +295,7 @@ function LabelIndex({
             value={filter}
             placeholder={t("scopePicker.filterPlaceholder")}
             aria-label={t("scopePicker.filterLabel")}
-            onChange={(event) => {
+            onChange={(event): void => {
               setFilter(source, event.target.value);
             }}
           />
@@ -317,7 +323,7 @@ function LabelIndex({
                   <input
                     type="checkbox"
                     checked={chosen.includes(label.name)}
-                    onChange={() => {
+                    onChange={(): void => {
                       toggleLabel(source, label.name);
                     }}
                   />

@@ -60,7 +60,7 @@ export function DisplayNameForm({
 
       <form
         className="stack stack--tight"
-        onSubmit={(event) => {
+        onSubmit={(event): void => {
           event.preventDefault();
           rename.mutate({ tenantId, displayName: nameField.current?.value.trim() ?? "" });
         }}

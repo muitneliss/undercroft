@@ -110,7 +110,8 @@ export async function resolveToken(
   deps: Pick<RunDeps, "exec" | "env" | "refresher" | "transactor">,
   input: { source: string; tenantId: string },
 ): Promise<string> {
-  const run: Transactor = deps.transactor ?? ((fn) => fn(deps.exec));
+  const run: Transactor =
+    deps.transactor ?? (<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> => fn(deps.exec));
   try {
     return await run((tx) =>
       accessToken(tx, input.tenantId, input.source, {

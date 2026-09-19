@@ -127,7 +127,7 @@ export function Book({
             <button
               className="plate plate--small"
               type="button"
-              onClick={() => signOut.mutate()}
+              onClick={(): void => signOut.mutate()}
               disabled={signOut.isPending}
             >
               {t("app.signOut")}

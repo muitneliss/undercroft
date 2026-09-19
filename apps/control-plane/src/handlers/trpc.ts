@@ -187,7 +187,7 @@ export const superadminProcedure = authedProcedure.use(({ ctx, next }) => {
 });
 
 /** Require at least `min` authority. FORBIDDEN here is correct: membership is established. */
-export function requireRole(min: Role) {
+export function requireRole(min: Role): ReturnType<typeof tenantProcedure.use> {
   return tenantProcedure.use(({ ctx, next }) => {
     if (!outranks(ctx.role, min)) {
       // Worded, because the UI shows this message to the caller verbatim. The two refusals

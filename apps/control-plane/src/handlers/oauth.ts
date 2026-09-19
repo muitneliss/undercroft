@@ -34,7 +34,11 @@ function scopePath(tenantId: string, source: string): string {
   return `/tenants/${encodeURIComponent(tenantId)}/connect/${encodeURIComponent(source)}/scope`;
 }
 
-function failurePath(tenantId: string | undefined, source: string | undefined, reason: string) {
+function failurePath(
+  tenantId: string | undefined,
+  source: string | undefined,
+  reason: string,
+): string {
   const base = tenantId === undefined ? "/tenants" : `/tenants/${encodeURIComponent(tenantId)}`;
   const params = new URLSearchParams({ connect: "failed", reason });
   if (source !== undefined) {

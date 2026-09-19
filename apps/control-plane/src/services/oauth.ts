@@ -147,7 +147,7 @@ export async function startConsent(
 
   const state = randomToken();
   const pkce = createPkce();
-  const now = (deps.now ?? (() => new Date()))();
+  const now = (deps.now ?? ((): Date => new Date()))();
 
   await startHandshake(deps.exec, {
     stateSha256: hashToken(state),

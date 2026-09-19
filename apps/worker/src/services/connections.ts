@@ -65,7 +65,8 @@ export async function storeCredential(
     return { ok: false, reason: "unknown-tenant" };
   }
 
-  const run: Transactor = deps.transactor ?? ((fn) => fn(deps.exec));
+  const run: Transactor =
+    deps.transactor ?? (<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> => fn(deps.exec));
   await run(async (tx) => {
     await upsertConnection(tx, {
       tenantId: input.tenantId,

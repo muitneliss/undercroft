@@ -71,7 +71,7 @@ export async function runGoogleCollect(
   input: { source: GoogleSource; tenantId: string },
 ): Promise<CollectResult> {
   const runId = newRunId();
-  const observedAt = (deps.now ?? (() => new Date()))().toISOString();
+  const observedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
 
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);

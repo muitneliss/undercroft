@@ -216,6 +216,24 @@
       "linter": {
         "rules": {
           "nursery": {
+            // 41 of its 58 findings are "the parameter doesn't have a type defined", on
+            // callback parameters that are CONTEXTUALLY typed -- `write(level, event, extra)`
+            // inside `const logger: Logger = {...}`, `fetch: (input, init)` inside
+            // `realDeps: Deps`, every Zustand action against `UiState`. Annotating them
+            // restates the interface the object is already being checked against, and a
+            // restatement is a second copy that can drift from the first.
+            //
+            // The half worth keeping is return types, and that is not lost: 12 of its 13
+            // return-type findings are reported at the same lines by `useExplicitReturnType`,
+            // which stays ON and is enforced.
+            //
+            // Five findings fall outside that overlap. `WHEEL` in `SignIn.tsx` was a genuine
+            // missing annotation and is fixed. The other four are tRPC's unnameable generics
+            // -- `export const router = t.router`, `t.procedure`, and the `errorFormatter`
+            // whose return is tRPC's own error shape -- where writing the type means naming
+            // an inferred generic the library does not export as a usable name. That is why
+            // tRPC's own documentation writes them exactly like this.
+            "useExplicitType": "off",
             // There is no Playwright in this repo. The rule is nursery rather than
             // playwright-domain, so `"playwright": "none"` above does not reach it, and it
             // fires on ordinary `describe`-shaped calls -- a Drive API `describe` request and

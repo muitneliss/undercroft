@@ -115,7 +115,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/lake"
         element={
           <Opened division="lake" signedInAs={signedInAs}>
-            {(tenantId) => <Lake tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => <Lake tenantId={tenantId} />}
           </Opened>
         }
       />
@@ -123,7 +123,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/people"
         element={
           <Opened division="people" signedInAs={signedInAs}>
-            {(tenantId) => <People tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => <People tenantId={tenantId} />}
           </Opened>
         }
       />
@@ -131,7 +131,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId"
         element={
           <Opened division="sources" signedInAs={signedInAs}>
-            {(tenantId) => <TenantOverview tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => <TenantOverview tenantId={tenantId} />}
           </Opened>
         }
       />

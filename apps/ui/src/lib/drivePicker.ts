@@ -60,10 +60,10 @@ function loadScript(src: string): Promise<void> {
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
-    script.onload = () => {
+    script.onload = (): void => {
       resolve();
     };
-    script.onerror = () => {
+    script.onerror = (): void => {
       reject(new Error(`could not load ${src}`));
     };
     document.head.append(script);
