@@ -33,7 +33,7 @@ export const en = {
     noOpenInvitation: "No open invitation with that id.",
     requiresRole: "This action requires the {{role}} role.",
     requiresSuperadmin: "This action requires platform administrator access.",
-    tenantExists: "The reference {{tenantId}} is already in use by another customer.",
+    tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
     scopeInsufficient:

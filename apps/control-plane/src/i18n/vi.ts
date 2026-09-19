@@ -52,7 +52,7 @@ export const vi = {
      * has to -- so the sentence points at a person rather than at a setting.
      */
     requiresSuperadmin: "Thao tác này cần quyền quản trị toàn hệ thống.",
-    tenantExists: "Mã tham chiếu {{tenantId}} đã được dùng cho một khách hàng khác.",
+    tenantExists: "Mã khách hàng {{tenantId}} đã được dùng cho một khách hàng khác.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**

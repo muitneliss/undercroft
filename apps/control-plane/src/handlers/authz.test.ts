@@ -381,3 +381,54 @@ describe("a customer reference is refused rather than reinterpreted", () => {
     ).toBe("BAD_REQUEST");
   });
 });
+
+describe("a customer can be retitled, but never re-identified", () => {
+  it("an admin corrects the display name and the id is left alone", async () => {
+    // The pairing that matters: the name a person reads is repairable, the id the lake
+    // writes under is not. Asserting both in one test is what proves they were separated.
+    const user = await seedUser("admin@example.test");
+    await seedMembership("CASE-0001", user, "admin");
+    const admin = caller({ userId: user, email: "admin@example.test" });
+
+    const renamed = await admin.tenants.rename({
+      tenantId: "CASE-0001",
+      displayName: "Acme Holdings",
+    });
+
+    expect(renamed.displayName).toBe("Acme Holdings");
+    expect(renamed.id).toBe("CASE-0001");
+  });
+
+  it("a member is refused, so the name is not a thing any signed-in colleague can change", async () => {
+    const user = await seedUser("member@example.test");
+    await seedMembership("CASE-0001", user, "member");
+
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "member@example.test" }).tenants.rename({
+          tenantId: "CASE-0001",
+          displayName: "Renamed By A Member",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+
+    // Aliased rather than typed as `display_name`: the column is snake_case and the lint
+    // rule that governs identifiers here is not worth a file-wide suppression for one row.
+    const { rows } = await db.query<{ name: string }>(
+      'SELECT display_name AS "name" FROM ops.tenant WHERE id = $1',
+      ["CASE-0001"],
+    );
+    expect(rows[0]!.name).toBe("");
+  });
+
+  it("an empty name falls back to the id rather than blanking the row", async () => {
+    const user = await seedUser("admin@example.test");
+    await seedMembership("CASE-0001", user, "admin");
+    const admin = caller({ userId: user, email: "admin@example.test" });
+    await admin.tenants.rename({ tenantId: "CASE-0001", displayName: "Acme" });
+
+    const cleared = await admin.tenants.rename({ tenantId: "CASE-0001", displayName: "" });
+
+    expect(cleared.displayName).toBe("CASE-0001");
+  });
+});

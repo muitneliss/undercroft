@@ -76,6 +76,33 @@ export async function createTenant(
 }
 
 /**
+ * Change a tenant's display name. The id is never touched.
+ *
+ * The `SET` list names one column deliberately. `ops.tenant.id` becomes an S3 key prefix in
+ * the raw lake, and the lake is create-only -- an object already written under
+ * `records/{source}/{id}/...` cannot be moved, so changing the id here would strand every
+ * byte already landed under the old one while new data went somewhere else. The display name
+ * has no such reach: it lives in this column and nowhere else.
+ *
+ * Returns the updated row, or `null` when no tenant has that id. `RETURNING` rather than a
+ * rowcount because the caller reports the new name back to a form, and reading it from the
+ * database is what makes the answer the truth rather than an echo of the request.
+ */
+export async function renameTenant(
+  exec: SqlExecutor,
+  tenantId: string,
+  displayName: string,
+): Promise<Tenant | null> {
+  const { rows } = await exec.query<{ id: string; display_name: string }>(
+    `UPDATE ops.tenant SET display_name = $2 WHERE id = $1
+     RETURNING id, display_name`,
+    [tenantId, displayName],
+  );
+  const row = rows[0];
+  return row === undefined ? null : { id: row.id, displayName: row.display_name };
+}
+
+/**
  * Every tenant on the platform.
  *
  * The counterpart to `membership.listForUser`, and the ONLY query in the control plane that

@@ -134,6 +134,39 @@ export const appRouter = router({
 
         return result.tenant;
       }),
+
+    /**
+     * Correct a customer's display name. Tenant admin, and the id is not an input.
+     *
+     * `requireRole("admin")` rather than `superadminProcedure`, which is the opposite axis to
+     * `create` above and deliberately so: bringing a customer into existence is platform
+     * authority, but retitling one that already exists is an act *inside* that customer, and
+     * a tenant admin is exactly who that belongs to. A superadmin still reaches it, because
+     * `authorityIn` resolves them to `admin` in any tenant that exists.
+     *
+     * There is no `tenantId` in the body and there never will be. The id is an S3 key prefix
+     * in the raw lake and the lake is create-only, so a "rename" of it would strand every
+     * object already written under the old prefix. Leaving it out of the input is what makes
+     * that impossible to ask for rather than merely refused.
+     *
+     * An empty name falls back to the id, matching `create`: the list renders
+     * `displayName || id`, and a blank row is not a name.
+     */
+    rename: requireRole("admin")
+      .input(z.object({ displayName: z.string().trim().max(200) }))
+      .mutation(async ({ ctx, input }) => {
+        const renamed = await tenants.rename(ctx.exec, {
+          tenantId: ctx.tenantId,
+          displayName: input.displayName || ctx.tenantId,
+          actor: ctx.user.email,
+        });
+
+        if (renamed === null) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+
+        return renamed;
+      }),
   }),
 
   connections: router({
