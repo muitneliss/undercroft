@@ -83,5 +83,10 @@ export const vi = {
     ingestNotConfigured:
       "Bản triển khai này chưa được cấu hình để kết nối tài khoản Google. Hãy báo người quản trị hệ thống.",
     sourceNotConnectable: "Nguồn {{source}} chưa kết nối tự động được.",
+    /** Names the state rather than a fault: the run the reader wants is already on screen. */
+    runInProgress: "Nguồn {{source}} đang được đồng bộ. Hãy đợi lần chạy này xong.",
+    runNotStarted: "Chưa chạy được đồng bộ. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    /** The worker answered and said no: a source not connected, or one this build cannot run. */
+    runRefused: "Dịch vụ xử lý từ chối chạy đồng bộ cho nguồn {{source}}.",
   },
 };

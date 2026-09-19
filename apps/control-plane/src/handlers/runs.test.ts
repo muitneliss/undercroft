@@ -15,6 +15,8 @@ import { migrate } from "@undercroft/db";
 import { closeRun, openRun, recordEntities, recordRefusals } from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
+import { messages } from "../i18n/index.ts";
+import { InMemoryWorkerClient, type WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
 
@@ -34,7 +36,7 @@ async function seedMember(email: string, role: Role, tenantId: string): Promise<
   return userId;
 }
 
-function caller(userId: string, email: string) {
+function caller(userId: string, email: string, worker: WorkerClient | null = null) {
   const ctx: Context = {
     exec: db,
     user: { userId, email },
@@ -44,10 +46,22 @@ function caller(userId: string, email: string) {
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
-    worker: null,
+    worker,
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);
+}
+
+async function refusal(fn: () => Promise<unknown>): Promise<{ code: string; message: string }> {
+  try {
+    await fn();
+  } catch (error) {
+    if (error instanceof TRPCError) {
+      return { code: error.code, message: error.message };
+    }
+    throw error;
+  }
+  throw new Error("expected a refusal");
 }
 
 async function errorCode(fn: () => Promise<unknown>): Promise<string> {
@@ -143,5 +157,85 @@ describe("runs.get", () => {
         caller(member, "m@example.test").runs.get({ tenantId: "CASE-0042", runId: "r-other" }),
       ),
     ).toBe("NOT_FOUND");
+  });
+});
+
+describe("runs.trigger", () => {
+  it("an admin starts a run and gets its id; the worker was asked as the admin's uuid", async () => {
+    const worker = new InMemoryWorkerClient();
+    const admin = await seedMember("a@example.test", "admin", "CASE-0042");
+    const started = await caller(admin, "a@example.test", worker).runs.trigger({
+      tenantId: "CASE-0042",
+      source: "hubspot",
+    });
+    expect(started.runId).toBe("run-mem-1");
+    expect(worker.triggered).toEqual([
+      { source: "hubspot", tenantId: "CASE-0042", triggeredBy: admin },
+    ]);
+    const { rows } = await db.query<{ action: string; actor: string }>(
+      "SELECT action, actor FROM ops.audit_log WHERE action = 'runs.trigger'",
+    );
+    expect(rows).toEqual([{ action: "runs.trigger", actor: "a@example.test" }]);
+  });
+
+  it("a member may not: starting a read of a customer's accounts is an admin's authority", async () => {
+    const member = await seedMember("m@example.test", "member", "CASE-0042");
+    expect(
+      await errorCode(() =>
+        caller(member, "m@example.test", new InMemoryWorkerClient()).runs.trigger({
+          tenantId: "CASE-0042",
+          source: "hubspot",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("a run already in progress is CONFLICT, worded, and nothing is audited", async () => {
+    const admin = await seedMember("a@example.test", "admin", "CASE-0042");
+    const worker = new InMemoryWorkerClient().runningAs("run-held");
+    const refused = await refusal(() =>
+      caller(admin, "a@example.test", worker).runs.trigger({
+        tenantId: "CASE-0042",
+        source: "hubspot",
+      }),
+    );
+    expect(refused.code).toBe("CONFLICT");
+    expect(refused.message).toBe(
+      messages(DEFAULT_LOCALE)("error.runInProgress", { source: "hubspot" }),
+    );
+    const { rows } = await db.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM ops.audit_log WHERE action = 'runs.trigger'",
+    );
+    expect(rows[0]?.n).toBe("0");
+  });
+
+  it("a worker that did not answer is PRECONDITION_FAILED; one that refused is BAD_REQUEST", async () => {
+    const admin = await seedMember("a@example.test", "admin", "CASE-0042");
+    const down = await refusal(() =>
+      caller(
+        admin,
+        "a@example.test",
+        new InMemoryWorkerClient().failing("unreachable"),
+      ).runs.trigger({ tenantId: "CASE-0042", source: "hubspot" }),
+    );
+    expect(down.code).toBe("PRECONDITION_FAILED");
+    expect(down.message).toBe(messages(DEFAULT_LOCALE)("error.runNotStarted"));
+
+    const refused = await refusal(() =>
+      caller(admin, "a@example.test", new InMemoryWorkerClient().failing("refused")).runs.trigger({
+        tenantId: "CASE-0042",
+        source: "hubspot",
+      }),
+    );
+    expect(refused.code).toBe("BAD_REQUEST");
+  });
+
+  it("with no worker configured the answer is PRECONDITION_FAILED, not an outage", async () => {
+    const admin = await seedMember("a@example.test", "admin", "CASE-0042");
+    expect(
+      await errorCode(() =>
+        caller(admin, "a@example.test").runs.trigger({ tenantId: "CASE-0042", source: "hubspot" }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
   });
 });

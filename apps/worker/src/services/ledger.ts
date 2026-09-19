@@ -12,12 +12,19 @@ import type { SqlExecutor } from "@undercroft/db";
 import {
   claimExternalRun,
   closeAbandoned,
+  findRunById,
   recordExternalBatch,
   recordRefusals,
+  type Run,
   type RunRefusal,
 } from "@undercroft/db/repos";
 
 import type { LandResult } from "./land.ts";
+
+/** One run by id, for an operator watching a verb they started. `null` when there is none. */
+export function findRun(exec: SqlExecutor, runId: string): Promise<Run | null> {
+  return findRunById(exec, runId);
+}
 
 /**
  * Take an external caller's run id, or refuse it.

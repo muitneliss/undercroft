@@ -45,5 +45,9 @@ export const en = {
     ingestNotConfigured:
       "This deployment is not set up to connect Google accounts. Tell whoever administers it.",
     sourceNotConnectable: "{{source}} cannot be connected automatically yet.",
+    runInProgress: "{{source}} is being synced right now. Wait for that run to finish.",
+    runNotStarted:
+      "The sync could not be started. The processing service did not answer; try again in a few minutes.",
+    runRefused: "The processing service refused to sync {{source}}.",
   },
 };

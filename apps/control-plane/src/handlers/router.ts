@@ -406,11 +406,49 @@ export const appRouter = router({
         return run;
       }),
 
-    // Triggering a run proxies to the worker's verb allowlist with the same bearer token
-    // Kestra uses; the control plane gains no wider privilege than the scheduler.
-    trigger: requireRole("member")
+    /**
+     * Run now. Admin-only: starting a read of a customer's accounts is the same authority
+     * as connecting them. The call proxies to the worker's verb allowlist with the same
+     * bearer token Kestra uses, so the control plane gains no wider privilege than the
+     * scheduler.
+     *
+     * Three refusals, three sentences: a run already in progress is CONFLICT and names it;
+     * a worker that did not answer is PRECONDITION_FAILED; a worker that answered no is
+     * BAD_REQUEST. One sentence for all three would send an admin to wait for a service that
+     * is fine, on the screen where the run they wanted is already visible.
+     */
+    trigger: requireRole("admin")
       .input(z.object({ source: z.string().min(1) }))
-      .mutation(({ input }) => ({ triggered: true, source: input.source })),
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.runNotStarted"),
+          });
+        }
+        const outcome = await runs.trigger(ctx.exec, ctx.worker, {
+          tenantId: ctx.tenantId,
+          source: input.source,
+          actor: ctx.user.email,
+          actorId: ctx.user.userId,
+        });
+        if (outcome.ok) {
+          return { runId: outcome.runId };
+        }
+        if (outcome.reason === "in-progress") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: messages(ctx.locale)("error.runInProgress", { source: input.source }),
+          });
+        }
+        throw new TRPCError({
+          code: outcome.reason === "unreachable" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
+          message: messages(ctx.locale)(
+            outcome.reason === "unreachable" ? "error.runNotStarted" : "error.runRefused",
+            { source: input.source },
+          ),
+        });
+      }),
   }),
 
   /**

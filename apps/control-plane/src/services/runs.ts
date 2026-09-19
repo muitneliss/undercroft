@@ -26,6 +26,8 @@ import {
   SOURCE_OF_TRANSFORM,
   stepsFor,
 } from "@undercroft/db/repos";
+import { record as recordAudit } from "../repos/auditLog.ts";
+import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
 export type RunKind = "ingest" | "transform" | "build" | "lake-api";
 
@@ -103,6 +105,35 @@ export async function list(
     items.map((r) => r.id),
   );
   return { items: items.map((run) => present(run, entities.get(run.id) ?? [])), nextCursor };
+}
+
+/**
+ * Start an ingest for one source, on an admin's word.
+ *
+ * The worker opens the run and answers with its id; this records who asked. The audit row
+ * names the source and the run, and the actor's address -- `ops.audit_log` is the one table
+ * where an address is what a trail is for. An outcome other than `ok` is returned for the
+ * handler to word; nothing is audited for a run that did not start.
+ */
+export async function trigger(
+  exec: SqlExecutor,
+  worker: WorkerClient,
+  input: { tenantId: string; source: string; actor: string; actorId: string },
+): Promise<TriggerOutcome> {
+  const outcome = await worker.triggerIngest({
+    source: input.source,
+    tenantId: input.tenantId,
+    triggeredBy: input.actorId,
+  });
+  if (outcome.ok) {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "runs.trigger",
+      detail: JSON.stringify({ source: input.source, runId: outcome.runId }),
+    });
+  }
+  return outcome;
 }
 
 export async function get(

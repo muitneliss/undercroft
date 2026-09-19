@@ -19,39 +19,54 @@ import type { ApiError } from "@undercroft/contracts";
 import { ConnectorError, HttpError } from "@undercroft/core";
 
 import { ScopeNotChosen } from "../services/google/collect.ts";
-import { RunInProgress } from "../services/ingest.ts";
+import { ConnectionUnusable, RunInProgress, UnknownTenant } from "../services/ingest.ts";
 
 const INTERNAL: Failure = {
   status: 500,
   code: "internal_error",
   message: "the worker could not complete the request",
+  details: [],
 };
 
 export interface Failure {
-  readonly status: 409 | 502 | 500;
+  readonly status: 404 | 409 | 502 | 500;
   readonly code: ApiError["code"];
   readonly message: string;
+  /** Structured detail a caller acts on -- the id of the run in progress -- never a payload. */
+  readonly details: string[];
 }
 
 export function failureOf(error: unknown): Failure {
   if (error instanceof ScopeNotChosen) {
-    return { status: 409, code: "scope_not_chosen", message: error.message };
+    return { status: 409, code: "scope_not_chosen", message: error.message, details: [] };
   }
-  // The message names the run in progress, which is what a caller wanting to watch it needs.
+  // The id of the run in progress rides in `details`, so a caller can watch it without
+  // parsing a sentence.
   if (error instanceof RunInProgress) {
-    return { status: 409, code: "run_in_progress", message: error.message };
+    return {
+      status: 409,
+      code: "run_in_progress",
+      message: error.message,
+      details: [error.runId],
+    };
+  }
+  if (error instanceof ConnectionUnusable) {
+    return { status: 409, code: "credential_unusable", message: error.message, details: [] };
+  }
+  if (error instanceof UnknownTenant) {
+    return { status: 404, code: "not_found", message: error.message, details: [] };
   }
   // Matched by name, not by class. The registry error lives in `@undercroft/db/repos`, which
   // a handler may not import even for a type (`layer-handler-no-repo`), and the class sets
   // its own `name` so that a caller two layers up can recognise it without reaching down.
   if (error instanceof Error && error.name === "ConnectionRegistryError") {
-    return { status: 409, code: "credential_unusable", message: error.message };
+    return { status: 409, code: "credential_unusable", message: error.message, details: [] };
   }
   // A source that failed mid-read is the source's fault, not ours: 502, with the message,
   // because a `ConnectorError` carries the count that tells a credential problem from a
   // transient one and nothing else.
   if (error instanceof ConnectorError || error instanceof HttpError) {
-    return { status: 502, code: "source_failed", message: error.message };
+    return { status: 502, code: "source_failed", message: error.message, details: [] };
   }
   return INTERNAL;
 }

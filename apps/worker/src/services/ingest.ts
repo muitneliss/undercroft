@@ -34,6 +34,7 @@
 // biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: One verb, one file. A run's opening, the two collector paths and its closing are one sequential procedure a reader follows top to bottom; splitting it by length would put the ledger in a different file from the run it records.
 // biome-ignore-all lint/style/noParameterProperties: TypeScript parameter properties in one error class. The alternative is declaring each field and then assigning it in the constructor, which is the same information written twice.
+// biome-ignore-all lint/style/noExcessiveClassesPerFile: The three refusals a start can make -- a run in progress, no such tenant, no usable grant -- are one class each so the error boundary can tell them apart by `instanceof`, and they belong beside the function that raises them rather than in a file of their own.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -57,6 +58,7 @@ import {
   closeRun,
   ConnectionRegistryError,
   type Credential,
+  getConnection,
   openRun,
   recordEntities,
   recordRefusals,
@@ -64,6 +66,7 @@ import {
   type RunRefusal,
   type RunTrigger,
   setStatus,
+  tenantExists,
 } from "@undercroft/db/repos";
 import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
@@ -149,6 +152,29 @@ export class RunInProgress extends UndercroftError {
   }
 }
 
+/** No such tenant. Named so the handler can answer 404 rather than a constraint violation. */
+export class UnknownTenant extends UndercroftError {
+  constructor(readonly tenantId: string) {
+    super(`tenant ${JSON.stringify(tenantId)} does not exist`);
+  }
+}
+
+/**
+ * The source has no usable grant, so no run is opened for it.
+ *
+ * Refused BEFORE a row exists, deliberately: a source nobody has connected would otherwise
+ * fail on every tick and fill the ledger with runs that could never have read anything.
+ */
+export class ConnectionUnusable extends UndercroftError {
+  constructor(
+    readonly source: string,
+    readonly tenantId: string,
+    readonly status: string,
+  ) {
+    super(`${source} for tenant ${JSON.stringify(tenantId)} is ${status}, not connected`);
+  }
+}
+
 /**
  * A usable access token, refreshing under a real row lock if one is close to expiry.
  *
@@ -213,6 +239,30 @@ export async function runIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string } & RunOpening,
 ): Promise<IngestResult> {
+  const started = await startIngest(deps, input);
+  return started.done;
+}
+
+/**
+ * Open the run and start it, returning its id before it has read a byte.
+ *
+ * The split exists for the HTTP verb: a run is minutes, an open connection is not the
+ * place to hold one, and the caller wants the id to watch it by. `done` settles when the
+ * run has been closed in the ledger, whichever way -- a failure is recorded and then
+ * rethrown, so a caller that awaits it learns both.
+ *
+ * Everything that can refuse does so BEFORE a row is opened: an unknown tenant, a source
+ * with no usable grant, a run already in progress. A refused start leaves no run behind.
+ */
+export async function startIngest(
+  deps: RunDeps,
+  input: { source: string; tenantId: string } & RunOpening,
+): Promise<{ runId: string; done: Promise<IngestResult> }> {
+  if (!(await tenantExists(deps.exec, input.tenantId))) {
+    throw new UnknownTenant(input.tenantId);
+  }
+  await requireUsableConnection(deps, input);
+
   const runId = newRunId();
   const trigger = input.trigger ?? "schedule";
   const opened = await openRun(deps.exec, {
@@ -229,6 +279,18 @@ export async function runIngest(
   const log = deps.log?.child({ runId, tenantId: input.tenantId, source: input.source });
   log?.info("run_opened", { verb: "ingest", trigger });
 
+  return {
+    runId,
+    done: execute(deps, { source: input.source, tenantId: input.tenantId, runId }, log),
+  };
+}
+
+async function execute(
+  deps: RunDeps,
+  input: { source: string; tenantId: string; runId: string },
+  log: Logger | undefined,
+): Promise<IngestResult> {
+  const { runId } = input;
   const ledger: Ledger = { entities: [], refusals: [] };
   try {
     if (isGoogleSource(input.source)) {
@@ -238,7 +300,7 @@ export async function runIngest(
         ledger,
       );
     } else {
-      await runSpecIngest(deps, { ...input, runId }, ledger);
+      await runSpecIngest(deps, input, ledger);
     }
     await settle(deps.exec, runId, ledger, { status: "ok" });
     log?.info("run_closed", { status: "ok", ...totals(ledger) });
@@ -250,6 +312,30 @@ export async function runIngest(
   }
 
   return { runId, source: input.source, entities: ledger.entities, refusals: ledger.refusals };
+}
+
+/**
+ * A source that authenticates needs a connected grant before a run makes sense.
+ *
+ * A spec with `auth: none` needs no connection at all and is not asked for one; every other
+ * source -- a Google collector, a bearer or OAuth spec -- must have a row that says
+ * `connected`. Anything else (`disconnected`, `expired`, `error`, or no row) is refused
+ * here, so the ledger never fills with runs that could not have read anything.
+ */
+async function requireUsableConnection(
+  deps: Pick<RunDeps, "exec" | "specsDir">,
+  input: { source: string; tenantId: string },
+): Promise<void> {
+  if (!isGoogleSource(input.source)) {
+    const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
+    if (spec.auth.kind === "none") {
+      return;
+    }
+  }
+  const connection = await getConnection(deps.exec, input.tenantId, input.source);
+  if (connection === null || connection.status !== "connected") {
+    throw new ConnectionUnusable(input.source, input.tenantId, connection?.status ?? "absent");
+  }
 }
 
 function totals(ledger: Ledger): {

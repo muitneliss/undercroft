@@ -33,6 +33,7 @@ export {
   closeRun,
   encodeCursor,
   entitiesForRuns,
+  findRunById,
   getRun,
   listRuns,
   MAX_ERROR_CHARS,

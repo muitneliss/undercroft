@@ -13,6 +13,7 @@
  * `InMemoryWorkerClient` without a socket.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
 // biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
@@ -50,6 +51,16 @@ export interface StoreCredentialInput {
   readonly credential: CredentialInput;
 }
 
+/**
+ * Starting a run has one more answer than the other verbs: "already running, as this id".
+ * Not a failure to retry and not a refusal to word as one -- the person pressing Run now
+ * wants to watch the run that exists.
+ */
+export type TriggerOutcome =
+  | { readonly ok: true; readonly runId: string }
+  | { readonly ok: false; readonly reason: "in-progress"; readonly runId: string }
+  | { readonly ok: false; readonly reason: WorkerFailure };
+
 export interface WorkerClient {
   storeCredential: (input: StoreCredentialInput) => Promise<WorkerOutcome<StoreCredentialResponse>>;
   browseScope: (input: {
@@ -61,6 +72,12 @@ export interface WorkerClient {
     source: string;
     tenantId: string;
   }) => Promise<WorkerOutcome<RevokeConnectionResponse>>;
+  /** Start an ingest for one source. `triggeredBy` is an `app_user` uuid, never an address. */
+  triggerIngest: (input: {
+    source: string;
+    tenantId: string;
+    triggeredBy: string;
+  }) => Promise<TriggerOutcome>;
 }
 
 /**
@@ -85,6 +102,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** The worker's answer for a credential Google refused. Every other status is a refusal. */
 const FORBIDDEN = 403;
+/** The worker's answer for a run already in progress, whose body names it. */
+const CONFLICT = 409;
 
 export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const doFetch = config.fetch ?? globalThis.fetch;
@@ -121,10 +140,55 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     }
   }
 
+  /**
+   * The one call whose refusal body IS read: a 409 `run_in_progress` carries the running
+   * run's id in `details`, which is a run id and never a token. Every other status is
+   * handled as `post` handles it.
+   */
+  async function trigger(input: {
+    source: string;
+    tenantId: string;
+    triggeredBy: string;
+  }): Promise<TriggerOutcome> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await doFetch(`${config.baseUrl}/v1/runs/ingest`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${config.triggerToken}`,
+        },
+        body: JSON.stringify({ ...input, trigger: "manual", chain: true }),
+        signal: controller.signal,
+      });
+      if (response.status === CONFLICT) {
+        const body = (await response.json().catch(() => null)) as {
+          code?: unknown;
+          details?: unknown;
+        } | null;
+        if (body?.code === "run_in_progress" && Array.isArray(body.details)) {
+          return { ok: false, reason: "in-progress", runId: String(body.details[0] ?? "") };
+        }
+        return { ok: false, reason: "refused" };
+      }
+      if (!response.ok) {
+        return { ok: false, reason: "refused" };
+      }
+      const started = (await response.json()) as { runId: string };
+      return { ok: true, runId: started.runId };
+    } catch {
+      return { ok: false, reason: "unreachable" };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
     browseScope: (input) => post("/v1/connections/browse", input),
     revokeConnection: (input) => post("/v1/connections/revoke", input),
+    triggerIngest: trigger,
   };
 }
 
@@ -138,9 +202,17 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
 export class InMemoryWorkerClient implements WorkerClient {
   readonly stored: StoreCredentialInput[] = [];
   readonly revoked: { source: string; tenantId: string }[] = [];
+  readonly triggered: { source: string; tenantId: string; triggeredBy: string }[] = [];
   #labels: BrowseScopeResponse["items"] = [];
   #failWith: WorkerFailure | null = null;
+  #runningAs: string | null = null;
   #exec: SqlExecutor | null = null;
+
+  /** Answer every trigger with "already running as `runId`", the worker's 409. */
+  runningAs(runId: string): this {
+    this.#runningAs = runId;
+    return this;
+  }
 
   /**
    * Honour the side effect the real worker has: a stored credential leaves a connected
@@ -211,6 +283,21 @@ export class InMemoryWorkerClient implements WorkerClient {
     }
     this.revoked.push(input);
     return Promise.resolve({ ok: true, value: { revokedUpstream: true } });
+  }
+
+  triggerIngest(input: {
+    source: string;
+    tenantId: string;
+    triggeredBy: string;
+  }): Promise<TriggerOutcome> {
+    if (this.#failWith !== null) {
+      return Promise.resolve({ ok: false, reason: this.#failWith });
+    }
+    if (this.#runningAs !== null) {
+      return Promise.resolve({ ok: false, reason: "in-progress", runId: this.#runningAs });
+    }
+    this.triggered.push(input);
+    return Promise.resolve({ ok: true, runId: `run-mem-${String(this.triggered.length)}` });
   }
 
   #fail<T>(): Promise<WorkerOutcome<T>> {

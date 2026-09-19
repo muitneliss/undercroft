@@ -326,6 +326,15 @@ function toRun(row: RunRow): Run {
   };
 }
 
+/** A run by id alone, for the worker's own verb. Callers with a tenant use `getRun`. */
+export async function findRunById(exec: SqlExecutor, id: string): Promise<Run | null> {
+  const { rows } = await exec.query<RunRow>(`SELECT ${RUN_COLUMNS} FROM ops.run WHERE id = $1`, [
+    id,
+  ]);
+  const row = rows[0];
+  return row === undefined ? null : toRun(row);
+}
+
 export async function getRun(exec: SqlExecutor, tenantId: string, id: string): Promise<Run | null> {
   const { rows } = await exec.query<RunRow>(
     `SELECT ${RUN_COLUMNS} FROM ops.run WHERE tenant_id = $1 AND id = $2`,

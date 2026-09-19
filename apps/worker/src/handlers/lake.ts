@@ -27,6 +27,7 @@ import {
   RevokeConnectionRequest,
   StoreCredentialRequest,
 } from "@undercroft/contracts";
+import type { Fetcher } from "@undercroft/connector-runtime";
 import {
   type ByteFetcher,
   createByteFetcher,
@@ -39,10 +40,10 @@ import type { LakeStore } from "@undercroft/lake";
 import { type Context, Hono } from "hono";
 import { authenticate } from "../services/auth.ts";
 import { browseScope, revokeConnection, storeCredential } from "../services/connections.ts";
-import { type Refresher, resolveToken, runIngest, type Transactor } from "../services/ingest.ts";
+import { type Refresher, resolveToken, type Transactor } from "../services/ingest.ts";
+import { type JobDeps, startIngestJob, startTransformJob } from "../services/jobs.ts";
 import { landRecords } from "../services/land.ts";
-import { claimExternal, recordExternal } from "../services/ledger.ts";
-import { runTransform } from "../services/transform.ts";
+import { claimExternal, findRun, recordExternal } from "../services/ledger.ts";
 import { failureOf } from "./errors.ts";
 
 export interface LakeApiDeps {
@@ -69,6 +70,8 @@ export interface LakeApiDeps {
   readonly transactor?: Transactor;
   /** The byte seam for the Google verbs. Injected in tests; the process wires the real one. */
   readonly byteFetcher?: ByteFetcher;
+  /** The text seam for the spec-driven ingest verb. Injected in tests, as above. */
+  readonly fetcher?: Fetcher;
   /** dbt project and profiles directories. Absent disables /v1/runs/transform. */
   readonly dbt?: { projectDir: string; profilesDir: string };
 }
@@ -121,7 +124,10 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
       code: failure.code,
       ...describeError(error),
     });
-    return c.json({ code: failure.code, message: failure.message, details: [] }, failure.status);
+    return c.json(
+      { code: failure.code, message: failure.message, details: failure.details },
+      failure.status,
+    );
   });
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -196,8 +202,32 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
     return c.json({ runId: body.runId, ...result }, status);
   });
 
-  // The trigger allowlist. Kestra and the control plane can start exactly these verbs,
-  // with the service token, and nothing else.
+  /** The run deps for one source, with that source's refresher if it has one. */
+  function jobDeps(source: string, specsDir: string): JobDeps {
+    const refresher = deps.refreshers?.[source];
+    return {
+      lake: deps.lake,
+      exec: deps.exec,
+      specsDir,
+      ...(deps.log === undefined ? {} : { log: deps.log }),
+      ...(deps.env ? { env: deps.env } : {}),
+      ...(refresher === undefined ? {} : { refresher }),
+      ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
+      ...(deps.fetcher === undefined ? {} : { fetcher: deps.fetcher }),
+      ...(deps.dbt === undefined ? {} : { dbt: deps.dbt }),
+    };
+  }
+
+  /**
+   * The trigger allowlist. Kestra and the control plane can start exactly these verbs, with
+   * the service token, and nothing else.
+   *
+   * Both answer 202 with the run's id and carry on without the caller: a full slice is
+   * minutes, and an open HTTP connection is not the place to hold one. What refuses, refuses
+   * before a row is opened -- an unknown tenant is 404, a source with no usable grant and a
+   * run already in progress are 409 -- through the error boundary above. The ledger is the
+   * record of what happened after 202; `GET /v1/runs/:id` reads it.
+   */
   app.post("/v1/runs/ingest", async (c) => {
     if (deps.specsDir === undefined) {
       return c.json(
@@ -205,34 +235,30 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
         400,
       );
     }
-    const bearer = bearerOf(c.req.header("authorization"));
-    if (deps.serviceToken === "" || bearer !== deps.serviceToken) {
-      return c.json(
-        { code: "unauthenticated", message: "the trigger token is required", details: [] },
-        401,
-      );
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
     }
-    const raw = (await c.req.json().catch(() => ({}))) as { source?: unknown; tenantId?: unknown };
+    const raw = (await c.req.json().catch(() => ({}))) as {
+      source?: unknown;
+      tenantId?: unknown;
+      trigger?: unknown;
+      triggeredBy?: unknown;
+      chain?: unknown;
+    };
     if (typeof raw.source !== "string" || typeof raw.tenantId !== "string") {
       return c.json(
         { code: "invalid_request", message: "source and tenantId are required", details: [] },
         400,
       );
     }
-    const refresher = deps.refreshers?.[raw.source];
-    const result = await runIngest(
-      {
-        lake: deps.lake,
-        exec: deps.exec,
-        specsDir: deps.specsDir,
-        ...(deps.log === undefined ? {} : { log: deps.log }),
-        ...(deps.env ? { env: deps.env } : {}),
-        ...(refresher === undefined ? {} : { refresher }),
-        ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
-      },
-      { source: raw.source, tenantId: raw.tenantId },
-    );
-    return c.json(result, 200);
+    const started = await startIngestJob(jobDeps(raw.source, deps.specsDir), {
+      source: raw.source,
+      tenantId: raw.tenantId,
+      trigger: raw.trigger === "manual" ? "manual" : "schedule",
+      triggeredBy: typeof raw.triggeredBy === "string" ? raw.triggeredBy : "",
+      chain: raw.chain !== false,
+    });
+    return c.json(started, 202);
   });
 
   app.post("/v1/runs/transform", async (c) => {
@@ -242,19 +268,37 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
         400,
       );
     }
-    const bearer = bearerOf(c.req.header("authorization"));
-    if (deps.serviceToken === "" || bearer !== deps.serviceToken) {
-      return c.json(
-        { code: "unauthenticated", message: "the trigger token is required", details: [] },
-        401,
-      );
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
     }
-    const body = (await c.req.json().catch(() => ({}))) as { select?: unknown };
-    const result = await runTransform(
-      deps.dbt,
-      typeof body.select === "string" ? { select: body.select } : {},
-    );
-    return c.json(result, 200);
+    const body = (await c.req.json().catch(() => ({}))) as {
+      tenantId?: unknown;
+      select?: unknown;
+      trigger?: unknown;
+      triggeredBy?: unknown;
+    };
+    if (typeof body.tenantId !== "string") {
+      return c.json({ code: "invalid_request", message: "tenantId is required", details: [] }, 400);
+    }
+    const started = await startTransformJob(jobDeps("*", deps.specsDir ?? ""), {
+      tenantId: body.tenantId,
+      trigger: body.trigger === "manual" ? "manual" : "schedule",
+      triggeredBy: typeof body.triggeredBy === "string" ? body.triggeredBy : "",
+      ...(typeof body.select === "string" ? { select: body.select } : {}),
+    });
+    return c.json(started, 202);
+  });
+
+  /** One run, by id, for whoever started it. The control plane reads the ledger directly. */
+  app.get("/v1/runs/:id", async (c) => {
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
+    }
+    const run = await findRun(deps.exec, c.req.param("id"));
+    if (run === null) {
+      return c.json({ code: "not_found", message: "no such run", details: [] }, 404);
+    }
+    return c.json(run, 200);
   });
 
   /**

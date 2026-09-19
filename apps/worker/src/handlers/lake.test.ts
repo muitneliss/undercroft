@@ -230,16 +230,14 @@ describe("the request line and the error boundary", () => {
     const events = sink.map(
       (line) => JSON.parse(line) as { event: string; errorType?: string; status?: number },
     );
-    // The run opened and failed before the boundary saw the error; the boundary's two lines
-    // close the request. The failure line carries the type, never the path in the message.
-    expect(events.map((e) => e.event)).toEqual([
-      "run_opened",
-      "run_failed",
-      "request_failed",
-      "request",
-    ]);
-    expect(events[2]?.errorType).toBe("Error");
-    expect(events[3]?.status).toBe(500);
+    // The spec is read before a run is opened, so a missing one leaves no run behind: the
+    // boundary's two lines are the whole record. The failure line carries the type, never
+    // the path in the message.
+    expect(events.map((e) => e.event)).toEqual(["request_failed", "request"]);
+    expect(events[0]?.errorType).toBe("Error");
+    expect(events[1]?.status).toBe(500);
+    const { rows } = await db.query<{ n: string }>("SELECT count(*)::text AS n FROM ops.run");
+    expect(rows[0]?.n).toBe("0");
   });
 });
 
