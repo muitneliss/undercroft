@@ -16,7 +16,7 @@
 
 import { join } from "node:path";
 import process from "node:process";
-import { createByteFetcher } from "@undercroft/core";
+import { createByteFetcher, createLogger } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { createLakeApi } from "./handlers/lake.ts";
@@ -52,6 +52,11 @@ function googleRefreshers(): Record<string, Refresher> {
   return { gmail: refresh, drive: refresh };
 }
 
+// JSONL on stdout, the same shape the control plane writes; the container runtime collects
+// it. Before this the worker's whole output was the startup line, so a run that failed at
+// 02:00 left no evidence anywhere.
+const log = createLogger({ component: "worker" });
+
 const pool = createPool(required("UNDERCROFT_POSTGRES_DSN"));
 const store = new S3ObjectStore({
   bucket: required("UNDERCROFT_S3_BUCKET_RAW"),
@@ -71,6 +76,7 @@ const app = createLakeApi({
   lake: new LakeStore(store),
   exec: asExecutor(pool),
   serviceToken: required("UNDERCROFT_TRIGGER_TOKEN"),
+  log,
   refreshers: googleRefreshers(),
   // Without this the `SELECT ... FOR UPDATE` in `accessToken` holds a lock for one
   // statement and protects nothing, which is what lets two concurrent runs spend the same
@@ -90,9 +96,7 @@ const app = createLakeApi({
 
 // parseInt, not Number(): a port, not an amount (the money lint rule bans Number()).
 const port = Number.parseInt(process.env.UNDERCROFT_WORKER_PORT ?? "8081", 10);
-// The startup line an operator greps to learn which port the worker actually bound. stdout is
-// where a container puts it, and the composition root is the one place a process speaks for itself.
-// biome-ignore lint/suspicious/noConsole: the startup line; see above.
-console.log(`undercroft worker listening on :${port}`);
+// The startup line an operator greps to learn which port the worker actually bound.
+log.info("listening", { port });
 
 export default { port, fetch: app.fetch };

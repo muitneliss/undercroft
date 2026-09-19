@@ -5,7 +5,10 @@
 // biome-ignore-all lint/suspicious/useAwait: An async function with no await, because the port it implements returns a promise. The contract is the signature, not the body -- `.claude/rules/tests.md` and the ESLint config this replaced both called this out by name.
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { canonicalJson, createStampSource, TestClock } from "@undercroft/core";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { canonicalJson, createLogger, createStampSource, TestClock } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
@@ -127,6 +130,56 @@ describe("the lake records API", () => {
     const json = (await res.json()) as { code: string; details: string[] };
     expect(json.code).toBe("invalid_request");
     expect(json.details.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the request line and the error boundary", () => {
+  function lines(): { sink: string[]; log: ReturnType<typeof createLogger> } {
+    const sink: string[] = [];
+    return { sink, log: createLogger({ component: "worker", sink: (line) => sink.push(line) }) };
+  }
+
+  it("a healthy request answers with an x-request-id and writes exactly one request line", async () => {
+    const { sink, log } = lines();
+    const res = await createLakeApi({ lake, exec: db, serviceToken: "svc-token", log }).request(
+      "/health",
+    );
+    expect(res.status).toBe(200);
+    const requestId = res.headers.get("x-request-id");
+    expect(requestId).not.toBeNull();
+
+    const events = sink.map((line) => JSON.parse(line) as { event: string; requestId?: string });
+    expect(events.map((e) => e.event)).toEqual(["request"]);
+    expect(events[0]?.requestId).toBe(requestId ?? "");
+  });
+
+  it("an unexpected failure is a 500 whose body repeats none of the error, and the log has the type", async () => {
+    const { sink, log } = lines();
+    // A specs directory holding no spec: the ingest verb reads `demo.yaml` and gets ENOENT,
+    // which is the kind of error nobody mapped -- and whose message names a filesystem path.
+    const specsDir = mkdtempSync(join(tmpdir(), "undercroft-empty-specs-"));
+    const res = await createLakeApi({
+      lake,
+      exec: db,
+      serviceToken: "svc-token",
+      log,
+      specsDir,
+    }).request("/v1/runs/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer svc-token" },
+      body: JSON.stringify({ source: "demo", tenantId: "CASE-1" }),
+    });
+    expect(res.status).toBe(500);
+    const json = (await res.json()) as { code: string; message: string };
+    expect(json.code).toBe("internal_error");
+    expect(json.message).not.toContain(specsDir);
+
+    const events = sink.map(
+      (line) => JSON.parse(line) as { event: string; errorType?: string; status?: number },
+    );
+    expect(events.map((e) => e.event)).toEqual(["request_failed", "request"]);
+    expect(events[0]?.errorType).toBe("Error");
+    expect(events[1]?.status).toBe(500);
   });
 });
 

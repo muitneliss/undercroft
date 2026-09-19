@@ -26,7 +26,13 @@ import {
   RevokeConnectionRequest,
   StoreCredentialRequest,
 } from "@undercroft/contracts";
-import { type ByteFetcher, createByteFetcher } from "@undercroft/core";
+import {
+  type ByteFetcher,
+  createByteFetcher,
+  describeError,
+  type Logger,
+  newRequestId,
+} from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
 import { type Context, Hono } from "hono";
@@ -35,11 +41,17 @@ import { browseScope, revokeConnection, storeCredential } from "../services/conn
 import { type Refresher, resolveToken, runIngest, type Transactor } from "../services/ingest.ts";
 import { landRecords } from "../services/land.ts";
 import { runTransform } from "../services/transform.ts";
+import { failureOf } from "./errors.ts";
 
 export interface LakeApiDeps {
   readonly lake: LakeStore;
   readonly exec: SqlExecutor;
   readonly serviceToken: string;
+  /**
+   * Where a request line and a failure go. Absent means silence, which is what a test that
+   * is not about logging wants; the process always wires one.
+   */
+  readonly log?: Logger;
   /** Directory of connector specs, for the ingest verb. Absent disables /v1/runs/ingest. */
   readonly specsDir?: string;
   readonly env?: NodeJS.ProcessEnv;
@@ -69,6 +81,46 @@ function bearerOf(header: string | undefined): string | null {
 
 export function createLakeApi(deps: LakeApiDeps): Hono {
   const app = new Hono();
+
+  /**
+   * One line per request, and an id the caller can quote back.
+   *
+   * Method, path, status and duration -- never a body. The body of a credential verb
+   * carries a live refresh token and the body of a records verb carries source payloads,
+   * and a request log is a far less controlled surface than the tables those belong in.
+   * The id is set before the handler runs so it rides on the response whichever way the
+   * request ends, including through the error boundary below.
+   */
+  app.use("*", async (c, next) => {
+    const requestId = newRequestId();
+    const startedAt = Date.now();
+    c.header("x-request-id", requestId);
+    await next();
+    deps.log?.info("request", {
+      requestId,
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      durationMs: Date.now() - startedAt,
+    });
+  });
+
+  /**
+   * The one error boundary. Every verb below lets a failure raise -- a refused scope, a
+   * dead credential, a source mid-fault -- and this is where each becomes the status and
+   * code the caller acts on. `failureOf` holds the mapping; this holds only the transport.
+   */
+  app.onError((error, c) => {
+    const failure = failureOf(error);
+    deps.log?.error("request_failed", {
+      method: c.req.method,
+      path: c.req.path,
+      status: failure.status,
+      code: failure.code,
+      ...describeError(error),
+    });
+    return c.json({ code: failure.code, message: failure.message, details: [] }, failure.status);
+  });
 
   app.get("/health", (c) => c.json({ ok: true }));
 
