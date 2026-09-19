@@ -130,6 +130,27 @@ export function ChartOptions({
               ))}
           </select>
         </div>
+        {chart.type === "map" ? (
+          <div className="field">
+            <label className="label" htmlFor="chart-region">
+              {t("chart.regionLabel")}
+            </label>
+            <select
+              className="input input--select"
+              id="chart-region"
+              value={chart.options.region === "world" ? "world" : "vn"}
+              onChange={(event) => {
+                onChange({
+                  ...chart,
+                  options: { ...chart.options, region: event.currentTarget.value },
+                });
+              }}
+            >
+              <option value="vn">{t("chart.regionVn")}</option>
+              <option value="world">{t("chart.regionWorld")}</option>
+            </select>
+          </div>
+        ) : null}
         {BOUNDED.has(chart.type) ? (
           <div className="field">
             <label className="label" htmlFor="chart-max">

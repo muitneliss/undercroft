@@ -543,7 +543,18 @@ export const en = {
     noNumeric:
       "The result has no numeric column to plot. Choose a numeric column as the value, or use Table.",
     noValue: "No value.",
-    mapLater: "Maps arrive in the next step.",
+    mapNotLoaded: "The map's boundaries could not be loaded.",
+    mapNeeds:
+      "A map needs a label column holding region names or codes, and a numeric column as the value.",
+    unmatched_one: "{{count, number}} label matches no region on the map: {{names}}",
+    unmatched_other: "{{count, number}} labels match no region on the map: {{names}}",
+    regionLabel: "Region",
+    regionVn: "Vietnam — 34 provinces and cities",
+    regionWorld: "World — countries",
+    attributionVn:
+      "Province boundaries: vietnamese-provinces-database (MIT), derived from the Administrative Units Reference Map (sapnhap.bando.com.vn), Vietnam Natural Resources, Environment and Cartography Publishing House.",
+    attributionWorld:
+      "Country boundaries: Natural Earth (public domain), via the world-atlas package.",
     total: "Total",
     pivotNeeds:
       "A pivot needs a label column and a value column; Split by gives the table its columns.",

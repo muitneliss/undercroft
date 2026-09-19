@@ -20,6 +20,7 @@
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: The frame is one switch over sixteen chart types, each arm a few lines; splitting it by family would put the shape of one decision -- which type gets which drawing -- across several names.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
+// biome-ignore-all lint/correctness/noUnresolvedImports: Biome's resolver does not see `Suspense` and `lazy` in @types/react 19, which declares them inside the `React` namespace it re-exports; `tsc` resolves them and so does the bundler, and both are in the gate.
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks whose inferred type is a Chart.js option shape hundreds of characters wide.
 // biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Chart.js's tooltip and tick callbacks -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
@@ -58,11 +59,13 @@ import {
   type TooltipItem,
 } from "chart.js";
 import { FunnelController, TrapezoidElement } from "chartjs-chart-funnel";
+import { lazy, Suspense } from "react";
 import { Bar, Bubble, Chart, Doughnut, Line, Pie, Radar, Scatter } from "react-chartjs-2";
 import { useTranslation } from "react-i18next";
 
 import type { TableResult } from "@/api/types.ts";
 import { ResultTable } from "@/components/ResultTable.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
 import { resolveColumns, type Series, toSeries } from "@/lib/chartData.ts";
 import { needlePlugin } from "@/lib/gaugeNeedle.ts";
 import { formatCount, formatDecimal, MISSING } from "@/lib/money.ts";
@@ -90,6 +93,11 @@ ChartJS.register(
   Tooltip,
   FunnelController,
   TrapezoidElement,
+);
+
+// The geo plugin and the projection maths ride only with a map.
+const GeoChart = lazy(() =>
+  import("@/components/charts/GeoChart.tsx").then((module) => ({ default: module.GeoChart })),
 );
 
 /** The tokens the leaf is set in, read once. Chart.js can only ease, so it does not move. */
@@ -343,7 +351,11 @@ export function ChartFrame({
     return <PivotTable result={result} chart={chart} />;
   }
   if (chart.type === "map") {
-    return <p className="note">{t("chart.mapLater")}</p>;
+    return (
+      <Suspense fallback={<Skeleton rows={6} />}>
+        <GeoChart result={result} chart={chart} />
+      </Suspense>
+    );
   }
 
   const series = toSeries(result, chart, t("chart.other"));

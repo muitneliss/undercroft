@@ -2021,6 +2021,15 @@
     height: 6rem;
   }
 
+  /* A map is taller than a chart: Vietnam is a long country, and the world's outline is
+   the width of the leaf. The height follows the width so the projection is not squashed
+   on a phone, capped where a desktop leaf would otherwise scroll past it. */
+  .plot--map {
+    height: auto;
+    aspect-ratio: 4 / 3;
+    max-height: 32rem;
+  }
+
   /* One figure, large, in the mono face: the number a KPI tile exists to show, printed
    from the digits the database holds. */
   .tile {

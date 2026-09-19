@@ -588,7 +588,16 @@ export const vi = {
     noNumeric:
       "Kết quả không có cột số để vẽ. Hãy chọn một cột số làm giá trị, hoặc dùng kiểu Bảng.",
     noValue: "Không có giá trị.",
-    mapLater: "Bản đồ sẽ có ở bước tiếp theo.",
+    mapNotLoaded: "Không tải được đường biên của bản đồ.",
+    mapNeeds: "Bản đồ cần một cột nhãn là tên hoặc mã vùng, và một cột số làm giá trị.",
+    unmatched_other: "{{count, number}} nhãn không khớp vùng nào trên bản đồ: {{names}}",
+    regionLabel: "Vùng",
+    regionVn: "Việt Nam — 34 tỉnh, thành",
+    regionWorld: "Thế giới — các quốc gia",
+    attributionVn:
+      "Đường biên tỉnh: vietnamese-provinces-database (MIT), lấy từ Bản đồ tham chiếu đơn vị hành chính (sapnhap.bando.com.vn), Nhà xuất bản Tài nguyên Môi trường và Bản đồ Việt Nam.",
+    attributionWorld:
+      "Đường biên quốc gia: Natural Earth (thuộc phạm vi công cộng), qua gói world-atlas.",
     total: "Tổng",
     pivotNeeds: "Bảng xoay cần một cột nhãn và một cột giá trị; cột Tách theo là các cột của bảng.",
   },
