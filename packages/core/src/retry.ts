@@ -48,6 +48,9 @@ export interface RetryDeps {
   readonly onRetry?: (info: { attempt: number; delayMs: number; error: unknown }) => void;
 }
 
+/** The delay-seconds form of `Retry-After`; anything else is parsed as an HTTP-date. */
+const WHOLE_SECONDS = /^\d+$/u;
+
 /**
  * Parse a `Retry-After` header. Seconds or an HTTP-date; anything else is `null`.
  *
@@ -60,7 +63,7 @@ export function parseRetryAfter(header: string | null, now: Date): number | null
     return null;
   }
   const trimmed = header.trim();
-  if (/^\d+$/u.test(trimmed)) {
+  if (WHOLE_SECONDS.test(trimmed)) {
     return Number.parseInt(trimmed, 10) * 1000;
   }
   const at = Date.parse(trimmed);

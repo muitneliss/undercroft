@@ -35,6 +35,11 @@ const ZONE = "Asia/Singapore";
  */
 const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
 
+/** The gaps between a cron expression's five fields. */
+const WHITESPACE = /\s+/u;
+/** A cron field that is a plain hour or minute, not a step, range or list. */
+const CRON_NUMBER = /^\d{1,2}$/u;
+
 const DATE = new Map<Locale, Intl.DateTimeFormat>();
 const DATE_TIME = new Map<Locale, Intl.DateTimeFormat>();
 
@@ -151,7 +156,7 @@ export function expiryNote(t: TFunction, iso: string | null | undefined, now = n
  * translator is worse still, because only one of its two answers ever gets checked.
  */
 export function describeSchedule(t: TFunction, cron: string): string {
-  const fields = cron.trim().split(/\s+/u);
+  const fields = cron.trim().split(WHITESPACE);
   if (fields.length !== 5) {
     return cron.trim();
   }
@@ -163,7 +168,7 @@ export function describeSchedule(t: TFunction, cron: string): string {
     return t("when.hourly");
   }
 
-  if (everyDay && /^\d{1,2}$/u.test(hour ?? "") && /^\d{1,2}$/u.test(minute ?? "")) {
+  if (everyDay && CRON_NUMBER.test(hour ?? "") && CRON_NUMBER.test(minute ?? "")) {
     const hh = (hour ?? "0").padStart(2, "0");
     const mm = (minute ?? "0").padStart(2, "0");
     return t("when.dailyAt", { time: `${hh}:${mm}` });

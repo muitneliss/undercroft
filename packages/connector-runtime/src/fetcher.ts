@@ -9,6 +9,9 @@
 
 import { HttpError } from "@undercroft/core";
 
+/** The delay-seconds form of `Retry-After`. */
+const WHOLE_SECONDS = /^\d+$/u;
+
 export interface HttpRequest {
   readonly url: string;
   readonly method: "GET" | "POST";
@@ -61,7 +64,7 @@ export function raiseForStatus(request: HttpRequest, response: HttpResponse): vo
   // parseInt, not Number(): the money lint rule bans Number() everywhere, and this is a
   // seconds count, not an amount.
   const retryAfterMs =
-    retryAfter !== null && /^\d+$/u.test(retryAfter)
+    retryAfter !== null && WHOLE_SECONDS.test(retryAfter)
       ? Number.parseInt(retryAfter, 10) * 1000
       : null;
   throw new HttpError(response.status, request.url, response.text.slice(0, 500), retryAfterMs);

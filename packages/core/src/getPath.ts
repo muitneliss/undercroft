@@ -22,6 +22,8 @@ import { isLosslessNumber } from "lossless-json";
  * value gets into the lake.
  */
 const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
+/** A dot-path segment: a name, then any number of `[n]` subscripts. */
+const SEGMENT = /^([^[\]]*)((?:\[\d+\])*)$/u;
 
 export function parsePath(path: string): string[] {
   if (path === "") {
@@ -29,7 +31,7 @@ export function parsePath(path: string): string[] {
   }
   const segments: string[] = [];
   for (const part of path.split(".")) {
-    const match = /^([^[\]]*)((?:\[\d+\])*)$/u.exec(part);
+    const match = SEGMENT.exec(part);
     if (match === null) {
       throw new TypeError(`unreadable path segment ${JSON.stringify(part)}`);
     }

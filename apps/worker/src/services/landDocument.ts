@@ -30,6 +30,9 @@ import type { LakeStore } from "@undercroft/lake";
  */
 export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
 
+/** A declared size we can read. Provider-controlled text, so anything else is unreadable. */
+const DIGITS_ONLY = /^\d+$/u;
+
 export interface DocumentToLand {
   readonly documentId: string;
   readonly contentType: string;
@@ -144,7 +147,7 @@ export async function landDocuments(
  * `Number("99999999999999999999")` is a silent rounding rather than a refusal.
  */
 function tooLarge(declaredBytes: string): boolean {
-  if (!/^\d+$/u.test(declaredBytes)) {
+  if (!DIGITS_ONLY.test(declaredBytes)) {
     return false; // Unreadable is not oversized; the fetch itself will report the truth.
   }
   return BigInt(declaredBytes) > BigInt(MAX_DOCUMENT_BYTES);

@@ -26,6 +26,8 @@ const OK_MAX = 300;
 /** How much of an error body to keep. Enough to carry a provider's message, never a file. */
 const EXCERPT_BYTES = 500;
 const MS_PER_SECOND = 1000;
+/** `Retry-After` in its delay-seconds form; the HTTP-date form is handled by `retry.ts`. */
+const WHOLE_SECONDS = /^\d+$/u;
 
 export interface ByteRequest {
   readonly url: string;
@@ -86,7 +88,7 @@ export function raiseForByteStatus(request: ByteRequest, response: ByteResponse)
   // parseInt, not Number(): the money rule bans Number() repo-wide, and this is a seconds
   // count rather than an amount.
   const retryAfterMs =
-    retryAfter !== null && /^\d+$/u.test(retryAfter)
+    retryAfter !== null && WHOLE_SECONDS.test(retryAfter)
       ? Number.parseInt(retryAfter, 10) * MS_PER_SECOND
       : null;
   const excerpt = new TextDecoder("utf-8", { fatal: false }).decode(

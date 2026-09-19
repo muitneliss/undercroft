@@ -34,6 +34,8 @@ const PDF = "application/pdf";
 const ENTITY = "messages";
 /** Page size. Gmail caps at 500; 100 keeps a page's follow-up fetches bounded. */
 const PAGE_SIZE = "100";
+/** Gmail's `internalDate`, which is epoch millis as text. Anything else is unreadable. */
+const DIGITS_ONLY = /^\d+$/u;
 /** Enough to identify and reconcile a message; deliberately not the body. */
 const HEADERS = ["From", "To", "Cc", "Subject", "Date", "Message-ID"] as const;
 
@@ -267,7 +269,7 @@ function headerMap(message: unknown): Record<string, string> {
  * is indistinguishable from a real 1970 date, and a wrong value is worse than a missing one.
  */
 function isoFromEpochMillis(value: string): string | null {
-  if (!/^\d+$/u.test(value)) {
+  if (!DIGITS_ONLY.test(value)) {
     return null;
   }
   // parseInt, not Number(): the money rule bans Number() repo-wide, and this is an

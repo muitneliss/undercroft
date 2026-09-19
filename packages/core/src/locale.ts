@@ -32,6 +32,9 @@ export const LOCALES: readonly Locale[] = ["vi", "en"] as const;
 /** What a reader gets when they have expressed no readable preference. */
 export const DEFAULT_LOCALE: Locale = "vi";
 
+/** A `q` value of zero, in any of its spellings: the client refusing that language. */
+const ZERO_WEIGHT = /^0(\.0+)?$/u;
+
 function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);
 }
@@ -75,7 +78,7 @@ export function negotiateLocale(header: string | null | undefined): Locale {
       return { locale: parseLocale(tag), weight: q === undefined ? "1" : q };
     })
     .filter((entry): entry is { locale: Locale; weight: string } => entry.locale !== null)
-    .filter((entry) => !/^0(\.0+)?$/u.test(entry.weight))
+    .filter((entry) => !ZERO_WEIGHT.test(entry.weight))
     .sort((a, b) => b.weight.localeCompare(a.weight, "en"));
 
   return ranked[0]?.locale ?? DEFAULT_LOCALE;

@@ -67,11 +67,15 @@ const LUMINANCE_BLUE = 0.0722;
 /** The flare constant. It keeps the ratio finite when one colour is pure black. */
 const CONTRAST_FLARE = 0.05;
 
+const LEADING_HASH = /^#/u;
+const HEX_SHORT = /^[0-9a-f]{3}$/iu;
+const HEX_LONG = /^[0-9a-f]{6}$/iu;
+
 /** Parse `#rgb` or `#rrggbb`. Returns null for anything else rather than guessing. */
 export function parseHex(hex: string): Rgb | null {
-  const value = hex.trim().replace(/^#/u, "");
+  const value = hex.trim().replace(LEADING_HASH, "");
 
-  if (/^[0-9a-f]{3}$/iu.test(value)) {
+  if (HEX_SHORT.test(value)) {
     const r = value.slice(0, 1);
     const g = value.slice(1, 2);
     const b = value.slice(2, 3);
@@ -82,7 +86,7 @@ export function parseHex(hex: string): Rgb | null {
     };
   }
 
-  if (/^[0-9a-f]{6}$/iu.test(value)) {
+  if (HEX_LONG.test(value)) {
     return {
       r: Number.parseInt(value.slice(0, 2), 16),
       g: Number.parseInt(value.slice(2, 4), 16),

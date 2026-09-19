@@ -279,13 +279,16 @@ async function resolveCaller(
   };
 }
 
+/** Any run of leading `../` (or `..\`) segments, which is how a path escapes `dist`. */
+const LEADING_PARENT_SEGMENTS = /^(\.\.(\/|\\|$))+/u;
+
 /**
  * Map a URL path to a file inside `dist`, or null to fall back to index.html. Returns null
  * for `/` and for anything that escapes `dist` — a request for `/../secrets` normalizes and
  * is refused rather than reaching outside the build.
  */
 async function resolveAsset(dist: string, urlPath: string): Promise<string | null> {
-  const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.(\/|\\|$))+/u, "");
+  const rel = normalize(decodeURIComponent(urlPath)).replace(LEADING_PARENT_SEGMENTS, "");
   if (rel === "/" || rel === "." || rel === sep) {
     return null;
   }

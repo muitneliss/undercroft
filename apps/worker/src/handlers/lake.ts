@@ -47,11 +47,13 @@ export interface LakeApiDeps {
   readonly dbt?: { projectDir: string; profilesDir: string };
 }
 
+const BEARER = /^Bearer\s+(.+)$/iu;
+
 function bearerOf(header: string | undefined): string | null {
   if (header === undefined) {
     return null;
   }
-  const match = /^Bearer\s+(.+)$/iu.exec(header);
+  const match = BEARER.exec(header);
   return match?.[1] ?? null;
 }
 

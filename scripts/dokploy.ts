@@ -39,6 +39,15 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 5
 /** Images this repo publishes. Everything else in the stack is upstream and not ours to verify. */
 const RELEASED_IMAGE_PREFIX = "ghcr.io/muitneliss/undercroft-";
 
+/** A trailing slash on the configured endpoint, so paths join without doubling it. */
+const TRAILING_SLASH = /\/$/u;
+/** A compose service key at the top level: exactly two spaces of indent. */
+const TOP_LEVEL_SERVICE = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/u;
+const IMAGE_LINE = /^\s+image:\s*(\S+)\s*$/u;
+/** A key at any depth, used to track which service a `depends_on` entry sits under. */
+const NESTED_NAME = /^\s+([a-z0-9][a-z0-9-]*):\s*$/u;
+const COMPLETED_CONDITION = /^\s+condition:\s*service_completed_successfully\s*$/u;
+
 /** Flags the stored compose command must carry. Asserted by `preflight`, never written by CI. */
 const REQUIRED_COMMAND_FLAGS = ["--pull always", "--wait", "--wait-timeout", "--remove-orphans"];
 
@@ -102,7 +111,7 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
   if (missing.length > 0) {
     throw new Error(`not configured: ${missing.join(", ")} must be set`);
   }
-  return { endpoint: endpoint.replace(/\/$/u, ""), apiKey, composeId };
+  return { endpoint: endpoint.replace(TRAILING_SLASH, ""), apiKey, composeId };
 }
 
 export const realDeps: Deps = {
@@ -265,11 +274,11 @@ export function releasedServices(
   const found: { service: string; image: string }[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
-    const serviceMatch = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
+    const serviceMatch = TOP_LEVEL_SERVICE.exec(line);
     if (serviceMatch?.[1] !== undefined) {
       service = serviceMatch[1];
     }
-    const imageMatch = /^\s+image:\s*(\S+)\s*$/u.exec(line);
+    const imageMatch = IMAGE_LINE.exec(line);
     if (imageMatch?.[1]?.startsWith(RELEASED_IMAGE_PREFIX)) {
       found.push({ service, image: expandEnv(imageMatch[1], env) });
     }
@@ -292,11 +301,11 @@ export function oneShotServices(composeFile: string): Set<string> {
   const found = new Set<string>();
   let candidate = "";
   for (const line of composeFile.split("\n")) {
-    const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
+    const nameMatch = NESTED_NAME.exec(line);
     if (nameMatch?.[1] !== undefined) {
       candidate = nameMatch[1];
     }
-    if (/^\s+condition:\s*service_completed_successfully\s*$/u.test(line) && candidate !== "") {
+    if (COMPLETED_CONDITION.test(line) && candidate !== "") {
       found.add(candidate);
     }
   }

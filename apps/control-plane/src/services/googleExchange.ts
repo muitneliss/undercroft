@@ -38,8 +38,11 @@ export interface GoogleIngestConfig {
   readonly fetch?: (url: string, init: RequestInit) => Promise<Response>;
 }
 
+/** Trailing slashes on the configured public URL, so the callback path joins cleanly. */
+const TRAILING_SLASHES = /\/+$/u;
+
 export function redirectUri(publicUrl: string): string {
-  return `${publicUrl.replace(/\/+$/u, "")}${CALLBACK_PATH}`;
+  return `${publicUrl.replace(TRAILING_SLASHES, "")}${CALLBACK_PATH}`;
 }
 
 interface Exchanged {

@@ -35,6 +35,9 @@ export interface Money {
 /** What a missing value looks like. An em dash, never a zero. */
 export const MISSING = "—";
 
+/** A plain decimal: optional sign, whole part, optional fraction. Nothing else. */
+const DECIMAL = /^(-?)(\d+)(?:\.(\d*))?$/u;
+
 /**
  * Split a decimal string into its parts without arithmetic.
  *
@@ -42,7 +45,7 @@ export const MISSING = "—";
  * read is reported as unreadable rather than coerced into something plausible.
  */
 function parts(amount: string): { sign: string; whole: string; fraction: string } | null {
-  const match = /^(-?)(\d+)(?:\.(\d*))?$/u.exec(amount.trim());
+  const match = DECIMAL.exec(amount.trim());
   if (!match) {
     return null;
   }

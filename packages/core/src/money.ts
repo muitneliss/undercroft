@@ -60,6 +60,13 @@ Big.NE = -1e6;
 const EURO_NOTATION = /\.\d{3},/u;
 const CLEANUP = /[\s'_]/gu;
 const ISO_4217 = /^[A-Z]{3}$/u;
+/** Thousands separators, once the European reading above has been refused. */
+const GROUPING = /,/gu;
+/** A leading currency symbol: anything before the first digit, sign or decimal point. */
+const LEADING_NON_NUMERIC = /^[^\d\-+.]+/u;
+const ENDS_WITH_DIGIT = /\d$/u;
+/** A trailing currency code, the `USD` in `1,234.50 USD`. */
+const TRAILING_NON_DIGITS = /[^\d]+$/u;
 
 /** What a person sees where there is no value. Never an empty cell, never `0`. */
 export const MISSING = "—";
@@ -143,11 +150,11 @@ export function parseAmount(value: string | Big | bigint | null | undefined): Bi
     return null;
   }
 
-  text = text.replace(/,/gu, "");
+  text = text.replace(GROUPING, "");
   // Strip a leading currency symbol and a trailing code; keep sign and digits.
-  text = text.replace(/^[^\d\-+.]+/u, "");
-  if (!/\d$/u.test(text)) {
-    text = text.replace(/[^\d]+$/u, "");
+  text = text.replace(LEADING_NON_NUMERIC, "");
+  if (!ENDS_WITH_DIGIT.test(text)) {
+    text = text.replace(TRAILING_NON_DIGITS, "");
   }
   if (text === "" || text === "-" || text === "+" || text === ".") {
     return null;
