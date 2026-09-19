@@ -7,6 +7,7 @@
  * expiry and never a ciphertext -- is a property of the query.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: The long function here is a `describe` block, whose length is the number of card states asked about rather than complexity in any one of them. Splitting it would group the same question under two headings.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 // biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
@@ -22,6 +23,9 @@ import { InMemoryWorkerClient } from "./workerClient.ts";
 const TENANT = "CASE-0042";
 const ENV = { UNDERCROFT_SECRET_KEY: Buffer.alloc(32, 5).toString("base64") };
 const GMAIL_SCOPE = JSON.stringify({ labels: [{ id: "Label_8", name: "Invoices" }] });
+/** What Google returns for a Gmail consent nobody unticked. */
+const GMAIL_GRANT =
+  "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly";
 
 let db: TestDatabase;
 
@@ -38,15 +42,25 @@ afterEach(async () => {
 describe("presentStatus", () => {
   it("a connected, scoped source is connected", () => {
     expect(
-      presentStatus({ status: "connected", source: "gmail", selectionJson: GMAIL_SCOPE }),
+      presentStatus({
+        status: "connected",
+        source: "gmail",
+        selectionJson: GMAIL_SCOPE,
+        scope: GMAIL_GRANT,
+      }),
     ).toBe("connected");
   });
 
   it("connected with no recorded scope needs one", () => {
     // Running in this state would read a whole mailbox on the strength of a missing row.
-    expect(presentStatus({ status: "connected", source: "gmail", selectionJson: "{}" })).toBe(
-      "needs_scope",
-    );
+    expect(
+      presentStatus({
+        status: "connected",
+        source: "gmail",
+        selectionJson: "{}",
+        scope: GMAIL_GRANT,
+      }),
+    ).toBe("needs_scope");
   });
 
   it("an empty label list is a recorded decision, not a missing one", () => {
@@ -56,31 +70,74 @@ describe("presentStatus", () => {
         status: "connected",
         source: "gmail",
         selectionJson: JSON.stringify({ labels: [] }),
+        scope: GMAIL_GRANT,
       }),
     ).toBe("connected");
   });
 
   it("a source that takes no scope is connected without one", () => {
     // HubSpot and Xero have no picker, so `needs_scope` would be a state nobody can leave.
-    expect(presentStatus({ status: "connected", source: "hubspot", selectionJson: "{}" })).toBe(
-      "connected",
-    );
+    expect(
+      presentStatus({ status: "connected", source: "hubspot", selectionJson: "{}", scope: "" }),
+    ).toBe("connected");
+  });
+
+  it("a grant missing the permission it asked for needs a reconnect", () => {
+    // What `case-001` actually held: Allow pressed with the Gmail tick removed. It read
+    // `connected` on the card while every Gmail call came back 403, and the only repair is
+    // to consent again.
+    expect(
+      presentStatus({
+        status: "connected",
+        source: "gmail",
+        selectionJson: GMAIL_SCOPE,
+        scope: "openid https://www.googleapis.com/auth/userinfo.email",
+      }),
+    ).toBe("needs_reconnect");
+  });
+
+  it("an unrecorded grant is not judged either way", () => {
+    // The quiet side. An empty scope column is no evidence -- rows predating it, and every
+    // source that never went through Google -- and no evidence is not a verdict.
+    expect(
+      presentStatus({
+        status: "connected",
+        source: "gmail",
+        selectionJson: GMAIL_SCOPE,
+        scope: "",
+      }),
+    ).toBe("connected");
   });
 
   it("expired and error both read as needing a reconnect", () => {
     // One state on screen: telling a token expiry from a provider fault is not the
     // customer's question to answer.
-    expect(presentStatus({ status: "expired", source: "gmail", selectionJson: GMAIL_SCOPE })).toBe(
-      "needs_reconnect",
-    );
-    expect(presentStatus({ status: "error", source: "gmail", selectionJson: GMAIL_SCOPE })).toBe(
-      "needs_reconnect",
-    );
+    expect(
+      presentStatus({
+        status: "expired",
+        source: "gmail",
+        selectionJson: GMAIL_SCOPE,
+        scope: GMAIL_GRANT,
+      }),
+    ).toBe("needs_reconnect");
+    expect(
+      presentStatus({
+        status: "error",
+        source: "gmail",
+        selectionJson: GMAIL_SCOPE,
+        scope: GMAIL_GRANT,
+      }),
+    ).toBe("needs_reconnect");
   });
 
   it("disconnected stays disconnected", () => {
     expect(
-      presentStatus({ status: "disconnected", source: "gmail", selectionJson: GMAIL_SCOPE }),
+      presentStatus({
+        status: "disconnected",
+        source: "gmail",
+        selectionJson: GMAIL_SCOPE,
+        scope: GMAIL_GRANT,
+      }),
     ).toBe("disconnected");
   });
 });

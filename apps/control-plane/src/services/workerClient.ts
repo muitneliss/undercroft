@@ -29,13 +29,18 @@ import { upsertConnection } from "@undercroft/db/repos";
 export type WorkerOutcome<T> = { ok: true; value: T } | { ok: false; reason: WorkerFailure };
 
 /**
- * Why a call did not succeed, in the two shapes a caller acts on differently.
+ * Why a call did not succeed, in the three shapes a caller acts on differently.
  *
  * `unreachable` is worth retrying and means the worker is down; `refused` means the worker
  * answered and said no, which retrying will not fix. Collapsing them would make a
  * misconfigured tenant look like an outage.
+ *
+ * `scope-insufficient` is split out of `refused` for the same reason one level finer: it is
+ * the only one of the three that the administrator reading the screen can fix, by
+ * reconnecting the source and granting the permission that was withheld. Worded as an
+ * outage -- which is what it was -- it sends them off to wait for a service that is fine.
  */
-export type WorkerFailure = "unreachable" | "refused";
+export type WorkerFailure = "unreachable" | "refused" | "scope-insufficient";
 
 export interface StoreCredentialInput {
   readonly source: string;
@@ -58,15 +63,28 @@ export interface WorkerClient {
   }) => Promise<WorkerOutcome<RevokeConnectionResponse>>;
 }
 
+/**
+ * The part of `fetch` this client actually uses.
+ *
+ * Narrower than `typeof globalThis.fetch` on purpose: under Bun that type carries a
+ * `preconnect` method, so a substitute would have to supply one that nothing here ever
+ * calls. An injected seam should ask for what it uses and no more -- the platform's own
+ * `fetch` still satisfies this.
+ */
+type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
 export interface HttpWorkerConfig {
   readonly baseUrl: string;
   readonly triggerToken: string;
   /** Injected in tests. The process uses the platform's `fetch`. */
-  readonly fetch?: typeof globalThis.fetch;
+  readonly fetch?: FetchLike;
   readonly timeoutMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** The worker's answer for a credential Google refused. Every other status is a refusal. */
+const FORBIDDEN = 403;
 
 export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const doFetch = config.fetch ?? globalThis.fetch;
@@ -88,7 +106,11 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
       if (!response.ok) {
         // The body is deliberately not read into the failure. A refusal from this endpoint
         // can echo a request that carried a live refresh token, and a control-plane log is
-        // not where that belongs.
+        // not where that belongs. The STATUS carries no such payload, which is what makes
+        // it the right place to tell a withheld permission from every other refusal.
+        if (response.status === FORBIDDEN) {
+          return { ok: false, reason: "scope-insufficient" };
+        }
         return { ok: false, reason: "refused" };
       }
       return { ok: true, value: (await response.json()) as T };

@@ -182,6 +182,27 @@ describe("browsing what may be shared", () => {
     expect(await response.json()).toEqual({ items: [{ id: "Label_8", name: "Invoices" }] });
   });
 
+  it("a grant Google refuses is answered as a refusal, not as a fault", async () => {
+    // Left to raise, this 403 became a 500, which the control plane could only read as "the
+    // worker is down" -- so the operator was told the processing service was not responding
+    // when the truth was that the Gmail permission had never been granted. 403 here is what
+    // lets that screen name the remedy.
+    await post("/v1/connections/credential", VALID);
+    fetcher.on("GET", "https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+      status: 403,
+      body: { error: { code: 403, status: "PERMISSION_DENIED" } },
+    });
+
+    const response = await post("/v1/connections/browse", {
+      source: "gmail",
+      tenantId: TENANT,
+      kind: "labels",
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "scope_insufficient" });
+  });
+
   it("drive cannot be browsed, because its choosing happens in the Picker", async () => {
     const response = await post("/v1/connections/browse", {
       source: "drive",

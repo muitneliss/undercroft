@@ -1,5 +1,6 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: This file IS the tRPC surface: one router literal whose procedures are declared inside it. There is no split that does not separate a procedure from the router it attaches to, and the length is the count of endpoints rather than complexity in any one of them.
 // biome-ignore-all lint/performance/noNamespaceImport: `import pg from "pg"` and friends: these packages have no useful named exports, and the namespace import is the documented way to consume them.
 // biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
 
@@ -205,9 +206,22 @@ export const appRouter = router({
           kind: "labels",
         });
         if (!outcome.ok) {
+          // Three outcomes, three sentences. One message for all of them told an
+          // administrator whose Gmail grant Google had refused that "the processing service
+          // is not responding" -- on the very screen where the remedy was a reconnect they
+          // could do themselves, and about a service that was answering perfectly.
+          if (outcome.reason === "scope-insufficient") {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: messages(ctx.locale)("error.scopeInsufficient"),
+            });
+          }
           throw new TRPCError({
             code: outcome.reason === "unreachable" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
-            message: messages(ctx.locale)("error.workerUnavailable"),
+            message: messages(ctx.locale)(
+              outcome.reason === "unreachable" ? "error.workerUnavailable" : "error.browseRefused",
+              { source: input.source },
+            ),
           });
         }
         return outcome.value;

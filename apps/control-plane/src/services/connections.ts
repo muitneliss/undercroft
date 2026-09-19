@@ -31,6 +31,7 @@ import {
 } from "@undercroft/db/repos";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
+import { grantCovers, requestedScopeFor } from "./oauth.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
 export type { Connection };
@@ -88,6 +89,12 @@ export function presentStatus(row: {
   status: Connection["status"];
   selectionJson: string;
   source: string;
+  /**
+   * What Google said it granted. Required rather than optional on purpose: a caller that
+   * could omit it would silently skip the grant check below, which is the very failure
+   * this function exists to surface.
+   */
+  scope: string;
 }): CardStatus {
   // `error` and `expired` are both "this will not run until somebody acts", and the card has
   // one state for that. Keeping them apart on screen would ask a customer to tell a token
@@ -97,6 +104,21 @@ export function presentStatus(row: {
   }
   if (row.status === "disconnected") {
     return "disconnected";
+  }
+  // Connected, and holding a grant that cannot do the job. Google's consent screen lets a
+  // person untick one permission and press Allow, which yields a working token for a
+  // narrower grant -- `case-001` sat at `connected` on `openid email` alone, and said so on
+  // the card while every Gmail call came back 403.
+  //
+  // A reconnect is the only repair, so this is `needs_reconnect` rather than a fourth state:
+  // the copy and the button for "your grant no longer works, connect again" already exist
+  // and already say the right thing.
+  //
+  // An EMPTY scope column is left alone deliberately. It means nothing was recorded -- rows
+  // predating the column, and every source that does not go through Google -- and rule 2
+  // forbids turning no evidence into a verdict in either direction.
+  if (row.scope !== "" && !grantCovers(requestedScopeFor(row.source), row.scope)) {
+    return "needs_reconnect";
   }
   // Connected, but nobody has said what may be read. Running in this state would read a
   // whole mailbox on the strength of a missing row.

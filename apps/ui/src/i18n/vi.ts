@@ -193,6 +193,13 @@ export const vi = {
     connecting: "Đang chuyển tới Google…",
     connectFailed: "Chưa kết nối được nguồn này.",
     connectDeclined: "Bạn đã huỷ ở màn hình của Google. Không có gì được cấp.",
+    /**
+     * Distinct from `connectDeclined` because what the reader did was different: they
+     * pressed Allow, having unticked the permission that makes the source work. Nothing was
+     * saved, and the sentence has to say which tick to leave alone next time.
+     */
+    connectScopeDeclined:
+      "Ở màn hình của Google, quyền cần thiết đã bị bỏ tích nên kết nối chưa được lưu. Hãy kết nối lại và giữ nguyên mọi dấu tích.",
     disconnecting: "Đang ngắt kết nối…",
     disconnectFailed: "Chưa ngắt kết nối được.",
     disconnected: "Đã ngắt kết nối.",

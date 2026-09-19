@@ -171,6 +171,8 @@ export const en = {
     connecting: "Taking you to Google…",
     connectFailed: "This source could not be connected.",
     connectDeclined: "You cancelled at Google’s screen. Nothing was granted.",
+    connectScopeDeclined:
+      "A permission this source needs was unticked at Google’s screen, so nothing was saved. Connect again and leave every tick in place.",
     disconnecting: "Disconnecting…",
     disconnectFailed: "This could not be disconnected.",
     disconnected: "Disconnected.",
