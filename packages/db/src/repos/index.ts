@@ -28,6 +28,7 @@ export {
   readConnectionDetail,
   readCredential,
   setCadence,
+  setExternalAccount,
   setStatus,
   upsertConnection,
   writeConnectionDetail,

@@ -17,12 +17,19 @@
  * deliberately not what the card's `expiresAt` carries. See that field.
  */
 
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One service, one file: what the card shows, what an admin may change about a grant, and how a grant ends are three decisions about the same row, and a reader following one into the next should not change files to do it.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
 // biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
 
-import { type Cadence, needsScope, nextRunAt, parseScope } from "@undercroft/contracts";
+import {
+  type Cadence,
+  type ConnectionScope,
+  needsScope,
+  nextRunAt,
+  parseScope,
+} from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   type Connection,
@@ -32,6 +39,7 @@ import {
   listConnections,
   listConnectionViews,
   setCadence as writeCadence,
+  setExternalAccount,
   setStatus,
   writeConnectionDetail,
 } from "@undercroft/db/repos";
@@ -277,11 +285,17 @@ export async function setScope(
     return { ok: false, reason: "unsupported-source" };
   }
 
+  // A Xero choice names an organisation. Its id goes where a run reads it, on the
+  // connection; its name goes where BI cannot, as the card's account label.
+  if (scope.kind === "xero") {
+    await setExternalAccount(exec, input.tenantId, input.source, scope.organisation.id);
+  }
   await writeConnectionDetail(exec, {
     tenantId: input.tenantId,
     source: input.source,
     selectionJson: input.selectionJson,
     chosenBy: input.actorId,
+    ...(scope.kind === "xero" ? { accountLabel: scope.organisation.name } : {}),
   });
 
   try {
@@ -289,10 +303,7 @@ export async function setScope(
       tenantId: input.tenantId,
       actor: input.actor,
       action: "connection.scope_set",
-      detail: JSON.stringify({
-        source: input.source,
-        count: scope.kind === "gmail" ? scope.labels.length : scope.files.length,
-      }),
+      detail: JSON.stringify({ source: input.source, count: chosenCount(scope) }),
     });
   } catch {
     // Swallowed like every other audit write here: a failed insert must not lose a scope an
@@ -352,6 +363,22 @@ export async function disconnect(
   return { revokedUpstream };
 }
 
+/** How many things were chosen, for the trail. A count, never the names. */
+function chosenCount(scope: ConnectionScope): number {
+  switch (scope.kind) {
+    case "gmail":
+      return scope.labels.length;
+    case "drive":
+      return scope.files.length;
+    case "xero":
+      return scope.entities.length;
+    default: {
+      const exhaustive: never = scope;
+      throw new Error(`unhandled scope ${String(exhaustive)}`);
+    }
+  }
+}
+
 /** The shape `scopeSummary` in the UI reads. */
 function configOf(
   source: string,
@@ -361,8 +388,16 @@ function configOf(
   if (scope === null) {
     return {};
   }
-  if (scope.kind === "gmail") {
-    return { labels: scope.labels.map((l) => l.name) };
+  switch (scope.kind) {
+    case "gmail":
+      return { labels: scope.labels.map((l) => l.name) };
+    case "drive":
+      return { folderIds: scope.files.map((f) => f.id) };
+    case "xero":
+      return { entities: scope.entities };
+    default: {
+      const exhaustive: never = scope;
+      throw new Error(`unhandled scope ${String(exhaustive)}`);
+    }
   }
-  return { folderIds: scope.files.map((f) => f.id) };
 }

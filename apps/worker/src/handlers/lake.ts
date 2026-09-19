@@ -39,7 +39,12 @@ import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
 import { type Context, Hono } from "hono";
 import { authenticate } from "../services/auth.ts";
-import { browseScope, revokeConnection, storeCredential } from "../services/connections.ts";
+import {
+  browseScope,
+  revokeConnection,
+  storeCredential,
+  type XeroClient,
+} from "../services/connections.ts";
 import { type Refresher, resolveToken, type Transactor } from "../services/ingest.ts";
 import { type JobDeps, startIngestJob, startTransformJob } from "../services/jobs.ts";
 import { landRecords } from "../services/land.ts";
@@ -75,6 +80,8 @@ export interface LakeApiDeps {
   readonly fetcher?: Fetcher;
   /** dbt project and profiles directories. Absent disables /v1/runs/transform. */
   readonly dbt?: { projectDir: string; profilesDir: string };
+  /** The Xero client, for revoking a grant. Absent means a disconnect only forgets our copy. */
+  readonly xero?: XeroClient;
 }
 
 function bearerOf(header: string | undefined): string | null {
@@ -439,6 +446,8 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
         exec: deps.exec,
         fetcher: deps.byteFetcher ?? createByteFetcher(),
         token: () => tokenFor(deps, parsed.data),
+        ...(deps.xero === undefined ? {} : { xero: deps.xero }),
+        ...(deps.env === undefined ? {} : { env: deps.env }),
       },
       parsed.data,
     );

@@ -97,6 +97,18 @@ const googleIngest =
       };
 
 /**
+ * The Xero client. The control plane runs the consent with it; the worker holds the same
+ * two values to refresh and revoke. Unset means Xero reads "not connected" and its button
+ * says why, exactly as the Google client does.
+ */
+const xeroClientId = optional("UNDERCROFT_XERO_CLIENT_ID");
+const xeroClientSecret = optional("UNDERCROFT_XERO_CLIENT_SECRET");
+const xero =
+  xeroClientId === undefined || xeroClientSecret === undefined || publicUrl === undefined
+    ? undefined
+    : { clientId: xeroClientId, clientSecret: xeroClientSecret, publicUrl };
+
+/**
  * The worker: the only process holding the master key, and so the only one that may seal a
  * credential. The control plane runs the browser half of a consent and hands the bundle over
  * on the trigger-token allowlist. ADR 0016.
@@ -227,6 +239,7 @@ const app = createServer({
   ...(publicUrl === undefined ? {} : { publicUrl }),
   ...(uiDist === undefined ? {} : { uiDist }),
   ...(googleIngest === undefined ? {} : { googleIngest }),
+  ...(xero === undefined ? {} : { xero }),
   ...(worker === undefined ? {} : { worker }),
 });
 

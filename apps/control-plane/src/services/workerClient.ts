@@ -66,7 +66,7 @@ export interface WorkerClient {
   browseScope: (input: {
     source: string;
     tenantId: string;
-    kind: "labels";
+    kind: "labels" | "organisations";
   }) => Promise<WorkerOutcome<BrowseScopeResponse>>;
   revokeConnection: (input: {
     source: string;

@@ -19,6 +19,7 @@
 
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One reader, one file: pace, fetch, retry, paginate, extract, guard are one sequential procedure a spec drives from top to bottom, and splitting it by length would put the guards in a different file from the loop they guard.
 // biome-ignore-all lint/complexity/useMaxParams: Four functions take five arguments, each a distinct required input with no sensible grouping. Bundling them into an options object to satisfy a count would hide which are required.
 // biome-ignore-all lint/nursery/usePlaywrightValidDescribeCallback: Playwright-domain rule. There is no Playwright in this repo.
 // biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
@@ -60,6 +61,12 @@ export interface RunContext {
   readonly clock?: Clock;
   /** Resolves a bearer token for the connector. Absent for `auth.kind === "none"`. */
   readonly token?: () => Promise<string>;
+  /**
+   * The provider's own account id, sent in `auth.accountHeader` -- Xero's organisation id
+   * in `xero-tenant-id`. Never our tenant id: that is the defect that meant live Xero had
+   * never run against the right organisation. Required when the spec names a header.
+   */
+  readonly accountId?: string;
   /** Injected for deterministic backoff in tests. */
   readonly random?: () => number;
   /**
@@ -106,14 +113,33 @@ async function authHeaders(spec: ConnectorSpec, ctx: RunContext): Promise<Record
     headers.authorization = `Bearer ${await ctx.token()}`;
   }
   if (spec.auth.kind === "oauth2" && spec.auth.accountHeader !== undefined) {
-    // Deliberately left to the caller to fill via defaults.headers; the account id is the
-    // provider's own org id, resolved from the connection, not our tenant id.
+    // The provider's own org id, resolved from the connection by the caller. Absent is a
+    // refusal before the first request: a request without it is a 401 at best and, on a
+    // consent that sees several organisations, the wrong org's books at worst.
+    if (ctx.accountId === undefined || ctx.accountId === "") {
+      throw new ConnectorError(
+        spec.id,
+        "*",
+        0,
+        `connector needs the provider's account id for the ${spec.auth.accountHeader} header but none was supplied`,
+      );
+    }
+    headers[spec.auth.accountHeader] = ctx.accountId;
   }
   return headers;
 }
 
+/**
+ * Join the spec's base URL and an entity's path.
+ *
+ * The path is made relative before resolving, because `new URL("/Contacts", base)` drops
+ * everything after the origin: a base of `https://api.xero.com/api.xro/2.0` became
+ * `https://api.xero.com/Contacts`, and the Xero spec had never fetched the right URL.
+ * HubSpot's base carries no path, which is why it never showed.
+ */
 function buildUrl(baseUrl: string, path: string, query: Record<string, string>): string {
-  const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const url = new URL(path.startsWith("/") ? path.slice(1) : path, base);
   for (const [key, value] of Object.entries(query)) {
     url.searchParams.set(key, value);
   }

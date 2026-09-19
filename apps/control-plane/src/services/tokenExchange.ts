@@ -2,58 +2,30 @@
  * Spending the authorization code, and reading who consented out of the id token.
  *
  * Split from `oauth.ts`, which holds the decisions -- whether a state is live, whether the
- * caller is still an admin. This is the part that talks to Google, and it is worth reading
- * on its own because of what it deliberately does NOT do: it verifies no signature.
+ * caller is still an admin. This is the part that talks to the provider, and it is worth
+ * reading on its own because of what it deliberately does NOT do: it verifies no signature.
  *
  * That is sound here only because of where the token came from -- a direct, server-to-server
- * TLS response to a request carrying our client secret and a PKCE verifier we generated.
- * There is no attacker-supplied path to this value. The same two claims taken from anything
- * a browser handed us would have to be verified, and the day this function is reused for
- * that is the day it needs to be.
+ * TLS response to a request carrying our client secret and, for Google, a PKCE verifier we
+ * generated. There is no attacker-supplied path to this value. The same two claims taken
+ * from anything a browser handed us would have to be verified, and the day this function is
+ * reused for that is the day it needs to be.
  */
 
 // biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
 // biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
-/** Where Google is told to come back to. One URI for both sources; the state carries which. */
-export const CALLBACK_PATH = "/oauth/google/callback";
+import { type Provider, type ProviderConfig, PROVIDERS, redirectUri } from "./oauthProviders.ts";
 
-export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-
-export interface GoogleIngestConfig {
-  readonly clientId: string;
-  readonly clientSecret: string;
-  /** The origin the BROWSER uses. Google builds `redirect_uri` from it. */
-  readonly publicUrl: string;
-  /**
-   * The browser Picker's API key and the Google project number. Public values -- they
-   * identify the app and authorise nothing -- and only Drive needs them.
-   */
-  readonly pickerApiKey?: string;
-  readonly projectNumber?: string;
-  readonly authorizeUrl?: string;
-  readonly tokenUrl?: string;
-  /**
-   * Injected in tests. Typed as the call this module actually makes rather than
-   * `typeof fetch`, whose Bun signature carries a `preconnect` property no stand-in has and
-   * none of this code uses.
-   */
-  readonly fetch?: (url: string, init: RequestInit) => Promise<Response>;
-}
-
-export function redirectUri(publicUrl: string): string {
-  return `${publicUrl.replace(/\/+$/u, "")}${CALLBACK_PATH}`;
-}
-
-interface Exchanged {
+export interface Exchanged {
   readonly accessToken: string;
   readonly refreshToken: string;
   readonly expiresAt: string | null;
   readonly scope: string;
+  /** The provider's opaque subject, or `""` where the provider names nobody (Xero). */
   readonly sub: string;
   readonly email: string;
 }
@@ -65,25 +37,36 @@ const MS_PER_SECOND = 1000;
  *
  * Returns `null` on any failure rather than throwing: every failure here means the same
  * thing to the caller -- the consent did not complete -- and the differences between them
- * are Google's business, not a customer's.
+ * are the provider's business, not a customer's.
  */
 export async function exchangeCode(
-  google: GoogleIngestConfig,
+  provider: Provider,
+  config: ProviderConfig,
   input: { code: string; verifier: string },
 ): Promise<Exchanged | null> {
-  const doFetch = google.fetch ?? globalThis.fetch;
+  const shape = PROVIDERS[provider];
+  const doFetch = config.fetch ?? globalThis.fetch;
+  const form = new URLSearchParams({
+    code: input.code,
+    grant_type: "authorization_code",
+    redirect_uri: redirectUri(config.publicUrl, provider),
+  });
+  if (shape.pkce) {
+    form.set("code_verifier", input.verifier);
+  }
+  const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
+  if (shape.clientAuth === "basic") {
+    headers.authorization = `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`;
+  } else {
+    form.set("client_id", config.clientId);
+    form.set("client_secret", config.clientSecret);
+  }
+
   try {
-    const response = await doFetch(google.tokenUrl ?? GOOGLE_TOKEN_URL, {
+    const response = await doFetch(config.tokenUrl ?? shape.tokenUrl, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: google.clientId,
-        client_secret: google.clientSecret,
-        code: input.code,
-        code_verifier: input.verifier,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri(google.publicUrl),
-      }).toString(),
+      headers,
+      body: form.toString(),
     });
     if (!response.ok) {
       return null;
@@ -95,7 +78,7 @@ export async function exchangeCode(
       return null;
     }
 
-    const identity = readIdToken(body.id_token);
+    const identity = shape.identity ? readIdToken(body.id_token) : { sub: "", email: "" };
     return {
       accessToken,
       refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : "",

@@ -1,18 +1,25 @@
 /**
- * The per-tenant Google consent: the decisions, with no transport in them.
+ * The per-tenant consent: the decisions, with no transport in them.
  *
  * This is NOT sign-in. Signing in asks for `openid email profile` and is Better Auth's;
- * this asks for a customer's mailbox or documents, per tenant, and its credential is sealed
- * by the worker into `app.connection_secret`. Keeping the two apart is the reason the login
- * client and the ingestion client are different Google clients: one misconfigured scope
- * list on the login path would otherwise hand over a mailbox as a side effect of signing in.
+ * this asks for a customer's mailbox, documents or accounts, per tenant, and its credential
+ * is sealed by the worker into `app.connection_secret`. Keeping the two apart is the reason
+ * the login client and the ingestion client are different Google clients: one misconfigured
+ * scope list on the login path would otherwise hand over a mailbox as a side effect of
+ * signing in.
+ *
+ * Two providers go through here, Google and Xero, and this flow knows neither by name: what
+ * differs between them is a table in `oauthProviders.ts`, and the provider a source uses is
+ * looked up from it.
  *
  * WHAT THIS FILE REFUSES, AND WHY EACH ONE MATTERS.
  *
- * - **No configured ingest client → no authorize URL.** Better a source that reads "not
- *   connected" than a button that sends somebody to a Google error page.
+ * - **No configured client → no authorize URL.** Better a source that reads "not
+ *   connected" than a button that sends somebody to a provider's error page.
  * - **The state must be live, unused and unexpired.** One `DELETE ... RETURNING` decides
  *   all three, so a replayed callback cannot win a race against its own first use.
+ * - **The callback's provider must be the handshake's.** A Google code arriving at the Xero
+ *   callback is a state somebody moved between flows, and is refused as no state at all.
  * - **The caller must still be an admin of the tenant the handshake names.** Starting a
  *   flow is not a standing authorisation: minutes pass, and a role can be withdrawn in them.
  * - **Unknown state, expired state and a wrong tenant are refused identically.** Saying
@@ -42,36 +49,31 @@ import {
   pruneExpiredHandshakes,
   startHandshake,
 } from "../repos/oauthHandshake.ts";
-import { exchangeCode, type GoogleIngestConfig, redirectUri } from "./googleExchange.ts";
+import {
+  type GoogleIngestConfig,
+  type Provider,
+  type ProviderConfig,
+  PROVIDERS,
+  providerOf,
+  redirectUri,
+} from "./oauthProviders.ts";
+import { exchangeCode } from "./tokenExchange.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
 // Re-exported so callers keep naming one seam: this module is what they reason about.
-export type { GoogleIngestConfig };
-
-export const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+export type { GoogleIngestConfig, Provider, ProviderConfig };
 
 /** Minutes, not hours: a consent is a thing somebody is doing right now. */
 const HANDSHAKE_TTL_MS = 15 * 60 * 1000;
 
-/**
- * The scopes each source asks for.
- *
- * Drive is `drive.file`, deliberately, not `drive.readonly`. `drive.file` reaches only what
- * the admin picked in Google's own Picker, so the shipped promise "No other folder is read"
- * is enforced by Google rather than by our query filter -- and it is not a Google
- * "restricted" scope, so it carries no annual CASA security assessment. Gmail has no such
- * option: no non-restricted Gmail scope reaches attachments.
- *
- * `openid email` rides along so the callback learns which account consented. It is the same
- * identity scope sign-in uses and grants nothing further.
- */
-export const SOURCE_SCOPES: Readonly<Record<string, readonly string[]>> = {
-  gmail: ["openid", "email", "https://www.googleapis.com/auth/gmail.readonly"],
-  drive: ["openid", "email", "https://www.googleapis.com/auth/drive.file"],
-};
+/** The scopes each source asks for, across every provider. See `oauthProviders.ts`. */
+export const SOURCE_SCOPES: Readonly<Record<string, readonly string[]>> = Object.assign(
+  {},
+  ...Object.values(PROVIDERS).map((shape) => shape.scopes),
+) as Record<string, readonly string[]>;
 
 export function isGoogleSource(source: string): boolean {
-  return Object.hasOwn(SOURCE_SCOPES, source);
+  return providerOf(source) === "google";
 }
 
 /**
@@ -89,7 +91,7 @@ const IDENTITY_SCOPES: ReadonlySet<string> = new Set(["openid", "email"]);
  * What a consent has to come back with to be worth keeping.
  *
  * Derived from what was actually requested rather than from a second hand-maintained list,
- * so adding a scope to `SOURCE_SCOPES` cannot leave a stale copy behind that accepts a
+ * so adding a scope to a provider's table cannot leave a stale copy behind that accepts a
  * grant missing it.
  */
 function capabilityScopes(requestedScope: string): string[] {
@@ -99,9 +101,9 @@ function capabilityScopes(requestedScope: string): string[] {
 /**
  * What a source asks for, as the one space-delimited string every comparison here uses.
  *
- * A source with no entry answers `""`, and so has no capability to withhold: HubSpot and
- * Xero do not come through this flow at all, and a grant check that invented a requirement
- * for them would park a working connection at "reconnect" forever.
+ * A source with no entry answers `""`, and so has no capability to withhold: HubSpot does
+ * not come through this flow at all, and a grant check that invented a requirement for it
+ * would park a working connection at "reconnect" forever.
  */
 export function requestedScopeFor(source: string): string {
   return (SOURCE_SCOPES[source] ?? []).join(" ");
@@ -124,8 +126,14 @@ export function grantCovers(requestedScope: string, grantedScope: string): boole
 export interface OAuthDeps {
   readonly exec: SqlExecutor;
   readonly google?: GoogleIngestConfig;
+  readonly xero?: ProviderConfig;
   readonly worker?: WorkerClient;
   readonly now?: () => Date;
+}
+
+/** The deployment's client for a provider, or `undefined` when it has none. */
+function configFor(deps: OAuthDeps, provider: Provider): ProviderConfig | undefined {
+  return deps[provider];
 }
 
 export type StartOutcome =
@@ -135,24 +143,25 @@ export type StartOutcome =
 /**
  * Begin a consent: record the handshake, return the URL to send the browser to.
  *
- * `access_type=offline` AND `prompt=consent` are both required. Without the first Google
- * issues no refresh token at all; without the second it issues one only on the very first
- * consent, so a customer who reconnects gets a credential that dies at the next expiry and
- * cannot be refreshed -- a failure that shows up hours later, far from its cause.
+ * The provider's own authorize parameters (`oauthProviders.ts`) are what make it issue a
+ * refresh token; a PKCE challenge rides along where the provider takes one. The verifier
+ * is stored on the handshake either way -- the column is not nullable, and an unused
+ * verifier costs nothing.
  */
 export async function startConsent(
   deps: OAuthDeps,
   input: { tenantId: string; source: string; startedBy: string },
 ): Promise<StartOutcome> {
-  const google = deps.google;
-  if (google === undefined) {
-    return { ok: false, reason: "not-configured" };
-  }
-
-  const scopes = SOURCE_SCOPES[input.source];
-  if (scopes === undefined) {
+  const provider = providerOf(input.source);
+  if (provider === null) {
     return { ok: false, reason: "unsupported-source" };
   }
+  const config = configFor(deps, provider);
+  if (config === undefined) {
+    return { ok: false, reason: "not-configured" };
+  }
+  const shape = PROVIDERS[provider];
+  const scopes = shape.scopes[input.source] ?? [];
 
   // Housekeeping on the way past: abandoned consents leave rows holding a live PKCE
   // verifier, and this is the only path that runs often enough to need no scheduler.
@@ -172,17 +181,19 @@ export async function startConsent(
     expiresAt: new Date(now.getTime() + HANDSHAKE_TTL_MS).toISOString(),
   });
 
-  const url = new URL(google.authorizeUrl ?? GOOGLE_AUTHORIZE_URL);
-  url.searchParams.set("client_id", google.clientId);
-  url.searchParams.set("redirect_uri", redirectUri(google.publicUrl));
+  const url = new URL(config.authorizeUrl ?? shape.authorizeUrl);
+  url.searchParams.set("client_id", config.clientId);
+  url.searchParams.set("redirect_uri", redirectUri(config.publicUrl, provider));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", scopes.join(" "));
-  url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "consent");
-  url.searchParams.set("include_granted_scopes", "false");
+  for (const [key, value] of Object.entries(shape.authorizeParams)) {
+    url.searchParams.set(key, value);
+  }
   url.searchParams.set("state", state);
-  url.searchParams.set("code_challenge", pkce.challenge);
-  url.searchParams.set("code_challenge_method", pkce.method);
+  if (shape.pkce) {
+    url.searchParams.set("code_challenge", pkce.challenge);
+    url.searchParams.set("code_challenge_method", pkce.method);
+  }
 
   return { ok: true, authorizeUrl: url.toString() };
 }
@@ -232,17 +243,23 @@ export interface CompleteDeps extends OAuthDeps {
  */
 export async function completeConsent(
   deps: CompleteDeps,
-  input: { state: string; code: string; caller: { userId: string; email: string } | null },
+  input: {
+    provider: Provider;
+    state: string;
+    code: string;
+    caller: { userId: string; email: string } | null;
+  },
 ): Promise<CompleteOutcome> {
-  const google = deps.google;
   const worker = deps.worker;
-  if (google === undefined || worker === undefined) {
+  const config = configFor(deps, input.provider);
+  if (config === undefined || worker === undefined) {
     return { ok: false, reason: "not-configured" };
   }
 
   const handshake = await consumeHandshake(deps.exec, hashToken(input.state));
-  if (handshake === null) {
-    // Unknown, already used and expired, answered identically on purpose.
+  // Unknown, already used, expired, and started with another provider: answered
+  // identically on purpose.
+  if (handshake === null || providerOf(handshake.source) !== input.provider) {
     return { ok: false, reason: "bad-state" };
   }
 
@@ -256,7 +273,7 @@ export async function completeConsent(
     };
   }
 
-  const exchanged = await exchangeCode(google, {
+  const exchanged = await exchangeCode(input.provider, config, {
     code: input.code,
     verifier: handshake.verifier,
   });
@@ -290,7 +307,8 @@ export async function completeConsent(
   const stored = await worker.storeCredential({
     source: handshake.source,
     tenantId: handshake.tenantId,
-    // Google's opaque `sub`, never the address: `ops.connection` is readable by BI.
+    // Google's opaque `sub`, never the address: `ops.connection` is readable by BI. Xero
+    // names nobody here; its organisation id is recorded when the admin chooses one.
     externalAccountId: exchanged.sub,
     scope: exchanged.scope,
     credential: {
@@ -310,15 +328,18 @@ export async function completeConsent(
 
   // The address, for the card. `app.connection_detail`, never `ops.connection`, which BI
   // can read. Written only after the worker confirmed the credential is sealed: a label for
-  // a connection that does not exist is worse than no label.
-  await writeConnectionDetail(deps.exec, {
-    tenantId: handshake.tenantId,
-    source: handshake.source,
-    accountLabel: exchanged.email,
-  });
+  // a connection that does not exist is worse than no label. A provider that names nobody
+  // writes nothing; the organisation's name arrives with the scope.
+  if (exchanged.email !== "") {
+    await writeConnectionDetail(deps.exec, {
+      tenantId: handshake.tenantId,
+      source: handshake.source,
+      accountLabel: exchanged.email,
+    });
+  }
 
   // Swallowed exactly as `recordRefusal` swallows its own, and for the same reason: a
-  // failed audit insert must not undo a consent that has already succeeded at Google.
+  // failed audit insert must not undo a consent that has already succeeded at the provider.
   try {
     await recordAudit(deps.exec, {
       tenantId: handshake.tenantId,

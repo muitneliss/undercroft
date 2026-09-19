@@ -96,7 +96,9 @@ export async function runGoogleCollect(
 
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
-  if (scope === null) {
+  // A Google source parses to a Google scope or to nothing; the third shape belongs to
+  // another collector and would mean a row written under the wrong source.
+  if (scope === null || scope.kind === "xero") {
     throw new ScopeNotChosen(input.source, input.tenantId);
   }
 

@@ -321,6 +321,29 @@ describe("choosing a scope", () => {
     expect(result).toEqual({ ok: false, reason: "unsupported-source" });
   });
 
+  it("a Xero choice records the organisation's id for runs and its name for the card", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "xero", status: "connected" });
+
+    const result = await setScope(db, {
+      tenantId: TENANT,
+      source: "xero",
+      selectionJson: JSON.stringify({
+        organisation: { id: "org-9f2a", name: "Acme Pte Ltd" },
+        entities: ["invoices", "contacts"],
+      }),
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    expect(result.ok).toBe(true);
+    const xero = (await list(db, TENANT)).find((r) => r.source === "xero");
+    expect(xero?.status).toBe("connected");
+    // The id is what a run sends as `xero-tenant-id`; the name is what a person reads.
+    expect(xero?.externalAccountId).toBe("org-9f2a");
+    expect(xero?.externalAccountLabel).toBe("Acme Pte Ltd");
+    expect(xero?.config.entities).toEqual(["invoices", "contacts"]);
+  });
+
   it("the audit entry counts what was chosen and never names it", async () => {
     // `ops.audit_log` has a wider readership than `app.connection_detail`. What was decided
     // and by whom belongs in a trail; which folders a customer picked is their data.

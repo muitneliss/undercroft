@@ -24,6 +24,7 @@ import { ConnectorError, HttpError, raiseForByteStatus } from "@undercroft/core"
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteCredential,
+  readCredential,
   tenantExists,
   upsertConnection,
   writeCredential,
@@ -34,8 +35,18 @@ import { createGoogleApi } from "./google/api.ts";
 import { isGoogleSource } from "./google/collect.ts";
 import { type GmailLabel, listLabels } from "./google/gmail.ts";
 import type { Transactor } from "./ingest.ts";
+import { listOrganisations, type XeroOrganisation } from "./xero/organisations.ts";
+import { xeroClientAuthorization } from "./xero/refresh.ts";
 
 export const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+export const XERO_REVOKE_URL = "https://identity.xero.com/connect/revocation";
+
+/** What revoking at Xero needs beyond the token: the client that minted it. */
+export interface XeroClient {
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly revocationUrl?: string;
+}
 
 export interface StoreCredentialDeps {
   readonly exec: SqlExecutor;
@@ -107,33 +118,32 @@ export interface BrowseDeps {
 }
 
 export type BrowseOutcome =
-  | { ok: true; items: GmailLabel[] }
+  | { ok: true; items: (GmailLabel | XeroOrganisation)[] }
   | { ok: false; reason: "unsupported" | "scope-insufficient" };
 
 /**
- * What an admin may choose from.
+ * What an admin may choose from: Gmail's labels, or the organisations a Xero consent sees.
  *
- * Gmail only. Drive needs no equivalent: under `drive.file` the choosing happens in the
- * browser through Google's own Picker, and a server-side folder listing would be both
- * impossible (we cannot see what has not been picked) and a wider grant than the feature
- * needs.
+ * Drive needs no equivalent: under `drive.file` the choosing happens in the browser through
+ * Google's own Picker, and a server-side folder listing would be both impossible (we cannot
+ * see what has not been picked) and a wider grant than the feature needs.
  *
- * A grant that cannot list labels is a *refusal*, not a fault. Left to raise, Google's 403
- * became a 500 here, which the control plane could only read as "the worker is broken" --
- * and the operator was told the processing service was down when what had happened was
- * that nobody ticked the Gmail box. The remedy is a reconnect, and nothing upstream of a
- * tagged outcome can say so.
+ * A grant that cannot list is a *refusal*, not a fault. Left to raise, Google's 403 became
+ * a 500 here, which the control plane could only read as "the worker is broken" -- and the
+ * operator was told the processing service was down when what had happened was that nobody
+ * ticked the Gmail box. The remedy is a reconnect, and nothing upstream of a tagged outcome
+ * can say so.
  */
 export async function browseScope(
   deps: BrowseDeps,
-  input: { source: string; kind: "labels" },
+  input: { source: string; kind: "labels" | "organisations" },
 ): Promise<BrowseOutcome> {
-  if (input.source !== "gmail" || input.kind !== "labels") {
+  const listing = listingFor(deps, input);
+  if (listing === null) {
     return { ok: false, reason: "unsupported" };
   }
-  const api = createGoogleApi(input.source, { fetcher: deps.fetcher, token: deps.token });
   try {
-    return { ok: true, items: await listLabels(api) };
+    return { ok: true, items: await listing() };
   } catch (error) {
     if (deniedForCredential(error)) {
       return { ok: false, reason: "scope-insufficient" };
@@ -143,6 +153,21 @@ export async function browseScope(
     // operator to revoke a working credential.
     throw error;
   }
+}
+
+/** The one listing each (source, kind) has, or null for a pair this worker cannot list. */
+function listingFor(
+  deps: BrowseDeps,
+  input: { source: string; kind: "labels" | "organisations" },
+): (() => Promise<(GmailLabel | XeroOrganisation)[]>) | null {
+  if (input.source === "gmail" && input.kind === "labels") {
+    const api = createGoogleApi(input.source, { fetcher: deps.fetcher, token: deps.token });
+    return () => listLabels(api);
+  }
+  if (input.source === "xero" && input.kind === "organisations") {
+    return () => listOrganisations({ fetcher: deps.fetcher, token: deps.token });
+  }
+  return null;
 }
 
 /**
@@ -184,15 +209,18 @@ export interface RevokeDeps {
   /** Resolves the token to revoke. Absent or failing means we still forget our copy. */
   /** A property, not a method: it is passed by reference, and a method would carry `this`. */
   readonly token: () => Promise<string>;
+  /** Xero revokes by REFRESH token with the client's own credential; absent, we only forget ours. */
+  readonly xero?: XeroClient;
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 /**
- * Forget a credential, and tell Google to forget it too.
+ * Forget a credential, and tell the provider to forget it too.
  *
  * The upstream call is best-effort and its outcome is *reported*, never assumed. Our row
- * disappearing while Google's grant stands would make "you can disconnect at any time" --
- * copy already on the consent card -- a half-truth. But a provider outage must not leave a
- * customer unable to disconnect, so the local delete happens either way.
+ * disappearing while the provider's grant stands would make "you can disconnect at any
+ * time" -- copy already on the consent card -- a half-truth. But a provider outage must not
+ * leave a customer unable to disconnect, so the local delete happens either way.
  */
 export async function revokeConnection(
   deps: RevokeDeps,
@@ -200,26 +228,57 @@ export async function revokeConnection(
 ): Promise<{ revokedUpstream: boolean }> {
   let revokedUpstream = false;
 
-  if (isGoogleSource(input.source)) {
-    try {
-      const token = await deps.token();
-      const request = {
-        url: GOOGLE_REVOKE_URL,
-        method: "POST" as const,
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ token }).toString(),
-      };
-      const response = await deps.fetcher.send(request);
-      raiseForByteStatus(request, response);
-      revokedUpstream = true;
-    } catch {
-      // Swallowed on purpose, and the only place in this module that swallows anything: a
-      // token already revoked at Google answers 400, and refusing to disconnect over that
-      // would trap a customer in a connection they have asked to end.
-      revokedUpstream = false;
-    }
+  try {
+    revokedUpstream = await revokeUpstream(deps, input);
+  } catch {
+    // Swallowed on purpose, and the only place in this module that swallows anything: a
+    // token already revoked at the provider answers 400, and refusing to disconnect over
+    // that would trap a customer in a connection they have asked to end.
+    revokedUpstream = false;
   }
 
   await deleteCredential(deps.exec, input.tenantId, input.source);
   return { revokedUpstream };
+}
+
+/** Tell the provider, in the way each provider is told. `false` when this one cannot be. */
+async function revokeUpstream(
+  deps: RevokeDeps,
+  input: { source: string; tenantId: string },
+): Promise<boolean> {
+  if (isGoogleSource(input.source)) {
+    const token = await deps.token();
+    const request = {
+      url: GOOGLE_REVOKE_URL,
+      method: "POST" as const,
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }).toString(),
+    };
+    const response = await deps.fetcher.send(request);
+    raiseForByteStatus(request, response);
+    return true;
+  }
+  if (input.source === "xero" && deps.xero !== undefined) {
+    // The refresh token, not the access token: revoking it ends the grant and every
+    // connection under it, which is what "disconnect" means to the customer.
+    const credential = await readCredential(
+      deps.exec,
+      input.tenantId,
+      input.source,
+      deps.env === undefined ? {} : { env: deps.env },
+    );
+    const request = {
+      url: deps.xero.revocationUrl ?? XERO_REVOKE_URL,
+      method: "POST" as const,
+      headers: {
+        authorization: xeroClientAuthorization(deps.xero),
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ token: credential.refreshToken }).toString(),
+    };
+    const response = await deps.fetcher.send(request);
+    raiseForByteStatus(request, response);
+    return true;
+  }
+  return false;
 }

@@ -27,6 +27,7 @@
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
+- [Runbook Xero Setup](sources/runbook-xero-setup.md)
 
 ## Notes
 

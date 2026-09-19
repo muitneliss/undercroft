@@ -47,11 +47,16 @@ export const StoreCredentialResponse = z.object({
   expiresAt: z.string().nullable(),
 });
 
-/** Listing what an admin may choose from. Needs a live token, so it lives in the worker. */
+/**
+ * Listing what an admin may choose from. Needs a live token, so it lives in the worker.
+ *
+ * `labels` is Gmail's; `organisations` is Xero's -- the organisations one consent can see,
+ * of which the platform must be told one rather than guess.
+ */
 export const BrowseScopeRequest = z.object({
   source: z.string().min(1),
   tenantId: z.string().min(1),
-  kind: z.enum(["labels"]),
+  kind: z.enum(["labels", "organisations"]),
 });
 
 export const BrowseScopeResponse = z.object({

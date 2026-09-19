@@ -235,11 +235,12 @@ export const appRouter = router({
       }),
 
     /**
-     * What an admin may choose from, for the scope picker.
+     * What an admin may choose from, for the scope picker: Gmail's labels, or the
+     * organisations a Xero consent can see.
      *
      * Proxied to the worker because it needs a live token, which only the worker can open.
-     * Gmail only: under `drive.file` the choosing happens in the browser through Google's own
-     * Picker, so there is nothing for the server to list.
+     * Drive has no listing: under `drive.file` the choosing happens in the browser through
+     * Google's own Picker, so there is nothing for the server to list.
      */
     browseScope: requireRole("admin")
       .input(z.object({ source: z.string().min(1) }))
@@ -253,7 +254,7 @@ export const appRouter = router({
         const outcome = await ctx.worker.browseScope({
           source: input.source,
           tenantId: ctx.tenantId,
-          kind: "labels",
+          kind: input.source === "xero" ? "organisations" : "labels",
         });
         if (!outcome.ok) {
           // Three outcomes, three sentences. One message for all of them told an

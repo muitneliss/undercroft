@@ -20,9 +20,11 @@ import { createByteFetcher, createLogger } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { createLakeApi } from "./handlers/lake.ts";
+import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
 import type { Refresher } from "./services/ingest.ts";
 import { closeAbandonedRuns } from "./services/ledger.ts";
+import { xeroRefresher } from "./services/xero/refresh.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -33,24 +35,37 @@ function required(name: string): string {
 }
 
 /**
- * The Google sources share one OAuth client, so they share one refresher.
- *
- * With no client configured this is an empty map rather than a broken entry: `gmail` and
- * `drive` then behave the way an unconfigured source should -- a run finds no credential
- * and says so -- rather than failing later with something that reads like a Google outage.
- *
- * HubSpot and Xero are deliberately absent. Neither has ever had a refresher, and Xero's
- * rotation semantics (the old token dies the instant the new one is issued) deserve their
- * own change rather than a line in this one.
+ * The Xero client, when this deployment has one. The worker refreshes with it (Xero rotates,
+ * and the rotated pair is written back under the row lock) and revokes with it.
  */
-function googleRefreshers(): Record<string, Refresher> {
+function xeroClient(): XeroClient | undefined {
+  const clientId = process.env.UNDERCROFT_XERO_CLIENT_ID ?? "";
+  const clientSecret = process.env.UNDERCROFT_XERO_CLIENT_SECRET ?? "";
+  return clientId === "" || clientSecret === "" ? undefined : { clientId, clientSecret };
+}
+
+/**
+ * One refresher per source that can refresh.
+ *
+ * The Google sources share one OAuth client, so they share one refresher. With no client
+ * configured a source is simply absent from the map rather than a broken entry: a run then
+ * finds no credential and says so, rather than failing later with something that reads like
+ * a provider outage. HubSpot is deliberately absent: a private-app token has nothing to
+ * refresh with.
+ */
+function refreshers(xeroClientOrNone: XeroClient | undefined): Record<string, Refresher> {
+  const found: Record<string, Refresher> = {};
   const clientId = process.env.UNDERCROFT_GOOGLE_INGEST_CLIENT_ID ?? "";
   const clientSecret = process.env.UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET ?? "";
-  if (clientId === "" || clientSecret === "") {
-    return {};
+  if (clientId !== "" && clientSecret !== "") {
+    const refresh = googleRefresher({ clientId, clientSecret, fetcher: createByteFetcher() });
+    found.gmail = refresh;
+    found.drive = refresh;
   }
-  const refresh = googleRefresher({ clientId, clientSecret, fetcher: createByteFetcher() });
-  return { gmail: refresh, drive: refresh };
+  if (xeroClientOrNone !== undefined) {
+    found.xero = xeroRefresher({ ...xeroClientOrNone, fetcher: createByteFetcher() });
+  }
+  return found;
 }
 
 // JSONL on stdout, the same shape the control plane writes; the container runtime collects
@@ -73,12 +88,15 @@ const store = new S3ObjectStore({
     : {}),
 });
 
+const xero = xeroClient();
+
 const app = createLakeApi({
   lake: new LakeStore(store),
   exec: asExecutor(pool),
   serviceToken: required("UNDERCROFT_TRIGGER_TOKEN"),
   log,
-  refreshers: googleRefreshers(),
+  refreshers: refreshers(xero),
+  ...(xero === undefined ? {} : { xero }),
   // Without this the `SELECT ... FOR UPDATE` in `accessToken` holds a lock for one
   // statement and protects nothing, which is what lets two concurrent runs spend the same
   // refresh token. See `services/ingest.ts`.

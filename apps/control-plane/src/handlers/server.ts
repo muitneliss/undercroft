@@ -31,7 +31,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { isAdminIn } from "../services/authz.ts";
 import { appUserForEmail } from "../services/invite.ts";
-import { type GoogleIngestConfig, startConsent } from "../services/oauth.ts";
+import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
@@ -95,6 +95,8 @@ export interface ServerDeps {
    * page while verification is still pending.
    */
   readonly googleIngest?: GoogleIngestConfig;
+  /** The Xero client. Absent means Xero reads "not connected" and its button says why. */
+  readonly xero?: ProviderConfig;
   /**
    * The worker: the only process holding the master key, and so the only one that can seal
    * a credential. Absent disables the consent flow with it. ADR 0016.
@@ -124,6 +126,7 @@ export function createServer(deps: ServerDeps): Hono {
   registerOAuthRoutes(app, {
     exec: deps.exec,
     ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
+    ...(deps.xero === undefined ? {} : { xero: deps.xero }),
     ...(deps.worker === undefined ? {} : { worker: deps.worker }),
     // Through `authz.isAdminIn`, which is the same policy `tenantProcedure` resolves. Asking
     // `roleFor` here instead -- as this line first did -- reads a `tenant_member` row that a
@@ -180,6 +183,7 @@ export function createServer(deps: ServerDeps): Hono {
             {
               exec: deps.exec,
               ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
+              ...(deps.xero === undefined ? {} : { xero: deps.xero }),
             },
             start,
           ),

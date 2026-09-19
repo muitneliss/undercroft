@@ -172,6 +172,9 @@ services:
       # "not connected" -- the right state while Google verification is pending.
       UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
       UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET:-}
+      # The Xero client, for refreshing and revoking; the control plane runs the consent.
+      UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
+      UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
       # dbt runs as a subprocess here (ADR 0007) and connects as `undercroft_dbt`, never as
       # the platform role. dbt/profiles.yml reads this; without it the transform verb fails
       # inside dbt, far from anything that names the variable.
@@ -273,6 +276,9 @@ services:
       # says it is unavailable.
       UNDERCROFT_GOOGLE_PICKER_API_KEY: ${UNDERCROFT_GOOGLE_PICKER_API_KEY:-}
       UNDERCROFT_GOOGLE_PROJECT_NUMBER: ${UNDERCROFT_GOOGLE_PROJECT_NUMBER:-}
+      # The Xero client, for the consent. See docs/runbook/xero-setup.md.
+      UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
+      UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
       UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
       UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
       UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}

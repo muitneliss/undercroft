@@ -27,6 +27,7 @@
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 // biome-ignore-all lint/suspicious/useAwait: An async function with no await, because the port it implements returns a promise. The contract is the signature, not the body -- `.claude/rules/tests.md` and the ESLint config this replaced both called this out by name.
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
@@ -44,7 +45,7 @@ import {
   type RunContext,
   readEntity,
 } from "@undercroft/connector-runtime";
-import { parseSpec } from "@undercroft/contracts";
+import { needsScope, parseScope, parseSpec, SCOPED_SOURCES } from "@undercroft/contracts";
 import {
   type ByteFetcher,
   createByteFetcher,
@@ -60,6 +61,7 @@ import {
   type Credential,
   getConnection,
   openRun,
+  readConnectionDetail,
   recordEntities,
   recordRefusals,
   type RunEntity,
@@ -71,7 +73,12 @@ import {
 import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
 import { createGoogleApi } from "./google/api.ts";
-import { type GoogleSource, isGoogleSource, runGoogleCollect } from "./google/collect.ts";
+import {
+  type GoogleSource,
+  isGoogleSource,
+  runGoogleCollect,
+  ScopeNotChosen,
+} from "./google/collect.ts";
 import { landRecords, type RecordToLand } from "./land.ts";
 import { loadStreamToRaw } from "./loadToRaw.ts";
 
@@ -336,6 +343,14 @@ async function requireUsableConnection(
   if (connection === null || connection.status !== "connected") {
     throw new ConnectionUnusable(input.source, input.tenantId, connection?.status ?? "absent");
   }
+  // A scoped source with nothing chosen is refused before a row is opened, for the same
+  // reason the scheduler skips it: a run that could only fail, every tick, is noise.
+  if (SCOPED_SOURCES.has(input.source)) {
+    const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
+    if (needsScope(input.source, detail?.selectionJson ?? "{}")) {
+      throw new ScopeNotChosen(input.source, input.tenantId);
+    }
+  }
 }
 
 function totals(ledger: Ledger): {
@@ -377,6 +392,23 @@ async function settle(
     ...totals(ledger),
     ...(outcome.error === undefined ? {} : { error: outcome.error }),
   });
+}
+
+/**
+ * What a spec run reads, as the connection records it: the provider's account id, and the
+ * entities the admin chose. `null` for each means "the spec decides" -- a source with no
+ * organisation to name, or a choice that named no entities and so means all of them.
+ */
+async function chosenFor(
+  deps: Pick<RunDeps, "exec">,
+  input: { source: string; tenantId: string },
+): Promise<{ accountId: string | null; entities: string[] | null }> {
+  const connection = await getConnection(deps.exec, input.tenantId, input.source);
+  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
+  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
+  const entities = scope?.kind === "xero" && scope.entities.length > 0 ? scope.entities : null;
+  const accountId = connection?.externalAccountId ?? null;
+  return { accountId: accountId === "" ? null : accountId, entities };
 }
 
 /**
@@ -426,6 +458,7 @@ async function runSpecIngest(
   ledger: Ledger,
 ): Promise<void> {
   const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
+  const chosen = await chosenFor(deps, input);
 
   const ctx: RunContext = {
     fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),
@@ -436,6 +469,9 @@ async function runSpecIngest(
       : {
           token: () => resolveToken(deps, input),
         }),
+    // The provider's account id -- the Xero organisation chosen after consent -- for the
+    // header the spec names. The runtime refuses to send a request without it.
+    ...(chosen.accountId === null ? {} : { accountId: chosen.accountId }),
   };
 
   // Ids per entity, so a `batch-from` relation can read against the entity it references.
@@ -443,7 +479,14 @@ async function runSpecIngest(
   // the spec schema checks by refusing an unknown reference.
   const idsByEntity = new Map<string, string[]>();
 
-  for (const entity of spec.entities) {
+  // What the admin chose to read, where they chose. Spec order is kept, so a relation still
+  // follows the entity it reads against.
+  const entities =
+    chosen.entities === null
+      ? spec.entities
+      : spec.entities.filter((entity) => chosen.entities?.includes(entity.name) === true);
+
+  for (const entity of entities) {
     const entityCtx: RunContext =
       entity.request.kind === "batch-from"
         ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }

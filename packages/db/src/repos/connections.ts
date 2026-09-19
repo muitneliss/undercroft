@@ -204,6 +204,25 @@ export async function upsertConnection(
   );
 }
 
+/**
+ * Record the provider's own account id -- a Xero organisation, chosen after consent.
+ *
+ * On `ops.connection` because a run needs it and BI may see it: it is an opaque id, never a
+ * name. The name goes to `app.connection_detail` with the rest of the choice.
+ */
+export async function setExternalAccount(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+  externalAccountId: string,
+): Promise<void> {
+  await exec.query(
+    `UPDATE ops.connection SET external_account_id = $3, updated_at = now()
+     WHERE tenant_id = $1 AND source = $2`,
+    [tenantId, source, externalAccountId],
+  );
+}
+
 export async function setStatus(
   exec: SqlExecutor,
   tenantId: string,

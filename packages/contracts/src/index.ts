@@ -30,6 +30,7 @@ export {
   needsScope,
   parseScope,
   SCOPED_SOURCES,
+  XeroScope,
 } from "./connectionScope.ts";
 export {
   ApiError,
