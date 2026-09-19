@@ -8,5 +8,5 @@ export {
   ObjectExists,
   type PutResult,
   RETENTION_UNBOUNDED,
-  sha256Hex,
 } from "./store.ts";
+export { sha256Hex } from "./keys.ts";

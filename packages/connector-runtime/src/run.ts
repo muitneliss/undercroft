@@ -23,6 +23,7 @@ import {
   ConnectorError,
   canonicalJson,
   createPacer,
+  type Pacer,
   getPath,
   getStringPath,
   parseLossless,
@@ -31,6 +32,7 @@ import {
   withRetry,
 } from "@undercroft/core";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
+import { nextPageUrl, renderBatchBody } from "./paging.ts";
 
 export interface RawRecordOut {
   readonly source: string;
@@ -53,34 +55,6 @@ export interface RunContext {
    * means the relation has nothing to read.
    */
   readonly sourceIds?: readonly string[];
-}
-
-/**
- * Render a batch request body from a named template.
- *
- * Named, never arbitrary code: a spec is configuration a user writes, and a template that
- * could execute would make every connector spec a script.
- */
-/**
- * The compile-time end of an exhaustive switch.
- *
- * Its value is that adding a member to one of these unions -- a new pagination kind, a second
- * batch template -- stops compiling HERE rather than silently falling out of the switch and
- * returning undefined at runtime.
- */
-function assertNever(value: never, what: string): never {
-  throw new Error(`unhandled ${what}: ${JSON.stringify(value)}`);
-}
-
-function renderBatchBody(template: "hubspot-batch-inputs", ids: readonly string[]): string {
-  switch (template) {
-    case "hubspot-batch-inputs":
-      return JSON.stringify({ inputs: ids.map((id) => ({ id })) });
-    // Unreachable while the union has one member, and that is the point: adding a second
-    // template without a case here stops compiling rather than falling through to nothing.
-    default:
-      return assertNever(template, "batch body template");
-  }
 }
 
 function retryPolicy(spec: ConnectorSpec): RetryPolicy {
@@ -120,62 +94,6 @@ function buildUrl(baseUrl: string, path: string, query: Record<string, string>):
   return url.toString();
 }
 
-/** Advance to the next page's URL, or null when the source signals it is done. */
-interface PageCursor {
-  readonly entity: ConnectorEntity;
-  readonly spec: ConnectorSpec;
-  readonly parsed: unknown;
-  readonly pageIndex: number;
-  readonly recordsThisPage: number;
-  readonly currentUrl: string;
-}
-
-function nextPageUrl(page: PageCursor): string | null {
-  const { entity, spec, parsed, pageIndex, recordsThisPage, currentUrl } = page;
-  const pagination = entity.pagination ?? spec.defaults.pagination;
-  switch (pagination.kind) {
-    case "none":
-      return null;
-    case "json-link": {
-      const next = getStringPath(parsed, pagination.nextPath);
-      // A next-link equal to the current URL is an infinite loop wearing a cursor.
-      if (next === null || next === currentUrl) {
-        return null;
-      }
-      return next;
-    }
-    case "page-number": {
-      if (pagination.stopOn === "empty-page" && recordsThisPage === 0) {
-        return null;
-      }
-      const url = new URL(currentUrl);
-      url.searchParams.set(pagination.param, String(pagination.startAt + pageIndex + 1));
-      return url.toString();
-    }
-    case "offset": {
-      if (recordsThisPage === 0) {
-        return null;
-      }
-      const url = new URL(currentUrl);
-      // parseInt, not Number(): an offset index, not an amount.
-      const prev = Number.parseInt(url.searchParams.get(pagination.param) ?? "0", 10);
-      url.searchParams.set(pagination.param, String(prev + recordsThisPage));
-      return url.toString();
-    }
-    case "cursor": {
-      const cursor = getStringPath(parsed, pagination.cursorPath);
-      if (cursor === null) {
-        return null;
-      }
-      const url = new URL(currentUrl);
-      url.searchParams.set(pagination.param, cursor);
-      return url.toString();
-    }
-    default:
-      return assertNever(pagination, "pagination kind");
-  }
-}
-
 function extractRecords(entity: ConnectorEntity, spec: ConnectorSpec, parsed: unknown): unknown[] {
   const container =
     entity.envelopePath === undefined ? parsed : getPath(parsed, entity.envelopePath);
@@ -196,29 +114,129 @@ function extractRecords(entity: ConnectorEntity, spec: ConnectorSpec, parsed: un
  * Read every record for one entity. Async generator, so the caller lands records as they
  * arrive rather than buffering an entire source in memory.
  */
+/**
+ * What the two readers below share: the paced fetcher, the record emitter, and the running
+ * count they both advance and the error messages both quote.
+ */
+interface EntityRun {
+  readonly spec: ConnectorSpec;
+  readonly entity: ConnectorEntity;
+  readonly headers: Record<string, string>;
+  readonly guards: NonNullable<ConnectorEntity["guards"]>;
+  readonly fetchJson: (request: HttpRequest) => Promise<unknown>;
+  readonly emit: (parsed: unknown) => Generator<RawRecordOut>;
+  /** Read, never copied: `emit` advances it as records are yielded. */
+  readonly state: { seen: number };
+}
+
+/** Whether the run has read everything the spec allows it to. */
+function atCeiling(run: EntityRun): boolean {
+  return run.guards.maxRecords !== undefined && run.state.seen >= run.guards.maxRecords;
+}
+
+/**
+ * A relation read: ids harvested from another entity, POSTed in chunks.
+ *
+ * This exists because a relation like HubSpot's deal->company associations is a different
+ * route with a different shape, and bending it into the object reader is how a connector
+ * becomes hundreds of lines of special cases.
+ */
+async function* readBatch(
+  run: EntityRun,
+  request: Extract<ConnectorEntity["request"], { kind: "batch-from" }>,
+  ids: readonly string[],
+): AsyncGenerator<RawRecordOut> {
+  const url = buildUrl(run.spec.baseUrl, request.path, {});
+
+  for (let offset = 0; offset < ids.length; offset += request.chunkSize) {
+    const chunk = ids.slice(offset, offset + request.chunkSize);
+    const parsed = await run.fetchJson({
+      url,
+      method: "POST",
+      headers: { ...run.headers, "content-type": "application/json" },
+      body: renderBatchBody(request.bodyTemplate, chunk),
+    });
+    for (const record of run.emit(parsed)) {
+      yield record;
+      if (atCeiling(run)) {
+        return;
+      }
+    }
+  }
+}
+
+/** The ordinary object read: one request per page, until the source says it is done. */
+async function* readPages(
+  run: EntityRun,
+  request: Exclude<ConnectorEntity["request"], { kind: "batch-from" }>,
+): AsyncGenerator<RawRecordOut> {
+  let url = buildUrl(run.spec.baseUrl, request.path, request.query);
+  let pageIndex = 0;
+
+  for (;;) {
+    const currentUrl = url;
+    const parsed = await run.fetchJson({ url, method: request.method, headers: run.headers });
+
+    // `emit` advances `seen`, so capture the page size before draining it.
+    const recordsThisPage = extractRecords(run.entity, run.spec, parsed).length;
+    for (const record of run.emit(parsed)) {
+      yield record;
+      if (atCeiling(run)) {
+        return;
+      }
+    }
+
+    const next = nextPageUrl({
+      entity: run.entity,
+      spec: run.spec,
+      parsed,
+      pageIndex,
+      recordsThisPage,
+      currentUrl,
+    });
+    pageIndex += 1;
+    if (next === null) {
+      break;
+    }
+    url = next;
+  }
+}
+
+/**
+ * The guards that can only be answered once the whole entity is read.
+ *
+ * Both raise rather than report: a run that read nothing, or that landed exactly on a
+ * provider's cap, has almost certainly lost data, and `connectors.md` is explicit that a
+ * failure raises rather than returning an empty stream.
+ */
+function checkGuards(run: EntityRun): void {
+  const { spec, entity, guards, state } = run;
+  if (guards.failOnEmpty && state.seen === 0) {
+    throw new ConnectorError(spec.id, entity.name, 0, "source returned no records (failOnEmpty)");
+  }
+  if (guards.failOnExactCount !== undefined && state.seen === guards.failOnExactCount) {
+    // The HubSpot 10,000 cap: landing exactly on it is almost certainly truncation, and
+    // the source does not say so.
+    throw new ConnectorError(
+      spec.id,
+      entity.name,
+      state.seen,
+      `read exactly ${state.seen} records, the configured truncation ceiling -- this is probably silent data loss`,
+    );
+  }
+}
+
 export async function* readEntity(
   spec: ConnectorSpec,
   entity: ConnectorEntity,
   ctx: RunContext,
 ): AsyncGenerator<RawRecordOut> {
   const clock = ctx.clock ?? systemClock;
-  const rateLimit = entity.rateLimit ?? spec.defaults.rateLimit;
   const guards = entity.guards ?? spec.defaults.guards;
-  const pacer = createPacer(
-    {
-      minIntervalMs: rateLimit.minIntervalMs,
-      ...(rateLimit.requestsPerMinute === undefined
-        ? {}
-        : { requestsPerMinute: rateLimit.requestsPerMinute }),
-      ...(rateLimit.requestsPerDay === undefined
-        ? {}
-        : { requestsPerDay: rateLimit.requestsPerDay }),
-    },
-    clock,
-  );
+  const pacer = pacerFor(spec, entity, clock);
   const policy = retryPolicy(spec);
   const headers = await authHeaders(spec, ctx);
-  let seen = 0;
+  const state = { seen: 0 };
 
   /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
   async function fetchJson(request: HttpRequest): Promise<unknown> {
@@ -232,7 +250,7 @@ export async function* readEntity(
       policy,
       { clock, ...(ctx.random === undefined ? {} : { random: ctx.random }) },
     ).catch((error: unknown) => {
-      throw new ConnectorError(spec.id, entity.name, seen, describe(error), { cause: error });
+      throw new ConnectorError(spec.id, entity.name, state.seen, describe(error), { cause: error });
     });
   }
 
@@ -245,7 +263,7 @@ export async function* readEntity(
         throw new ConnectorError(
           spec.id,
           entity.name,
-          seen,
+          state.seen,
           `a record has no value at idPath ${JSON.stringify(entity.idPath)}`,
         );
       }
@@ -258,82 +276,36 @@ export async function* readEntity(
         sourceUpdatedAt: updatedAt,
         payloadText: canonicalJson(record),
       };
-      seen += 1;
+      state.seen += 1;
     }
   }
+
+  const run: EntityRun = { spec, entity, headers, guards, fetchJson, emit, state };
 
   if (entity.request.kind === "batch-from") {
-    // A relation read: ids harvested from another entity, POSTed in chunks. This exists
-    // because a relation like HubSpot's deal->company associations is a different route
-    // with a different shape, and bending it into the object reader is how a connector
-    // becomes hundreds of lines of special cases.
-    const { request } = entity;
-    const ids = ctx.sourceIds ?? [];
-    const url = buildUrl(spec.baseUrl, request.path, {});
-
-    for (let offset = 0; offset < ids.length; offset += request.chunkSize) {
-      const chunk = ids.slice(offset, offset + request.chunkSize);
-      const parsed = await fetchJson({
-        url,
-        method: "POST",
-        headers: { ...headers, "content-type": "application/json" },
-        body: renderBatchBody(request.bodyTemplate, chunk),
-      });
-      for (const record of emit(parsed)) {
-        yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
-          return;
-        }
-      }
-    }
+    yield* readBatch(run, entity.request, ctx.sourceIds ?? []);
   } else {
-    const { request } = entity;
-    let url = buildUrl(spec.baseUrl, request.path, request.query);
-    let pageIndex = 0;
-
-    for (;;) {
-      const currentUrl = url;
-      const parsed = await fetchJson({ url, method: request.method, headers });
-
-      // `emit` advances `seen`, so capture the page size before draining it.
-      const pageSize = extractRecords(entity, spec, parsed).length;
-      for (const record of emit(parsed)) {
-        yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
-          return;
-        }
-      }
-
-      const next = nextPageUrl({
-        entity,
-        spec,
-        parsed,
-        pageIndex,
-        recordsThisPage: pageSize,
-        currentUrl,
-      });
-      pageIndex += 1;
-      if (next === null) {
-        break;
-      }
-      url = next;
-    }
+    yield* readPages(run, entity.request);
   }
 
-  // Guards run once the whole entity is read.
-  if (guards.failOnEmpty && seen === 0) {
-    throw new ConnectorError(spec.id, entity.name, 0, "source returned no records (failOnEmpty)");
-  }
-  if (guards.failOnExactCount !== undefined && seen === guards.failOnExactCount) {
-    // The HubSpot 10,000 cap: landing exactly on it is almost certainly truncation, and
-    // the source does not say so.
-    throw new ConnectorError(
-      spec.id,
-      entity.name,
-      seen,
-      `read exactly ${seen} records, the configured truncation ceiling -- this is probably silent data loss`,
-    );
-  }
+  checkGuards(run);
+}
+
+/** The pacer this entity runs under: its own rate limit, else the spec's default. */
+function pacerFor(spec: ConnectorSpec, entity: ConnectorEntity, clock: Clock): Pacer {
+  const rateLimit = entity.rateLimit ?? spec.defaults.rateLimit;
+  return createPacer(
+    {
+      minIntervalMs: rateLimit.minIntervalMs,
+      ...(rateLimit.requestsPerMinute === undefined
+        ? {}
+        : { requestsPerMinute: rateLimit.requestsPerMinute }),
+      ...(rateLimit.requestsPerDay === undefined
+        ? {}
+        : { requestsPerDay: rateLimit.requestsPerDay }),
+    },
+    clock,
+  );
 }
 
 function describe(error: unknown): string {

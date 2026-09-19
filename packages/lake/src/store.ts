@@ -26,6 +26,13 @@
 
 import { createStampSource, isStamp, type StampSource, systemClock } from "@undercroft/core";
 import type { ObjectStore } from "./objectStore.ts";
+import {
+  blobKey as blobKeyOf,
+  journalKey as journalKeyOf,
+  sha256Hex,
+  validateSourceKey as validateSourceKeyOf,
+  validateStream,
+} from "./keys.ts";
 
 /**
  * Default retention: `undefined` means keep every observation, forever.
@@ -39,9 +46,6 @@ import type { ObjectStore } from "./objectStore.ts";
  * is a starting position with a deadline, not a permanent policy.
  */
 export const RETENTION_UNBOUNDED = undefined;
-
-/** Reserved key prefixes, written only by the store. `validateSourceKey` keeps callers out. */
-const RESERVED_PREFIXES = ["_blobs/", "_journal/"] as const;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -81,32 +85,6 @@ export interface JournalEntry {
  * (it names a set of records), which the source-key rule forbids. It still must not be
  * empty, traverse, or shadow a reserved prefix.
  */
-function validateStream(stream: string): string {
-  const s = stream.replace(/^\/+|\/+$/gu, "");
-  if (s === "") {
-    throw new RangeError("journal stream must not be empty");
-  }
-  if (s.split("/").includes("..")) {
-    throw new RangeError(`journal stream must not traverse: ${JSON.stringify(stream)}`);
-  }
-  if (RESERVED_PREFIXES.some((p) => `${s}/`.startsWith(p))) {
-    throw new RangeError(
-      `journal stream must not shadow a reserved prefix: ${JSON.stringify(stream)}`,
-    );
-  }
-  return s;
-}
-
-async function sha256Hex(data: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  const bytes = new Uint8Array(digest);
-  let hex = "";
-  for (const b of bytes) {
-    hex += b.toString(16).padStart(2, "0");
-  }
-  return hex;
-}
-
 export interface LakeStoreOptions {
   /** Keep at most this many observations per key. `undefined` keeps everything. Min 1. */
   readonly retention?: number | undefined;
@@ -129,48 +107,21 @@ export class LakeStore {
   }
 
   // -- keys -----------------------------------------------------------------
+  //
+  // Delegates. The grammar itself lives in `keys.ts`, because what a key may look like is a
+  // rule about the lake rather than a behaviour of this class -- and it is the rule that
+  // keeps `prune` from ever walking an entity directory. See that module.
 
   static blobKey(digest: string): string {
-    return `_blobs/${digest.slice(0, 2)}/${digest}`;
+    return blobKeyOf(digest);
   }
 
   static journalKey(stream: string, stamp: string, digest: string): string {
-    // Stream first, then stamp, so listing `_journal/{stream}/` sorts by observation
-    // time and a plain `StartAfter` over it is an incremental-load cursor. The digest
-    // tail disambiguates two observations that share a microsecond.
-    return `_journal/${validateStream(stream)}/${stamp}/${digest.slice(0, 12)}`;
+    return journalKeyOf(stream, stamp, digest);
   }
 
-  /**
-   * Reject key shapes that make pruning dangerous.
-   *
-   * In a provenance store, listing every subdirectory of a key and treating each as a
-   * version means a key naming an *intermediate* node makes prune walk entity directories
-   * and delete customer data. The shape is enforced here, at the only place keys enter
-   * the store, rather than promised in a docstring no line of code keeps.
-   */
   static validateSourceKey(sourceKey: string): string {
-    const key = sourceKey.replace(/^\/+|\/+$/gu, "");
-    if (key === "") {
-      throw new RangeError("source_key must not be empty");
-    }
-    const segments = key.split("/");
-    if (segments.includes("..")) {
-      throw new RangeError(`source_key must not traverse: ${JSON.stringify(sourceKey)}`);
-    }
-    if (RESERVED_PREFIXES.some((p) => `${key}/`.startsWith(p))) {
-      throw new RangeError(
-        `source_key must not shadow a reserved prefix: ${JSON.stringify(sourceKey)}`,
-      );
-    }
-    if (segments.length < 2) {
-      throw new RangeError(
-        `source_key ${JSON.stringify(sourceKey)} is too shallow: it must name a leaf ` +
-          "(e.g. 'xero/invoices/INV-001'), not a container. A container key would make " +
-          "retention prune sibling entities.",
-      );
-    }
-    return key;
+    return validateSourceKeyOf(sourceKey);
   }
 
   // -- writing --------------------------------------------------------------
@@ -396,5 +347,3 @@ export class LakeStore {
     return removed;
   }
 }
-
-export { sha256Hex };
