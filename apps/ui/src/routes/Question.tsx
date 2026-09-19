@@ -34,9 +34,9 @@ import { lazy, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
+import { ChartOptions } from "@/components/ChartOptions.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { QuestionBuilder } from "@/components/QuestionBuilder.tsx";
-import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { paramsFromSearch, withParam } from "@/lib/params.ts";
@@ -51,6 +51,10 @@ import { trpc } from "@/trpc.ts";
 
 const SqlEditor = lazy(() =>
   import("@/components/SqlEditor.tsx").then((module) => ({ default: module.SqlEditor })),
+);
+// The charting library rides in its own chunk, fetched the first time a result is drawn.
+const ChartFrame = lazy(() =>
+  import("@/components/charts/ChartFrame.tsx").then((module) => ({ default: module.ChartFrame })),
 );
 
 const NEW = "new";
@@ -155,6 +159,7 @@ function QuestionLeaf({
   const setQuestionSql = useUiStore((state) => state.setQuestionSql);
   const switchQuestionToSql = useUiStore((state) => state.switchQuestionToSql);
   const markQuestionSaved = useUiStore((state) => state.markQuestionSaved);
+  const setQuestionChart = useUiStore((state) => state.setQuestionChart);
 
   const visual = draft.definition.kind === "visual" ? draft.definition : null;
   const compiled = trpc.bi.compile.useQuery(
@@ -390,7 +395,20 @@ function QuestionLeaf({
             {save.error.message}
           </Errata>
         ) : null}
-        {result === undefined ? null : <ResultTable result={result} locale={locale} />}
+        {result === undefined ? null : (
+          <>
+            {canAuthor ? (
+              <ChartOptions
+                columns={result.columns}
+                chart={draft.chart}
+                onChange={setQuestionChart}
+              />
+            ) : null}
+            <Suspense fallback={<Skeleton rows={4} />}>
+              <ChartFrame result={result} chart={draft.chart} locale={locale} />
+            </Suspense>
+          </>
+        )}
       </div>
 
       {canAuthor && draft.id !== null ? (

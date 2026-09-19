@@ -2002,6 +2002,41 @@
     font-weight: 400;
   }
 
+  /* -- charts ---------------------------------------------------------------------- */
+
+  /* The frame a chart is drawn in. Chart.js can only ease, so it is told not to move;
+   the frame inks in with the same two steps a table row does. A fixed height, because
+   the canvas fills its box and a box with no height is a box with no chart. */
+  .plot {
+    position: relative;
+    height: 22rem;
+    animation: ink-set var(--pass) both;
+  }
+
+  .plot--gauge {
+    height: 14rem;
+  }
+
+  .plot--progress {
+    height: 6rem;
+  }
+
+  /* One figure, large, in the mono face: the number a KPI tile exists to show, printed
+   from the digits the database holds. */
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    animation: ink-set var(--pass) both;
+  }
+
+  .tile__figure {
+    font-family: var(--face-mono);
+    font-size: 2.25rem;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
   /* -- the question builder ------------------------------------------------------ */
 
   /* A column is a punch and, once chosen, the aggregate beside it. */
