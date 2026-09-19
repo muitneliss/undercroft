@@ -33,11 +33,11 @@
  * Invite-only is enforced in three independent places, because a single gate that fails
  * open is an open control plane:
  *
- *   * **`user.validateUserInfo`** -- refuses an uninvited identity before it is created,
+ *   - **`user.validateUserInfo`** -- refuses an uninvited identity before it is created,
  *     and again on every returning *Google* sign-in. Fails closed by the library's design.
- *   * **`sendVerificationOTP`** -- will not put a code in the post for an address that
+ *   - **`sendVerificationOTP`** -- will not put a code in the post for an address that
  *     could not use it, so this platform cannot be made to email strangers.
- *   * **`resolveCaller` in `server.ts`** -- no `app.app_user` row, no `Context.user`, so
+ *   - **`resolveCaller` in `server.ts`** -- no `app.app_user` row, no `Context.user`, so
  *     even a validly-signed session for a removed account is unauthenticated on arrival.
  *     This is the layer that covers a returning sign-in by code.
  *

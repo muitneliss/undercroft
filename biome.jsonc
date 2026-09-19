@@ -402,12 +402,23 @@
       "linter": { "rules": { "performance": { "noBarrelFile": "off" } } }
     },
 
-    // Two imports Biome's resolver reads wrong and `tsc` reads right: React 19 does export
-    // `StrictMode`, and `pg` does have a default export through its CJS interop. Scoped to
-    // the two files rather than switched off, so the rule still catches a genuinely missing
-    // module anywhere else -- which is most of what the `project` domain is worth.
+    // Imports Biome's resolver reads wrong and `tsc` reads right: React 19 does export
+    // `StrictMode`, `lazy`, `Suspense` and `Fragment`, and `pg` does have a default export
+    // through its CJS interop. Scoped to the files rather than switched off, so the rule still
+    // catches a genuinely missing module anywhere else -- which is most of what the `project`
+    // domain is worth.
     {
-      "includes": ["apps/ui/src/main.tsx", "packages/db/src/pool.ts"],
+      "includes": [
+        "apps/ui/src/main.tsx",
+        "apps/ui/src/App.tsx",
+        "apps/ui/src/components/QuestionCard.tsx",
+        "apps/ui/src/components/charts/ChartFrame.tsx",
+        "apps/ui/src/routes/Journal.tsx",
+        "apps/ui/src/routes/Lake.tsx",
+        "apps/ui/src/routes/ModelEditor.tsx",
+        "apps/ui/src/routes/Question.tsx",
+        "packages/db/src/pool.ts"
+      ],
       "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } }
     },
 
@@ -627,6 +638,47 @@
     {
       "includes": ["apps/ui/src/components/LanguageSwitcher.tsx"],
       "linter": { "rules": { "a11y": { "useSemanticElements": "off" } } }
+    },
+
+    // `MonacoEnvironment` is declared on `Window` by monaco-editor's own types and nowhere
+    // else, so `globalThis.MonacoEnvironment` does not typecheck. The library reads it off the
+    // page object; this is the one spelling that both compiles and works.
+    {
+      "includes": ["apps/ui/src/components/SqlEditor.tsx"],
+      "linter": { "rules": { "style": { "useGlobalThis": "off" } } }
+    },
+
+    // Error classes that carry their context as parameter properties, same reasoning as
+    // `packages/core/src/errors.ts`: "failed after 412 records on entity deals" is what tells
+    // a retry from an investigation, and the fields ARE the message.
+    {
+      "includes": ["apps/worker/src/services/ingest.ts", "scripts/kestraFlows.ts"],
+      "linter": { "rules": { "style": { "noParameterProperties": "off" } } }
+    },
+
+    // Four more entropy false positives: two i18n key names that read like tokens, a public
+    // HubSpot API URL used to prove a credential, and the pinned upstream commit the province
+    // geometry is fetched from. None is a credential; the rule stays on everywhere else.
+    {
+      "includes": [
+        "apps/ui/src/lib/lake.ts",
+        "apps/ui/src/lib/runs.ts",
+        "apps/worker/src/services/validateCredential.ts",
+        "scripts/geo/vnProvinces.ts"
+      ],
+      "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // Rows rendered from a result set that has no key of its own: a query's output is
+    // positional by definition, and the filter list is a fixed-length editor. The rule guards
+    // reordering and insertion, neither of which these lists do.
+    {
+      "includes": [
+        "apps/ui/src/components/QuestionBuilder.tsx",
+        "apps/ui/src/components/ResultTable.tsx",
+        "apps/ui/src/components/charts/ChartFrame.tsx"
+      ],
+      "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
     },
 
     // A fixed-length skeleton. The rule guards against reconciliation bugs when a keyed list

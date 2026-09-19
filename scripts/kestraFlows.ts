@@ -12,11 +12,11 @@
  *
  * Two things here are deliberate rather than cautious:
  *
- *   * It WAITS for Kestra rather than failing on the first refused connection. Kestra is a
+ *   - It WAITS for Kestra rather than failing on the first refused connection. Kestra is a
  *     Java standalone that takes a minute to answer, and this service starts alongside it.
  *     A flow Kestra rejects (a 4xx with a message) is a different matter and fails at once:
  *     retrying a broken flow produces the same rejection, later, with less context.
- *   * The API path carries the tenant. Kestra 1.0 put `/{tenant}/` into every path, `main`
+ *   - The API path carries the tenant. Kestra 1.0 put `/{tenant}/` into every path, `main`
  *     being the tenant an OSS install has; an older Kestra answers 404 to that shape, so the
  *     un-prefixed path is tried once before giving up. A 404 on CREATE cannot mean "no such
  *     flow", which is what makes it safe to read as "no such path".

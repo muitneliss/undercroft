@@ -11,14 +11,14 @@
  * the reasoning is written down. Everything this form appears to "remember" is DERIVED from
  * the one mutation that already knows it:
  *
- *   * **which step we are on** is `sendCode.isSuccess` -- a code has been sent, so ask for
+ *   - **which step we are on** is `sendCode.isSuccess` -- a code has been sent, so ask for
  *     it. Not a stored flag that could disagree with whether the send actually happened.
- *   * **the address being verified** is `sendCode.variables.email`. React Query keeps the
+ *   - **the address being verified** is `sendCode.variables.email`. React Query keeps the
  *     variables it was called with; copying them into state would be a second value that
  *     has to be kept in step with the first.
- *   * **pending and failed** are the mutations' own flags, exactly as `Book.tsx` reads
+ *   - **pending and failed** are the mutations' own flags, exactly as `Book.tsx` reads
  *     `signOut.isPending`.
- *   * **going back** is `sendCode.reset()`. One owner, one reset.
+ *   - **going back** is `sendCode.reset()`. One owner, one reset.
  *
  * The two inputs are uncontrolled and read through a `useRef` on submit. A DOM ref is not
  * application state -- ADR 0009 says so -- and it matters here for a second reason: the code
@@ -56,7 +56,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
     onSuccess: () => {
       // A full reload rather than a route change: the identity just changed, and every
       // cached query was answered for the previous one. The same idiom as signing out.
-      window.location.assign("/");
+      globalThis.location.assign("/");
     },
   });
 

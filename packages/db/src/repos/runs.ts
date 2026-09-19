@@ -389,7 +389,7 @@ export async function findRunById(exec: SqlExecutor, id: string): Promise<Run | 
   const { rows } = await exec.query<RunRow>(`SELECT ${RUN_COLUMNS} FROM ops.run WHERE id = $1`, [
     id,
   ]);
-  const row = rows[0];
+  const [row] = rows;
   return row === undefined ? null : toRun(row);
 }
 
@@ -398,7 +398,7 @@ export async function getRun(exec: SqlExecutor, tenantId: string, id: string): P
     `SELECT ${RUN_COLUMNS} FROM ops.run WHERE tenant_id = $1 AND id = $2`,
     [tenantId, id],
   );
-  const row = rows[0];
+  const [row] = rows;
   return row === undefined ? null : toRun(row);
 }
 

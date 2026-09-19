@@ -237,7 +237,7 @@ export async function completeConsent(
     caller: { userId: string; email: string } | null;
   },
 ): Promise<CompleteOutcome> {
-  const worker = deps.worker;
+  const { worker } = deps;
   const config = configFor(deps, input.provider);
   if (config === undefined || worker === undefined) {
     return { ok: false, reason: "not-configured" };
@@ -250,7 +250,7 @@ export async function completeConsent(
     return { ok: false, reason: "bad-state" };
   }
 
-  const caller = input.caller;
+  const { caller } = input;
   if (caller === null || !(await deps.hasAdminAuthority(handshake.tenantId, caller))) {
     return {
       ok: false,

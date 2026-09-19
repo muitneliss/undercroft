@@ -86,7 +86,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
 
   const startOAuth = trpc.connections.startOAuth.useMutation({
     onSuccess: (result) => {
-      window.location.assign(result.authorizeUrl);
+      globalThis.location.assign(result.authorizeUrl);
     },
   });
   const disconnect = trpc.connections.disconnect.useMutation({ onSuccess: invalidate });
@@ -192,7 +192,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
                   startOAuth.mutate({ tenantId, source: connection.source });
                 }}
                 onScope={(): void => {
-                  window.location.assign(
+                  globalThis.location.assign(
                     `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
                   );
                 }}

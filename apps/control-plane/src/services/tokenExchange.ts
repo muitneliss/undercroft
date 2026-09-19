@@ -101,7 +101,7 @@ function readIdToken(idToken: unknown): { sub: string; email: string } {
   if (typeof idToken !== "string") {
     return { sub: "", email: "" };
   }
-  const payload = idToken.split(".")[1];
+  const [, payload] = idToken.split(".");
   if (payload === undefined) {
     return { sub: "", email: "" };
   }
