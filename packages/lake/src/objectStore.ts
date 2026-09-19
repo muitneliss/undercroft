@@ -5,7 +5,6 @@
  * test above this line runs with no network and no credentials.
  */
 
-// biome-ignore-all lint/nursery/noMisleadingReturnType: A generator whose declared type is the contract its consumer relies on.
 export interface ObjectStore {
   get: (key: string) => Promise<Uint8Array>;
   put: (key: string, data: Uint8Array) => Promise<void>;

@@ -11,8 +11,6 @@
  * the consent sentences. Money is a string here for the reason given in `@/lib/money`.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
 import type { Money } from "@/lib/money.ts";

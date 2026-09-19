@@ -17,10 +17,6 @@
  * of a random value is stored so the column keeps its shape and nothing replayable exists.
  */
 
-// biome-ignore-all lint/performance/noNamespaceImport: `import pg from "pg"` and friends: these packages have no useful named exports, and the namespace import is the documented way to consume them.
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { EmailMessage, Locale } from "@undercroft/core";
 import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";

@@ -1,9 +1,14 @@
 /**
  * The test-file override in `biome.jsonc`, pinned from both sides.
  *
- * `biome.jsonc` switches ten rules OFF for `**\/*.test.ts(x)` -- the ones whose reason is
- * "because it is a test" rather than anything about the file. ADR 0017 records why that is
- * the one place a rule is disabled in the config rather than suppressed at the file.
+ * `biome.jsonc` switches seven rules OFF for `**\/*.test.ts(x)` -- the ones whose reason is
+ * "because it is a test" rather than anything about the file. ADR 0017 records why they are
+ * disabled in the config rather than suppressed at the file; ADR 0018 extends the same
+ * reasoning to the rules that cannot hold anywhere in this repo, which is why this is no
+ * longer the only override. Three of the original ten left for that wider block:
+ * `noMagicNumbers` and `useValidTestTitle` are off repo-wide now, and
+ * `useQwikValidLexicalScope` went with the Qwik domain -- scoping any of them to tests had
+ * stopped saying anything.
  *
  * A scoped `off` fails in two directions and, as with the GritQL plugins, the quiet one is
  * worse. Too narrow, and the suppression headers this replaced come back file by file. Too
@@ -16,9 +21,9 @@
  * The third assertion is the one that matters: a money violation in the `.test.ts` fixture is
  * still reported, so this is an override and not Biome skipping the suite.
  *
- * Seven of the ten rules are not exercised here, and deliberately: the suite itself pins
- * them. Their `biome-ignore-all` headers are gone from ~60 test files, so dropping any one
- * from the override fails `bun run lint` on the files that needed it.
+ * Four of the seven are not exercised here, and deliberately: the suite itself pins them.
+ * Their `biome-ignore-all` headers are gone from ~60 test files, so dropping any one from the
+ * override fails `bun run lint` on the files that needed it.
  *
  * The REAL `biome.jsonc` is copied in -- byte for byte, not a second description of it --
  * along with the `.biome/plugins` it names, so this cannot pass against a stale copy of the
@@ -44,15 +49,20 @@ const BIOME = join(REPO, "node_modules", ".bin", "biome");
 /**
  * One body, written twice under two names.
  *
- * It trips three of the overridden rules at once -- `noBunModules` on the import,
- * `noMagicNumbers` on the status code, `useExpect` on a test body that asserts nothing --
+ * It trips three of the overridden rules at once -- `noBunModules` on the `bun:test` import,
+ * `noNodejsModules` on the `node:fs` one, `useExpect` on a test body that asserts nothing --
  * and the money plugin, which is not overridden anywhere and must survive in both.
+ *
+ * The fixtures sit at `src/probe.ts`, which matches none of the path-scoped overrides ADR
+ * 0018 added, so `noNodejsModules` is genuinely on for the twin. That is the point: the only
+ * thing that may silence it here is the name `.test.ts`.
  */
 const BODY = `import { test } from "bun:test";
+import { readFileSync } from "node:fs";
 
-export function probe(status: number): boolean {
+export function probe(path: string): boolean {
   test("x", () => undefined);
-  return status === 403;
+  return readFileSync(path, "utf8") === "";
 }
 
 export const total = Number(row.amount);
@@ -112,7 +122,7 @@ describe("the test-file override", () => {
     expect(rulesOn(TWIN)).toEqual(
       expect.arrayContaining([
         "lint/nursery/noBunModules",
-        "lint/style/noMagicNumbers",
+        "lint/correctness/noNodejsModules",
         "lint/nursery/useExpect",
       ]),
     );

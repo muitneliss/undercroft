@@ -17,8 +17,6 @@
  * because a division that vanishes teaches nobody that it exists.
  */
 
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
 export type DivisionId = "customers" | "sources" | "lake" | "people";
 
 export interface Division {

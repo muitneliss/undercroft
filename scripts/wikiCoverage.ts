@@ -39,16 +39,6 @@
  * Hashing is plain sha256 over the file's bytes, which is what the CLI records.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same function as noExcessiveLinesPerFunction: `auditWiki` is one sequential procedure whose branches are the ways a wiki page and its document can disagree.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: `auditWiki` holds one decision -- which findings this checkout has -- and the way to shorten it is to split one sequential pass across several names, which makes the order the checks run in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noNodejsModules: This is a build script running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, used here for `Bun.Glob`. tsc resolves it, and tsc is the check that binds here.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Two reads of a parsed YAML document, which genuinely is `unknown` -- `tracked.yaml`'s shape and a page's frontmatter are both files a human edits. Every field is checked for its type immediately after, and a field that fails the check is reported rather than assumed.
-// biome-ignore-all lint/style/noContinue: Each `continue` skips one item in a loop with the reason stated on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noMagicNumbers: Two structural offsets into a frontmatter block -- the 4 characters of the opening `---\n` fence, used as both a slice start and a search start. `FRONTMATTER_FENCE_LENGTH` does not tell a reader anything `"---\n".length` did not.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses.
-// biome-ignore-all lint/style/useExportsLast: The order here is deliberate -- the types this module is about first, then what operates on them. The ordering carries meaning and the rule's preferred one does not.
-
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";

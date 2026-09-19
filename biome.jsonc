@@ -46,7 +46,17 @@
       "semicolons": "always",
       "trailingCommas": "all",
       "arrowParentheses": "always"
-    }
+    },
+
+    // Two globals TypeScript already knows about and Biome's resolver does not, which is why
+    // `noUndeclaredVariables` reported six names that `tsc` resolves without complaint.
+    //
+    // `Bun` is the runtime, per CLAUDE.md. `__UNDERCROFT_RELEASE__` is the Vite `define`
+    // injected in `apps/ui/vite.config.ts`, declared for `tsc` in `apps/ui/src/release.d.ts`
+    // and set by hand in `apps/ui/src/test/setup.ts` because `bun test` does not run the Vite
+    // config. Declaring them HERE keeps the rule on: an actually undeclared variable is still
+    // an error, which is what six per-file suppressions were costing us.
+    "globals": ["Bun", "__UNDERCROFT_RELEASE__"]
   },
 
   // ESLint's `no-restricted-syntax` has no equivalent rule in Biome, and the money and
@@ -74,10 +84,13 @@
     // entries escalate the ones whose default severity is `info` or `warn`, because a
     // warning that never fails the gate is a rule nobody fixes.
     //
-    // The cost is accepted knowingly: several rules here belong to frameworks this repo
-    // does not use, and they cannot be satisfied, only suppressed. Every such suppression
-    // is inline, at the line it applies to, with the reason written next to it -- never a
-    // blanket `off` in this file. See the ADR for why that trade was taken.
+    // Where a rule cannot apply here, it is answered ONCE in this file with the reason
+    // beside it, and never with a `biome-ignore-all` header in the source. ADR 0018
+    // supersedes ADR 0012 on that point and records the measurement behind it: the header
+    // form silences a rule for the WHOLE file rather than the line that needed it, and
+    // Biome never reports one that has stopped being needed -- so 17 of the 679 headers
+    // were already dead with the gate green. Outside a test file the header is now banned
+    // outright by `.ast-grep/rules/no-biome-ignore-all.yml`.
     "rules": {
       "preset": "all",
       "a11y": "error",
@@ -90,31 +103,42 @@
       "suspicious": "error"
     },
 
-    // Domains are Biome's per-framework rule bundles. All fifteen are on, which is what
-    // "every rule" means -- including `solid` and `qwik`, whose rules contradict React and
-    // are suppressed at their call sites rather than switched off here.
+    // Domains are Biome's per-framework rule bundles. Four are on: the four whose framework
+    // is actually in `package.json`. The other eleven are `none`, and that costs NO coverage
+    // -- a Solid rule only ever fires on Solid code, so switching it off in a repo with no
+    // Solid removes findings that were never about this codebase.
+    //
+    // Having all fifteen on was not strictness, it was noise, and the noise was paid for in
+    // suppressions: 255 of the findings behind the `biome-ignore-all` headers came from these
+    // eleven. `noReactSpecificProps` alone was 196 of them -- a Solid rule whose fix rewrites
+    // `className` to `class`, which does not compile in React and broke `tsc` the first time
+    // it ran (ADR 0012 records that). A rule that can only ever be wrong here is not a rule,
+    // and leaving it on to suppress it 196 times taught readers to skip suppression headers.
     //
     // `project` and `types` are the two that earn their keep: `project` walks the module
     // graph (undeclared dependencies, import cycles) and `types` runs the inference engine,
     // which is what carries `noFloatingPromises`, `noMisusedPromises` and
     // `noUnsafeTypeAssertion` across from `typescript-eslint`'s type-checked preset. Losing
     // those was the one real risk in dropping typescript-eslint.
+    //
+    // `react` is the UI (react 19.0.0) and `test` is the Bun suite. Turn a domain back on the
+    // day its framework enters `package.json`, not before. ADR 0018.
     "domains": {
-      "astro": "all",
-      "drizzle": "all",
-      "next": "all",
-      "playwright": "all",
+      "astro": "none",
+      "drizzle": "none",
+      "next": "none",
+      "playwright": "none",
       "project": "all",
-      "qwik": "all",
+      "qwik": "none",
       "react": "all",
-      "reactNative": "all",
-      "solid": "all",
-      "svelte": "all",
-      "tailwind": "all",
+      "reactNative": "none",
+      "solid": "none",
+      "svelte": "none",
+      "tailwind": "none",
       "test": "all",
-      "turborepo": "all",
+      "turborepo": "none",
       "types": "all",
-      "vue": "all"
+      "vue": "none"
     }
   },
 
@@ -179,18 +203,201 @@
       }
     },
 
-    // The one place a rule is switched OFF rather than suppressed at the file, and the
-    // boundary is narrow: a rule lands here only when the reason is "because it is a test" --
-    // true of every test file, identically, and of nothing else. ADR 0017 supersedes that
-    // paragraph of ADR 0012 and records why: these ten reasons had been copy-pasted into 137
-    // headers across 60 files, and `noBunModules` alone appeared in all 58 suites. A sentence
-    // repeated 58 times is not one a reviewer re-reads, and it cannot be deleted when it
-    // stops being true, because it lives in 58 places.
+    // Rules that cannot hold ANYWHERE in this repo. Off once, here, with the reason.
     //
-    // Everything else still argues for itself at the file it applies to, in a test exactly as
-    // in a source file: `noUnsafeTypeAssertion`, `useExplicitType`, `useTopLevelRegex`,
-    // `useNamingConvention`, `noTernary`, `noSecrets` and `noNonNullAssertion` are suppressed
-    // per file, with per-file reasons, and stay that way.
+    // ADR 0018. Each of these was previously a `biome-ignore-all` header repeated across the
+    // files it fired in -- `noTernary` in 62 of them -- and the header form is strictly worse
+    // than this block in three ways: it silences the rule for the whole file rather than the
+    // line, Biome never reports it once it stops being needed, and the same sentence in 62
+    // places is one no reviewer re-reads. Deleting an entry here turns the rule back on
+    // everywhere at once, which is the property the headers did not have.
+    {
+      "includes": ["**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            // There is no Playwright in this repo. The rule is nursery rather than
+            // playwright-domain, so `"playwright": "none"` above does not reach it, and it
+            // fires on ordinary `describe`-shaped calls -- a Drive API `describe` request and
+            // a connector-runtime helper.
+            "usePlaywrightValidDescribeCallback": "off",
+            // Reads `/\s/.test(value)` -- `RegExp#test` on a regex literal -- as a test
+            // framework's `test()` with a non-string title, in 19 files that contain no test.
+            // In a real suite it wants a shorter title shape than `tests.md` asks for, so it
+            // has nothing to say on either side of the line.
+            "useValidTestTitle": "off"
+          },
+          "performance": {
+            // These sequential awaits ARE the design, and running them concurrently is the
+            // bug this rule would introduce. `createPacer` sleeps between requests to hold a
+            // rate limit (`connectors.md`); `migrate()` runs SQL files in order and records
+            // each before the next; the connector runtime walks pages and id-chunks where
+            // page N+1 is not known until N returns; `acceptInvitations` writes through one
+            // `SqlExecutor`, which is a single connection and not safe to fan out on.
+            "noAwaitInLoops": "off"
+          },
+          "security": {
+            // Five findings, all false: a Drive `fields` mask, a connector-runtime cursor
+            // token, an AES key-derivation label, and two Dokploy endpoint paths. The rule
+            // scores string ENTROPY, and a long opaque-looking constant is not a credential.
+            // The real guard is `pii.md` plus `.gitignore`, which is checked by a human.
+            "noSecrets": "off"
+          },
+          "style": {
+            // Money aside, the numbers left after the domain constants were named are
+            // structural: slice offsets, a `padStart` width, the radix argument, an HTTP
+            // status. `SLICE_START_OF_GREEN_CHANNEL` tells a reader nothing the expression
+            // did not, and the rule ships no allow-list option, so it is all or nothing.
+            "noMagicNumbers": "off",
+            // A ternary selects between two VALUES. What the rule wants instead is a mutable
+            // temporary plus a statement, which separates the condition from the value it
+            // chooses. Inside JSX it is additionally the only way to render conditionally
+            // inline, and 251 of these are in `.tsx`.
+            "noTernary": "off",
+            // Most of what it flags is not ours to name: `access_token`, `refresh_token`,
+            // `hs_object_id`, `grant_type` are field names on the wire, and renaming them is
+            // breaking the contract with HubSpot, Xero and Google rather than tidying a
+            // local. The rule cannot tell a provider's payload from a variable.
+            "useNamingConvention": "off"
+          }
+        }
+      }
+    },
+
+    // A React component file is PascalCase. That is the convention the whole `apps/ui` tree
+    // already follows, and the rule's default list does not include it, so `Icon.tsx` was the
+    // one file it could never be happy with. This is the rule aimed correctly, not switched
+    // off: a `snake_case` component would still be reported.
+    //
+    // It also has to be settled HERE rather than at the file. The diagnostic is anchored at
+    // line 0 -- the filename is not on any line -- so there is no line a `// biome-ignore`
+    // could attach to, and the file-wide header is banned now.
+    {
+      "includes": ["apps/ui/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": { "filenameCases": ["camelCase", "PascalCase", "export"] }
+            }
+          }
+        }
+      }
+    },
+
+    // Code that does not run in a browser. `noNodejsModules` is a portability rule for
+    // bundled code; `node:fs` and `node:crypto` are the platform for the two server apps, the
+    // shared packages, the build scripts and the agent hook. It stays ON for `apps/ui/src`,
+    // which is the only tree where importing one would be a real bug -- and that is the whole
+    // value of the rule here, so it is scoped rather than switched off.
+    //
+    // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
+    // respectively, never in the browser.
+    {
+      "includes": [
+        "apps/control-plane/**",
+        "apps/worker/**",
+        "packages/**",
+        "scripts/**",
+        ".claude/**",
+        "apps/ui/vite.config.ts",
+        "apps/ui/src/test/setup.ts"
+      ],
+      "linter": { "rules": { "correctness": { "noNodejsModules": "off" } } }
+    },
+
+    // The composition root is DEFINED as the place that reads the environment --
+    // `layering.md` requires it there and bans it everywhere below, which is a stricter rule
+    // than `noProcessEnv` and is enforced separately by `.ast-grep/rules/layer-injected-deps`.
+    // Leaving the Biome rule on here would report the one place the architecture demands.
+    {
+      "includes": [
+        "apps/*/src/main.ts",
+        "apps/worker/src/server.ts",
+        "apps/*/src/*Cli.ts",
+        "packages/*/src/*Cli.ts",
+        "scripts/**",
+        // DEBT, listed here rather than hidden: `keys()` takes an `env` and every public
+        // function in the module threads one through, but the parameter still DEFAULTS to
+        // `process.env`, so a caller that forgets gets ambient configuration in a package
+        // that sits below every layer. The fix is to make `env` required and thread it from
+        // the two call sites in `packages/db/src/repos/connections.ts` up to the composition
+        // roots -- a cross-package API change, not a lint edit, so it is not being done
+        // inside this PR. Until then the rule would report the one line that names the debt.
+        "packages/crypto/src/seal.ts"
+      ],
+      "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
+    },
+
+    // A package entry point IS a barrel -- that is what `@undercroft/core` being importable as
+    // one name means. The rule's concern is a barrel in the middle of a tree, where it pulls
+    // in modules nobody asked for; ours are the published surface, and `build:ui` in the gate
+    // is what catches the cost the rule is really about (see CLAUDE.md on `node:crypto`).
+    {
+      "includes": ["**/index.ts"],
+      "linter": { "rules": { "performance": { "noBarrelFile": "off" } } }
+    },
+
+    // Two imports Biome's resolver reads wrong and `tsc` reads right: React 19 does export
+    // `StrictMode`, and `pg` does have a default export through its CJS interop. Scoped to
+    // the two files rather than switched off, so the rule still catches a genuinely missing
+    // module anywhere else -- which is most of what the `project` domain is worth.
+    {
+      "includes": ["apps/ui/src/main.tsx", "packages/db/src/pool.ts"],
+      "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } }
+    },
+
+    // The stylesheet and the favicon. These five reasons were written at the top of
+    // `index.css` and are kept verbatim, because they are the argument, not decoration.
+    {
+      "includes": ["apps/ui/src/index.css", "**/*.svg"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            // The rule cannot see a class name assembled at runtime, and this UI assembles
+            // them -- ``className={`mark mark--${mark}`}`` in StatusMark.tsx builds one per
+            // state. Every name it reports is reachable that way, so acting on it would
+            // delete live styles.
+            "noUnusedClasses": "off",
+            // Four progressive enhancements -- `scrollbar-color`, `::selection`,
+            // `user-select` and `overflow-x: clip`. Each degrades to the browser default
+            // where unsupported, and the form tells no state by one of these alone. Where
+            // `clip` is unsupported the axis falls back to `visible`, so a leaf mid-turn can
+            // briefly overhang the binder: a 190ms cosmetic overflow, not a broken layout,
+            // and the alternative (`hidden`) fails worse by moving the document's scroll
+            // inside `.book`.
+            "useBaseline": "off",
+            // A cascade layer orders one sheet against another; an icon has nothing to
+            // cascade with, and `index.css` IS the sheet.
+            "useLayeredStyles": "off"
+          },
+          "style": {
+            // `.colophon .datum` is grouped with the colophon, which puts it above the
+            // generic `.datum`. The specific rule still wins -- specificity decides this, not
+            // source order -- so the cascade reads as written; moving the block would
+            // separate it from the component it belongs to.
+            "noDescendingSpecificity": "off",
+            // The palette has to stay hex because `@/lib/acetate` reads `--leaf` and `--ink`
+            // back out of the computed styles and parses them with `parseHex`, which accepts
+            // `#rgb`/`#rrggbb` and returns null for anything else rather than guessing.
+            // Rewriting these as `oklch()` makes that parse fail and the solver falls back to
+            // its hardcoded defaults -- a guessed colour in the code path that guarantees
+            // WCAG contrast, which is exactly the failure rule 2 is about.
+            "noHexColors": "off",
+            // One document, not a module that grew. The board, the leaf and the rail are
+            // defined against each other -- the comments argue contrast ratios across
+            // sections -- and cutting it at 300 lines splits a single argument across files.
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+
+    // Rules whose reason is "because it is a test" -- true of every test file, identically,
+    // and of nothing else. ADR 0017 records why these are answered here rather than in 137
+    // pasted headers; ADR 0018 extends the same reasoning to the blocks above, which is why
+    // this is no longer the only place a rule is switched off.
     //
     // Pinned from both sides by `scripts/biomeTestOverride.test.ts`, which runs the real
     // config: the rules fire in a `.ts` twin, stay quiet in the `.test.ts` fixture, and a
@@ -209,10 +416,7 @@
           "correctness": {
             // A suite reads fixtures, makes temp directories and hashes bytes. `node:` is the
             // platform a test runs on, not a portability hazard.
-            "noNodejsModules": "off",
-            // Qwik-domain rule about what may cross a `$()` serialization boundary. There is
-            // no Qwik in this repo; in a suite it fires on ordinary closures.
-            "useQwikValidLexicalScope": "off"
+            "noNodejsModules": "off"
           },
           "nursery": {
             // Bun is the test runner, per CLAUDE.md. `bun:test` is the toolchain, not an
@@ -224,20 +428,13 @@
             "noConditionalExpect": "off",
             // Test bodies whose assertion is that the call did not throw, written in the
             // guard style `tests.md` prescribes rather than as an `expect()`.
-            "useExpect": "off",
-            // The titles this flags are full sentences naming the promise under test, which
-            // is exactly what `tests.md` asks a title to be. The rule wants a shorter shape.
-            "useValidTestTitle": "off"
+            "useExpect": "off"
           },
           "style": {
             // A suite is as long as its subject has behaviours, and the harnesses that make
             // one long -- a loopback server, Better Auth on its memory adapter, PGlite -- are
             // the ones too delicate to keep two copies of.
-            "noExcessiveLinesPerFile": "off",
-            // In a test the number IS the assertion. `expect(status).toBe(403)` says what the
-            // code must do; `expect(status).toBe(EXPECTED_STATUS)` says only that two names
-            // agree, and it passes while both are wrong. Source files get named constants.
-            "noMagicNumbers": "off"
+            "noExcessiveLinesPerFile": "off"
           },
           "suspicious": {
             // Assertions inside a helper that several tests call, which is how the repeated

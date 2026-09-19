@@ -4,10 +4,6 @@
 // stdin and reading the verdict from stdout. It is linted rather than ignored because a broken
 // hook fails OPEN -- hand-edits would then reach CLI-owned wiki pages silently.
 
-// biome-ignore-all lint/correctness/noNodejsModules: `node:fs` and `node:process` ARE this
-// script's interface. It is executed by node, never bundled for a browser.
-// biome-ignore-all lint/nursery/useValidTestTitle: false positive -- the rule reads
-// `RegExp#test(norm)` as a test-framework call. There is no test framework in this file.
 import { readFileSync } from "node:fs";
 import process from "node:process";
 

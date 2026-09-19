@@ -12,8 +12,6 @@
  * entry so production code cannot import PGlite by accident.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-
 import { PGlite } from "@electric-sql/pglite";
 import type { QueryResult, SqlExecutor } from "./executor.ts";
 

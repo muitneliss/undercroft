@@ -13,10 +13,6 @@
  * and a service that threw one would be callable from exactly one caller.
  */
 
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. Here it would additionally move two helpers away from the single function that calls them. The ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-
 import type { CredentialInput } from "@undercroft/contracts";
 import type { ByteFetcher } from "@undercroft/core";
 import { ConnectorError, HttpError, raiseForByteStatus } from "@undercroft/core";
