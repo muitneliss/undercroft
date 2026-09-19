@@ -10,11 +10,23 @@
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
 import { migrate } from "@undercroft/db";
-import { upsertConnection, writeConnectionDetail, writeCredential } from "@undercroft/db/repos";
+import {
+  openRun,
+  upsertConnection,
+  writeConnectionDetail,
+  writeCredential,
+} from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
-import { disconnect, KNOWN_SOURCES, list, presentStatus, setScope } from "./connections.ts";
+import {
+  disconnect,
+  KNOWN_SOURCES,
+  list,
+  presentStatus,
+  setCadence,
+  setScope,
+} from "./connections.ts";
 import { InMemoryWorkerClient } from "./workerClient.ts";
 
 const TENANT = "CASE-0042";
@@ -196,6 +208,82 @@ describe("the schedule", () => {
     const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
 
     expect(gmail?.scopes).toEqual(["openid", "https://www.googleapis.com/auth/gmail.readonly"]);
+  });
+
+  it("the card says how often the source is read and when it is next due", async () => {
+    // The same rule the scheduler's due list applies, so the card and the ledger agree.
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "hourly",
+      actor: "ada@example.test",
+    });
+    await openRun(db, {
+      id: "r-1",
+      tenantId: TENANT,
+      source: "hubspot",
+      verb: "ingest",
+      trigger: "schedule",
+    });
+    const startedAt = (await list(db, TENANT)).find((r) => r.source === "hubspot")?.lastRun
+      ?.startedAt;
+
+    const hubspot = (await list(db, TENANT, new Date("2026-03-01T10:00:00.000Z"))).find(
+      (r) => r.source === "hubspot",
+    );
+    expect(hubspot?.cadence).toBe("hourly");
+    expect(hubspot?.nextRunAt).toBe(
+      new Date(new Date(startedAt ?? "").getTime() + 3_600_000).toISOString(),
+    );
+  });
+
+  it("a paused source, and one still waiting for its scope, have no next run", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "paused",
+      actor: "ada@example.test",
+    });
+    await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
+
+    const cards = await list(db, TENANT);
+    expect(cards.find((r) => r.source === "hubspot")?.nextRunAt).toBeNull();
+    expect(cards.find((r) => r.source === "gmail")?.nextRunAt).toBeNull();
+    // A source nobody has connected reads the default and will not run.
+    expect(cards.find((r) => r.source === "xero")).toMatchObject({
+      cadence: "daily",
+      nextRunAt: null,
+    });
+  });
+});
+
+describe("choosing a cadence", () => {
+  it("is recorded on the connection and in the trail", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    const result = await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "every_6h",
+      actor: "ada@example.test",
+    });
+    expect(result).toEqual({ ok: true });
+    const { rows } = await db.query<{ action: string; detail: unknown }>(
+      "SELECT action, detail FROM ops.audit_log",
+    );
+    expect(rows[0]?.action).toBe("connection.cadence_set");
+    expect(JSON.stringify(rows[0]?.detail)).toContain('"cadence":"every_6h"');
+  });
+
+  it("a source nobody has connected has nothing to set it on", async () => {
+    const result = await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "hourly",
+      actor: "ada@example.test",
+    });
+    expect(result).toEqual({ ok: false, reason: "no-connection" });
   });
 });
 

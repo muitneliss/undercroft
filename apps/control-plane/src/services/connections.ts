@@ -22,7 +22,7 @@
 
 // biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
 
-import { parseScope } from "@undercroft/contracts";
+import { type Cadence, needsScope, nextRunAt, parseScope } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   type Connection,
@@ -31,6 +31,7 @@ import {
   getConnection,
   listConnections,
   listConnectionViews,
+  setCadence as writeCadence,
   setStatus,
   writeConnectionDetail,
 } from "@undercroft/db/repos";
@@ -53,9 +54,6 @@ export const KNOWN_SOURCES = ["hubspot", "xero", "gmail", "drive"] as const;
 
 /** Narrow, so the union survives tRPC inference and the UI can index its label maps. */
 export type KnownSource = (typeof KNOWN_SOURCES)[number];
-
-/** Sources that must be told what to read before a run may read anything. */
-const SCOPED_SOURCES = new Set(["gmail", "drive"]);
 
 /**
  * What the card shows, which is not what the database stores.
@@ -96,12 +94,14 @@ export interface ConnectionCardView {
    * card prints its outcome, its time and how much it saw; the Journal holds the rest.
    */
   readonly lastRun: LastRun | null;
+  /** How often this source is read, in one of four words. `daily` until an admin says otherwise. */
+  readonly cadence: Cadence;
   /**
-   * Always `""` for now. Kestra owns schedules and nothing in this database writes one; a
-   * column would be a promise nobody keeps, and the card already renders an absent value as
-   * absent rather than as "never".
+   * When this source is next due, or `null` when nothing will run: disconnected, paused, or
+   * waiting for a scope. A value in the past means "at the scheduler's next tick" -- the
+   * rule is `nextRunAt` in `@undercroft/contracts`, the same one the due list applies.
    */
-  readonly scheduleCron: string;
+  readonly nextRunAt: string | null;
 }
 
 /**
@@ -147,7 +147,7 @@ export function presentStatus(row: {
   }
   // Connected, but nobody has said what may be read. Running in this state would read a
   // whole mailbox on the strength of a missing row.
-  if (SCOPED_SOURCES.has(row.source) && parseScope(row.source, row.selectionJson) === null) {
+  if (needsScope(row.source, row.selectionJson)) {
     return "needs_scope";
   }
   return "connected";
@@ -160,7 +160,11 @@ export function presentStatus(row: {
  * product -- had nothing to offer on the very screen a new customer lands on. A source with
  * no row is synthesised as `disconnected`, which is what it is.
  */
-export async function list(exec: SqlExecutor, tenantId: string): Promise<ConnectionCardView[]> {
+export async function list(
+  exec: SqlExecutor,
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<ConnectionCardView[]> {
   const rows = await listConnectionViews(exec, tenantId);
   // Typed explicitly: an inferred tuple widens to `(string | ConnectionView)[]` and the map
   // loses its value type.
@@ -178,7 +182,8 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Connect
         config: {},
         expiresAt: null,
         lastRun: null,
-        scheduleCron: "",
+        cadence: "daily" as const,
+        nextRunAt: null,
       };
     }
     return {
@@ -192,9 +197,47 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Connect
       // Not `row.credentialExpiresAt`. See the field.
       expiresAt: null,
       lastRun: row.lastRun,
-      scheduleCron: "",
+      cadence: row.cadence,
+      nextRunAt: nextRunAt(
+        {
+          source: row.source,
+          status: row.status,
+          cadence: row.cadence,
+          selectionJson: row.selectionJson,
+          lastRunStartedAt: row.lastRun?.startedAt ?? null,
+        },
+        now,
+      ),
     };
   });
+}
+
+export type SetCadenceOutcome = { ok: true } | { ok: false; reason: "no-connection" };
+
+/**
+ * Record how often a source is read. Admin-only at the handler: it changes how often a
+ * customer's accounts are opened, which is a decision about their data, not ours.
+ */
+export async function setCadence(
+  exec: SqlExecutor,
+  input: { tenantId: string; source: string; cadence: Cadence; actor: string },
+): Promise<SetCadenceOutcome> {
+  const written = await writeCadence(exec, input.tenantId, input.source, input.cadence);
+  if (!written) {
+    return { ok: false, reason: "no-connection" };
+  }
+  try {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "connection.cadence_set",
+      detail: JSON.stringify({ source: input.source, cadence: input.cadence }),
+    });
+  } catch {
+    // Swallowed like every other audit write here: a failed insert must not lose a cadence
+    // an admin has already saved.
+  }
+  return { ok: true };
 }
 
 export function get(

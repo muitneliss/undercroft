@@ -190,6 +190,12 @@ services:
       # The worker reads and writes `raw`, so it waits for the schema too.
       db-migrate:
         condition: service_completed_successfully
+      # And for the flows to be in Kestra. Not because the worker needs them, but because a
+      # stack whose flows never landed is a stack that schedules nothing, and that is a
+      # failed deploy rather than a quiet one. `verify` reads this dependency as the sign
+      # that `kestra-flows` is a job meant to exit.
+      kestra-flows:
+        condition: service_completed_successfully
     environment:
       # As its own role, never as the bootstrap superuser: the grant model in
       # packages/db/sql only binds when the process that runs a customer's data holds
@@ -255,6 +261,27 @@ services:
       resources:
         limits:
           memory: 256m
+
+  # The Kestra flows, delivered by the deploy. Dokploy raw compose has no checkout to mount
+  # and Kestra reads flows from its own database, so `flows/` is baked into the control-plane
+  # image and this one-shot pushes each file through Kestra's API -- creating or updating
+  # it -- then exits. It waits for Kestra to answer (a Java standalone takes a minute) and
+  # fails at once on a flow Kestra rejects. Without it, `ingest_daily` was documentation.
+  kestra-flows:
+    # Deliberately NOT `<<: *restart`, for the reason `db-migrate` gives.
+    image: ghcr.io/muitneliss/undercroft-control-plane:${IMAGE_TAG:-latest}
+    depends_on:
+      kestra:
+        condition: service_started
+    command: ["bun", "run", "kestra:flows"]
+    environment:
+      UNDERCROFT_KESTRA_URL: http://undercroft-kestra:8080
+      UNDERCROFT_KESTRA_USER: ${UNDERCROFT_KESTRA_USER:-admin@example.com}
+      UNDERCROFT_KESTRA_PASSWORD: ${UNDERCROFT_KESTRA_PASSWORD:?set in .env}
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   control-plane:
     <<: *restart

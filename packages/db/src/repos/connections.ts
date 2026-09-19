@@ -31,6 +31,7 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One table group, one file: the connection row, its sealed credential, its chosen scope and the view the card reads are four reads of the same pair of keys, and splitting them by length would put the licence for the credential join in a different file from the join.
 
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
@@ -51,12 +52,19 @@ export interface Credential {
   readonly expiresAt: string | null;
 }
 
+/**
+ * How often the source is read. The words and the rule that turns them into a time are in
+ * `@undercroft/contracts`; this repo stores the word and decides nothing about it.
+ */
+export type Cadence = "hourly" | "every_6h" | "daily" | "paused";
+
 export interface Connection {
   readonly tenantId: string;
   readonly source: string;
   readonly status: "disconnected" | "connected" | "error" | "expired";
   readonly externalAccountId: string | null;
   readonly scope: string;
+  readonly cadence: Cadence;
 }
 
 function credentialToJson(c: Credential): string {
@@ -79,7 +87,7 @@ function credentialFromJson(blob: string): Credential {
 export async function listConnections(exec: SqlExecutor, tenantId: string): Promise<Connection[]> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope
+            external_account_id AS "externalAccountId", scope, cadence
      FROM ops.connection WHERE tenant_id = $1 ORDER BY source`,
     [tenantId],
   );
@@ -93,11 +101,79 @@ export async function getConnection(
 ): Promise<Connection | null> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope
+            external_account_id AS "externalAccountId", scope, cadence
      FROM ops.connection WHERE tenant_id = $1 AND source = $2`,
     [tenantId, source],
   );
   return rows[0] ?? null;
+}
+
+/** Record how often a source is read. `false` means there is no such connection to set it on. */
+export async function setCadence(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+  cadence: Cadence,
+): Promise<boolean> {
+  const { rows } = await exec.query<{ source: string }>(
+    `UPDATE ops.connection SET cadence = $3, updated_at = now()
+     WHERE tenant_id = $1 AND source = $2
+     RETURNING source`,
+    [tenantId, source, cadence],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Everything the schedule needs to decide whether a connected pair is due.
+ *
+ * Connected rows only; which of them is due is decided one layer up, by the rule in
+ * `@undercroft/contracts`, so this query stays a read of what is recorded. The selection
+ * comes back as JSON text for the same reason as in `readConnectionDetail`.
+ */
+export interface DueCandidate {
+  readonly tenantId: string;
+  readonly source: string;
+  readonly status: "connected";
+  readonly cadence: Cadence;
+  readonly selectionJson: string;
+  readonly lastRunStartedAt: string | null;
+  readonly lastRunStatus: "running" | "ok" | "failed" | null;
+}
+
+export async function listDueCandidates(exec: SqlExecutor): Promise<DueCandidate[]> {
+  const { rows } = await exec.query<{
+    tenantId: string;
+    source: string;
+    cadence: Cadence;
+    selectionJson: string | null;
+    lastRunStartedAt: Date | string | null;
+    lastRunStatus: DueCandidate["lastRunStatus"];
+  }>(
+    `SELECT c.tenant_id AS "tenantId", c.source, c.cadence,
+            d.selection::text AS "selectionJson",
+            r.started_at      AS "lastRunStartedAt",
+            r.status          AS "lastRunStatus"
+     FROM ops.connection c
+     LEFT JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
+     LEFT JOIN LATERAL (
+       SELECT started_at, status FROM ops.run
+       WHERE tenant_id = c.tenant_id AND source = c.source AND verb = 'ingest'
+       ORDER BY started_at DESC, id DESC LIMIT 1
+     ) r ON true
+     WHERE c.status = 'connected'
+     ORDER BY c.tenant_id, c.source`,
+  );
+  return rows.map((row) => ({
+    tenantId: row.tenantId,
+    source: row.source,
+    status: "connected",
+    cadence: row.cadence,
+    selectionJson: row.selectionJson ?? "{}",
+    lastRunStartedAt:
+      row.lastRunStartedAt === null ? null : new Date(row.lastRunStartedAt).toISOString(),
+    lastRunStatus: row.lastRunStatus,
+  }));
 }
 
 export async function upsertConnection(
@@ -345,6 +421,7 @@ export async function listConnectionViews(
     status: Connection["status"];
     externalAccountId: string | null;
     scope: string;
+    cadence: Cadence;
     accountLabel: string | null;
     selectionJson: string | null;
     chosenAt: Date | string | null;
@@ -358,7 +435,7 @@ export async function listConnectionViews(
     lastRunError: string | null;
   }>(
     `SELECT c.tenant_id AS "tenantId", c.source, c.status,
-            c.external_account_id AS "externalAccountId", c.scope,
+            c.external_account_id AS "externalAccountId", c.scope, c.cadence,
             d.account_label       AS "accountLabel",
             d.selection::text     AS "selectionJson",
             d.chosen_at           AS "chosenAt",
@@ -391,6 +468,7 @@ export async function listConnectionViews(
     status: row.status,
     externalAccountId: row.externalAccountId,
     scope: row.scope,
+    cadence: row.cadence,
     accountLabel: row.accountLabel ?? "",
     selectionJson: row.selectionJson ?? "{}",
     chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),

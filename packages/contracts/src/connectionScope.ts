@@ -51,6 +51,20 @@ export type DriveScope = z.infer<typeof DriveScope>;
 export type ConnectionScope = z.infer<typeof ConnectionScope>;
 
 /**
+ * Sources that must be told what to read before a run may read anything.
+ *
+ * One set, shared by the card that shows `needs_scope`, the schedule that skips such a
+ * source, and the collector that refuses to run it. A second copy is how one of the three
+ * starts reading a whole mailbox on the strength of a missing row.
+ */
+export const SCOPED_SOURCES: ReadonlySet<string> = new Set(["gmail", "drive"]);
+
+/** True when this source needs a scope and none usable has been chosen. */
+export function needsScope(source: string, selectionJson: string): boolean {
+  return SCOPED_SOURCES.has(source) && parseScope(source, selectionJson) === null;
+}
+
+/**
  * Read a stored selection, or `null` when there is nothing usable there.
  *
  * Null rather than a default: "nobody has chosen yet" and "somebody chose nothing" are

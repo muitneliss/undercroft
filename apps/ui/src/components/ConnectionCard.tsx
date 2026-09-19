@@ -37,7 +37,7 @@ import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { presentConnection, scopeSummary } from "@/lib/connectionState.ts";
 import { orMissing } from "@/lib/money.ts";
-import { describeSchedule, expiryNote } from "@/lib/when.ts";
+import { expiryNote } from "@/lib/when.ts";
 
 const MARK_LABEL = {
   granted: "grant.markGranted",
@@ -120,11 +120,7 @@ export function ConnectionCard({
           {card.state === "connected" ? (
             <>
               <span className="label">{t("grant.schedule")}</span>
-              <span className="datum datum--quiet">
-                {connection.scheduleCron
-                  ? describeSchedule(t, connection.scheduleCron)
-                  : orMissing("")}
-              </span>
+              <span className="datum datum--quiet">{orMissing("")}</span>
               <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
             </>
           ) : null}

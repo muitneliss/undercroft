@@ -15,7 +15,22 @@ export {
   StoreCredentialRequest,
   StoreCredentialResponse,
 } from "./connectionApi.ts";
-export { ConnectionScope, DriveScope, GmailScope, parseScope } from "./connectionScope.ts";
+export {
+  CADENCE_INTERVAL_MS,
+  CADENCES,
+  Cadence,
+  isDue,
+  nextRunAt,
+  type ScheduleFacts,
+} from "./cadence.ts";
+export {
+  ConnectionScope,
+  DriveScope,
+  GmailScope,
+  needsScope,
+  parseScope,
+  SCOPED_SOURCES,
+} from "./connectionScope.ts";
 export {
   ApiError,
   LandRecordInput,

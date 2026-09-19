@@ -7,6 +7,7 @@
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
 import { TRPCError } from "@trpc/server";
+import { Cadence } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
@@ -279,6 +280,25 @@ export const appRouter = router({
             code: "BAD_REQUEST",
             message: messages(ctx.locale)("error.scopeNotUnderstood", { source: input.source }),
           });
+        }
+        return { ok: true };
+      }),
+
+    /**
+     * How often a source is read. Admin-only, like every change to a live grant. A source
+     * nobody has connected has nothing to set it on, and says so as NOT_FOUND.
+     */
+    setCadence: requireRole("admin")
+      .input(z.object({ source: z.string().min(1), cadence: Cadence }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await connections.setCadence(ctx.exec, {
+          tenantId: ctx.tenantId,
+          source: input.source,
+          cadence: input.cadence,
+          actor: ctx.user.email,
+        });
+        if (!result.ok) {
+          throw new TRPCError({ code: "NOT_FOUND" });
         }
         return { ok: true };
       }),

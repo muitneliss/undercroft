@@ -44,6 +44,7 @@ import { type Refresher, resolveToken, type Transactor } from "../services/inges
 import { type JobDeps, startIngestJob, startTransformJob } from "../services/jobs.ts";
 import { landRecords } from "../services/land.ts";
 import { claimExternal, findRun, recordExternal } from "../services/ledger.ts";
+import { listDue } from "../services/schedule.ts";
 import { failureOf } from "./errors.ts";
 
 export interface LakeApiDeps {
@@ -287,6 +288,17 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
       ...(typeof body.select === "string" ? { select: body.select } : {}),
     });
     return c.json(started, 202);
+  });
+
+  /**
+   * What the scheduler should start now. Registered before `/v1/runs/:id` so that `due` is
+   * a word and not a run id.
+   */
+  app.get("/v1/runs/due", async (c) => {
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
+    }
+    return c.json({ due: await listDue(deps.exec) }, 200);
   });
 
   /** One run, by id, for whoever started it. The control plane reads the ledger directly. */

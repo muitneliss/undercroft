@@ -151,6 +151,10 @@ services:
       # The worker reads and writes `raw`, so it waits for the schema too.
       db-migrate:
         condition: service_completed_successfully
+      # And for the flows to be in Kestra: a stack whose flows never landed schedules
+      # nothing, and that is a failed deploy rather than a quiet one.
+      kestra-flows:
+        condition: service_completed_successfully
     environment:
       # As its own role, never as the bootstrap superuser; `db-migrate` sets the password.
       UNDERCROFT_POSTGRES_DSN: postgres://undercroft_worker:${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
@@ -208,6 +212,27 @@ services:
       resources:
         limits:
           memory: 256m
+
+  # The Kestra flows, delivered by the deploy: `flows/` is baked into the control-plane
+  # image and this one-shot pushes each file through Kestra's API, then exits. It waits for
+  # Kestra to answer and fails at once on a flow Kestra rejects. See the server file.
+  kestra-flows:
+    # Deliberately NOT `<<: *restart`, for the reason `db-migrate` gives.
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.control-plane
+    depends_on:
+      kestra:
+        condition: service_started
+    command: ["bun", "run", "kestra:flows"]
+    environment:
+      UNDERCROFT_KESTRA_URL: http://kestra:8080
+      UNDERCROFT_KESTRA_USER: ${UNDERCROFT_KESTRA_USER:-admin@example.com}
+      UNDERCROFT_KESTRA_PASSWORD: ${UNDERCROFT_KESTRA_PASSWORD:?set in .env}
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   control-plane:
     <<: *restart

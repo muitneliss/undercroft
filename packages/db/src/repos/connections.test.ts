@@ -8,7 +8,9 @@ import { createTestDatabase, type TestDatabase } from "../testing.ts";
 import {
   ConnectionRegistryError,
   type Credential,
+  getConnection,
   readCredential,
+  setCadence,
   upsertConnection,
   writeCredential,
 } from "./connections.ts";
@@ -58,5 +60,17 @@ describe("credentials are sealed at rest and open exactly", () => {
     await expect(readCredential(db, "CASE-1", "xero", { env })).rejects.toBeInstanceOf(
       ConnectionRegistryError,
     );
+  });
+});
+
+describe("cadence", () => {
+  it("a connection reads daily until an admin says otherwise, and the word is stored", async () => {
+    expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("daily");
+    expect(await setCadence(db, "CASE-1", "xero", "hourly")).toBe(true);
+    expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("hourly");
+  });
+
+  it("a source nobody has connected has nothing to set a cadence on", async () => {
+    expect(await setCadence(db, "CASE-1", "hubspot", "hourly")).toBe(false);
   });
 });

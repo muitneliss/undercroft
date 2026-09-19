@@ -170,6 +170,75 @@ describe("POST /v1/runs/ingest", () => {
   });
 });
 
+describe("GET /v1/runs/due", () => {
+  const GMAIL_SCOPE = JSON.stringify({ labels: [{ id: "Label_8", name: "Invoices" }] });
+
+  async function seed(sql: string, params: unknown[] = []): Promise<void> {
+    await db.asSuperuser((tx) => tx.query(sql, params));
+  }
+
+  it("lists the connected pairs whose gap has passed, and nothing that cannot run", async () => {
+    // demo: connected, hourly, last ran two hours ago -> due.
+    await seed("UPDATE ops.connection SET cadence = 'hourly' WHERE source = 'demo'");
+    await seed(
+      `INSERT INTO ops.run (id, tenant_id, source, verb, status, started_at, ended_at)
+       VALUES ('r-old', 'CASE-1', 'demo', 'ingest', 'ok', now() - interval '2 hours', now() - interval '2 hours')`,
+    );
+    // gmail: connected, scoped and chosen, never ran -> due now.
+    await seed(
+      "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-1', 'gmail', 'connected')",
+    );
+    await seed(
+      "INSERT INTO app.connection_detail (tenant_id, source, selection) VALUES ('CASE-1', 'gmail', $1::jsonb)",
+      [GMAIL_SCOPE],
+    );
+    // drive: connected but nobody has chosen what to read -> not due.
+    await seed(
+      "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-1', 'drive', 'connected')",
+    );
+    // hubspot: connected but paused -> not due. stale (seeded above): expired -> not due.
+    await seed(
+      "INSERT INTO ops.connection (tenant_id, source, status, cadence) VALUES ('CASE-1', 'hubspot', 'connected', 'paused')",
+    );
+
+    const res = await api().request("/v1/runs/due", {
+      headers: { authorization: "Bearer svc-token" },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      due: [
+        { tenantId: "CASE-1", source: "demo" },
+        { tenantId: "CASE-1", source: "gmail" },
+      ],
+    });
+  });
+
+  it("a pair inside its gap, or with a run in progress, is not asked for again", async () => {
+    await seed("UPDATE ops.connection SET cadence = 'hourly' WHERE source = 'demo'");
+    await openRun(db, {
+      id: "r-live",
+      tenantId: "CASE-1",
+      source: "demo",
+      verb: "ingest",
+      trigger: "schedule",
+    });
+    const live = await api().request("/v1/runs/due", {
+      headers: { authorization: "Bearer svc-token" },
+    });
+    expect(await live.json()).toEqual({ due: [] });
+
+    await seed("UPDATE ops.run SET status = 'ok', ended_at = now() WHERE id = 'r-live'");
+    const fresh = await api().request("/v1/runs/due", {
+      headers: { authorization: "Bearer svc-token" },
+    });
+    expect(await fresh.json()).toEqual({ due: [] });
+  });
+
+  it("needs the trigger token", async () => {
+    expect((await api().request("/v1/runs/due")).status).toBe(401);
+  });
+});
+
 describe("GET /v1/runs/:id", () => {
   it("returns the run for whoever holds the trigger token, and 404 for no such run", async () => {
     await openRun(db, {
