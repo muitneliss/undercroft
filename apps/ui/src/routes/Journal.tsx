@@ -92,50 +92,7 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
             }
           />
         ) : (
-          <table className="table">
-            <caption>{t("journal.caption", { count: items.length })}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("journal.colWhen")}</th>
-                <th scope="col">{t("journal.colWhat")}</th>
-                <th scope="col">{t("journal.colOutcome")}</th>
-                <th scope="col" className="num">
-                  {t("journal.colLanded")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colCreated")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colChanged")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colRefused")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colDuration")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((run) => (
-                <Fragment key={run.id}>
-                  <RunRow
-                    run={run}
-                    locale={locale}
-                    open={run.id === openId}
-                    href={`${base}/${run.id}`}
-                  />
-                  {run.id === openId ? (
-                    <tr className="table__hinge">
-                      <td colSpan={COLUMNS}>
-                        <RunDetail tenantId={tenantId} runId={run.id} />
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+          <RunTable items={items} tenantId={tenantId} openId={openId} base={base} />
         )}
 
         {runs.hasNextPage ? (
@@ -154,5 +111,70 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
         ) : null}
       </div>
     </div>
+  );
+}
+
+type Run = React.ComponentProps<typeof RunRow>["run"];
+
+/**
+ * The ledger itself: one row per run, and the open one's detail on a hinge row beneath it.
+ *
+ * Its own component because the eight columns are the bulk of this page and none of them is
+ * a decision -- the decisions (which run is open, whether there is another page) stay above.
+ */
+function RunTable({
+  items,
+  tenantId,
+  openId,
+  base,
+}: {
+  items: readonly Run[];
+  tenantId: string;
+  openId: string | null;
+  base: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+
+  return (
+    <table className="table">
+      <caption>{t("journal.caption", { count: items.length })}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{t("journal.colWhen")}</th>
+          <th scope="col">{t("journal.colWhat")}</th>
+          <th scope="col">{t("journal.colOutcome")}</th>
+          <th scope="col" className="num">
+            {t("journal.colLanded")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colCreated")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colChanged")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colRefused")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colDuration")}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((run) => (
+          <Fragment key={run.id}>
+            <RunRow run={run} locale={locale} open={run.id === openId} href={`${base}/${run.id}`} />
+            {run.id === openId ? (
+              <tr className="table__hinge">
+                <td colSpan={COLUMNS}>
+                  <RunDetail tenantId={tenantId} runId={run.id} />
+                </td>
+              </tr>
+            ) : null}
+          </Fragment>
+        ))}
+      </tbody>
+    </table>
   );
 }

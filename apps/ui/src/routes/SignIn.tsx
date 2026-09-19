@@ -43,23 +43,9 @@ const WHEEL = DIVISIONS.map((d) => d.hue);
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();
-  const signinCodeId = useId();
-  const signinEmailId = useId();
-  const emailFieldRef = useRef<HTMLInputElement>(null);
-  const codeFieldRef = useRef<HTMLInputElement>(null);
 
   const sendCode = useMutation({
     mutationFn: (variables: { email: string }) => sendSignInCode(variables.email),
-  });
-
-  const signIn = useMutation({
-    mutationFn: (variables: { email: string; otp: string }) =>
-      signInWithCode(variables.email, variables.otp),
-    onSuccess: () => {
-      // A full reload rather than a route change: the identity just changed, and every
-      // cached query was answered for the previous one. The same idiom as signing out.
-      globalThis.location.assign("/");
-    },
   });
 
   // The step, derived. `variables` is what the send was called with, so the address shown
@@ -123,104 +109,22 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
          * it are cleared by the remount rather than by hand.
          */}
         {sentTo === null ? (
-          <form
+          <AddressForm
             key="address"
-            className="stack stack--tight"
-            onSubmit={(event): void => {
-              event.preventDefault();
-              const email = emailFieldRef.current?.value.trim() ?? "";
-              if (email !== "") {
-                sendCode.mutate({ email });
-              }
+            pending={sendCode.isPending}
+            error={sendCode.isError ? sendCode.error : null}
+            onSend={(email): void => {
+              sendCode.mutate({ email });
             }}
-          >
-            <div className="field">
-              <label className="label" htmlFor={signinEmailId}>
-                {t("signIn.emailLabel")}
-              </label>
-              <input
-                className="input"
-                id={signinEmailId}
-                name="email"
-                type="email"
-                autoComplete="email"
-                required={true}
-                placeholder={t("signIn.emailPlaceholder")}
-                ref={emailFieldRef}
-                disabled={sendCode.isPending}
-              />
-            </div>
-
-            {sendCode.isError ? (
-              <Errata heading={t("signIn.notSent")} live={true}>
-                {sendCode.error.message}
-              </Errata>
-            ) : null}
-
-            <div className="row">
-              <button className="plate" type="submit" disabled={sendCode.isPending}>
-                {sendCode.isPending ? t("signIn.sending") : t("signIn.sendCode")}
-              </button>
-            </div>
-          </form>
+          />
         ) : (
-          <form
+          <CodeForm
             key="code"
-            className="stack stack--tight"
-            onSubmit={(event): void => {
-              event.preventDefault();
-              const otp = codeFieldRef.current?.value.trim() ?? "";
-              if (otp !== "") {
-                signIn.mutate({ email: sentTo, otp });
-              }
+            sentTo={sentTo}
+            onUseAnotherAddress={(): void => {
+              sendCode.reset();
             }}
-          >
-            <div className="field">
-              <label className="label" htmlFor={signinCodeId}>
-                {t("signIn.codeLabel")}
-              </label>
-              <input
-                className="input"
-                id={signinCodeId}
-                name="otp"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required={true}
-                maxLength={6}
-                placeholder="000000"
-                ref={codeFieldRef}
-                disabled={signIn.isPending}
-              />
-              {/*
-               * Honest on purpose. The server will not say whether an address has access,
-               * because that would make this form a list of who does -- so this cannot
-               * promise that a code actually went out.
-               */}
-              <p className="field__hint">{t("signIn.codeHint", { email: sentTo })}</p>
-            </div>
-
-            {signIn.isError ? (
-              <Errata heading={t("signIn.notSignedIn")} live={true}>
-                {signIn.error.message}
-              </Errata>
-            ) : null}
-
-            <div className="row">
-              <button className="plate plate--primary" type="submit" disabled={signIn.isPending}>
-                {signIn.isPending ? t("signIn.signingIn") : t("signIn.signIn")}
-              </button>
-              <button
-                className="plate plate--small"
-                type="button"
-                onClick={(): void => {
-                  sendCode.reset();
-                }}
-              >
-                {t("signIn.useAnotherAddress")}
-              </button>
-            </div>
-          </form>
+          />
         )}
 
         {/* The imprint opens this page and the colophon closes it, on the same hairline
@@ -229,5 +133,147 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
         <Colophon />
       </div>
     </main>
+  );
+}
+
+/**
+ * Step one: which address. The input is uncontrolled and read on submit, so the value lives
+ * in the DOM and nowhere else -- see the note at the top of this file.
+ */
+function AddressForm({
+  onSend,
+  pending,
+  error,
+}: {
+  onSend: (email: string) => void;
+  pending: boolean;
+  error: Error | null;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const signinEmailId = useId();
+  const emailFieldRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <form
+      className="stack stack--tight"
+      onSubmit={(event): void => {
+        event.preventDefault();
+        const email = emailFieldRef.current?.value.trim() ?? "";
+        if (email !== "") {
+          onSend(email);
+        }
+      }}
+    >
+      <div className="field">
+        <label className="label" htmlFor={signinEmailId}>
+          {t("signIn.emailLabel")}
+        </label>
+        <input
+          className="input"
+          id={signinEmailId}
+          name="email"
+          type="email"
+          autoComplete="email"
+          required={true}
+          placeholder={t("signIn.emailPlaceholder")}
+          ref={emailFieldRef}
+          disabled={pending}
+        />
+      </div>
+
+      {error === null ? null : (
+        <Errata heading={t("signIn.notSent")} live={true}>
+          {error.message}
+        </Errata>
+      )}
+
+      <div className="row">
+        <button className="plate" type="submit" disabled={pending}>
+          {pending ? t("signIn.sending") : t("signIn.sendCode")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Step two: the code that was sent to `sentTo`.
+ *
+ * The sign-in mutation lives here rather than one level up because it is this step's, and
+ * the keyed remount then clears a failed attempt along with the field it was typed into.
+ * The code is a short-lived secret: it is read from a ref on submit and never stored.
+ */
+function CodeForm({
+  sentTo,
+  onUseAnotherAddress,
+}: {
+  sentTo: string;
+  onUseAnotherAddress: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const signinCodeId = useId();
+  const codeFieldRef = useRef<HTMLInputElement>(null);
+
+  const signIn = useMutation({
+    mutationFn: (variables: { email: string; otp: string }) =>
+      signInWithCode(variables.email, variables.otp),
+    onSuccess: () => {
+      // A full reload rather than a route change: the identity just changed, and every
+      // cached query was answered for the previous one. The same idiom as signing out.
+      globalThis.location.assign("/");
+    },
+  });
+
+  return (
+    <form
+      className="stack stack--tight"
+      onSubmit={(event): void => {
+        event.preventDefault();
+        const otp = codeFieldRef.current?.value.trim() ?? "";
+        if (otp !== "") {
+          signIn.mutate({ email: sentTo, otp });
+        }
+      }}
+    >
+      <div className="field">
+        <label className="label" htmlFor={signinCodeId}>
+          {t("signIn.codeLabel")}
+        </label>
+        <input
+          className="input"
+          id={signinCodeId}
+          name="otp"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          required={true}
+          maxLength={6}
+          placeholder="000000"
+          ref={codeFieldRef}
+          disabled={signIn.isPending}
+        />
+        {/*
+         * Honest on purpose. The server will not say whether an address has access,
+         * because that would make this form a list of who does -- so this cannot
+         * promise that a code actually went out.
+         */}
+        <p className="field__hint">{t("signIn.codeHint", { email: sentTo })}</p>
+      </div>
+
+      {signIn.isError ? (
+        <Errata heading={t("signIn.notSignedIn")} live={true}>
+          {signIn.error.message}
+        </Errata>
+      ) : null}
+
+      <div className="row">
+        <button className="plate plate--primary" type="submit" disabled={signIn.isPending}>
+          {signIn.isPending ? t("signIn.signingIn") : t("signIn.signIn")}
+        </button>
+        <button className="plate plate--small" type="button" onClick={onUseAnotherAddress}>
+          {t("signIn.useAnotherAddress")}
+        </button>
+      </div>
+    </form>
   );
 }
