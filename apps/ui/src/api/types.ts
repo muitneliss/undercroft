@@ -20,6 +20,11 @@ export type Source = "hubspot" | "xero" | "gmail" | "drive";
 
 export const SOURCES: readonly Source[] = ["hubspot", "xero", "gmail", "drive"] as const;
 
+/** Whether a string from a URL or a ledger row names one of the four. */
+export function isSource(value: string | undefined): value is Source {
+  return SOURCES.some((source) => source === value);
+}
+
 /**
  * Not in the catalogue, and deliberately: these are the vendors' own names for their own
  * products. "HubSpot" is HubSpot in every language, and a translated product name is how an
@@ -64,3 +69,9 @@ export const SOURCE_ACCESS: Record<
 export type Connection = inferRouterOutputs<AppRouter>["connections"]["list"][number];
 
 export type ConnectionStatus = Connection["status"];
+
+/** One line of the ledger, exactly as `runs.list` returns it. */
+export type RunView = inferRouterOutputs<AppRouter>["runs"]["list"]["items"][number];
+
+/** One run in full, as `runs.get` returns it: the line plus what it recorded beneath. */
+export type RunDetail = inferRouterOutputs<AppRouter>["runs"]["get"];

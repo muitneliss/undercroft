@@ -265,9 +265,10 @@
     --rule-strong: rgba(22, 21, 15, 0.44);
     --hair: 1px;
 
-    /* The section wheel. Seven hues divide the book and are taken in order; four
-     are spoken for and three are the system's room to grow. Vermilion is not in
-     the wheel -- see --errata. */
+    /* The section wheel. Seven hues divide the book and are taken in order; all
+     seven are spoken for since the ring closed (ADR 0019), so an eighth section
+     is a decision about the wheel first. Vermilion is not in the wheel -- see
+     --errata. */
     --hue-oxide: #b24b1a;
     --hue-chrome: #eda600;
     --hue-grass: #3e782b;
@@ -1888,6 +1889,34 @@
   .table th:last-child {
     padding-right: 0;
     text-align: right;
+  }
+
+  /* -- the journal ------------------------------------------------------------- */
+
+  /* The open row: its leaf is hinged down in the row beneath it, and the row itself
+   takes the board's wash so the eye finds which line the leaf belongs to. The same
+   wash as the hover, held. */
+  .table tbody tr[aria-current] td {
+    background: color-mix(in srgb, var(--board) 14%, transparent);
+  }
+
+  /* The hinge row carries the leaf and nothing else: no cell padding to double the
+   leaf's own, and no hover wash beneath a leaf that is already open. */
+  .table__hinge td,
+  .table tbody tr.table__hinge:hover td {
+    padding: 0 0 var(--s-4);
+    background: transparent;
+  }
+
+  /* What a run did, as the line the reader follows into the leaf; who started it,
+   set beneath in the quiet face. */
+  .journal__what {
+    display: block;
+    font-weight: 700;
+  }
+
+  .journal__trigger {
+    display: block;
   }
 
   code {

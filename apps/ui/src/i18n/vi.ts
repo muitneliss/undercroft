@@ -23,6 +23,7 @@
  *   and `@/lib/money`, which decide a zone and a separator in one place each.
  */
 
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One catalogue, one file: every sentence the interface says in this language, in one place a translator reads top to bottom. Splitting it by length would split a language, and a key added to one half and forgotten in the other is exactly what the single file exists to prevent.
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
 
 export const vi = {
@@ -50,7 +51,10 @@ export const vi = {
     sections: "Các mục",
     customers: "Khách hàng",
     sources: "Nguồn dữ liệu",
+    journal: "Nhật ký",
     lake: "Hồ dữ liệu thô",
+    models: "Mô hình",
+    reports: "Báo cáo",
     people: "Người dùng",
     lockedTitle: "Hãy chọn một khách hàng trước",
     /** Read to a screen reader after the tab's own label, hence the leading dash. */
@@ -209,6 +213,7 @@ export const vi = {
     runNow: "Chạy ngay",
     running: "Đang chạy…",
     runFailedHead: "Lần chạy gần nhất thất bại",
+    openInJournal: "Xem trong nhật ký",
     runNotStarted: "Chưa chạy được",
     cadenceNotSaved: "Chưa lưu được tần suất",
     since: "Từ",
@@ -318,6 +323,73 @@ export const vi = {
     failed: "Thất bại",
     never: "Chưa chạy",
     landed_other: "{{countText}} bản ghi",
+  },
+
+  /** The journal: every run, newest first, and one run opened in its row. */
+  journal: {
+    title: "Nhật ký",
+    lead: "Mỗi lần đọc dữ liệu của {{tenantId}} và mỗi lần dựng mô hình, mới nhất ở trên.",
+    notLoaded: "Không tải được nhật ký của {{tenantId}}.",
+    caption_other: "{{count, number}} lần chạy",
+    colWhen: "Khi nào",
+    colWhat: "Việc gì",
+    colOutcome: "Kết quả",
+    colLanded: "Đã về",
+    colCreated: "Mới",
+    colChanged: "Đổi",
+    colRefused: "Từ chối",
+    colDuration: "Mất",
+    kindModels: "Dựng mô hình",
+    kindBuild: "Dựng thử một mô hình",
+    kindLakeApi: "Ghi từ ngoài vào {{source}}",
+    triggerSchedule: "theo lịch",
+    triggerManual: "chạy tay",
+    triggerBuild: "từ trình soạn",
+    triggerLakeApi: "qua API hồ dữ liệu",
+    testsFailed_other: "{{countText}} kiểm tra không đạt",
+    older: "Cũ hơn",
+    emptyTitle: "Chưa có lần chạy nào",
+    emptyBody: "Lần đầu sẽ chạy lúc {{when}}. Hoặc bấm Chạy ngay ở mục Nguồn dữ liệu.",
+    emptyBodyDueNow:
+      "Lần đầu sẽ chạy ở lượt kế tiếp, trong vòng 15 phút. Hoặc bấm Chạy ngay ở mục Nguồn dữ liệu.",
+    emptyBodyNoSchedule:
+      "Chưa có nguồn nào sẵn sàng để chạy. Hãy kết nối một nguồn và chọn dữ liệu cần đồng bộ ở mục Nguồn dữ liệu.",
+    goToSources: "Đến Nguồn dữ liệu",
+    detailNotLoaded: "Không tải được chi tiết lần chạy này.",
+    started: "Bắt đầu",
+    ended: "Kết thúc",
+    trigger: "Khởi chạy",
+    runId: "Mã lần chạy",
+    errorHead: "Lỗi",
+    entitiesHead: "Theo từng loại dữ liệu",
+    colEntity: "Loại",
+    colUnchanged: "Không đổi",
+    refusalsHead: "Bản ghi bị từ chối",
+    colRecordId: "Mã bản ghi",
+    colReason: "Lý do",
+    colAt: "Lúc",
+    stepsHead: "Các bước dbt",
+    colStep: "Bước",
+    colStatus: "Trạng thái",
+    colFailures: "Dòng lỗi",
+    colTook: "Mất",
+    nothingRecorded: "Lần chạy này chưa ghi nhận gì thêm.",
+  },
+
+  models: {
+    head: "Mô hình",
+    title: "Mô hình dữ liệu",
+    lead: "Các mô hình dbt của {{tenantId}}, soạn ngay trong trình duyệt.",
+    emptyTitle: "Sắp có",
+    emptyBody: "Trình soạn mô hình sẽ xuất hiện ở đây.",
+  },
+
+  reports: {
+    head: "Báo cáo",
+    title: "Báo cáo",
+    lead: "Câu hỏi, biểu đồ và bảng điều khiển của {{tenantId}}.",
+    emptyTitle: "Sắp có",
+    emptyBody: "Câu hỏi và bảng điều khiển sẽ xuất hiện ở đây.",
   },
 
   /**

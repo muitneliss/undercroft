@@ -11,7 +11,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
-import { expiryNote, formatDate, relativeTime } from "./when.ts";
+import { expiryNote, formatDate, formatDuration, relativeTime } from "./when.ts";
 
 const en = translatorFor("en");
 const vi = translatorFor("vi");
@@ -72,5 +72,21 @@ describe("relativeTime", () => {
   it("an unreadable instant is missing, never 'now'", () => {
     expect(relativeTime("not a date", "vi", NOW)).toBe("—");
     expect(relativeTime(null, "vi", NOW)).toBe("—");
+  });
+});
+
+describe("formatDuration", () => {
+  it("says how long a run took in the reader's language, in the unit that fits", () => {
+    const start = "2026-09-17T11:00:00Z";
+
+    expect(formatDuration(start, "2026-09-17T11:00:12Z", "en")).toBe("12 secs");
+    expect(formatDuration(start, "2026-09-17T11:00:12Z", "vi")).toBe("12 giây");
+    expect(formatDuration(start, "2026-09-17T11:02:00Z", "en")).toBe("2 min");
+    expect(formatDuration(start, "2026-09-17T12:30:00Z", "en")).toBe("1.5 hrs");
+  });
+
+  it("a run still in progress has no duration", () => {
+    // MISSING, not a count that is still growing.
+    expect(formatDuration("2026-09-17T11:00:00Z", null, "vi")).toBe("—");
   });
 });

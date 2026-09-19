@@ -14,6 +14,7 @@
 
 import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 // The side effect is the point: `useTranslation` resolves against the module-level i18next
@@ -33,16 +34,21 @@ function card(
   over: Parameters<typeof connection>[1] = {},
   props: Partial<Parameters<typeof ConnectionCard>[0]> = {},
 ): React.JSX.Element {
+  // A router, because the failed-run slip links into the journal. Memory, because no test
+  // here navigates.
   return (
-    <ConnectionCard
-      connection={connection("hubspot", { status: "connected", ...over })}
-      onConnect={noop}
-      onScope={noop}
-      onDisconnect={noop}
-      onRun={noop}
-      onCadence={noop}
-      {...props}
-    />
+    <MemoryRouter>
+      <ConnectionCard
+        tenantId="CASE-0042"
+        connection={connection("hubspot", { status: "connected", ...over })}
+        onConnect={noop}
+        onScope={noop}
+        onDisconnect={noop}
+        onRun={noop}
+        onCadence={noop}
+        {...props}
+      />
+    </MemoryRouter>
   );
 }
 
@@ -52,6 +58,11 @@ describe("the last run", () => {
 
     expect(screen.getByText("Lần chạy gần nhất thất bại")).toBeDefined();
     expect(screen.getByText("HubSpot answered 401 after 0")).toBeDefined();
+    // And a way into the ledger, at this run: the slip names the fault, the journal holds
+    // what was refused and why.
+    expect(screen.getByRole("link", { name: "Xem trong nhật ký" }).getAttribute("href")).toBe(
+      "/tenants/CASE-0042/journal/run-1",
+    );
   });
 
   it("a run that succeeded tips in no slip and says how much it saw", () => {

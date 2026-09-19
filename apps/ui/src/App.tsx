@@ -10,7 +10,8 @@
  * division decides the board hue; the board hue decides the acetate's solved alpha.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noUnresolvedImports: Biome's resolver does not see `Suspense`, `lazy` and `Fragment` in @types/react 19, which declares them inside the `React` namespace it re-exports; `tsc` resolves them and so does the bundler, and both are in the gate.
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
 // biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
@@ -19,11 +20,10 @@
 // biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
 // biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
 
-import type { ReactNode } from "react";
+import { lazy, type ReactNode, Suspense } from "react";
 import { Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 
-import type { Source } from "@/api/types.ts";
-import { SOURCES } from "@/api/types.ts";
+import { isSource } from "@/api/types.ts";
 import { Book } from "@/components/Book.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import type { DivisionId } from "@/lib/divisions.ts";
@@ -35,9 +35,23 @@ import { TenantOverview } from "@/routes/TenantOverview.tsx";
 import { Tenants } from "@/routes/Tenants.tsx";
 import { trpc } from "@/trpc.ts";
 
-function isSource(value: string | undefined): value is Source {
-  return SOURCES.includes(value as Source);
-}
+/**
+ * The three divisions that closed the ring load on demand.
+ *
+ * Each is its own chunk, so the models editor and the charts -- the two heaviest things
+ * the interface will ever carry -- never ride in the bundle an operator downloads to read
+ * a schedule of grants. The Suspense boundary sits INSIDE the book, below the keyed leaf,
+ * so the page turn still fires once for the division rather than once for the chunk.
+ */
+const Journal = lazy(() =>
+  import("@/routes/Journal.tsx").then((module) => ({ default: module.Journal })),
+);
+const Models = lazy(() =>
+  import("@/routes/Models.tsx").then((module) => ({ default: module.Models })),
+);
+const Reports = lazy(() =>
+  import("@/routes/Reports.tsx").then((module) => ({ default: module.Reports })),
+);
 
 /**
  * A signed-in page: the book opened at one division.
@@ -121,10 +135,46 @@ export function App(): React.JSX.Element {
         element={<ScopeRoute signedInAs={signedInAs} />}
       />
       <Route
+        path="/tenants/:tenantId/journal/:runId?"
+        element={
+          <Opened division="journal" signedInAs={signedInAs}>
+            {(tenantId) => (
+              <Suspense fallback={<Skeleton rows={6} />}>
+                <Journal tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
         path="/tenants/:tenantId/lake"
         element={
           <Opened division="lake" signedInAs={signedInAs}>
             {(tenantId) => <Lake tenantId={tenantId} />}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/models"
+        element={
+          <Opened division="models" signedInAs={signedInAs}>
+            {(tenantId) => (
+              <Suspense fallback={<Skeleton rows={4} />}>
+                <Models tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/reports"
+        element={
+          <Opened division="reports" signedInAs={signedInAs}>
+            {(tenantId) => (
+              <Suspense fallback={<Skeleton rows={4} />}>
+                <Reports tenantId={tenantId} />
+              </Suspense>
+            )}
           </Opened>
         }
       />

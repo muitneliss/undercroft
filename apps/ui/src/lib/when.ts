@@ -197,3 +197,48 @@ export function relativeTime(
   }
   return format.format(-Math.round(elapsed / DAY_MS), "day");
 }
+
+type DurationUnit = "second" | "minute" | "hour";
+
+const DURATION = new Map<string, Intl.NumberFormat>();
+
+function durationFormat(locale: Locale, unit: DurationUnit): Intl.NumberFormat {
+  const key = `${locale}/${unit}`;
+  const held = DURATION.get(key);
+  if (held) {
+    return held;
+  }
+  const made = new Intl.NumberFormat(CLDR[locale], {
+    style: "unit",
+    unit,
+    unitDisplay: "short",
+    maximumFractionDigits: unit === "hour" ? 1 : 0,
+  });
+  DURATION.set(key, made);
+  return made;
+}
+
+/**
+ * How long a run took, in the reader's language: "12 giây", "2 min", "1.5 hr".
+ *
+ * A run still in progress has no duration and gets MISSING, not a count that is still
+ * growing; so does a pair of instants that cannot be read or that run backwards.
+ */
+export function formatDuration(startedAt: string, endedAt: string | null, locale: Locale): string {
+  const start = parse(startedAt);
+  const end = parse(endedAt);
+  if (start === null || end === null) {
+    return MISSING;
+  }
+  const ms = end.getTime() - start.getTime();
+  if (ms < 0) {
+    return MISSING;
+  }
+  if (ms < MINUTE_MS) {
+    return durationFormat(locale, "second").format(ms / 1000);
+  }
+  if (ms < HOUR_MS) {
+    return durationFormat(locale, "minute").format(ms / MINUTE_MS);
+  }
+  return durationFormat(locale, "hour").format(ms / HOUR_MS);
+}

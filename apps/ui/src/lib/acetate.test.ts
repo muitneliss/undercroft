@@ -31,7 +31,7 @@ import {
 
 const LEAF = PAPER;
 
-/** Every hue in the wheel, including the three no division has claimed. */
+/** Every hue in the wheel, as a literal: the seven the divisions claim, in the wheel's order. */
 const WHEEL = ["#b24b1a", "#eda600", "#3e782b", "#0f7673", "#234c9e", "#634cb0", "#7f4023"];
 
 describe("solveLeaf", () => {

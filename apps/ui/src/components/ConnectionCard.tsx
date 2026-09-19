@@ -30,6 +30,7 @@
 // biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import type { Connection } from "@/api/types.ts";
 import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types.ts";
@@ -38,6 +39,7 @@ import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import type { Cadence } from "@/lib/cadence.ts";
 import { presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
 import { expiryNote } from "@/lib/when.ts";
 
@@ -49,6 +51,7 @@ const MARK_LABEL = {
 } as const;
 
 export function ConnectionCard({
+  tenantId,
   connection,
   onConnect,
   onScope,
@@ -58,6 +61,8 @@ export function ConnectionCard({
   canRun = false,
   busy = false,
 }: {
+  /** Whose book this row is in: where a failed run's slip links into the journal. */
+  tenantId: string;
   connection: Connection;
   onConnect: () => void;
   onScope: () => void;
@@ -79,7 +84,7 @@ export function ConnectionCard({
   const unprinted = card.state === "not_connected";
   const lapsed = card.mark === "lapsed";
   const running = connection.lastRun?.status === "running";
-  const lastRunFailed = connection.lastRun?.status === "failed";
+  const failedRun = connection.lastRun?.status === "failed" ? connection.lastRun : null;
   // Two booleans, and `||` is the operator that combines them; Biome's type inference does
   // not see the default on `busy` and asks for `??`, which would be wrong for `false`.
   const cannotRun = [busy, running].includes(true);
@@ -225,13 +230,19 @@ export function ConnectionCard({
       {/* A failed run gets the same slip, with the run's own reason. The grant may be fine;
           what is wrong is the record, and the card must not read "granted, syncing" over a
           source that stopped landing anything last night. */}
-      {!lapsed && lastRunFailed ? (
+      {!lapsed && failedRun !== null ? (
         <div className="errata errata--inline">
           <span className="errata__mark">
             <ErrataMark size={13} />
             {t("grant.runFailedHead")}
           </span>
-          <p className="errata__body">{orMissing(connection.lastRun?.error)}</p>
+          <p className="errata__body">{orMissing(failedRun.error)}</p>
+          <Link
+            className="plate plate--small"
+            to={`${divisionPath("journal", tenantId)}/${failedRun.id}`}
+          >
+            {t("grant.openInJournal")}
+          </Link>
         </div>
       ) : null}
 

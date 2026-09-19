@@ -42,3 +42,4 @@
 ## [2026-09-19] ingest | ADR 0018: per-tenant roles and row-level security
 ## [2026-09-19] ingest | ADR 0018: per-tenant roles and row-level security
 ## [2026-09-19] ingest | Runbook Deployment
+## [2026-09-19] ingest | ADR 0019: the wheel is full

@@ -9,6 +9,7 @@
  * reads like prose written for the screen rather than like a translation of one.
  */
 
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One catalogue, one file: every sentence the interface says in this language, in one place a translator reads top to bottom. Splitting it by length would split a language, and a key added to one half and forgotten in the other is exactly what the single file exists to prevent.
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
 
 export const en = {
@@ -31,7 +32,10 @@ export const en = {
     sections: "Sections",
     customers: "Customers",
     sources: "Sources",
+    journal: "Journal",
     lake: "Raw lake",
+    models: "Models",
+    reports: "Reports",
     people: "People",
     lockedTitle: "Choose a customer first",
     lockedHint: " — choose a customer first",
@@ -175,6 +179,7 @@ export const en = {
     runNow: "Run now",
     running: "Running…",
     runFailedHead: "The last run failed",
+    openInJournal: "Open in the journal",
     runNotStarted: "The run could not be started",
     cadenceNotSaved: "The schedule could not be saved",
     since: "Since",
@@ -268,6 +273,74 @@ export const en = {
     never: "Never run",
     landed_one: "{{countText}} record",
     landed_other: "{{countText}} records",
+  },
+
+  journal: {
+    title: "Journal",
+    lead: "Every read of {{tenantId}}'s data and every build of its models, newest first.",
+    notLoaded: "The journal for {{tenantId}} could not be loaded.",
+    caption_one: "{{count, number}} run",
+    caption_other: "{{count, number}} runs",
+    colWhen: "When",
+    colWhat: "What",
+    colOutcome: "Outcome",
+    colLanded: "Landed",
+    colCreated: "New",
+    colChanged: "Changed",
+    colRefused: "Refused",
+    colDuration: "Took",
+    kindModels: "Build the models",
+    kindBuild: "Try one model",
+    kindLakeApi: "Landed from outside into {{source}}",
+    triggerSchedule: "on schedule",
+    triggerManual: "by hand",
+    triggerBuild: "from the editor",
+    triggerLakeApi: "through the lake API",
+    testsFailed_one: "{{countText}} test failed",
+    testsFailed_other: "{{countText}} tests failed",
+    older: "Older",
+    emptyTitle: "No run yet",
+    emptyBody: "The first one runs at {{when}}. Or press Run now under Sources.",
+    emptyBodyDueNow:
+      "The first one runs at the next tick, within 15 minutes. Or press Run now under Sources.",
+    emptyBodyNoSchedule:
+      "No source is ready to run. Connect one and choose what to sync under Sources.",
+    goToSources: "Go to Sources",
+    detailNotLoaded: "This run's detail could not be loaded.",
+    started: "Started",
+    ended: "Ended",
+    trigger: "Started",
+    runId: "Run id",
+    errorHead: "Error",
+    entitiesHead: "By entity",
+    colEntity: "Entity",
+    colUnchanged: "Unchanged",
+    refusalsHead: "Refused records",
+    colRecordId: "Record id",
+    colReason: "Reason",
+    colAt: "At",
+    stepsHead: "dbt steps",
+    colStep: "Step",
+    colStatus: "Status",
+    colFailures: "Failing rows",
+    colTook: "Took",
+    nothingRecorded: "This run recorded nothing further.",
+  },
+
+  models: {
+    head: "Models",
+    title: "Data models",
+    lead: "{{tenantId}}'s dbt models, written in the browser.",
+    emptyTitle: "Coming next",
+    emptyBody: "The model editor will appear here.",
+  },
+
+  reports: {
+    head: "Reports",
+    title: "Reports",
+    lead: "{{tenantId}}'s questions, charts and dashboards.",
+    emptyTitle: "Coming next",
+    emptyBody: "Questions and dashboards will appear here.",
   },
 
   source: {

@@ -189,6 +189,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
             {list.map((connection: Connection) => (
               <ConnectionCard
                 key={connection.source}
+                tenantId={tenantId}
                 connection={connection}
                 canRun={isAdmin}
                 busy={
