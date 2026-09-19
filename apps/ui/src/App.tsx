@@ -10,16 +10,6 @@
  * division decides the board hue; the board hue decides the acetate's solved alpha.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noUnresolvedImports: Biome's resolver does not see `Suspense`, `lazy` and `Fragment` in @types/react 19, which declares them inside the `React` namespace it re-exports; `tsc` resolves them and so does the bundler, and both are in the gate.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
-
 import { lazy, type ReactNode, Suspense } from "react";
 import { Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 
@@ -147,7 +137,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/journal/:runId?"
         element={
           <Opened division="journal" signedInAs={signedInAs}>
-            {(tenantId) => (
+            {(tenantId): React.JSX.Element => (
               <Suspense fallback={<Skeleton rows={6} />}>
                 <Journal tenantId={tenantId} />
               </Suspense>
@@ -159,7 +149,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/lake"
         element={
           <Opened division="lake" signedInAs={signedInAs}>
-            {(tenantId) => (
+            {(tenantId): React.JSX.Element => (
               <Suspense fallback={<Skeleton rows={5} />}>
                 <Lake tenantId={tenantId} />
               </Suspense>
@@ -171,7 +161,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/models"
         element={
           <Opened division="models" signedInAs={signedInAs}>
-            {(tenantId) => (
+            {(tenantId): React.JSX.Element => (
               <Suspense fallback={<Skeleton rows={4} />}>
                 <Models tenantId={tenantId} />
               </Suspense>
@@ -183,7 +173,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/models/:name"
         element={
           <Opened division="models" signedInAs={signedInAs}>
-            {(tenantId) => (
+            {(tenantId): React.JSX.Element => (
               <Suspense fallback={<Skeleton rows={6} />}>
                 <ModelEditor tenantId={tenantId} />
               </Suspense>
@@ -195,7 +185,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/reports"
         element={
           <Opened division="reports" signedInAs={signedInAs}>
-            {(tenantId) => (
+            {(tenantId): React.JSX.Element => (
               <Suspense fallback={<Skeleton rows={4} />}>
                 <Reports tenantId={tenantId} />
               </Suspense>
@@ -207,7 +197,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/reports/questions/:id"
         element={
           <Opened division="reports" signedInAs={signedInAs}>
-            {(tenantId) => (
+            {(tenantId): React.JSX.Element => (
               <Suspense fallback={<Skeleton rows={6} />}>
                 <Question tenantId={tenantId} />
               </Suspense>
@@ -219,7 +209,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/reports/dashboards/:id"
         element={
           <Opened division="reports" signedInAs={signedInAs}>
-            {(tenantId) => (
+            {(tenantId): React.JSX.Element => (
               <Suspense fallback={<Skeleton rows={6} />}>
                 <Dashboard tenantId={tenantId} />
               </Suspense>
@@ -231,7 +221,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/people"
         element={
           <Opened division="people" signedInAs={signedInAs}>
-            {(tenantId) => <People tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => <People tenantId={tenantId} />}
           </Opened>
         }
       />
@@ -239,7 +229,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId"
         element={
           <Opened division="sources" signedInAs={signedInAs}>
-            {(tenantId) => <TenantOverview tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => <TenantOverview tenantId={tenantId} />}
           </Opened>
         }
       />

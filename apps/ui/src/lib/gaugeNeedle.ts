@@ -7,8 +7,6 @@
  * the reading rides in a closure and no plugin options need declaring on Chart.js's types.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: Needle geometry -- the hub's radius, the line's width, a full turn -- is the number itself, read beside the stroke it sets.
-
 import type { Chart, Plugin } from "chart.js";
 
 /** The plugin for one reading: `fraction` is 0..1 of the arc. */

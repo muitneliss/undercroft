@@ -17,22 +17,6 @@
  *   record always hashes to the same bytes even if the API reorders its keys.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One reader, one file: pace, fetch, retry, paginate, extract, guard are one sequential procedure a spec drives from top to bottom, and splitting it by length would put the guards in a different file from the loop they guard.
-// biome-ignore-all lint/complexity/useMaxParams: Four functions take five arguments, each a distinct required input with no sensible grouping. Bundling them into an options object to satisfy a count would hide which are required.
-// biome-ignore-all lint/nursery/usePlaywrightValidDescribeCallback: Playwright-domain rule. There is no Playwright in this repo.
-// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useDefaultSwitchClause: Switches over a closed union where the compiler proves exhaustiveness. A default clause would make the next added member compile silently instead of failing here.
-// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/useAwait: An async function with no await, because the port it implements returns a promise. The contract is the signature, not the body -- `.claude/rules/tests.md` and the ESLint config this replaced both called this out by name.
-
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import {
   type Clock,

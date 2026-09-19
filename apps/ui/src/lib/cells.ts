@@ -8,8 +8,6 @@
  * three places and call it the value. Null is MISSING, never an empty cell.
  */
 
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 

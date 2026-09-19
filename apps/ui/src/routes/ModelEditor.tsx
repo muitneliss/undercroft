@@ -18,25 +18,6 @@
  * regardless.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/noUnresolvedImports: Biome's resolver does not see `Suspense` and `lazy` in @types/react 19, which declares them inside the `React` namespace it re-exports; `tsc` resolves them and so does the bundler, and both are in the gate.
-// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on a single-instance form: the editor renders one model at a time, and the ids are what its <label>s and <datalist> point at.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/nursery/useReactCompiler: The effect seeds a draft from the query cache once the model arrives, which is a write to the store rather than a render-time computation. The compiler cannot see that the store is the owner; `.claude/rules/state.md` is what makes it correct.
-// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on the controls in this file: one form's submit, and one `onChange` per checkbox in the tests table. The re-render the rule is about needs a memoised child to bite; these props land on plain DOM elements.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/nursery/useReactNamingConvention: Fires on the `columnField` handle, which it wants suffixed `Ref`. It is named for what it holds -- the column field -- which is how the form reads, and the convention this follows is DisplayNameForm's beside it.
-// biome-ignore-all lint/style/noNestedTernary: Three chained conditions that map one value onto three outcomes. Written as nested if/else they occupy fifteen lines to say the same thing.
-// biome-ignore-all lint/style/useNamingConvention: `not_null` is dbt's own name for the test, the value stored and sent over the wire; the key is the value, and a camelCase spelling would be a second name for the same thing.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One model, one leaf: the editor, the tests, the build result, the reference and the delete confirmation are the parts of one screen, and a reader following what Save and Build do wants them in the order they sit on the page.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the route this file is named for first, then the parts of it that exist to keep that function readable. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { TEST_KINDS } from "@undercroft/contracts/models";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -155,7 +136,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
               className="plate plate--primary"
               disabled={busy || !dirty}
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 save.mutate({
                   tenantId,
                   name,
@@ -172,7 +153,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
               disabled={busy || dirty}
               title={dirty ? t("models.buildHint") : undefined}
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 build.mutate({ tenantId, name });
               }}
             >
@@ -229,7 +210,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
                   className="plate plate--primary"
                   disabled={busy}
                   type="button"
-                  onClick={() => {
+                  onClick={(): void => {
                     remove.mutate({ tenantId, name });
                   }}
                 >
@@ -340,7 +321,7 @@ function TestsForm({
                         checked={kinds.includes(kind)}
                         disabled={!canEdit}
                         type="checkbox"
-                        onChange={(event) => {
+                        onChange={(event): void => {
                           setModelTest(column, kind, event.currentTarget.checked);
                         }}
                       />
@@ -354,7 +335,7 @@ function TestsForm({
                     <button
                       className="plate plate--small"
                       type="button"
-                      onClick={() => {
+                      onClick={(): void => {
                         removeColumn(column);
                       }}
                     >
@@ -371,7 +352,7 @@ function TestsForm({
       {canEdit ? (
         <form
           className="stack stack--tight"
-          onSubmit={(event) => {
+          onSubmit={(event): void => {
             event.preventDefault();
             const field = columnField.current;
             const column = field?.value.trim() ?? "";

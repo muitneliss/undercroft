@@ -12,20 +12,6 @@
  * value, which is text a person types and is written on change like the rest.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on a single-instance form: the builder renders one question at a time, and the ids are what its <label>s point at.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- React's event handlers -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on the builder's controls. The re-render the rule is about needs a memoised child to bite; these props land on plain DOM elements.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noNestedTernary: Three chained conditions that map one value onto three outcomes. Written as nested if/else they occupy fifteen lines to say the same thing.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One builder, one file: the table, the columns, the filters, the grouping and the order are the parts of one form, and a reader following what a choice does to the draft wants them in the order they sit on the page.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noArrayIndexKey: A filter row has no identity but its position: two identical filters are two filters, and the list is edited in place by index, which is the key the edit is made under.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import {
   type Aggregate,
   AGGREGATES,
@@ -120,7 +106,7 @@ export function QuestionBuilder({
           className="input input--select"
           id="q-table"
           value={definition.table}
-          onChange={(event) => {
+          onChange={(event): void => {
             onPatch({
               table: event.currentTarget.value,
               fields: [{ column: "*", aggregate: "count", alias: "count" }],
@@ -145,7 +131,7 @@ export function QuestionBuilder({
             <input
               type="checkbox"
               checked={countAll}
-              onChange={(event) => {
+              onChange={(event): void => {
                 onPatch({
                   fields: event.currentTarget.checked
                     ? [...definition.fields, { column: "*", aggregate: "count", alias: "count" }]
@@ -164,7 +150,7 @@ export function QuestionBuilder({
                   <input
                     type="checkbox"
                     checked={field !== undefined}
-                    onChange={(event) => {
+                    onChange={(event): void => {
                       onPatch({
                         fields: withField(
                           definition.fields,
@@ -185,7 +171,7 @@ export function QuestionBuilder({
                     aria-label={`${column.name}: ${t("bi.aggNone")}`}
                     className="input input--select"
                     value={field.aggregate ?? NONE}
-                    onChange={(event) => {
+                    onChange={(event): void => {
                       onPatch({
                         fields: withAggregate(
                           definition.fields,
@@ -221,7 +207,7 @@ export function QuestionBuilder({
                 aria-label={t("bi.filterColumn")}
                 className="input input--select"
                 value={filter.column}
-                onChange={(event) => {
+                onChange={(event): void => {
                   const column = event.currentTarget.value;
                   const [firstOp = "is_null"] = opsFor(
                     columns.find((c) => c.name === column)?.type ?? "",
@@ -243,7 +229,7 @@ export function QuestionBuilder({
                 aria-label={t("bi.filterOp")}
                 className="input input--select"
                 value={filter.op}
-                onChange={(event) => {
+                onChange={(event): void => {
                   const chosen = event.currentTarget.value;
                   const op = ops.find((candidate) => candidate === chosen);
                   if (op === undefined) {
@@ -275,7 +261,7 @@ export function QuestionBuilder({
                   }
                   type="text"
                   value={textOf(filter.value)}
-                  onChange={(event) => {
+                  onChange={(event): void => {
                     const text = event.currentTarget.value;
                     onPatch({
                       filters: definition.filters.map((f, i) =>
@@ -288,7 +274,7 @@ export function QuestionBuilder({
               <button
                 className="plate plate--small"
                 type="button"
-                onClick={() => {
+                onClick={(): void => {
                   onPatch({ filters: definition.filters.filter((_f, i) => i !== index) });
                 }}
               >
@@ -303,7 +289,7 @@ export function QuestionBuilder({
             <button
               className="plate"
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 const [first] = columns;
                 if (first === undefined) {
                   return;
@@ -328,7 +314,7 @@ export function QuestionBuilder({
               <input
                 type="checkbox"
                 checked={definition.groupBy.includes(column.name)}
-                onChange={(event) => {
+                onChange={(event): void => {
                   onPatch({
                     groupBy: event.currentTarget.checked
                       ? [...definition.groupBy, column.name]
@@ -352,7 +338,7 @@ export function QuestionBuilder({
             className="input input--select"
             id="q-order"
             value={order?.by ?? NONE}
-            onChange={(event) => {
+            onChange={(event): void => {
               const by = event.currentTarget.value;
               onPatch({ orderBy: by === NONE ? [] : [{ by, dir: order?.dir ?? "asc" }] });
             }}
@@ -370,7 +356,7 @@ export function QuestionBuilder({
             aria-label={t("bi.orderHead")}
             className="input input--select"
             value={order.dir}
-            onChange={(event) => {
+            onChange={(event): void => {
               onPatch({
                 orderBy: [
                   { by: order.by, dir: event.currentTarget.value === "desc" ? "desc" : "asc" },
@@ -393,7 +379,7 @@ export function QuestionBuilder({
             min={1}
             type="number"
             value={definition.limit}
-            onChange={(event) => {
+            onChange={(event): void => {
               // parseInt, not Number(): a row count, not an amount.
               const limit = Number.parseInt(event.currentTarget.value, 10);
               if (Number.isFinite(limit) && limit >= 1) {

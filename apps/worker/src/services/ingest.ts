@@ -22,21 +22,6 @@
  * hold for every caller at once.
  */
 
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/useAwait: An async function with no await, because the port it implements returns a promise. The contract is the signature, not the body -- `.claude/rules/tests.md` and the ESLint config this replaced both called this out by name.
-
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One verb, one file. A run's opening, the two collector paths and its closing are one sequential procedure a reader follows top to bottom; splitting it by length would put the ledger in a different file from the run it records.
-// biome-ignore-all lint/style/noParameterProperties: TypeScript parameter properties in one error class. The alternative is declaring each field and then assigning it in the constructor, which is the same information written twice.
-// biome-ignore-all lint/style/noExcessiveClassesPerFile: The three refusals a start can make -- a run in progress, no such tenant, no usable grant -- are one class each so the error boundary can tell them apart by `instanceof`, and they belong beside the function that raises them rather than in a file of their own.
-
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -210,7 +195,8 @@ export async function resolveToken(
   deps: Pick<RunDeps, "exec" | "env" | "refresher" | "transactor">,
   input: { source: string; tenantId: string },
 ): Promise<string> {
-  const run: Transactor = deps.transactor ?? ((fn) => fn(deps.exec));
+  const run: Transactor =
+    deps.transactor ?? (<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> => fn(deps.exec));
   try {
     return await run((tx) =>
       accessToken(tx, input.tenantId, input.source, {

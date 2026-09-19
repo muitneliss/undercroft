@@ -13,10 +13,6 @@
  * printing a time that already went by.
  */
 
-// biome-ignore-all lint/security/noSecrets: False positives on catalogue keys -- `journal.emptyBodyNoSchedule` is a dotted identifier into `@/i18n`, not a credential. No real secret is in any tracked file; CI enforces that separately.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 

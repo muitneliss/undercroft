@@ -12,12 +12,6 @@
  * "Other", so a chart with fifty customers is still a chart. A null is a gap, never a zero.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: `bySeries` is one pass over the rows that places each value in its series and its label -- one sequential procedure whose branches are the states a row can be in (a kept series, a folded one, a gap). Splitting it would put the shape of one pivot across several names.
-// biome-ignore-all lint/complexity/useMaxParams: `bySeries` takes five arguments, each a distinct required input with no sensible grouping. Bundling them into an options object to satisfy a count would hide which are required.
-// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { ChartConfig } from "@undercroft/contracts/bi";
 
 import type { TableResult } from "@/api/types.ts";

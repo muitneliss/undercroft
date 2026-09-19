@@ -11,22 +11,6 @@
  * A viewer reads what was made for them.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on a single-instance form: the route renders one dashboard at a time, and the ids are what its <label>s point at.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/nursery/useReactCompiler: The effect seeds a draft from the query cache once the dashboard arrives, which is a write to the store rather than a render-time computation. The compiler cannot see that the store is the owner; `.claude/rules/state.md` is what makes it correct.
-// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on the controls in this file. The re-render the rule is about needs a memoised child to bite; these props land on plain DOM elements.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noNestedTernary: Chained conditions that map one leaf onto its states -- an author editing, an author reading, a viewer; nothing to add, everything added, a choice to make. Written as nested if/else they occupy three times the lines to say the same thing.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One dashboard, one leaf: the name, the filters, the grid and the save are the parts of one screen, and a reader following what Save stores wants them in the order they sit on the page.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the route this file is named for first, then the parts of it that exist to keep that function readable. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { type DashboardFilter, IDENTIFIER } from "@undercroft/contracts/bi";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -106,7 +90,7 @@ export function Dashboard({ tenantId }: { tenantId: string }): React.JSX.Element
       questions={questions.data}
       canAuthor={tenant.data.role !== "viewer"}
       locale={locale}
-      onSaved={async (savedId) => {
+      onSaved={async (savedId): Promise<void> => {
         await utils.bi.dashboards.list.invalidate({ tenantId });
         await utils.bi.dashboards.get.invalidate({ tenantId, id: savedId });
         if (isNew) {
@@ -115,7 +99,7 @@ export function Dashboard({ tenantId }: { tenantId: string }): React.JSX.Element
           });
         }
       }}
-      onDeleted={async () => {
+      onDeleted={async (): Promise<void> => {
         setDashboardDraft(null);
         await utils.bi.dashboards.list.invalidate({ tenantId });
         void navigate(divisionPath("reports", tenantId));
@@ -210,7 +194,7 @@ function DashboardLeaf({
                 placeholder={t("dashboard.namePlaceholder")}
                 type="text"
                 value={draft.name}
-                onChange={(event) => {
+                onChange={(event): void => {
                   setDashboardName(event.currentTarget.value);
                 }}
               />
@@ -227,7 +211,7 @@ function DashboardLeaf({
             <button
               className="plate"
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 setEdit(!edit);
               }}
             >
@@ -237,7 +221,7 @@ function DashboardLeaf({
               className="plate plate--primary"
               disabled={busy || !dirty || !valid}
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 save.mutate({
                   tenantId,
                   ...(draft.id === null ? {} : { id: draft.id }),
@@ -292,7 +276,7 @@ function DashboardLeaf({
                     title={t("dashboard.filterNameHint")}
                     type="text"
                     value={filter.name}
-                    onChange={(event) => {
+                    onChange={(event): void => {
                       const name = event.currentTarget.value;
                       setDashboardFilters(
                         draft.filters.map((held, j) => (j === i ? { ...held, name } : held)),
@@ -308,7 +292,7 @@ function DashboardLeaf({
                     className="input input--select"
                     id={`d-filter-kind-${String(i)}`}
                     value={filter.kind}
-                    onChange={(event) => {
+                    onChange={(event): void => {
                       const chosen = event.currentTarget.value;
                       const kind = chosen === "date_range" || chosen === "number" ? chosen : "text";
                       setDashboardFilters(
@@ -332,7 +316,7 @@ function DashboardLeaf({
                     maxLength={80}
                     type="text"
                     value={filter.label}
-                    onChange={(event) => {
+                    onChange={(event): void => {
                       const label = event.currentTarget.value;
                       setDashboardFilters(
                         draft.filters.map((held, j) => (j === i ? { ...held, label } : held)),
@@ -343,7 +327,7 @@ function DashboardLeaf({
                 <button
                   className="plate plate--small"
                   type="button"
-                  onClick={() => {
+                  onClick={(): void => {
                     setDashboardFilters(draft.filters.filter((_held, j) => j !== i));
                   }}
                 >
@@ -355,7 +339,7 @@ function DashboardLeaf({
               <button
                 className="plate"
                 type="button"
-                onClick={() => {
+                onClick={(): void => {
                   setDashboardFilters([...draft.filters, { name: "", kind: "text", label: "" }]);
                 }}
               >
@@ -398,7 +382,7 @@ function DashboardLeaf({
                 search={search}
                 locale={locale}
                 edit={edit}
-                onAction={(action) => {
+                onAction={(action): void => {
                   setDashboardLayout(applyTileAction(draft.layout, tile.questionId, action));
                 }}
               />
@@ -414,7 +398,7 @@ function DashboardLeaf({
           ) : (
             <form
               className="row"
-              onSubmit={(event) => {
+              onSubmit={(event): void => {
                 event.preventDefault();
                 const chosen = String(new FormData(event.currentTarget).get("question") ?? "");
                 if (byId.has(chosen)) {
@@ -460,7 +444,7 @@ function DashboardLeaf({
                   className="plate plate--primary"
                   disabled={busy}
                   type="button"
-                  onClick={() => {
+                  onClick={(): void => {
                     if (draft.id !== null) {
                       remove.mutate({ tenantId, id: draft.id });
                     }

@@ -19,10 +19,6 @@
  * decides that in SQL and answers `suppressed` for the runs it applied it to.
  */
 
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. One email at a time, to one address at a time, so a provider's rate limit is met and a failure is attributed to the message that caused it.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import {
   DEFAULT_LOCALE,
   describeError,

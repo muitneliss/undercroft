@@ -11,10 +11,6 @@
  * project) and the browser (which refuses a bad name before it is sent).
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: The size cap is the one number in the file, written as the kilobytes it is rather than as a constant that says the same thing twice.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: `not_null` is dbt's own name for the test, and the value stored and sent over the wire; a camelCase spelling would be a second name for the same thing.
-
 import { z } from "zod";
 
 /** A dbt model or column name: what Postgres accepts unquoted and dbt accepts as a node. */

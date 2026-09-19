@@ -14,18 +14,6 @@
  * whether it succeeded.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on a single-instance form: the band renders once per Sources leaf, and the ids are what its <label>s point at.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as the routes: what remains are contextually-typed callbacks whose inferred type is a React or tRPC shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- React's event handlers, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/nursery/useReactNamingConvention: Fires on the `mintForm` handle, which it wants suffixed `Ref`. It is named for what it holds, which is how the band reads, and the convention this follows is DisplayNameForm's beside it.
-// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on one form and one plate per row of a short table. The re-render the rule is about matters under a memoised list of hundreds.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -123,7 +111,7 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
                       className="plate plate--small"
                       type="button"
                       disabled={revoke.isPending}
-                      onClick={() => {
+                      onClick={(): void => {
                         revoke.mutate({ tenantId, id: key.id });
                       }}
                     >
@@ -157,7 +145,7 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
             <button
               className="plate"
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 copy.mutate(mint.data.token);
               }}
             >
@@ -166,7 +154,7 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
             <button
               className="plate"
               type="button"
-              onClick={() => {
+              onClick={(): void => {
                 copy.reset();
                 mint.reset();
               }}
@@ -189,7 +177,7 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
         <form
           className="stack stack--tight"
           ref={mintForm}
-          onSubmit={(event) => {
+          onSubmit={(event): void => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             const label = String(data.get("label") ?? "").trim();

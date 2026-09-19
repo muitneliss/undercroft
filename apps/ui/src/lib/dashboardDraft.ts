@@ -6,8 +6,6 @@
  * definition. The layout's moves live in `lib/dashboardLayout.ts`; this only holds.
  */
 
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { DashboardFilter, DashboardLayout } from "@undercroft/contracts/bi";
 
 import type { DashboardView } from "@/api/types.ts";

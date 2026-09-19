@@ -12,9 +12,6 @@
  * the platform is on, so a preset and the run that landed the rows agree on which day it is.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: The span of each preset, in days, is the preset itself; and the slice offsets read a `YYYY-MM-DD` string whose shape is fixed by the formatter above them.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { DashboardFilter } from "@undercroft/contracts/bi";
 
 /** The two parameters a date range named `name` binds. */

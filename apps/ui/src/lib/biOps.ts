@@ -8,9 +8,6 @@
  * because a person filtering for a name does not mean its capitalisation.
  */
 
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: `is_null` and `not_null` are the filter operators as stored in a question and sent over the wire; the key is the value, and a camelCase spelling would be a second name for the same thing.
-
 import type { FilterOp } from "@undercroft/contracts/bi";
 import type { TFunction } from "i18next";
 

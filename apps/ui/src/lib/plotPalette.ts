@@ -19,8 +19,6 @@
  * says what the journal says.
  */
 
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 /** Categorical slots, in the order series take them. Past seven, series fold to "Other". */
 export const CATEGORICAL: readonly string[] = [
   "#234c9e", // ultramarine (people's family)

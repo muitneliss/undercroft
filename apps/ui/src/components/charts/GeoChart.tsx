@@ -13,16 +13,6 @@
  * chart frame, so the geo plugin and the projection maths ride only with a map.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks whose inferred type is a Chart.js option shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Chart.js's tooltip and scale callbacks -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: Data and option objects built per render for a map of one result. The re-render the rule is about matters under a memoised list of hundreds.
-// biome-ignore-all lint/style/noMagicNumbers: The number of unmatched labels named before "and more" is the number itself, read beside the note it bounds.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useNamingConvention: `ChartJS` is the name react-chartjs-2's own documentation gives the Chart.js class when both are in one file, to keep it apart from the `Chart` component; strictCase would have it `ChartJs`, which no reader of either library recognises.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { useQuery } from "@tanstack/react-query";
 import type { ChartConfig } from "@undercroft/contracts/bi";
 import { Chart as ChartJS } from "chart.js";
@@ -177,7 +167,7 @@ export function GeoChart({
               legend: { display: false },
               tooltip: {
                 callbacks: {
-                  label: (item) => {
+                  label: (item): string => {
                     const point = points[item.dataIndex];
                     const row =
                       point === undefined

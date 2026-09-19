@@ -13,10 +13,6 @@
  * source: the handshake row carries the source.
  */
 
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: OAuth query parameter names (access_type, include_granted_scopes) are the provider's.
-
 export type Provider = "google" | "xero";
 
 /** What a deployment holds for one provider: the client, and where the browser comes back. */

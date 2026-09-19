@@ -17,23 +17,6 @@
  * face and ink as the leaf it sits on.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: The frame is one switch over sixteen chart types, each arm a few lines; splitting it by family would put the shape of one decision -- which type gets which drawing -- across several names.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/noUnresolvedImports: Biome's resolver does not see `Suspense` and `lazy` in @types/react 19, which declares them inside the `React` namespace it re-exports; `tsc` resolves them and so does the bundler, and both are in the gate.
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks whose inferred type is a Chart.js option shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Chart.js's tooltip and tick callbacks -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: Data and option objects built per render for a chart of one result. The re-render the rule is about matters under a memoised list of hundreds.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One frame, one file: sixteen chart types over one series shape, and a reader checking that every type honours the two rules in the docstring wants them side by side rather than in sixteen files that agree by convention.
-// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/useNamingConvention: `ChartJS` is the name react-chartjs-2's own documentation gives the Chart.js class when both are in one file, to keep it apart from the `Chart` component; strictCase would have it `ChartJs`, which no reader of either library recognises.
-// biome-ignore-all lint/style/noMagicNumbers: Chart geometry -- a half circle's degrees, a point's radius, a cutout's share -- is the number itself, read beside the option it sets.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noArrayIndexKey: A pivot cell has no identity but its position; the table is replaced whole on every run.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import type { ChartConfig } from "@undercroft/contracts/bi";
 import type { Locale } from "@undercroft/core/locale";
 import {
@@ -56,6 +39,7 @@ import {
   RadialLinearScale,
   ScatterController,
   Tooltip,
+  type ChartOptions,
   type TooltipItem,
 } from "chart.js";
 import { FunnelController, TrapezoidElement } from "chartjs-chart-funnel";
@@ -133,12 +117,12 @@ function tooltipLabel(series: Series) {
   };
 }
 
-function cartesianScales(locale: Locale) {
+function cartesianScales(locale: Locale): NonNullable<ChartOptions<"line">["scales"]> {
   return {
     y: {
       ticks: {
-        callback: (value: string | number) =>
-          typeof value === "number" ? formatCount(value, locale) : value,
+        callback: (value: string | number): string =>
+          typeof value === "number" ? formatCount(value, locale) : String(value),
       },
       grid: { color: TOKENS.rule },
     },

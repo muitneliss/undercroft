@@ -8,8 +8,6 @@
  * contract's shape at the one place it leaves the browser.
  */
 
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { ModelTests, TestKind } from "@undercroft/contracts/models";
 
 import type { ModelDetail } from "@/api/types.ts";

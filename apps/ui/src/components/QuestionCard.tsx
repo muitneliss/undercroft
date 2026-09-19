@@ -12,17 +12,6 @@
  * the nine controls that move and size it, one cell at a time.
  */
 
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/noUnresolvedImports: Biome's resolver does not see `Suspense` and `lazy` in @types/react 19, which declares them inside the `React` namespace it re-exports; `tsc` resolves them and so does the bundler, and both are in the gate.
-// biome-ignore-all lint/nursery/noInlineStyles: Data becoming a style: the tile's grid placement IS the layout the author saved, four integers per tile that no class can carry. Biome's fix deletes the attribute rather than relocating it, which removes the feature.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks whose inferred type is a React shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- React's event handlers -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers and the placement object on a tile. The re-render the rule is about needs a memoised child to bite; these props land on plain DOM elements.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noNestedTernary: Four chained conditions that map one tile onto its states -- gone, waiting, loading, refused, drawn -- and written as nested if/else they occupy twenty lines to say the same thing.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { compile, type DashboardTile, paramNames } from "@undercroft/contracts/bi";
 import type { Locale } from "@undercroft/core/locale";
 import { lazy, Suspense } from "react";
@@ -78,7 +67,7 @@ function TileControls({ onAction }: { onAction: (action: TileAction) => void }):
           className="plate plate--small"
           title={t(ACTION_KEY[action])}
           type="button"
-          onClick={() => {
+          onClick={(): void => {
             onAction(action);
           }}
         >
