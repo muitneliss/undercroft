@@ -199,6 +199,13 @@ export const en = {
     errata: "Errata",
     whatWeRead: "What we read",
     whatWeChange: "What we change",
+    pasteToken: "Paste a private-app token",
+    tokenLabel: "HubSpot private-app token",
+    tokenHint:
+      "Made in HubSpot: Settings → Integrations → Private apps. It is checked with HubSpot before it is stored, and never shown again.",
+    tokenSave: "Check and save",
+    tokenSaving: "Checking…",
+    tokenRejected: "The token was not accepted",
   },
 
   grantState: {
@@ -215,6 +222,16 @@ export const en = {
       "Choose the labels to read. Only message headers and PDF attachments in those labels are read; no other label is read.",
     leadDrive:
       "Choose the folders or documents to read. Google permits us to read exactly what you pick here and nothing else.",
+    leadXero:
+      "Choose the Xero organisation to read, and which kinds of data. One consent can see several organisations; only the one you choose here is read.",
+    leadNone: "This source needs no scope.",
+    xeroEntitiesHint:
+      "Choosing no kind of data means every kind. That is a deliberate choice, not an empty one.",
+    organisationsHead: "Organisation",
+    entitiesHead: "Kinds of data",
+    noOrganisations:
+      "The Xero account that consented sees no organisation. Reconnect with an account that has access to the books.",
+    chooseOrganisation: "Choose an organisation before saving.",
     wholeMailboxHint:
       "Choosing no label means the whole mailbox. That is a deliberate choice, not an empty one.",
     directChildrenOnly: "Only files directly inside a chosen folder are read. Sub-folders are not.",
@@ -245,6 +262,12 @@ export const en = {
   scope: {
     driveFolders_one: "PDFs in {{count, number}} selected folder",
     driveFolders_other: "PDFs in {{count, number}} selected folders",
+    xeroContacts: "Contacts",
+    xeroInvoices: "Invoices",
+    xeroPayments: "Payments",
+    xeroCreditNotes: "Credit notes",
+    xeroAll: "Every kind of data: contacts, invoices, payments, credit notes",
+    xeroEntities: "{{entities}}",
     gmailWholeMailbox: "Headers and PDF attachments, whole mailbox",
     gmailLabels: "Headers and PDF attachments in {{labels}}",
   },

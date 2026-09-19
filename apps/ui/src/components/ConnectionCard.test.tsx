@@ -106,6 +106,41 @@ describe("Run now", () => {
   });
 });
 
+describe("how a source is connected", () => {
+  it("HubSpot offers a token to paste, in the row, where Gmail offers its consent screen", () => {
+    // HubSpot has no consent to run; sending the browser to a screen that does not exist
+    // was a button that failed. Gmail must still go to Google's.
+    render(
+      <MemoryRouter>
+        <ConnectionCard
+          tenantId="CASE-0042"
+          connection={connection("hubspot")}
+          onConnect={noop}
+          onScope={noop}
+          onDisconnect={noop}
+          onRun={noop}
+          onCadence={noop}
+          tokenForm={<input aria-label="the token form" />}
+        />
+        <ConnectionCard
+          tenantId="CASE-0042"
+          connection={connection("gmail")}
+          onConnect={noop}
+          onScope={noop}
+          onDisconnect={noop}
+          onRun={noop}
+          onCadence={noop}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Dán mã ứng dụng riêng")).toBeDefined();
+    expect(screen.getByLabelText("the token form")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Kết nối HubSpot" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Kết nối Gmail" })).toBeDefined();
+  });
+});
+
 describe("the cadence", () => {
   it("offers an admin the four presets with the stored one selected, and saves on change", () => {
     const chosen: Cadence[] = [];

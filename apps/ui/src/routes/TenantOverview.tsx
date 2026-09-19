@@ -44,6 +44,7 @@ import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { TokenForm } from "@/components/TokenForm.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -216,6 +217,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
                 onCadence={(cadence) => {
                   setCadence.mutate({ tenantId, source: connection.source, cadence });
                 }}
+                tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
               />
             ))}
           </div>

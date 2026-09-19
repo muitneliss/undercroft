@@ -58,6 +58,10 @@ export interface ScopeDraft {
   readonly source: string;
   readonly labels: string[];
   readonly files: ChosenFile[];
+  /** Xero: which of the organisations the consent can see. Null until one is chosen. */
+  readonly organisation: { readonly id: string; readonly name: string } | null;
+  /** Xero: which entities to read. Empty means every one the spec declares, deliberately. */
+  readonly entities: string[];
 }
 
 interface UiState {
@@ -79,6 +83,10 @@ interface UiState {
    * reader is told about.
    */
   clearScopeLabels: (source: string) => void;
+  /** Xero: choose the organisation to read. One at a time; a consent that sees several is told which. */
+  setScopeOrganisation: (source: string, organisation: { id: string; name: string }) => void;
+  /** Xero: add or remove one entity. No entity chosen means every one, deliberately. */
+  toggleScopeEntity: (source: string, entity: string) => void;
   /**
    * What the admin has typed into the label index's filter, and which source they typed it
    * against.
@@ -101,6 +109,20 @@ interface UiState {
   setScopeFilter: (source: string, query: string) => void;
 }
 
+/**
+ * The draft for one source, or an empty one when what is held belongs to another source.
+ *
+ * Every draft write goes through this, so a tick made against Gmail's labels can never land
+ * in a draft that was started for Drive: the source is checked once, here, rather than in
+ * each action.
+ */
+function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
+  if (held !== null && held.source === source) {
+    return held;
+  }
+  return { source, labels: [], files: [], organisation: null, entities: [] };
+}
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
@@ -110,22 +132,31 @@ export const useUiStore = create<UiState>()(
       setScopeDraft: (scopeDraft): unknown => set({ scopeDraft }),
       toggleScopeLabel: (source, label): unknown =>
         set((state) => {
-          const draft = state.scopeDraft?.source === source ? state.scopeDraft : null;
-          const labels = draft?.labels ?? [];
+          const draft = draftFor(state.scopeDraft, source);
           return {
             scopeDraft: {
-              source,
-              files: draft?.files ?? [],
-              labels: labels.includes(label)
-                ? labels.filter((l) => l !== label)
-                : [...labels, label],
+              ...draft,
+              labels: draft.labels.includes(label)
+                ? draft.labels.filter((l) => l !== label)
+                : [...draft.labels, label],
             },
           };
         }),
       clearScopeLabels: (source): unknown =>
+        set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), labels: [] } })),
+      setScopeOrganisation: (source, organisation): unknown =>
+        set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), organisation } })),
+      toggleScopeEntity: (source, entity): unknown =>
         set((state) => {
-          const draft = state.scopeDraft?.source === source ? state.scopeDraft : null;
-          return { scopeDraft: { source, files: draft?.files ?? [], labels: [] } };
+          const draft = draftFor(state.scopeDraft, source);
+          return {
+            scopeDraft: {
+              ...draft,
+              entities: draft.entities.includes(entity)
+                ? draft.entities.filter((e) => e !== entity)
+                : [...draft.entities, entity],
+            },
+          };
         }),
       scopeFilter: { source: "", query: "" },
       setScopeFilter: (source, query): unknown => set({ scopeFilter: { source, query } }),

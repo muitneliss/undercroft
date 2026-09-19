@@ -238,6 +238,14 @@ export const vi = {
     errata: "Đính chính",
     whatWeRead: "Chúng tôi đọc gì",
     whatWeChange: "Chúng tôi thay đổi gì",
+    /** HubSpot: no consent screen, a private app's token pasted in the row. */
+    pasteToken: "Dán mã ứng dụng riêng",
+    tokenLabel: "Mã ứng dụng riêng của HubSpot",
+    tokenHint:
+      "Tạo trong HubSpot: Cài đặt → Tích hợp → Ứng dụng riêng. Mã được kiểm tra với HubSpot trước khi lưu và sẽ không hiển thị lại.",
+    tokenSave: "Kiểm tra và lưu",
+    tokenSaving: "Đang kiểm tra…",
+    tokenRejected: "Mã chưa được chấp nhận",
   },
 
   /**
@@ -263,6 +271,16 @@ export const vi = {
       "Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp PDF đính kèm trong những nhãn đó được đọc; không nhãn nào khác được đọc.",
     leadDrive:
       "Chọn thư mục hoặc tài liệu cần đọc. Google chỉ cho phép đọc đúng những gì bạn chọn ở đây.",
+    leadXero:
+      "Chọn tổ chức Xero cần đọc, và những loại dữ liệu nào. Một lần cấp quyền có thể thấy nhiều tổ chức; chỉ tổ chức bạn chọn ở đây được đọc.",
+    leadNone: "Nguồn này không cần chọn phạm vi.",
+    xeroEntitiesHint:
+      "Không chọn loại dữ liệu nào nghĩa là đọc tất cả các loại. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
+    organisationsHead: "Tổ chức",
+    entitiesHead: "Loại dữ liệu",
+    noOrganisations:
+      "Tài khoản Xero đã cấp quyền không thấy tổ chức nào. Hãy kết nối lại bằng một tài khoản có quyền truy cập sổ sách.",
+    chooseOrganisation: "Hãy chọn một tổ chức trước khi lưu.",
     wholeMailboxHint:
       "Không chọn nhãn nào nghĩa là đọc toàn bộ hòm thư. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
     directChildrenOnly:
@@ -297,6 +315,13 @@ export const vi = {
     driveFolders_other: "PDF trong {{count, number}} thư mục đã chọn",
     gmailWholeMailbox: "Tiêu đề thư và tệp PDF đính kèm, toàn bộ hòm thư",
     gmailLabels: "Tiêu đề thư và tệp PDF đính kèm trong {{labels}}",
+    /** Xero's entities, by the spec's ids. The ids are recorded; these are the words. */
+    xeroContacts: "Liên hệ",
+    xeroInvoices: "Hóa đơn",
+    xeroPayments: "Thanh toán",
+    xeroCreditNotes: "Giấy báo có",
+    xeroAll: "Mọi loại dữ liệu: liên hệ, hóa đơn, thanh toán, giấy báo có",
+    xeroEntities: "{{entities}}",
   },
 
   /** Dates in the operator's terms. Chosen by `@/lib/when`. */

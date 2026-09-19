@@ -29,6 +29,7 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -38,7 +39,7 @@ import { GrantWhen } from "@/components/GrantWhen.tsx";
 import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import type { Cadence } from "@/lib/cadence.ts";
-import { presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import { connectsBy, presentConnection, scopeSummary } from "@/lib/connectionState.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
 import { expiryNote } from "@/lib/when.ts";
@@ -60,6 +61,7 @@ export function ConnectionCard({
   onCadence,
   canRun = false,
   busy = false,
+  tokenForm,
 }: {
   /** Whose book this row is in: where a failed run's slip links into the journal. */
   tenantId: string;
@@ -74,6 +76,11 @@ export function ConnectionCard({
   /** Whether the reader is an admin. Courtesy; the server refuses regardless. */
   canRun?: boolean;
   busy?: boolean;
+  /**
+   * The form a token-connected source opens in its row. A slot rather than a component the
+   * card renders itself, so the card stays renderable with no tRPC provider behind it.
+   */
+  tokenForm?: ReactNode;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const card = presentConnection(t, connection);
@@ -83,6 +90,11 @@ export function ConnectionCard({
 
   const unprinted = card.state === "not_connected";
   const lapsed = card.mark === "lapsed";
+  // A source with no consent screen opens a form in its row instead of sending the browser
+  // away; the same plate wording covers a first connection and a reconnect.
+  const pastes =
+    connectsBy(connection.source) === "token" &&
+    (card.action?.kind === "connect" || card.action?.kind === "reconnect");
   const running = connection.lastRun?.status === "running";
   const failedRun = connection.lastRun?.status === "failed" ? connection.lastRun : null;
   // Two booleans, and `||` is the operator that combines them; Biome's type inference does
@@ -154,7 +166,14 @@ export function ConnectionCard({
         </div>
 
         <div className="grant__actions">
-          {card.action?.kind === "connect" ? (
+          {pastes ? (
+            <details className="tokenform">
+              <summary className="plate plate--primary">{t("grant.pasteToken")}</summary>
+              <div className="hinge">{tokenForm}</div>
+            </details>
+          ) : null}
+
+          {card.action?.kind === "connect" && !pastes ? (
             <button
               type="button"
               className="plate plate--primary"
@@ -178,7 +197,7 @@ export function ConnectionCard({
             </button>
           ) : null}
 
-          {card.action?.kind === "reconnect" ? (
+          {card.action?.kind === "reconnect" && !pastes ? (
             <button
               type="button"
               className="plate plate--primary"

@@ -37,12 +37,18 @@
  * sentence -- what an admin reads while choosing is verbatim what the record says
  * afterwards. It carries `role="status"`, so a screen reader is told the same thing at the
  * same moment instead of being left to infer it from a checkbox.
+ *
+ * **Xero** is a third shape: one consent can see several organisations, and the platform
+ * must be told which one rather than guess. The list comes through the worker like Gmail's
+ * labels; the choice is one organisation and any number of the spec's entities, where none
+ * means all of them, as with Gmail.
  */
 
 // biome-ignore-all lint/nursery/useReactCompiler: The effect seeds a draft from the query cache once the grants arrive, which is a write to the store rather than a render-time computation. The compiler cannot see that the store is the owner; `.claude/rules/state.md` is what makes it correct.
 
 // biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One leaf, one file: three sources choose three ways on the same screen, and the reader following one branch into the next should not change files to do it.
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
@@ -68,8 +74,20 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { openDrivePicker } from "@/lib/drivePicker.ts";
 import { type BrowsedLabel, indexLabels, type LabelOwner } from "@/lib/labelIndex.ts";
+import { describeXeroEntity, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
+
+/** Which lead each source's picker opens with. HubSpot never reaches this leaf. */
+const LEAD_KEY = {
+  gmail: "scopePicker.leadGmail",
+  drive: "scopePicker.leadDrive",
+  xero: "scopePicker.leadXero",
+  hubspot: "scopePicker.leadNone",
+} as const;
+
+/** Sources whose choices are listed by the worker, because listing needs a live token. */
+const BROWSED: ReadonlySet<Source> = new Set<Source>(["gmail", "xero"]);
 
 /**
  * How many labels before the index needs to be searchable rather than merely readable.
@@ -99,7 +117,7 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
   const labels = trpc.connections.browseScope.useQuery(
     { tenantId, source },
     // Drive has no server-side listing to fetch; asking for one would be a guaranteed 400.
-    { enabled: source === "gmail" },
+    { enabled: BROWSED.has(source) },
   );
   const config = trpc.config.google.useQuery(undefined, { enabled: source === "drive" });
 
@@ -124,10 +142,16 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
       source,
       labels: current.config.labels ?? [],
       files: (current.config.folderIds ?? []).map((id) => ({ id, name: id, kind: "folder" })),
+      // The organisation already chosen, by the id a run sends and the name the card shows.
+      organisation:
+        current.externalAccountId === ""
+          ? null
+          : { id: current.externalAccountId, name: current.externalAccountLabel },
+      entities: current.config.entities ?? [],
     });
   }, [current, source, setDraft]);
 
-  if (connections.isPending || (source === "gmail" && labels.isPending)) {
+  if (connections.isPending || (BROWSED.has(source) && labels.isPending)) {
     return <Skeleton rows={4} />;
   }
 
@@ -141,43 +165,63 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
 
   const chosenLabels = draft?.source === source ? draft.labels : [];
   const chosenFiles = draft?.source === source ? draft.files : [];
+  const chosenOrganisation = draft?.source === source ? draft.organisation : null;
+  const chosenEntities = draft?.source === source ? draft.entities : [];
+
+  function selection(): unknown {
+    if (source === "gmail") {
+      return {
+        labels: chosenLabels.map((name) => ({
+          id: labels.data?.items.find((i) => i.name === name)?.id ?? name,
+          name,
+        })),
+      };
+    }
+    if (source === "xero") {
+      return { organisation: chosenOrganisation, entities: chosenEntities };
+    }
+    return { files: chosenFiles };
+  }
 
   function save(): void {
-    setScope.mutate({
-      tenantId,
-      source,
-      selection:
-        source === "gmail"
-          ? {
-              labels: chosenLabels.map((name) => ({
-                id: labels.data?.items.find((i) => i.name === name)?.id ?? name,
-                name,
-              })),
-            }
-          : { files: chosenFiles },
-    });
+    setScope.mutate({ tenantId, source, selection: selection() });
   }
+
+  // Xero cannot be saved without an organisation: the server would refuse it, and the
+  // plate saying so beforehand is cheaper than the errata afterwards.
+  const unsaveable = source === "xero" && chosenOrganisation === null;
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("nav.sources")}</div>
       <div className="body stack">
         <h1>{t("scopePicker.title")}</h1>
-        <p className="prose prose--lead">
-          {source === "gmail" ? t("scopePicker.leadGmail") : t("scopePicker.leadDrive")}
-        </p>
+        <p className="prose prose--lead">{t(LEAD_KEY[source])}</p>
 
-        {source === "gmail" ? (
-          <p className="note">{t("scopePicker.wholeMailboxHint")}</p>
-        ) : (
-          <p className="note">{t("scopePicker.directChildrenOnly")}</p>
-        )}
+        {source === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
+        {source === "drive" ? <p className="note">{t("scopePicker.directChildrenOnly")}</p> : null}
+        {source === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
       </div>
 
       <div className="band-rule" />
 
       <div className="head">{SOURCE_LABEL[source]}</div>
       <div className="body stack">
+        {source === "xero" ? (
+          labels.isError ? (
+            <Errata heading={t("common.notLoaded")} live={true}>
+              {labels.error.message}
+            </Errata>
+          ) : (
+            <XeroChoice
+              source={source}
+              organisations={labels.data?.items ?? []}
+              organisation={chosenOrganisation}
+              entities={chosenEntities}
+            />
+          )
+        ) : null}
+
         {source === "gmail" ? (
           labels.isError ? (
             <Errata heading={t("common.notLoaded")} live={true}>
@@ -210,7 +254,9 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
               </div>
             </>
           )
-        ) : (
+        ) : null}
+
+        {source === "drive" ? (
           <>
             <button
               type="button"
@@ -224,7 +270,7 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
                   return;
                 }
                 void openDrivePicker(picker, (picked) => {
-                  setDraft({ source, labels: [], files: picked });
+                  setDraft({ source, labels: [], files: picked, organisation: null, entities: [] });
                 });
               }}
             >
@@ -240,7 +286,7 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
               </ul>
             )}
           </>
-        )}
+        ) : null}
 
         {setScope.isError ? (
           <Errata heading={t("scopePicker.notSaved")} live={true}>
@@ -248,16 +294,103 @@ export function ScopePicker({ tenantId, source }: { tenantId: string; source: So
           </Errata>
         ) : null}
 
+        {unsaveable ? <p className="note">{t("scopePicker.chooseOrganisation")}</p> : null}
+
         <button
           type="button"
           className="plate plate--primary"
-          disabled={setScope.isPending}
+          disabled={setScope.isPending || unsaveable}
           onClick={save}
         >
           {setScope.isPending ? t("scopePicker.saving") : t("scopePicker.save")}
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Xero's choice: one organisation, and which entities.
+ *
+ * Both halves are read from the store and written to it, for the reason the label index
+ * gives. The entity list is the spec's, in the spec's order, with the words a reader sees
+ * translated and the ids that get recorded left as they are.
+ */
+function XeroChoice({
+  source,
+  organisations,
+  organisation,
+  entities,
+}: {
+  source: Source;
+  organisations: readonly { id: string; name: string }[];
+  organisation: { id: string; name: string } | null;
+  entities: readonly string[];
+}) {
+  const { t } = useTranslation();
+  const setOrganisation = useUiStore((s) => s.setScopeOrganisation);
+  const toggleEntity = useUiStore((s) => s.toggleScopeEntity);
+
+  if (organisations.length === 0) {
+    return <p className="note">{t("scopePicker.noOrganisations")}</p>;
+  }
+
+  return (
+    <>
+      <fieldset className="index">
+        <legend className="label index__legend">{t("scopePicker.organisationsHead")}</legend>
+        <div className="index__field">
+          <div className="index__cols">
+            {organisations.map((candidate) => (
+              <label key={candidate.id} className="punch">
+                <input
+                  type="radio"
+                  name="organisation"
+                  checked={organisation?.id === candidate.id}
+                  onChange={() => {
+                    setOrganisation(source, { id: candidate.id, name: candidate.name });
+                  }}
+                />
+                <span className="punch__box" />
+                <span>{candidate.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset className="index">
+        <legend className="label index__legend">{t("scopePicker.entitiesHead")}</legend>
+        <div className="index__field">
+          <div className="index__cols">
+            {XERO_ENTITIES.map((entity) => (
+              <label key={entity} className="punch">
+                <input
+                  type="checkbox"
+                  checked={entities.includes(entity)}
+                  onChange={() => {
+                    toggleEntity(source, entity);
+                  }}
+                />
+                <span className="punch__box" />
+                <span>{describeXeroEntity(t, entity)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </fieldset>
+
+      <div className="echo">
+        <span className="label">{t("scopePicker.echoHead")}</span>
+        <p className="note echo__says" role="status">
+          {entities.length === 0
+            ? t("scope.xeroAll")
+            : t("scope.xeroEntities", {
+                entities: entities.map((entity) => describeXeroEntity(t, entity)).join(", "),
+              })}
+        </p>
+      </div>
+    </>
   );
 }
 

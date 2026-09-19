@@ -1891,6 +1891,29 @@
     text-align: right;
   }
 
+  /* -- a form hinged into a row ------------------------------------------------ */
+
+  /* A plate that is a <summary>: the same die, the disclosure triangle removed. Open, it
+   is struck -- the ink fills the plate -- because the leaf beneath it is the thing that
+   is now on the page. */
+  .tokenform > summary.plate {
+    list-style: none;
+  }
+
+  .tokenform > summary.plate::-webkit-details-marker {
+    display: none;
+  }
+
+  .tokenform[open] > summary.plate {
+    background: var(--ink);
+    color: var(--leaf);
+  }
+
+  /* The leaf lies below the plate, full width of the actions cell, not beside it. */
+  .tokenform {
+    flex-basis: 100%;
+  }
+
   /* -- the journal ------------------------------------------------------------- */
 
   /* The open row: its leaf is hinged down in the row beneath it, and the row itself

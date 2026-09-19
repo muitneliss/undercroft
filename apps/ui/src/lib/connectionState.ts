@@ -37,9 +37,20 @@
 
 import type { TFunction } from "i18next";
 
-import type { Connection } from "@/api/types.ts";
+import type { Connection, Source } from "@/api/types.ts";
+import { describeXeroEntity } from "@/lib/xeroEntities.ts";
 
 export type CardState = "not_connected" | "connected" | "needs_scope" | "needs_reconnect";
+
+/**
+ * How a source is connected: through a provider's consent screen, or by a token an admin
+ * pastes. HubSpot has no consent to run -- a private app issues a token -- so its card
+ * opens a form in the row where the others send the browser away. Wordless, so the card
+ * test can ask it with no translator in scope.
+ */
+export function connectsBy(source: Source): "consent" | "token" {
+  return source === "hubspot" ? "token" : "consent";
+}
 
 /** The single thing to do next, as a decision rather than as a button label. */
 export type ActionKind = "connect" | "scope" | "reconnect";
@@ -168,8 +179,16 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
         ? t("scope.gmailWholeMailbox")
         : t("scope.gmailLabels", { labels: labels.join(", ") });
 
-    case "hubspot":
     case "xero":
+      // An empty list is a recorded decision -- every entity the spec declares -- and the
+      // words say so rather than leaving a dash that reads as "nothing chosen".
+      return entities.length === 0
+        ? t("scope.xeroAll")
+        : t("scope.xeroEntities", {
+            entities: entities.map((entity) => describeXeroEntity(t, entity)).join(", "),
+          });
+
+    case "hubspot":
       return entities.length === 0 ? null : entities.join(", ");
 
     default: {
