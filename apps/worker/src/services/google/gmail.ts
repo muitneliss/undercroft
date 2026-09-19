@@ -121,58 +121,86 @@ export async function harvestGmail(
 
     const headers = headerMap(message);
     const internalDate = str(message, "internalDate");
-    records.push({
-      entity: ENTITY,
-      sourceRecordId: messageId,
-      sourceUpdatedAt: isoFromEpochMillis(internalDate),
-      // Built from extracted fields, then canonicalised -- never re-serialised from a
-      // parsed payload, and carrying no plain JS number (`canonicalJson` refuses one, and
-      // an id that had been through a float would be a different id).
-      payloadText: canonicalJson({
-        id: messageId,
-        threadId: str(message, "threadId"),
-        labelIds,
-        headers,
-        snippetOmitted: true,
-        internalDate,
-      }),
-    });
-
+    records.push(messageRecord(messageId, message, labelIds, internalDate));
     for (const part of pdfParts(message)) {
-      const attachmentId = part.attachmentId;
-      documents.push({
-        // (messageId, partIndex), never attachmentId. See the module docstring.
-        documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
-        contentType: PDF,
-        declaredBytes: part.size,
-        // Opaque ids, enumerations and counts only -- this reaches dbt.
-        metadata: {
-          labelIds,
-          partIndex: String(part.index),
-          messageId,
-        },
-        // Names a human wrote. The lake manifest, which dbt and BI cannot reach.
-        manifest: {
-          filename: part.filename,
-          subject: headers.Subject ?? "",
-          from: headers.From ?? "",
-          to: headers.To ?? "",
-          messageId,
-        },
-        sourceUpdatedAt: isoFromEpochMillis(internalDate),
-        fetchBytes: async () => {
-          const body = await api.getJson(
-            `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
-            "attachments",
-            records.length,
-          );
-          return decodeBase64Url(str(body, "data"));
-        },
-      });
+      documents.push(attachment(api, { messageId, headers, labelIds, internalDate }, part));
     }
   }
 
   return { records, documents };
+}
+
+/**
+ * One message as a record to land.
+ *
+ * Built from extracted fields, then canonicalised -- never re-serialised from a parsed
+ * payload, and carrying no plain JS number (`canonicalJson` refuses one, and an id that had
+ * been through a float would be a different id).
+ */
+function messageRecord(
+  messageId: string,
+  message: unknown,
+  labelIds: string[],
+  internalDate: string,
+): RecordToLand {
+  return {
+    entity: ENTITY,
+    sourceRecordId: messageId,
+    sourceUpdatedAt: isoFromEpochMillis(internalDate),
+    payloadText: canonicalJson({
+      id: messageId,
+      threadId: str(message, "threadId"),
+      labelIds,
+      headers: headerMap(message),
+      snippetOmitted: true,
+      internalDate,
+    }),
+  };
+}
+
+/** What a message says about itself that its attachments need. */
+interface MessageFacts {
+  readonly messageId: string;
+  readonly headers: Record<string, string>;
+  readonly labelIds: string[];
+  readonly internalDate: string;
+}
+
+/**
+ * One PDF attachment as a document to land.
+ *
+ * The split between `metadata` and `manifest` is the whole point and it is load-bearing:
+ * `metadata` reaches `raw.documents`, which dbt and BI can read, so it carries opaque ids,
+ * enumerations and counts only. Every name a human wrote goes in `manifest`, which lives in
+ * the access-controlled object store. `pii.md`, ADR 0015.
+ */
+function attachment(api: GoogleApi, facts: MessageFacts, part: PdfPart): DocumentToLand {
+  const { messageId, headers, labelIds, internalDate } = facts;
+  const { attachmentId } = part;
+
+  return {
+    // (messageId, partIndex), never attachmentId. See the module docstring.
+    documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
+    contentType: PDF,
+    declaredBytes: part.size,
+    metadata: { labelIds, partIndex: String(part.index), messageId },
+    manifest: {
+      filename: part.filename,
+      subject: headers.Subject ?? "",
+      from: headers.From ?? "",
+      to: headers.To ?? "",
+      messageId,
+    },
+    sourceUpdatedAt: isoFromEpochMillis(internalDate),
+    fetchBytes: async (): Promise<Uint8Array> => {
+      const body = await api.getJson(
+        `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+        "attachments",
+        0,
+      );
+      return decodeBase64Url(str(body, "data"));
+    },
+  };
 }
 
 /**
@@ -187,30 +215,48 @@ async function listMessageIds(api: GoogleApi, scope: GmailScope): Promise<string
   const ids = new Set<string>();
 
   for (const labelId of queries) {
-    let pageToken: string | null = null;
-    do {
-      const url = new URL(`${GMAIL_BASE}/messages`);
-      url.searchParams.set("maxResults", PAGE_SIZE);
-      if (labelId !== null) {
-        url.searchParams.set("labelIds", labelId);
-      }
-      if (pageToken !== null) {
-        url.searchParams.set("pageToken", pageToken);
-      }
-
-      const page = await api.getJson(url.toString(), ENTITY, ids.size);
-      for (const message of asArray(getPath(page, "messages"))) {
-        const id = str(message, "id");
-        if (id !== "") {
-          ids.add(id);
-        }
-      }
-      const next = str(page, "nextPageToken");
-      pageToken = next === "" ? null : next;
-    } while (pageToken !== null);
+    await collectLabelIds(api, labelId, ids);
   }
 
   return [...ids];
+}
+
+/** The URL of one page of message ids: the label, if any, and the cursor, if any. */
+function listUrl(labelId: string | null, pageToken: string | null): string {
+  const url = new URL(`${GMAIL_BASE}/messages`);
+  url.searchParams.set("maxResults", PAGE_SIZE);
+  if (labelId !== null) {
+    url.searchParams.set("labelIds", labelId);
+  }
+  if (pageToken !== null) {
+    url.searchParams.set("pageToken", pageToken);
+  }
+  return url.toString();
+}
+
+/**
+ * Every message id under one label, page by page, added to the union.
+ *
+ * Sequential because each page's cursor comes out of the one before it -- there is nothing to
+ * parallelise, and Gmail's pacing is per request either way.
+ */
+async function collectLabelIds(
+  api: GoogleApi,
+  labelId: string | null,
+  ids: Set<string>,
+): Promise<void> {
+  let pageToken: string | null = null;
+  do {
+    const page = await api.getJson(listUrl(labelId, pageToken), ENTITY, ids.size);
+    for (const message of asArray(getPath(page, "messages"))) {
+      const id = str(message, "id");
+      if (id !== "") {
+        ids.add(id);
+      }
+    }
+    const next = str(page, "nextPageToken");
+    pageToken = next === "" ? null : next;
+  } while (pageToken !== null);
 }
 
 function messageUrl(messageId: string): string {
@@ -281,8 +327,10 @@ function headerMap(message: unknown): Record<string, string> {
  * Unreadable is `null`, never a guess and never `0` -- an epoch-zero timestamp downstream
  * is indistinguishable from a real 1970 date, and a wrong value is worse than a missing one.
  */
+const EPOCH_MILLIS = /^\d+$/u;
+
 function isoFromEpochMillis(value: string): string | null {
-  if (!/^\d+$/u.test(value)) {
+  if (!EPOCH_MILLIS.test(value)) {
     return null;
   }
   // parseInt, not Number(): the money rule bans Number() repo-wide, and this is an

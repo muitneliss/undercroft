@@ -91,14 +91,22 @@ export const TRUNCATED = "events_truncated";
  */
 const LOG_ONLY: ReadonlySet<string> = new Set(["errorMessage"]);
 
-export function createRunJournal(deps: RunJournalDeps): RunJournal {
-  const clock = deps.clock ?? systemClock;
+/** The pending rows and the chain that writes them, so `flush` has one thing to await. */
+interface EventBuffer {
+  readonly push: (event: RunEvent) => void;
+  readonly flush: () => Promise<void>;
+}
+
+/**
+ * Buffered, serialised writes.
+ *
+ * The chain is what keeps the rows in the order the events happened: each write waits on the
+ * one before it. A write that fails does NOT fail the run -- a run is not failed over its own
+ * narration -- but it is said out loud rather than swallowed, because "the feed is short"
+ * needs a reason somewhere.
+ */
+function createEventBuffer(deps: RunJournalDeps): EventBuffer {
   const pending: RunEvent[] = [];
-  const lastProgressAt = new Map<string, number>();
-  let accepted = 0;
-  let truncationNoted = false;
-  // Serialises the writes so the rows land in the order the events happened, and gives
-  // `flush` one thing to await.
   let chain: Promise<void> = Promise.resolve();
 
   function write(): Promise<void> {
@@ -107,28 +115,49 @@ export function createRunJournal(deps: RunJournalDeps): RunJournal {
       return Promise.resolve();
     }
     return recordEvents(deps.exec, deps.runId, batch).catch((error: unknown) => {
-      // The run is not failed over its own narration. Said out loud rather than swallowed:
-      // stdout is still a channel, and "the feed is short" needs a reason somewhere.
       deps.log?.warn("run_events_unwritten", { count: batch.length, ...describeError(error) });
     });
   }
 
+  return {
+    push: (event): void => {
+      pending.push(event);
+      chain = chain.then(write);
+    },
+    flush: async (): Promise<void> => {
+      chain = chain.then(write);
+      await chain;
+    },
+  };
+}
+
+/** The `detail` column: everything the event carried except what only the log wants. */
+function detailOf(fields: Omit<EventFields, "entity">): Record<string, unknown> {
+  const detail: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (!LOG_ONLY.has(key)) {
+      detail[key] = value;
+    }
+  }
+  return detail;
+}
+
+export function createRunJournal(deps: RunJournalDeps): RunJournal {
+  const clock = deps.clock ?? systemClock;
+  const buffer = createEventBuffer(deps);
+  const lastProgressAt = new Map<string, number>();
+  let accepted = 0;
+  let truncationNoted = false;
+
   function push(level: RunEvent["level"], event: string, fields: EventFields): void {
     const { entity, ...rest } = fields;
-    const detail: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(rest)) {
-      if (!LOG_ONLY.has(key)) {
-        detail[key] = value;
-      }
-    }
-    pending.push({
+    buffer.push({
       at: clock.now().toISOString(),
       level,
       event,
       entity: entity ?? null,
-      detail,
+      detail: detailOf(rest),
     });
-    chain = chain.then(write);
   }
 
   /**
@@ -181,10 +210,7 @@ export function createRunJournal(deps: RunJournalDeps): RunJournal {
       note("info", event, fields);
     },
 
-    async flush(): Promise<void> {
-      chain = chain.then(write);
-      await chain;
-    },
+    flush: buffer.flush,
   };
 }
 

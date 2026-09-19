@@ -29,7 +29,7 @@ import { grantExpiryFor } from "@undercroft/db/services";
 import { createGoogleApi } from "./google/api.ts";
 import { isGoogleSource } from "./google/collect.ts";
 import { type GmailLabel, listLabels } from "./google/gmail.ts";
-import type { Transactor } from "./runPaths.ts";
+import type { Transactor } from "./runTypes.ts";
 import { validateCredential } from "./validateCredential.ts";
 import { listOrganisations, type XeroOrganisation } from "./xero/organisations.ts";
 import { xeroClientAuthorization } from "./xero/refresh.ts";

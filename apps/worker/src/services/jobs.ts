@@ -27,7 +27,7 @@ import {
 } from "@undercroft/db/repos";
 
 import { RunInProgress, startIngest } from "./ingest.ts";
-import type { RunDeps } from "./runPaths.ts";
+import type { RunDeps } from "./runTypes.ts";
 import { readRelation } from "./preview.ts";
 import { createRunJournal, type RunJournal } from "./runJournal.ts";
 import { runTransform, type TransformDeps, type TransformOutcome } from "./transform.ts";

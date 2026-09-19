@@ -8,7 +8,7 @@
 export { createLakeApi, type LakeApiDeps } from "./handlers/lake.ts";
 export { type AuthOutcome, authenticate } from "./services/auth.ts";
 export { runIngest } from "./services/ingest.ts";
-export type { IngestResult, RunDeps } from "./services/runPaths.ts";
+export type { IngestResult, RunDeps } from "./services/runTypes.ts";
 export {
   type LandedRecord,
   type LandResult,

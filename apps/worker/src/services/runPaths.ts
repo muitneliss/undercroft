@@ -3,148 +3,28 @@
  *
  * A spec source is read by the generic connector runtime; Gmail and Drive are collectors
  * rather than specs (ADR 0015) and take a different route to the same ledger. Split from
- * `ingest.ts` so that file holds the LEDGER -- what a run records and how it settles -- and
- * this one holds how the records are actually fetched.
+ * `ingest.ts` so that file holds the LEDGER -- what a run records, how it opens and how it
+ * settles -- and this one holds how the records are actually fetched.
+ *
+ * Both paths write into the same `Ledger` as they go and narrate into the same `RunJournal`,
+ * so a failure halfway still records what the first half did. That is `connectors.md`'s rule
+ * that a failure raises rather than returning an empty stream, kept on the worker's side.
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  createFetcher,
-  type Fetcher,
-  readEntity,
-  type RunContext,
-} from "@undercroft/connector-runtime";
+import { createFetcher, readEntity, type RunContext } from "@undercroft/connector-runtime";
 import { type ConnectorSpec, parseScope, parseSpec } from "@undercroft/contracts";
-import { type ByteFetcher, createByteFetcher, type Logger } from "@undercroft/core";
+import { createByteFetcher } from "@undercroft/core";
+import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
+
 import { createGoogleApi } from "./google/api.ts";
 import { type GoogleSource, runGoogleCollect } from "./google/collect.ts";
+import type { Ledger, RunDeps } from "./runTypes.ts";
+import { resolveToken } from "./runTypes.ts";
 import { landRecords, type RecordToLand } from "./land.ts";
 import { loadStreamToRaw } from "./loadToRaw.ts";
-import type { RunRefusal, RunTrigger } from "@undercroft/db/repos";
-import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
-import type { SqlExecutor } from "@undercroft/db";
-import { ConnectionRegistryError, setStatus } from "@undercroft/db/repos";
-import { accessToken } from "@undercroft/db/services";
-import type { Credential } from "@undercroft/db/repos";
-import type { LakeStore } from "@undercroft/lake";
-
-/**
- * Run `fn` inside one transaction on one connection.
- *
- * Injected rather than constructed: building it needs a pool, and `layer-injected-deps`
- * keeps infrastructure above this layer. `server.ts` supplies `withTransaction(pool, fn)`.
- */
-export type Transactor = <T>(fn: (tx: SqlExecutor) => Promise<T>) => Promise<T>;
-
-/**
- * Exchanges a refresh token for a fresh credential.
- *
- * Named here rather than written out at each call site so the handler can speak about a
- * refresher without importing `@undercroft/db/repos` -- `layer-handler-no-repo` counts a
- * type-only import too, and rightly: a transport layer that knows the credential's shape is
- * one refactor away from knowing which table it lives in.
- */
-export type Refresher = (refreshToken: string) => Promise<Credential>;
-
-export interface RunDeps {
-  readonly lake: LakeStore;
-  readonly exec: SqlExecutor;
-  readonly specsDir: string;
-  readonly env?: NodeJS.ProcessEnv;
-  /** Injected in tests; the process wires the real `fetch`-backed fetcher. */
-  readonly fetcher?: Fetcher;
-  /** The byte-returning seam the Google collectors use. Injected in tests, as above. */
-  readonly byteFetcher?: ByteFetcher;
-  /**
-   * Exchanges a refresh token for a fresh credential. Absent means this source cannot
-   * refresh -- correct for a HubSpot private app, which has nothing to refresh with.
-   */
-  readonly refresher?: Refresher;
-  /**
-   * Required for the row lock to mean anything. `accessToken` reads the credential
-   * `FOR UPDATE`, which only holds inside a transaction; on the autocommit executor it
-   * locks for the statement and no longer, so two concurrent runs can both spend the same
-   * rotating refresh token and destroy the connection. Absent falls back to autocommit,
-   * which is safe only because no refresher is wired in that case.
-   */
-  readonly transactor?: Transactor;
-  /** Where the run's opening, closing and failure are written. Absent means silence. */
-  readonly log?: Logger;
-}
-
-export interface IngestResult {
-  readonly runId: string;
-  readonly source: string;
-  readonly entities: {
-    entity: string;
-    landed: number;
-    loadedCreated: number;
-    loadedChanged: number;
-    loadedUnchanged: number;
-    refused: number;
-  }[];
-  /** Every record or document this run refused, with why. Never a payload. */
-  readonly refusals: RunRefusal[];
-}
-
-/** What a run wants to know about why it was started. Both default to the scheduler's. */
-export interface RunOpening {
-  readonly trigger?: RunTrigger;
-  /** An `app_user` uuid. Never an address: `ops.run` is readable by BI. */
-  readonly triggeredBy?: string;
-}
-
-/**
- * A usable access token, refreshing under a real row lock if one is close to expiry.
- *
- * The transaction is the whole point. `accessToken` takes `SELECT ... FOR UPDATE`, which
- * holds a lock only inside a transaction -- so running it on the autocommit executor gave a
- * lock that lasted one statement and protected nothing. That went unnoticed because no
- * refresher was ever supplied, which meant the refresh branch never ran. Wiring one makes
- * the lock load-bearing, so it has to be real in the same change.
- *
- * A failure rolls the transaction back, leaving the stored credential untouched. Losing a
- * rotated refresh token half-written costs the connection outright.
- *
- * The rollback takes one write with it that has to survive. `accessToken` marks a
- * connection `expired` and *then* throws when it cannot refresh, so inside a transaction
- * that status is rolled back by the very throw that earned it -- and the card in the UI
- * would keep reading "connected" forever while every run failed. "This needs re-consent" is
- * a durable fact about the credential rather than part of the attempt that failed, so it is
- * re-applied outside the transaction.
- *
- * Only for `ConnectionRegistryError`, which is the "cannot be refreshed" case. A refresher
- * that threw because Google's token endpoint was briefly down is a transient fault, and
- * marking a perfectly good connection expired over one would send a customer to re-consent
- * for nothing.
- */
-export async function resolveToken(
-  deps: Pick<RunDeps, "exec" | "env" | "refresher" | "transactor">,
-  input: { source: string; tenantId: string },
-): Promise<string> {
-  const run: Transactor =
-    deps.transactor ?? (<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> => fn(deps.exec));
-  try {
-    return await run((tx) =>
-      accessToken(tx, input.tenantId, input.source, {
-        ...(deps.refresher === undefined ? {} : { refresher: deps.refresher }),
-        ...(deps.env === undefined ? {} : { env: deps.env }),
-      }),
-    );
-  } catch (error) {
-    if (error instanceof ConnectionRegistryError) {
-      await setStatus(deps.exec, input.tenantId, input.source, "expired");
-    }
-    throw error;
-  }
-}
-
-/** What a run has done so far, gathered as it goes so a failure still records the rest. */
-export interface Ledger {
-  readonly entities: IngestResult["entities"];
-  readonly refusals: RunRefusal[];
-}
+import type { RunJournal } from "./runJournal.ts";
 
 /**
  * What a spec run reads, as the connection records it: the provider's account id, and the
@@ -174,13 +54,14 @@ export async function runGoogleIngest(
   deps: RunDeps,
   input: { source: GoogleSource; tenantId: string; runId: string },
   ledger: Ledger,
+  journal: RunJournal,
 ): Promise<void> {
   const api = createGoogleApi(input.source, {
     fetcher: deps.byteFetcher ?? createByteFetcher(),
     token: () => resolveToken(deps, input),
   });
 
-  const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api }, input);
+  const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api, journal }, input);
 
   const records = result.refusals.filter((r) => r.entity !== "documents").length;
   ledger.entities.push(
@@ -202,74 +83,132 @@ export async function runGoogleIngest(
     },
   );
   ledger.refusals.push(...result.refusals);
+  for (const entity of ledger.entities) {
+    journal.info("entity_done", {
+      entity: entity.entity,
+      landed: entity.landed,
+      created: entity.loadedCreated,
+      changed: entity.loadedChanged,
+      unchanged: entity.loadedUnchanged,
+      refused: entity.refused,
+    });
+  }
+}
+
+/** What one spec run needs, gathered once before the first entity is read. */
+interface SpecRun {
+  readonly spec: ConnectorSpec;
+  readonly ctx: RunContext;
+  readonly entities: ConnectorSpec["entities"];
 }
 
 /**
- * The context one run hands the connector runtime.
+ * Open a spec run: the spec, the request context, and which entities the admin chose.
  *
- * A token resolver is attached only when the connector authenticates: under
- * `exactOptionalPropertyTypes` an explicit `undefined` is not the same as omitting the key,
- * and a spec with `auth.kind === "none"` must not be handed a resolver it may then call. The
- * account id -- the Xero organisation chosen after consent -- is attached the same way, and
- * the runtime refuses to send a request without it where the spec names it.
+ * Spec ORDER is kept through the filter, because a `batch-from` relation reads against ids
+ * harvested from an entity declared before it; the spec schema refuses an unknown reference,
+ * and a reordered list would turn that check into a run that silently read nothing.
  */
-function runContextFor(
+async function openSpecRun(
   deps: RunDeps,
-  spec: ConnectorSpec,
   input: { source: string; tenantId: string },
-  accountId: string | null,
-): RunContext {
-  return {
+): Promise<SpecRun> {
+  const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
+  const chosen = await chosenFor(deps, input);
+
+  const ctx: RunContext = {
     fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),
     // Only attach a token resolver when the connector authenticates. Under
     // exactOptionalPropertyTypes an explicit `undefined` is not the same as omitting it.
     ...(spec.auth.kind === "none"
       ? {}
-      : {
-          token: () => resolveToken(deps, input),
-        }),
+      : { token: (): Promise<string> => resolveToken(deps, input) }),
     // The provider's account id -- the Xero organisation chosen after consent -- for the
     // header the spec names. The runtime refuses to send a request without it.
-    ...(accountId === null ? {} : { accountId }),
+    ...(chosen.accountId === null ? {} : { accountId: chosen.accountId }),
   };
+
+  const entities =
+    chosen.entities === null
+      ? spec.entities
+      : spec.entities.filter((entity) => chosen.entities?.includes(entity.name) === true);
+
+  return { spec, ctx, entities };
+}
+
+/** Everything one entity's read reports to, held together so it is three arguments not six. */
+interface EntityRun {
+  readonly deps: RunDeps;
+  readonly input: { source: string; tenantId: string; runId: string };
+  readonly spec: ConnectorSpec;
+  readonly ledger: Ledger;
+  readonly journal: RunJournal;
+}
+
+/** What one entity's land and load did, before it is written into the ledger. */
+interface EntityOutcome {
+  readonly landed: Awaited<ReturnType<typeof landRecords>>;
+  readonly loaded: Awaited<ReturnType<typeof loadStreamToRaw>>;
+}
+
+/** Write one entity's outcome into the ledger, and narrate it. */
+function recordEntity(run: EntityRun, entity: string, outcome: EntityOutcome): void {
+  const { landed, loaded } = outcome;
+  for (const result of landed.results) {
+    if (result.status === "failed") {
+      run.ledger.refusals.push({
+        entity: result.entity,
+        sourceRecordId: result.sourceRecordId,
+        reason: result.reason ?? "refused",
+      });
+    }
+  }
+  run.ledger.entities.push({
+    entity,
+    landed: landed.created + landed.unchanged,
+    loadedCreated: loaded.created,
+    loadedChanged: loaded.changed,
+    loadedUnchanged: loaded.unchanged,
+    refused: landed.failed,
+  });
+  run.journal.info("entity_done", {
+    entity,
+    landed: landed.created + landed.unchanged,
+    created: loaded.created,
+    changed: loaded.changed,
+    unchanged: loaded.unchanged,
+    refused: landed.failed,
+  });
 }
 
 /**
- * Read one entity, land it, load it into `raw`, and record what happened.
+ * Read one entity, land it, load it, and record what it did. Returns the ids it saw.
  *
- * `idsByEntity` is carried because a `batch-from` relation reads against the entity it
- * references, and spec order is what guarantees the referenced one has already run.
+ * The ids come back so a `batch-from` relation declared after this entity can read against
+ * them. The whole entity is buffered before landing because the lake write is one create-only
+ * call per record and the ids are needed as a set; a source large enough for that to matter
+ * would want a different shape, and none is.
  */
-async function readOneEntity(
-  deps: RunDeps,
-  input: { source: string; tenantId: string; runId: string },
-  run: {
-    spec: ConnectorSpec;
-    entity: ConnectorSpec["entities"][number];
-    ctx: RunContext;
-    idsByEntity: Map<string, string[]>;
-    ledger: Ledger;
-  },
-): Promise<void> {
-  const { spec, entity, ctx, idsByEntity, ledger } = run;
-  const entityCtx: RunContext =
-    entity.request.kind === "batch-from"
-      ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }
-      : ctx;
+async function ingestEntity(
+  run: EntityRun,
+  entity: ConnectorSpec["entities"][number],
+  ctx: RunContext,
+): Promise<string[]> {
+  const { deps, input, spec, journal } = run;
+  journal.info("entity_started", { entity: entity.name });
 
   const batch: RecordToLand[] = [];
-  for await (const record of readEntity(spec, entity, entityCtx)) {
+  for await (const record of readEntity(spec, entity, ctx)) {
     batch.push({
       entity: record.entity,
       sourceRecordId: record.sourceRecordId,
       sourceUpdatedAt: record.sourceUpdatedAt,
       payloadText: record.payloadText,
     });
+    // Coalesced by the journal: a line per record would be the run written twice.
+    journal.progress("records_read", { entity: entity.name, read: batch.length });
   }
-  idsByEntity.set(
-    entity.name,
-    batch.map((r) => r.sourceRecordId),
-  );
+
   const landed = await landRecords(deps.lake, {
     source: input.source,
     tenantId: input.tenantId,
@@ -281,48 +220,28 @@ async function readOneEntity(
     tenantId: input.tenantId,
     entity: entity.name,
   });
-  for (const result of landed.results) {
-    if (result.status === "failed") {
-      ledger.refusals.push({
-        entity: result.entity,
-        sourceRecordId: result.sourceRecordId,
-        reason: result.reason ?? "refused",
-      });
-    }
-  }
-  ledger.entities.push({
-    entity: entity.name,
-    landed: landed.created + landed.unchanged,
-    loadedCreated: loaded.created,
-    loadedChanged: loaded.changed,
-    loadedUnchanged: loaded.unchanged,
-    refused: landed.failed,
-  });
+
+  recordEntity(run, entity.name, { landed, loaded });
+  return batch.map((r) => r.sourceRecordId);
 }
 
 export async function runSpecIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string; runId: string },
   ledger: Ledger,
+  journal: RunJournal,
 ): Promise<void> {
-  const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
-  const chosen = await chosenFor(deps, input);
-
-  const ctx = runContextFor(deps, spec, input, chosen.accountId);
+  const { spec, ctx, entities } = await openSpecRun(deps, input);
+  const run: EntityRun = { deps, input, spec, ledger, journal };
 
   // Ids per entity, so a `batch-from` relation can read against the entity it references.
-  // Spec order matters: the referenced entity must be declared before the relation, which
-  // the spec schema checks by refusing an unknown reference.
   const idsByEntity = new Map<string, string[]>();
 
-  // What the admin chose to read, where they chose. Spec order is kept, so a relation still
-  // follows the entity it reads against.
-  const entities =
-    chosen.entities === null
-      ? spec.entities
-      : spec.entities.filter((entity) => chosen.entities?.includes(entity.name) === true);
-
   for (const entity of entities) {
-    await readOneEntity(deps, input, { spec, entity, ctx, idsByEntity, ledger });
+    const entityCtx: RunContext =
+      entity.request.kind === "batch-from"
+        ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }
+        : ctx;
+    idsByEntity.set(entity.name, await ingestEntity(run, entity, entityCtx));
   }
 }

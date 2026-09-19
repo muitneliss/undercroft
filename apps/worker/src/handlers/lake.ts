@@ -18,7 +18,7 @@ import { registerAnalyticsRoutes } from "./analytics.ts";
 import { registerConnectionRoutes } from "./connections.ts";
 import { authenticate } from "../services/auth.ts";
 import type { XeroClient } from "../services/connections.ts";
-import type { Refresher, Transactor } from "../services/runPaths.ts";
+import type { Refresher, Transactor } from "../services/runTypes.ts";
 import { startIngestJob, startTransformJob } from "../services/jobs.ts";
 import { landRecords } from "../services/land.ts";
 import { claimExternal, recordExternal } from "../services/ledger.ts";
