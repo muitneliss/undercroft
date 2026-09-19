@@ -23,15 +23,11 @@ import {
   tombstoneMissing,
 } from "../../repos/rawDocuments.ts";
 import { landRecords } from "../land.ts";
-import {
-  type DocumentToLand,
-  landDocuments,
-  type LandedDocument,
-} from "../landDocument.ts";
+import { type DocumentToLand, landDocuments, type LandedDocument } from "../landDocument.ts";
 import { loadStreamToRaw } from "../loadToRaw.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
-import { harvestGmail } from "./gmail.ts";
+import { type GmailHarvest, harvestGmail } from "./gmail.ts";
 
 export const GOOGLE_SOURCES = ["gmail", "drive"] as const;
 export type GoogleSource = (typeof GOOGLE_SOURCES)[number];
@@ -114,6 +110,41 @@ function catalogueRows(
   return rows;
 }
 
+/**
+ * The scope an admin recorded, or a refusal.
+ *
+ * A run never invents one. "Nobody has chosen yet" and "somebody chose everything" are
+ * different facts, and collapsing the first into the second reads a whole mailbox on an
+ * authority nobody granted.
+ */
+async function requireScope(
+  deps: CollectDeps,
+  input: { source: GoogleSource; tenantId: string },
+): Promise<NonNullable<ReturnType<typeof parseScope>>> {
+  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
+  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
+  if (scope === null) {
+    throw new ScopeNotChosen(input.source, input.tenantId);
+  }
+  return scope;
+}
+
+/**
+ * Harvest under the chosen scope.
+ *
+ * `seenIds` is Drive's alone and null for Gmail, deliberately: a message that stops matching
+ * a label selection has been relabelled, not deleted, and the tombstone pass must not be
+ * handed a set that would report a deletion which never happened.
+ */
+async function harvestFor(
+  api: GoogleApi,
+  scope: NonNullable<ReturnType<typeof parseScope>>,
+): Promise<GmailHarvest & { seenIds: readonly string[] | null }> {
+  return scope.kind === "gmail"
+    ? { ...(await harvestGmail(api, scope)), seenIds: null }
+    : await harvestDrive(api, scope);
+}
+
 export async function runGoogleCollect(
   deps: CollectDeps,
   input: { source: GoogleSource; tenantId: string },
@@ -121,16 +152,9 @@ export async function runGoogleCollect(
   const runId = newRunId();
   const observedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
 
-  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
-  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
-  if (scope === null) {
-    throw new ScopeNotChosen(input.source, input.tenantId);
-  }
+  const scope = await requireScope(deps, input);
 
-  const harvest =
-    scope.kind === "gmail"
-      ? { ...(await harvestGmail(deps.api, scope)), seenIds: null }
-      : await harvestDrive(deps.api, scope);
+  const harvest = await harvestFor(deps.api, scope);
 
   const entity = scope.kind === "gmail" ? "messages" : "files";
 

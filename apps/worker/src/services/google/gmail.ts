@@ -88,6 +88,58 @@ function labelKind(reported: string): "system" | "user" | null {
  * Returns what to land rather than landing it, so the decision of what a mailbox contains
  * is testable without a lake or a database.
  */
+interface MessageContext {
+  readonly api: GoogleApi;
+  readonly message: unknown;
+  readonly messageId: string;
+  readonly labelIds: string[];
+  readonly headers: Record<string, string>;
+  readonly internalDate: string;
+  /**
+   * How many records the run has landed so far, read WHEN THE FETCH RUNS rather than when
+   * the document is described -- a `ConnectorError` raised mid-download should carry the
+   * count at that moment, which is what tells a credential problem from a transient fault.
+   */
+  readonly seen: () => number;
+}
+
+/** The PDF attachments of one message, as documents to land. */
+function attachmentsOf(ctx: MessageContext): DocumentToLand[] {
+  const { api, message, messageId, labelIds, headers, internalDate } = ctx;
+  return pdfParts(message).map((part) => {
+    const { attachmentId } = part;
+    return {
+      // (messageId, partIndex), never attachmentId. See the module docstring.
+      documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
+      contentType: PDF,
+      declaredBytes: part.size,
+      // Opaque ids, enumerations and counts only -- this reaches dbt.
+      metadata: {
+        labelIds,
+        partIndex: String(part.index),
+        messageId,
+      },
+      // Names a human wrote. The lake manifest, which dbt and BI cannot reach.
+      manifest: {
+        filename: part.filename,
+        subject: headers.Subject ?? "",
+        from: headers.From ?? "",
+        to: headers.To ?? "",
+        messageId,
+      },
+      sourceUpdatedAt: isoFromEpochMillis(internalDate),
+      fetchBytes: async (): Promise<Uint8Array> => {
+        const body = await api.getJson(
+          `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+          "attachments",
+          ctx.seen(),
+        );
+        return decodeBase64Url(str(body, "data"));
+      },
+    };
+  });
+}
+
 export async function harvestGmail(api: GoogleApi, scope: GmailScope): Promise<GmailHarvest> {
   const selected = new Set(scope.labels.map((l) => l.id));
   const messageIds = await listMessageIds(api, scope);
@@ -125,38 +177,17 @@ export async function harvestGmail(api: GoogleApi, scope: GmailScope): Promise<G
       }),
     });
 
-    for (const part of pdfParts(message)) {
-      const { attachmentId } = part;
-      documents.push({
-        // (messageId, partIndex), never attachmentId. See the module docstring.
-        documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
-        contentType: PDF,
-        declaredBytes: part.size,
-        // Opaque ids, enumerations and counts only -- this reaches dbt.
-        metadata: {
-          labelIds,
-          partIndex: String(part.index),
-          messageId,
-        },
-        // Names a human wrote. The lake manifest, which dbt and BI cannot reach.
-        manifest: {
-          filename: part.filename,
-          subject: headers.Subject ?? "",
-          from: headers.From ?? "",
-          to: headers.To ?? "",
-          messageId,
-        },
-        sourceUpdatedAt: isoFromEpochMillis(internalDate),
-        fetchBytes: async () => {
-          const body = await api.getJson(
-            `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
-            "attachments",
-            records.length,
-          );
-          return decodeBase64Url(str(body, "data"));
-        },
-      });
-    }
+    documents.push(
+      ...attachmentsOf({
+        api,
+        message,
+        messageId,
+        labelIds,
+        headers,
+        internalDate,
+        seen: () => records.length,
+      }),
+    );
   }
 
   return { records, documents };
@@ -174,30 +205,42 @@ async function listMessageIds(api: GoogleApi, scope: GmailScope): Promise<string
   const ids = new Set<string>();
 
   for (const labelId of queries) {
-    let pageToken: string | null = null;
-    do {
-      const url = new URL(`${GMAIL_BASE}/messages`);
-      url.searchParams.set("maxResults", PAGE_SIZE);
-      if (labelId !== null) {
-        url.searchParams.set("labelIds", labelId);
-      }
-      if (pageToken !== null) {
-        url.searchParams.set("pageToken", pageToken);
-      }
-
-      const page = await api.getJson(url.toString(), ENTITY, ids.size);
-      for (const message of asArray(getPath(page, "messages"))) {
-        const id = str(message, "id");
-        if (id !== "") {
-          ids.add(id);
-        }
-      }
-      const next = str(page, "nextPageToken");
-      pageToken = next === "" ? null : next;
-    } while (pageToken !== null);
+    await addMessageIds(api, labelId, ids);
   }
 
   return [...ids];
+}
+
+/** Every page of one query, unioned into `ids`. `null` means the whole mailbox. */
+async function addMessageIds(
+  api: GoogleApi,
+  labelId: string | null,
+  ids: Set<string>,
+): Promise<void> {
+  let pageToken: string | null = null;
+  do {
+    const page = await api.getJson(messagesUrl(labelId, pageToken), ENTITY, ids.size);
+    for (const message of asArray(getPath(page, "messages"))) {
+      const id = str(message, "id");
+      if (id !== "") {
+        ids.add(id);
+      }
+    }
+    const next = str(page, "nextPageToken");
+    pageToken = next === "" ? null : next;
+  } while (pageToken !== null);
+}
+
+function messagesUrl(labelId: string | null, pageToken: string | null): string {
+  const url = new URL(`${GMAIL_BASE}/messages`);
+  url.searchParams.set("maxResults", PAGE_SIZE);
+  if (labelId !== null) {
+    url.searchParams.set("labelIds", labelId);
+  }
+  if (pageToken !== null) {
+    url.searchParams.set("pageToken", pageToken);
+  }
+  return url.toString();
 }
 
 function messageUrl(messageId: string): string {
