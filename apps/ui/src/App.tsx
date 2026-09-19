@@ -128,6 +128,21 @@ export function App(): React.JSX.Element {
 
   return (
     <Routes>
+      <DivisionRoutes signedInAs={signedInAs} />
+      <TenantRoutes signedInAs={signedInAs} />
+    </Routes>
+  );
+}
+
+/**
+ * The routes reached from the tab rail, and the two that stand outside it.
+ *
+ * Split only because the table grew past what one function may be; the ORDER is unchanged and
+ * still matters -- `path="*"` has to stay last, and it lives with the second half.
+ */
+function DivisionRoutes({ signedInAs }: { signedInAs: string }): React.JSX.Element {
+  return (
+    <>
       <Route
         path="/tenants/:tenantId/connect/:source/scope"
         element={<ScopeRoute signedInAs={signedInAs} />}
@@ -180,6 +195,13 @@ export function App(): React.JSX.Element {
           </Opened>
         }
       />
+    </>
+  );
+}
+
+function TenantRoutes({ signedInAs }: { signedInAs: string }): React.JSX.Element {
+  return (
+    <>
       <Route
         path="/tenants/:tenantId/reports"
         element={
@@ -241,6 +263,6 @@ export function App(): React.JSX.Element {
         }
       />
       <Route path="*" element={<Navigate to="/tenants" replace={true} />} />
-    </Routes>
+    </>
   );
 }
