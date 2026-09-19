@@ -53,6 +53,36 @@ export interface Sealed {
 }
 
 /**
+ * One `<version>:<base64>` entry, or a bare `<base64>` meaning version 1.
+ *
+ * Every failure here is `SecretKeyMissing` rather than a repaired value: a short key is
+ * refused rather than padded or hashed into shape, because stretching one produces something
+ * that encrypts and decrypts perfectly while holding far less entropy than it claims.
+ */
+function parseKeyEntry(part: string): { version: number; key: Buffer } {
+  const colon = part.lastIndexOf(":");
+  const versionText = colon === -1 ? "" : part.slice(0, colon);
+  const material = colon === -1 ? part : part.slice(colon + 1);
+
+  const key = Buffer.from(material, "base64");
+  if (key.byteLength !== KEY_BYTES) {
+    throw new SecretKeyMissing(
+      `${KEY_ENV} must decode to ${KEY_BYTES} bytes for AES-256; got ${key.byteLength}`,
+    );
+  }
+
+  // parseInt, not Number(): the money lint rule bans Number() everywhere, and a key version
+  // is an integer index, not an amount. NaN from a non-numeric version is caught below.
+  const version = versionText === "" ? 1 : Number.parseInt(versionText, 10);
+  if (!Number.isInteger(version)) {
+    throw new SecretKeyMissing(
+      `${KEY_ENV} version ${JSON.stringify(versionText)} is not an integer`,
+    );
+  }
+  return { version, key };
+}
+
+/**
  * Parse the configured master key(s).
  *
  * One key is `<base64>`. Several are `<version>:<base64>` comma-separated, highest version
@@ -73,28 +103,7 @@ function keys(env: NodeJS.ProcessEnv = process.env): Map<number, Buffer> {
     if (part === "") {
       continue;
     }
-    const colon = part.lastIndexOf(":");
-    const versionText = colon === -1 ? "" : part.slice(0, colon);
-    const material = colon === -1 ? part : part.slice(colon + 1);
-
-    const key = Buffer.from(material, "base64");
-    if (key.byteLength !== KEY_BYTES) {
-      // Checked, never padded or hashed into shape. Silently stretching a short key
-      // produces something that encrypts and decrypts while having far less entropy than
-      // it claims.
-      throw new SecretKeyMissing(
-        `${KEY_ENV} must decode to ${KEY_BYTES} bytes for AES-256; got ${key.byteLength}`,
-      );
-    }
-    // parseInt, not Number(): the money lint rule bans Number() everywhere, and a key
-    // version is an integer index, not an amount. NaN from a non-numeric version is
-    // caught by the isInteger check below.
-    const version = versionText === "" ? 1 : Number.parseInt(versionText, 10);
-    if (!Number.isInteger(version)) {
-      throw new SecretKeyMissing(
-        `${KEY_ENV} version ${JSON.stringify(versionText)} is not an integer`,
-      );
-    }
+    const { version, key } = parseKeyEntry(part);
     out.set(version, key);
   }
   if (out.size === 0) {

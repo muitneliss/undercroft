@@ -35,6 +35,53 @@ export interface Pacer {
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 
+/** The entries of a sliding window still inside `span`. */
+function prune(window: number[], now: number, span: number): number[] {
+  return window.filter((at) => now - at < span);
+}
+
+/**
+ * The daily cap, which is the one limit that cannot be waited out within a run.
+ *
+ * Returns the pruned window, or raises. Separated from the per-minute pacing below because
+ * the two answers are different in kind: one is "wait", the other is "come back tomorrow",
+ * and sleeping on the second parks a worker for hours pretending to make progress.
+ */
+function admitDay(dayWindow: number[], now: number, requestsPerDay: number | undefined): number[] {
+  if (requestsPerDay === undefined) {
+    return dayWindow;
+  }
+  const pruned = prune(dayWindow, now, DAY_MS);
+  if (pruned.length >= requestsPerDay) {
+    throw new QuotaExhausted("daily request", requestsPerDay, new Date(pruned[0]! + DAY_MS));
+  }
+  return pruned;
+}
+
+interface TurnState {
+  readonly now: number;
+  readonly lastAt: number;
+  readonly minIntervalMs: number;
+  readonly minuteWindow: readonly number[];
+  readonly requestsPerMinute?: number;
+}
+
+/**
+ * How long before the next request may go: the longer of the minimum spacing and the wait
+ * for the oldest entry to leave the per-minute window. Zero means now.
+ */
+function waitUntilTurn(state: TurnState): number {
+  const { now, lastAt, minIntervalMs, minuteWindow, requestsPerMinute } = state;
+  const waits: number[] = [];
+  if (minIntervalMs > 0 && lastAt !== Number.NEGATIVE_INFINITY) {
+    waits.push(lastAt + minIntervalMs - now);
+  }
+  if (requestsPerMinute !== undefined && minuteWindow.length >= requestsPerMinute) {
+    waits.push(minuteWindow[0]! + MINUTE_MS - now);
+  }
+  return Math.max(0, ...waits);
+}
+
 export function createPacer(options: PacerOptions = {}, clock: Clock = systemClock): Pacer {
   const { minIntervalMs = 0, requestsPerMinute, requestsPerDay } = options;
 
@@ -46,37 +93,22 @@ export function createPacer(options: PacerOptions = {}, clock: Clock = systemClo
   // decide they may go now, and both go now.
   let queue: Promise<void> = Promise.resolve();
 
-  function prune(window: number[], now: number, span: number): number[] {
-    return window.filter((at) => now - at < span);
-  }
-
   async function waitTurn(): Promise<void> {
     for (;;) {
       const now = clock.now().getTime();
 
-      if (requestsPerDay !== undefined) {
-        dayWindow = prune(dayWindow, now, DAY_MS);
-        if (dayWindow.length >= requestsPerDay) {
-          throw new QuotaExhausted(
-            "daily request",
-            requestsPerDay,
-            new Date(dayWindow[0]! + DAY_MS),
-          );
-        }
-      }
-
-      const waits: number[] = [];
-      if (minIntervalMs > 0 && lastAt !== Number.NEGATIVE_INFINITY) {
-        waits.push(lastAt + minIntervalMs - now);
-      }
+      dayWindow = admitDay(dayWindow, now, requestsPerDay);
       if (requestsPerMinute !== undefined) {
         minuteWindow = prune(minuteWindow, now, MINUTE_MS);
-        if (minuteWindow.length >= requestsPerMinute) {
-          waits.push(minuteWindow[0]! + MINUTE_MS - now);
-        }
       }
 
-      const wait = Math.max(0, ...waits);
+      const wait = waitUntilTurn({
+        now,
+        lastAt,
+        minIntervalMs,
+        minuteWindow,
+        ...(requestsPerMinute === undefined ? {} : { requestsPerMinute }),
+      });
       if (wait <= 0) {
         lastAt = now;
         minuteWindow.push(now);

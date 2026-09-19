@@ -83,6 +83,25 @@ function isRetryable(error: unknown, policy: RetryPolicy): boolean {
   return error instanceof HttpError && policy.on.includes(error.status);
 }
 
+/**
+ * How long to wait before the next attempt.
+ *
+ * What the server ASKED for wins over our backoff, clamped to `maxRetryAfterMs` -- a provider
+ * answering `Retry-After: 3600` must not park a worker for an hour -- and where it asked for
+ * nothing we fall back to the jittered backoff.
+ */
+function delayFor(
+  policy: RetryPolicy,
+  attempt: number,
+  error: unknown,
+  random: () => number,
+): number {
+  const asked = policy.respectRetryAfter && error instanceof HttpError ? error.retryAfterMs : null;
+  return asked === null
+    ? backoffFor(policy, attempt, random)
+    : Math.min(asked, policy.maxRetryAfterMs);
+}
+
 export async function withRetry<T>(
   operation: (attempt: number) => Promise<T>,
   policy: RetryPolicy = DEFAULT_RETRY,
@@ -99,12 +118,7 @@ export async function withRetry<T>(
         throw error;
       }
 
-      const asked =
-        policy.respectRetryAfter && error instanceof HttpError ? error.retryAfterMs : null;
-      const delayMs =
-        asked === null
-          ? backoffFor(policy, attempt, random)
-          : Math.min(asked, policy.maxRetryAfterMs);
+      const delayMs = delayFor(policy, attempt, error, random);
 
       deps.onRetry?.({ attempt, delayMs, error });
       await clock.sleep(delayMs);
