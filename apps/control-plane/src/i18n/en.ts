@@ -26,6 +26,39 @@ export const en = {
     ].join("\n"),
   },
 
+  runFailed: {
+    subject: "The {{source}} sync for {{tenantId}} failed",
+    models: "the model build",
+    noReason: "no reason recorded",
+    body: [
+      "The {{source}} run for {{tenantId}} at {{when}} failed.",
+      "",
+      "Reason: {{error}}",
+      "",
+      "See the detail in the journal: {{link}}",
+      "",
+      "If it keeps failing you will not receive another email about this source for 24 hours; a successful run resets that window.",
+    ].join("\n"),
+  },
+
+  grantExpiring: {
+    subject: "{{tenantId}}'s {{source}} access is about to expire",
+    body: [
+      "The {{source}} access that {{tenantId}} granted expires on {{when}}.",
+      "",
+      "Reconnect the source under Sources before then so syncing is not interrupted: {{link}}",
+    ].join("\n"),
+  },
+
+  keyExpiring: {
+    subject: "{{tenantId}}'s ingest key “{{label}}” is about to expire",
+    body: [
+      "The ingest key “{{label}}” for {{tenantId}} expires on {{when}}.",
+      "",
+      "Mint a new key under Sources and pass it to whoever uses this one: {{link}}",
+    ].join("\n"),
+  },
+
   error: {
     notInvited:
       "That address has not been invited. Ask an administrator for an invitation, and sign in with the exact address it was sent to.",

@@ -12,6 +12,7 @@ import { migrate } from "../migrate.ts";
 import { createTestDatabase, type TestDatabase } from "../testing.ts";
 import {
   claimExternalRun,
+  claimFailedRuns,
   closeAbandoned,
   closeRun,
   entitiesForRuns,
@@ -188,5 +189,55 @@ describe("an external caller's run id", () => {
       false,
     );
     expect(await getRun(db, "CASE-0043", "ext-1")).toBeNull();
+  });
+});
+
+describe("a failure is claimed for notice once", () => {
+  async function failed(id: string, source = "hubspot"): Promise<void> {
+    await openRun(db, { id, ...PAIR, source });
+    await closeRun(db, id, { status: "failed", error: "answered 401" });
+  }
+
+  it("the first failure is sent; the same failure is never claimed twice", async () => {
+    await failed("f1");
+    expect((await claimFailedRuns(db)).map((r) => [r.id, r.notice])).toEqual([["f1", "sent"]]);
+    expect(await claimFailedRuns(db)).toEqual([]);
+  });
+
+  it("a second failure of the pair within a day is suppressed; another pair is not", async () => {
+    await failed("f1");
+    await claimFailedRuns(db);
+    await failed("f2");
+    await failed("x1", "xero");
+
+    const claimed = await claimFailedRuns(db);
+    expect(claimed.map((r) => [r.id, r.notice])).toEqual([
+      ["f2", "suppressed"],
+      ["x1", "sent"],
+    ]);
+  });
+
+  it("a success in between, or a notice older than a day, lets the next failure through", async () => {
+    await failed("f1");
+    await claimFailedRuns(db);
+    await openRun(db, { id: "ok", ...PAIR });
+    await closeRun(db, "ok", { status: "ok" });
+    await failed("f2");
+    expect((await claimFailedRuns(db)).map((r) => r.notice)).toEqual(["sent"]);
+
+    // The quiet side of the window: a notice sent yesterday no longer holds today's.
+    await db.asSuperuser((tx) =>
+      tx.exec("UPDATE ops.run SET notified_at = now() - interval '25 hours' WHERE id = 'f2'"),
+    );
+    await failed("f3");
+    expect((await claimFailedRuns(db)).map((r) => r.notice)).toEqual(["sent"]);
+  });
+
+  it("a failure older than a day is left alone rather than reported late", async () => {
+    await failed("old");
+    await db.asSuperuser((tx) =>
+      tx.exec("UPDATE ops.run SET ended_at = now() - interval '2 days' WHERE id = 'old'"),
+    );
+    expect(await claimFailedRuns(db)).toEqual([]);
   });
 });

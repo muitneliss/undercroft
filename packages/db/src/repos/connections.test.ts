@@ -42,14 +42,14 @@ function cred(over: Partial<Credential> = {}): Credential {
 
 describe("credentials are sealed at rest and open exactly", () => {
   it("what is written comes back unchanged", async () => {
-    await writeCredential(db, "CASE-1", "xero", cred(), env);
+    await writeCredential(db, "CASE-1", "xero", cred(), { env });
     const opened = await readCredential(db, "CASE-1", "xero", { env });
     expect(opened.accessToken).toBe("access-1");
     expect(opened.refreshToken).toBe("refresh-1");
   });
 
   it("the stored bytes are not the plaintext", async () => {
-    await writeCredential(db, "CASE-1", "xero", cred(), env);
+    await writeCredential(db, "CASE-1", "xero", cred(), { env });
     const { rows } = await db.query<{ ciphertext: Uint8Array }>(
       "SELECT ciphertext FROM app.connection_secret WHERE tenant_id = 'CASE-1'",
     );

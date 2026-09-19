@@ -12,6 +12,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import * as people from "../services/people.ts";
+import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
 import * as tenants from "../services/tenants.ts";
 import {
@@ -86,6 +87,18 @@ export const appRouter = router({
       await ctx.endSession();
       return { ok: true };
     }),
+
+    /**
+     * Remember the language this person reads, for the emails nobody's browser is open to
+     * see. The browser's store stays the owner of the choice while a page is open; this is
+     * where it is projected so a failed-run notice at three in the morning arrives in it.
+     */
+    setLocale: authedProcedure
+      .input(z.object({ locale: z.enum(["vi", "en"]) }))
+      .mutation(async ({ ctx, input }) => {
+        await preferences.setLocale(ctx.exec, ctx.user.userId, input.locale);
+        return { ok: true };
+      }),
   }),
 
   tenants: router({

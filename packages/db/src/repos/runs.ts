@@ -269,6 +269,69 @@ export async function recordExternalBatch(
   );
 }
 
+/** A failure claimed for notice, and whether it is to be sent or was suppressed. */
+export interface FailedRunNotice {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly source: string;
+  readonly verb: RunVerb;
+  readonly error: string | null;
+  readonly endedAt: string;
+  readonly notice: "sent" | "suppressed";
+}
+
+/**
+ * Claim every failed run of the last day that nobody has been told about.
+ *
+ * One UPDATE that marks and returns, so a notice goes out at most once whatever runs the
+ * tick. The suppression is decided in the same statement: a failure of a pair that had a
+ * notice SENT within the last day, with no successful run of that pair since, is marked
+ * `suppressed` and returned as such -- the caller sends nothing for it. A success in
+ * between resets the window, because "it failed again" after "it worked" is news.
+ *
+ * Failures older than a day are left alone rather than claimed late: a notice about last
+ * week arriving today would be read as today's.
+ */
+export async function claimFailedRuns(exec: SqlExecutor): Promise<FailedRunNotice[]> {
+  const { rows } = await exec.query<{
+    id: string;
+    tenant_id: string;
+    source: string;
+    verb: RunVerb;
+    error: string | null;
+    ended_at: Date | string;
+    notice: "sent" | "suppressed";
+  }>(
+    `UPDATE ops.run r
+     SET notified_at = now(),
+         notice = CASE WHEN EXISTS (
+           SELECT 1 FROM ops.run p
+           WHERE p.tenant_id = r.tenant_id AND p.source = r.source AND p.verb = r.verb
+             AND p.id <> r.id AND p.notice = 'sent'
+             AND p.notified_at > now() - interval '1 day'
+             AND NOT EXISTS (
+               SELECT 1 FROM ops.run o
+               WHERE o.tenant_id = r.tenant_id AND o.source = r.source AND o.verb = r.verb
+                 AND o.status = 'ok' AND o.ended_at >= p.notified_at
+             )
+         ) THEN 'suppressed' ELSE 'sent' END
+     WHERE r.status = 'failed' AND r.notified_at IS NULL
+       AND r.ended_at > now() - interval '1 day'
+     RETURNING r.id, r.tenant_id, r.source, r.verb, r.error, r.ended_at, r.notice`,
+  );
+  return rows
+    .map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      source: row.source,
+      verb: row.verb,
+      error: row.error,
+      endedAt: new Date(row.ended_at).toISOString(),
+      notice: row.notice,
+    }))
+    .sort((a, b) => a.endedAt.localeCompare(b.endedAt));
+}
+
 /**
  * Every run still marked running is one the worker was in the middle of when it stopped.
  * Called once at boot: a row that stayed `running` forever would hold `run_one_running`

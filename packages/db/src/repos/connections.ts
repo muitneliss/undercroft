@@ -216,24 +216,84 @@ export async function setStatus(
   );
 }
 
+/**
+ * Seal and store a credential.
+ *
+ * `grantExpiresAt` is when the GRANT lapses -- `services/grantExpiry.ts` decides it -- and it
+ * is kept in the clear beside the ciphertext for the same reason `expires_at` is: "which
+ * grants are about to lapse" has to be a query. A new grant end clears `warned_at`, so a
+ * grant renewed after a warning is warned about again when it next approaches its end.
+ */
 export async function writeCredential(
   exec: SqlExecutor,
   tenantId: string,
   source: string,
   credential: Credential,
-  env?: NodeJS.ProcessEnv,
+  opts: { env?: NodeJS.ProcessEnv; grantExpiresAt?: string | null } = {},
 ): Promise<void> {
-  const sealed = seal(credentialToJson(credential), env === undefined ? {} : { env });
-  await exec.query(
-    `INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version, expires_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, now())
-     ON CONFLICT (tenant_id, source) DO UPDATE SET
-       ciphertext  = EXCLUDED.ciphertext,
-       key_version = EXCLUDED.key_version,
-       expires_at  = EXCLUDED.expires_at,
-       updated_at  = now()`,
-    [tenantId, source, Buffer.from(sealed.blob), sealed.keyVersion, credential.expiresAt],
+  const sealed = seal(
+    credentialToJson(credential),
+    opts.env === undefined ? {} : { env: opts.env },
   );
+  await exec.query(
+    `INSERT INTO app.connection_secret
+       (tenant_id, source, ciphertext, key_version, expires_at, grant_expires_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, now())
+     ON CONFLICT (tenant_id, source) DO UPDATE SET
+       ciphertext       = EXCLUDED.ciphertext,
+       key_version      = EXCLUDED.key_version,
+       expires_at       = EXCLUDED.expires_at,
+       grant_expires_at = EXCLUDED.grant_expires_at,
+       warned_at        = CASE
+         WHEN EXCLUDED.grant_expires_at IS DISTINCT FROM app.connection_secret.grant_expires_at
+         THEN NULL ELSE app.connection_secret.warned_at END,
+       updated_at       = now()`,
+    [
+      tenantId,
+      source,
+      Buffer.from(sealed.blob),
+      sealed.keyVersion,
+      credential.expiresAt,
+      opts.grantExpiresAt ?? null,
+    ],
+  );
+}
+
+/** A grant about to lapse, as the warning names it. */
+export interface ExpiringGrant {
+  readonly tenantId: string;
+  readonly source: string;
+  readonly grantExpiresAt: string;
+}
+
+/**
+ * Claim every grant lapsing within `withinDays` that has not been warned about.
+ *
+ * One UPDATE that marks and returns: a second tick, or a second replica, finds nothing. A
+ * grant already lapsed is not claimed -- the card says "reconnect" for that, and a warning
+ * about the past is noise.
+ */
+export async function claimExpiringGrants(
+  exec: SqlExecutor,
+  withinDays: number,
+): Promise<ExpiringGrant[]> {
+  const { rows } = await exec.query<{
+    tenant_id: string;
+    source: string;
+    grant_expires_at: Date | string;
+  }>(
+    `UPDATE app.connection_secret SET warned_at = now()
+     WHERE grant_expires_at IS NOT NULL AND warned_at IS NULL
+       AND grant_expires_at > now()
+       AND grant_expires_at <= now() + make_interval(days => $1::int)
+     RETURNING tenant_id, source, grant_expires_at`,
+    [withinDays],
+  );
+  return rows.map((row) => ({
+    tenantId: row.tenant_id,
+    source: row.source,
+    grantExpiresAt: new Date(row.grant_expires_at).toISOString(),
+  }));
 }
 
 /**

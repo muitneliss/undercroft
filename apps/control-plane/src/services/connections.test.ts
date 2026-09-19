@@ -176,7 +176,7 @@ describe("the schedule", () => {
       TENANT,
       "gmail",
       { accessToken: "at", refreshToken: "rt", expiresAt: "2099-01-01T00:00:00.000Z" },
-      ENV,
+      { env: ENV },
     );
     await writeConnectionDetail(db, {
       tenantId: TENANT,

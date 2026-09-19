@@ -11,6 +11,7 @@
 
 export {
   type Cadence,
+  claimExpiringGrants,
   type Connection,
   type ConnectionDetail,
   ConnectionRegistryError,
@@ -18,6 +19,7 @@ export {
   deleteCredential,
   type ConnectionView,
   type DueCandidate,
+  type ExpiringGrant,
   getConnection,
   type LastRun,
   listConnections,
@@ -31,12 +33,15 @@ export {
   writeConnectionDetail,
   writeCredential,
 } from "./connections.ts";
+export { claimExpiringKeys, type ExpiringKey } from "./ingestKeys.ts";
 export {
   claimExternalRun,
+  claimFailedRuns,
   closeAbandoned,
   closeRun,
   encodeCursor,
   entitiesForRuns,
+  type FailedRunNotice,
   findRunById,
   getRun,
   listRuns,
