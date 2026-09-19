@@ -9,7 +9,24 @@
 
 import { describe, expect, test as it } from "bun:test";
 
-import { exactAmount, formatCount, formatMoney, MISSING, orMissing } from "./money.ts";
+import {
+  exactAmount,
+  formatCount,
+  formatDecimal,
+  formatMoney,
+  MISSING,
+  orMissing,
+} from "./money.ts";
+
+describe("formatDecimal", () => {
+  it("groups the whole part and keeps every digit of the fraction, with no currency", () => {
+    expect(formatDecimal("9007199254740993.0001")).toBe("9,007,199,254,740,993.0001");
+    expect(formatDecimal("-1234.5")).toBe("-1,234.5");
+    expect(formatDecimal("42")).toBe("42");
+    // Not a decimal: shown as it came, not as missing.
+    expect(formatDecimal("n/a")).toBe("n/a");
+  });
+});
 
 describe("formatMoney", () => {
   it("keeps every digit of an amount a double could not hold", () => {

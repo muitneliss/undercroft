@@ -29,15 +29,20 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import type { Connection } from "@/api/types.ts";
 import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types.ts";
+import { GrantWhen } from "@/components/GrantWhen.tsx";
 import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
-import { presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import type { Cadence } from "@/lib/cadence.ts";
+import { connectsBy, presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
-import { describeSchedule, expiryNote } from "@/lib/when.ts";
+import { expiryNote } from "@/lib/when.ts";
 
 const MARK_LABEL = {
   granted: "grant.markGranted",
@@ -47,17 +52,35 @@ const MARK_LABEL = {
 } as const;
 
 export function ConnectionCard({
+  tenantId,
   connection,
   onConnect,
   onScope,
   onDisconnect,
+  onRun,
+  onCadence,
+  canRun = false,
   busy = false,
+  tokenForm,
 }: {
+  /** Whose book this row is in: where a failed run's slip links into the journal. */
+  tenantId: string;
   connection: Connection;
   onConnect: () => void;
   onScope: () => void;
   onDisconnect: () => void;
+  /** Start a run by hand. Only offered when `canRun`. */
+  onRun: () => void;
+  /** Record how often this source is read. Only offered when `canRun`. */
+  onCadence: (cadence: Cadence) => void;
+  /** Whether the reader is an admin. Courtesy; the server refuses regardless. */
+  canRun?: boolean;
   busy?: boolean;
+  /**
+   * The form a token-connected source opens in its row. A slot rather than a component the
+   * card renders itself, so the card stays renderable with no tRPC provider behind it.
+   */
+  tokenForm?: ReactNode;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const card = presentConnection(t, connection);
@@ -67,6 +90,16 @@ export function ConnectionCard({
 
   const unprinted = card.state === "not_connected";
   const lapsed = card.mark === "lapsed";
+  // A source with no consent screen opens a form in its row instead of sending the browser
+  // away; the same plate wording covers a first connection and a reconnect.
+  const pastes =
+    connectsBy(connection.source) === "token" &&
+    (card.action?.kind === "connect" || card.action?.kind === "reconnect");
+  const running = connection.lastRun?.status === "running";
+  const failedRun = connection.lastRun?.status === "failed" ? connection.lastRun : null;
+  // Two booleans, and `||` is the operator that combines them; Biome's type inference does
+  // not see the default on `busy` and asks for `??`, which would be wrong for `false`.
+  const cannotRun = [busy, running].includes(true);
   const named = connection.externalAccountLabel !== "";
 
   const className = [
@@ -118,15 +151,7 @@ export function ConnectionCard({
 
         <div className="grant__when stack stack--tight">
           {card.state === "connected" ? (
-            <>
-              <span className="label">{t("grant.schedule")}</span>
-              <span className="datum datum--quiet">
-                {connection.scheduleCron
-                  ? describeSchedule(t, connection.scheduleCron)
-                  : orMissing("")}
-              </span>
-              <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
-            </>
+            <GrantWhen connection={connection} canEdit={canRun} busy={busy} onCadence={onCadence} />
           ) : null}
 
           {/* How long the data has been standing still. A lapse is not an
@@ -141,7 +166,14 @@ export function ConnectionCard({
         </div>
 
         <div className="grant__actions">
-          {card.action?.kind === "connect" ? (
+          {pastes ? (
+            <details className="tokenform">
+              <summary className="plate plate--primary">{t("grant.pasteToken")}</summary>
+              <div className="hinge">{tokenForm}</div>
+            </details>
+          ) : null}
+
+          {card.action?.kind === "connect" && !pastes ? (
             <button
               type="button"
               className="plate plate--primary"
@@ -165,7 +197,7 @@ export function ConnectionCard({
             </button>
           ) : null}
 
-          {card.action?.kind === "reconnect" ? (
+          {card.action?.kind === "reconnect" && !pastes ? (
             <button
               type="button"
               className="plate plate--primary"
@@ -174,6 +206,16 @@ export function ConnectionCard({
             >
               {t("grant.reconnect", { name })}
               <ArrowRight size={13} />
+            </button>
+          ) : null}
+
+          {/* Run now is a plain plate: the primary action on a granted source is nothing,
+              and starting a read by hand is the exception rather than the routine. Disabled
+              while a run is in progress, because the ledger would refuse a second one and
+              the card already says so. */}
+          {card.state === "connected" && canRun ? (
+            <button type="button" className="plate" onClick={onRun} disabled={cannotRun}>
+              {running ? t("grant.running") : t("grant.runNow")}
             </button>
           ) : null}
 
@@ -201,6 +243,25 @@ export function ConnectionCard({
             {t("grant.errata")}
           </span>
           <p className="errata__body">{card.detail}</p>
+        </div>
+      ) : null}
+
+      {/* A failed run gets the same slip, with the run's own reason. The grant may be fine;
+          what is wrong is the record, and the card must not read "granted, syncing" over a
+          source that stopped landing anything last night. */}
+      {!lapsed && failedRun !== null ? (
+        <div className="errata errata--inline">
+          <span className="errata__mark">
+            <ErrataMark size={13} />
+            {t("grant.runFailedHead")}
+          </span>
+          <p className="errata__body">{orMissing(failedRun.error)}</p>
+          <Link
+            className="plate plate--small"
+            to={`${divisionPath("journal", tenantId)}/${failedRun.id}`}
+          >
+            {t("grant.openInJournal")}
+          </Link>
         </div>
       ) : null}
 

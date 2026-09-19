@@ -24,13 +24,23 @@
 import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DEFAULT_LOCALE } from "@undercroft/core/locale";
+import type { ComponentProps } from "react";
+import { MemoryRouter } from "react-router-dom";
 
+import { LakeSummary } from "@/components/LakeSummary.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
-import { Lake } from "@/routes/Lake.tsx";
 import { useUiStore } from "@/store.ts";
 import { en } from "./en.ts";
 import { translatorFor } from "./index.ts";
 import { vi } from "./vi.ts";
+
+/** A leaf with a translated heading on it, and no server behind it. */
+const EMPTY_LAKE: ComponentProps<typeof LakeSummary> = {
+  tenantId: "CASE-0042",
+  summary: { records: [], documents: [] },
+  connections: [],
+  locale: DEFAULT_LOCALE,
+};
 
 /**
  * Every leaf path in a catalogue, with i18next's plural suffix removed.
@@ -105,17 +115,21 @@ describe("the catalogues", () => {
 
 describe("choosing a language", () => {
   it("Vietnamese is what a reader who has chosen nothing gets", () => {
-    render(<Lake tenantId="CASE-0042" />);
+    render(
+      <MemoryRouter>
+        <LakeSummary {...EMPTY_LAKE} />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByRole("heading", { name: "Hồ dữ liệu thô" })).toBeDefined();
   });
 
   it("pressing English rewrites the page and the document's language", async () => {
     render(
-      <>
+      <MemoryRouter>
         <LanguageSwitcher />
-        <Lake tenantId="CASE-0042" />
-      </>,
+        <LakeSummary {...EMPTY_LAKE} />
+      </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "English" }));

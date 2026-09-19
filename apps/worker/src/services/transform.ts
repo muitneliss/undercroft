@@ -1,84 +1,260 @@
 /**
- * Running the user's dbt project.
+ * Building one tenant's models, as that tenant.
  *
  * dbt is a subprocess, not a library: we spawn the `dbt` binary that ships in the worker
- * image and stream its exit status back. We write no Python and import nothing from dbt --
- * it is a dependency we invoke, like `pg_dump`.
+ * image and read what it wrote. We write no Python and import nothing from dbt -- it is a
+ * dependency we invoke, like `pg_dump`. Why in the worker image rather than a container the
+ * worker starts is ADR 0007: starting a container needs the Docker socket, and nothing in
+ * this stack gets one.
  *
- * Why in the worker image rather than a container the worker starts: starting a container
- * needs the Docker socket, and handing the socket to anything in this stack is the thing
- * the architecture refuses (it turns a compromise of that service into a host compromise).
- * A subprocess keeps Kestra and the worker socket-free. See ADR 0007.
+ * What one build does, in order, and why each step is where it is:
  *
- * dbt runs as `undercroft_dbt`, whose privileges (no USAGE on `app`, create only in
- * `analytics`/`dq`) are what make it safe to run SQL a user wrote.
+ * 1. **Provision** the tenant's roles and schemas (idempotent) and **mint** a password for
+ *    its dbt login. The password is a local here and the environment of one child process.
+ * 2. **Write the project** to a fresh temporary directory: the platform's sources and macros,
+ *    the customer's models from `app.model`, and a profile that IS the tenant. A directory
+ *    that exists for one build cannot drift from the table.
+ * 3. **Spawn `dbt build`** with a deadline. A build that runs for half an hour is a build
+ *    that has hung, and the previous tables keep serving -- stale, not wrong.
+ * 4. **Read `run_results.json`** into steps for the ledger, one per model or test. A
+ *    non-zero exit with results is a build that ran and found something wrong, reported step
+ *    by step; a non-zero exit with no results is dbt failing to start, and that raises with
+ *    its last lines.
+ * 5. **Record what was built**: the columns each successful model's relation now has, read
+ *    as the tenant's dbt login and written back to `app.model` so the editor can offer them.
+ * 6. **Remove the directory**, whatever happened.
+ *
+ * A tenant with no models spawns nothing and reports an empty, successful build.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
 // biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
+// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point: one column read per built model on one session, and one write per model after. Parallel writes to one row set buy nothing.
 // biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { ConnectorError } from "@undercroft/core";
+import type { DatabaseAddress, SqlExecutor } from "@undercroft/db";
+import {
+  listModels,
+  provisionTenantRoles,
+  rotateTenantPassword,
+  type RunStep,
+  setModelColumns,
+  tenantRolesFor,
+} from "@undercroft/db/repos";
+import { parseRunResults, PASSWORD_VAR, renderProject } from "@undercroft/db/services";
 
-export interface TransformResult {
-  readonly ok: boolean;
-  readonly exitCode: number;
-  /** Trimmed tail of dbt's output. Never the whole log: it can contain row values. */
-  readonly output: string;
+import { columnsOf } from "../repos/relations.ts";
+import { TenantNotProvisioned, type TenantSessions } from "./tenantSession.ts";
+
+export interface SpawnOptions {
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly timeoutMs: number;
 }
+
+export type Spawn = (
+  cmd: readonly string[],
+  options: SpawnOptions,
+) => Promise<{ exitCode: number; output: string }>;
 
 export interface TransformDeps {
-  readonly projectDir: string;
-  readonly profilesDir: string;
+  /** The worker's own executor: provisioning, rotation, the models, the columns written back. */
+  readonly exec: SqlExecutor;
+  /** Where the generated profile points dbt. */
+  readonly database: DatabaseAddress;
+  /** How the worker becomes the tenant, to read what it built. */
+  readonly sessions: TenantSessions;
+  /** The child's environment, less the password this module adds. `PATH` finds `dbt`. */
+  readonly env?: NodeJS.ProcessEnv;
   /** Injected in tests; the process uses Bun.spawn against the real binary. */
-  readonly spawn?: (
-    cmd: readonly string[],
-    cwd: string,
-  ) => Promise<{ exitCode: number; output: string }>;
+  readonly spawn?: Spawn;
+  /** Where project directories are made. Defaults to the OS temp directory. */
+  readonly workDir?: string;
+  /** How long one build may run. */
+  readonly timeoutMs?: number;
 }
+
+export interface TransformOutcome {
+  readonly ok: boolean;
+  readonly steps: RunStep[];
+  readonly testsFailed: number;
+  /** Why a build is not ok: the first erroring model's message, else dbt's last lines. */
+  readonly error: string | null;
+}
+
+/** A scheduled build of every model. Longer than any honest project needs. */
+export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
+/** How many trailing lines of dbt's output are kept. Enough to name the fault; never a row. */
+const TAIL_LINES = 20;
 
 async function realSpawn(
   cmd: readonly string[],
-  cwd: string,
+  options: SpawnOptions,
 ): Promise<{ exitCode: number; output: string }> {
-  const proc = Bun.spawn([...cmd], { cwd, stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  const exitCode = await proc.exited;
-  return { exitCode, output: `${stdout}\n${stderr}` };
+  const proc = Bun.spawn([...cmd], {
+    cwd: options.cwd,
+    env: options.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const deadline = setTimeout(() => proc.kill(), options.timeoutMs);
+  try {
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const exitCode = await proc.exited;
+    return { exitCode, output: `${stdout}\n${stderr}` };
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
+function tailOf(output: string): string {
+  return output.trim().split("\n").slice(-TAIL_LINES).join("\n");
+}
+
+/** The child's environment: the parent's defined values, plus the one password. */
+function childEnv(parent: NodeJS.ProcessEnv | undefined, password: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parent ?? {})) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  env[PASSWORD_VAR] = password;
+  return env;
+}
+
+async function writeProject(dir: string, files: Record<string, string>): Promise<void> {
+  for (const [path, text] of Object.entries(files)) {
+    const full = join(dir, path);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, text, "utf8");
+  }
+}
+
+async function readRunResults(dir: string): Promise<unknown> {
+  try {
+    return JSON.parse(await readFile(join(dir, "target", "run_results.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/** Why the build is not ok, in dbt's own words for the model that broke. */
+function errorOf(steps: readonly RunStep[], tail: string): string | null {
+  const broken = steps.find((s) => s.kind === "model" && s.status === "error");
+  if (broken === undefined) {
+    return null;
+  }
+  return broken.message ?? tail;
 }
 
 /**
- * Run `dbt build` over the project. A non-zero exit raises: a failed transform must not
- * report success, and the previous tables keep serving (stale, not wrong).
+ * Record the columns each successful model now has, as the tenant reads them.
+ *
+ * One session for every model of the build; the write-back is the worker's own column-level
+ * grant on `app.model`. A model whose relation cannot be seen records nothing rather than an
+ * empty list that would read as "no columns".
+ */
+async function recordColumns(
+  deps: TransformDeps,
+  tenantId: string,
+  analyticsSchema: string,
+  built: readonly string[],
+): Promise<void> {
+  if (built.length === 0) {
+    return;
+  }
+  const found = await deps.sessions.as({ tenantId, kind: "dbt" }, async (exec) => {
+    const byModel = new Map<string, string[]>();
+    for (const name of built) {
+      const columns = await columnsOf(exec, analyticsSchema, name);
+      if (columns.length > 0) {
+        byModel.set(
+          name,
+          columns.map((c) => c.name),
+        );
+      }
+    }
+    return byModel;
+  });
+  for (const [name, columns] of found) {
+    await setModelColumns(deps.exec, tenantId, name, columns);
+  }
+}
+
+/**
+ * Build the tenant's models, or the one `select` names, and report step by step.
+ *
+ * Raises only when dbt could not run at all -- no binary, no results -- with its last lines
+ * as the cause. A build that ran and failed is an outcome, not an exception: the ledger
+ * wants its steps.
  */
 export async function runTransform(
   deps: TransformDeps,
-  opts: { select?: string } = {},
-): Promise<TransformResult> {
-  const spawn = deps.spawn ?? realSpawn;
-  const cmd = [
-    "dbt",
-    "build",
-    "--profiles-dir",
-    deps.profilesDir,
-    "--project-dir",
-    deps.projectDir,
-    ...(opts.select === undefined ? [] : ["--select", opts.select]),
-  ];
-
-  const { exitCode, output } = await spawn(cmd, deps.projectDir);
-  // Only the tail, and only on failure paths does it reach a caller -- dbt's log can echo
-  // row values from a failing test, and those belong in `dq`, not in an HTTP response.
-  const tail = output.trim().split("\n").slice(-20).join("\n");
-
-  if (exitCode !== 0) {
-    throw new ConnectorError("dbt", "build", 0, `dbt build exited ${exitCode}`, {
-      cause: new Error(tail),
-    });
+  input: { tenantId: string; select?: string; timeoutMs?: number },
+): Promise<TransformOutcome> {
+  await provisionTenantRoles(deps.exec, input.tenantId);
+  const roles = await tenantRolesFor(deps.exec, input.tenantId);
+  if (roles === null) {
+    throw new TenantNotProvisioned(input.tenantId);
   }
-  return { ok: true, exitCode, output: tail };
+  const models = await listModels(deps.exec, input.tenantId);
+  if (models.length === 0) {
+    return { ok: true, steps: [], testsFailed: 0, error: null };
+  }
+
+  const password = await rotateTenantPassword(deps.exec, input.tenantId, "dbt");
+  const dir = await mkdtemp(join(deps.workDir ?? tmpdir(), "undercroft-dbt-"));
+  try {
+    await writeProject(
+      dir,
+      renderProject({
+        slug: roles.slug,
+        database: deps.database,
+        models: models.map((m) => ({ name: m.name, sql: m.sql, tests: m.tests })),
+      }),
+    );
+    const spawn = deps.spawn ?? realSpawn;
+    const cmd = [
+      "dbt",
+      "build",
+      "--profiles-dir",
+      dir,
+      "--project-dir",
+      dir,
+      ...(input.select === undefined ? [] : ["--select", input.select]),
+    ];
+    const { exitCode, output } = await spawn(cmd, {
+      cwd: dir,
+      env: childEnv(deps.env, password),
+      timeoutMs: input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    });
+    const tail = tailOf(output);
+    const { steps, testsFailed } = parseRunResults(await readRunResults(dir));
+
+    if (exitCode !== 0 && steps.length === 0) {
+      throw new ConnectorError("dbt", "build", 0, `dbt build exited ${String(exitCode)}`, {
+        cause: new Error(tail),
+      });
+    }
+    const error = errorOf(steps, tail);
+    const built = steps
+      .filter((s) => s.kind === "model" && s.status === "success")
+      .map((s) => s.name);
+    await recordColumns(deps, input.tenantId, roles.analyticsSchema, built);
+    return { ok: error === null, steps, testsFailed, error };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }

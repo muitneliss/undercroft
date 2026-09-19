@@ -88,6 +88,26 @@ export function exactAmount(money: Money | null | undefined): string {
 }
 
 /**
+ * A decimal string with its whole part grouped and its fraction exactly as it came.
+ *
+ * For a `numeric` column on a chart's tooltip or a KPI tile: the same digits the database
+ * holds, grouped for the eye, never parsed. No currency, because a query result does not
+ * say which -- and no rounding, because a figure a reader can read is a figure they may
+ * quote. An unreadable value is shown as it came rather than as MISSING: it is a value,
+ * just not a decimal.
+ */
+export function formatDecimal(value: string): string {
+  const split = parts(value);
+  if (!split) {
+    return value;
+  }
+  const whole = group(split.whole);
+  return split.fraction === ""
+    ? `${split.sign}${whole}`
+    : `${split.sign}${whole}.${split.fraction}`;
+}
+
+/**
  * Which CLDR locale groups a plain number for each of our languages. `@/lib/when` holds the
  * same table for dates; both are small enough that sharing them would cost more than it saves.
  */

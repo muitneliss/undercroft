@@ -43,7 +43,9 @@ import type { Connection } from "@/api/types.ts";
 import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { IngestKeys } from "@/components/IngestKeys.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { TokenForm } from "@/components/TokenForm.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -70,11 +72,25 @@ function connectFailureKey(
   return "grant.connectFailed";
 }
 
+/** How often the list re-reads while a run is in progress. A run is minutes; this is not. */
+const RUNNING_POLL_MS = 5000;
+
 export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const utils = trpc.useUtils();
-  const connections = trpc.connections.list.useQuery({ tenantId });
+  const connections = trpc.connections.list.useQuery(
+    { tenantId },
+    {
+      // Live only while something is live: a run in progress is the one state on this page
+      // that changes without anybody pressing anything, so the list polls while one exists
+      // and stops the moment it ends. Run now therefore has a visible consequence.
+      refetchInterval: (query) =>
+        query.state.data?.some((c) => c.lastRun?.status === "running") === true
+          ? RUNNING_POLL_MS
+          : false,
+    },
+  );
   const tenant = trpc.tenants.get.useQuery({ tenantId });
 
   async function invalidate(): Promise<void> {
@@ -87,6 +103,8 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
     },
   });
   const disconnect = trpc.connections.disconnect.useMutation({ onSuccess: invalidate });
+  const runNow = trpc.runs.trigger.useMutation({ onSuccess: invalidate });
+  const setCadence = trpc.connections.setCadence.useMutation({ onSuccess: invalidate });
 
   if (connections.isPending || tenant.isPending) {
     return <Skeleton rows={5} />;
@@ -145,6 +163,21 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
             {t("grant.disconnectedNotRevoked")}
           </Errata>
         ) : null}
+
+        {/* The server's own sentence: a run already in progress, a worker that did not
+            answer, a source it refused. Each names its remedy; a local restatement would be
+            a second copy to keep in step with the refusal that actually happened. */}
+        {runNow.isError ? (
+          <Errata heading={t("grant.runNotStarted")} live={true}>
+            {runNow.error.message}
+          </Errata>
+        ) : null}
+
+        {setCadence.isError ? (
+          <Errata heading={t("grant.cadenceNotSaved")} live={true}>
+            {setCadence.error.message}
+          </Errata>
+        ) : null}
       </div>
 
       <div className="band-rule" />
@@ -158,8 +191,16 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
             {list.map((connection: Connection) => (
               <ConnectionCard
                 key={connection.source}
+                tenantId={tenantId}
                 connection={connection}
-                busy={startOAuth.isPending || disconnect.isPending || !isAdmin}
+                canRun={isAdmin}
+                busy={
+                  startOAuth.isPending ||
+                  disconnect.isPending ||
+                  runNow.isPending ||
+                  setCadence.isPending ||
+                  !isAdmin
+                }
                 onConnect={() => {
                   startOAuth.mutate({ tenantId, source: connection.source });
                 }}
@@ -171,11 +212,30 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
                 onDisconnect={() => {
                   disconnect.mutate({ tenantId, source: connection.source });
                 }}
+                onRun={() => {
+                  runNow.mutate({ tenantId, source: connection.source });
+                }}
+                onCadence={(cadence) => {
+                  setCadence.mutate({ tenantId, source: connection.source, cadence });
+                }}
+                tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* Keys are minted and revoked by admins; a member or viewer is not shown a band they
+          cannot act in, and the server refuses regardless. */}
+      {isAdmin ? (
+        <>
+          <div className="band-rule" />
+          <div className="head">{t("keys.head")}</div>
+          <div className="body stack">
+            <IngestKeys tenantId={tenantId} />
+          </div>
+        </>
+      ) : null}
 
       <div className="band-rule" />
 

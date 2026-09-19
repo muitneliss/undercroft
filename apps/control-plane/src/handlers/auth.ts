@@ -66,6 +66,7 @@ import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { messages } from "../i18n/index.ts";
 import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
+import { setLocale } from "../services/preferences.ts";
 import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 
 /**
@@ -337,12 +338,20 @@ export function createAuth(config: AuthConfig): Auth {
            * passes to the client verbatim.
            */
           before: async (user, context) => {
-            const invited = await config.transactor((tx) =>
-              resolveInvitedUser(tx, user.email, superadmins),
-            );
+            const locale = localeOf(context);
+            const invited = await config.transactor(async (tx) => {
+              const resolved = await resolveInvitedUser(tx, user.email, superadmins);
+              // The language of the request that signed them in is the best guess the
+              // platform has for the emails it will send while no browser is open; the
+              // switcher on any page corrects it (`session.setLocale`).
+              if (resolved !== null) {
+                await setLocale(tx, resolved.appUserId, locale);
+              }
+              return resolved;
+            });
             if (invited === null) {
               throw new APIError("FORBIDDEN", {
-                message: messages(localeOf(context))("error.notInvited"),
+                message: messages(locale)("error.notInvited"),
               });
             }
             return { data: user };

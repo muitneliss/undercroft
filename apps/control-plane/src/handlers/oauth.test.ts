@@ -56,6 +56,34 @@ const google = {
   },
 };
 
+const XERO_TOKEN_URL = "https://identity.xero.test/connect/token";
+/** What the Xero token endpoint was asked, so the client's authentication can be checked. */
+const xeroAsked: { last: { headers: Headers; body: string } | null } = { last: null };
+const xero = {
+  clientId: "xero-client",
+  clientSecret: "xero-secret",
+  publicUrl: "https://undercroft.test",
+  authorizeUrl: "https://login.xero.test/identity/connect/authorize",
+  tokenUrl: XERO_TOKEN_URL,
+  fetch: (url: string, init: RequestInit) => {
+    if (url !== XERO_TOKEN_URL) {
+      return Promise.reject(new Error(`unexpected fetch to ${url}`));
+    }
+    xeroAsked.last = { headers: new Headers(init.headers), body: String(init.body) };
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          access_token: "xat",
+          refresh_token: "xrt",
+          expires_in: 1800,
+          scope: "offline_access accounting.transactions.read accounting.contacts.read",
+        }),
+        { status: 200 },
+      ),
+    );
+  },
+};
+
 beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
@@ -79,6 +107,7 @@ beforeEach(async () => {
       id_token: ID_TOKEN,
     },
   };
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {
@@ -120,6 +149,7 @@ function appFor(
   registerOAuthRoutes(app, {
     exec: db,
     google,
+    xero,
     worker,
     hasAdminAuthority: (tenantId, who) => isAdminIn(db, superadmins, { tenantId, ...who }),
     resolveCaller: () => Promise.resolve(caller),
@@ -127,10 +157,10 @@ function appFor(
   return app;
 }
 
-/** Start a real consent and return the `state` Google would hand back. */
+/** Start a real consent and return the `state` the provider would hand back. */
 async function beginConsent(source = "gmail"): Promise<string> {
   const started = await startConsent(
-    { exec: db, google },
+    { exec: db, google, xero },
     { tenantId: TENANT, source, startedBy: ADMIN.userId },
   );
   if (!started.ok) {
@@ -139,8 +169,8 @@ async function beginConsent(source = "gmail"): Promise<string> {
   return new URL(started.authorizeUrl).searchParams.get("state") ?? "";
 }
 
-function callback(app: Hono, query: Record<string, string>) {
-  return app.request(`/oauth/google/callback?${new URLSearchParams(query).toString()}`);
+function callback(app: Hono, query: Record<string, string>, provider = "google") {
+  return app.request(`/oauth/${provider}/callback?${new URLSearchParams(query).toString()}`);
 }
 
 describe("completing a consent", () => {
@@ -298,6 +328,36 @@ describe("completing a consent", () => {
     expect(response.headers.get("location")).toContain("reason=worker-refused");
     const { rows } = await db.query("SELECT 1 FROM app.connection_detail");
     expect(rows).toHaveLength(0);
+  });
+
+  it("a Xero consent authenticates the client in a Basic header and seals with no account yet", async () => {
+    // Xero names nobody in its token response; the organisation is chosen afterwards from
+    // the ones the consent can see, and that choice is what records the account id.
+    const state = await beginConsent("xero");
+
+    const response = await callback(appFor(ADMIN), { state, code: "xero-code" }, "xero");
+
+    expect(response.headers.get("location")).toBe("/tenants/CASE-0042/connect/xero/scope");
+    expect(xeroAsked.last?.headers.get("authorization")).toBe(
+      `Basic ${Buffer.from("xero-client:xero-secret").toString("base64")}`,
+    );
+    const form = new URLSearchParams(xeroAsked.last?.body ?? "");
+    expect(form.get("redirect_uri")).toBe("https://undercroft.test/oauth/xero/callback");
+    expect(form.has("code_verifier")).toBe(false);
+    expect(form.has("client_secret")).toBe(false);
+    expect(worker.stored[0]?.source).toBe("xero");
+    expect(worker.stored[0]?.externalAccountId).toBe("");
+    expect(worker.stored[0]?.credential.refreshToken).toBe("xrt");
+  });
+
+  it("a state started with one provider is refused at the other's callback", async () => {
+    // A code moved between flows is no state at all: answered as bad-state, nothing spent.
+    const state = await beginConsent("xero");
+
+    const response = await callback(appFor(ADMIN), { state, code: "xero-code" }, "google");
+
+    expect(response.headers.get("location")).toContain("reason=bad-state");
+    expect(worker.stored).toHaveLength(0);
   });
 
   it("a consent that worked is written to the audit trail", async () => {

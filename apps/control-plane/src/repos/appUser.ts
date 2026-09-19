@@ -9,7 +9,13 @@
  * `email` is `text UNIQUE` and Postgres would happily keep two rows for one person.
  */
 
+import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
+
+/** Record the language this person reads, for the emails nobody's browser is open to see. */
+export async function setLocale(exec: SqlExecutor, userId: string, locale: Locale): Promise<void> {
+  await exec.query("UPDATE app.app_user SET locale = $2 WHERE id = $1", [userId, locale]);
+}
 
 /** The `app_user` id for an address, or `null` when there is no such user. */
 export async function findIdByEmail(exec: SqlExecutor, email: string): Promise<string | null> {

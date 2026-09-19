@@ -15,6 +15,8 @@ const LATER = "2026-09-17T12:00:00.000Z";
 beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
+  // Every statement runs as the worker does, so a missing grant on raw.documents fails here.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {

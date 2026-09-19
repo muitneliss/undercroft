@@ -34,6 +34,8 @@ beforeEach(async () => {
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
   fetcher = new InMemoryByteFetcher();
+  // Seeded as the superuser; from here on every statement runs as the worker does.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {
@@ -76,11 +78,14 @@ const VALID = {
 /** An ingest key that IS valid for the lake API, to prove it is refused here. */
 async function issueIngestKey(): Promise<string> {
   const token = randomToken();
-  await db.query("INSERT INTO app.ingest_key (id, token_sha256, tenant_id) VALUES ($1, $2, $3)", [
-    "key-1",
-    hashToken(token),
-    TENANT,
-  ]);
+  // Minting a key is the control plane's; the worker only ever reads the digest.
+  await db.asSuperuser((tx) =>
+    tx.query("INSERT INTO app.ingest_key (id, token_sha256, tenant_id) VALUES ($1, $2, $3)", [
+      "key-1",
+      hashToken(token),
+      TENANT,
+    ]),
+  );
   return token;
 }
 

@@ -15,11 +15,15 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
-import type { Money } from "@/lib/money.ts";
 
 export type Source = "hubspot" | "xero" | "gmail" | "drive";
 
 export const SOURCES: readonly Source[] = ["hubspot", "xero", "gmail", "drive"] as const;
+
+/** Whether a string from a URL or a ledger row names one of the four. */
+export function isSource(value: string | undefined): value is Source {
+  return SOURCES.some((source) => source === value);
+}
 
 /**
  * Not in the catalogue, and deliberately: these are the vendors' own names for their own
@@ -66,73 +70,32 @@ export type Connection = inferRouterOutputs<AppRouter>["connections"]["list"][nu
 
 export type ConnectionStatus = Connection["status"];
 
-export interface Tenant {
-  id: string;
-  display_name: string;
-  status: string;
-  created_at: string;
-}
+/** One line of the ledger, exactly as `runs.list` returns it. */
+export type RunView = inferRouterOutputs<AppRouter>["runs"]["list"]["items"][number];
 
-export interface Member {
-  id: string;
-  email: string;
-  display_name: string;
-  is_staff: boolean;
-  role: string | null;
-}
+/** One run in full, as `runs.get` returns it: the line plus what it recorded beneath. */
+export type RunDetail = inferRouterOutputs<AppRouter>["runs"]["get"];
 
-export interface SessionUser {
-  id: string;
-  email: string;
-  display_name: string;
-  is_staff: boolean;
-}
+/** What has landed, per stream, as `lake.summary` returns it. */
+export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 
-export interface LakeObject {
-  key: string;
-  versions: number;
-  newest_sha256: string | null;
-  bytes: number | null;
-}
+/** One model on the list, as `models.list` returns it: its name and its last build. */
+export type ModelItem = inferRouterOutputs<AppRouter>["models"]["list"][number];
 
-/**
- * One observation of an object, from `vcdo/lake/store.py`.
- *
- * Every field is optional because a manifest is written once and never migrated
- * -- an object observed by an older build genuinely may not carry a field a
- * newer one writes. Marking them required would make the type lie about the
- * lake's oldest contents, and the interface renders each absence as MISSING
- * rather than as a zero or an empty cell.
- */
-export interface LakeManifest {
-  stamp: string;
-  source_key?: string;
-  sha256?: string;
-  blob_key?: string;
-  bytes?: number;
-  run_id?: string;
-  observed_at?: string;
-  reason?: string;
-}
+/** One model in full, as `models.get` returns it: the item plus its SQL and tests. */
+export type ModelDetail = inferRouterOutputs<AppRouter>["models"]["get"];
 
-export interface LakeManifests {
-  key: string;
-  versions: LakeManifest[];
-}
+/** What a build answered: the run, its steps, and the model's first rows. */
+export type BuildResult = inferRouterOutputs<AppRouter>["models"]["build"];
 
-/**
- * Totals for one customer.
- *
- * NO ENDPOINT SERVES THIS YET. `curated.customer_commercial_overview` exists in
- * migration 006 and nothing in `vcdo/api/routers/` exposes it, so nothing in the
- * interface renders a money figure. The type and `@/lib/money` stay because the
- * discipline they encode is the expensive part -- an amount crosses as a string
- * and is never parsed into a JavaScript number -- and re-deriving that later,
- * against a UI already rendering floats, is how the rule gets broken once and
- * for good.
- */
-export interface CustomerTotals {
-  customer: string;
-  invoiced: Money | null;
-  outstanding: Money | null;
-}
+/** A query result as every tenant-scoped read answers it: columns, rows, and whether cut. */
+export type TableResult = BuildResult["preview"] & object;
+
+/** One saved question in full, as `bi.questions.get` returns it. */
+export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get"];
+
+/** One dashboard in full, as `bi.dashboards.get` returns it. */
+export type DashboardView = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["get"];
+
+/** The tenant's analytics schema as its read-only login sees it. */
+export type SchemaView = inferRouterOutputs<AppRouter>["bi"]["schema"];

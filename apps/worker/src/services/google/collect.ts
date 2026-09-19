@@ -11,6 +11,7 @@
  * the strength of a missing row. The UI has a `needs_scope` state for exactly this.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
@@ -21,7 +22,7 @@
 import { parseScope } from "@undercroft/contracts";
 import { newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { readConnectionDetail } from "@undercroft/db/repos";
+import { readConnectionDetail, type RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
 import {
@@ -63,7 +64,12 @@ export interface CollectDeps {
 export interface CollectResult {
   readonly runId: string;
   readonly source: string;
-  readonly records: { landed: number; loadedCreated: number; loadedChanged: number };
+  readonly records: {
+    landed: number;
+    loadedCreated: number;
+    loadedChanged: number;
+    loadedUnchanged: number;
+  };
   readonly documents: {
     created: number;
     unchanged: number;
@@ -71,18 +77,28 @@ export interface CollectResult {
     failed: number;
     tombstoned: number;
   };
+  /**
+   * What this run refused, with why: a record that could not be landed under entity
+   * `messages`/`files`, a document skipped over the size ceiling or failed under
+   * `documents`. The ids are opaque provider ids, never a subject or a filename.
+   */
+  readonly refusals: RunRefusal[];
 }
 
 export async function runGoogleCollect(
   deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string },
+  input: { source: GoogleSource; tenantId: string; runId?: string },
 ): Promise<CollectResult> {
-  const runId = newRunId();
+  // The caller that opened an `ops.run` row hands its id down; a caller with no ledger
+  // still gets a run id on every object it lands.
+  const runId = input.runId ?? newRunId();
   const observedAt = (deps.now ?? (() => new Date()))().toISOString();
 
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
-  if (scope === null) {
+  // A Google source parses to a Google scope or to nothing; the third shape belongs to
+  // another collector and would mean a row written under the wrong source.
+  if (scope === null || scope.kind === "xero") {
     throw new ScopeNotChosen(input.source, input.tenantId);
   }
 
@@ -150,6 +166,26 @@ export async function runGoogleCollect(
           { keptIds: harvest.seenIds, observedAt },
         );
 
+  const refusals: RunRefusal[] = [];
+  for (const result of landedRecords.results) {
+    if (result.status === "failed") {
+      refusals.push({
+        entity,
+        sourceRecordId: result.sourceRecordId,
+        reason: result.reason ?? "refused",
+      });
+    }
+  }
+  for (const result of landedDocuments.results) {
+    if (result.status === "skipped" || result.status === "failed") {
+      refusals.push({
+        entity: "documents",
+        sourceRecordId: result.documentId,
+        reason: result.reason ?? result.status,
+      });
+    }
+  }
+
   return {
     runId,
     source: input.source,
@@ -157,7 +193,9 @@ export async function runGoogleCollect(
       landed: landedRecords.created + landedRecords.unchanged,
       loadedCreated: loaded.created,
       loadedChanged: loaded.changed,
+      loadedUnchanged: loaded.unchanged,
     },
+    refusals,
     documents: {
       created: landedDocuments.created,
       unchanged: landedDocuments.unchanged,

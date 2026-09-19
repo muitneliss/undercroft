@@ -151,8 +151,13 @@ services:
       # The worker reads and writes `raw`, so it waits for the schema too.
       db-migrate:
         condition: service_completed_successfully
+      # And for the flows to be in Kestra: a stack whose flows never landed schedules
+      # nothing, and that is a failed deploy rather than a quiet one.
+      kestra-flows:
+        condition: service_completed_successfully
     environment:
-      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      # As its own role, never as the bootstrap superuser; `db-migrate` sets the password.
+      UNDERCROFT_POSTGRES_DSN: postgres://undercroft_worker:${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_S3_ENDPOINT: http://minio:9000
       UNDERCROFT_S3_BUCKET_RAW: ${UNDERCROFT_S3_BUCKET_RAW:-undercroft-raw}
       UNDERCROFT_S3_ACCESS_KEY: ${UNDERCROFT_S3_ACCESS_KEY}
@@ -167,10 +172,12 @@ services:
       # "not connected" -- the right state while Google verification is pending.
       UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
       UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET:-}
-      # dbt runs as a subprocess here (ADR 0007) and connects as `undercroft_dbt`, never as
-      # the platform role. dbt/profiles.yml reads this; without it the transform verb fails
-      # inside dbt, far from anything that names the variable.
-      UNDERCROFT_DBT_PASSWORD: ${UNDERCROFT_DBT_PASSWORD:?set in .env}
+      # The Xero client, for refreshing and revoking; the control plane runs the consent.
+      UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
+      UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
+      # dbt runs as a subprocess here (ADR 0007) as each TENANT'S OWN login (ADR 0018). The
+      # worker mints that login's password right before a build and hands it to the child
+      # by environment; no variable here carries a dbt password any more.
     deploy:
       resources:
         limits:
@@ -198,11 +205,36 @@ services:
         condition: service_healthy
     command: ["bun", "run", "migrate"]
     environment:
+      # The one service that connects as the bootstrap superuser: it applies the schema and
+      # sets the two platform roles' passwords from the variables below.
       UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      UNDERCROFT_APP_PG_PASSWORD: ${UNDERCROFT_APP_PG_PASSWORD:?set in .env}
+      UNDERCROFT_WORKER_PG_PASSWORD: ${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}
     deploy:
       resources:
         limits:
           memory: 256m
+
+  # The Kestra flows, delivered by the deploy: `flows/` is baked into the control-plane
+  # image and this one-shot pushes each file through Kestra's API, then exits. It waits for
+  # Kestra to answer and fails at once on a flow Kestra rejects. See the server file.
+  kestra-flows:
+    # Deliberately NOT `<<: *restart`, for the reason `db-migrate` gives.
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.control-plane
+    depends_on:
+      kestra:
+        condition: service_started
+    command: ["bun", "run", "kestra:flows"]
+    environment:
+      UNDERCROFT_KESTRA_URL: http://kestra:8080
+      UNDERCROFT_KESTRA_USER: ${UNDERCROFT_KESTRA_USER:-admin@example.com}
+      UNDERCROFT_KESTRA_PASSWORD: ${UNDERCROFT_KESTRA_PASSWORD:?set in .env}
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   control-plane:
     <<: *restart
@@ -216,7 +248,8 @@ services:
       db-migrate:
         condition: service_completed_successfully
     environment:
-      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      # As its own role; see the worker's note.
+      UNDERCROFT_POSTGRES_DSN: postgres://undercroft_app:${UNDERCROFT_APP_PG_PASSWORD:?set in .env}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY}
       UNDERCROFT_SESSION_SECRET: ${UNDERCROFT_SESSION_SECRET:?set in .env}
       UNDERCROFT_WORKER_URL: http://worker:8081
@@ -242,6 +275,9 @@ services:
       # says it is unavailable.
       UNDERCROFT_GOOGLE_PICKER_API_KEY: ${UNDERCROFT_GOOGLE_PICKER_API_KEY:-}
       UNDERCROFT_GOOGLE_PROJECT_NUMBER: ${UNDERCROFT_GOOGLE_PROJECT_NUMBER:-}
+      # The Xero client, for the consent. See docs/runbook/xero-setup.md.
+      UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
+      UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
       UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
       UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
       UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}
@@ -255,26 +291,6 @@ services:
       resources:
         limits:
           memory: 512m
-
-  metabase:
-    <<: *restart
-    image: metabase/metabase:v0.64.x
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      MB_DB_TYPE: postgres
-      MB_DB_HOST: postgres
-      MB_DB_PORT: "5432"
-      MB_DB_DBNAME: ${UNDERCROFT_PG_DB:-undercroft}
-      MB_DB_USER: ${UNDERCROFT_PG_USER:-undercroft}
-      MB_DB_PASS: ${UNDERCROFT_PG_PASSWORD}
-    ports:
-      - "127.0.0.1:${UNDERCROFT_PORT_METABASE:-13001}:3000"
-    deploy:
-      resources:
-        limits:
-          memory: 2g
 
 volumes:
   minio-data:

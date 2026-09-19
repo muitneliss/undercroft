@@ -32,6 +32,8 @@ beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
+  // Seeded as the superuser; from here on every statement runs as the control plane does.
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {

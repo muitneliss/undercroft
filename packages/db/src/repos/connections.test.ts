@@ -8,7 +8,9 @@ import { createTestDatabase, type TestDatabase } from "../testing.ts";
 import {
   ConnectionRegistryError,
   type Credential,
+  getConnection,
   readCredential,
+  setCadence,
   upsertConnection,
   writeCredential,
 } from "./connections.ts";
@@ -40,14 +42,14 @@ function cred(over: Partial<Credential> = {}): Credential {
 
 describe("credentials are sealed at rest and open exactly", () => {
   it("what is written comes back unchanged", async () => {
-    await writeCredential(db, "CASE-1", "xero", cred(), env);
+    await writeCredential(db, "CASE-1", "xero", cred(), { env });
     const opened = await readCredential(db, "CASE-1", "xero", { env });
     expect(opened.accessToken).toBe("access-1");
     expect(opened.refreshToken).toBe("refresh-1");
   });
 
   it("the stored bytes are not the plaintext", async () => {
-    await writeCredential(db, "CASE-1", "xero", cred(), env);
+    await writeCredential(db, "CASE-1", "xero", cred(), { env });
     const { rows } = await db.query<{ ciphertext: Uint8Array }>(
       "SELECT ciphertext FROM app.connection_secret WHERE tenant_id = 'CASE-1'",
     );
@@ -58,5 +60,17 @@ describe("credentials are sealed at rest and open exactly", () => {
     await expect(readCredential(db, "CASE-1", "xero", { env })).rejects.toBeInstanceOf(
       ConnectionRegistryError,
     );
+  });
+});
+
+describe("cadence", () => {
+  it("a connection reads daily until an admin says otherwise, and the word is stored", async () => {
+    expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("daily");
+    expect(await setCadence(db, "CASE-1", "xero", "hourly")).toBe(true);
+    expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("hourly");
+  });
+
+  it("a source nobody has connected has nothing to set a cadence on", async () => {
+    expect(await setCadence(db, "CASE-1", "hubspot", "hourly")).toBe(false);
   });
 });

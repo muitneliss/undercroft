@@ -51,7 +51,16 @@ export const LandRecordsResponse = z.object({
 });
 export type LandRecordsResponse = z.infer<typeof LandRecordsResponse>;
 
-/** The error envelope every non-2xx response uses. `message` never carries a payload value. */
+/**
+ * The error envelope every non-2xx response uses. `message` never carries a payload value.
+ *
+ * The last seven codes are what the worker's error boundary answers when a verb throws
+ * rather than refuses: a run that cannot start because nobody chose a scope, a credential
+ * that cannot be refreshed, a source that failed mid-read, a run already in progress, a
+ * pasted token the source rejected, a thing that does not exist, and everything else --
+ * which is answered with no message at all, because an unexpected error's text is the one
+ * place a row value can leak into a response.
+ */
 export const ApiError = z.object({
   code: z.enum([
     "invalid_request",
@@ -63,6 +72,14 @@ export const ApiError = z.object({
     "record_rejected",
     "rate_limited",
     "store_unavailable",
+    "scope_not_chosen",
+    "credential_unusable",
+    "source_failed",
+    "run_in_progress",
+    "credential_rejected",
+    "query_failed",
+    "not_found",
+    "internal_error",
   ]),
   message: z.string(),
   details: z.array(z.string()).default([]),

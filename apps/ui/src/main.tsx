@@ -1,7 +1,9 @@
 // biome-ignore-all lint/correctness/noUnresolvedImports: `react` and `pg` resolve through the workspace package that depends on them; Biome's module resolver does not walk a Bun workspace layout. tsc and the build both resolve them.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import type { AppRouter } from "@undercroft/control-plane/router";
+import type { Locale } from "@undercroft/core/locale";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -31,13 +33,37 @@ const queryClient = new QueryClient({
 // `accept-language` is read per request rather than captured once, so a language chosen
 // mid-session applies to the next call: the server composes an invitation email and a
 // refusal message in it, and those must be in the language the operator is looking at.
-const trpcClient = trpc.createClient({
-  links: [
-    httpBatchLink({
-      url: "/trpc",
-      headers: () => ({ "accept-language": useUiStore.getState().locale }),
-    }),
-  ],
+const link = httpBatchLink({
+  url: "/trpc",
+  headers: () => ({ "accept-language": useUiStore.getState().locale }),
+});
+const trpcClient = trpc.createClient({ links: [link] });
+
+/**
+ * Tell the server when the reader changes language, so the emails it sends while no page
+ * is open -- a failed run at three in the morning -- arrive in it.
+ *
+ * The store stays the owner of the choice; this is a projection of it, exactly like the
+ * one `i18n/index.ts` makes into i18next and onto `<html lang>`. It lives here rather than
+ * in `i18n/index.ts` because that module must stay network-free for the tests that render
+ * with it. Only while signed in: an anonymous reader has nobody to record it against, and
+ * signing in records the request's language itself. A failed call is left alone -- the
+ * store is still right, and the next change or the next sign-in records it again.
+ */
+const vanilla = createTRPCClient<AppRouter>({ links: [link] });
+let recordedLocale: Locale = useUiStore.getState().locale;
+useUiStore.subscribe((state) => {
+  if (state.locale === recordedLocale) {
+    return;
+  }
+  recordedLocale = state.locale;
+  const signedIn = queryClient
+    .getQueryCache()
+    .findAll({ queryKey: [["session", "me"]] })
+    .some((query) => query.state.status === "success");
+  if (signedIn) {
+    vanilla.session.setLocale.mutate({ locale: state.locale }).catch(() => undefined);
+  }
 });
 
 const root = document.querySelector("#root");

@@ -51,8 +51,8 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
 import { DIVISIONS } from "@/lib/divisions.ts";
 
-/** The full wheel, including the three hues no division has claimed yet. */
-const WHEEL = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "#7f4023"];
+/** The full wheel: seven hues, every one of them a division's, in the order they are bound. */
+const WHEEL = DIVISIONS.map((d) => d.hue);
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();

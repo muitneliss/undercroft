@@ -26,7 +26,10 @@
       // output means the generator and the formatter disagree on every run.
       "!specs/schema",
       // Vendored upstream webfont assets; not ours to restyle.
-      "!apps/ui/public/fonts"
+      "!apps/ui/public/fonts",
+      // Boundary files emitted by `bun run geo:build`. Formatting a 170 KB TopoJSON means
+      // the generator and the formatter disagree on every run, as with `specs/schema`.
+      "!apps/ui/public/geo"
     ]
   },
 

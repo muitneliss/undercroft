@@ -31,6 +31,7 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One table group, one file: the connection row, its sealed credential, its chosen scope and the view the card reads are four reads of the same pair of keys, and splitting them by length would put the licence for the credential join in a different file from the join.
 
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
@@ -51,12 +52,19 @@ export interface Credential {
   readonly expiresAt: string | null;
 }
 
+/**
+ * How often the source is read. The words and the rule that turns them into a time are in
+ * `@undercroft/contracts`; this repo stores the word and decides nothing about it.
+ */
+export type Cadence = "hourly" | "every_6h" | "daily" | "paused";
+
 export interface Connection {
   readonly tenantId: string;
   readonly source: string;
   readonly status: "disconnected" | "connected" | "error" | "expired";
   readonly externalAccountId: string | null;
   readonly scope: string;
+  readonly cadence: Cadence;
 }
 
 function credentialToJson(c: Credential): string {
@@ -79,7 +87,7 @@ function credentialFromJson(blob: string): Credential {
 export async function listConnections(exec: SqlExecutor, tenantId: string): Promise<Connection[]> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope
+            external_account_id AS "externalAccountId", scope, cadence
      FROM ops.connection WHERE tenant_id = $1 ORDER BY source`,
     [tenantId],
   );
@@ -93,11 +101,79 @@ export async function getConnection(
 ): Promise<Connection | null> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope
+            external_account_id AS "externalAccountId", scope, cadence
      FROM ops.connection WHERE tenant_id = $1 AND source = $2`,
     [tenantId, source],
   );
   return rows[0] ?? null;
+}
+
+/** Record how often a source is read. `false` means there is no such connection to set it on. */
+export async function setCadence(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+  cadence: Cadence,
+): Promise<boolean> {
+  const { rows } = await exec.query<{ source: string }>(
+    `UPDATE ops.connection SET cadence = $3, updated_at = now()
+     WHERE tenant_id = $1 AND source = $2
+     RETURNING source`,
+    [tenantId, source, cadence],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Everything the schedule needs to decide whether a connected pair is due.
+ *
+ * Connected rows only; which of them is due is decided one layer up, by the rule in
+ * `@undercroft/contracts`, so this query stays a read of what is recorded. The selection
+ * comes back as JSON text for the same reason as in `readConnectionDetail`.
+ */
+export interface DueCandidate {
+  readonly tenantId: string;
+  readonly source: string;
+  readonly status: "connected";
+  readonly cadence: Cadence;
+  readonly selectionJson: string;
+  readonly lastRunStartedAt: string | null;
+  readonly lastRunStatus: "running" | "ok" | "failed" | null;
+}
+
+export async function listDueCandidates(exec: SqlExecutor): Promise<DueCandidate[]> {
+  const { rows } = await exec.query<{
+    tenantId: string;
+    source: string;
+    cadence: Cadence;
+    selectionJson: string | null;
+    lastRunStartedAt: Date | string | null;
+    lastRunStatus: DueCandidate["lastRunStatus"];
+  }>(
+    `SELECT c.tenant_id AS "tenantId", c.source, c.cadence,
+            d.selection::text AS "selectionJson",
+            r.started_at      AS "lastRunStartedAt",
+            r.status          AS "lastRunStatus"
+     FROM ops.connection c
+     LEFT JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
+     LEFT JOIN LATERAL (
+       SELECT started_at, status FROM ops.run
+       WHERE tenant_id = c.tenant_id AND source = c.source AND verb = 'ingest'
+       ORDER BY started_at DESC, id DESC LIMIT 1
+     ) r ON true
+     WHERE c.status = 'connected'
+     ORDER BY c.tenant_id, c.source`,
+  );
+  return rows.map((row) => ({
+    tenantId: row.tenantId,
+    source: row.source,
+    status: "connected",
+    cadence: row.cadence,
+    selectionJson: row.selectionJson ?? "{}",
+    lastRunStartedAt:
+      row.lastRunStartedAt === null ? null : new Date(row.lastRunStartedAt).toISOString(),
+    lastRunStatus: row.lastRunStatus,
+  }));
 }
 
 export async function upsertConnection(
@@ -128,6 +204,25 @@ export async function upsertConnection(
   );
 }
 
+/**
+ * Record the provider's own account id -- a Xero organisation, chosen after consent.
+ *
+ * On `ops.connection` because a run needs it and BI may see it: it is an opaque id, never a
+ * name. The name goes to `app.connection_detail` with the rest of the choice.
+ */
+export async function setExternalAccount(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+  externalAccountId: string,
+): Promise<void> {
+  await exec.query(
+    `UPDATE ops.connection SET external_account_id = $3, updated_at = now()
+     WHERE tenant_id = $1 AND source = $2`,
+    [tenantId, source, externalAccountId],
+  );
+}
+
 export async function setStatus(
   exec: SqlExecutor,
   tenantId: string,
@@ -140,24 +235,84 @@ export async function setStatus(
   );
 }
 
+/**
+ * Seal and store a credential.
+ *
+ * `grantExpiresAt` is when the GRANT lapses -- `services/grantExpiry.ts` decides it -- and it
+ * is kept in the clear beside the ciphertext for the same reason `expires_at` is: "which
+ * grants are about to lapse" has to be a query. A new grant end clears `warned_at`, so a
+ * grant renewed after a warning is warned about again when it next approaches its end.
+ */
 export async function writeCredential(
   exec: SqlExecutor,
   tenantId: string,
   source: string,
   credential: Credential,
-  env?: NodeJS.ProcessEnv,
+  opts: { env?: NodeJS.ProcessEnv; grantExpiresAt?: string | null } = {},
 ): Promise<void> {
-  const sealed = seal(credentialToJson(credential), env === undefined ? {} : { env });
-  await exec.query(
-    `INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version, expires_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, now())
-     ON CONFLICT (tenant_id, source) DO UPDATE SET
-       ciphertext  = EXCLUDED.ciphertext,
-       key_version = EXCLUDED.key_version,
-       expires_at  = EXCLUDED.expires_at,
-       updated_at  = now()`,
-    [tenantId, source, Buffer.from(sealed.blob), sealed.keyVersion, credential.expiresAt],
+  const sealed = seal(
+    credentialToJson(credential),
+    opts.env === undefined ? {} : { env: opts.env },
   );
+  await exec.query(
+    `INSERT INTO app.connection_secret
+       (tenant_id, source, ciphertext, key_version, expires_at, grant_expires_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, now())
+     ON CONFLICT (tenant_id, source) DO UPDATE SET
+       ciphertext       = EXCLUDED.ciphertext,
+       key_version      = EXCLUDED.key_version,
+       expires_at       = EXCLUDED.expires_at,
+       grant_expires_at = EXCLUDED.grant_expires_at,
+       warned_at        = CASE
+         WHEN EXCLUDED.grant_expires_at IS DISTINCT FROM app.connection_secret.grant_expires_at
+         THEN NULL ELSE app.connection_secret.warned_at END,
+       updated_at       = now()`,
+    [
+      tenantId,
+      source,
+      Buffer.from(sealed.blob),
+      sealed.keyVersion,
+      credential.expiresAt,
+      opts.grantExpiresAt ?? null,
+    ],
+  );
+}
+
+/** A grant about to lapse, as the warning names it. */
+export interface ExpiringGrant {
+  readonly tenantId: string;
+  readonly source: string;
+  readonly grantExpiresAt: string;
+}
+
+/**
+ * Claim every grant lapsing within `withinDays` that has not been warned about.
+ *
+ * One UPDATE that marks and returns: a second tick, or a second replica, finds nothing. A
+ * grant already lapsed is not claimed -- the card says "reconnect" for that, and a warning
+ * about the past is noise.
+ */
+export async function claimExpiringGrants(
+  exec: SqlExecutor,
+  withinDays: number,
+): Promise<ExpiringGrant[]> {
+  const { rows } = await exec.query<{
+    tenant_id: string;
+    source: string;
+    grant_expires_at: Date | string;
+  }>(
+    `UPDATE app.connection_secret SET warned_at = now()
+     WHERE grant_expires_at IS NOT NULL AND warned_at IS NULL
+       AND grant_expires_at > now()
+       AND grant_expires_at <= now() + make_interval(days => $1::int)
+     RETURNING tenant_id, source, grant_expires_at`,
+    [withinDays],
+  );
+  return rows.map((row) => ({
+    tenantId: row.tenant_id,
+    source: row.source,
+    grantExpiresAt: new Date(row.grant_expires_at).toISOString(),
+  }));
 }
 
 /**
@@ -316,7 +471,23 @@ export interface ConnectionView extends Connection {
    * later, for a credential the worker refreshes without anybody being asked.
    */
   readonly credentialExpiresAt: string | null;
-  readonly lastRunId: string;
+  /**
+   * The newest run for this source, or `null` when there has never been one. Enough for a
+   * card to say whether the last run worked, when, and how much it saw; the ledger holds
+   * the rest.
+   */
+  readonly lastRun: LastRun | null;
+}
+
+export interface LastRun {
+  readonly id: string;
+  readonly status: "running" | "ok" | "failed";
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+  /** Records the run saw in raw: created + changed + unchanged. A count, not an amount. */
+  readonly seen: number;
+  readonly refused: number;
+  readonly error: string | null;
 }
 
 export async function listConnectionViews(
@@ -329,26 +500,41 @@ export async function listConnectionViews(
     status: Connection["status"];
     externalAccountId: string | null;
     scope: string;
+    cadence: Cadence;
     accountLabel: string | null;
     selectionJson: string | null;
     chosenAt: Date | string | null;
     credentialExpiresAt: Date | string | null;
     lastRunId: string | null;
+    lastRunStatus: LastRun["status"] | null;
+    lastRunStartedAt: Date | string | null;
+    lastRunEndedAt: Date | string | null;
+    lastRunSeen: number | null;
+    lastRunRefused: number | null;
+    lastRunError: string | null;
   }>(
     `SELECT c.tenant_id AS "tenantId", c.source, c.status,
-            c.external_account_id AS "externalAccountId", c.scope,
+            c.external_account_id AS "externalAccountId", c.scope, c.cadence,
             d.account_label       AS "accountLabel",
             d.selection::text     AS "selectionJson",
             d.chosen_at           AS "chosenAt",
             s.expires_at          AS "credentialExpiresAt",
-            r.id                  AS "lastRunId"
+            r.id                  AS "lastRunId",
+            r.status              AS "lastRunStatus",
+            r.started_at          AS "lastRunStartedAt",
+            r.ended_at            AS "lastRunEndedAt",
+            r.seen                AS "lastRunSeen",
+            r.refused             AS "lastRunRefused",
+            r.error               AS "lastRunError"
      FROM ops.connection c
      LEFT JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
      LEFT JOIN app.connection_secret s ON s.tenant_id = c.tenant_id AND s.source = c.source
      LEFT JOIN LATERAL (
-       SELECT id FROM ops.run
-       WHERE tenant_id = c.tenant_id AND source = c.source
-       ORDER BY started_at DESC LIMIT 1
+       SELECT id, status, started_at, ended_at, created + changed + unchanged AS seen,
+              refused, error
+       FROM ops.run
+       WHERE tenant_id = c.tenant_id AND source = c.source AND verb = 'ingest'
+       ORDER BY started_at DESC, id DESC LIMIT 1
      ) r ON true
      WHERE c.tenant_id = $1
      ORDER BY c.source`,
@@ -361,11 +547,24 @@ export async function listConnectionViews(
     status: row.status,
     externalAccountId: row.externalAccountId,
     scope: row.scope,
+    cadence: row.cadence,
     accountLabel: row.accountLabel ?? "",
     selectionJson: row.selectionJson ?? "{}",
     chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),
     credentialExpiresAt:
       row.credentialExpiresAt === null ? null : new Date(row.credentialExpiresAt).toISOString(),
-    lastRunId: row.lastRunId ?? "",
+    lastRun:
+      row.lastRunId === null || row.lastRunStatus === null || row.lastRunStartedAt === null
+        ? null
+        : {
+            id: row.lastRunId,
+            status: row.lastRunStatus,
+            startedAt: new Date(row.lastRunStartedAt).toISOString(),
+            endedAt:
+              row.lastRunEndedAt === null ? null : new Date(row.lastRunEndedAt).toISOString(),
+            seen: row.lastRunSeen ?? 0,
+            refused: row.lastRunRefused ?? 0,
+            error: row.lastRunError,
+          },
   }));
 }

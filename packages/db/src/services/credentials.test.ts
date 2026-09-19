@@ -57,7 +57,7 @@ describe("needsRefresh treats missing expiry as fresh", () => {
 
 describe("accessToken refreshes and writes the rotated token back", () => {
   it("returns the stored token when it is still fresh", async () => {
-    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: null }), env);
+    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: null }), { env });
     const token = await accessToken(db, "CASE-1", "xero", { env });
     expect(token).toBe("access-1");
   });
@@ -67,7 +67,7 @@ describe("accessToken refreshes and writes the rotated token back", () => {
     // the connection is lost. Prove the NEW refresh token is what is now on disk.
     const now = new Date("2026-01-01T00:00:00Z");
     const expired = new Date(now.getTime() + 60_000).toISOString();
-    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: expired }), env);
+    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: expired }), { env });
 
     function refresher(old: string): Promise<Credential> {
       expect(old).toBe("refresh-1");
@@ -88,13 +88,9 @@ describe("accessToken refreshes and writes the rotated token back", () => {
   it("an expired token with no refresher marks the connection expired and raises", async () => {
     const now = new Date("2026-01-01T00:00:00Z");
     const expired = new Date(now.getTime() + 60_000).toISOString();
-    await writeCredential(
-      db,
-      "CASE-1",
-      "xero",
-      cred({ refreshToken: "", expiresAt: expired }),
+    await writeCredential(db, "CASE-1", "xero", cred({ refreshToken: "", expiresAt: expired }), {
       env,
-    );
+    });
 
     await expect(accessToken(db, "CASE-1", "xero", { now, env })).rejects.toBeInstanceOf(
       ConnectionRegistryError,

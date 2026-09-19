@@ -61,6 +61,7 @@ beforeEach(async () => {
       id_token: ID_TOKEN,
     },
   };
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {
@@ -161,5 +162,41 @@ describe("starting a consent", () => {
     );
 
     expect(started).toEqual({ ok: false, reason: "unsupported-source" });
+  });
+
+  it("xero goes to Xero's authorize endpoint, with its own callback and no PKCE", async () => {
+    // A confidential client with a secret: Xero takes it in a Basic header at the token
+    // endpoint and reserves PKCE for clients that have none. `offline_access` is what makes
+    // it issue a refresh token at all.
+    const xero = {
+      clientId: "xero-client",
+      clientSecret: "xero-secret",
+      publicUrl: "https://undercroft.test",
+    };
+    const started = await startConsent(
+      { exec: db, google, xero },
+      { tenantId: TENANT, source: "xero", startedBy: ADMIN.userId },
+    );
+    if (!started.ok) {
+      throw new Error("expected the consent to start");
+    }
+
+    const url = new URL(started.authorizeUrl);
+    expect(url.origin + url.pathname).toBe("https://login.xero.com/identity/connect/authorize");
+    expect(url.searchParams.get("redirect_uri")).toBe(
+      "https://undercroft.test/oauth/xero/callback",
+    );
+    expect(url.searchParams.get("scope")).toContain("offline_access");
+    expect(url.searchParams.get("code_challenge")).toBeNull();
+    expect(url.searchParams.get("client_id")).toBe("xero-client");
+  });
+
+  it("xero with no Xero client configured is refused, even with Google configured", async () => {
+    const started = await startConsent(
+      { exec: db, google },
+      { tenantId: TENANT, source: "xero", startedBy: ADMIN.userId },
+    );
+
+    expect(started).toEqual({ ok: false, reason: "not-configured" });
   });
 });

@@ -17,19 +17,29 @@
  * deliberately not what the card's `expiresAt` carries. See that field.
  */
 
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One service, one file: what the card shows, what an admin may change about a grant, and how a grant ends are three decisions about the same row, and a reader following one into the next should not change files to do it.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
 // biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
 
-import { parseScope } from "@undercroft/contracts";
+import {
+  type Cadence,
+  type ConnectionScope,
+  needsScope,
+  nextRunAt,
+  parseScope,
+} from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   type Connection,
   type ConnectionView,
+  type LastRun,
   getConnection,
   listConnections,
   listConnectionViews,
+  setCadence as writeCadence,
+  setExternalAccount,
   setStatus,
   writeConnectionDetail,
 } from "@undercroft/db/repos";
@@ -52,9 +62,6 @@ export const KNOWN_SOURCES = ["hubspot", "xero", "gmail", "drive"] as const;
 
 /** Narrow, so the union survives tRPC inference and the UI can index its label maps. */
 export type KnownSource = (typeof KNOWN_SOURCES)[number];
-
-/** Sources that must be told what to read before a run may read anything. */
-const SCOPED_SOURCES = new Set(["gmail", "drive"]);
 
 /**
  * What the card shows, which is not what the database stores.
@@ -90,13 +97,19 @@ export interface ConnectionCardView {
    * nearest number to hand.
    */
   readonly expiresAt: string | null;
-  readonly lastRunId: string;
   /**
-   * Always `""` for now. Kestra owns schedules and nothing in this database writes one; a
-   * column would be a promise nobody keeps, and the card already renders an absent value as
-   * absent rather than as "never".
+   * The newest ingest run for this source, or `null` when there has never been one. The
+   * card prints its outcome, its time and how much it saw; the Journal holds the rest.
    */
-  readonly scheduleCron: string;
+  readonly lastRun: LastRun | null;
+  /** How often this source is read, in one of four words. `daily` until an admin says otherwise. */
+  readonly cadence: Cadence;
+  /**
+   * When this source is next due, or `null` when nothing will run: disconnected, paused, or
+   * waiting for a scope. A value in the past means "at the scheduler's next tick" -- the
+   * rule is `nextRunAt` in `@undercroft/contracts`, the same one the due list applies.
+   */
+  readonly nextRunAt: string | null;
 }
 
 /**
@@ -142,7 +155,7 @@ export function presentStatus(row: {
   }
   // Connected, but nobody has said what may be read. Running in this state would read a
   // whole mailbox on the strength of a missing row.
-  if (SCOPED_SOURCES.has(row.source) && parseScope(row.source, row.selectionJson) === null) {
+  if (needsScope(row.source, row.selectionJson)) {
     return "needs_scope";
   }
   return "connected";
@@ -155,7 +168,11 @@ export function presentStatus(row: {
  * product -- had nothing to offer on the very screen a new customer lands on. A source with
  * no row is synthesised as `disconnected`, which is what it is.
  */
-export async function list(exec: SqlExecutor, tenantId: string): Promise<ConnectionCardView[]> {
+export async function list(
+  exec: SqlExecutor,
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<ConnectionCardView[]> {
   const rows = await listConnectionViews(exec, tenantId);
   // Typed explicitly: an inferred tuple widens to `(string | ConnectionView)[]` and the map
   // loses its value type.
@@ -172,8 +189,9 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Connect
         scopes: [],
         config: {},
         expiresAt: null,
-        lastRunId: "",
-        scheduleCron: "",
+        lastRun: null,
+        cadence: "daily" as const,
+        nextRunAt: null,
       };
     }
     return {
@@ -186,10 +204,48 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Connect
       config: configOf(row.source, row.selectionJson),
       // Not `row.credentialExpiresAt`. See the field.
       expiresAt: null,
-      lastRunId: row.lastRunId,
-      scheduleCron: "",
+      lastRun: row.lastRun,
+      cadence: row.cadence,
+      nextRunAt: nextRunAt(
+        {
+          source: row.source,
+          status: row.status,
+          cadence: row.cadence,
+          selectionJson: row.selectionJson,
+          lastRunStartedAt: row.lastRun?.startedAt ?? null,
+        },
+        now,
+      ),
     };
   });
+}
+
+export type SetCadenceOutcome = { ok: true } | { ok: false; reason: "no-connection" };
+
+/**
+ * Record how often a source is read. Admin-only at the handler: it changes how often a
+ * customer's accounts are opened, which is a decision about their data, not ours.
+ */
+export async function setCadence(
+  exec: SqlExecutor,
+  input: { tenantId: string; source: string; cadence: Cadence; actor: string },
+): Promise<SetCadenceOutcome> {
+  const written = await writeCadence(exec, input.tenantId, input.source, input.cadence);
+  if (!written) {
+    return { ok: false, reason: "no-connection" };
+  }
+  try {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "connection.cadence_set",
+      detail: JSON.stringify({ source: input.source, cadence: input.cadence }),
+    });
+  } catch {
+    // Swallowed like every other audit write here: a failed insert must not lose a cadence
+    // an admin has already saved.
+  }
+  return { ok: true };
 }
 
 export function get(
@@ -229,11 +285,17 @@ export async function setScope(
     return { ok: false, reason: "unsupported-source" };
   }
 
+  // A Xero choice names an organisation. Its id goes where a run reads it, on the
+  // connection; its name goes where BI cannot, as the card's account label.
+  if (scope.kind === "xero") {
+    await setExternalAccount(exec, input.tenantId, input.source, scope.organisation.id);
+  }
   await writeConnectionDetail(exec, {
     tenantId: input.tenantId,
     source: input.source,
     selectionJson: input.selectionJson,
     chosenBy: input.actorId,
+    ...(scope.kind === "xero" ? { accountLabel: scope.organisation.name } : {}),
   });
 
   try {
@@ -241,16 +303,70 @@ export async function setScope(
       tenantId: input.tenantId,
       actor: input.actor,
       action: "connection.scope_set",
-      detail: JSON.stringify({
-        source: input.source,
-        count: scope.kind === "gmail" ? scope.labels.length : scope.files.length,
-      }),
+      detail: JSON.stringify({ source: input.source, count: chosenCount(scope) }),
     });
   } catch {
     // Swallowed like every other audit write here: a failed insert must not lose a scope an
     // admin has already saved.
   }
 
+  return { ok: true };
+}
+
+/** Sources whose credential is a token an admin pastes, rather than an OAuth consent. */
+const PASTED_TOKEN_SOURCES: ReadonlySet<string> = new Set(["hubspot"]);
+
+export type SetTokenOutcome =
+  | { ok: true }
+  | { ok: false; reason: "unsupported-source" | "rejected" | "unreachable" | "refused" };
+
+/**
+ * Connect a source with a token the admin pasted.
+ *
+ * The token goes to the worker to be PROVEN and sealed, and nowhere else: not to this
+ * process's log, not to the audit row, not back to the browser. The worker probes the
+ * provider with it before writing anything, so a typo is refused here and now rather than
+ * sealed into a "connected" card that 401s at its first run.
+ *
+ * `externalAccountId` is empty: a private app names no account, and inventing one would
+ * be a guess on a column BI can read.
+ */
+export async function setToken(
+  exec: SqlExecutor,
+  worker: WorkerClient,
+  input: { tenantId: string; source: string; token: string; actor: string },
+): Promise<SetTokenOutcome> {
+  if (!PASTED_TOKEN_SOURCES.has(input.source)) {
+    return { ok: false, reason: "unsupported-source" };
+  }
+
+  const stored = await worker.storeCredential({
+    source: input.source,
+    tenantId: input.tenantId,
+    externalAccountId: "",
+    scope: "",
+    credential: { accessToken: input.token, refreshToken: "", expiresAt: null },
+    validate: true,
+  });
+  if (!stored.ok) {
+    if (stored.reason === "credential-rejected") {
+      return { ok: false, reason: "rejected" };
+    }
+    return { ok: false, reason: stored.reason === "unreachable" ? "unreachable" : "refused" };
+  }
+
+  try {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "connection.connected",
+      // Which source, and that it was a pasted token. Never the token.
+      detail: JSON.stringify({ source: input.source, method: "token" }),
+    });
+  } catch {
+    // Swallowed like every other audit write here: a failed insert must not undo a
+    // connection the worker has already sealed.
+  }
   return { ok: true };
 }
 
@@ -304,6 +420,22 @@ export async function disconnect(
   return { revokedUpstream };
 }
 
+/** How many things were chosen, for the trail. A count, never the names. */
+function chosenCount(scope: ConnectionScope): number {
+  switch (scope.kind) {
+    case "gmail":
+      return scope.labels.length;
+    case "drive":
+      return scope.files.length;
+    case "xero":
+      return scope.entities.length;
+    default: {
+      const exhaustive: never = scope;
+      throw new Error(`unhandled scope ${String(exhaustive)}`);
+    }
+  }
+}
+
 /** The shape `scopeSummary` in the UI reads. */
 function configOf(
   source: string,
@@ -313,8 +445,16 @@ function configOf(
   if (scope === null) {
     return {};
   }
-  if (scope.kind === "gmail") {
-    return { labels: scope.labels.map((l) => l.name) };
+  switch (scope.kind) {
+    case "gmail":
+      return { labels: scope.labels.map((l) => l.name) };
+    case "drive":
+      return { folderIds: scope.files.map((f) => f.id) };
+    case "xero":
+      return { entities: scope.entities };
+    default: {
+      const exhaustive: never = scope;
+      throw new Error(`unhandled scope ${String(exhaustive)}`);
+    }
   }
-  return { folderIds: scope.files.map((f) => f.id) };
 }

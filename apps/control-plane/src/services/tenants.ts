@@ -18,6 +18,7 @@
 // biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
 
 import type { SqlExecutor } from "@undercroft/db";
+import { isRoleCollision, provisionTenantRoles } from "@undercroft/db/repos";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import { listForUser, type MemberTenant } from "../repos/membership.ts";
 import {
@@ -26,6 +27,7 @@ import {
   listAllTenants,
   renameTenant,
   type Tenant,
+  undoCreateTenant,
 } from "../repos/tenant.ts";
 
 export type { MemberTenant, Tenant };
@@ -57,15 +59,27 @@ export function get(exec: SqlExecutor, tenantId: string): Promise<Tenant | null>
 export type CreateResult =
   | { readonly ok: true; readonly tenant: Tenant }
   /** The reference is already in use. Reported, never a success that quietly changed nothing. */
-  | { readonly ok: false; readonly reason: "already-exists" };
+  | { readonly ok: false; readonly reason: "already-exists" }
+  /**
+   * The reference folds to the same Postgres role name as an existing customer's --
+   * `CASE-0042` and `case_0042` would share a login. Refused, and the row undone.
+   */
+  | { readonly ok: false; readonly reason: "role-collision" };
 
 /**
- * Create a customer.
+ * Create a customer, and the two database roles that are its own.
  *
  * A value, not an exception, like every other decision in this layer -- `handlers/router.ts`
  * is where `already-exists` becomes a CONFLICT. Authority is NOT re-checked here: this is
  * reachable only through `superadminProcedure`, and a second check in a second place is the
  * arrangement where one of the two is later relaxed alone.
+ *
+ * The roles are provisioned in the same call because a customer without them is a customer
+ * whose first build and first report would fail with a login nobody can explain. When the
+ * provisioning is refused -- the one refusal it has is a slug collision -- the row it
+ * followed is taken back, so the operator is left with a refusal and not with a half-made
+ * customer. A transaction would do the same; the explicit undo keeps this layer on the plain
+ * executor every other decision uses.
  *
  * The audit row is written in the same call rather than by the handler, because "a customer
  * was created, and by whom" is one fact. Its `tenantId` is the new customer, so the record
@@ -78,6 +92,16 @@ export async function create(
   const created = await createTenant(exec, input.tenantId, input.displayName);
   if (!created) {
     return { ok: false, reason: "already-exists" };
+  }
+
+  try {
+    await provisionTenantRoles(exec, input.tenantId);
+  } catch (error) {
+    if (isRoleCollision(error)) {
+      await undoCreateTenant(exec, input.tenantId);
+      return { ok: false, reason: "role-collision" };
+    }
+    throw error;
   }
 
   await recordAudit(exec, {

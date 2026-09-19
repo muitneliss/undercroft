@@ -165,6 +165,8 @@ beforeEach(async () => {
     googleIngest,
     worker,
   }).fetch;
+  // From here on every statement runs as the control plane does.
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {

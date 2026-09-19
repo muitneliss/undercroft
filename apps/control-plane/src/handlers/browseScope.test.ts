@@ -46,6 +46,7 @@ beforeEach(async () => {
     ADMIN.userId,
     "admin",
   ]);
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {

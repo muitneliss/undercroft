@@ -87,11 +87,8 @@ jobs:
       - name: Verify the host runs the published images
         run: bun run scripts/dokploy.ts verify ${{ inputs.tag }}
 
-      - name: Smoke-test the public surfaces
-        run: |
-          bun run scripts/dokploy.ts smoke \
-            https://undercroft.lowbit.link/api/health \
-            https://undercroft-bi.lowbit.link/api/health
+      - name: Smoke-test the public surface
+        run: bun run scripts/dokploy.ts smoke https://undercroft.lowbit.link/api/health
 
       # Otherwise the only record of why a rollout failed lives in a panel the reader may not
       # have access to, and Dokploy prunes it.
