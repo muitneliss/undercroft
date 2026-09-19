@@ -3,8 +3,6 @@
  * disconnecting tells Xero.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { InMemoryByteFetcher } from "@undercroft/core";
 import { migrate } from "@undercroft/db";

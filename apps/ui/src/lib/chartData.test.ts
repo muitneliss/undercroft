@@ -4,8 +4,6 @@
  * a null is a gap and never a zero, and past seven series the rest fold into "Other".
  */
 
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
-
 import { describe, expect, test as it } from "bun:test";
 
 import type { TableResult } from "@/api/types.ts";

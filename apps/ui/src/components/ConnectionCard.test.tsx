@@ -10,8 +10,6 @@
  * handlers are plain functions that record what they were given.
  */
 
-// biome-ignore-all lint/style/useFilenamingConvention: One file named for the thing it tests, matching every other module in its directory.
-
 import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";

@@ -10,13 +10,6 @@
  * exists to close.
  */
 
-// biome-ignore-all lint/nursery/useUnicodeRegex: Two regexes over ASCII-only input where the `u` flag changes nothing.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noTemplateCurlyInString: Literal `${...}` in strings that are compose-file and shell templates, where the placeholder is the content.
-
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { expect, test as it } from "bun:test";
 
 import { type Config, type Deps, oneShotServices, verify } from "./dokploy.ts";
@@ -33,11 +26,13 @@ const STALE_DIGEST = `sha256:${"9".repeat(64)}`;
 const COMPOSE = [
   "services:",
   "  worker:",
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: A compose file's own `${VAR:-default}`, quoted here as the fixture bytes. Reading it as a JS placeholder is the misreading.
   "    image: ghcr.io/muitneliss/undercroft-worker:${IMAGE_TAG:-latest}",
   "    depends_on:",
   "      db-migrate:",
   "        condition: service_completed_successfully",
   "  db-migrate:",
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: As above: compose interpolation, not a JS template.
   "    image: ghcr.io/muitneliss/undercroft-control-plane:${IMAGE_TAG:-latest}",
   '    command: ["bun", "run", "migrate"]',
 ].join("\n");
@@ -172,7 +167,7 @@ it("a one-shot service that exited 0 on the wrong image still fails", async () =
   const { deps } = recorder(routes({ tag: "v1.3.0", migrateDigest: STALE_DIGEST }));
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
-    new RegExp(`db-migrate: running ${STALE_DIGEST}`),
+    new RegExp(`db-migrate: running ${STALE_DIGEST}`, "u"),
   );
 });
 
@@ -186,7 +181,7 @@ it("a long-running service on a stale digest fails the release", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", workerDigest: STALE_DIGEST }));
 
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
-    new RegExp(`worker: running ${STALE_DIGEST}`),
+    new RegExp(`worker: running ${STALE_DIGEST}`, "u"),
   );
 });
 

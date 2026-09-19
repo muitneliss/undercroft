@@ -9,8 +9,6 @@
  * proven against real Postgres in the Docker tier.
  */
 
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { bindParams, compileVisual } from "@undercroft/contracts";
 import { migrate } from "@undercroft/db";

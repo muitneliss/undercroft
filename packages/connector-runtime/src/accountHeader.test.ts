@@ -4,9 +4,6 @@
  * silently never sent -- every request went out addressed to no organisation.
  */
 
-// biome-ignore-all lint/style/noNonNullAssertion: A test asserting on a fixture it created three lines earlier. Biome's unsafe autofix deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-// biome-ignore-all lint/style/useNamingConvention: HTTP header names are the provider's own -- `xero-tenant-id` is the header Xero reads -- and strictCase cannot be satisfied by code that talks to another system.
-
 import { describe, expect, test as it } from "bun:test";
 import { parseSpec } from "@undercroft/contracts";
 import { ConnectorError, TestClock } from "@undercroft/core";

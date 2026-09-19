@@ -15,22 +15,18 @@
  * developer's database is theirs to reset.
  */
 
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/correctness/noUnresolvedImports: `pg` resolves through the workspace package that depends on it; Biome's module resolver does not walk a Bun workspace layout. tsc and the test runner both resolve it.
-// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; a Docker-tier test is its own composition root.
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed env file, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the value that lied.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
-
 import { describe, expect, test as it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
+// biome-ignore lint/correctness/noUnresolvedImports: `pg` is CommonJS; its default export is the namespace, which Biome's resolver does not model. tsc does, with esModuleInterop.
 import pg from "pg";
 
 import { migrate } from "./migrate.ts";
 import { asExecutor } from "./pool.ts";
 import { provisionTenantRoles, rotateTenantPassword } from "./repos/tenantRoles.ts";
 
+// biome-ignore lint/style/noProcessEnv: The integration tier gates itself on the env var that turns it on. A suite is its own composition root -- `layering.md`.
 const ENABLED = process.env.UNDERCROFT_ITEST === "1";
 const TENANT = "CASE-ITEST";
 const OTHER = "CASE-ITEST-OTHER";

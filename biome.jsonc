@@ -830,6 +830,18 @@
             // Bun is the test runner, per CLAUDE.md. `bun:test` is the toolchain, not an
             // accidental dependency.
             "noBunModules": "off",
+            // 39 findings, and every one is the same line: `(await res.json()) as { code:
+            // string }`. A response body IS `unknown` until something names it, and in a
+            // test the name is the assertion -- this endpoint promises a `code`, and the
+            // next line checks it. Writing a Zod schema per assertion would move the
+            // promise away from the test that pins it. `as unknown as` and casting builders
+            // remain banned by `.claude/rules/tests.md`, which this does not touch.
+            "noUnsafeTypeAssertion": "off",
+            // 32 findings on helper arrows inside a suite -- a fetch recorder, a `deps`
+            // factory. `useExplicitType` is already off repo-wide for the same reason and
+            // this is its other half; a test's helpers are read top to bottom with their
+            // call sites in view.
+            "useExplicitReturnType": "off",
             // These assert inside a callback the code under test invokes -- a refresher, an
             // onRetry hook -- which is how a collaborator is checked without a mock.
             // `.claude/rules/tests.md` bans the mock alternative outright.
@@ -837,6 +849,20 @@
             // Test bodies whose assertion is that the call did not throw, written in the
             // guard style `tests.md` prescribes rather than as an `expect()`.
             "useExpect": "off"
+          },
+          "performance": {
+            // 35 findings, all of them a regex written inside the assertion it belongs to.
+            // The rule guards a literal recompiled on a hot path; a test runs its assertion
+            // once, and hoisting the pattern to module scope puts it a screen away from the
+            // thing it describes.
+            "useTopLevelRegex": "off"
+          },
+          "security": {
+            // 23 findings and not one is a credential: a 25-digit money fixture, an invented
+            // `ya29.` token, a base64 blob. `.claude/rules/pii.md` requires fixtures to be
+            // INVENTED rather than anonymised, so a suite is exactly where high-entropy
+            // strings that are not secrets belong.
+            "noSecrets": "off"
           },
           "style": {
             // A suite is as long as its subject has behaviours, and the harnesses that make
@@ -847,7 +873,11 @@
           "suspicious": {
             // Assertions inside a helper that several tests call, which is how the repeated
             // part of a check is named once.
-            "noMisplacedAssertion": "off"
+            "noMisplacedAssertion": "off",
+            // 5 findings, all a seam whose TYPE is async: a `typeof fetch` recorder, a
+            // `run: () => Promise<string>` counter. The signature is the contract being
+            // stood in for; dropping `async` to satisfy the rule would stop it matching.
+            "useAwait": "off"
           }
         }
       }

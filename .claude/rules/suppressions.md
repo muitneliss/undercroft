@@ -10,12 +10,14 @@ silences the rule for the **whole file**, and Biome never reports one that has g
 
 ## NEVER
 
-- **NEVER write `// biome-ignore-all` in a file that is not a test.** It permits every future
-  violation of that rule in that file, by someone who will not read your reason. Enforced:
-  `.ast-grep/rules/no-biome-ignore-all.yml` fails `bun run lint:rules`, and therefore
-  `bun run verify` and CI.
-- **NEVER write `// biome-ignore-all lint:` or `// biome-ignore-all lint/plugin:`, anywhere —
-  a test file included.** Both silence the `money.grit` and `no-mocks.grit` plugins, which
+- **NEVER write `// biome-ignore-all`, in any file, a test suite included.** It permits every
+  future violation of that rule in that file, by someone who will not read your reason.
+  Enforced: `.ast-grep/rules/no-biome-ignore-all.yml` fails `bun run lint:rules`, and
+  therefore `bun run verify` and CI. Suites were exempt until the 241 headers in them were
+  measured: 93 were already dead and 134 were the same sentence in every suite, which left
+  the exemption protecting nothing. ADR 0022.
+- **NEVER write the group-wide `lint:` or `lint/plugin:` spelling on a line-level
+  `// biome-ignore` either.** Both silence the `money.grit` and `no-mocks.grit` plugins, which
   CLAUDE.md calls the two rules this repo most needs a machine to enforce. Measured against
   Biome 2.5.14; `plugin:` alone does not, and that is not a distinction to rely on.
 - **NEVER write `// ast-grep-ignore`.** It switches off the layering, `useState` and
@@ -34,7 +36,11 @@ silences the rule for the **whole file**, and Biome never reports one that has g
   replaced the headers, and the difference matters: an exception names its files, a switch
   does not.
 - **A genuine one-off gets the line-level `// biome-ignore`**, which Biome expires by itself —
-  `bun run lint` runs with `--error-on-warnings`, so an unused one fails the gate.
+  `bun run lint` runs with `--error-on-warnings`, so an unused one fails the gate. This is the
+  only suppression form a source file or a suite may carry, and the whole tree holds **seven**
+  across five files: a `^` that flips a GCM tag bit, a control range that IS the assertion, a
+  compose file's `${IMAGE_TAG:-latest}` quoted as fixture bytes twice, an integration suite's
+  `process.env` gate and its CommonJS `pg` import, and the charting `Big#toNumber()` below.
 - **A plugin is suppressed by NAME: `// biome-ignore lint/plugin/money:`.** Measured against
   Biome 2.5.14: naming the plugin silences that plugin and no other, and Biome reports the
   suppression as unused when the violation on that line came from a different one — which is
