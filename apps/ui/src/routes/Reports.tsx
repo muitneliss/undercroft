@@ -10,6 +10,7 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import type { DashboardItem, QuestionItem } from "@/api/types.ts";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
@@ -21,7 +22,6 @@ import { trpc } from "@/trpc.ts";
 
 export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
-  const locale = useUiStore((state) => state.locale);
   const questions = trpc.bi.questions.list.useQuery({ tenantId });
   const dashboards = trpc.bi.dashboards.list.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
@@ -65,113 +65,166 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
 
       {nothing ? null : (
         <>
-          <div className="band-rule" />
-          <div className="head">{t("bi.dashboardsHead")}</div>
-          <div className="body stack">
-            {dashboards.data.length === 0 ? (
-              <p className="note">{t("bi.noDashboards")}</p>
-            ) : (
-              <table className="table">
-                <caption>{t("bi.dashboardsCaption", { count: dashboards.data.length })}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t("bi.colName")}</th>
-                    <th scope="col" className="num">
-                      {t("bi.colTiles")}
-                    </th>
-                    <th scope="col">{t("bi.colUpdated")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboards.data.map((dashboard) => (
-                    <tr key={dashboard.id}>
-                      <td>
-                        <Link className="journal__what" to={`${base}/dashboards/${dashboard.id}`}>
-                          {dashboard.name}
-                        </Link>
-                      </td>
-                      <td className="num datum">
-                        {formatCount(dashboard.layout.tiles.length, locale)}
-                      </td>
-                      <td className="datum datum--quiet">
-                        {relativeTime(dashboard.updatedAt, locale)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {canAuthor ? (
-              <div className="row">
-                <Link className="plate" to={`${base}/dashboards/new`}>
-                  {t("bi.newDashboard")}
-                </Link>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="band-rule" />
-          <div className="head">{t("bi.questionsHead")}</div>
-          <div className="body stack">
-            {questions.data.length === 0 ? (
-              <p className="note">{t("bi.noQuestions")}</p>
-            ) : (
-              <table className="table">
-                <caption>{t("bi.questionsCaption", { count: questions.data.length })}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t("bi.colName")}</th>
-                    <th scope="col">{t("bi.colKind")}</th>
-                    <th scope="col">{t("bi.colChart")}</th>
-                    <th scope="col">{t("bi.colUpdated")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {questions.data.map((question) => (
-                    <tr key={question.id}>
-                      <td>
-                        <Link className="journal__what" to={`${base}/questions/${question.id}`}>
-                          {question.name}
-                        </Link>
-                      </td>
-                      <td className="datum datum--quiet">
-                        {question.definition.kind === "visual"
-                          ? t("bi.kindVisual")
-                          : t("bi.kindSql")}
-                      </td>
-                      <td className="datum datum--quiet">{question.chart.type}</td>
-                      <td className="datum datum--quiet">
-                        {relativeTime(question.updatedAt, locale)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {canAuthor ? (
-              <div className="row">
-                <Link className="plate plate--primary" to={`${base}/questions/new`}>
-                  {t("bi.newQuestion")}
-                </Link>
-              </div>
-            ) : null}
-          </div>
+          <DashboardBand items={dashboards.data} base={base} canAuthor={canAuthor} />
+          <QuestionBand items={questions.data} base={base} canAuthor={canAuthor} />
         </>
       )}
+
+      {/* A customer with nothing yet still gets the dashboards band, because "make one" is
+          the whole point of the page and an author should not have to guess where. */}
       {nothing && canAuthor ? (
-        <>
-          <div className="band-rule" />
-          <div className="head">{t("bi.dashboardsHead")}</div>
-          <div className="body stack">
-            <p className="note">{t("bi.noDashboards")}</p>
-            <div className="row">
-              <Link className="plate" to={`${base}/dashboards/new`}>
-                {t("bi.newDashboard")}
-              </Link>
-            </div>
-          </div>
-        </>
+        <DashboardBand items={dashboards.data} base={base} canAuthor={true} />
       ) : null}
     </div>
+  );
+}
+
+/** What has been put together, and how many questions each puts together. */
+function DashboardTable({
+  items,
+  base,
+}: {
+  items: readonly DashboardItem[];
+  base: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+
+  return (
+    <table className="table">
+      <caption>{t("bi.dashboardsCaption", { count: items.length })}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{t("bi.colName")}</th>
+          <th scope="col" className="num">
+            {t("bi.colTiles")}
+          </th>
+          <th scope="col">{t("bi.colUpdated")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((dashboard) => (
+          <tr key={dashboard.id}>
+            <td>
+              <Link className="journal__what" to={`${base}/dashboards/${dashboard.id}`}>
+                {dashboard.name}
+              </Link>
+            </td>
+            <td className="num datum">{formatCount(dashboard.layout.tiles.length, locale)}</td>
+            <td className="datum datum--quiet">{relativeTime(dashboard.updatedAt, locale)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** What has been asked, whether it was built or written, and how it is drawn. */
+function QuestionTable({
+  items,
+  base,
+}: {
+  items: readonly QuestionItem[];
+  base: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+
+  return (
+    <table className="table">
+      <caption>{t("bi.questionsCaption", { count: items.length })}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{t("bi.colName")}</th>
+          <th scope="col">{t("bi.colKind")}</th>
+          <th scope="col">{t("bi.colChart")}</th>
+          <th scope="col">{t("bi.colUpdated")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((question) => (
+          <tr key={question.id}>
+            <td>
+              <Link className="journal__what" to={`${base}/questions/${question.id}`}>
+                {question.name}
+              </Link>
+            </td>
+            <td className="datum datum--quiet">
+              {question.definition.kind === "visual" ? t("bi.kindVisual") : t("bi.kindSql")}
+            </td>
+            <td className="datum datum--quiet">{question.chart.type}</td>
+            <td className="datum datum--quiet">{relativeTime(question.updatedAt, locale)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** What has been put together, and the plate that starts another. */
+function DashboardBand({
+  items,
+  base,
+  canAuthor,
+}: {
+  items: readonly DashboardItem[];
+  base: string;
+  canAuthor: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <div className="band-rule" />
+      <div className="head">{t("bi.dashboardsHead")}</div>
+      <div className="body stack">
+        {items.length === 0 ? (
+          <p className="note">{t("bi.noDashboards")}</p>
+        ) : (
+          <DashboardTable items={items} base={base} />
+        )}
+        {canAuthor ? (
+          <div className="row">
+            <Link className="plate" to={`${base}/dashboards/new`}>
+              {t("bi.newDashboard")}
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+/** What has been asked, and the plate that asks another. */
+function QuestionBand({
+  items,
+  base,
+  canAuthor,
+}: {
+  items: readonly QuestionItem[];
+  base: string;
+  canAuthor: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <div className="band-rule" />
+      <div className="head">{t("bi.questionsHead")}</div>
+      <div className="body stack">
+        {items.length === 0 ? (
+          <p className="note">{t("bi.noQuestions")}</p>
+        ) : (
+          <QuestionTable items={items} base={base} />
+        )}
+        {canAuthor ? (
+          <div className="row">
+            <Link className="plate plate--primary" to={`${base}/questions/new`}>
+              {t("bi.newQuestion")}
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }

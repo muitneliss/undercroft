@@ -91,9 +91,6 @@ export function ConnectionCard({
     (card.action?.kind === "connect" || card.action?.kind === "reconnect");
   const running = connection.lastRun?.status === "running";
   const failedRun = connection.lastRun?.status === "failed" ? connection.lastRun : null;
-  // Two booleans, and `||` is the operator that combines them; Biome's type inference does
-  // not see the default on `busy` and asks for `??`, which would be wrong for `false`.
-  const cannotRun = [busy, running].includes(true);
   const named = connection.externalAccountLabel !== "";
 
   const className = [
@@ -159,84 +156,163 @@ export function ConnectionCard({
           ) : null}
         </div>
 
-        <div className="grant__actions">
-          {pastes ? (
-            <details className="tokenform">
-              <summary className="plate plate--primary">{t("grant.pasteToken")}</summary>
-              <div className="hinge">{tokenForm}</div>
-            </details>
-          ) : null}
-
-          {card.action?.kind === "connect" && !pastes ? (
-            <button
-              type="button"
-              className="plate plate--primary"
-              onClick={onConnect}
-              disabled={busy}
-            >
-              {t("grant.connect", { name })}
-              <ArrowRight size={13} />
-            </button>
-          ) : null}
-
-          {card.action?.kind === "scope" ? (
-            <button
-              type="button"
-              className="plate plate--primary"
-              onClick={onScope}
-              disabled={busy}
-            >
-              {t("grant.chooseScope")}
-              <ArrowRight size={13} />
-            </button>
-          ) : null}
-
-          {card.action?.kind === "reconnect" && !pastes ? (
-            <button
-              type="button"
-              className="plate plate--primary"
-              onClick={onConnect}
-              disabled={busy}
-            >
-              {t("grant.reconnect", { name })}
-              <ArrowRight size={13} />
-            </button>
-          ) : null}
-
-          {/* Run now is a plain plate: the primary action on a granted source is nothing,
-              and starting a read by hand is the exception rather than the routine. Disabled
-              while a run is in progress, because the ledger would refuse a second one and
-              the card already says so. */}
-          {card.state === "connected" && canRun ? (
-            <button type="button" className="plate" onClick={onRun} disabled={cannotRun}>
-              {running ? t("grant.running") : t("grant.runNow")}
-            </button>
-          ) : null}
-
-          {card.state === "connected" ? (
-            <button type="button" className="plate" onClick={onScope} disabled={busy}>
-              {t("grant.changeScope")}
-            </button>
-          ) : null}
-
-          {unprinted ? null : (
-            <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
-              {t("grant.disconnect")}
-            </button>
-          )}
-        </div>
+        <GrantActions
+          card={card}
+          name={name}
+          pastes={pastes}
+          tokenForm={tokenForm}
+          canRun={canRun}
+          busy={busy}
+          running={running}
+          onConnect={onConnect}
+          onScope={onScope}
+          onDisconnect={onDisconnect}
+          onRun={onRun}
+        />
       </div>
 
-      {/* The correction slip. Vermilion is held out of the section wheel for
-          exactly this, and a lapsed grant is the state that actually happens in
-          production -- so it is the loudest thing in the row, not the quietest. */}
+      <GrantSlips tenantId={tenantId} lapsed={lapsed} detail={card.detail} failedRun={failedRun} />
+
+      {/* Stated before the redirect, never after it. Dropped once the decision
+          has been made, because repeating it then is noise. */}
+      {unprinted ? (
+        <dl className="access">
+          <dt>{t("grant.whatWeRead")}</dt>
+          <dd>{t(access.reads)}</dd>
+          <dt>{t("grant.whatWeChange")}</dt>
+          <dd>{t(access.writes)}</dd>
+        </dl>
+      ) : null}
+    </article>
+  );
+}
+
+/** What `presentConnection` decided this row says and offers. */
+type Card = ReturnType<typeof presentConnection>;
+
+/**
+ * The one next action for this state, and the two that are always available once granted.
+ *
+ * Every state has exactly one primary plate. That is the point of the state machine in
+ * `@/lib/connectionState`: a row offering two equally-weighted next steps is a row whose
+ * state nobody decided.
+ */
+function GrantActions({
+  card,
+  name,
+  pastes,
+  tokenForm,
+  canRun,
+  busy,
+  running,
+  onConnect,
+  onScope,
+  onDisconnect,
+  onRun,
+}: {
+  card: Card;
+  name: string;
+  pastes: boolean;
+  tokenForm: ReactNode;
+  canRun: boolean;
+  busy: boolean;
+  running: boolean;
+  onConnect: () => void;
+  onScope: () => void;
+  onDisconnect: () => void;
+  onRun: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  // Two booleans, and `||` is the operator that combines them; Biome's type inference does
+  // not see the default on `busy` and asks for `??`, which would be wrong for `false`.
+  const cannotRun = [busy, running].includes(true);
+
+  return (
+    <div className="grant__actions">
+      {pastes ? (
+        <details className="tokenform">
+          <summary className="plate plate--primary">{t("grant.pasteToken")}</summary>
+          <div className="hinge">{tokenForm}</div>
+        </details>
+      ) : null}
+
+      {card.action?.kind === "connect" && !pastes ? (
+        <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
+          {t("grant.connect", { name })}
+          <ArrowRight size={13} />
+        </button>
+      ) : null}
+
+      {card.action?.kind === "scope" ? (
+        <button type="button" className="plate plate--primary" onClick={onScope} disabled={busy}>
+          {t("grant.chooseScope")}
+          <ArrowRight size={13} />
+        </button>
+      ) : null}
+
+      {card.action?.kind === "reconnect" && !pastes ? (
+        <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
+          {t("grant.reconnect", { name })}
+          <ArrowRight size={13} />
+        </button>
+      ) : null}
+
+      {/* Run now is a plain plate: the primary action on a granted source is nothing,
+          and starting a read by hand is the exception rather than the routine. Disabled
+          while a run is in progress, because the ledger would refuse a second one and
+          the card already says so. */}
+      {card.state === "connected" && canRun ? (
+        <button type="button" className="plate" onClick={onRun} disabled={cannotRun}>
+          {running ? t("grant.running") : t("grant.runNow")}
+        </button>
+      ) : null}
+
+      {card.state === "connected" ? (
+        <button type="button" className="plate" onClick={onScope} disabled={busy}>
+          {t("grant.changeScope")}
+        </button>
+      ) : null}
+
+      {card.state === "not_connected" ? null : (
+        <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
+          {t("grant.disconnect")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The correction slips: the grant itself, or the last run.
+ *
+ * At most one shows. A lapsed grant is the louder fact -- a failed run under a withdrawn
+ * grant is a consequence of it, and two slips would have the operator chasing the symptom.
+ */
+function GrantSlips({
+  tenantId,
+  lapsed,
+  detail,
+  failedRun,
+}: {
+  tenantId: string;
+  lapsed: boolean;
+  detail: Card["detail"];
+  failedRun: { id: string; error: string | null } | null;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      {/* Vermilion is held out of the section wheel for exactly this, and a lapsed grant is
+          the state that actually happens in production -- so it is the loudest thing in the
+          row, not the quietest. */}
       {lapsed ? (
         <div className="errata errata--inline">
           <span className="errata__mark">
             <ErrataMark size={13} />
             {t("grant.errata")}
           </span>
-          <p className="errata__body">{card.detail}</p>
+          <p className="errata__body">{detail}</p>
         </div>
       ) : null}
 
@@ -258,17 +334,6 @@ export function ConnectionCard({
           </Link>
         </div>
       ) : null}
-
-      {/* Stated before the redirect, never after it. Dropped once the decision
-          has been made, because repeating it then is noise. */}
-      {unprinted ? (
-        <dl className="access">
-          <dt>{t("grant.whatWeRead")}</dt>
-          <dd>{t(access.reads)}</dd>
-          <dt>{t("grant.whatWeChange")}</dt>
-          <dd>{t(access.writes)}</dd>
-        </dl>
-      ) : null}
-    </article>
+    </>
   );
 }

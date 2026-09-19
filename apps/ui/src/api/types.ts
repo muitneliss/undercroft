@@ -95,8 +95,14 @@ export type TableResult = BuildResult["preview"] & object;
 /** One saved question in full, as `bi.questions.get` returns it. */
 export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get"];
 
+/** One saved question on the list, as `bi.questions.list` returns it: no SQL, no rows. */
+export type QuestionItem = inferRouterOutputs<AppRouter>["bi"]["questions"]["list"][number];
+
 /** One dashboard in full, as `bi.dashboards.get` returns it. */
 export type DashboardView = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["get"];
+
+/** One dashboard on the list, as `bi.dashboards.list` returns it. */
+export type DashboardItem = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["list"][number];
 
 /** The tenant's analytics schema as its read-only login sees it. */
 export type SchemaView = inferRouterOutputs<AppRouter>["bi"]["schema"];
