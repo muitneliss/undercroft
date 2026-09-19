@@ -411,6 +411,8 @@
       "includes": [
         "apps/ui/src/main.tsx",
         "apps/ui/src/App.tsx",
+        "apps/ui/src/components/QuestionBands.tsx",
+        "apps/ui/src/components/QuestionResult.tsx",
         "apps/ui/src/components/QuestionCard.tsx",
         "apps/ui/src/components/charts/ChartFrame.tsx",
         "apps/ui/src/routes/Journal.tsx",
