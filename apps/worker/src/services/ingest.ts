@@ -142,9 +142,9 @@ export async function runIngest(
   input: { source: string; tenantId: string },
 ): Promise<IngestResult> {
   if (isGoogleSource(input.source)) {
-    return runGoogleIngest(deps, { source: input.source, tenantId: input.tenantId });
+    return await runGoogleIngest(deps, { source: input.source, tenantId: input.tenantId });
   }
-  return runSpecIngest(deps, input);
+  return await runSpecIngest(deps, input);
 }
 
 /**

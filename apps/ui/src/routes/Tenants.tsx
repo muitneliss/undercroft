@@ -27,7 +27,7 @@
  * which is the only thing that actually knows either.
  */
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -38,6 +38,8 @@ import { trpc } from "@/trpc.ts";
 
 export function Tenants(): React.JSX.Element {
   const { t } = useTranslation();
+  const tenantIdFieldId = useId();
+  const tenantNameId = useId();
   const utils = trpc.useUtils();
   const idFieldRef = useRef<HTMLInputElement>(null);
   const nameFieldRef = useRef<HTMLInputElement>(null);
@@ -132,14 +134,14 @@ export function Tenants(): React.JSX.Element {
               }}
             >
               <div className="field">
-                <label className="label" htmlFor="tenant-id">
+                <label className="label" htmlFor={tenantIdFieldId}>
                   {t("tenants.idLabel")}
                 </label>
                 <input
                   autoComplete="off"
                   className="input"
                   disabled={addTenant.isPending}
-                  id="tenant-id"
+                  id={tenantIdFieldId}
                   name="tenantId"
                   placeholder={t("tenants.idPlaceholder")}
                   ref={idFieldRef}
@@ -150,14 +152,14 @@ export function Tenants(): React.JSX.Element {
               </div>
 
               <div className="field">
-                <label className="label" htmlFor="tenant-name">
+                <label className="label" htmlFor={tenantNameId}>
                   {t("tenants.nameLabel")}
                 </label>
                 <input
                   autoComplete="off"
                   className="input"
                   disabled={addTenant.isPending}
-                  id="tenant-name"
+                  id={tenantNameId}
                   name="displayName"
                   placeholder={t("tenants.namePlaceholder")}
                   ref={nameFieldRef}

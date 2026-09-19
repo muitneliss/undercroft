@@ -72,7 +72,7 @@ export class S3ObjectStore implements ObjectStore {
       return await body.transformToByteArray();
     } catch (error) {
       if (isNoSuchKey(error)) {
-        throw new ObjectNotFound(key);
+        throw new ObjectNotFound(key, { cause: error });
       }
       throw error;
     }

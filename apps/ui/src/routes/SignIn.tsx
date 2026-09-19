@@ -29,7 +29,7 @@
  */
 
 import { useMutation } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth.ts";
 import { Colophon } from "@/components/Colophon.tsx";
@@ -43,6 +43,8 @@ const WHEEL: string[] = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();
+  const emailId = useId();
+  const codeId = useId();
   const emailFieldRef = useRef<HTMLInputElement>(null);
   const codeFieldRef = useRef<HTMLInputElement>(null);
 
@@ -133,12 +135,12 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             }}
           >
             <div className="field">
-              <label className="label" htmlFor="signin-email">
+              <label className="label" htmlFor={emailId}>
                 {t("signIn.emailLabel")}
               </label>
               <input
                 className="input"
-                id="signin-email"
+                id={emailId}
                 name="email"
                 type="email"
                 autoComplete="email"
@@ -174,12 +176,12 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             }}
           >
             <div className="field">
-              <label className="label" htmlFor="signin-code">
+              <label className="label" htmlFor={codeId}>
                 {t("signIn.codeLabel")}
               </label>
               <input
                 className="input"
-                id="signin-code"
+                id={codeId}
                 name="otp"
                 type="text"
                 inputMode="numeric"

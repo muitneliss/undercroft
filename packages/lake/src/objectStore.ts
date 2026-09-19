@@ -35,8 +35,8 @@ export function byCodeUnit(a: string, b: string): number {
 
 /** Raised when a requested object is not present. */
 export class ObjectNotFound extends Error {
-  constructor(key: string) {
-    super(`no such object: ${key}`);
+  constructor(key: string, options?: { cause?: unknown }) {
+    super(`no such object: ${key}`, options);
     this.name = "ObjectNotFound";
   }
 }

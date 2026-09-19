@@ -15,8 +15,9 @@ export class SpecError extends Error {
   constructor(
     message: string,
     readonly issues: readonly string[] = [],
+    options?: { cause?: unknown },
   ) {
-    super(message);
+    super(message, options);
     this.name = "SpecError";
   }
 }
@@ -35,6 +36,8 @@ export function parseSpec(text: string): ConnectorSpec {
   } catch (error) {
     throw new SpecError(
       `connector spec is not valid YAML: ${error instanceof Error ? error.message : String(error)}`,
+      [],
+      { cause: error },
     );
   }
 

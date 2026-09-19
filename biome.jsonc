@@ -306,6 +306,19 @@
             // breaking the contract with HubSpot, Xero and Google rather than tidying a
             // local. The rule cannot tell a provider's payload from a variable.
             "useNamingConvention": "off"
+          },
+          "suspicious": {
+            // This one is not opinionated, it is WRONG here, and acting on it would put a
+            // null dereference in the tree. It reports `if (!match)` after
+            // `DECIMAL.exec(amount)` in `apps/ui/src/lib/money.ts` as "always falsy" -- delete
+            // that guard and `tsc` answers `TS18047: 'match' is possibly 'null'`, which is
+            // exactly right, because `RegExp#exec` returns `RegExpExecArray | null`. Checked
+            // by running both.
+            //
+            // The other twelve findings are the same shape: `?? ""` on a header lookup, `?.`
+            // on `match.groups`. Biome's inference engine is nursery-grade and disagrees with
+            // `tsc`, and `tsc` is the check that binds. Reconsider on a Biome upgrade.
+            "noUnnecessaryConditions": "off"
           }
         }
       }
@@ -555,6 +568,60 @@
         "scripts/wikiCoverage.ts"
       ],
       "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
+    },
+
+    // Three entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
+    // default export carrying `port` and `fetch` to start a server, and Vite reads a default
+    // export from its config. A named export is not an option a caller would accept.
+    {
+      "includes": ["apps/*/src/main.ts", "apps/worker/src/server.ts", "apps/ui/vite.config.ts"],
+      "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+    },
+
+    // Styles computed per element, which is the one thing a class cannot express: the tab
+    // rail's `flexGrow` IS the division's extent, the title-page wheel paints a different hue
+    // per span, and the skeleton's widths are derived so the placeholder does not look ruled.
+    // ADR 0012 records this rule's autofix DELETING the `flexGrow` that gives the rail its
+    // proportions, which is the failure mode to keep in mind if it is ever turned back on.
+    {
+      "includes": [
+        "apps/ui/src/components/TabRail.tsx",
+        "apps/ui/src/components/Skeleton.tsx",
+        "apps/ui/src/routes/SignIn.tsx"
+      ],
+      "linter": { "rules": { "nursery": { "noInlineStyles": "off" } } }
+    },
+
+    // Three findings the rules cannot see through.
+    //
+    // `useErrorCause` at `api.ts` reports a throw that DOES pass `{ cause: error }` -- through
+    // `ConnectorError`, whose constructor forwards its options to `UndercroftError` and on to
+    // `Error`. The rule looks for the option on the `new` expression and stops there.
+    //
+    // `noMisleadingReturnType` wants `-1 | 0 | 1` on a comparator and a literal on a counter
+    // getter. `number` is the type `Array#sort` is declared against and the type a count has.
+    //
+    // `noLeakedRender` reports a ternary with two real branches, which is the shape it exists
+    // to recommend over `&&`.
+    {
+      "includes": ["apps/worker/src/services/google/api.ts", "packages/contracts/src/loadSpec.ts"],
+      "linter": { "rules": { "style": { "useErrorCause": "off" } } }
+    },
+    {
+      "includes": ["packages/core/src/pacer.ts", "packages/lake/src/objectStore.ts"],
+      "linter": { "rules": { "nursery": { "noMisleadingReturnType": "off" } } }
+    },
+    {
+      "includes": ["apps/ui/src/components/Book.tsx"],
+      "linter": { "rules": { "suspicious": { "noLeakedRender": "off" } } }
+    },
+
+    // The argument parser walks `argv` by index because an option CONSUMES THE NEXT ELEMENT
+    // (`--tenant CASE-0042`), so the loop advances by one inside its own body. `for...of` has
+    // no cursor to advance.
+    {
+      "includes": ["apps/control-plane/src/inviteCli.ts"],
+      "linter": { "rules": { "style": { "useForOf": "off" } } }
     },
 
     // `import * as connections from "../services/connections.ts"` is what makes the tRPC

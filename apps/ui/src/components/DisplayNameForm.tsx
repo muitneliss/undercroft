@@ -21,7 +21,7 @@
  * only thing that actually knows either.
  */
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
@@ -37,6 +37,7 @@ export function DisplayNameForm({
   canEdit: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const displayNameId = useId();
   const utils = trpc.useUtils();
   const nameFieldRef = useRef<HTMLInputElement>(null);
 
@@ -66,7 +67,7 @@ export function DisplayNameForm({
         }}
       >
         <div className="field">
-          <label className="label" htmlFor="tenant-display-name">
+          <label className="label" htmlFor={displayNameId}>
             {t("tenants.nameLabel")}
           </label>
           <input
@@ -78,7 +79,7 @@ export function DisplayNameForm({
             // uncontrolled input ignores every later `defaultValue` on its own.
             defaultValue={displayName}
             disabled={rename.isPending}
-            id="tenant-display-name"
+            id={displayNameId}
             key={displayName}
             name="displayName"
             placeholder={t("tenants.namePlaceholder")}

@@ -17,7 +17,7 @@
  * only thing that actually knows.
  */
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
@@ -29,6 +29,8 @@ import { trpc } from "@/trpc.ts";
 
 export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
+  const emailId = useId();
+  const roleId = useId();
   const locale = useUiStore((state) => state.locale);
   const utils = trpc.useUtils();
   const emailFieldRef = useRef<HTMLInputElement>(null);
@@ -170,12 +172,12 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
             }}
           >
             <div className="field">
-              <label className="label" htmlFor="invite-email">
+              <label className="label" htmlFor={emailId}>
                 {t("people.inviteLabel")}
               </label>
               <input
                 className="input"
-                id="invite-email"
+                id={emailId}
                 name="email"
                 type="email"
                 autoComplete="off"
@@ -188,12 +190,12 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
             </div>
 
             <div className="field">
-              <label className="label" htmlFor="invite-role">
+              <label className="label" htmlFor={roleId}>
                 {t("people.roleLabel")}
               </label>
               <select
                 className="input"
-                id="invite-role"
+                id={roleId}
                 name="role"
                 ref={roleFieldRef}
                 disabled={invite.isPending}
