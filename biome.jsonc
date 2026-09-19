@@ -482,7 +482,7 @@
       "includes": [
         "scripts/dokploy.ts",
         "apps/worker/src/services/google/drive.ts",
-        "packages/connector-runtime/src/run.ts",
+        "packages/connector-runtime/src/reader.ts",
         "packages/crypto/src/seal.ts"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
@@ -494,7 +494,7 @@
     {
       "includes": [
         "apps/worker/src/services/google/api.ts",
-        "packages/connector-runtime/src/run.ts"
+        "packages/connector-runtime/src/reader.ts"
       ],
       "linter": { "rules": { "nursery": { "usePlaywrightValidDescribeCallback": "off" } } }
     },

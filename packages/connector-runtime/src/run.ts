@@ -19,198 +19,26 @@
 
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import {
-  type Clock,
-  ConnectorError,
-  canonicalJson,
-  createPacer,
-  getPath,
-  getStringPath,
-  parseLossless,
-  type RetryPolicy,
-  systemClock,
-  withRetry,
-} from "@undercroft/core";
-import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
+  type RawRecordOut,
+  type Reader,
+  type RunContext,
+  checkGuards,
+  createReader,
+  readBatch,
+  readPages,
+} from "./reader.ts";
 
-export interface RawRecordOut {
-  readonly source: string;
-  readonly entity: string;
-  readonly sourceRecordId: string;
-  readonly sourceUpdatedAt: string | null;
-  readonly payloadText: string;
-}
+export type { RawRecordOut, RunContext } from "./reader.ts";
 
-export interface RunContext {
-  readonly fetcher: Fetcher;
-  readonly clock?: Clock;
-  /** Resolves a bearer token for the connector. Absent for `auth.kind === "none"`. */
-  readonly token?: () => Promise<string>;
-  /**
-   * The provider's own account id, sent in `auth.accountHeader` -- Xero's organisation id
-   * in `xero-tenant-id`. Never our tenant id: that is the defect that meant live Xero had
-   * never run against the right organisation. Required when the spec names a header.
-   */
-  readonly accountId?: string;
-  /** Injected for deterministic backoff in tests. */
-  readonly random?: () => number;
-  /**
-   * Ids harvested from the entity a `batch-from` request reads against. The orchestrator
-   * collects these as it reads the referenced entity and passes them here; an empty list
-   * means the relation has nothing to read.
-   */
-  readonly sourceIds?: readonly string[];
-}
-
-/**
- * Render a batch request body from a named template.
- *
- * Named, never arbitrary code: a spec is configuration a user writes, and a template that
- * could execute would make every connector spec a script.
- */
-/**
- * The compile-time end of an exhaustive switch.
- *
- * Adding a member to one of these unions -- a new pagination kind, a second batch template --
- * stops compiling HERE rather than falling out of the switch and returning undefined.
- */
-function assertNever(value: never, what: string): never {
-  throw new Error(`unhandled ${what}: ${JSON.stringify(value)}`);
-}
-
-function renderBatchBody(template: "hubspot-batch-inputs", ids: readonly string[]): string {
-  switch (template) {
-    case "hubspot-batch-inputs":
-      return JSON.stringify({ inputs: ids.map((id) => ({ id })) });
-    default:
-      return assertNever(template, "batch body template");
-  }
-}
-
-function retryPolicy(spec: ConnectorSpec): RetryPolicy {
-  const r = spec.defaults.retry;
-  return {
-    attempts: r.attempts,
-    on: r.on,
-    backoff: r.backoff,
-    baseMs: r.baseMs,
-    maxMs: r.maxMs,
-    jitter: r.jitter,
-    respectRetryAfter: r.respectRetryAfter,
-    maxRetryAfterMs: r.maxRetryAfterMs,
-  };
-}
-
-async function authHeaders(spec: ConnectorSpec, ctx: RunContext): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { ...spec.defaults.headers };
-  if (spec.auth.kind === "bearer" || spec.auth.kind === "oauth2") {
-    if (ctx.token === undefined) {
-      throw new ConnectorError(spec.id, "*", 0, "connector needs a token but none was supplied");
-    }
-    headers.authorization = `Bearer ${await ctx.token()}`;
-  }
-  if (spec.auth.kind === "oauth2" && spec.auth.accountHeader !== undefined) {
-    // The provider's own org id, resolved from the connection by the caller. Absent is a
-    // refusal before the first request: a request without it is a 401 at best and, on a
-    // consent that sees several organisations, the wrong org's books at worst.
-    if (ctx.accountId === undefined || ctx.accountId === "") {
-      throw new ConnectorError(
-        spec.id,
-        "*",
-        0,
-        `connector needs the provider's account id for the ${spec.auth.accountHeader} header but none was supplied`,
-      );
-    }
-    headers[spec.auth.accountHeader] = ctx.accountId;
-  }
-  return headers;
-}
-
-/**
- * Join the spec's base URL and an entity's path.
- *
- * The path is made relative before resolving, because `new URL("/Contacts", base)` drops
- * everything after the origin: a base of `https://api.xero.com/api.xro/2.0` became
- * `https://api.xero.com/Contacts`, and the Xero spec had never fetched the right URL.
- * HubSpot's base carries no path, which is why it never showed.
- */
-function buildUrl(baseUrl: string, path: string, query: Record<string, string>): string {
-  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  const url = new URL(path.startsWith("/") ? path.slice(1) : path, base);
-  for (const [key, value] of Object.entries(query)) {
-    url.searchParams.set(key, value);
-  }
-  return url.toString();
-}
-
-/** Advance to the next page's URL, or null when the source signals it is done. */
-interface PageCursor {
-  readonly entity: ConnectorEntity;
-  readonly spec: ConnectorSpec;
-  readonly parsed: unknown;
-  readonly pageIndex: number;
-  readonly recordsThisPage: number;
-  readonly currentUrl: string;
-}
-
-function nextPageUrl(page: PageCursor): string | null {
-  const { entity, spec, parsed, pageIndex, recordsThisPage, currentUrl } = page;
-  const pagination = entity.pagination ?? spec.defaults.pagination;
-  switch (pagination.kind) {
-    case "none":
-      return null;
-    case "json-link": {
-      const next = getStringPath(parsed, pagination.nextPath);
-      // A next-link equal to the current URL is an infinite loop wearing a cursor.
-      if (next === null || next === currentUrl) {
-        return null;
-      }
-      return next;
-    }
-    case "page-number": {
-      if (pagination.stopOn === "empty-page" && recordsThisPage === 0) {
-        return null;
-      }
-      const url = new URL(currentUrl);
-      url.searchParams.set(pagination.param, String(pagination.startAt + pageIndex + 1));
-      return url.toString();
-    }
-    case "offset": {
-      if (recordsThisPage === 0) {
-        return null;
-      }
-      const url = new URL(currentUrl);
-      // parseInt, not Number(): an offset index, not an amount.
-      const prev = Number.parseInt(url.searchParams.get(pagination.param) ?? "0", 10);
-      url.searchParams.set(pagination.param, String(prev + recordsThisPage));
-      return url.toString();
-    }
-    case "cursor": {
-      const cursor = getStringPath(parsed, pagination.cursorPath);
-      if (cursor === null) {
-        return null;
-      }
-      const url = new URL(currentUrl);
-      url.searchParams.set(pagination.param, cursor);
-      return url.toString();
-    }
-    default:
-      return assertNever(pagination, "pagination kind");
-  }
-}
-function extractRecords(entity: ConnectorEntity, spec: ConnectorSpec, parsed: unknown): unknown[] {
-  const container =
-    entity.envelopePath === undefined ? parsed : getPath(parsed, entity.envelopePath);
-  if (!Array.isArray(container)) {
-    throw new ConnectorError(
-      spec.id,
-      entity.name,
-      0,
-      entity.envelopePath === undefined
-        ? "response body is not an array and no envelopePath was given"
-        : `envelopePath ${JSON.stringify(entity.envelopePath)} did not resolve to an array`,
-    );
-  }
-  return container;
+/** Dispatch on the one thing that changes the shape of a read: how the request is made. */
+async function* readRequest(
+  reader: Reader,
+  ctx: RunContext,
+): AsyncGenerator<RawRecordOut, boolean> {
+  const { request } = reader.entity;
+  return request.kind === "batch-from"
+    ? yield* readBatch(reader, request, ctx.sourceIds ?? [])
+    : yield* readPages(reader, request);
 }
 
 /**
@@ -222,141 +50,12 @@ export async function* readEntity(
   entity: ConnectorEntity,
   ctx: RunContext,
 ): AsyncGenerator<RawRecordOut> {
-  const clock = ctx.clock ?? systemClock;
-  const rateLimit = entity.rateLimit ?? spec.defaults.rateLimit;
-  const guards = entity.guards ?? spec.defaults.guards;
-  const pacer = createPacer(
-    {
-      minIntervalMs: rateLimit.minIntervalMs,
-      ...(rateLimit.requestsPerMinute === undefined
-        ? {}
-        : { requestsPerMinute: rateLimit.requestsPerMinute }),
-      ...(rateLimit.requestsPerDay === undefined
-        ? {}
-        : { requestsPerDay: rateLimit.requestsPerDay }),
-    },
-    clock,
-  );
-  const policy = retryPolicy(spec);
-  const headers = await authHeaders(spec, ctx);
-  let seen = 0;
-
-  /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
-  async function fetchJson(request: HttpRequest): Promise<unknown> {
-    return await withRetry(
-      async () => {
-        await pacer.acquire();
-        const response = await ctx.fetcher.send(request);
-        raiseForStatus(request, response);
-        return parseLossless(response.text);
-      },
-      policy,
-      { clock, ...(ctx.random === undefined ? {} : { random: ctx.random }) },
-    ).catch((error: unknown) => {
-      throw new ConnectorError(spec.id, entity.name, seen, describe(error), { cause: error });
-    });
+  const reader = await createReader(spec, entity, ctx);
+  const stopped = yield* readRequest(reader, ctx);
+  if (stopped) {
+    // `maxRecords` truncated the read on purpose, so the end-of-entity guards -- which
+    // exist to catch truncation -- have nothing to say about it.
+    return;
   }
-
-  /** Turn one decoded page into records, refusing any that cannot be keyed. */
-  function* emit(parsed: unknown): Generator<RawRecordOut> {
-    for (const record of extractRecords(entity, spec, parsed)) {
-      const id = getStringPath(record, entity.idPath);
-      if (id === null) {
-        // A record with no id cannot be upserted or traced; that is fatal per record.
-        throw new ConnectorError(
-          spec.id,
-          entity.name,
-          seen,
-          `a record has no value at idPath ${JSON.stringify(entity.idPath)}`,
-        );
-      }
-      const updatedAt =
-        entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath);
-      yield {
-        source: spec.id,
-        entity: entity.name,
-        sourceRecordId: id,
-        sourceUpdatedAt: updatedAt,
-        payloadText: canonicalJson(record),
-      };
-      seen += 1;
-    }
-  }
-
-  if (entity.request.kind === "batch-from") {
-    // A relation read: ids harvested from another entity, POSTed in chunks. This exists
-    // because a relation like HubSpot's deal->company associations is a different route
-    // with a different shape, and bending it into the object reader is how a connector
-    // becomes hundreds of lines of special cases.
-    const { request } = entity;
-    const ids = ctx.sourceIds ?? [];
-    const url = buildUrl(spec.baseUrl, request.path, {});
-
-    for (let offset = 0; offset < ids.length; offset += request.chunkSize) {
-      const chunk = ids.slice(offset, offset + request.chunkSize);
-      const parsed = await fetchJson({
-        url,
-        method: "POST",
-        headers: { ...headers, "content-type": "application/json" },
-        body: renderBatchBody(request.bodyTemplate, chunk),
-      });
-      for (const record of emit(parsed)) {
-        yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
-          return;
-        }
-      }
-    }
-  } else {
-    const { request } = entity;
-    let url = buildUrl(spec.baseUrl, request.path, request.query);
-    let pageIndex = 0;
-
-    for (;;) {
-      const currentUrl = url;
-      const parsed = await fetchJson({ url, method: request.method, headers });
-
-      // `emit` advances `seen`, so capture the page size before draining it.
-      const pageSize = extractRecords(entity, spec, parsed).length;
-      for (const record of emit(parsed)) {
-        yield record;
-        if (guards.maxRecords !== undefined && seen >= guards.maxRecords) {
-          return;
-        }
-      }
-
-      const next = nextPageUrl({
-        entity,
-        spec,
-        parsed,
-        pageIndex,
-        recordsThisPage: pageSize,
-        currentUrl,
-      });
-      pageIndex += 1;
-      if (next === null) {
-        break;
-      }
-      url = next;
-    }
-  }
-
-  // Guards run once the whole entity is read.
-  if (guards.failOnEmpty && seen === 0) {
-    throw new ConnectorError(spec.id, entity.name, 0, "source returned no records (failOnEmpty)");
-  }
-  if (guards.failOnExactCount !== undefined && seen === guards.failOnExactCount) {
-    // The HubSpot 10,000 cap: landing exactly on it is almost certainly truncation, and
-    // the source does not say so.
-    throw new ConnectorError(
-      spec.id,
-      entity.name,
-      seen,
-      `read exactly ${seen} records, the configured truncation ceiling -- this is probably silent data loss`,
-    );
-  }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  checkGuards(reader);
 }
