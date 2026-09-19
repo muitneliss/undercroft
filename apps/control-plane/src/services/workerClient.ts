@@ -138,7 +138,7 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
 export class InMemoryWorkerClient implements WorkerClient {
   readonly stored: StoreCredentialInput[] = [];
   readonly revoked: { source: string; tenantId: string }[] = [];
-  #labels: { id: string; name: string }[] = [];
+  #labels: BrowseScopeResponse["items"] = [];
   #failWith: WorkerFailure | null = null;
   #exec: SqlExecutor | null = null;
 
@@ -163,7 +163,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  withLabels(labels: { id: string; name: string }[]): this {
+  withLabels(labels: BrowseScopeResponse["items"]): this {
     this.#labels = labels;
     return this;
   }

@@ -240,6 +240,22 @@ export const vi = {
     directChildrenOnly:
       "Chỉ đọc tệp nằm trực tiếp trong thư mục đã chọn. Thư mục con không được đọc.",
     labelsHead: "Nhãn",
+    /** The runs of the index. Gmail reports who owns a label; nothing here infers it. */
+    labelsMine: "Nhãn của bạn",
+    labelsSystem: "Nhãn sẵn có của Gmail",
+    labelsUnclassified: "Nhãn chưa phân loại",
+    filterLabel: "Lọc danh sách nhãn",
+    filterPlaceholder: "Gõ để lọc",
+    /** The size of the mailbox while nothing is typed; the ratio once something is. */
+    filterTotal_other: "{{count, number}} nhãn",
+    /** Figures only, and the same two in either language. The words are the key below. */
+    filterTally: "{{shown, number}} / {{total, number}}",
+    filterTallyRead: "Đang hiện {{shown, number}} trong {{total, number}} nhãn",
+    noMatch: "Không có nhãn nào khớp với từ đã gõ.",
+    /** The standing line under the list: what this selection permits, while it is made. */
+    echoHead: "Sẽ đọc",
+    echoChosen_other: "Tiêu đề thư và tệp PDF đính kèm trong {{count, number}} nhãn đã chọn",
+    clearAll: "Bỏ chọn tất cả",
     pickFromDrive: "Chọn từ Google Drive",
     nothingToChoose: "Chưa có mục nào để chọn.",
     notLoaded: "Không tải được danh sách từ Google. Không có gì bị thay đổi.",
