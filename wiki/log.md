@@ -37,3 +37,4 @@
 ## [2026-09-18] ingest | ADR 0016 The Worker Seals the Control Plane Consents
 ## [2026-09-18] ingest | Runbook Google Ingestion Setup
 ## [2026-09-18] ingest | Runbook Sign-In Setup
+## [2026-09-19] ingest | Runbook Deployment

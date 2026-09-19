@@ -55,6 +55,22 @@ server file will not survive a deploy.
 → the images build → `scripts/dokploy.ts` runs `preflight → deploy → verify → smoke`. See
 ADR 0008. Nothing else deploys; a plain push to `main` ships nothing.
 
+release-please opens that PR as a **GitHub App**, not as `github-actions[bot]`. Since June
+2026 GitHub holds every workflow run on a PR the default token authored behind "requires
+approval from a maintainer", so the release PR would arrive with no CI until someone clicked
+— and a release merged on an unapproved PR is a release merged on no evidence. Two settings
+feed it, and a rotation that misses either fails the `release` workflow at its first step:
+
+| Where                          | Name                         | Value                                  |
+| ------------------------------ | ---------------------------- | -------------------------------------- |
+| Settings → Actions → Variables | `RELEASE_PLEASE_APP_ID`      | the App's numeric id                   |
+| Settings → Actions → Secrets   | `RELEASE_PLEASE_PRIVATE_KEY` | the App's generated `.pem`, whole file |
+
+The App needs **Contents: read & write** and **Pull requests: read & write** on this
+repository and nothing else, and it must be installed on it. It is an App rather than a
+personal token because a PAT expires and makes every release read as authored by whoever
+minted it.
+
 **By hand**, using the same client (needs the three env vars — never write them to a file):
 
 ```bash

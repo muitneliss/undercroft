@@ -1,13 +1,15 @@
 ---
 title: Runbook Deployment
 type: source
-date: 2026-09-18
+date: 2026-09-19
 tags: []
 source: docs/runbook/deployment.md
 source_path: docs/runbook/deployment.md
-source_hash: 005f32b738095fe8e57f1e1970ab765ceb162025b870fab8b4b27e8d21ee900e
-ingested: 2026-09-18
+source_hash: 5bfefbe7d3bec7f4a65257a562c06c2cd4f9979c18d04b09e636d0988eec4ddd
+ingested: 2026-09-19
 ---
+
+# Runbook Deployment
 
 # Runbook Deployment
 
@@ -49,6 +51,17 @@ server file will not survive a deploy.
 **Automatically, on a release.** Merge the release-please PR → version bumps, a tag is cut →
 images build → `scripts/dokploy.ts` runs `preflight → deploy → verify → smoke`. A plain push
 to `main` ships nothing.
+
+**release-please authenticates as a GitHub App, not as `github-actions[bot]`.** Since June
+2026 GitHub holds every workflow run on a PR the default `GITHUB_TOKEN` authored behind
+"requires approval from a maintainer" — on a same-repo branch, not only a fork — so the
+release PR would arrive with no CI until a human clicked, and a release merged on an
+unapproved PR is a release merged on no evidence. An installation token is a different
+identity and the gate does not apply. It is an App rather than a personal token because a
+PAT expires and makes every release read as authored by whoever minted it. Two settings feed
+it — the variable `RELEASE_PLEASE_APP_ID` and the secret `RELEASE_PLEASE_PRIVATE_KEY` — and a
+rotation missing either fails the `release` workflow at its first step. The workflow's own
+`GITHUB_TOKEN` is therefore granted nothing; each called workflow asks for what it needs.
 
 **By hand**, using the same client with `DOKPLOY_API_ENDPOINT`, `DOKPLOY_API_KEY` and
 `DOKPLOY_COMPOSE_ID` exported (never written to a file), running the same four subcommands.
