@@ -40,6 +40,141 @@ const MARK_LABEL = {
   absent: "grant.markAbsent",
 } as const;
 
+/** Who granted it, and what it permits. */
+function GrantAccount({
+  connection,
+  card,
+  named,
+}: {
+  connection: Connection;
+  card: ReturnType<typeof presentConnection>;
+  named: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="grant__account stack stack--tight">
+      {/* Named for a lapsed grant too, not only a healthy one: the first
+        thing an operator needs to know about a withdrawn grant is which
+        account withdrew it, and "Reconnect Xero" alone does not say. */}
+      {named && card.state !== "needs_scope" ? (
+        <>
+          <span className="label">{t("grant.account")}</span>
+          <span className="datum">{orMissing(connection.externalAccountLabel)}</span>
+        </>
+      ) : null}
+
+      {/* What this grant permits, for the years after it was made. The
+        access statement answers it before the redirect; nothing answered
+        it afterwards, which left the schedule saying who and when but
+        never over what. Deliberately not the words "what we read" -- that
+        phrasing belongs to the pre-consent statement and repeating it on a
+        live grant would read as though consent were being asked again. */}
+      {card.state === "connected" ? (
+        <>
+          <span className="label">{t("grant.reads")}</span>
+          <span className="datum datum--quiet">{orMissing(scopeSummary(t, connection))}</span>
+        </>
+      ) : null}
+
+      {card.state === "needs_scope" ? <p className="note">{card.detail}</p> : null}
+    </div>
+  );
+}
+
+/** When it runs, when it lapses, and how long it has been standing still. */
+function GrantWhen({
+  connection,
+  card,
+  lapsed,
+}: {
+  connection: Connection;
+  card: ReturnType<typeof presentConnection>;
+  lapsed: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="grant__when stack stack--tight">
+      {card.state === "connected" ? (
+        <>
+          <span className="label">{t("grant.schedule")}</span>
+          <span className="datum datum--quiet">
+            {connection.scheduleCron ? describeSchedule(t, connection.scheduleCron) : orMissing("")}
+          </span>
+          <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
+        </>
+      ) : null}
+
+      {/* How long the data has been standing still. A lapse is not an
+        instant; six days of it is a different conversation from six
+        hours, and the operator is usually on the phone. */}
+      {lapsed && connection.expiresAt ? (
+        <>
+          <span className="label">{t("grant.since")}</span>
+          <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** What an operator can do about it. Which buttons appear is the card's decision, not this
+ * component's -- `presentConnection` already answered it. */
+function GrantActions({
+  card,
+  name,
+  busy,
+  unprinted,
+  onConnect,
+  onScope,
+  onDisconnect,
+}: {
+  card: ReturnType<typeof presentConnection>;
+  name: string;
+  busy: boolean;
+  unprinted: boolean;
+  onConnect: () => void;
+  onScope: () => void;
+  onDisconnect: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="grant__actions">
+      {card.action?.kind === "connect" ? (
+        <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
+          {t("grant.connect", { name })}
+          <ArrowRight size={13} />
+        </button>
+      ) : null}
+
+      {card.action?.kind === "scope" ? (
+        <button type="button" className="plate plate--primary" onClick={onScope} disabled={busy}>
+          {t("grant.chooseScope")}
+          <ArrowRight size={13} />
+        </button>
+      ) : null}
+
+      {card.action?.kind === "reconnect" ? (
+        <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
+          {t("grant.reconnect", { name })}
+          <ArrowRight size={13} />
+        </button>
+      ) : null}
+
+      {card.state === "connected" ? (
+        <button type="button" className="plate" onClick={onScope} disabled={busy}>
+          {t("grant.changeScope")}
+        </button>
+      ) : null}
+
+      {unprinted ? null : (
+        <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
+          {t("grant.disconnect")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function ConnectionCard({
   connection,
   onConnect,
@@ -83,106 +218,19 @@ export function ConnectionCard({
           <StatusMark mark={card.mark} label={t(MARK_LABEL[card.mark])} />
         </div>
 
-        <div className="grant__account stack stack--tight">
-          {/* Named for a lapsed grant too, not only a healthy one: the first
-              thing an operator needs to know about a withdrawn grant is which
-              account withdrew it, and "Reconnect Xero" alone does not say. */}
-          {named && card.state !== "needs_scope" ? (
-            <>
-              <span className="label">{t("grant.account")}</span>
-              <span className="datum">{orMissing(connection.externalAccountLabel)}</span>
-            </>
-          ) : null}
+        <GrantAccount connection={connection} card={card} named={named} />
 
-          {/* What this grant permits, for the years after it was made. The
-              access statement answers it before the redirect; nothing answered
-              it afterwards, which left the schedule saying who and when but
-              never over what. Deliberately not the words "what we read" -- that
-              phrasing belongs to the pre-consent statement and repeating it on a
-              live grant would read as though consent were being asked again. */}
-          {card.state === "connected" ? (
-            <>
-              <span className="label">{t("grant.reads")}</span>
-              <span className="datum datum--quiet">{orMissing(scopeSummary(t, connection))}</span>
-            </>
-          ) : null}
+        <GrantWhen connection={connection} card={card} lapsed={lapsed} />
 
-          {card.state === "needs_scope" ? <p className="note">{card.detail}</p> : null}
-        </div>
-
-        <div className="grant__when stack stack--tight">
-          {card.state === "connected" ? (
-            <>
-              <span className="label">{t("grant.schedule")}</span>
-              <span className="datum datum--quiet">
-                {connection.scheduleCron
-                  ? describeSchedule(t, connection.scheduleCron)
-                  : orMissing("")}
-              </span>
-              <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
-            </>
-          ) : null}
-
-          {/* How long the data has been standing still. A lapse is not an
-              instant; six days of it is a different conversation from six
-              hours, and the operator is usually on the phone. */}
-          {lapsed && connection.expiresAt ? (
-            <>
-              <span className="label">{t("grant.since")}</span>
-              <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
-            </>
-          ) : null}
-        </div>
-
-        <div className="grant__actions">
-          {card.action?.kind === "connect" ? (
-            <button
-              type="button"
-              className="plate plate--primary"
-              onClick={onConnect}
-              disabled={busy}
-            >
-              {t("grant.connect", { name })}
-              <ArrowRight size={13} />
-            </button>
-          ) : null}
-
-          {card.action?.kind === "scope" ? (
-            <button
-              type="button"
-              className="plate plate--primary"
-              onClick={onScope}
-              disabled={busy}
-            >
-              {t("grant.chooseScope")}
-              <ArrowRight size={13} />
-            </button>
-          ) : null}
-
-          {card.action?.kind === "reconnect" ? (
-            <button
-              type="button"
-              className="plate plate--primary"
-              onClick={onConnect}
-              disabled={busy}
-            >
-              {t("grant.reconnect", { name })}
-              <ArrowRight size={13} />
-            </button>
-          ) : null}
-
-          {card.state === "connected" ? (
-            <button type="button" className="plate" onClick={onScope} disabled={busy}>
-              {t("grant.changeScope")}
-            </button>
-          ) : null}
-
-          {unprinted ? null : (
-            <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
-              {t("grant.disconnect")}
-            </button>
-          )}
-        </div>
+        <GrantActions
+          card={card}
+          name={name}
+          busy={busy}
+          unprinted={unprinted}
+          onConnect={onConnect}
+          onScope={onScope}
+          onDisconnect={onDisconnect}
+        />
       </div>
 
       {/* The correction slip. Vermilion is held out of the section wheel for
