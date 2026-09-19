@@ -381,6 +381,11 @@
         "apps/*/src/*Cli.ts",
         "packages/*/src/*Cli.ts",
         "scripts/**",
+        // A build config IS a composition root: it is where the dev server is wired, and the
+        // proxy target has to follow the same UNDERCROFT_API_PORT `task dev:api` binds. It is
+        // already named above for `noNodejsModules`, for the same reason -- it runs on Node,
+        // never in the browser.
+        "apps/ui/vite.config.ts",
         // DEBT, listed here rather than hidden: `keys()` takes an `env` and every public
         // function in the module threads one through, but the parameter still DEFAULTS to
         // `process.env`, so a caller that forgets gets ambient configuration in a package

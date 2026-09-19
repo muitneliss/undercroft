@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { createGoogleApi } from "./api.ts";
 import { runGoogleCollect, ScopeNotChosen } from "./collect.ts";
+import { NOTHING_MATCHED } from "./drive.ts";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const DRIVE = "https://www.googleapis.com/drive/v3/files";
@@ -71,13 +72,48 @@ function collect(source: "gmail" | "drive") {
   return runGoogleCollect({ lake, exec: db, api }, { source, tenantId: TENANT });
 }
 
+/**
+ * The message URL the collector actually fetches: `format=full`.
+ *
+ * An attachment is only discoverable at this format. Gmail's `metadata` returns headers
+ * alone, so a fixture registered against THAT url can never prove an attachment lands --
+ * which is exactly how this suite stayed green while production landed none. `metadataUrl`
+ * below is kept so one test can hold the distinction.
+ */
 function messageUrl(id: string): string {
+  return `${GMAIL}/messages/${id}?format=full`;
+}
+
+/** The `format=metadata` url, kept only so one test can model what Gmail returns there. */
+function metadataUrl(id: string): string {
   const url = new URL(`${GMAIL}/messages/${id}`);
   url.searchParams.set("format", "metadata");
   for (const header of ["From", "To", "Cc", "Subject", "Date", "Message-ID"]) {
     url.searchParams.append("metadataHeaders", header);
   }
   return url.toString();
+}
+
+/**
+ * What `format=metadata` ACTUALLY returns: id, labels and headers, and no `payload.parts`.
+ *
+ * Google's Format reference is explicit -- "Returns only email message ID, labels, and email
+ * headers". A fixture that answers a metadata request with parts describes an API that does
+ * not exist.
+ */
+function metadataOnly(id: string, labelIds: string[]): unknown {
+  return {
+    id,
+    threadId: `t-${id}`,
+    labelIds,
+    internalDate: "1789400000000",
+    payload: {
+      headers: [
+        { name: "Subject", value: `Invoice ${id}` },
+        { name: "From", value: "billing@acme.test" },
+      ],
+    },
+  };
 }
 
 function listUrl(labelId: string | null): string {
@@ -224,6 +260,71 @@ describe("gmail", () => {
     expect(rows[0]?.document_id).toBe("m1:002");
     expect(rows[0]?.lake_key).toBe("documents/gmail/CASE-0042/m1:002");
     expect(rows[0]?.lake_key).not.toContain("rotates");
+  });
+
+  it("an attachment lands even though `format=metadata` carries no parts", async () => {
+    // The regression this suite could not see. Google's Format reference is explicit that
+    // `metadata` "Returns only email message ID, labels, and email headers" -- no `payload`
+    // parts, so no `body.attachmentId`. Every other attachment test here answers the
+    // metadata URL with a parts-bearing body, which describes an API that does not exist:
+    // they stay green whichever format the collector asks for, and a mailbox full of
+    // invoices lands zero documents in production.
+    //
+    // So this fixture models the real thing on both sides -- headers only at `metadata`,
+    // parts at `full` -- and the fetcher REFUSES anything unmodelled. A collector asking for
+    // metadata therefore fails loudly here instead of quietly finding no attachments.
+    await connect("gmail", { labels: [] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", metadataUrl("m1"), { body: metadataOnly("m1", ["Label_A"]) })
+      .on("GET", messageUrl("m1"), { body: message("m1", ["Label_A"]) })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, { body: { data: PDF_B64 } });
+
+    const result = await collect("gmail");
+
+    expect(result.records.landed).toBe(1);
+    expect(result.documents.created).toBe(1);
+  });
+
+  it("`format=full` widens what is fetched without widening what is stored", async () => {
+    // The quiet side of the format change. `full` returns bodies, a snippet and every header
+    // a message carries; `metadata` returned none of that, so the narrowing that used to be
+    // done by the request is now done by `headerMap` and `messageRecord`. If either stops
+    // narrowing, a body or a Received chain lands in raw.records and this fails.
+    await connect("gmail", { labels: [] });
+    const withBody = message("m1", ["Label_A"]) as {
+      snippet?: string;
+      payload: { headers: { name: string; value: string }[]; parts: { body: unknown }[] };
+    };
+    withBody.snippet = "Please find the settlement figure attached";
+    withBody.payload.headers.push(
+      { name: "Received", value: "from mx.acme.test by smtp.google.test" },
+      { name: "DKIM-Signature", value: "v=1; a=rsa-sha256; d=acme.test" },
+      { name: "X-Internal-Routing", value: "ledger-team" },
+    );
+    withBody.payload.parts[0] = {
+      body: { size: "12", data: Buffer.from("secret body text").toString("base64url") },
+    };
+
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), { body: withBody })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, { body: { data: PDF_B64 } });
+
+    await collect("gmail");
+
+    const { rows } = await db.query<{ payload: unknown }>(
+      "SELECT payload FROM raw.records WHERE source = 'gmail'",
+    );
+    const landed = JSON.stringify(rows[0]?.payload);
+    expect(landed).not.toContain("secret body text");
+    expect(landed).not.toContain("settlement figure");
+    expect(landed).not.toContain("DKIM");
+    expect(landed).not.toContain("X-Internal-Routing");
+    expect(landed).not.toContain("mx.acme.test");
+    // The six the consent names still land, so this is a narrowing and not a blanking.
+    expect(landed).toContain("Invoice m1");
+    expect(landed).toContain("billing@acme.test");
   });
 
   it("the catalogue carries no filename, subject or address", async () => {
@@ -411,6 +512,43 @@ describe("drive", () => {
       "SELECT document_id FROM raw.documents",
     );
     expect(rows.map((r) => r.document_id)).toEqual(["f1"]);
+  });
+
+  it("a picked folder that matched nothing says so rather than landing a silent zero", async () => {
+    // The firing side, and the symptom an operator actually reports: "Drive syncs nothing
+    // even though I have data". A folder whose contents are all filtered out by the chosen
+    // allow-list returns an empty listing, and until this was recorded the run was green with
+    // 0 records and 0 refusals -- indistinguishable from an empty folder, or from a broken
+    // credential. `readOneFile` already refused a directly-picked file with a reason; the
+    // folder path was the half that stayed silent. CLAUDE.md rule 2.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      fileTypes: ["application/pdf"],
+    });
+    fetcher.on("GET", listUrlFor("folder-1", ["application/pdf"]), { body: { files: [] } });
+
+    const result = await collect("drive");
+
+    expect(result.records.landed).toBe(0);
+    expect(result.refusals).toEqual([
+      { entity: "files", sourceRecordId: "folder-1", reason: NOTHING_MATCHED },
+    ]);
+  });
+
+  it("a picked folder that matched something records no refusal", async () => {
+    // The quiet side. A guard that always fires is as useless as one that never does.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      fileTypes: [],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", []), { body: { files: [file("f1")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.records.landed).toBe(1);
+    expect(result.refusals).toEqual([]);
   });
 
   it("a file that vanished from a picked folder is tombstoned", async () => {
