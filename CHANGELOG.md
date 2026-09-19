@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/muitneliss/undercroft/compare/v1.10.0...v1.10.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **ui:** give a signed-in reader a page again — the route table is data ([#61](https://github.com/muitneliss/undercroft/issues/61)) ([e82ac14](https://github.com/muitneliss/undercroft/commit/e82ac14cd4515fe7c963d8510760d182833f61f3))
+
 ## [1.10.0](https://github.com/muitneliss/undercroft/compare/v1.9.0...v1.10.0) (2026-09-19)
 
 
