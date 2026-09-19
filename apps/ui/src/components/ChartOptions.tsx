@@ -46,158 +46,234 @@ export function ChartOptions({
   onChange: (chart: ChartConfig) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const chartMaxId = useId();
-  const chartRegionId = useId();
-  const chartSeriesId = useId();
-  const chartTypeId = useId();
-  const chartAxisId = useId();
   const numeric = columns.filter((c) => isNumericType(c.type));
-  const { max } = chart.options;
 
   return (
     <div className="stack stack--tight">
       <div className="row">
-        <div className="field">
-          <label className="label" htmlFor={chartTypeId}>
-            {t("chart.typeLabel")}
-          </label>
-          <select
-            className="input input--select"
-            id={chartTypeId}
-            value={chart.type}
-            onChange={(event): void => {
-              const chosen = event.currentTarget.value;
-              const type = CHART_TYPES.find((candidate) => candidate === chosen);
-              if (type !== undefined) {
-                onChange({ ...chart, type });
-              }
-            }}
-          >
-            {CHART_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {t(TYPE_KEY[type])}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label" htmlFor={chartAxisId}>
-            {t("chart.xLabel")}
-          </label>
-          <select
-            className="input input--select"
-            id={chartAxisId}
-            value={chart.x ?? NONE}
-            onChange={(event): void => {
-              const x = event.currentTarget.value;
-              const { x: _dropped, ...rest } = chart;
-              onChange(x === NONE ? rest : { ...rest, x });
-            }}
-          >
-            <option value={NONE}>{t("chart.none")}</option>
-            {columns.map((column) => (
-              <option key={column.name} value={column.name}>
-                {column.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label" htmlFor={chartSeriesId}>
-            {t("chart.seriesLabel")}
-          </label>
-          <select
-            className="input input--select"
-            id={chartSeriesId}
-            value={chart.series ?? NONE}
-            onChange={(event): void => {
-              const series = event.currentTarget.value;
-              const { series: _dropped, ...rest } = chart;
-              onChange(series === NONE ? rest : { ...rest, series });
-            }}
-          >
-            <option value={NONE}>{t("chart.none")}</option>
-            {columns
-              .filter((c) => !isNumericType(c.type))
-              .map((column) => (
-                <option key={column.name} value={column.name}>
-                  {column.name}
-                </option>
-              ))}
-          </select>
-        </div>
-        {chart.type === "map" ? (
-          <div className="field">
-            <label className="label" htmlFor={chartRegionId}>
-              {t("chart.regionLabel")}
-            </label>
-            <select
-              className="input input--select"
-              id={chartRegionId}
-              value={chart.options.region === "world" ? "world" : "vn"}
-              onChange={(event): void => {
-                onChange({
-                  ...chart,
-                  options: { ...chart.options, region: event.currentTarget.value },
-                });
-              }}
-            >
-              <option value="vn">{t("chart.regionVn")}</option>
-              <option value="world">{t("chart.regionWorld")}</option>
-            </select>
-          </div>
-        ) : null}
-        {BOUNDED.has(chart.type) ? (
-          <div className="field">
-            <label className="label" htmlFor={chartMaxId}>
-              {t("chart.maxLabel")}
-            </label>
-            <input
-              className="input"
-              id={chartMaxId}
-              min={1}
-              type="number"
-              value={typeof max === "number" ? max : ""}
-              onChange={(event): void => {
-                // parseInt, not Number(): a bound on a dial, not an amount.
-                const parsed = Number.parseInt(event.currentTarget.value, 10);
-                const { max: _dropped, ...options } = chart.options;
-                onChange({
-                  ...chart,
-                  options:
-                    Number.isFinite(parsed) && parsed > 0 ? { ...options, max: parsed } : options,
-                });
-              }}
-            />
-          </div>
-        ) : null}
+        <TypeSelect
+          type={chart.type}
+          onPick={(type): void => {
+            onChange({ ...chart, type });
+          }}
+        />
+        <ColumnSelect
+          label={t("chart.xLabel")}
+          value={chart.x ?? NONE}
+          columns={columns}
+          onPick={(x): void => {
+            const { x: _dropped, ...rest } = chart;
+            onChange(x === NONE ? rest : { ...rest, x });
+          }}
+        />
+        <ColumnSelect
+          label={t("chart.seriesLabel")}
+          value={chart.series ?? NONE}
+          columns={columns.filter((c) => !isNumericType(c.type))}
+          onPick={(series): void => {
+            const { series: _dropped, ...rest } = chart;
+            onChange(series === NONE ? rest : { ...rest, series });
+          }}
+        />
+        {chart.type === "map" ? <RegionSelect chart={chart} onChange={onChange} /> : null}
+        {BOUNDED.has(chart.type) ? <MaxField chart={chart} onChange={onChange} /> : null}
       </div>
 
       {numeric.length === 0 ? null : (
-        <fieldset className="index">
-          <legend className="label index__legend">{t("chart.yLabel")}</legend>
-          <div className="index__cols">
-            {numeric.map((column) => (
-              <label key={column.name} className="punch">
-                <input
-                  type="checkbox"
-                  checked={chart.y.includes(column.name)}
-                  onChange={(event): void => {
-                    onChange({
-                      ...chart,
-                      y: event.currentTarget.checked
-                        ? [...chart.y, column.name]
-                        : chart.y.filter((name) => name !== column.name),
-                    });
-                  }}
-                />
-                <span className="punch__box" />
-                <span>{column.name}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <ValueColumns chart={chart} numeric={numeric} onChange={onChange} />
       )}
     </div>
+  );
+}
+
+/** Which of the sixteen drawings. The catalogue names them; `CHART_TYPES` orders them. */
+function TypeSelect({
+  type,
+  onPick,
+}: {
+  type: ChartType;
+  onPick: (type: ChartType) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const chartTypeId = useId();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={chartTypeId}>
+        {t("chart.typeLabel")}
+      </label>
+      <select
+        className="input input--select"
+        id={chartTypeId}
+        value={type}
+        onChange={(event): void => {
+          const chosen = event.currentTarget.value;
+          const picked = CHART_TYPES.find((candidate) => candidate === chosen);
+          if (picked !== undefined) {
+            onPick(picked);
+          }
+        }}
+      >
+        {CHART_TYPES.map((candidate) => (
+          <option key={candidate} value={candidate}>
+            {t(TYPE_KEY[candidate])}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
+ * One "which column" choice, offered from the result's own columns.
+ *
+ * Both the axis and the series are this select with a different label and a different
+ * shortlist -- the caller filters, because which columns may answer is the caller's question.
+ */
+function ColumnSelect({
+  label,
+  value,
+  columns,
+  onPick,
+}: {
+  label: string;
+  value: string;
+  columns: readonly { name: string }[];
+  onPick: (name: string) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const selectId = useId();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={selectId}>
+        {label}
+      </label>
+      <select
+        className="input input--select"
+        id={selectId}
+        value={value}
+        onChange={(event): void => {
+          onPick(event.currentTarget.value);
+        }}
+      >
+        <option value={NONE}>{t("chart.none")}</option>
+        {columns.map((column) => (
+          <option key={column.name} value={column.name}>
+            {column.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** Which map a map is drawn on. Only a map asks. */
+function RegionSelect({
+  chart,
+  onChange,
+}: {
+  chart: ChartConfig;
+  onChange: (chart: ChartConfig) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const chartRegionId = useId();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={chartRegionId}>
+        {t("chart.regionLabel")}
+      </label>
+      <select
+        className="input input--select"
+        id={chartRegionId}
+        value={chart.options.region === "world" ? "world" : "vn"}
+        onChange={(event): void => {
+          onChange({
+            ...chart,
+            options: { ...chart.options, region: event.currentTarget.value },
+          });
+        }}
+      >
+        <option value="vn">{t("chart.regionVn")}</option>
+        <option value="world">{t("chart.regionWorld")}</option>
+      </select>
+    </div>
+  );
+}
+
+/** The bound a gauge or a progress bar reads its share against. */
+function MaxField({
+  chart,
+  onChange,
+}: {
+  chart: ChartConfig;
+  onChange: (chart: ChartConfig) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const chartMaxId = useId();
+  const { max } = chart.options;
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={chartMaxId}>
+        {t("chart.maxLabel")}
+      </label>
+      <input
+        className="input"
+        id={chartMaxId}
+        min={1}
+        type="number"
+        value={typeof max === "number" ? max : ""}
+        onChange={(event): void => {
+          // parseInt, not Number(): a bound on a dial, not an amount.
+          const parsed = Number.parseInt(event.currentTarget.value, 10);
+          const { max: _dropped, ...options } = chart.options;
+          onChange({
+            ...chart,
+            options: Number.isFinite(parsed) && parsed > 0 ? { ...options, max: parsed } : options,
+          });
+        }}
+      />
+    </div>
+  );
+}
+
+/** Which columns are plotted. Only the numeric ones are offered, so a pick can be drawn. */
+function ValueColumns({
+  chart,
+  numeric,
+  onChange,
+}: {
+  chart: ChartConfig;
+  numeric: readonly { name: string }[];
+  onChange: (chart: ChartConfig) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <fieldset className="index">
+      <legend className="label index__legend">{t("chart.yLabel")}</legend>
+      <div className="index__cols">
+        {numeric.map((column) => (
+          <label key={column.name} className="punch">
+            <input
+              type="checkbox"
+              checked={chart.y.includes(column.name)}
+              onChange={(event): void => {
+                onChange({
+                  ...chart,
+                  y: event.currentTarget.checked
+                    ? [...chart.y, column.name]
+                    : chart.y.filter((name) => name !== column.name),
+                });
+              }}
+            />
+            <span className="punch__box" />
+            <span>{column.name}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

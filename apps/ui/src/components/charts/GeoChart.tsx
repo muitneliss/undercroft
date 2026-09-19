@@ -146,46 +146,13 @@ export function GeoChart({
 
   return (
     <div className="stack stack--tight">
-      <div className="plot plot--map">
-        <Chart
-          type="choropleth"
-          data={{
-            labels: collection.features.map(nameOf),
-            datasets: [
-              {
-                label: first.label,
-                outline: collection.features,
-                showOutline: true,
-                data: points,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (item): string => {
-                    const point = points[item.dataIndex];
-                    const row =
-                      point === undefined
-                        ? undefined
-                        : joined.byCode.get(regionOfFeature(point.feature).code);
-                    const name = point === undefined ? "" : nameOf(point.feature);
-                    return `${name}: ${row?.raw === null || row === undefined ? MISSING : formatDecimal(row.raw)}`;
-                  },
-                },
-              },
-            },
-            scales: {
-              projection: { axis: "x", projection: spec.projection },
-              color: { axis: "x", interpolate, legend: { position: "bottom-right" } },
-            },
-          }}
-        />
-      </div>
+      <Choropleth
+        collection={collection}
+        points={points}
+        joined={joined}
+        label={first.label}
+        projection={spec.projection}
+      />
       {joined.unmatched.length > 0 ? (
         <p className="note">
           {t("chart.unmatched", {
@@ -197,6 +164,69 @@ export function GeoChart({
       <p className="field__hint">
         {region === "vn" ? t("chart.attributionVn") : t("chart.attributionWorld")}
       </p>
+    </div>
+  );
+}
+
+/**
+ * The drawing: every boundary outlined, and the ones a row reached filled from the ramp.
+ *
+ * The tooltip reads the row's ORIGINAL digits out of the join, never the float that
+ * positioned the colour -- `money.md`, and the reason `raw` is carried this far.
+ */
+function Choropleth({
+  collection,
+  points,
+  joined,
+  label,
+  projection,
+}: {
+  collection: FeatureCollection<Geometry>;
+  points: readonly { feature: Feature<Geometry>; value: number }[];
+  joined: ReturnType<typeof joinRegions>;
+  label: string;
+  projection: (typeof REGIONS)[RegionKey]["projection"];
+}): React.JSX.Element {
+  return (
+    <div className="plot plot--map">
+      <Chart
+        type="choropleth"
+        data={{
+          labels: collection.features.map(nameOf),
+          datasets: [
+            {
+              label,
+              outline: collection.features,
+              showOutline: true,
+              data: [...points],
+            },
+          ],
+        }}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (item): string => {
+                  const point = points[item.dataIndex];
+                  const row =
+                    point === undefined
+                      ? undefined
+                      : joined.byCode.get(regionOfFeature(point.feature).code);
+                  const name = point === undefined ? "" : nameOf(point.feature);
+                  return `${name}: ${row?.raw === null || row === undefined ? MISSING : formatDecimal(row.raw)}`;
+                },
+              },
+            },
+          },
+          scales: {
+            projection: { axis: "x", projection },
+            color: { axis: "x", interpolate, legend: { position: "bottom-right" } },
+          },
+        }}
+      />
     </div>
   );
 }
