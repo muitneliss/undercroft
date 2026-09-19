@@ -1889,11 +1889,23 @@
   }
 
   /* The hinge row carries the leaf and nothing else: no cell padding to double the
-   leaf's own, and no hover wash beneath a leaf that is already open. */
-  .table__hinge td,
+   leaf's own, and no hover wash beneath a leaf that is already open.
+
+   `text-align` is reset because this cell is also a LAST cell, and the rule above
+   right-aligns those. That alignment is for a figure in a schedule's last column;
+   inherited into a hinged leaf it right-aligned the whole run detail -- every
+   section head, every stage name on the rail, the colophon -- while each status
+   mark, being a flex item, stayed left. The symptom was type scattered diagonally
+   inside a leaf nobody could see a cause for.
+
+   Both selectors carry `tbody tr` so they outweigh `.table td:last-child`, which a
+   bare `.table__hinge td` does not -- the first attempt at this fix lost that
+   specificity race and changed nothing on screen. */
+  .table tbody tr.table__hinge td,
   .table tbody tr.table__hinge:hover td {
     padding: 0 0 var(--s-4);
     background: transparent;
+    text-align: start;
   }
 
   /* What a run did, as the line the reader follows into the leaf; who started it,
@@ -1907,17 +1919,44 @@
     display: block;
   }
 
-  /* -- the run's own shape, drawn ------------------------------------------------
+  /* -- the run's own shape, drawn -------------------------------------------------
    *
-   * `@xyflow/react` supplies only the canvas; everything it draws by default is
-   * overridden below. No grid, no minimap, no zoom -- this is a schedule read left
-   * to right, not an infinite canvas -- and a node is the same die-cut plate as
-   * everywhere else, its connection points the punched hole the hinge and the
-   * punch already use. The canvas is `aria-hidden` (see RunFlow.tsx); the chain
-   * links either side of it are real text and carry their own style below.
+   * One plate per stage, left to right in the order they happen, with the work
+   * flowing along the connection between them while the run is still going.
+   *
+   * THREE PLATES, NOT ONE REPEATED. A stage of work is a leaf lying on the board.
+   * The run's own verdict is the stamp that closes the ledger, so it is inked --
+   * the one solid object in the row. A stage that stopped is an errata slip, in the
+   * same vermilion-ruled language a correction wears everywhere else here. That is
+   * what keeps a row of plates from being the grid of equal cards DESIGN.md bans:
+   * these are three different objects, not one card recoloured three ways.
+   *
+   * THE CONNECTION IS ALIVE WHILE THE RUN IS. An edge out of a settled stage is a
+   * still rule; an edge out of a stage still working flows. It is the one honest
+   * live signal the drawing has, and the thing that tells an operator mid-call that
+   * something IS happening without them reading a figure. That flow is the single
+   * `linear` animation in this sheet -- everything else steps, and a dash crawling
+   * in six visible jumps reads as a rendering fault rather than as movement.
+   *
+   * `--station-h` is the same number `runFlowLayout.ts` gives the nodes;
+   * `runFlowLayout.test.ts` reads this block and fails if the two ever disagree.
+   *
+   * Of @xyflow/react's own look nothing survives but what it is genuinely good at:
+   * node placement, edge paths, markers and the flow animation. The canvas is
+   * `aria-hidden` (see RunFlow.tsx).
    */
 
-  .run-flow__chain {
+  .run-map {
+    /* Pinned against `runFlowLayout.ts` by its own test -- see the note above. */
+    --station-h: 96px;
+  }
+
+  /* -- the chain: another run, either side of this one --------------------------- */
+
+  /* Printed ONCE, as real text with a real href. It used to be printed twice, as a
+   dashed plate on the canvas and again as a prose line beneath it. Caps, not
+   Garamond: this is wayfinding, and Garamond is for sentences a reader must act on. */
+  .run-chain {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -1925,68 +1964,85 @@
     margin: 0;
   }
 
-  .run-flow__chain a {
+  .run-chain__link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
     font-family: var(--face-display);
-    font-size: var(--t-small);
+    font-size: var(--t-micro);
     font-weight: 700;
+    font-variation-settings: "wdth" 84;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: var(--ink);
   }
 
-  /* Matches RunFlow.tsx's own CANVAS_HEIGHT: the two have no way to share one number
-   across CSS and JS, so a change to either changes both. */
-  .run-flow__canvas {
-    width: 100%;
-    height: 7.625rem;
-    overflow-x: auto;
-    overflow-y: hidden;
+  .run-chain__link:hover {
+    text-decoration-thickness: 2px;
   }
 
-  .run-flow__canvas .react-flow {
+  /* -- the canvas ---------------------------------------------------------------- */
+
+  /* Tall enough for the plate plus the ply shadow beneath it, which would otherwise
+   be clipped by the scroll container and leave the row looking pasted on. */
+  .run-map__canvas {
+    width: 100%;
+    height: calc(var(--station-h) + 20px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* A default scrollbar belongs to no design system. This one is a hairline in the
+     sheet's own ink, which is the only chrome the drawing ever shows. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+
+  .run-map__canvas .react-flow {
     background: transparent;
   }
 
-  .run-flow__canvas .react-flow__pane {
+  .run-map__canvas .react-flow__pane {
     cursor: default;
   }
 
-  .run-flow__canvas .react-flow__edge-path {
-    stroke: var(--rule-strong);
-    stroke-width: 1.5px;
-    fill: none;
-    transition: stroke var(--pass);
-  }
+  /* -- the connection ------------------------------------------------------------ */
 
-  .run-flow__canvas .react-flow__edge.run-flow__edge--active .react-flow__edge-path {
+  .run-map__canvas .react-flow__edge.run-link .react-flow__edge-path {
     stroke: var(--ink-2);
+    stroke-width: 2px;
+    fill: none;
   }
 
-  .run-flow__canvas .react-flow__handle {
-    width: 9px;
-    height: 9px;
-    min-width: 0;
-    min-height: 0;
-    border: var(--hair) solid var(--ink);
-    border-radius: 50%;
-    background: var(--page);
-    box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+  .run-map__canvas .react-flow__edge.run-link .react-flow__arrowhead polyline,
+  .run-map__canvas .react-flow__edge.run-link .react-flow__arrowhead path {
+    stroke: var(--ink-2);
+    fill: var(--ink-2);
   }
 
-  /* Required by @xyflow/react's license, not decoration: kept visible and linked,
-   just not dressed as a floating pill, which this system has none of. */
-  .run-flow__canvas .react-flow__attribution {
-    padding: 0 var(--s-1);
-    background: transparent;
-    box-shadow: none;
+  /* A run that stopped never travelled the rest of the line, so what is left of it
+   is drawn as the hairline of something that did not happen. */
+  .run-map__canvas .react-flow__edge.run-link--lapsed .react-flow__edge-path {
+    stroke: var(--rule-strong);
+    stroke-width: 1px;
+    stroke-dasharray: 3 4;
   }
 
-  .run-flow__canvas .react-flow__attribution a {
-    font-family: var(--face-display);
-    font-size: var(--t-micro);
-    letter-spacing: 0.04em;
-    color: var(--ink-3);
+  /* The live one. @xyflow/react marks an animated edge with `.animated` and animates
+   the dash itself; this restates it so the dash, the pace and the direction are this
+   sheet's decision rather than the library's default. */
+  .run-map__canvas .react-flow__edge.animated .react-flow__edge-path {
+    stroke-dasharray: 8 6;
+    animation: run-link-flow 620ms linear infinite;
   }
 
-  .run-flow__plate {
+  @keyframes run-link-flow {
+    to {
+      stroke-dashoffset: -14;
+    }
+  }
+
+  /* -- a plate -------------------------------------------------------------------- */
+
+  .run-plate {
     position: relative;
     box-sizing: border-box;
     display: flex;
@@ -1995,68 +2051,158 @@
     gap: var(--s-1);
     width: 100%;
     height: 100%;
-    padding: var(--s-2) var(--s-3);
-    background: var(--leaf);
-    border: var(--hair) solid var(--rule-strong);
-    border-radius: var(--r-plate);
-    overflow: hidden;
+    padding: var(--s-3) var(--s-4);
+    border-radius: var(--r-leaf);
   }
 
-  .run-flow__plate--link {
-    background: var(--page);
+  /* A stage of work: a leaf lying on the board. Depth is declared ONCE and each of the
+   three plates declares it as a keyline, so none of them carries a shadow too. */
+  .run-plate--work {
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule-strong);
+  }
+
+  /* The verdict: the stamp that closes the ledger, and the one inked object in the
+   row. Only where the run actually succeeded -- a failed verdict is an errata slip
+   below, and a run still going has no verdict to stamp yet. */
+  .run-plate--stamp {
+    background: var(--ink);
+    border: var(--hair) solid var(--ink);
+  }
+
+  .run-plate--stamp .run-plate__name,
+  .run-plate--stamp .run-plate__datum,
+  /* Granted green is a tone for paper. On the inked stamp it measured 2.2:1 and the
+   word under the figure was effectively unreadable; the mark's GEOMETRY still carries
+   the state, which is the whole reason hue is the third carrier and not the first. */
+  .run-plate--stamp .mark {
+    color: var(--leaf);
+  }
+
+  /* A run that stopped, wearing the correction language: vermilion rules top and
+   bottom on slip ground, cut at 1px like every other errata in this interface. */
+  .run-plate--errata {
+    /* The literal `.errata` uses: the slip ground has never been a token in this sheet. */
+    background: #fdf0eb;
+    border: var(--hair) solid var(--errata);
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-radius: 1px;
+  }
+
+  /* Still working: the board's own hue washed under the leaf, so the plate the run is
+   on reads as the live one at a glance across the whole row. */
+  .run-plate--pending {
+    background: color-mix(in srgb, var(--board) 16%, var(--leaf));
     border-style: dashed;
   }
 
-  /* Two rows, not three: the name, then the mark and its figure together. Both rows
-   are `flex-shrink: 0` on purpose -- a plate too small for its content should clip
-   the second row's overflow, never silently squash every row to fit. */
-  .run-flow__label {
-    flex-shrink: 0;
+  .run-plate__name {
     font-family: var(--face-display);
     font-size: var(--t-micro);
     font-weight: 700;
     font-variation-settings: "wdth" 84;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The loudest line on the plate. "Did my data come in, and how much" is the
+   question this leaf exists to answer, so the figure is set at reading size in the
+   machine face with tabular figures, not tucked under the mark as a footnote. */
+  .run-plate__datum {
+    font-family: var(--face-mono);
+    font-size: 0.9375rem;
+    font-feature-settings: "tnum";
+    line-height: 1.2;
     color: var(--ink);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .run-flow__foot {
-    display: flex;
-    flex-shrink: 0;
-    align-items: baseline;
-    gap: var(--s-2);
+  .run-plate .mark {
     min-width: 0;
   }
 
-  .run-flow__foot .mark {
-    flex-shrink: 0;
-  }
+  /* -- the connectors -------------------------------------------------------------- */
 
-  .run-flow__detail {
+  /* The punched hole the hinge and the tab strip already use, on the edges where
+   something is actually wired. Both ends used to show one anyway, connected to
+   nothing, which is the tell that a canvas was dropped in rather than drawn.
+   *
+   * `top` is a real offset, NOT `50%` with a `translateY(-50%)` over it:
+   * @xyflow/react measures a handle's LAID-OUT box to place the edge endpoint and
+   * never sees the transform, so a hole centred by transform sat 4.5px below where
+   * its own edge arrived and every connection left the plate with a small kink. */
+  .run-map__canvas .react-flow__handle.run-plate__in,
+  .run-map__canvas .react-flow__handle.run-plate__out {
+    top: calc(50% - 4.5px);
+    width: 9px;
+    height: 9px;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-height: 0;
+    border: var(--hair) solid var(--ink);
+    border-radius: 50%;
+    background: var(--page);
+    box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+    transform: none;
   }
 
-  /* The one live signal a stage still in progress can honestly show: lines of type
-   being set, the same motion the skeleton uses while a leaf is still loading. */
-  .run-flow__plate--pending::after {
-    content: "";
-    position: absolute;
-    inset-inline: var(--s-3);
-    bottom: 0.3rem;
-    height: 3px;
-    background: repeating-linear-gradient(90deg, var(--rule-strong) 0 50%, transparent 50% 100%);
-    background-size: 6px 100%;
-    animation: set-line 1.1s steps(6, end) infinite;
+  .run-map__canvas .react-flow__handle.run-plate__out {
+    right: -4.5px;
   }
 
+  /* Only the LEAVING side is punched. The arriving side is where the arrowhead lands, and
+   an arrow into a hole is two marks saying "the connection ends here" stacked on each
+   other. The handle still has to exist for @xyflow/react to anchor the edge to it, so it
+   stays as a point with nothing drawn. */
+  .run-map__canvas .react-flow__handle.run-plate__in {
+    left: 0;
+    top: calc(50% - 0.5px);
+    width: 1px;
+    height: 1px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .run-plate--last .run-plate__out,
+  .run-plate--only .run-plate__out {
+    display: none;
+  }
+
+  /* -- the colophon ----------------------------------------------------------------- */
+
+  /* @xyflow/react's credit, kept and linked, set in this sheet's own voice instead of
+   floating over the drawing as a pill -- which is a thing this system has none of.
+   Machine face and lowercase: in caps with the label's tracking it read as a section
+   head competing with SƠ ĐỒ above it, which is a lot of authority for a credit. */
+  .run-map__colophon {
+    margin: 0;
+    text-align: end;
+  }
+
+  .run-map__colophon a {
+    font-family: var(--face-mono);
+    font-size: var(--t-micro);
+    color: var(--ink-3);
+    text-decoration-color: transparent;
+  }
+
+  .run-map__colophon a:hover {
+    color: var(--ink-2);
+    text-decoration-color: var(--ink-2);
+  }
+
+  /* The flow is the only thing moving here, and it is the thing a reader who asked
+   not to have motion most wants stilled. The dash stays, so a live edge still reads
+   as different from a settled one without anything travelling. */
   @media (prefers-reduced-motion: reduce) {
-    .run-flow__plate--pending::after {
+    .run-map__canvas .react-flow__edge.animated .react-flow__edge-path {
       animation: none;
     }
   }

@@ -536,12 +536,19 @@ export const vi = {
       modelsNone: "Chưa có mô hình",
       modelsSummary: "{{models}} mô hình · {{tests}} kiểm tra",
       modelsSummaryFailed: "{{models}} mô hình · {{tests}} kiểm tra · {{testsFailed}} không đạt",
+      outcome: "Kết quả",
       entityDone: "Xong",
       entityActive: "Đang xử lý",
       entityInterrupted: "Dừng ở đây",
-      entityLandedRefused: "{{landed}} · {{refused}} bị từ chối",
+      /* The unit matters on the rail: a datum hangs under the line on its own, where a
+       bare "0" is a stray digit rather than a count of anything. `landed` carries the
+       digits already grouped for the reader, or the em dash when there is no count at
+       all; `count` is there only to choose the plural form English needs. */
+      entityLanded_other: "{{landed}} bản ghi",
+      entityLandedRefused: "{{landed}} bản ghi · {{refused}} bị từ chối",
       chainedFrom: "Nối từ lần đồng bộ {{source}}",
       chainedTo: "Nối sang việc dựng mô hình",
+      drawnWith: "Sơ đồ vẽ bằng {{name}}",
     },
   },
 

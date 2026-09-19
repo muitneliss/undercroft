@@ -31,7 +31,15 @@ function numberField(detail: Readonly<Record<string, unknown>>, key: string): nu
   return typeof value === "number" ? value : null;
 }
 
-/** "234", or "234 · 12 refused" once a refusal is worth calling out. MISSING for no count at all. */
+/**
+ * "234 records", or "234 records · 12 refused" once a refusal is worth calling out.
+ *
+ * The unit is there because the rail hangs this under the line on its own, with no column
+ * head above it to say what is being counted, and a bare "0" under a station reads as a
+ * stray digit rather than as a count of nothing. MISSING stays bare for the same reason it
+ * is a dash and not a zero: there is no count to put a unit on. `formatCount` is what keeps
+ * that distinction -- `{{count, number}}` in the catalogue would render the absence as "0".
+ */
 export function landedSummary(
   t: TFunction,
   locale: Locale,
@@ -44,7 +52,10 @@ export function landedSummary(
       refused: formatCount(refused, locale),
     });
   }
-  return formatCount(landed, locale);
+  if (landed === null) {
+    return formatCount(landed, locale);
+  }
+  return t("journal.flow.entityLanded", { landed: formatCount(landed, locale), count: landed });
 }
 
 /** What one event says about the entity it concerns -- the caller has already resolved which. */
