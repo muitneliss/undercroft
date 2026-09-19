@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.10.0](https://github.com/muitneliss/undercroft/compare/v1.9.0...v1.10.0) (2026-09-19)
+
+
+### Features
+
+* **google:** let admins choose which file types Gmail and Drive ingest ([#59](https://github.com/muitneliss/undercroft/issues/59)) ([adf0a5b](https://github.com/muitneliss/undercroft/commit/adf0a5b90b67d5215159d46430b1cb6883847c83))
+* **journal:** draw a run's own shape with React Flow, beside what it said ([#60](https://github.com/muitneliss/undercroft/issues/60)) ([5409d1a](https://github.com/muitneliss/undercroft/commit/5409d1a6f03c493a387fd317c85d4caaa76bf1fa))
+* **journal:** let a run say what it is doing while it is doing it ([#54](https://github.com/muitneliss/undercroft/issues/54)) ([a8be7f6](https://github.com/muitneliss/undercroft/commit/a8be7f63ab94eca6dd9f371d14db4b2255880ba4))
+
 ## [1.9.0](https://github.com/muitneliss/undercroft/compare/v1.8.0...v1.9.0) (2026-09-19)
 
 
