@@ -14,6 +14,13 @@
  * Google's screen and returns through a server redirect, so a same-tab journey is the one the
  * person is already on. A failed return lands back here with `?connect=failed`, read from the
  * URL rather than from state -- the browser left and came back, and there is no state left.
+ *
+ * `DisplayNameForm` at the foot is here rather than on the customers list because it acts on
+ * ONE customer and this is that customer's page. Until it existed a mistyped name was
+ * permanent: `tenants.create` was the only writer of `ops.tenant`, so the typo outlived the
+ * mistake. It changes the label and nothing else -- the tenant id is not an input to
+ * `tenants.rename` at all, because it is an object-key prefix in the create-only raw lake and
+ * changing it would strand every byte already written under the old one.
  */
 
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
@@ -34,6 +41,7 @@ import { useSearchParams } from "react-router-dom";
 
 import type { Connection } from "@/api/types.ts";
 import { ConnectionCard } from "@/components/ConnectionCard.tsx";
+import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -167,6 +175,17 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
             ))}
           </div>
         )}
+      </div>
+
+      <div className="band-rule" />
+
+      <div className="head">{t("tenants.renameHead")}</div>
+      <div className="body stack">
+        <DisplayNameForm
+          canEdit={isAdmin}
+          displayName={tenant.data.displayName}
+          tenantId={tenantId}
+        />
       </div>
     </div>
   );

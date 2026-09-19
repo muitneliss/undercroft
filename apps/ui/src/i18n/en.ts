@@ -75,22 +75,31 @@ export const en = {
     caption_one: "{{count, number}} customer",
     caption_other: "{{count, number}} customers",
     colCustomer: "Customer",
-    colReference: "Reference",
+    colReference: "Tenant ID",
     colRole: "Your role",
     addHead: "Add a customer",
     addNote:
-      "Only a platform administrator can add a customer. Ask whoever runs this control plane to create the reference.",
+      "Only a platform administrator can add a customer. Ask whoever runs this control plane to create the tenant ID.",
     addLead:
-      "The reference is a CASE-id and cannot be changed once the first raw data has landed under it — choose it carefully.",
-    idLabel: "Reference",
+      "The tenant ID becomes the storage path in the raw lake, so it cannot be changed once the first data has landed under it — choose it carefully. The display name can be corrected at any time.",
+    idLabel: "Tenant ID",
     idPlaceholder: "CASE-0001",
     idHint: "Letters, digits, hyphens and underscores. Never a real customer name.",
     nameLabel: "Display name",
-    namePlaceholder: "Leave empty to use the reference",
+    namePlaceholder: "Leave empty to use the tenant ID",
     add: "Add customer",
     adding: "Adding…",
     notAdded: "Not added",
     notLoaded: "The list of customers could not be loaded. Nothing has been changed.",
+
+    renameHead: "Change the display name",
+    renameLead:
+      "Only the display name changes. The tenant ID and every record already synced stay as they are.",
+    renameNote: "Only an admin of this customer can change the display name.",
+    rename: "Save name",
+    renaming: "Saving…",
+    renamed: "The display name has been changed.",
+    notRenamed: "Not changed",
   },
 
   sources: {

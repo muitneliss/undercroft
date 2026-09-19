@@ -95,7 +95,7 @@ export const vi = {
       "Khách hàng là đơn vị mà mọi thứ khác gắn vào: các tài khoản đã kết nối, các bản ghi đã đồng bộ, và những ai được xem chúng.",
     caption_other: "{{count, number}} khách hàng",
     colCustomer: "Khách hàng",
-    colReference: "Mã tham chiếu",
+    colReference: "Mã khách hàng",
     colRole: "Vai trò của bạn",
     addHead: "Thêm khách hàng",
     /**
@@ -104,18 +104,39 @@ export const vi = {
      * obvious instead of being a dead end.
      */
     addNote:
-      "Chỉ quản trị viên toàn hệ thống mới thêm được khách hàng. Hãy đề nghị người quản lý bảng điều khiển tạo mã tham chiếu mới.",
+      "Chỉ quản trị viên toàn hệ thống mới thêm được khách hàng. Hãy đề nghị người quản lý bảng điều khiển tạo mã khách hàng mới.",
+    /**
+     * Two sentences because there are two different promises, and running them together is
+     * what produced the question this wording answers: an operator read one warning over a
+     * form with two fields and concluded the whole form was permanent. The id is permanent
+     * for a reason a reader can check -- it becomes the storage path -- and the display name
+     * is not permanent at all.
+     */
     addLead:
-      "Mã tham chiếu là một CASE-id và không đổi được sau khi dữ liệu thô đầu tiên đã ghi vào hồ — hãy chọn kỹ.",
-    idLabel: "Mã tham chiếu",
+      "Mã khách hàng trở thành đường dẫn lưu trữ trong hồ dữ liệu thô, nên không đổi được sau khi dữ liệu đầu tiên đã ghi vào — hãy chọn kỹ. Tên hiển thị thì sửa lại được bất cứ lúc nào.",
+    idLabel: "Mã khách hàng",
     idPlaceholder: "CASE-0001",
     idHint: "Chữ cái, chữ số, dấu gạch ngang và gạch dưới. Không dùng tên thật của khách hàng.",
     nameLabel: "Tên hiển thị",
-    namePlaceholder: "Để trống thì dùng chính mã tham chiếu",
+    namePlaceholder: "Để trống thì dùng chính mã khách hàng",
     add: "Thêm khách hàng",
     adding: "Đang thêm…",
     notAdded: "Chưa thêm được",
     notLoaded: "Không tải được danh sách khách hàng. Không có gì bị thay đổi.",
+
+    renameHead: "Đổi tên hiển thị",
+    /**
+     * The counterpart to `addLead`, on the page where the correction actually happens. It
+     * states what does NOT change, because that is the question an operator hesitating over
+     * this form is really asking.
+     */
+    renameLead:
+      "Chỉ tên hiển thị thay đổi. Mã khách hàng và toàn bộ dữ liệu đã đồng bộ giữ nguyên.",
+    renameNote: "Chỉ quản trị viên của khách hàng này mới đổi được tên hiển thị.",
+    rename: "Lưu tên",
+    renaming: "Đang lưu…",
+    renamed: "Đã đổi tên hiển thị.",
+    notRenamed: "Chưa đổi được tên",
   },
 
   sources: {

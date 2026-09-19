@@ -1,12 +1,20 @@
 /**
  * The customers division: the book's table of contents.
  *
- * One line per member company, the reference in mono where an operator's eye already looks
+ * One line per member company, the tenant id in mono where an operator's eye already looks
  * for it, and the role as a word. The list comes from `trpc.tenants.list`, whose query IS
  * the visibility boundary -- it returns only tenants the caller is a member of.
  *
- * Every name here is a CASE-ID. `.claude/rules/pii.md` -- real client names live only in
- * restricted storage, never in a tracked file, a fixture or a screenshot.
+ * "Tenant id" on screen, and it is the SAME value `.claude/rules/pii.md` calls a CASE-id:
+ * `ops.tenant.id`, which this form writes and the raw lake then uses as an object-key prefix.
+ * The rule's name for it never reached the UI well -- an operator reading "the reference is a
+ * CASE-id" could not tell whether that was a second identifier alongside the tenant id they
+ * already had. It is not; there is one id. `CASE-0001` survives as the placeholder because
+ * the SHAPE is still what pii.md requires: a neutral code and never a real client name, since
+ * this value reaches an S3 path and `raw.documents.lake_key`, which dbt can read.
+ *
+ * The display name beside it is the opposite case and is corrected on `TenantOverview`. Only
+ * the id is permanent, and saying so takes two sentences because it is two promises.
  *
  * The "Add" affordance is a real form since ADR 0013, and it is shown only to a platform
  * superadmin. Hiding it from everyone else is courtesy and not the control: `tenants.create`
