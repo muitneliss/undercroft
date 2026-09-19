@@ -262,6 +262,41 @@ describe("a table dbt creates at runtime reaches BI, and only BI-safe schemas do
   });
 });
 
+describe("a run's event feed is granted like a refusal, not like a run", () => {
+  // ops.run is readable by BI on purpose: whether a sync happened is a reportable fact.
+  // The feed under it is not -- it is the same category as ops.run_refusal, whose reason
+  // may quote a payload key. Both halves are pinned: it is written by the worker and read
+  // by the control plane, and it is reachable from neither the BI nor the dbt side.
+  it("the worker appends and the control plane reads", async () => {
+    await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
+    await db.asRole("undercroft_worker", async (tx) => {
+      await tx.query(
+        `INSERT INTO ops.run (id, tenant_id, source, verb, trigger)
+         VALUES ('r1', 'CASE-0042', 'gmail', 'ingest', 'manual')`,
+      );
+      await tx.query(
+        `INSERT INTO ops.run_event (run_id, level, event, detail)
+         VALUES ('r1', 'info', 'work_listed', '{"total": 12}'::jsonb)`,
+      );
+    });
+    const seen = await db.asRole("undercroft_app", (tx) =>
+      tx.query<{ event: string }>("SELECT event FROM ops.run_event WHERE run_id = 'r1'"),
+    );
+    expect(seen.rows[0]?.event).toBe("work_listed");
+  });
+
+  it("BI and dbt are refused it, while BI still reads the run itself", async () => {
+    await db.asRole("undercroft_bi", async (tx) => {
+      await tx.query("SELECT count(*) FROM ops.run");
+      await expectDenied(() => tx.query("SELECT * FROM ops.run_event"));
+      await expectDenied(() => tx.query("SELECT * FROM ops.run_refusal"));
+    });
+    await db.asRole("undercroft_dbt", async (tx) => {
+      await expectDenied(() => tx.query("SELECT * FROM ops.run_event"));
+    });
+  });
+});
+
 describe("every table in app is granted to the control plane, and to nothing else", () => {
   // The hazard: `040_grants.sql` grants `ON ALL TABLES IN SCHEMA app`, which Postgres
   // expands to the tables existing at that moment, and the ledger means it never runs

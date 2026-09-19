@@ -47,3 +47,4 @@
 ## [2026-09-19] ingest | ADR 0020: BI is first-party, Metabase leaves the stack
 ## [2026-09-19] ingest | Runbook Deployment
 ## [2026-09-19] ingest | Runbook Google Ingestion Setup
+## [2026-09-19] ingest | ADR 0021 Run Evidence Is a Ledger, Not a Log Stream

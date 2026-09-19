@@ -28,7 +28,11 @@ import type { DriveScope } from "@undercroft/contracts";
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
+import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
+
+/** Why a pick was not taken. The one reason this collector has, and it is a refusal. */
+export const NOT_A_PDF = "not-a-pdf";
 
 const DRIVE_BASE = "https://www.googleapis.com/drive/v3/files";
 const PDF = "application/pdf";
@@ -42,22 +46,36 @@ export interface DriveHarvest {
   readonly documents: DocumentToLand[];
   /** Every document id this run saw, so the caller can tombstone what vanished. */
   readonly seenIds: string[];
+  /**
+   * What was picked and not taken, with why.
+   *
+   * A directly-picked file that is not a PDF used to be dropped where it was found, which
+   * made "we were given nothing" and "we refused what we were given" the same green run
+   * landing 0. CLAUDE.md rule 2: recorded with its reason, never dropped.
+   */
+  readonly skipped: { fileId: string; reason: string }[];
 }
 
 export function driveBaseUrl(): string {
   return DRIVE_BASE;
 }
 
-export async function harvestDrive(api: GoogleApi, scope: DriveScope): Promise<DriveHarvest> {
+export async function harvestDrive(
+  api: GoogleApi,
+  scope: DriveScope,
+  journal: RunJournal = SILENT_JOURNAL,
+): Promise<DriveHarvest> {
   const records: RecordToLand[] = [];
   const documents: DocumentToLand[] = [];
   const seen = new Set<string>();
+  const skipped: DriveHarvest["skipped"] = [];
+  let folders = 0;
 
   for (const picked of scope.files) {
-    const files =
-      picked.kind === "folder"
-        ? await listPdfsIn(api, picked.id, records.length)
-        : await readOneFile(api, picked.id, records.length);
+    if (picked.kind === "folder") {
+      folders += 1;
+    }
+    const files = await pdfsOf(api, picked, records.length, skipped);
 
     for (const file of files) {
       if (seen.has(file.id)) {
@@ -65,48 +83,95 @@ export async function harvestDrive(api: GoogleApi, scope: DriveScope): Promise<D
       }
       seen.add(file.id);
 
-      records.push({
-        entity: ENTITY,
-        sourceRecordId: file.id,
-        sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
-        payloadText: canonicalJson({
-          id: file.id,
-          mimeType: file.mimeType,
-          size: file.size,
-          modifiedTime: file.modifiedTime,
-          md5Checksum: file.md5Checksum,
-          parents: file.parents,
-        }),
-      });
-
-      documents.push({
-        documentId: file.id,
-        contentType: PDF,
-        declaredBytes: file.size,
-        // Reaches dbt: ids, types, counts. `parents` are folder ids, not folder names.
-        metadata: {
-          mimeType: file.mimeType,
-          parents: file.parents,
-          pickedVia: picked.kind,
-        },
-        // Reaches the lake manifest only: everything a person named.
-        manifest: {
-          filename: file.name,
-          pickedFrom: picked.name,
-          fileId: file.id,
-        },
-        sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
-        fetchBytes: () =>
-          api.getBytes(
-            `${DRIVE_BASE}/${encodeURIComponent(file.id)}?alt=media`,
-            ENTITY,
-            records.length,
-          ),
-      });
+      records.push(toRecord(file));
+      documents.push(toDocument(api, file, picked, records.length));
     }
   }
 
-  return { records, documents, seenIds: [...seen] };
+  // The sentence a green run landing nothing could not say before: what was looked in, what
+  // was found there, and the one-level rule that explains the difference between them.
+  journal.info("picks_listed", {
+    entity: ENTITY,
+    folders,
+    picks: scope.files.length,
+    pdfs: records.length,
+    skipped: skipped.length,
+  });
+
+  return { records, documents, seenIds: [...seen], skipped };
+}
+
+/** The row that lands in `raw.records`: Drive's own facts about the file, canonicalised. */
+function toRecord(file: DriveFile): RecordToLand {
+  return {
+    entity: ENTITY,
+    sourceRecordId: file.id,
+    sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
+    payloadText: canonicalJson({
+      id: file.id,
+      mimeType: file.mimeType,
+      size: file.size,
+      modifiedTime: file.modifiedTime,
+      md5Checksum: file.md5Checksum,
+      parents: file.parents,
+    }),
+  };
+}
+
+/**
+ * The document that lands in the lake, and the split that keeps names out of Postgres.
+ *
+ * `metadata` reaches dbt and therefore a dashboard: ids, types and counts only. `manifest`
+ * reaches the lake alone, which dbt and BI cannot read, and is where everything a person
+ * named goes. Two arguments rather than one object, so the boundary is visible here. ADR 0015.
+ */
+function toDocument(
+  api: GoogleApi,
+  file: DriveFile,
+  picked: DriveScope["files"][number],
+  seen: number,
+): DocumentToLand {
+  return {
+    documentId: file.id,
+    contentType: PDF,
+    declaredBytes: file.size,
+    metadata: {
+      mimeType: file.mimeType,
+      parents: file.parents, // Folder ids, not folder names.
+      pickedVia: picked.kind,
+    },
+    manifest: {
+      filename: file.name,
+      pickedFrom: picked.name,
+      fileId: file.id,
+    },
+    sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
+    fetchBytes: () =>
+      api.getBytes(`${DRIVE_BASE}/${encodeURIComponent(file.id)}?alt=media`, ENTITY, seen),
+  };
+}
+
+/**
+ * The PDFs one pick yields: a folder's, listed one level down, or the single file itself.
+ *
+ * A pick that yields nothing because it is not a PDF is appended to `skipped` rather than
+ * returned empty, so the caller can refuse it with a reason instead of landing a silent zero.
+ */
+async function pdfsOf(
+  api: GoogleApi,
+  picked: DriveScope["files"][number],
+  seen: number,
+  skipped: DriveHarvest["skipped"],
+): Promise<DriveFile[]> {
+  if (picked.kind === "folder") {
+    return listPdfsIn(api, picked.id, seen);
+  }
+  const one = await readOneFile(api, picked.id, seen);
+  if (one.file === null) {
+    skipped.push({ fileId: picked.id, reason: one.reason });
+    return [];
+  }
+  return [one.file];
 }
 
 interface DriveFile {
@@ -149,14 +214,24 @@ async function listPdfsIn(api: GoogleApi, folderId: string, seen: number): Promi
   return files;
 }
 
-/** A directly picked file. Non-PDFs are skipped: the consent says PDFs. */
-async function readOneFile(api: GoogleApi, fileId: string, seen: number): Promise<DriveFile[]> {
+/**
+ * A directly picked file, or the reason it is not one we may take.
+ *
+ * Non-PDFs are refused: the consent says PDFs. The refusal is RETURNED rather than swallowed
+ * so the caller can record it -- an admin who picked a spreadsheet is owed the sentence
+ * "that pick is not a PDF" and not a run that quietly landed nothing.
+ */
+async function readOneFile(
+  api: GoogleApi,
+  fileId: string,
+  seen: number,
+): Promise<{ file: DriveFile | null; reason: string }> {
   const url = new URL(`${DRIVE_BASE}/${encodeURIComponent(fileId)}`);
   url.searchParams.set("fields", FILE_FIELDS);
   url.searchParams.set("supportsAllDrives", "true");
 
   const file = toFile(await api.getJson(url.toString(), ENTITY, seen));
-  return file.mimeType === PDF ? [file] : [];
+  return file.mimeType === PDF ? { file, reason: "" } : { file: null, reason: NOT_A_PDF };
 }
 
 function toFile(raw: unknown): DriveFile {

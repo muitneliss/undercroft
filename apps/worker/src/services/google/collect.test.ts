@@ -357,4 +357,38 @@ describe("drive", () => {
     await expect(collect("drive")).resolves.toMatchObject({ source: "drive" });
     expect(fetcher.calls.map((c) => c.url)).not.toContain(listUrlFor("sub"));
   });
+
+  function fileUrlFor(id: string): string {
+    const url = new URL(`${DRIVE}/${id}`);
+    url.searchParams.set("fields", "id,name,mimeType,size,modifiedTime,md5Checksum,parents");
+    url.searchParams.set("supportsAllDrives", "true");
+    return url.toString();
+  }
+
+  it("a picked file that is not a PDF is refused with its reason, not dropped", async () => {
+    // It used to be dropped where it was found, so the run landed 0 and said nothing --
+    // indistinguishable from "the picker gave us nothing". CLAUDE.md rule 2.
+    await connect("drive", { files: [{ id: "x1", name: "budget", kind: "file" }] });
+    fetcher.on("GET", fileUrlFor("x1"), {
+      body: { id: "x1", name: "budget.xlsx", mimeType: "application/vnd.ms-excel", size: "10" },
+    });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([
+      { entity: "files", sourceRecordId: "x1", reason: "not-a-pdf" },
+    ]);
+  });
+
+  it("a picked file that is a PDF is landed and refused nothing", async () => {
+    await connect("drive", { files: [{ id: "f1", name: "statement", kind: "file" }] });
+    fetcher
+      .on("GET", fileUrlFor("f1"), { body: file("f1") })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([]);
+    expect(result.documents.created).toBe(1);
+  });
 });

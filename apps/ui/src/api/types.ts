@@ -76,6 +76,9 @@ export type RunView = inferRouterOutputs<AppRouter>["runs"]["list"]["items"][num
 /** One run in full, as `runs.get` returns it: the line plus what it recorded beneath. */
 export type RunDetail = inferRouterOutputs<AppRouter>["runs"]["get"];
 
+/** One line of what a run said while it ran, as `runs.events` returns it. */
+export type RunEventView = inferRouterOutputs<AppRouter>["runs"]["events"][number];
+
 /** What has landed, per stream, as `lake.summary` returns it. */
 export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 

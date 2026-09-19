@@ -43,6 +43,7 @@ const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
 
 const DATE = new Map<Locale, Intl.DateTimeFormat>();
 const DATE_TIME = new Map<Locale, Intl.DateTimeFormat>();
+const TIME = new Map<Locale, Intl.DateTimeFormat>();
 
 /**
  * Formatters are built once per locale and kept.
@@ -84,6 +85,32 @@ function dateTimeFormat(locale: Locale): Intl.DateTimeFormat {
   return made;
 }
 
+/**
+ * Clock time to the second, with no date.
+ *
+ * For a list of instants that all belong to one thing on one day -- the lines of a run's
+ * feed. Repeating the date on every line would push the sentence, which is the part worth
+ * reading, off to the right. Seconds are kept: a run's steps are seconds apart, and a feed
+ * whose lines all read 12:42 says nothing about what followed what.
+ *
+ * Same zone as everything else in this module, for the reason at the top of the file.
+ */
+function timeFormat(locale: Locale): Intl.DateTimeFormat {
+  const held = TIME.get(locale);
+  if (held) {
+    return held;
+  }
+  const made = new Intl.DateTimeFormat(CLDR[locale], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: ZONE,
+  });
+  TIME.set(locale, made);
+  return made;
+}
+
 function parse(iso: string | null | undefined): Date | null {
   if (!iso) {
     return null;
@@ -100,6 +127,11 @@ export function formatDate(iso: string | null | undefined, locale: Locale): stri
 export function formatDateTime(iso: string | null | undefined, locale: Locale): string {
   const date = parse(iso);
   return date ? dateTimeFormat(locale).format(date) : MISSING;
+}
+
+export function formatTime(iso: string | null | undefined, locale: Locale): string {
+  const date = parse(iso);
+  return date ? timeFormat(locale).format(date) : MISSING;
 }
 
 const DAY_MS = 86_400_000;

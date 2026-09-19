@@ -16,11 +16,13 @@
 import type { SqlExecutor } from "@undercroft/db";
 import {
   entitiesForRuns,
+  eventsFor,
   getRun,
   listRuns,
   refusalsFor,
   type Run,
   type RunEntity,
+  type RunEvent,
   type RunRefusal,
   type RunStep,
   SOURCE_OF_TRANSFORM,
@@ -148,4 +150,29 @@ export async function get(
   const entities = (await entitiesForRuns(exec, [run.id])).get(run.id) ?? [];
   const [refusals, steps] = await Promise.all([refusalsFor(exec, run.id), stepsFor(exec, run.id)]);
   return { ...present(run, entities), entityCounts: entities, refusals, steps };
+}
+
+/**
+ * What a run has been saying about itself, for somebody watching it happen.
+ *
+ * Read on its own rather than folded into `get`, because the two change at different rates:
+ * a detail is worth re-reading when a run ends, a feed every couple of seconds while it
+ * runs, and one call carrying both would re-send every refusal and every dbt step on each
+ * tick.
+ *
+ * `null` for a run that is not this tenant's, decided through `getRun` rather than by
+ * reading the events and finding none -- an id that returns an empty feed for a stranger's
+ * run and an empty feed for a run of one's own that has said nothing yet must be the same
+ * answer, and the run's ownership is the thing that must not leak.
+ */
+export async function events(
+  exec: SqlExecutor,
+  tenantId: string,
+  runId: string,
+): Promise<RunEvent[] | null> {
+  const run = await getRun(exec, tenantId, runId);
+  if (run === null) {
+    return null;
+  }
+  return eventsFor(exec, run.id);
 }
