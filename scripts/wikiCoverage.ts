@@ -154,80 +154,96 @@ function sha256(file: string): string {
  * Returned findings are sorted by kind then path so the output is stable between runs --
  * a gate whose message reorders itself produces diffs nobody can read.
  */
-export function auditWiki(root: string): Finding[] {
-  const findings: Finding[] = [];
-  const scoped = new Set(inScopeFiles(root));
-  const pages = readPages(root).filter((page) => page.sourcePath !== null);
-  const claims = new Map<string, string[]>();
+/**
+ * One page's claim on one file: does it exist, is it in scope, and does its digest still
+ * match? A page that records no readable digest is REPORTED, not passed over -- there is no
+ * evidence its summary still matches its document, and "no evidence" is not "pass".
+ */
+function auditPage(root: string, page: Page, scoped: ReadonlySet<string>): Finding[] {
+  const claimed = page.sourcePath ?? "";
+  const absolute = join(root, claimed);
 
-  for (const page of pages) {
-    const claimed = page.sourcePath ?? "";
-    claims.set(claimed, [...(claims.get(claimed) ?? []), page.page]);
-
-    const absolute = join(root, claimed);
-    if (!existsSync(absolute)) {
-      findings.push({
+  if (!existsSync(absolute)) {
+    return [
+      {
         kind: "dangling",
         path: page.page,
         message: `claims ${claimed}, which does not exist`,
         remedy: `the file moved or was deleted: re-ingest at its new path, or run: wiki remove --title "<title>"`,
-      });
-      continue;
-    }
-
-    if (!scoped.has(claimed)) {
-      findings.push({
-        kind: "out-of-scope",
-        path: page.page,
-        message: `claims ${claimed}, which wiki/tracked.yaml does not cover`,
-        remedy: "widen include in wiki/tracked.yaml, or remove the page",
-      });
-    }
-
-    // A page that records no readable digest is REPORTED, not passed over. There is no
-    // evidence its summary still matches its document, and "no evidence" is not "pass" --
-    // that is rule 2 in CLAUDE.md, and skipping the comparison here would have been the
-    // harness quietly breaking the rule it exists to enforce.
-    if (page.sourceHash === null) {
-      findings.push({
-        kind: "unverifiable",
-        path: page.page,
-        message: `claims ${claimed} but records no readable source_hash`,
-        remedy: `re-ingest so the digest is written: wiki ingest --source ${claimed} --title "<title>"`,
-      });
-    } else if (sha256(absolute) !== page.sourceHash) {
-      findings.push({
-        kind: "stale",
-        path: claimed,
-        message: `has changed since ${page.page} was written`,
-        remedy: `read the file, then run: wiki ingest --source ${claimed} --title "<title>"`,
-      });
-    }
+      },
+    ];
   }
 
-  for (const [claimed, byPages] of claims) {
-    if (byPages.length > 1) {
-      findings.push({
-        kind: "duplicated",
-        path: claimed,
-        message: `is claimed by ${byPages.length} pages: ${byPages.join(", ")}`,
-        remedy: 'remove all but one with: wiki remove --title "<title>"',
-      });
-    }
+  const findings: Finding[] = [];
+  if (!scoped.has(claimed)) {
+    findings.push({
+      kind: "out-of-scope",
+      path: page.page,
+      message: `claims ${claimed}, which wiki/tracked.yaml does not cover`,
+      remedy: "widen include in wiki/tracked.yaml, or remove the page",
+    });
   }
 
-  for (const file of scoped) {
-    if (!claims.has(file)) {
-      findings.push({
-        kind: "uncovered",
-        path: file,
-        message: "is in scope but has no wiki source page",
-        remedy: `read the file, then run: wiki ingest --source ${file} --title "<title>"`,
-      });
-    }
+  if (page.sourceHash === null) {
+    findings.push({
+      kind: "unverifiable",
+      path: page.page,
+      message: `claims ${claimed} but records no readable source_hash`,
+      remedy: `re-ingest so the digest is written: wiki ingest --source ${claimed} --title "<title>"`,
+    });
+  } else if (sha256(absolute) !== page.sourceHash) {
+    findings.push({
+      kind: "stale",
+      path: claimed,
+      message: `has changed since ${page.page} was written`,
+      remedy: `read the file, then run: wiki ingest --source ${claimed} --title "<title>"`,
+    });
+  }
+  return findings;
+}
+
+/** A file two pages both claim to summarise. One of them is wrong and nothing says which. */
+function duplicatedClaims(claims: ReadonlyMap<string, string[]>): Finding[] {
+  return [...claims]
+    .filter(([, byPages]) => byPages.length > 1)
+    .map(([claimed, byPages]) => ({
+      kind: "duplicated" as const,
+      path: claimed,
+      message: `is claimed by ${byPages.length} pages: ${byPages.join(", ")}`,
+      remedy: 'remove all but one with: wiki remove --title "<title>"',
+    }));
+}
+
+/** A file in scope that no page covers. */
+function uncoveredFiles(
+  scoped: ReadonlySet<string>,
+  claims: ReadonlyMap<string, string[]>,
+): Finding[] {
+  return [...scoped]
+    .filter((file) => !claims.has(file))
+    .map((file) => ({
+      kind: "uncovered" as const,
+      path: file,
+      message: "is in scope but has no wiki source page",
+      remedy: `read the file, then run: wiki ingest --source ${file} --title "<title>"`,
+    }));
+}
+
+export function auditWiki(root: string): Finding[] {
+  const scoped = new Set(inScopeFiles(root));
+  const pages = readPages(root).filter((page) => page.sourcePath !== null);
+
+  const claims = new Map<string, string[]>();
+  for (const page of pages) {
+    const claimed = page.sourcePath ?? "";
+    claims.set(claimed, [...(claims.get(claimed) ?? []), page.page]);
   }
 
-  return findings.sort((a, b) => a.kind.localeCompare(b.kind) || a.path.localeCompare(b.path));
+  return [
+    ...pages.flatMap((page) => auditPage(root, page, scoped)),
+    ...duplicatedClaims(claims),
+    ...uncoveredFiles(scoped, claims),
+  ].sort((a, b) => a.kind.localeCompare(b.kind) || a.path.localeCompare(b.path));
 }
 
 /**

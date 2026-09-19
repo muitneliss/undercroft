@@ -39,3 +39,4 @@
 ## [2026-09-18] ingest | Runbook Sign-In Setup
 ## [2026-09-19] note | Tenant ID
 ## [2026-09-19] ingest | ADR 0017 Tests Are a Category in the Lint Config
+## [2026-09-19] ingest | ADR 0018 A Lint Decision Lives in the Config
