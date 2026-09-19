@@ -152,7 +152,8 @@ services:
       db-migrate:
         condition: service_completed_successfully
     environment:
-      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      # As its own role, never as the bootstrap superuser; `db-migrate` sets the password.
+      UNDERCROFT_POSTGRES_DSN: postgres://undercroft_worker:${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_S3_ENDPOINT: http://minio:9000
       UNDERCROFT_S3_BUCKET_RAW: ${UNDERCROFT_S3_BUCKET_RAW:-undercroft-raw}
       UNDERCROFT_S3_ACCESS_KEY: ${UNDERCROFT_S3_ACCESS_KEY}
@@ -198,7 +199,11 @@ services:
         condition: service_healthy
     command: ["bun", "run", "migrate"]
     environment:
+      # The one service that connects as the bootstrap superuser: it applies the schema and
+      # sets the two platform roles' passwords from the variables below.
       UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      UNDERCROFT_APP_PG_PASSWORD: ${UNDERCROFT_APP_PG_PASSWORD:?set in .env}
+      UNDERCROFT_WORKER_PG_PASSWORD: ${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}
     deploy:
       resources:
         limits:
@@ -216,7 +221,8 @@ services:
       db-migrate:
         condition: service_completed_successfully
     environment:
-      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      # As its own role; see the worker's note.
+      UNDERCROFT_POSTGRES_DSN: postgres://undercroft_app:${UNDERCROFT_APP_PG_PASSWORD:?set in .env}@postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY}
       UNDERCROFT_SESSION_SECRET: ${UNDERCROFT_SESSION_SECRET:?set in .env}
       UNDERCROFT_WORKER_URL: http://worker:8081

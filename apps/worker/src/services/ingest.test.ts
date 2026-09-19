@@ -55,6 +55,8 @@ beforeEach(async () => {
   );
   specsDir = mkdtempSync(join(tmpdir(), "undercroft-specs-"));
   writeFileSync(join(specsDir, "demo.yaml"), SPEC);
+  // Seeded as the superuser; from here on every statement runs as the worker does.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {

@@ -10,7 +10,6 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
-import * as models from "../services/models.ts";
 import * as people from "../services/people.ts";
 import * as tenants from "../services/tenants.ts";
 import {
@@ -375,16 +374,6 @@ export const appRouter = router({
         }
         return { ok: true };
       }),
-  }),
-
-  models: router({
-    // A preview of an analytics table for the UI. Money-shaped columns come back as
-    // strings, never numbers -- the amount rule, held at the API boundary.
-    preview: tenantProcedure
-      .input(z.object({ table: z.string().regex(/^[a-z][a-z0-9_]*$/u) }))
-      .query(async ({ ctx, input }) => ({
-        rows: await models.preview(ctx.exec, input.table),
-      })),
   }),
 
   runs: router({

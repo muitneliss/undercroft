@@ -191,7 +191,10 @@ services:
       db-migrate:
         condition: service_completed_successfully
     environment:
-      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      # As its own role, never as the bootstrap superuser: the grant model in
+      # packages/db/sql only binds when the process that runs a customer's data holds
+      # exactly the privileges 040_grants.sql gives it. `db-migrate` sets this password.
+      UNDERCROFT_POSTGRES_DSN: postgres://undercroft_worker:${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_S3_ENDPOINT: http://undercroft-minio:9000
       UNDERCROFT_S3_BUCKET_RAW: ${UNDERCROFT_S3_BUCKET_RAW:-undercroft-raw}
       UNDERCROFT_S3_ACCESS_KEY: ${UNDERCROFT_S3_ACCESS_KEY:?set in .env}
@@ -242,7 +245,12 @@ services:
         condition: service_healthy
     command: ["bun", "run", "migrate"]
     environment:
+      # The one service that connects as the bootstrap superuser: it applies the schema and
+      # sets the two platform roles' passwords from the variables below, so the worker and
+      # the control plane can connect as themselves.
       UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      UNDERCROFT_APP_PG_PASSWORD: ${UNDERCROFT_APP_PG_PASSWORD:?set in .env}
+      UNDERCROFT_WORKER_PG_PASSWORD: ${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}
     deploy:
       resources:
         limits:
@@ -260,7 +268,9 @@ services:
       db-migrate:
         condition: service_completed_successfully
     environment:
-      UNDERCROFT_POSTGRES_DSN: postgres://${UNDERCROFT_PG_USER:-undercroft}:${UNDERCROFT_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
+      # As its own role; see the worker's note. The internet-facing process holds the
+      # privileges of `undercroft_app` and nothing more.
+      UNDERCROFT_POSTGRES_DSN: postgres://undercroft_app:${UNDERCROFT_APP_PG_PASSWORD:?set in .env}@undercroft-postgres:5432/${UNDERCROFT_PG_DB:-undercroft}
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY:?set in .env}
       UNDERCROFT_SESSION_SECRET: ${UNDERCROFT_SESSION_SECRET:?set in .env}
       UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN:?set in .env}

@@ -100,9 +100,18 @@ Production values live in Dokploy's environment and in a local gitignored file; 
 never committed. `deploy/compose/.env.example` lists the names. The `:?set in .env` variables
 have no default and hard-fail the stack if unset:
 `UNDERCROFT_S3_ACCESS_KEY`, `UNDERCROFT_S3_SECRET_KEY`, `UNDERCROFT_PG_PASSWORD`,
-`UNDERCROFT_KESTRA_PG_PASSWORD`, `UNDERCROFT_TRIGGER_TOKEN`, `UNDERCROFT_SECRET_KEY`,
-`UNDERCROFT_SESSION_SECRET`, `UNDERCROFT_DBT_PASSWORD`, `UNDERCROFT_METABASE_PG_PASSWORD`,
-`UNDERCROFT_PUBLIC_URL`.
+`UNDERCROFT_APP_PG_PASSWORD`, `UNDERCROFT_WORKER_PG_PASSWORD`, `UNDERCROFT_KESTRA_PG_PASSWORD`,
+`UNDERCROFT_TRIGGER_TOKEN`, `UNDERCROFT_SECRET_KEY`, `UNDERCROFT_SESSION_SECRET`,
+`UNDERCROFT_DBT_PASSWORD`, `UNDERCROFT_METABASE_PG_PASSWORD`, `UNDERCROFT_PUBLIC_URL`.
+
+**Each service connects as its own role.** `db-migrate` is the one service that connects as
+the bootstrap superuser: it applies the schema and then sets `undercroft_app`'s and
+`undercroft_worker`'s passwords from `UNDERCROFT_APP_PG_PASSWORD` and
+`UNDERCROFT_WORKER_PG_PASSWORD`. The control plane and the worker connect as those roles, so
+the grant model in `packages/db/sql` is what binds them — and a repo statement missing a grant
+fails in the offline gate, where every suite runs as the role that runs it in production
+(`db.become(...)` in `@undercroft/db/testing`). Adding the two variables to Dokploy's
+environment is part of rolling this release out; without them `db-migrate` refuses to start.
 
 ## Applying migrations
 
@@ -243,8 +252,12 @@ Two Kestra behaviours that waste time otherwise:
   emits unqualified table names against a pool whose `search_path` is `app`; the offline gate
   uses its memory adapter. A mistake here fails loudly (`Database schema mismatch`)
   rather than silently, and `bun run migrate` is what prevents it.
-- The `undercroft_dbt` role that `dbt/profiles.yml` connects as is not created by any
-  migration on this branch; the transform verb will fail until it exists.
+- **A real login is proven in the Docker tier, not the gate.** PGlite has no authentication,
+  so the offline suites stand in a `SET ROLE` for a login. `bun run itest` opens a connection
+  _as_ a tenant's role against the compose Postgres (start it with
+  `docker compose -f deploy/compose/docker-compose.yml up -d postgres`, with
+  `deploy/compose/.env` filled in) and proves it sees only its tenant and that `RESET ROLE`
+  gives it nothing more. Run it after any change to `packages/db/sql`.
 - The raw lake is not in a backup set — it is object storage with its own durability story,
   and the one layer that cannot be regenerated. Versioning and replication, not a nightly
   dump. Recorded rather than quietly omitted.

@@ -16,6 +16,8 @@ let db: TestDatabase;
 beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
+  // As the control plane: provisioning a tenant's roles is a privilege it must actually hold.
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {

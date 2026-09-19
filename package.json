@@ -27,6 +27,7 @@
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
     "build:ui": "bun run --filter '@undercroft/ui' build",
     "test": "bun test",
+    "itest": "UNDERCROFT_ITEST=1 bun test integration",
     "verify": "bun run typecheck && bun run lint && bun run lint:rules && bun run format:check && bun run spec:validate && bun run build:ui && bun run test",
     "wiki:check": "bun run scripts/wikiCoverage.ts"
   },

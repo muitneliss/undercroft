@@ -19,6 +19,7 @@ let db: TestDatabase;
 beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {

@@ -50,6 +50,8 @@ beforeEach(async () => {
   await db.exec(
     "CREATE TABLE raw.records_hubspot PARTITION OF raw.records FOR VALUES IN ('hubspot')",
   );
+  // Seeded as the superuser; from here on every statement runs as the worker does.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {

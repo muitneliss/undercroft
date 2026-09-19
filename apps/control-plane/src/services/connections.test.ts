@@ -30,6 +30,7 @@ beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {

@@ -79,6 +79,7 @@ beforeEach(async () => {
       id_token: ID_TOKEN,
     },
   };
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {

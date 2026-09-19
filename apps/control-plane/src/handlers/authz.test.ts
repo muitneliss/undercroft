@@ -77,6 +77,9 @@ async function errorCode(fn: () => Promise<unknown>): Promise<string> {
 beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
+  // Every statement runs as the control plane does, fixtures included: `undercroft_app`
+  // holds DML on every table in `app` and `ops`, which is what the seeding helpers need.
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {
@@ -217,20 +220,6 @@ describe("unauthenticated access", () => {
     await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-other')");
     const tenants = await caller({ userId: user, email: "u@example.test" }).tenants.list();
     expect(tenants.map((t) => t.id)).toEqual(["CASE-1"]);
-  });
-});
-
-describe("models.preview keeps money as a string", () => {
-  it("a numeric column comes back as a string, never a float", async () => {
-    const user = await seedUser("u@example.test");
-    await seedMembership("CASE-1", user, "member");
-    await db.exec("CREATE TABLE analytics.fct_demo (amount numeric(18,4))");
-    await db.query("INSERT INTO analytics.fct_demo (amount) VALUES (8500.0001)");
-    const result = await caller({ userId: user, email: "u@example.test" }).models.preview({
-      tenantId: "CASE-1",
-      table: "fct_demo",
-    });
-    expect(typeof (result.rows[0] as { amount: unknown }).amount).toBe("string");
   });
 });
 
