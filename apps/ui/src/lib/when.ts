@@ -147,33 +147,53 @@ export function expiryNote(t: TFunction, iso: string | null | undefined, now = n
   return t("when.expiresInDays", { count: days });
 }
 
+const RELATIVE = new Map<Locale, Intl.RelativeTimeFormat>();
+
+function relativeFormat(locale: Locale): Intl.RelativeTimeFormat {
+  const held = RELATIVE.get(locale);
+  if (held) {
+    return held;
+  }
+  const made = new Intl.RelativeTimeFormat(CLDR[locale], { numeric: "auto" });
+  RELATIVE.set(locale, made);
+  return made;
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+/** Past this, "34 days ago" tells a reader less than the date does. */
+const RELATIVE_HORIZON_MS: number = 30 * DAY_MS;
+
 /**
- * A cron expression in words, for the handful of shapes this product writes.
+ * How long ago an instant was, in the reader's language: "5 phút trước", "2 hours ago".
  *
- * Deliberately narrow: it recognises a daily and an hourly schedule and returns
- * the expression itself for anything else. A general cron-to-English translator
- * that is subtly wrong about a schedule is worse than showing the operator the
- * five fields they already know how to read -- and a general cron-to-*two*-language
- * translator is worse still, because only one of its two answers ever gets checked.
+ * For the run column, where "just now" and "yesterday" are what an operator on a call
+ * wants and a timestamp is what they would have to convert. Past thirty days the date
+ * itself is the better answer and it is formatted in the fixed zone like every other date
+ * here. Unreadable is MISSING, never "now".
  */
-export function describeSchedule(t: TFunction, cron: string): string {
-  const fields = cron.trim().split(/\s+/u);
-  if (fields.length !== 5) {
-    return cron.trim();
+export function relativeTime(
+  iso: string | null | undefined,
+  locale: Locale,
+  now = new Date(),
+): string {
+  const date = parse(iso);
+  if (!date) {
+    return MISSING;
   }
-
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = fields;
-  const everyDay = dayOfMonth === "*" && month === "*" && dayOfWeek === "*";
-
-  if (everyDay && hour === "*" && minute === "0") {
-    return t("when.hourly");
+  const elapsed = now.getTime() - date.getTime();
+  if (Math.abs(elapsed) >= RELATIVE_HORIZON_MS) {
+    return formatDateTime(iso, locale);
   }
-
-  if (everyDay && /^\d{1,2}$/u.test(hour ?? "") && /^\d{1,2}$/u.test(minute ?? "")) {
-    const hh = (hour ?? "0").padStart(2, "0");
-    const mm = (minute ?? "0").padStart(2, "0");
-    return t("when.dailyAt", { time: `${hh}:${mm}` });
+  const format = relativeFormat(locale);
+  if (Math.abs(elapsed) < MINUTE_MS) {
+    return format.format(0, "second");
   }
-
-  return cron.trim();
+  if (Math.abs(elapsed) < HOUR_MS) {
+    return format.format(-Math.round(elapsed / MINUTE_MS), "minute");
+  }
+  if (Math.abs(elapsed) < DAY_MS) {
+    return format.format(-Math.round(elapsed / HOUR_MS), "hour");
+  }
+  return format.format(-Math.round(elapsed / DAY_MS), "day");
 }

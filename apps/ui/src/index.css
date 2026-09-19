@@ -1442,6 +1442,23 @@
     text-align: right;
   }
 
+  /* A run's line: the mark, then how long ago, then how much. Inline, so the three
+     read as one fact set against the column's edge rather than three stacked lines. */
+  .grant__run {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
+  /* A select is an input with a die-cut edge, sized to its words rather than stretched
+     to the column: it is one choice among four, not a field to fill. */
+  .input--select {
+    align-self: flex-end;
+    width: auto;
+  }
+
   .grant__actions {
     display: flex;
     gap: var(--s-2);
@@ -2075,6 +2092,12 @@
     }
     .grant__when {
       text-align: left;
+    }
+    .grant__run {
+      justify-content: flex-start;
+    }
+    .input--select {
+      align-self: flex-start;
     }
     .grant__actions {
       justify-content: flex-start;

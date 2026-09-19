@@ -11,7 +11,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
-import { describeSchedule, expiryNote, formatDate } from "./when.ts";
+import { expiryNote, formatDate, relativeTime } from "./when.ts";
 
 const en = translatorFor("en");
 const vi = translatorFor("vi");
@@ -51,15 +51,26 @@ describe("expiryNote", () => {
   });
 });
 
-describe("describeSchedule", () => {
-  it("names the two shapes this product writes, in both languages", () => {
-    expect(describeSchedule(en, "0 9 * * *")).toBe("Daily at 09:00 SGT");
-    expect(describeSchedule(vi, "0 9 * * *")).toBe("Hằng ngày lúc 09:00 SGT");
+describe("relativeTime", () => {
+  it("says how long ago in the reader's language, from the same instant", () => {
+    const fiveMinutesAgo = "2026-09-17T11:55:00Z";
+
+    expect(relativeTime(fiveMinutesAgo, "en", NOW)).toBe("5 minutes ago");
+    expect(relativeTime(fiveMinutesAgo, "vi", NOW)).toBe("5 phút trước");
+    expect(relativeTime("2026-09-16T09:00:00Z", "en", NOW)).toBe("yesterday");
   });
 
-  it("shows an unrecognised expression rather than guessing at it", () => {
-    // A cron translator that is subtly wrong about a schedule is worse than the five
-    // fields an operator already knows how to read -- and twice as bad in two languages.
-    expect(describeSchedule(vi, "*/7 3 1 * 2")).toBe("*/7 3 1 * 2");
+  it("past a month it is the date, in the fixed zone, not a count of days", () => {
+    // 17:30 UTC on 1 August is 01:30 on the 2nd in Singapore, whichever language reads it.
+    const long = "2026-08-01T17:30:00Z";
+
+    expect(relativeTime(long, "en", NOW)).toContain("02");
+    expect(relativeTime(long, "vi", NOW)).toContain("02");
+    expect(relativeTime(long, "en", NOW)).not.toContain("ago");
+  });
+
+  it("an unreadable instant is missing, never 'now'", () => {
+    expect(relativeTime("not a date", "vi", NOW)).toBe("—");
+    expect(relativeTime(null, "vi", NOW)).toBe("—");
   });
 });

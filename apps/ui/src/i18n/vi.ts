@@ -203,6 +203,14 @@ export const vi = {
     account: "Tài khoản",
     reads: "Đọc",
     schedule: "Lịch",
+    lastRun: "Lần chạy gần nhất",
+    nextRun: "Lần chạy kế tiếp",
+    cadenceLabel: "Tần suất đồng bộ",
+    runNow: "Chạy ngay",
+    running: "Đang chạy…",
+    runFailedHead: "Lần chạy gần nhất thất bại",
+    runNotStarted: "Chưa chạy được",
+    cadenceNotSaved: "Chưa lưu được tần suất",
     since: "Từ",
     connect: "Kết nối {{name}}",
     chooseScope: "Chọn dữ liệu cần đồng bộ",
@@ -295,7 +303,21 @@ export const vi = {
     expiresTomorrow: "Hết hạn ngày mai",
     expiresInDays_other: "Còn {{count, number}} ngày nữa là hết hạn",
     hourly: "Mỗi giờ",
-    dailyAt: "Hằng ngày lúc {{time}} SGT",
+    every6h: "Mỗi 6 giờ",
+    daily: "Hằng ngày",
+    paused: "Tạm dừng",
+    pausedNoNext: "Không chạy khi đang tạm dừng",
+    /** The scheduler asks every fifteen minutes; a due time already past means its next ask. */
+    dueNow: "Ở lượt kế tiếp, trong vòng 15 phút",
+  },
+
+  /** A run as the card prints it. Chosen by `@/lib/runs`. */
+  run: {
+    ok: "Thành công",
+    running: "Đang chạy",
+    failed: "Thất bại",
+    never: "Chưa chạy",
+    landed_other: "{{countText}} bản ghi",
   },
 
   /**
