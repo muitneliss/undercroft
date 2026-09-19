@@ -55,6 +55,18 @@ export const vi = {
     tenantExists: "Mã tham chiếu {{tenantId}} đã được dùng cho một khách hàng khác.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    /**
+     * Names the remedy, because there is one and it belongs to the reader.
+     *
+     * This case used to be worded as `workerUnavailable` -- "the service is not
+     * responding" -- for a grant that Google had refused. An administrator told that waits,
+     * retries, and eventually reports an outage; what was needed was a reconnect with the
+     * Gmail permission left ticked.
+     */
+    scopeInsufficient:
+      "Kết nối Google hiện chưa đủ quyền để đọc danh sách này. Hãy ngắt kết nối rồi kết nối lại, và giữ nguyên dấu tích ở quyền đọc Gmail trên màn hình của Google.",
+    /** The worker answered and said no, for a reason retrying will not change. */
+    browseRefused: "Dịch vụ xử lý không lấy được danh sách cho nguồn {{source}}.",
     scopeNotUnderstood: "Không đọc được lựa chọn cho nguồn {{source}}.",
     /**
      * Points at a person, not at a variable, for the same reason `requiresSuperadmin` does:

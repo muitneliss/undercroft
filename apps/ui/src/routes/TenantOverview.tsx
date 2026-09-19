@@ -39,6 +39,29 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { trpc } from "@/trpc.ts";
 
+/**
+ * Which sentence a failed consent gets, from the reason the callback redirected with.
+ *
+ * Three outcomes rather than two. `scope-declined` is not a cancellation: the admin pressed
+ * Allow with the one permission that matters unticked, which Google accepts and we refuse.
+ * Told only "this source could not be connected", they repeat the exact steps that produced
+ * it -- so the case that names the tick to leave alone has to be its own sentence.
+ *
+ * A function rather than a chain inside the JSX, because it is a decision with a name and
+ * the compiler checks each key against the catalogue.
+ */
+function connectFailureKey(
+  reason: string | null,
+): "grant.connectDeclined" | "grant.connectScopeDeclined" | "grant.connectFailed" {
+  if (reason === "declined") {
+    return "grant.connectDeclined";
+  }
+  if (reason === "scope-declined") {
+    return "grant.connectScopeDeclined";
+  }
+  return "grant.connectFailed";
+}
+
 export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
@@ -86,9 +109,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
 
         {failed ? (
           <Errata heading={t("grant.connectFailed")} live={true}>
-            {params.get("reason") === "declined"
-              ? t("grant.connectDeclined")
-              : t("grant.connectFailed")}
+            {t(connectFailureKey(params.get("reason")))}
           </Errata>
         ) : null}
 

@@ -74,6 +74,53 @@ export function isGoogleSource(source: string): boolean {
   return Object.hasOwn(SOURCE_SCOPES, source);
 }
 
+/**
+ * The scopes that ride along to name the account and grant nothing further.
+ *
+ * They are excluded from every granted-scope comparison for a mundane reason: Google does
+ * not hand back what you asked for. `email` returns as
+ * `https://www.googleapis.com/auth/userinfo.email`, so a set difference over the whole
+ * string reports a scope missing that was granted, and the check would refuse every
+ * consent there is.
+ */
+const IDENTITY_SCOPES: ReadonlySet<string> = new Set(["openid", "email"]);
+
+/**
+ * What a consent has to come back with to be worth keeping.
+ *
+ * Derived from what was actually requested rather than from a second hand-maintained list,
+ * so adding a scope to `SOURCE_SCOPES` cannot leave a stale copy behind that accepts a
+ * grant missing it.
+ */
+function capabilityScopes(requestedScope: string): string[] {
+  return requestedScope.split(" ").filter((scope) => scope !== "" && !IDENTITY_SCOPES.has(scope));
+}
+
+/**
+ * What a source asks for, as the one space-delimited string every comparison here uses.
+ *
+ * A source with no entry answers `""`, and so has no capability to withhold: HubSpot and
+ * Xero do not come through this flow at all, and a grant check that invented a requirement
+ * for them would park a working connection at "reconnect" forever.
+ */
+export function requestedScopeFor(source: string): string {
+  return (SOURCE_SCOPES[source] ?? []).join(" ");
+}
+
+/**
+ * Whether a grant carries every capability that was asked for.
+ *
+ * Google's consent screen lets a person untick an individual permission and press Allow
+ * anyway. What comes back is a valid token for a narrower grant -- so the exchange
+ * succeeds, the credential seals, and the connection reads `connected` while being able to
+ * read nothing at all. The first symptom is a 403 from an API call much later, worded as
+ * whatever that call's failure path happens to say.
+ */
+export function grantCovers(requestedScope: string, grantedScope: string): boolean {
+  const granted = new Set(grantedScope.split(" "));
+  return capabilityScopes(requestedScope).every((scope) => granted.has(scope));
+}
+
 export interface OAuthDeps {
   readonly exec: SqlExecutor;
   readonly google?: GoogleIngestConfig;
@@ -144,7 +191,13 @@ export type CompleteOutcome =
   | { ok: true; tenantId: string; source: string; accountLabel: string }
   | {
       ok: false;
-      reason: "not-configured" | "bad-state" | "not-admin" | "exchange-failed" | "worker-refused";
+      reason:
+        | "not-configured"
+        | "bad-state"
+        | "not-admin"
+        | "exchange-failed"
+        | "scope-declined"
+        | "worker-refused";
       tenantId?: string;
       source?: string;
     };
@@ -211,6 +264,24 @@ export async function completeConsent(
     return {
       ok: false,
       reason: "exchange-failed",
+      tenantId: handshake.tenantId,
+      source: handshake.source,
+    };
+  }
+
+  // Nothing is sealed for a grant that withheld what it was asked for. `requestedScope` is
+  // recorded on the handshake at the start of the flow for exactly this comparison, and
+  // this is the only place that can make it: by the time a collector gets a 403, the
+  // consent it came from is long gone. Storing the credential anyway is the guess rule 2
+  // forbids -- a `connected` card standing in for a grant that reads nothing.
+  //
+  // The token is not revoked upstream. What is left at Google after this refusal is
+  // `openid email`, which is what signing in already holds, and there is nothing here to
+  // revoke it with: sealing is the worker's, and this path never reached it.
+  if (!grantCovers(handshake.requestedScope, exchanged.scope)) {
+    return {
+      ok: false,
+      reason: "scope-declined",
       tenantId: handshake.tenantId,
       source: handshake.source,
     };

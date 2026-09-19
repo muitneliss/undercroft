@@ -36,6 +36,9 @@ export const en = {
     tenantExists: "The reference {{tenantId}} is already in use by another customer.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
+    scopeInsufficient:
+      "The Google connection does not currently carry enough permission to read this list. Disconnect and connect again, leaving the Gmail permission ticked on Google's screen.",
+    browseRefused: "The processing service could not fetch the list for {{source}}.",
     scopeNotUnderstood: "The selection for {{source}} could not be read.",
     ingestNotConfigured:
       "This deployment is not set up to connect Google accounts. Tell whoever administers it.",

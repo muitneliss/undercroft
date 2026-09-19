@@ -1,0 +1,68 @@
+/**
+ * What survives the hop to the worker: not the body, only the status.
+ *
+ * The control plane deliberately never reads a refusal's body -- a request to these
+ * endpoints can carry a live refresh token, and echoing one into a log or an error message
+ * is how a credential ends up somewhere it was never meant to be. That leaves the status
+ * line as the entire vocabulary for "why not", so which status means what is a contract
+ * rather than a detail, and it is pinned here.
+ */
+
+// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
+// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(status).toBe(403)` says what the code must do; naming it says only that two names agree, and it can pass while both are wrong.
+
+import { describe, expect, test as it } from "bun:test";
+
+import { createHttpWorkerClient, type WorkerClient } from "./workerClient.ts";
+
+/** Answers every request with one status. A real function, not a spy. */
+function answering(status: number): WorkerClient {
+  return createHttpWorkerClient({
+    baseUrl: "https://worker.test",
+    triggerToken: "t",
+    fetch: () => Promise.resolve(new Response("{}", { status })),
+  });
+}
+
+describe("reading a worker refusal", () => {
+  it("403 is the grant, not the worker", async () => {
+    // The one failure an administrator can fix from the screen they are looking at, so it
+    // must arrive distinguishable. Worded as an outage -- which it was until this mapping
+    // existed -- it sends them off to wait for a service that is answering fine.
+    const outcome = await answering(403).browseScope({
+      source: "gmail",
+      tenantId: "CASE-0042",
+      kind: "labels",
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: "scope-insufficient" });
+  });
+
+  it("any other refusal stays a plain refusal", async () => {
+    // The quiet side. A guard that answered `scope-insufficient` to everything would tell
+    // an operator to reconnect a credential that was never the problem.
+    const outcome = await answering(500).browseScope({
+      source: "gmail",
+      tenantId: "CASE-0042",
+      kind: "labels",
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: "refused" });
+  });
+
+  it("a worker that cannot be reached at all is unreachable, not refused", async () => {
+    const client = createHttpWorkerClient({
+      baseUrl: "https://worker.test",
+      triggerToken: "t",
+      fetch: () => Promise.reject(new Error("connection refused")),
+    });
+
+    const outcome = await client.browseScope({
+      source: "gmail",
+      tenantId: "CASE-0042",
+      kind: "labels",
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: "unreachable" });
+  });
+});

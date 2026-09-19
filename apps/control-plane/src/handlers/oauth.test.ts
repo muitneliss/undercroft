@@ -7,6 +7,7 @@
  */
 
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One callback and one harness. What makes this file long is that the callback's whole job is refusal -- unknown state, replayed state, a withdrawn role, a failed exchange, a withheld scope -- and each refusal is one test against a harness too delicate to keep two copies of.
 // biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
 // biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
@@ -181,6 +182,29 @@ describe("completing a consent", () => {
       [TENANT],
     );
     expect(rows[0]?.account_label).toBe("ops@acme.test");
+  });
+
+  it("a consent that withheld the scope it asked for seals nothing", async () => {
+    // Google's screen lets a person untick one permission and press Allow anyway, and what
+    // comes back is a perfectly valid token for a grant that can read nothing. Sealed, it
+    // becomes a `connected` card whose every call is a 403 -- which is what `case-001` was,
+    // and the first anyone heard of it was "the processing service is not responding".
+    tokenResponse = {
+      status: 200,
+      body: {
+        access_token: "at",
+        refresh_token: "rt",
+        expires_in: 3599,
+        scope: "openid https://www.googleapis.com/auth/userinfo.email",
+        id_token: ID_TOKEN,
+      },
+    };
+    const state = await beginConsent();
+
+    const response = await callback(appFor(ADMIN), { state, code: "auth-code" });
+
+    expect(response.headers.get("location")).toContain("reason=scope-declined");
+    expect(worker.stored).toHaveLength(0);
   });
 
   it("an unknown state is refused and nothing is exchanged", async () => {
