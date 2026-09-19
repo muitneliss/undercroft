@@ -75,6 +75,35 @@ interface UiState {
   setScopeDraft: (draft: ScopeDraft) => void;
   /** Add or remove one Gmail label. Absent labels mean the whole mailbox, deliberately. */
   toggleScopeLabel: (source: string, label: string) => void;
+  /**
+   * Put the selection back to none, which for Gmail MEANS the whole mailbox.
+   *
+   * A verb of its own rather than the component looping `toggleScopeLabel`, because that
+   * loop is forty writes for one decision an operator took once, and because the picker
+   * reads back the consequence beside the control: clearing has to be the single step the
+   * reader is told about.
+   */
+  clearScopeLabels: (source: string) => void;
+  /**
+   * What the admin has typed into the label index's filter, and which source they typed it
+   * against.
+   *
+   * Client state no endpoint knows about, so it lives here for the same reason the draft
+   * does: `useState` is banned, and a second owner of "what is on screen" is how a filter
+   * and the list it filters drift apart.
+   *
+   * It carries its `source` for the same reason `scopeDraft` does, and it is the cheaper of
+   * the two ways to get the property that matters -- a word typed against Gmail's labels
+   * must not still be narrowing the screen after a move to another source. The alternative
+   * was an effect that cleared the field on arrival, which is a SECOND writer racing the
+   * first, and one whose reset an operator sees happen. Reading `source` here instead makes
+   * a stale filter unrepresentable rather than merely cleaned up afterwards.
+   *
+   * Deliberately NOT persisted: a filter restored on a later visit hides labels for a
+   * reason the reader can no longer see.
+   */
+  scopeFilter: { source: string; query: string };
+  setScopeFilter: (source: string, query: string) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -102,6 +131,13 @@ export const useUiStore = create<UiState>()(
             },
           };
         }),
+      clearScopeLabels: (source): unknown =>
+        set((state) => {
+          const draft = state.scopeDraft?.source === source ? state.scopeDraft : null;
+          return { scopeDraft: { source, files: draft?.files ?? [], labels: [] } };
+        }),
+      scopeFilter: { source: "", query: "" },
+      setScopeFilter: (source, query): unknown => set({ scopeFilter: { source, query } }),
     }),
     {
       name: "undercroft.ui",

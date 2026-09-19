@@ -55,7 +55,26 @@ export const BrowseScopeRequest = z.object({
 });
 
 export const BrowseScopeResponse = z.object({
-  items: z.array(z.object({ id: z.string(), name: z.string() })),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      /**
+       * Who owns the label, as the provider reports it: `system` for the set Gmail ships
+       * (INBOX, SENT, the CATEGORY_* group) and `user` for one somebody made.
+       *
+       * Kept THREE-VALUED. A provider that does not say leaves `null`, and the picker gives
+       * that its own run rather than filing it under "yours" -- which would be a claim about
+       * who made a label, made up by us, on the screen where an admin decides what a customer
+       * has agreed to hand over. `.claude/rules/money.md` is where that rule is written down,
+       * and it is about values rather than amounts.
+       *
+       * Defaulted rather than required so a worker built before this field answers a control
+       * plane built after it: the missing field becomes "not classified", which is true.
+       */
+      kind: z.enum(["system", "user"]).nullable().default(null),
+    }),
+  ),
 });
 
 export const RevokeConnectionRequest = z.object({

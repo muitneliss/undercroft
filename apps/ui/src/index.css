@@ -1226,6 +1226,151 @@
     cursor: not-allowed;
   }
 
+  /* -- the index of labels -----------------------------------------------------
+   *
+   * The back matter of a manual, and the form the scope picker needed.
+   *
+   * Sixty Gmail labels as one column of stacked checkboxes is not a long screen, it
+   * is a broken one: the fieldset grew without limit, carried SAVE past the fold,
+   * and left two thirds of the leaf blank beside it. An index is set in COLUMNS,
+   * inside the frame of the leaf it is printed on, with a running head over each
+   * continued column. Every rule below is that sentence and nothing else.
+   *
+   * The frame is closed by rules at both edges rather than by a fade. A fade would
+   * be a second, softer depth system on a page whose only depth is ply, and it says
+   * "there is more below" in the one register this design does not speak.
+   */
+
+  .index {
+    /* A fieldset's own border is a browser's idea of a group: drawn in a grey this
+     palette does not contain, notched around a legend nobody styled. The group is
+     carried by the legend and by the frame below it. */
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+  }
+
+  .index__legend {
+    padding: 0;
+    margin-bottom: var(--s-2);
+  }
+
+  .index__seek {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    margin-bottom: var(--s-2);
+  }
+
+  .index__filter {
+    flex: 1 1 18rem;
+    max-width: 24rem;
+    min-width: 0;
+  }
+
+  /* The one mark on this page nobody here drew. It arrives as a blue-grey system
+   glyph; this puts it in the page's ink without pretending it is ours. */
+  .index__filter::-webkit-search-cancel-button {
+    filter: grayscale(1);
+    opacity: 0.55;
+    cursor: pointer;
+  }
+
+  .index__field {
+    /* The frame is the height of the leaf, not the height of the mailbox. The `vh`
+     term is what keeps SAVE on screen when a window is short as well as narrow. */
+    max-height: min(24rem, 52vh);
+    overflow-y: auto;
+    /* Scrolling stops at the frame rather than carrying on into the leaf behind it. */
+    overscroll-behavior: contain;
+    border-top: var(--hair) solid var(--rule-strong);
+    border-bottom: var(--hair) solid var(--rule-strong);
+    padding-bottom: var(--s-3);
+  }
+
+  .index__run + .index__run {
+    margin-top: var(--s-4);
+  }
+
+  /* A continued column carries its running head. Same device as the heads in the
+   margin column, one frame further in: a reader who has scrolled past the top of a
+   run still knows which run they are in. */
+  .index__head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    /* The page stock, because the head lies ON the leaf while the column travels
+     under it. Transparent would let label names print through their own head. */
+    background: var(--page);
+    padding: var(--s-3) 0 var(--s-1);
+    line-height: 1.4;
+  }
+
+  .index__cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    column-gap: var(--s-5);
+    align-items: start;
+  }
+
+  .index__cols .punch {
+    /* The full width of its column, so the entry is the target rather than the
+     fifteen pixels of the hole. */
+    display: flex;
+    align-items: flex-start;
+    padding: 0.34rem var(--s-2) 0.34rem 0;
+    /* A label name is the thing the decision is made on, so it WRAPS. Gmail nests
+     labels with slashes and those names get long; an ellipsis would hide part of
+     what a customer is being asked to hand over, to save a few pixels. */
+    overflow-wrap: anywhere;
+    transition: background var(--hinge);
+  }
+
+  .index__cols .punch__box {
+    /* Optically on the first line's centre, not on the block's. A name that wrapped
+     to two lines would otherwise carry its hole halfway down itself. */
+    margin-top: 0.17em;
+  }
+
+  /* The wash the schedule answers a cursor with, at the same two frames. */
+  .index__cols .punch:hover {
+    background: color-mix(in srgb, var(--board) 8%, transparent);
+  }
+
+  .index__none {
+    padding: var(--s-4) 0;
+  }
+
+  /* -- what this selection will permit ------------------------------------------
+   *
+   * A standing line under the control it describes, in the consent card's own
+   * sentence: an admin reads here exactly what the record will say afterwards.
+   *
+   * Set to `.access`'s measure and hung from `.access`'s margin column, because it
+   * is the same statement at an earlier moment -- one before the grant exists, one
+   * for the years after it. A box would have been a second card on a page whose
+   * entire structure is hanging heads and rules.
+   *
+   * It carries no rule of its own, and `.access` does. The difference is what is
+   * above them: `.access` follows loose content and has to open itself, whereas the
+   * frame above this one already closed with a rule sixteen pixels up. Two parallel
+   * rules that close together are one thick rule with a gap in it, and neither of
+   * them reads as the edge of anything. So the frame keeps the rule, and this takes
+   * the separation instead.
+   */
+  .echo {
+    display: grid;
+    grid-template-columns: var(--head-col) minmax(0, 1fr) auto;
+    gap: var(--s-2) var(--s-5);
+    align-items: baseline;
+    padding-top: var(--s-5);
+  }
+
+  .echo__says {
+    max-width: 58ch;
+  }
+
   /* -- the schedule of grants -------------------------------------------------- */
 
   /*
@@ -2016,6 +2161,25 @@
 
     .access dt {
       padding-top: var(--s-3);
+    }
+
+    /* The margin column is gone, so the statement stacks under its own head and the
+     clear plate falls to its own line rather than being squeezed against the
+     sentence it belongs to. */
+    .echo {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: start;
+      gap: var(--s-2);
+    }
+
+    /* One column of entries, and a deeper target: this is the width where the index
+     is read with a thumb rather than a cursor. */
+    .index__cols {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .index__cols .punch {
+      padding-block: var(--s-2);
     }
 
     .grant__head {

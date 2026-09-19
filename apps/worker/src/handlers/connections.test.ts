@@ -169,7 +169,7 @@ describe("browsing what may be shared", () => {
   it("gmail labels come back for the picker", async () => {
     await post("/v1/connections/credential", VALID);
     fetcher.on("GET", "https://gmail.googleapis.com/gmail/v1/users/me/labels", {
-      body: { labels: [{ id: "Label_8", name: "Invoices" }] },
+      body: { labels: [{ id: "Label_8", name: "Invoices", type: "user" }] },
     });
 
     const response = await post("/v1/connections/browse", {
@@ -179,7 +179,13 @@ describe("browsing what may be shared", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ items: [{ id: "Label_8", name: "Invoices" }] });
+    // Who owns a label crosses the hop, not only its name. Drop it here and the picker still
+    // renders every label -- in one undifferentiated run, with the thirteen Gmail ships
+    // sitting on top of the ones an admin came to find, and nothing on the page to say a
+    // classification was lost on the way.
+    expect(await response.json()).toEqual({
+      items: [{ id: "Label_8", name: "Invoices", kind: "user" }],
+    });
   });
 
   it("a grant Google refuses is answered as a refusal, not as a fault", async () => {

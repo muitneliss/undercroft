@@ -59,15 +59,38 @@ export function gmailBaseUrl(): string {
   return GMAIL_BASE;
 }
 
+/** One row of the label listing, as the scope picker needs to see it. */
+export interface GmailLabel {
+  readonly id: string;
+  readonly name: string;
+  /** Gmail's own `type`, or null where it did not say. See `labelKind`. */
+  readonly kind: "system" | "user" | null;
+}
+
 /** The labels an admin can choose from. Needs a live token, so it runs in the worker. */
-export async function listLabels(api: GoogleApi): Promise<{ id: string; name: string }[]> {
+export async function listLabels(api: GoogleApi): Promise<GmailLabel[]> {
   const body = await api.getJson(`${GMAIL_BASE}/labels`, "labels");
   const labels = asArray(getPath(body, "labels"));
   return labels.flatMap((label) => {
     const id = str(label, "id");
+    if (id === "") {
+      return [];
+    }
     const name = str(label, "name");
-    return id === "" ? [] : [{ id, name: name === "" ? id : name }];
+    return [{ id, name: name === "" ? id : name, kind: labelKind(str(label, "type")) }];
   });
+}
+
+/**
+ * Gmail's ownership of a label, kept three-valued.
+ *
+ * The picker sets an admin's own labels ahead of the thirteen Gmail ships, because in a real
+ * mailbox the built-ins are the noise that the labels they came to find are buried under.
+ * That ordering is only worth having if it is TRUE, so a label Gmail did not classify stays
+ * unclassified rather than being filed under the commoner of the two answers.
+ */
+function labelKind(reported: string): "system" | "user" | null {
+  return reported === "system" || reported === "user" ? reported : null;
 }
 
 /**

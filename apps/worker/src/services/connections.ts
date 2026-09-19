@@ -30,7 +30,7 @@ import {
 
 import { createGoogleApi } from "./google/api.ts";
 import { isGoogleSource } from "./google/collect.ts";
-import { listLabels } from "./google/gmail.ts";
+import { type GmailLabel, listLabels } from "./google/gmail.ts";
 import type { Transactor } from "./ingest.ts";
 
 export const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
@@ -102,7 +102,7 @@ export interface BrowseDeps {
 }
 
 export type BrowseOutcome =
-  | { ok: true; items: { id: string; name: string }[] }
+  | { ok: true; items: GmailLabel[] }
   | { ok: false; reason: "unsupported" | "scope-insufficient" };
 
 /**
