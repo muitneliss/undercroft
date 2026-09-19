@@ -63,6 +63,18 @@ function usage(message: string): never {
   process.exit(2);
 }
 
+/**
+ * Refused, not defaulted. `--lang fr` is somebody expecting French, and silently sending
+ * Vietnamese would look like the flag worked.
+ */
+function requireLocale(value: string | undefined): Locale {
+  const asked = parseLocale(value);
+  if (asked === null) {
+    usage(`--lang must be one of ${LOCALES.join(", ")}`);
+  }
+  return asked;
+}
+
 function parseArgs(argv: readonly string[]): Args {
   let email = "";
   let tenantId = "";
@@ -80,13 +92,7 @@ function parseArgs(argv: readonly string[]): Args {
       role = argv[i] ?? "";
     } else if (arg === "--lang") {
       i += 1;
-      const asked = parseLocale(argv[i]);
-      // Refused, not defaulted. `--lang fr` is somebody expecting French; silently sending
-      // Vietnamese would look like the flag worked.
-      if (asked === null) {
-        usage(`--lang must be one of ${LOCALES.join(", ")}`);
-      }
-      locale = asked;
+      locale = requireLocale(argv[i]);
     } else if (arg === "--create-tenant") {
       createTenant = true;
     } else if (arg !== undefined && !arg.startsWith("--")) {
@@ -96,6 +102,17 @@ function parseArgs(argv: readonly string[]): Args {
     }
   }
 
+  require(email, tenantId, role);
+  return { email, tenantId, role, createTenant, locale };
+}
+
+/**
+ * The three things an invitation cannot be created without.
+ *
+ * Refused rather than defaulted, all three: an invite sent to the wrong tenant or with the
+ * wrong authority is not a mistake the operator can see afterwards.
+ */
+function require(email: string, tenantId: string, role: string): void {
   if (email === "") {
     usage("an email address is required");
   }
@@ -105,7 +122,6 @@ function parseArgs(argv: readonly string[]): Args {
   if (!ROLES.has(role)) {
     usage(`--role must be one of ${[...ROLES].join(", ")}`);
   }
-  return { email, tenantId, role, createTenant, locale };
 }
 
 function optional(name: string): string | undefined {
