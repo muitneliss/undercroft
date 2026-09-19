@@ -528,6 +528,21 @@ export const vi = {
       truncated: "Đã ghi {{at}} dòng; từ đây chỉ ghi cảnh báo và lỗi.",
       unknown: "Sự kiện {{event}}.",
     },
+
+    /** The graph beside the feed: the run's own shape, not what it said about itself. */
+    flow: {
+      head: "Sơ đồ",
+      models: "Mô hình",
+      modelsNone: "Chưa có mô hình",
+      modelsSummary: "{{models}} mô hình · {{tests}} kiểm tra",
+      modelsSummaryFailed: "{{models}} mô hình · {{tests}} kiểm tra · {{testsFailed}} không đạt",
+      entityDone: "Xong",
+      entityActive: "Đang xử lý",
+      entityInterrupted: "Dừng ở đây",
+      entityLandedRefused: "{{landed}} · {{refused}} bị từ chối",
+      chainedFrom: "Nối từ lần đồng bộ {{source}}",
+      chainedTo: "Nối sang việc dựng mô hình",
+    },
   },
 
   models: {

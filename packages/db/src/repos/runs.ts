@@ -486,6 +486,30 @@ export async function getRun(exec: SqlExecutor, tenantId: string, id: string): P
 }
 
 /**
+ * The run a given run chained into, if it has finished chaining yet.
+ *
+ * `startIngestJob` opens the child only after the parent's own `done` settles (jobs.ts), so
+ * a reader who just watched the parent close ok may still get `null` back for a beat before
+ * the child row exists. At most one child is expected per parent -- chaining happens once,
+ * right after the parent settles -- but the query takes the newest by `started_at` rather
+ * than assume it, the same defensiveness `openRun`'s in-progress lookup already applies.
+ */
+export async function findChildRun(
+  exec: SqlExecutor,
+  tenantId: string,
+  parentRunId: string,
+): Promise<Run | null> {
+  const { rows } = await exec.query<RunRow>(
+    `SELECT ${RUN_COLUMNS} FROM ops.run
+     WHERE tenant_id = $1 AND parent_run_id = $2
+     ORDER BY started_at DESC, id DESC LIMIT 1`,
+    [tenantId, parentRunId],
+  );
+  const [row] = rows;
+  return row === undefined ? null : toRun(row);
+}
+
+/**
  * A page of runs, newest first, keyed by an opaque cursor.
  *
  * The cursor is `startedAt|id` in base64url: the pair the index is ordered by, so a page
