@@ -26,7 +26,8 @@ import {
   tenantRolesFor,
 } from "@undercroft/db/repos";
 
-import { type RunDeps, RunInProgress, startIngest } from "./ingest.ts";
+import { RunInProgress, startIngest } from "./ingest.ts";
+import type { RunDeps } from "./runPaths.ts";
 import { readRelation } from "./preview.ts";
 import { runTransform, type TransformDeps } from "./transform.ts";
 

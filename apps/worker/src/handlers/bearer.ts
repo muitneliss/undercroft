@@ -10,7 +10,7 @@
 import type { Context } from "hono";
 import type { JobDeps } from "../services/jobs.ts";
 import type { LakeApiDeps } from "./lake.ts";
-import { resolveToken } from "../services/ingest.ts";
+import { resolveToken } from "../services/runPaths.ts";
 
 const BEARER = /^Bearer\s+(?<token>.+)$/iu;
 

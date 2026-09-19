@@ -14,7 +14,7 @@ import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { createLakeApi } from "./handlers/lake.ts";
 import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
-import type { Refresher } from "./services/ingest.ts";
+import type { Refresher } from "./services/runPaths.ts";
 import { closeAbandonedRuns } from "./services/ledger.ts";
 import { createTenantSessions } from "./services/tenantSession.ts";
 import { xeroRefresher } from "./services/xero/refresh.ts";
