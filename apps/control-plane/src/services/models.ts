@@ -1,0 +1,133 @@
+/**
+ * The customer's dbt models: listed with their last build, read in full, saved, deleted.
+ *
+ * Save stores and executes nothing. That is the whole of this module's promise: a model
+ * saved with a syntax error is a row in `app.model`, not a broken table in `analytics_x`,
+ * and Build -- a worker verb, chosen separately -- is where SQL first runs. An author who
+ * has saved and not built has changed nothing a dashboard can see.
+ *
+ * Two ways to write: `create` refuses a name already in use, because a person creating
+ * "stg_deals" over a colleague's has to be told; `save` overwrites, because that is what
+ * pressing Save on an open editor means. The handler words the refusal.
+ *
+ * The audit row names the model and who saved it, never the SQL: the trail is for "who
+ * changed what", and the SQL is in the table beside it.
+ */
+
+// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+
+import { ModelTests } from "@undercroft/contracts";
+import type { SqlExecutor } from "@undercroft/db";
+import {
+  deleteModel,
+  getModel,
+  insertModel,
+  type LastBuild,
+  lastBuildPerModel,
+  listModels,
+  type Model,
+  saveModel,
+} from "@undercroft/db/repos";
+
+import { record as recordAudit } from "../repos/auditLog.ts";
+
+export type { LastBuild, Model };
+
+export interface ModelItem {
+  readonly name: string;
+  readonly updatedAt: string;
+  readonly updatedBy: string;
+  readonly lastBuild: (LastBuild & { columns: string[] }) | null;
+}
+
+export type ModelDetail = ModelItem & { readonly sql: string; readonly tests: ModelTests };
+
+function item(model: Model, built: LastBuild | undefined): ModelItem {
+  return {
+    name: model.name,
+    updatedAt: model.updatedAt,
+    updatedBy: model.updatedBy,
+    lastBuild: built === undefined ? null : { ...built, columns: model.columns },
+  };
+}
+
+export async function list(exec: SqlExecutor, tenantId: string): Promise<ModelItem[]> {
+  const [models, builds] = await Promise.all([
+    listModels(exec, tenantId),
+    lastBuildPerModel(exec, tenantId),
+  ]);
+  return models.map((m) => item(m, builds.get(m.name)));
+}
+
+export async function get(
+  exec: SqlExecutor,
+  tenantId: string,
+  name: string,
+): Promise<ModelDetail | null> {
+  const model = await getModel(exec, tenantId, name);
+  if (model === null) {
+    return null;
+  }
+  const builds = await lastBuildPerModel(exec, tenantId);
+  return {
+    ...item(model, builds.get(name)),
+    sql: model.sql,
+    // Re-validated on the way out rather than asserted: the row's shape is the contract's
+    // by construction, and a parse says so where an assertion would only claim it.
+    tests: ModelTests.parse(model.tests),
+  };
+}
+
+export type SaveOutcome = { ok: true } | { ok: false; reason: "name-taken" };
+
+/**
+ * Store the model. With `create`, a name already in use is refused and nothing is written.
+ */
+export async function save(
+  exec: SqlExecutor,
+  input: {
+    tenantId: string;
+    name: string;
+    sql: string;
+    tests: ModelTests;
+    create: boolean;
+    actor: string;
+    actorId: string;
+  },
+): Promise<SaveOutcome> {
+  const model = { name: input.name, sql: input.sql, tests: input.tests, updatedBy: input.actorId };
+  if (input.create) {
+    const created = await insertModel(exec, input.tenantId, model);
+    if (!created) {
+      return { ok: false, reason: "name-taken" };
+    }
+  } else {
+    await saveModel(exec, input.tenantId, model);
+  }
+  await recordAudit(exec, {
+    tenantId: input.tenantId,
+    actor: input.actor,
+    action: "models.save",
+    detail: JSON.stringify({ name: input.name, created: input.create }),
+  });
+  return { ok: true };
+}
+
+/** Remove the model. `false` when there was none; the handler decides that is NOT_FOUND. */
+export async function remove(
+  exec: SqlExecutor,
+  input: { tenantId: string; name: string; actor: string },
+): Promise<boolean> {
+  const removed = await deleteModel(exec, input.tenantId, input.name);
+  if (removed) {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "models.delete",
+      detail: JSON.stringify({ name: input.name }),
+    });
+  }
+  return removed;
+}

@@ -7,12 +7,13 @@
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
 import { TRPCError } from "@trpc/server";
-import { Cadence } from "@undercroft/contracts";
+import { Cadence, MAX_MODEL_SQL_BYTES, ModelName, ModelTests } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import * as keys from "../services/keys.ts";
 import * as lake from "../services/lake.ts";
+import * as models from "../services/models.ts";
 import * as people from "../services/people.ts";
 import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
@@ -552,6 +553,66 @@ export const appRouter = router({
           cursor: input.cursor ?? null,
         }),
       ),
+  }),
+
+  models: router({
+    /** The tenant's models with their last build. Any member may read what is built for them. */
+    list: tenantProcedure.query(({ ctx, input }) => models.list(ctx.exec, input.tenantId)),
+
+    get: tenantProcedure.input(z.object({ name: ModelName })).query(async ({ ctx, input }) => {
+      const model = await models.get(ctx.exec, input.tenantId, input.name);
+      if (model === null) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return model;
+    }),
+
+    /**
+     * Store a model. Executes nothing: Build is the worker's verb, chosen separately, so a
+     * saved mistake is a row and not a broken table. Admin-only, like every write that
+     * changes what a customer's dashboards will show.
+     */
+    save: requireRole("admin")
+      .input(
+        z.object({
+          name: ModelName,
+          sql: z.string().max(MAX_MODEL_SQL_BYTES),
+          tests: ModelTests,
+          create: z.boolean().default(false),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const outcome = await models.save(ctx.exec, {
+          tenantId: ctx.tenantId,
+          name: input.name,
+          sql: input.sql,
+          tests: input.tests,
+          create: input.create,
+          actor: ctx.user.email,
+          actorId: ctx.user.userId,
+        });
+        if (!outcome.ok) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: messages(ctx.locale)("error.modelNameTaken", { name: input.name }),
+          });
+        }
+        return { ok: true };
+      }),
+
+    delete: requireRole("admin")
+      .input(z.object({ name: ModelName }))
+      .mutation(async ({ ctx, input }) => {
+        const removed = await models.remove(ctx.exec, {
+          tenantId: ctx.tenantId,
+          name: input.name,
+          actor: ctx.user.email,
+        });
+        if (!removed) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        return { ok: true };
+      }),
   }),
 
   runs: router({

@@ -1,0 +1,135 @@
+/**
+ * Models over tRPC: who may write one, and what a taken name is told.
+ *
+ * The role gate is pinned from both sides -- a member is refused, an admin is answered --
+ * and the one worded refusal on this router, a name already in use, arrives in the
+ * caller's language.
+ */
+
+// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
+
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { TRPCError } from "@trpc/server";
+import { migrate } from "@undercroft/db";
+import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+
+import { appRouter } from "./router.ts";
+import type { Context, Role } from "./trpc.ts";
+
+const TENANT = "CASE-0042";
+
+let db: TestDatabase;
+
+async function seedMember(email: string, role: Role): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    "INSERT INTO app.app_user (email) VALUES ($1) RETURNING id",
+    [email],
+  );
+  const userId = rows[0]?.id ?? "";
+  await db.query("INSERT INTO app.tenant_member (tenant_id, user_id, role) VALUES ($1, $2, $3)", [
+    TENANT,
+    userId,
+    role,
+  ]);
+  return userId;
+}
+
+function caller(userId: string, email: string, locale: "vi" | "en" = "vi") {
+  const ctx: Context = {
+    exec: db,
+    user: { userId, email },
+    sessionId: "s1",
+    superadmin: false,
+    locale,
+    endSession: () => Promise.resolve(),
+    notifyInvitation: () => Promise.resolve(false),
+    startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
+    worker: null,
+    googlePicker: null,
+  };
+  return appRouter.createCaller(ctx);
+}
+
+async function refusal(fn: () => Promise<unknown>): Promise<{ code: string; message: string }> {
+  try {
+    await fn();
+  } catch (error) {
+    if (error instanceof TRPCError) {
+      return { code: error.code, message: error.message };
+    }
+    throw error;
+  }
+  throw new Error("expected a refusal");
+}
+
+const DRAFT = { tenantId: TENANT, name: "stg_deals", sql: "select 1", tests: { columns: {} } };
+
+beforeEach(async () => {
+  db = await createTestDatabase();
+  await migrate(db);
+  await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+  await db.become("undercroft_app");
+});
+
+afterEach(async () => {
+  await db.close();
+});
+
+describe("models.save", () => {
+  it("a member is refused: what a dashboard shows is an admin's decision", async () => {
+    const member = await seedMember("m@example.test", "member");
+    const got = await refusal(() => caller(member, "m@example.test").models.save(DRAFT));
+    expect(got.code).toBe("FORBIDDEN");
+  });
+
+  it("an admin saves, and any member then reads it back", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const viewer = await seedMember("v@example.test", "viewer");
+
+    await caller(admin, "a@example.test").models.save({ ...DRAFT, create: true });
+
+    const listed = await caller(viewer, "v@example.test").models.list({ tenantId: TENANT });
+    expect(listed.map((m) => m.name)).toEqual(["stg_deals"]);
+    const full = await caller(viewer, "v@example.test").models.get({
+      tenantId: TENANT,
+      name: "stg_deals",
+    });
+    expect(full.sql).toBe("select 1");
+  });
+
+  it("a taken name is a CONFLICT worded in the caller's language", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    await caller(admin, "a@example.test").models.save({ ...DRAFT, create: true });
+
+    const got = await refusal(() =>
+      caller(admin, "a@example.test", "en").models.save({ ...DRAFT, create: true }),
+    );
+    expect(got.code).toBe("CONFLICT");
+    expect(got.message).toBe(
+      "A model named stg_deals already exists. Open it to edit, or choose another name.",
+    );
+  });
+
+  it("a name that is not a plain identifier is refused before it reaches the database", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const got = await refusal(() =>
+      caller(admin, "a@example.test").models.save({ ...DRAFT, name: "Deals-2026" }),
+    );
+    expect(got.code).toBe("BAD_REQUEST");
+  });
+});
+
+describe("models.delete", () => {
+  it("removes an existing model; a name that is not there is NOT_FOUND", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test");
+    await api.models.save({ ...DRAFT, create: true });
+
+    expect(await api.models.delete({ tenantId: TENANT, name: "stg_deals" })).toEqual({ ok: true });
+    const got = await refusal(() => api.models.delete({ tenantId: TENANT, name: "stg_deals" }));
+    expect(got.code).toBe("NOT_FOUND");
+  });
+});

@@ -69,6 +69,8 @@ export const en = {
     tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",
     tenantRoleCollision:
       "The tenant ID {{tenantId}} is too close to another customer's (it differs only in case or punctuation). Choose one that differs in more than that.",
+    modelNameTaken:
+      "A model named {{name}} already exists. Open it to edit, or choose another name.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
     scopeInsufficient:

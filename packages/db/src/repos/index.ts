@@ -47,6 +47,18 @@ export {
 } from "./ingestKeys.ts";
 export { type CursorKey, decodeCursor, encodeCursor } from "./cursor.ts";
 export {
+  deleteModel,
+  getModel,
+  insertModel,
+  type LastBuild,
+  lastBuildPerModel,
+  listModels,
+  type Model,
+  type ModelTestsJson,
+  saveModel,
+  setModelColumns,
+} from "./models.ts";
+export {
   claimExternalRun,
   claimFailedRuns,
   closeAbandoned,
