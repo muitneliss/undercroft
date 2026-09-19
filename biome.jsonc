@@ -234,16 +234,24 @@
             // an inferred generic the library does not export as a usable name. That is why
             // tRPC's own documentation writes them exactly like this.
             "useExplicitType": "off",
-            // There is no Playwright in this repo. The rule is nursery rather than
-            // playwright-domain, so `"playwright": "none"` above does not reach it, and it
-            // fires on ordinary `describe`-shaped calls -- a Drive API `describe` request and
-            // a connector-runtime helper.
-            "usePlaywrightValidDescribeCallback": "off",
+            // The React Compiler is not enabled in `vite.config.ts` and is not a dependency,
+            // so its one finding is advice for a build step this repo does not run.
+            "useReactCompiler": "off",
             // Reads `/\s/.test(value)` -- `RegExp#test` on a regex literal -- as a test
             // framework's `test()` with a non-string title, in 19 files that contain no test.
             // In a real suite it wants a shorter title shape than `tests.md` asks for, so it
             // has nothing to say on either side of the line.
             "useValidTestTitle": "off"
+          },
+          "complexity": {
+            // `void promise` is this repo's marker for a call that is deliberately not
+            // awaited, and every one of the seven sites says in a comment why: the i18next
+            // init that the module body cannot await, a sign-in redirect, a react-router
+            // transition nothing waits on, and the verification mail whose SEND DURATION
+            // would otherwise leak whether an address exists. Deleting the operator leaves
+            // the prose with nothing to point at. (Checked: `noFloatingPromises` does not
+            // currently report these, so this is about the reader, not a rule conflict.)
+            "noVoid": "off"
           },
           "performance": {
             // These sequential awaits ARE the design, and running them concurrently is the
@@ -252,14 +260,13 @@
             // each before the next; the connector runtime walks pages and id-chunks where
             // page N+1 is not known until N returns; `acceptInvitations` writes through one
             // `SqlExecutor`, which is a single connection and not safe to fan out on.
-            "noAwaitInLoops": "off"
-          },
-          "security": {
-            // Five findings, all false: a Drive `fields` mask, a connector-runtime cursor
-            // token, an AES key-derivation label, and two Dokploy endpoint paths. The rule
-            // scores string ENTROPY, and a long opaque-looking constant is not a credential.
-            // The real guard is `pii.md` plus `.gitignore`, which is checked by a human.
-            "noSecrets": "off"
+            "noAwaitInLoops": "off",
+            // A micro-optimisation aimed at re-render cost, which this control plane does not
+            // have: the lists are a handful of tenants and connections. Satisfying it means
+            // wrapping 17 handlers in `useCallback`, which moves the handler away from the
+            // element it belongs to and adds a dependency array that has to be kept right --
+            // a new way to be wrong, bought with no measured gain.
+            "noJsxPropsBind": "off"
           },
           "style": {
             // A guard at the top of a loop -- `if (result.status !== "created") continue;` --
@@ -432,6 +439,87 @@
           }
         }
       }
+    },
+
+    // Narrow scopes, below: a rule that is right almost everywhere and wrong at a handful of
+    // named places. These are the cases a `biome-ignore-all` header used to carry, kept as
+    // path entries so the rule stays ON for every file not listed -- which is the difference
+    // between an exception and switching the rule off. ADR 0018.
+
+    // `noSecrets` scores string ENTROPY, and these five are not credentials: a Drive `fields`
+    // mask, the connector runtime's cursor token, the AES key-derivation label, and two
+    // Dokploy endpoint paths. The rule stays on everywhere else, which is where a pasted key
+    // would actually land. The real guard against a committed secret is `pii.md` plus
+    // `.gitignore`.
+    {
+      "includes": [
+        "scripts/dokploy.ts",
+        "apps/worker/src/services/google/drive.ts",
+        "packages/connector-runtime/src/run.ts",
+        "packages/crypto/src/seal.ts"
+      ],
+      "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // There is no Playwright here. The rule is nursery rather than playwright-domain, so
+    // `"playwright": "none"` does not reach it, and it reads two ordinary `describe`-shaped
+    // calls -- a Drive API request and a connector-runtime helper -- as test declarations.
+    {
+      "includes": [
+        "apps/worker/src/services/google/api.ts",
+        "packages/connector-runtime/src/run.ts"
+      ],
+      "linter": { "rules": { "nursery": { "usePlaywrightValidDescribeCallback": "off" } } }
+    },
+
+    // The error types that cross package boundaries. Parameter properties ARE the shape of
+    // this module: `HttpError(status, url, bodyExcerpt, retryAfterMs)` carries the context
+    // that lets a reader tell a retry from an investigation, which the module docstring
+    // states as its whole purpose. Rewriting four classes into field declarations plus
+    // assignments doubles the file and says nothing new, and splitting one error per file
+    // scatters a set whose value is that it is one import.
+    {
+      "includes": ["packages/core/src/errors.ts"],
+      "linter": {
+        "rules": {
+          "complexity": { "useMaxParams": "off" },
+          "style": { "noExcessiveClassesPerFile": "off", "noParameterProperties": "off" }
+        }
+      }
+    },
+
+    // Same parameter-property reasoning for the one error class here.
+    {
+      "includes": ["packages/contracts/src/loadSpec.ts"],
+      "linter": { "rules": { "style": { "noParameterProperties": "off" } } }
+    },
+
+    // Surrogate-pair arithmetic: `offset >> 10` and `offset & 0x3ff` are the encoding, written
+    // the way the Unicode spec writes it. This function decides the bytes a record hashes to,
+    // and therefore its address in the lake -- `raw-lake.md` calls content addressing the
+    // default here. Restating it as division and modulo to satisfy a style rule is a rewrite
+    // of an encoding algorithm for no behavioural reason, which is exactly the class of change
+    // not worth making.
+    {
+      "includes": ["packages/core/src/canonicalJson.ts"],
+      "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
+    },
+
+    // A module named for a pair: `email.ts` holds the transport and its error, `store.ts` the
+    // lake store and the error it raises. One class per file would put an error in a file of
+    // its own, away from the only thing that throws it.
+    {
+      "includes": ["packages/core/src/email.ts", "packages/lake/src/store.ts"],
+      "linter": { "rules": { "style": { "noExcessiveClassesPerFile": "off" } } }
+    },
+
+    // `layering.md`: a repo takes `SqlExecutor` first, then the columns it writes. That is the
+    // signature every repo in the tree shares, and `writeCredential(exec, tenantId, source,
+    // credential, env?)` is five parameters because the row has four columns. Bundling them
+    // into an options object here alone would make this the one repo that reads differently.
+    {
+      "includes": ["packages/db/src/repos/**"],
+      "linter": { "rules": { "complexity": { "useMaxParams": "off" } } }
     },
 
     // Rules whose reason is "because it is a test" -- true of every test file, identically,
