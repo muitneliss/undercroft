@@ -23,7 +23,7 @@ import {
   saveDashboard,
   saveQuestion,
 } from "./bi.ts";
-import { InMemoryWorkerClient } from "./workerClient.ts";
+import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 
 const TENANT = "CASE-0042";
 const OTHER = "CASE-0043";

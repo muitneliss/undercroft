@@ -5,7 +5,6 @@
  * test above this line runs with no network and no credentials.
  */
 
-// biome-ignore-all lint/nursery/noMisleadingReturnType: A generator whose declared type is the contract its consumer relies on.
 export interface ObjectStore {
   get: (key: string) => Promise<Uint8Array>;
   put: (key: string, data: Uint8Array) => Promise<void>;
@@ -36,8 +35,8 @@ export function byCodeUnit(a: string, b: string): number {
 
 /** Raised when a requested object is not present. */
 export class ObjectNotFound extends Error {
-  constructor(key: string) {
-    super(`no such object: ${key}`);
+  constructor(key: string, options?: { cause?: unknown }) {
+    super(`no such object: ${key}`, options);
     this.name = "ObjectNotFound";
   }
 }

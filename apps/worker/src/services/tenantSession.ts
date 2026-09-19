@@ -12,11 +12,6 @@
  * against real Postgres in the Docker tier.
  */
 
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import { asExecutor, createRolePool, type SqlExecutor } from "@undercroft/db";
 import { rotateTenantPassword, type TenantRoleKind, tenantRolesFor } from "@undercroft/db/repos";
 
@@ -47,7 +42,7 @@ export function createTenantSessions(deps: {
   readonly dsn: string;
 }): TenantSessions {
   return {
-    async as(target, fn) {
+    async as<T>(target: SessionTarget, fn: (exec: SqlExecutor) => Promise<T>): Promise<T> {
       const roles = await tenantRolesFor(deps.exec, target.tenantId);
       if (roles === null) {
         throw new TenantNotProvisioned(target.tenantId);
@@ -78,7 +73,7 @@ export function sessionsBySetRole(
   asRole: <T>(role: string, fn: (tx: SqlExecutor) => Promise<T>) => Promise<T>,
 ): TenantSessions {
   return {
-    async as(target, fn) {
+    async as<T>(target: SessionTarget, fn: (exec: SqlExecutor) => Promise<T>): Promise<T> {
       const roles = await tenantRolesFor(exec, target.tenantId);
       if (roles === null) {
         throw new TenantNotProvisioned(target.tenantId);

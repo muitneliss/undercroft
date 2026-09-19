@@ -9,9 +9,6 @@
  * way to the browser -- while `integer`, `real` and `boolean` arrive as themselves.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: The size cap is the one number in the file, written as the kilobytes it is rather than as a constant that says the same thing twice.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
 import { z } from "zod";
 
 import { ModelName } from "./models.ts";

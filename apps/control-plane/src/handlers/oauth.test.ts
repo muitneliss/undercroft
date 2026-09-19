@@ -18,7 +18,7 @@ import { Hono } from "hono";
 import { isAdminIn } from "../services/authz.ts";
 import { startConsent } from "../services/oauth.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
-import { InMemoryWorkerClient } from "../services/workerClient.ts";
+import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
 
 const TENANT = "CASE-0042";

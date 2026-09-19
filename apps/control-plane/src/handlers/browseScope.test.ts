@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { messages } from "../i18n/index.ts";
 import type { WorkerFailure } from "../services/workerClient.ts";
-import { InMemoryWorkerClient } from "../services/workerClient.ts";
+import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
 

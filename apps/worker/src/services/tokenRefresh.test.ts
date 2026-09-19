@@ -19,7 +19,7 @@ import { readCredential } from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
-import { resolveToken } from "./ingest.ts";
+import { resolveToken } from "./runTypes.ts";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const ENV = { UNDERCROFT_SECRET_KEY: KEY };

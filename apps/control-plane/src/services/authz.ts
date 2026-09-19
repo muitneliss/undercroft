@@ -19,14 +19,12 @@
  * away from the query it was meant to guard.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-
 import type { SqlExecutor } from "@undercroft/db";
 import { type Role, roleFor as roleForMember } from "../repos/membership.ts";
 import { findTenant } from "../repos/tenant.ts";
 import { isSuperadmin, type Superadmins } from "./superadmin.ts";
 
-export type { Role };
+export type { Role } from "../repos/membership.ts";
 
 export const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2 };
 

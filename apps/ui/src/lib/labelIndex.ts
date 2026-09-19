@@ -27,9 +27,6 @@
  * cannot drift between what is typed and what is searched.
  */
 
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses.
-
 /** Who owns a label, as the provider reported it. Null is "it did not say". */
 export type LabelOwner = "system" | "user" | null;
 

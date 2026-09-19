@@ -8,8 +8,6 @@
  * the invisible wrongness rule 2 exists to prevent.
  */
 
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import { foldForSearch } from "@/lib/labelIndex.ts";
 
 export interface Region {

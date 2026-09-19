@@ -17,12 +17,6 @@
  * deliberately not what the card's `expiresAt` carries. See that field.
  */
 
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One service, one file: what the card shows, what an admin may change about a grant, and how a grant ends are three decisions about the same row, and a reader following one into the next should not change files to do it.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-
 import {
   type Cadence,
   type ConnectionScope,
@@ -48,7 +42,7 @@ import { record as recordAudit } from "../repos/auditLog.ts";
 import { grantCovers, requestedScopeFor } from "./oauth.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
-export type { Connection };
+export type { Connection } from "@undercroft/db/repos";
 
 /**
  * The sources the schedule always shows.

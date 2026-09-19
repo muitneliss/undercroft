@@ -27,17 +27,7 @@
  * which is the only thing that actually knows either.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on the two single-instance forms in the app -- a sign-in panel and a create-customer form, neither of which can appear twice on a page. The id is what the <label> points at.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType: what remains are contextually-typed callbacks whose inferred type is a React or tRPC shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- React's event handlers, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/nursery/useReactNamingConvention: Fires on the two `useRef` handles, which it wants suffixed `Ref`. They are named for what they hold -- the reference field and the name field -- which is how the form reads, and the convention this file follows is People.tsx's beside it.
-// biome-ignore-all lint/performance/noJsxPropsBind: An inline submit handler on a single form. The re-render the rule is about matters under a memoised list of hundreds; this is one <form>.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -46,22 +36,126 @@ import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { trpc } from "@/trpc.ts";
 
+/**
+ * Creating a customer, which only a platform superadmin may do.
+ *
+ * The refusal shown here is the SERVER's own words, never a restatement: a reference that is
+ * already taken is something the operator can act on, and a second copy of that sentence in
+ * the catalogue would drift out of step with the refusal that actually fired.
+ */
+function AddTenantPanel({
+  isSuperadmin,
+  addTenant,
+  idFieldRef,
+  nameFieldRef,
+  tenantIdFieldId,
+  tenantNameId,
+}: {
+  isSuperadmin: boolean;
+  addTenant: {
+    isPending: boolean;
+    isError: boolean;
+    error: { message: string } | null;
+    mutate: (input: { tenantId: string; displayName: string }) => void;
+  };
+  idFieldRef: React.RefObject<HTMLInputElement | null>;
+  nameFieldRef: React.RefObject<HTMLInputElement | null>;
+  tenantIdFieldId: string;
+  tenantNameId: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <>
+      {isSuperadmin ? (
+        <>
+          <p className="note">{t("tenants.addLead")}</p>
+
+          <form
+            className="stack stack--tight"
+            onSubmit={(event): void => {
+              event.preventDefault();
+              const tenantId = idFieldRef.current?.value.trim() ?? "";
+              const displayName = nameFieldRef.current?.value.trim() ?? "";
+              if (tenantId === "") {
+                return;
+              }
+              addTenant.mutate({ tenantId, displayName });
+            }}
+          >
+            <div className="field">
+              <label className="label" htmlFor={tenantIdFieldId}>
+                {t("tenants.idLabel")}
+              </label>
+              <input
+                autoComplete="off"
+                className="input"
+                disabled={addTenant.isPending}
+                id={tenantIdFieldId}
+                name="tenantId"
+                placeholder={t("tenants.idPlaceholder")}
+                ref={idFieldRef}
+                required={true}
+                type="text"
+              />
+              <p className="field__hint">{t("tenants.idHint")}</p>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor={tenantNameId}>
+                {t("tenants.nameLabel")}
+              </label>
+              <input
+                autoComplete="off"
+                className="input"
+                disabled={addTenant.isPending}
+                id={tenantNameId}
+                name="displayName"
+                placeholder={t("tenants.namePlaceholder")}
+                ref={nameFieldRef}
+                type="text"
+              />
+            </div>
+
+            <button className="plate" disabled={addTenant.isPending} type="submit">
+              {addTenant.isPending ? t("tenants.adding") : t("tenants.add")}
+            </button>
+          </form>
+
+          {/* The server's own words. A reference already in use is the one failure an
+            operator can act on, and it arrives worded in their language from
+            `error.tenantExists` -- restating it here would be a second copy to keep in
+            step with the refusal that actually happened. */}
+          {addTenant.isError ? (
+            <Errata heading={t("tenants.notAdded")} live={true}>
+              {addTenant.error?.message ?? ""}
+            </Errata>
+          ) : null}
+        </>
+      ) : (
+        <p className="note">{t("tenants.addNote")}</p>
+      )}
+    </>
+  );
+}
+
 export function Tenants(): React.JSX.Element {
   const { t } = useTranslation();
+  const tenantIdFieldId = useId();
+  const tenantNameId = useId();
   const utils = trpc.useUtils();
-  const idField = useRef<HTMLInputElement>(null);
-  const nameField = useRef<HTMLInputElement>(null);
+  const idFieldRef = useRef<HTMLInputElement>(null);
+  const nameFieldRef = useRef<HTMLInputElement>(null);
 
   const tenants = trpc.tenants.list.useQuery();
   const session = trpc.session.me.useQuery();
 
   const addTenant = trpc.tenants.create.useMutation({
     onSuccess: async () => {
-      if (idField.current !== null) {
-        idField.current.value = "";
+      if (idFieldRef.current !== null) {
+        idFieldRef.current.value = "";
       }
-      if (nameField.current !== null) {
-        nameField.current.value = "";
+      if (nameFieldRef.current !== null) {
+        nameFieldRef.current.value = "";
       }
       // The new customer belongs in the list beside the others, and the cache is the only
       // copy of that list -- there is no second one here to keep in step.
@@ -125,74 +219,14 @@ export function Tenants(): React.JSX.Element {
 
       <div className="head">{t("tenants.addHead")}</div>
       <div className="body stack">
-        {session.data?.superadmin === true ? (
-          <>
-            <p className="note">{t("tenants.addLead")}</p>
-
-            <form
-              className="stack stack--tight"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const tenantId = idField.current?.value.trim() ?? "";
-                const displayName = nameField.current?.value.trim() ?? "";
-                if (tenantId === "") {
-                  return;
-                }
-                addTenant.mutate({ tenantId, displayName });
-              }}
-            >
-              <div className="field">
-                <label className="label" htmlFor="tenant-id">
-                  {t("tenants.idLabel")}
-                </label>
-                <input
-                  autoComplete="off"
-                  className="input"
-                  disabled={addTenant.isPending}
-                  id="tenant-id"
-                  name="tenantId"
-                  placeholder={t("tenants.idPlaceholder")}
-                  ref={idField}
-                  required={true}
-                  type="text"
-                />
-                <p className="field__hint">{t("tenants.idHint")}</p>
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="tenant-name">
-                  {t("tenants.nameLabel")}
-                </label>
-                <input
-                  autoComplete="off"
-                  className="input"
-                  disabled={addTenant.isPending}
-                  id="tenant-name"
-                  name="displayName"
-                  placeholder={t("tenants.namePlaceholder")}
-                  ref={nameField}
-                  type="text"
-                />
-              </div>
-
-              <button className="plate" disabled={addTenant.isPending} type="submit">
-                {addTenant.isPending ? t("tenants.adding") : t("tenants.add")}
-              </button>
-            </form>
-
-            {/* The server's own words. A reference already in use is the one failure an
-                operator can act on, and it arrives worded in their language from
-                `error.tenantExists` -- restating it here would be a second copy to keep in
-                step with the refusal that actually happened. */}
-            {addTenant.isError ? (
-              <Errata heading={t("tenants.notAdded")} live={true}>
-                {addTenant.error.message}
-              </Errata>
-            ) : null}
-          </>
-        ) : (
-          <p className="note">{t("tenants.addNote")}</p>
-        )}
+        <AddTenantPanel
+          isSuperadmin={session.data?.superadmin === true}
+          addTenant={addTenant}
+          idFieldRef={idFieldRef}
+          nameFieldRef={nameFieldRef}
+          tenantIdFieldId={tenantIdFieldId}
+          tenantNameId={tenantNameId}
+        />
       </div>
     </div>
   );

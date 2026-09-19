@@ -23,19 +23,6 @@
  * changing it would strand every byte already written under the old one.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: An inline submit handler on a single form. The re-render the rule is about matters under a memoised list of hundreds; this is one <form>.
-// biome-ignore-all lint/style/useGlobalThis: Reading `process` in a composition root on Bun, where it is the documented global.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
@@ -74,11 +61,9 @@ function connectFailureKey(
 
 /** How often the list re-reads while a run is in progress. A run is minutes; this is not. */
 const RUNNING_POLL_MS = 5000;
-
 export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
-  const utils = trpc.useUtils();
   const connections = trpc.connections.list.useQuery(
     { tenantId },
     {
@@ -93,19 +78,6 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
   );
   const tenant = trpc.tenants.get.useQuery({ tenantId });
 
-  async function invalidate(): Promise<void> {
-    await utils.connections.list.invalidate({ tenantId });
-  }
-
-  const startOAuth = trpc.connections.startOAuth.useMutation({
-    onSuccess: (result) => {
-      window.location.assign(result.authorizeUrl);
-    },
-  });
-  const disconnect = trpc.connections.disconnect.useMutation({ onSuccess: invalidate });
-  const runNow = trpc.runs.trigger.useMutation({ onSuccess: invalidate });
-  const setCadence = trpc.connections.setCadence.useMutation({ onSuccess: invalidate });
-
   if (connections.isPending || tenant.isPending) {
     return <Skeleton rows={5} />;
   }
@@ -118,112 +90,21 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
     );
   }
 
-  const list = connections.data;
   // Hiding is courtesy; the server refuses regardless. A viewer sees the schedule and no
   // live buttons, which is the honest rendering of what they may do.
   const isAdmin = tenant.data.role === "admin";
-  const failed = params.get("connect") === "failed";
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("nav.sources")}</div>
-      <div className="body stack">
-        <h1>{t("sources.title")}</h1>
-        <p className="prose prose--lead">
-          {list.length === 0 ? t("sources.none") : t("sources.count", { count: list.length })}
-        </p>
 
-        {failed ? (
-          <Errata heading={t("grant.connectFailed")} live={true}>
-            {t(connectFailureKey(params.get("reason")))}
-          </Errata>
-        ) : null}
-
-        {/*
-          A refusal to START a consent, which the server now words rather than answering with
-          a URL it made up. Without this the navigation below simply never happened and the
-          page sat there looking like a dead button.
-        */}
-        {startOAuth.isError ? (
-          <Errata heading={t("grant.connectFailed")} live={true}>
-            {startOAuth.error.message}
-          </Errata>
-        ) : null}
-
-        {disconnect.isError ? (
-          <Errata heading={t("grant.disconnectFailed")} live={true}>
-            {disconnect.error.message}
-          </Errata>
-        ) : null}
-
-        {disconnect.isSuccess && !disconnect.data.revokedUpstream ? (
-          // Reported, never assumed: our row is gone but the grant may still stand at
-          // Google, and only the customer can finish that.
-          <Errata heading={t("grant.disconnected")} live={true}>
-            {t("grant.disconnectedNotRevoked")}
-          </Errata>
-        ) : null}
-
-        {/* The server's own sentence: a run already in progress, a worker that did not
-            answer, a source it refused. Each names its remedy; a local restatement would be
-            a second copy to keep in step with the refusal that actually happened. */}
-        {runNow.isError ? (
-          <Errata heading={t("grant.runNotStarted")} live={true}>
-            {runNow.error.message}
-          </Errata>
-        ) : null}
-
-        {setCadence.isError ? (
-          <Errata heading={t("grant.cadenceNotSaved")} live={true}>
-            {setCadence.error.message}
-          </Errata>
-        ) : null}
-      </div>
-
-      <div className="band-rule" />
-
-      <div className="head">{t("sources.grantsHead")}</div>
-      <div className="body">
-        {list.length === 0 ? (
-          <p className="note">{t("common.nothingToShow")}</p>
-        ) : (
-          <div className="schedule">
-            {list.map((connection: Connection) => (
-              <ConnectionCard
-                key={connection.source}
-                tenantId={tenantId}
-                connection={connection}
-                canRun={isAdmin}
-                busy={
-                  startOAuth.isPending ||
-                  disconnect.isPending ||
-                  runNow.isPending ||
-                  setCadence.isPending ||
-                  !isAdmin
-                }
-                onConnect={() => {
-                  startOAuth.mutate({ tenantId, source: connection.source });
-                }}
-                onScope={() => {
-                  window.location.assign(
-                    `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
-                  );
-                }}
-                onDisconnect={() => {
-                  disconnect.mutate({ tenantId, source: connection.source });
-                }}
-                onRun={() => {
-                  runNow.mutate({ tenantId, source: connection.source });
-                }}
-                onCadence={(cadence) => {
-                  setCadence.mutate({ tenantId, source: connection.source, cadence });
-                }}
-                tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <SourcesBand
+        tenantId={tenantId}
+        list={connections.data}
+        isAdmin={isAdmin}
+        failed={params.get("connect") === "failed"}
+        reason={params.get("reason")}
+      />
 
       {/* Keys are minted and revoked by admins; a member or viewer is not shown a band they
           cannot act in, and the server refuses regardless. */}
@@ -247,6 +128,198 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
           tenantId={tenantId}
         />
       </div>
+    </div>
+  );
+}
+
+/** The four mutations a grant can be acted on with, held in one place so a card gets all four. */
+interface Actions {
+  readonly startOAuth: ReturnType<typeof trpc.connections.startOAuth.useMutation>;
+  readonly disconnect: ReturnType<typeof trpc.connections.disconnect.useMutation>;
+  readonly runNow: ReturnType<typeof trpc.runs.trigger.useMutation>;
+  readonly setCadence: ReturnType<typeof trpc.connections.setCadence.useMutation>;
+}
+
+/**
+ * The lead, what the last action refused, and the schedule itself.
+ *
+ * Two bands rather than one because the refusals are read at the top of the page and the
+ * grants below the rule -- but they come from the same four mutations, and splitting them
+ * into separate components would mean owning those mutations somewhere neither of them is.
+ */
+function SourcesBand({
+  tenantId,
+  list,
+  isAdmin,
+  failed,
+  reason,
+}: {
+  tenantId: string;
+  list: readonly Connection[];
+  isAdmin: boolean;
+  failed: boolean;
+  reason: string | null;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const utils = trpc.useUtils();
+
+  async function invalidate(): Promise<void> {
+    await utils.connections.list.invalidate({ tenantId });
+  }
+
+  const actions: Actions = {
+    startOAuth: trpc.connections.startOAuth.useMutation({
+      onSuccess: (result) => {
+        globalThis.location.assign(result.authorizeUrl);
+      },
+    }),
+    disconnect: trpc.connections.disconnect.useMutation({ onSuccess: invalidate }),
+    runNow: trpc.runs.trigger.useMutation({ onSuccess: invalidate }),
+    setCadence: trpc.connections.setCadence.useMutation({ onSuccess: invalidate }),
+  };
+
+  return (
+    <>
+      <div className="body stack">
+        <h1>{t("sources.title")}</h1>
+        <p className="prose prose--lead">
+          {list.length === 0 ? t("sources.none") : t("sources.count", { count: list.length })}
+        </p>
+        <Refusals actions={actions} failed={failed} reason={reason} />
+      </div>
+
+      <div className="band-rule" />
+
+      <div className="head">{t("sources.grantsHead")}</div>
+      <div className="body">
+        {list.length === 0 ? (
+          <p className="note">{t("common.nothingToShow")}</p>
+        ) : (
+          <SourceCards tenantId={tenantId} list={list} canRun={isAdmin} actions={actions} />
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Everything this page might have to say it could not do.
+ *
+ * Each refusal is the SERVER's own sentence -- a run already in progress, a worker that did
+ * not answer, a source it refused -- because a local restatement is a second copy to keep in
+ * step with the refusal that actually happened.
+ */
+function Refusals({
+  actions,
+  failed,
+  reason,
+}: {
+  actions: Actions;
+  failed: boolean;
+  reason: string | null;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const { startOAuth, disconnect, runNow, setCadence } = actions;
+
+  return (
+    <>
+      {failed ? (
+        <Errata heading={t("grant.connectFailed")} live={true}>
+          {t(connectFailureKey(reason))}
+        </Errata>
+      ) : null}
+
+      {/*
+        A refusal to START a consent, which the server now words rather than answering with
+        a URL it made up. Without this the navigation below simply never happened and the
+        page sat there looking like a dead button.
+      */}
+      {startOAuth.isError ? (
+        <Errata heading={t("grant.connectFailed")} live={true}>
+          {startOAuth.error.message}
+        </Errata>
+      ) : null}
+
+      {disconnect.isError ? (
+        <Errata heading={t("grant.disconnectFailed")} live={true}>
+          {disconnect.error.message}
+        </Errata>
+      ) : null}
+
+      {disconnect.isSuccess && !disconnect.data.revokedUpstream ? (
+        // Reported, never assumed: our row is gone but the grant may still stand at
+        // Google, and only the customer can finish that.
+        <Errata heading={t("grant.disconnected")} live={true}>
+          {t("grant.disconnectedNotRevoked")}
+        </Errata>
+      ) : null}
+
+      {runNow.isError ? (
+        <Errata heading={t("grant.runNotStarted")} live={true}>
+          {runNow.error.message}
+        </Errata>
+      ) : null}
+
+      {setCadence.isError ? (
+        <Errata heading={t("grant.cadenceNotSaved")} live={true}>
+          {setCadence.error.message}
+        </Errata>
+      ) : null}
+    </>
+  );
+}
+
+/** The schedule: one card per source, each wired to the four mutations. */
+function SourceCards({
+  tenantId,
+  list,
+  canRun,
+  actions,
+}: {
+  tenantId: string;
+  list: readonly Connection[];
+  canRun: boolean;
+  actions: Actions;
+}): React.JSX.Element {
+  const { startOAuth, disconnect, runNow, setCadence } = actions;
+  // One action at a time, across every card: the list is about to be invalidated and a
+  // second request answers about a schedule that no longer exists.
+  const busy =
+    startOAuth.isPending ||
+    disconnect.isPending ||
+    runNow.isPending ||
+    setCadence.isPending ||
+    !canRun;
+
+  return (
+    <div className="schedule">
+      {list.map((connection: Connection) => (
+        <ConnectionCard
+          key={connection.source}
+          tenantId={tenantId}
+          connection={connection}
+          canRun={canRun}
+          busy={busy}
+          onConnect={(): void => {
+            startOAuth.mutate({ tenantId, source: connection.source });
+          }}
+          onScope={(): void => {
+            globalThis.location.assign(
+              `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
+            );
+          }}
+          onDisconnect={(): void => {
+            disconnect.mutate({ tenantId, source: connection.source });
+          }}
+          onRun={(): void => {
+            runNow.mutate({ tenantId, source: connection.source });
+          }}
+          onCadence={(cadence): void => {
+            setCadence.mutate({ tenantId, source: connection.source, cadence });
+          }}
+          tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
+        />
+      ))}
     </div>
   );
 }

@@ -12,12 +12,6 @@
  * "Other", so a chart with fifty customers is still a chart. A null is a gap, never a zero.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: `bySeries` is one pass over the rows that places each value in its series and its label -- one sequential procedure whose branches are the states a row can be in (a kept series, a folded one, a gap). Splitting it would put the shape of one pivot across several names.
-// biome-ignore-all lint/complexity/useMaxParams: `bySeries` takes five arguments, each a distinct required input with no sensible grouping. Bundling them into an options object to satisfy a count would hide which are required.
-// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { ChartConfig } from "@undercroft/contracts/bi";
 
 import type { TableResult } from "@/api/types.ts";
@@ -102,15 +96,25 @@ function byColumns(result: TableResult, x: number, y: string[]): Series {
  * Series beyond the palette fold into "Other" by summing positions; the folded raw is
  * null, because a sum of floats is not a figure anybody may read.
  */
-function bySeries(
+interface SeriesRequest {
+  readonly result: TableResult;
+  readonly x: number;
+  readonly seriesAt: number;
+  readonly yName: string;
+  readonly otherLabel: string;
+}
+
+/**
+ * The two axes of the pivot, in the order the rows first mention them.
+ *
+ * Row order, never sorted: the query said what order it wanted, and a chart that re-sorts an
+ * `ORDER BY` is a chart that disagrees with the table beside it.
+ */
+function axesOf(
   result: TableResult,
   x: number,
   seriesAt: number,
-  yName: string,
-  otherLabel: string,
-): Series {
-  const yAt = index(result, yName);
-  const type = typeAt(result, yAt);
+): { labels: string[]; names: string[] } {
   const labels: string[] = [];
   const names: string[] = [];
   for (const row of result.rows) {
@@ -123,20 +127,22 @@ function bySeries(
       names.push(name);
     }
   }
-  const kept = names.slice(0, MAX_SERIES);
-  const folded = names.length > MAX_SERIES;
-  const datasets: {
-    label: string;
-    values: (number | null)[];
-    raw: (string | null)[];
-    colour: string;
-  }[] = kept.map((name, i) => ({
+  return { labels, names };
+}
+
+/** One empty dataset per kept series, plus the fold's own when there is one. */
+function emptySeries(
+  labels: readonly string[],
+  kept: readonly string[],
+  otherLabel: string | null,
+): Dataset[] {
+  const datasets: Dataset[] = kept.map((name, i) => ({
     label: name,
     values: labels.map(() => null),
     raw: labels.map(() => null),
     colour: colourFor(i),
   }));
-  if (folded) {
+  if (otherLabel !== null) {
     datasets.push({
       label: otherLabel,
       values: labels.map(() => null),
@@ -144,23 +150,67 @@ function bySeries(
       colour: OTHER,
     });
   }
+  return datasets;
+}
+
+/** Where each row's value goes: which position on the axis, and which dataset holds it. */
+interface Fill {
+  readonly result: TableResult;
+  readonly x: number;
+  readonly seriesAt: number;
+  readonly yAt: number;
+  readonly type: string;
+  readonly labels: readonly string[];
+  readonly kept: readonly string[];
+}
+
+/** A named series takes the position AND the readable figure behind it. */
+function writeNamed(dataset: Dataset, at: number, cell: Cell, type: string): void {
+  dataset.values[at] = plotValue(cell, type);
+  dataset.raw[at] = rawOf(cell);
+}
+
+/**
+ * The fold takes a sum of positions only.
+ *
+ * Its `raw` stays null on purpose: a sum of floats is not a figure anybody may read, and
+ * printing one in a tooltip would be exactly the invisible wrongness rule 2 exists to
+ * prevent. A null contributes nothing rather than counting as a zero.
+ */
+function addFolded(dataset: Dataset, at: number, cell: Cell, type: string): void {
+  const value = plotValue(cell, type);
+  if (value !== null) {
+    dataset.values[at] = (dataset.values[at] ?? 0) + value;
+  }
+}
+
+/** Write every row into the dataset its series names, or into the fold. */
+function fillSeries(datasets: Dataset[], fill: Fill): void {
+  const { result, x, seriesAt, yAt, type, labels, kept } = fill;
   for (const row of result.rows) {
-    const li = labels.indexOf(labelOf(x < 0 ? null : (row[x] ?? null)));
-    const name = labelOf(row[seriesAt] ?? null);
-    const ki = kept.indexOf(name);
-    const di = ki >= 0 ? ki : datasets.length - 1;
-    const dataset = datasets[di];
+    const at = labels.indexOf(labelOf(x < 0 ? null : (row[x] ?? null)));
+    const ki = kept.indexOf(labelOf(row[seriesAt] ?? null));
+    const dataset = datasets[ki >= 0 ? ki : datasets.length - 1];
     if (dataset === undefined) {
       continue;
     }
-    const value = plotValue(row[yAt] ?? null, type);
     if (ki >= 0) {
-      dataset.values[li] = value;
-      dataset.raw[li] = rawOf(row[yAt] ?? null);
-    } else if (value !== null) {
-      dataset.values[li] = (dataset.values[li] ?? 0) + value;
+      writeNamed(dataset, at, row[yAt] ?? null, type);
+    } else {
+      addFolded(dataset, at, row[yAt] ?? null, type);
     }
   }
+}
+
+function bySeries(request: SeriesRequest): Series {
+  const { result, x, seriesAt, yName, otherLabel } = request;
+  const yAt = index(result, yName);
+  const type = typeAt(result, yAt);
+  const { labels, names } = axesOf(result, x, seriesAt);
+  const kept = names.slice(0, MAX_SERIES);
+  const datasets = emptySeries(labels, kept, names.length > MAX_SERIES ? otherLabel : null);
+
+  fillSeries(datasets, { result, x, seriesAt, yAt, type, labels, kept });
   return { labels, datasets, x: result.columns[x]?.name ?? null, y: [yName] };
 }
 
@@ -170,7 +220,13 @@ export function toSeries(result: TableResult, chart: ChartConfig, otherLabel: st
   const xAt = index(result, x);
   const [firstY] = y;
   if (series !== null && firstY !== undefined) {
-    return bySeries(result, xAt, index(result, series), firstY, otherLabel);
+    return bySeries({
+      result,
+      x: xAt,
+      seriesAt: index(result, series),
+      yName: firstY,
+      otherLabel,
+    });
   }
   return byColumns(result, xAt, y);
 }

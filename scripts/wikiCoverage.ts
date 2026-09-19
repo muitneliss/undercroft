@@ -39,16 +39,6 @@
  * Hashing is plain sha256 over the file's bytes, which is what the CLI records.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same function as noExcessiveLinesPerFunction: `auditWiki` is one sequential procedure whose branches are the ways a wiki page and its document can disagree.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: `auditWiki` holds one decision -- which findings this checkout has -- and the way to shorten it is to split one sequential pass across several names, which makes the order the checks run in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noNodejsModules: This is a build script running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, used here for `Bun.Glob`. tsc resolves it, and tsc is the check that binds here.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Two reads of a parsed YAML document, which genuinely is `unknown` -- `tracked.yaml`'s shape and a page's frontmatter are both files a human edits. Every field is checked for its type immediately after, and a field that fails the check is reported rather than assumed.
-// biome-ignore-all lint/style/noContinue: Each `continue` skips one item in a loop with the reason stated on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noMagicNumbers: Two structural offsets into a frontmatter block -- the 4 characters of the opening `---\n` fence, used as both a slice start and a search start. `FRONTMATTER_FENCE_LENGTH` does not tell a reader anything `"---\n".length` did not.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses.
-// biome-ignore-all lint/style/useExportsLast: The order here is deliberate -- the types this module is about first, then what operates on them. The ordering carries meaning and the rule's preferred one does not.
-
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -164,80 +154,96 @@ function sha256(file: string): string {
  * Returned findings are sorted by kind then path so the output is stable between runs --
  * a gate whose message reorders itself produces diffs nobody can read.
  */
-export function auditWiki(root: string): Finding[] {
-  const findings: Finding[] = [];
-  const scoped = new Set(inScopeFiles(root));
-  const pages = readPages(root).filter((page) => page.sourcePath !== null);
-  const claims = new Map<string, string[]>();
+/**
+ * One page's claim on one file: does it exist, is it in scope, and does its digest still
+ * match? A page that records no readable digest is REPORTED, not passed over -- there is no
+ * evidence its summary still matches its document, and "no evidence" is not "pass".
+ */
+function auditPage(root: string, page: Page, scoped: ReadonlySet<string>): Finding[] {
+  const claimed = page.sourcePath ?? "";
+  const absolute = join(root, claimed);
 
-  for (const page of pages) {
-    const claimed = page.sourcePath ?? "";
-    claims.set(claimed, [...(claims.get(claimed) ?? []), page.page]);
-
-    const absolute = join(root, claimed);
-    if (!existsSync(absolute)) {
-      findings.push({
+  if (!existsSync(absolute)) {
+    return [
+      {
         kind: "dangling",
         path: page.page,
         message: `claims ${claimed}, which does not exist`,
         remedy: `the file moved or was deleted: re-ingest at its new path, or run: wiki remove --title "<title>"`,
-      });
-      continue;
-    }
-
-    if (!scoped.has(claimed)) {
-      findings.push({
-        kind: "out-of-scope",
-        path: page.page,
-        message: `claims ${claimed}, which wiki/tracked.yaml does not cover`,
-        remedy: "widen include in wiki/tracked.yaml, or remove the page",
-      });
-    }
-
-    // A page that records no readable digest is REPORTED, not passed over. There is no
-    // evidence its summary still matches its document, and "no evidence" is not "pass" --
-    // that is rule 2 in CLAUDE.md, and skipping the comparison here would have been the
-    // harness quietly breaking the rule it exists to enforce.
-    if (page.sourceHash === null) {
-      findings.push({
-        kind: "unverifiable",
-        path: page.page,
-        message: `claims ${claimed} but records no readable source_hash`,
-        remedy: `re-ingest so the digest is written: wiki ingest --source ${claimed} --title "<title>"`,
-      });
-    } else if (sha256(absolute) !== page.sourceHash) {
-      findings.push({
-        kind: "stale",
-        path: claimed,
-        message: `has changed since ${page.page} was written`,
-        remedy: `read the file, then run: wiki ingest --source ${claimed} --title "<title>"`,
-      });
-    }
+      },
+    ];
   }
 
-  for (const [claimed, byPages] of claims) {
-    if (byPages.length > 1) {
-      findings.push({
-        kind: "duplicated",
-        path: claimed,
-        message: `is claimed by ${byPages.length} pages: ${byPages.join(", ")}`,
-        remedy: 'remove all but one with: wiki remove --title "<title>"',
-      });
-    }
+  const findings: Finding[] = [];
+  if (!scoped.has(claimed)) {
+    findings.push({
+      kind: "out-of-scope",
+      path: page.page,
+      message: `claims ${claimed}, which wiki/tracked.yaml does not cover`,
+      remedy: "widen include in wiki/tracked.yaml, or remove the page",
+    });
   }
 
-  for (const file of scoped) {
-    if (!claims.has(file)) {
-      findings.push({
-        kind: "uncovered",
-        path: file,
-        message: "is in scope but has no wiki source page",
-        remedy: `read the file, then run: wiki ingest --source ${file} --title "<title>"`,
-      });
-    }
+  if (page.sourceHash === null) {
+    findings.push({
+      kind: "unverifiable",
+      path: page.page,
+      message: `claims ${claimed} but records no readable source_hash`,
+      remedy: `re-ingest so the digest is written: wiki ingest --source ${claimed} --title "<title>"`,
+    });
+  } else if (sha256(absolute) !== page.sourceHash) {
+    findings.push({
+      kind: "stale",
+      path: claimed,
+      message: `has changed since ${page.page} was written`,
+      remedy: `read the file, then run: wiki ingest --source ${claimed} --title "<title>"`,
+    });
+  }
+  return findings;
+}
+
+/** A file two pages both claim to summarise. One of them is wrong and nothing says which. */
+function duplicatedClaims(claims: ReadonlyMap<string, string[]>): Finding[] {
+  return [...claims]
+    .filter(([, byPages]) => byPages.length > 1)
+    .map(([claimed, byPages]) => ({
+      kind: "duplicated" as const,
+      path: claimed,
+      message: `is claimed by ${byPages.length} pages: ${byPages.join(", ")}`,
+      remedy: 'remove all but one with: wiki remove --title "<title>"',
+    }));
+}
+
+/** A file in scope that no page covers. */
+function uncoveredFiles(
+  scoped: ReadonlySet<string>,
+  claims: ReadonlyMap<string, string[]>,
+): Finding[] {
+  return [...scoped]
+    .filter((file) => !claims.has(file))
+    .map((file) => ({
+      kind: "uncovered" as const,
+      path: file,
+      message: "is in scope but has no wiki source page",
+      remedy: `read the file, then run: wiki ingest --source ${file} --title "<title>"`,
+    }));
+}
+
+export function auditWiki(root: string): Finding[] {
+  const scoped = new Set(inScopeFiles(root));
+  const pages = readPages(root).filter((page) => page.sourcePath !== null);
+
+  const claims = new Map<string, string[]>();
+  for (const page of pages) {
+    const claimed = page.sourcePath ?? "";
+    claims.set(claimed, [...(claims.get(claimed) ?? []), page.page]);
   }
 
-  return findings.sort((a, b) => a.kind.localeCompare(b.kind) || a.path.localeCompare(b.path));
+  return [
+    ...pages.flatMap((page) => auditPage(root, page, scoped)),
+    ...duplicatedClaims(claims),
+    ...uncoveredFiles(scoped, claims),
+  ].sort((a, b) => a.kind.localeCompare(b.kind) || a.path.localeCompare(b.path));
 }
 
 /**

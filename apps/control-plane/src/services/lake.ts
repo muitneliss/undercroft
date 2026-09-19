@@ -13,8 +13,6 @@
  * empty page, which is what it is: absence, not an error.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-
 import type { SqlExecutor } from "@undercroft/db";
 
 import {
@@ -29,7 +27,13 @@ import {
   summariseRecords,
 } from "../repos/rawLake.ts";
 
-export type { DocumentSummary, Page, RawDocument, RawRecord, RecordStreamSummary };
+export type {
+  DocumentSummary,
+  Page,
+  RawDocument,
+  RawRecord,
+  RecordStreamSummary,
+} from "../repos/rawLake.ts";
 
 export interface LakeSummary {
   readonly records: RecordStreamSummary[];

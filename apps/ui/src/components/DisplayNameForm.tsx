@@ -21,16 +21,7 @@
  * only thing that actually knows either.
  */
 
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/useUniqueElementIds: A static id on a single-instance form, matching the create-customer form in Tenants.tsx. The id is what this field's <label> points at, and the component renders once per page -- the duplicate-id hazard the rule describes needs a second instance, which the route does not create.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as the routes: what remains are contextually-typed callbacks whose inferred type is a React or tRPC shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- React's event handlers, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/nursery/useReactNamingConvention: Fires on the `nameField` handle, which it wants suffixed `Ref`. It is named for what it holds -- the name field -- which is how the form reads, and the convention this follows is Tenants.tsx's beside it.
-// biome-ignore-all lint/performance/noJsxPropsBind: An inline submit handler on a single form. The re-render the rule is about matters under a memoised list of hundreds; this is one <form>.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
@@ -46,8 +37,9 @@ export function DisplayNameForm({
   canEdit: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const displayNameId = useId();
   const utils = trpc.useUtils();
-  const nameField = useRef<HTMLInputElement>(null);
+  const nameFieldRef = useRef<HTMLInputElement>(null);
 
   const rename = trpc.tenants.rename.useMutation({
     onSuccess: async () => {
@@ -69,13 +61,13 @@ export function DisplayNameForm({
 
       <form
         className="stack stack--tight"
-        onSubmit={(event) => {
+        onSubmit={(event): void => {
           event.preventDefault();
-          rename.mutate({ tenantId, displayName: nameField.current?.value.trim() ?? "" });
+          rename.mutate({ tenantId, displayName: nameFieldRef.current?.value.trim() ?? "" });
         }}
       >
         <div className="field">
-          <label className="label" htmlFor="tenant-display-name">
+          <label className="label" htmlFor={displayNameId}>
             {t("tenants.nameLabel")}
           </label>
           <input
@@ -87,11 +79,11 @@ export function DisplayNameForm({
             // uncontrolled input ignores every later `defaultValue` on its own.
             defaultValue={displayName}
             disabled={rename.isPending}
-            id="tenant-display-name"
+            id={displayNameId}
             key={displayName}
             name="displayName"
             placeholder={t("tenants.namePlaceholder")}
-            ref={nameField}
+            ref={nameFieldRef}
             type="text"
           />
         </div>

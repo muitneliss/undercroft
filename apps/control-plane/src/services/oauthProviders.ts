@@ -13,10 +13,6 @@
  * source: the handshake row carries the source.
  */
 
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: OAuth query parameter names (access_type, include_granted_scopes) are the provider's.
-
 export type Provider = "google" | "xero";
 
 /** What a deployment holds for one provider: the client, and where the browser comes back. */
@@ -59,6 +55,9 @@ export interface ProviderShape {
   /** Whether the token response carries an id token naming who consented. */
   readonly identity: boolean;
 }
+
+/** Trailing slashes on the configured public URL, so the callback path joins cleanly. */
+const TRAILING_SLASHES = /\/+$/u;
 
 export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
   google: {
@@ -121,5 +120,5 @@ export function providerOf(source: string): Provider | null {
 
 /** Where a provider is told to come back to. One URI per provider, registered in its console. */
 export function redirectUri(publicUrl: string, provider: Provider): string {
-  return `${publicUrl.replace(/\/+$/u, "")}/oauth/${provider}/callback`;
+  return `${publicUrl.replace(TRAILING_SLASHES, "")}/oauth/${provider}/callback`;
 }

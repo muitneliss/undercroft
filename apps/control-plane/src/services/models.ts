@@ -14,10 +14,6 @@
  * changed what", and the SQL is in the table beside it.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import {
   type BuildModelResponse,
   type DqFailuresRequest,
@@ -40,7 +36,7 @@ import { MACROS, SOURCES_YML } from "@undercroft/db/services";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
-export type { LastBuild, Model };
+export type { LastBuild, Model } from "@undercroft/db/repos";
 
 export interface ModelItem {
   readonly name: string;

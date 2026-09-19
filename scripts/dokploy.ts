@@ -10,46 +10,22 @@
  * Three things here look like over-engineering and are not. Each is a failure that has
  * already shipped somewhere:
  *
- *   * `deploy` snapshots the deployment ids BEFORE triggering and refuses to read a verdict
+ *   - `deploy` snapshots the deployment ids BEFORE triggering and refuses to read a verdict
  *     out of a record that already existed. `compose.deploy` only queues, so for the first
  *     seconds the newest record is still the PREVIOUS release's -- `status: done`, finished
  *     hours ago, exit 0. That is how a release reports success while the host goes on
  *     running the build before it.
- *   * `verify` compares image CONFIG digests against what ghcr serves, because Dokploy
+ *   - `verify` compares image CONFIG digests against what ghcr serves, because Dokploy
  *     reports `done` for a deploy that changed nothing. Config digest, not index digest:
  *     buildx attestations change the index digest on every build, so two builds of an
  *     identical image compare unequal there and equal here.
- *   * Reads retry; the trigger never does. A retried trigger queues a second concurrent
+ *   - Reads retry; the trigger never does. A retried trigger queues a second concurrent
  *     `docker compose up` against the same stack.
  *
  * Credentials come from the environment and are never written to a file -- all three or
  * none, so a half-finished secret wiring cannot reach for a developer's compose id and
  * deploy something nobody asked for.
  */
-
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/useSingleJsDocAsterisk: Bullet lists inside module docstrings. Biome's fix flattens them, which destroyed the list recording how invite-only is enforced in three independent places -- exactly the documentation that must not be damaged by a formatter.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
-// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
-// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
-// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One design document and one deploy client, each of which argues with itself across its length. Splitting at 300 lines would cut a single argument in half.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
-
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
 
 import process from "node:process";
 
@@ -62,6 +38,15 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 5
 
 /** Images this repo publishes. Everything else in the stack is upstream and not ours to verify. */
 const RELEASED_IMAGE_PREFIX = "ghcr.io/muitneliss/undercroft-";
+
+/** A trailing slash on the configured endpoint, so paths join without doubling it. */
+const TRAILING_SLASH = /\/$/u;
+/** A compose service key at the top level: exactly two spaces of indent. */
+const TOP_LEVEL_SERVICE = /^ {2}(?<name>[a-z0-9][a-z0-9-]*):\s*$/u;
+const IMAGE_LINE = /^\s+image:\s*(?<image>\S+)\s*$/u;
+/** A key at any depth, used to track which service a `depends_on` entry sits under. */
+const NESTED_NAME = /^\s+(?<name>[a-z0-9][a-z0-9-]*):\s*$/u;
+const COMPLETED_CONDITION = /^\s+condition:\s*service_completed_successfully\s*$/u;
 
 /** Flags the stored compose command must carry. Asserted by `preflight`, never written by CI. */
 const REQUIRED_COMMAND_FLAGS = ["--pull always", "--wait", "--wait-timeout", "--remove-orphans"];
@@ -126,7 +111,7 @@ export function configFromEnv(env: Record<string, string | undefined>): Config {
   if (missing.length > 0) {
     throw new Error(`not configured: ${missing.join(", ")} must be set`);
   }
-  return { endpoint: endpoint.replace(/\/$/u, ""), apiKey, composeId };
+  return { endpoint: endpoint.replace(TRAILING_SLASH, ""), apiKey, composeId };
 }
 
 export const realDeps: Deps = {
@@ -223,7 +208,7 @@ export async function deployAndWait(
       );
     }
   }
-  const deploymentId = ours.deploymentId;
+  const { deploymentId } = ours;
   deps.log(`deployment ${deploymentId} queued`);
 
   // Phase two: watch that record, and only that record, until it settles.
@@ -269,8 +254,9 @@ export async function composeRecord(cfg: Config, deps: Deps): Promise<ComposeRec
  */
 export function expandEnv(value: string, env: Record<string, string | undefined>): string {
   return value.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/gu,
-    (_match: string, name: string, fallback: string | undefined) => {
+    /\$\{(?<name>[A-Za-z_][A-Za-z0-9_]*)(?::-(?<fallback>[^}]*))?\}/gu,
+    (...args: unknown[]) => {
+      const { name, fallback } = args.at(-1) as { name: string; fallback?: string };
       const resolved = env[name];
       return resolved !== undefined && resolved !== "" ? resolved : (fallback ?? "");
     },
@@ -289,13 +275,13 @@ export function releasedServices(
   const found: { service: string; image: string }[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
-    const serviceMatch = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
-    if (serviceMatch?.[1] !== undefined) {
-      service = serviceMatch[1];
+    const matchedService = TOP_LEVEL_SERVICE.exec(line)?.groups?.name;
+    if (matchedService !== undefined) {
+      service = matchedService;
     }
-    const imageMatch = /^\s+image:\s*(\S+)\s*$/u.exec(line);
-    if (imageMatch?.[1]?.startsWith(RELEASED_IMAGE_PREFIX)) {
-      found.push({ service, image: expandEnv(imageMatch[1], env) });
+    const matchedImage = IMAGE_LINE.exec(line)?.groups?.image;
+    if (matchedImage?.startsWith(RELEASED_IMAGE_PREFIX) === true) {
+      found.push({ service, image: expandEnv(matchedImage, env) });
     }
   }
   return found;
@@ -316,11 +302,11 @@ export function oneShotServices(composeFile: string): Set<string> {
   const found = new Set<string>();
   let candidate = "";
   for (const line of composeFile.split("\n")) {
-    const nameMatch = /^\s+([a-z0-9][a-z0-9-]*):\s*$/u.exec(line);
-    if (nameMatch?.[1] !== undefined) {
-      candidate = nameMatch[1];
+    const matchedName = NESTED_NAME.exec(line)?.groups?.name;
+    if (matchedName !== undefined) {
+      candidate = matchedName;
     }
-    if (/^\s+condition:\s*service_completed_successfully\s*$/u.test(line) && candidate !== "") {
+    if (COMPLETED_CONDITION.test(line) && candidate !== "") {
       found.add(candidate);
     }
   }
@@ -429,6 +415,76 @@ async function publishedConfigDigest(deps: Deps, image: string, token: string): 
  *
  * Empty `releaseTag` keeps the old behaviour for an operator running `verify` by hand.
  */
+interface ServiceCheck {
+  readonly cfg: Config;
+  readonly deps: Deps;
+  readonly ghcrToken: string;
+  readonly service: string;
+  readonly image: string;
+  readonly appName: string;
+  readonly containers: readonly Container[];
+  /** Whether this service is meant to run to completion rather than stay up. */
+  readonly oneShot: boolean;
+}
+
+/**
+ * One service, checked. Returns what is wrong with it, or null when it is right.
+ *
+ * A one-shot service is meant to exit and a long-running one is meant not to, so they are
+ * asked different questions -- reading the wrong expectation either way is a false verdict.
+ * Absence of evidence is never success: without `State` there is no exit code, and "not
+ * running" is exactly what a completed job and a crashed one have in common.
+ *
+ * The digest check is reached by BOTH kinds, because a migration that exited 0 on last
+ * release's image is still the wrong thing having run, and the digest is the only way to see
+ * it. Config digest, not index digest: see the module docstring.
+ */
+type VerifiedService = { ok: true; digest: string } | { ok: false; problem: string };
+
+async function verifyService(check: ServiceCheck): Promise<VerifiedService> {
+  const { cfg, deps, service, image, appName, containers, oneShot } = check;
+
+  const container = containers.find((c) => c.name.includes(`-${service}-`));
+  if (container === undefined) {
+    return { ok: false, problem: `${service}: no container matching ${appName}-${service}-*` };
+  }
+
+  const config = await callApi<ContainerConfig>(cfg, deps, "docker.getConfig", {
+    query: { containerId: container.containerId },
+    retries: 3,
+  });
+
+  if (oneShot) {
+    const state = config.State;
+    if (state === undefined) {
+      return {
+        ok: false,
+        problem: `${service}: docker.getConfig returned no State, so no exit code to read`,
+      };
+    }
+    if (state.Status !== "exited" || state.ExitCode !== 0) {
+      return {
+        ok: false,
+        problem: `${service}: one-shot service is ${state.Status} with exit code ${state.ExitCode}, expected exited 0`,
+      };
+    }
+  } else if (container.state !== "running") {
+    return {
+      ok: false,
+      problem: `${service}: container is ${container.state} (${container.status})`,
+    };
+  }
+
+  const expected = await publishedConfigDigest(deps, image, check.ghcrToken);
+  if (config.Image !== expected) {
+    return {
+      ok: false,
+      problem: `${service}: running ${config.Image} (from ${config.Config.Image}), ghcr serves ${expected} for ${image}`,
+    };
+  }
+  return { ok: true, digest: expected };
+}
+
 export async function verify(
   cfg: Config,
   deps: Deps,
@@ -450,50 +506,24 @@ export async function verify(
 
   const problems: string[] = [];
   for (const { service, image } of services) {
-    const container = containers.find((c) => c.name.includes(`-${service}-`));
-    if (container === undefined) {
-      problems.push(`${service}: no container matching ${compose.appName}-${service}-*`);
-      continue;
-    }
-
-    const config = await callApi<ContainerConfig>(cfg, deps, "docker.getConfig", {
-      query: { containerId: container.containerId },
-      retries: 3,
+    const checked = await verifyService({
+      cfg,
+      deps,
+      ghcrToken,
+      service,
+      image,
+      appName: compose.appName,
+      containers,
+      oneShot: oneShot.has(service),
     });
-
-    // A one-shot service is meant to exit; a long-running one is meant not to. Reading the
-    // wrong expectation either way is a false verdict, so they are asked different questions.
-    if (oneShot.has(service)) {
-      const state = config.State;
-      if (state === undefined) {
-        // Never infer success from the absence of evidence: without State there is no exit
-        // code, and "it is not running" is exactly what a completed job and a crashed one
-        // have in common.
-        problems.push(`${service}: docker.getConfig returned no State, so no exit code to read`);
-        continue;
-      }
-      if (state.Status !== "exited" || state.ExitCode !== 0) {
-        problems.push(
-          `${service}: one-shot service is ${state.Status} with exit code ${state.ExitCode}, expected exited 0`,
-        );
-        continue;
-      }
-    } else if (container.state !== "running") {
-      problems.push(`${service}: container is ${container.state} (${container.status})`);
-      continue;
-    }
-
-    // Reached by both kinds: a migration that exited 0 on last release's image is still the
-    // wrong thing running, and the digest is the only way to see it.
-    const expected = await publishedConfigDigest(deps, image, ghcrToken);
-    if (config.Image !== expected) {
-      problems.push(
-        `${service}: running ${config.Image} (from ${config.Config.Image}), ghcr serves ${expected} for ${image}`,
-      );
+    if (!checked.ok) {
+      problems.push(checked.problem);
       continue;
     }
     const ran = oneShot.has(service) ? "ran to completion on" : "runs";
-    deps.log(`  ${service} ${ran} the published image ${image} (${expected.slice(0, 19)}...)`);
+    deps.log(
+      `  ${service} ${ran} the published image ${image} (${checked.digest.slice(0, 19)}...)`,
+    );
   }
 
   if (problems.length > 0) {

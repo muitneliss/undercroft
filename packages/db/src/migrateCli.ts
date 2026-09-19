@@ -19,12 +19,6 @@
  * evidence at all.
  */
 
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Setting two roles' passwords one after the other on one connection is the order the deploy log reports them in; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
-
 import process from "node:process";
 import { migrate, type PlatformLoginRole, setRolePassword } from "./migrate.ts";
 import { asExecutor, createPool } from "./pool.ts";

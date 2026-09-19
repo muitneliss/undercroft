@@ -13,16 +13,6 @@
  * chart frame, so the geo plugin and the projection maths ride only with a map.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks whose inferred type is a Chart.js option shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Chart.js's tooltip and scale callbacks -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: Data and option objects built per render for a map of one result. The re-render the rule is about matters under a memoised list of hundreds.
-// biome-ignore-all lint/style/noMagicNumbers: The number of unmatched labels named before "and more" is the number itself, read beside the note it bounds.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useNamingConvention: `ChartJS` is the name react-chartjs-2's own documentation gives the Chart.js class when both are in one file, to keep it apart from the `Chart` component; strictCase would have it `ChartJs`, which no reader of either library recognises.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { useQuery } from "@tanstack/react-query";
 import type { ChartConfig } from "@undercroft/contracts/bi";
 import { Chart as ChartJS } from "chart.js";
@@ -156,46 +146,13 @@ export function GeoChart({
 
   return (
     <div className="stack stack--tight">
-      <div className="plot plot--map">
-        <Chart
-          type="choropleth"
-          data={{
-            labels: collection.features.map(nameOf),
-            datasets: [
-              {
-                label: first.label,
-                outline: collection.features,
-                showOutline: true,
-                data: points,
-              },
-            ],
-          }}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (item) => {
-                    const point = points[item.dataIndex];
-                    const row =
-                      point === undefined
-                        ? undefined
-                        : joined.byCode.get(regionOfFeature(point.feature).code);
-                    const name = point === undefined ? "" : nameOf(point.feature);
-                    return `${name}: ${row?.raw === null || row === undefined ? MISSING : formatDecimal(row.raw)}`;
-                  },
-                },
-              },
-            },
-            scales: {
-              projection: { axis: "x", projection: spec.projection },
-              color: { axis: "x", interpolate, legend: { position: "bottom-right" } },
-            },
-          }}
-        />
-      </div>
+      <Choropleth
+        collection={collection}
+        points={points}
+        joined={joined}
+        label={first.label}
+        projection={spec.projection}
+      />
       {joined.unmatched.length > 0 ? (
         <p className="note">
           {t("chart.unmatched", {
@@ -207,6 +164,69 @@ export function GeoChart({
       <p className="field__hint">
         {region === "vn" ? t("chart.attributionVn") : t("chart.attributionWorld")}
       </p>
+    </div>
+  );
+}
+
+/**
+ * The drawing: every boundary outlined, and the ones a row reached filled from the ramp.
+ *
+ * The tooltip reads the row's ORIGINAL digits out of the join, never the float that
+ * positioned the colour -- `money.md`, and the reason `raw` is carried this far.
+ */
+function Choropleth({
+  collection,
+  points,
+  joined,
+  label,
+  projection,
+}: {
+  collection: FeatureCollection<Geometry>;
+  points: readonly { feature: Feature<Geometry>; value: number }[];
+  joined: ReturnType<typeof joinRegions>;
+  label: string;
+  projection: (typeof REGIONS)[RegionKey]["projection"];
+}): React.JSX.Element {
+  return (
+    <div className="plot plot--map">
+      <Chart
+        type="choropleth"
+        data={{
+          labels: collection.features.map(nameOf),
+          datasets: [
+            {
+              label,
+              outline: collection.features,
+              showOutline: true,
+              data: [...points],
+            },
+          ],
+        }}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (item): string => {
+                  const point = points[item.dataIndex];
+                  const row =
+                    point === undefined
+                      ? undefined
+                      : joined.byCode.get(regionOfFeature(point.feature).code);
+                  const name = point === undefined ? "" : nameOf(point.feature);
+                  return `${name}: ${row?.raw === null || row === undefined ? MISSING : formatDecimal(row.raw)}`;
+                },
+              },
+            },
+          },
+          scales: {
+            projection: { axis: "x", projection },
+            color: { axis: "x", interpolate, legend: { position: "bottom-right" } },
+          },
+        }}
+      />
     </div>
   );
 }

@@ -7,8 +7,6 @@
  * privilege tests into the offline gate rather than the Docker tier.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: `dataTypeID` is the field name pg and PGlite both report a result column under, and the seam carries it as they spell it; a camelCase respelling would be a second name for the same thing.
-
 /** One column of a result, as the server described it: its name and its type's OID. */
 export interface QueryField {
   readonly name: string;

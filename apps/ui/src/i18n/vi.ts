@@ -23,9 +23,6 @@
  *   and `@/lib/money`, which decide a zone and a separator in one place each.
  */
 
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One catalogue, one file: every sentence the interface says in this language, in one place a translator reads top to bottom. Splitting it by length would split a language, and a key added to one half and forgotten in the other is exactly what the single file exists to prevent.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
-
 export const vi = {
   app: {
     name: "Undercroft",

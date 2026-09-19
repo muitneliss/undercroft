@@ -23,13 +23,6 @@
  * refused rather than run with a guess.
  */
 
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One contract, one file: the shape of a question, the shape of a dashboard, and the compiler that turns the one into SQL are three views of one agreement, and a reader checking that the compiler honours the shape wants them side by side rather than in three files that agree by convention.
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: `filterSql` is one switch over the eleven filter operators, each arm a line or three; splitting it by operator family would put the shape of one clause across three names.
-// biome-ignore-all lint/style/noMagicNumbers: The bounds on a definition -- how long a name or a value, how many fields, filters or tiles, how wide the grid -- are the numbers themselves, read beside the field they bound; a constant per bound would be a second name for each with no meaning the number does not already carry.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: `not_null`, `is_null`, `date_range` and the chart type names are the words stored in a question's definition and sent over the wire; the key is the value, and a camelCase spelling would be a second name for the same thing.
-
 import { z } from "zod";
 
 import { DEFAULT_QUERY_ROWS, MAX_QUERY_ROWS, MAX_QUERY_SQL_BYTES } from "./transformApi.ts";

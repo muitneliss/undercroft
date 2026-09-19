@@ -1,0 +1,96 @@
+# Bans the file-wide lint bypass outside test files, and the two spellings that reach the
+# money and no-mock plugins anywhere at all.
+#
+# `// biome-ignore-all lint/x/y` silences rule `y` from that comment to the END OF THE FILE,
+# not at the line that needed it -- so it also answers every violation written afterwards, by
+# someone who never read the reason. Biome reports an unused `// biome-ignore` (one line) but
+# never an unused `biome-ignore-all`, which is why 17 of this repo's 679 headers were already
+# dead with the gate green. A rule that cannot hold here belongs in `biome.jsonc`, once, with
+# its reason; a genuine one-off gets the line-level `// biome-ignore`, which Biome expires by
+# itself once `--error-on-warnings` is on.
+#
+# Test files keep theirs: their headers are answered by the `**/*.test.ts(x)` override in
+# `biome.jsonc` where the reason is "because it is a test", and the rest were left in place
+# deliberately. See ADR 0018 and `.claude/rules/suppressions.md`.
+#
+# Four rules because ast-grep binds one language per rule and `.tsx` parses as `tsx`.
+# Pinned from both sides -- fires, and stays quiet -- by `scripts/suppressions.test.ts`.
+id: no-biome-ignore-all-ts
+language: typescript
+severity: error
+message: >-
+  biome-ignore-all silences the rule for the whole file, and Biome never reports it once it
+  stops being needed. Put the decision in biome.jsonc with its reason, or use a line-level
+  // biome-ignore. See .claude/rules/suppressions.md and docs/adr/0018.
+files:
+  - "**/*.ts"
+ignores:
+  - "**/*.test.ts"
+rule:
+  kind: comment
+  regex: "^//\\s*biome-ignore-all\\b"
+---
+id: no-biome-ignore-all-tsx
+language: tsx
+severity: error
+message: >-
+  biome-ignore-all silences the rule for the whole file, and Biome never reports it once it
+  stops being needed. Put the decision in biome.jsonc with its reason, or use a line-level
+  // biome-ignore. See .claude/rules/suppressions.md and docs/adr/0018.
+files:
+  - "**/*.tsx"
+ignores:
+  - "**/*.test.tsx"
+rule:
+  kind: comment
+  regex: "^//\\s*biome-ignore-all\\b"
+---
+# The two spellings that silence the GritQL plugins, banned EVERYWHERE -- test files included.
+#
+# Verified against Biome 2.5.14: `// biome-ignore-all plugin:` does not suppress them, but
+# `// biome-ignore-all lint:` and `// biome-ignore-all lint/plugin:` both do. `money.grit` and
+# `no-mocks.grit` are the two rules CLAUDE.md calls the ones this repo most needs a machine to
+# enforce, so no file may reach them, and a test suite least of all -- `no-mocks.grit` exists
+# for test files specifically.
+id: no-blanket-biome-ignore-ts
+language: typescript
+severity: error
+message: >-
+  A group-wide or plugin-wide biome suppression silences the money and no-mock plugins. Name
+  the individual rule, or answer it in biome.jsonc. See .claude/rules/suppressions.md.
+rule:
+  kind: comment
+  regex: "^//\\s*biome-ignore(-all)?\\s+(lint|lint/plugin|plugin/[a-z]+)\\s*:"
+---
+id: no-blanket-biome-ignore-tsx
+language: tsx
+severity: error
+message: >-
+  A group-wide or plugin-wide biome suppression silences the money and no-mock plugins. Name
+  the individual rule, or answer it in biome.jsonc. See .claude/rules/suppressions.md.
+rule:
+  kind: comment
+  regex: "^//\\s*biome-ignore(-all)?\\s+(lint|lint/plugin|plugin/[a-z]+)\\s*:"
+---
+# The second escape hatch. `bun run lint:rules` is the hard gate for `state.md`, `layering.md`
+# and this file; an `ast-grep-ignore` turns any of them off at a line, and nothing reports it.
+# There are none in the tree today and this is what keeps it that way.
+id: no-ast-grep-ignore-ts
+language: typescript
+severity: error
+message: >-
+  ast-grep-ignore switches off the layering, useState and suppression gates with no record.
+  Fix the code, or change the rule deliberately. See .claude/rules/suppressions.md.
+rule:
+  kind: comment
+  regex: "^//\\s*ast-grep-ignore\\b"
+---
+id: no-ast-grep-ignore-tsx
+language: tsx
+severity: error
+message: >-
+  ast-grep-ignore switches off the layering, useState and suppression gates with no record.
+  Fix the code, or change the rule deliberately. See .claude/rules/suppressions.md.
+rule:
+  kind: comment
+  regex: "^//\\s*ast-grep-ignore\\b"

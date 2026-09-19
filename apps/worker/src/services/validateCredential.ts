@@ -13,9 +13,6 @@
  * an admin their token is wrong.
  */
 
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags a provider's probe URL as a high-entropy literal; it is a public endpoint path, and no real credential is in any tracked file. CI enforces that separately.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { ByteFetcher } from "@undercroft/core";
 import { raiseForByteStatus } from "@undercroft/core";
 

@@ -12,8 +12,6 @@
  * exists and why the format being wrong somewhere is survivable rather than fatal.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-
 import { z } from "zod";
 
 /** A dotted path into a JSON body: `paging.next.link`, `Invoices`, `from.id`. */

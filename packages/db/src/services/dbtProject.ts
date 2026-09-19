@@ -24,10 +24,6 @@
  * per model or test, with the failing-row count a test reported. Pure, so a fixture pins it.
  */
 
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: `not_null`, `run_results`, `execution_time` and `relation_name` are dbt's own names for its own things, read from a file dbt wrote; a camelCase spelling would be a second name for the same thing.
-
 import type { RunStep } from "../repos/runs.ts";
 
 /** The environment variable the generated profile reads the tenant's password from. */

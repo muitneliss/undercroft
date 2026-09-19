@@ -7,20 +7,11 @@
  * value is one a chart can plot.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/useUniqueElementIds: Static ids on a single-instance form: the panel renders once per question, and the ids are what its <label>s point at.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks whose inferred type is a React shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- React's event handlers -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on the panel's controls. The re-render the rule is about needs a memoised child to bite; these props land on plain DOM elements.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { CHART_TYPES, type ChartConfig, type ChartType } from "@undercroft/contracts/bi";
 import { useTranslation } from "react-i18next";
 
 import { isNumericType } from "@/lib/plot.ts";
+import { useId } from "react";
 
 const TYPE_KEY = {
   table: "chart.table",
@@ -56,152 +47,233 @@ export function ChartOptions({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const numeric = columns.filter((c) => isNumericType(c.type));
-  const { max } = chart.options;
 
   return (
     <div className="stack stack--tight">
       <div className="row">
-        <div className="field">
-          <label className="label" htmlFor="chart-type">
-            {t("chart.typeLabel")}
-          </label>
-          <select
-            className="input input--select"
-            id="chart-type"
-            value={chart.type}
-            onChange={(event) => {
-              const chosen = event.currentTarget.value;
-              const type = CHART_TYPES.find((candidate) => candidate === chosen);
-              if (type !== undefined) {
-                onChange({ ...chart, type });
-              }
-            }}
-          >
-            {CHART_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {t(TYPE_KEY[type])}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label" htmlFor="chart-x">
-            {t("chart.xLabel")}
-          </label>
-          <select
-            className="input input--select"
-            id="chart-x"
-            value={chart.x ?? NONE}
-            onChange={(event) => {
-              const x = event.currentTarget.value;
-              const { x: _dropped, ...rest } = chart;
-              onChange(x === NONE ? rest : { ...rest, x });
-            }}
-          >
-            <option value={NONE}>{t("chart.none")}</option>
-            {columns.map((column) => (
-              <option key={column.name} value={column.name}>
-                {column.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label" htmlFor="chart-series">
-            {t("chart.seriesLabel")}
-          </label>
-          <select
-            className="input input--select"
-            id="chart-series"
-            value={chart.series ?? NONE}
-            onChange={(event) => {
-              const series = event.currentTarget.value;
-              const { series: _dropped, ...rest } = chart;
-              onChange(series === NONE ? rest : { ...rest, series });
-            }}
-          >
-            <option value={NONE}>{t("chart.none")}</option>
-            {columns
-              .filter((c) => !isNumericType(c.type))
-              .map((column) => (
-                <option key={column.name} value={column.name}>
-                  {column.name}
-                </option>
-              ))}
-          </select>
-        </div>
-        {chart.type === "map" ? (
-          <div className="field">
-            <label className="label" htmlFor="chart-region">
-              {t("chart.regionLabel")}
-            </label>
-            <select
-              className="input input--select"
-              id="chart-region"
-              value={chart.options.region === "world" ? "world" : "vn"}
-              onChange={(event) => {
-                onChange({
-                  ...chart,
-                  options: { ...chart.options, region: event.currentTarget.value },
-                });
-              }}
-            >
-              <option value="vn">{t("chart.regionVn")}</option>
-              <option value="world">{t("chart.regionWorld")}</option>
-            </select>
-          </div>
-        ) : null}
-        {BOUNDED.has(chart.type) ? (
-          <div className="field">
-            <label className="label" htmlFor="chart-max">
-              {t("chart.maxLabel")}
-            </label>
-            <input
-              className="input"
-              id="chart-max"
-              min={1}
-              type="number"
-              value={typeof max === "number" ? max : ""}
-              onChange={(event) => {
-                // parseInt, not Number(): a bound on a dial, not an amount.
-                const parsed = Number.parseInt(event.currentTarget.value, 10);
-                const { max: _dropped, ...options } = chart.options;
-                onChange({
-                  ...chart,
-                  options:
-                    Number.isFinite(parsed) && parsed > 0 ? { ...options, max: parsed } : options,
-                });
-              }}
-            />
-          </div>
-        ) : null}
+        <TypeSelect
+          type={chart.type}
+          onPick={(type): void => {
+            onChange({ ...chart, type });
+          }}
+        />
+        <ColumnSelect
+          label={t("chart.xLabel")}
+          value={chart.x ?? NONE}
+          columns={columns}
+          onPick={(x): void => {
+            const { x: _dropped, ...rest } = chart;
+            onChange(x === NONE ? rest : { ...rest, x });
+          }}
+        />
+        <ColumnSelect
+          label={t("chart.seriesLabel")}
+          value={chart.series ?? NONE}
+          columns={columns.filter((c) => !isNumericType(c.type))}
+          onPick={(series): void => {
+            const { series: _dropped, ...rest } = chart;
+            onChange(series === NONE ? rest : { ...rest, series });
+          }}
+        />
+        {chart.type === "map" ? <RegionSelect chart={chart} onChange={onChange} /> : null}
+        {BOUNDED.has(chart.type) ? <MaxField chart={chart} onChange={onChange} /> : null}
       </div>
 
       {numeric.length === 0 ? null : (
-        <fieldset className="index">
-          <legend className="label index__legend">{t("chart.yLabel")}</legend>
-          <div className="index__cols">
-            {numeric.map((column) => (
-              <label key={column.name} className="punch">
-                <input
-                  type="checkbox"
-                  checked={chart.y.includes(column.name)}
-                  onChange={(event) => {
-                    onChange({
-                      ...chart,
-                      y: event.currentTarget.checked
-                        ? [...chart.y, column.name]
-                        : chart.y.filter((name) => name !== column.name),
-                    });
-                  }}
-                />
-                <span className="punch__box" />
-                <span>{column.name}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <ValueColumns chart={chart} numeric={numeric} onChange={onChange} />
       )}
     </div>
+  );
+}
+
+/** Which of the sixteen drawings. The catalogue names them; `CHART_TYPES` orders them. */
+function TypeSelect({
+  type,
+  onPick,
+}: {
+  type: ChartType;
+  onPick: (type: ChartType) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const chartTypeId = useId();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={chartTypeId}>
+        {t("chart.typeLabel")}
+      </label>
+      <select
+        className="input input--select"
+        id={chartTypeId}
+        value={type}
+        onChange={(event): void => {
+          const chosen = event.currentTarget.value;
+          const picked = CHART_TYPES.find((candidate) => candidate === chosen);
+          if (picked !== undefined) {
+            onPick(picked);
+          }
+        }}
+      >
+        {CHART_TYPES.map((candidate) => (
+          <option key={candidate} value={candidate}>
+            {t(TYPE_KEY[candidate])}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
+ * One "which column" choice, offered from the result's own columns.
+ *
+ * Both the axis and the series are this select with a different label and a different
+ * shortlist -- the caller filters, because which columns may answer is the caller's question.
+ */
+function ColumnSelect({
+  label,
+  value,
+  columns,
+  onPick,
+}: {
+  label: string;
+  value: string;
+  columns: readonly { name: string }[];
+  onPick: (name: string) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const selectId = useId();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={selectId}>
+        {label}
+      </label>
+      <select
+        className="input input--select"
+        id={selectId}
+        value={value}
+        onChange={(event): void => {
+          onPick(event.currentTarget.value);
+        }}
+      >
+        <option value={NONE}>{t("chart.none")}</option>
+        {columns.map((column) => (
+          <option key={column.name} value={column.name}>
+            {column.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** Which map a map is drawn on. Only a map asks. */
+function RegionSelect({
+  chart,
+  onChange,
+}: {
+  chart: ChartConfig;
+  onChange: (chart: ChartConfig) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const chartRegionId = useId();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={chartRegionId}>
+        {t("chart.regionLabel")}
+      </label>
+      <select
+        className="input input--select"
+        id={chartRegionId}
+        value={chart.options.region === "world" ? "world" : "vn"}
+        onChange={(event): void => {
+          onChange({
+            ...chart,
+            options: { ...chart.options, region: event.currentTarget.value },
+          });
+        }}
+      >
+        <option value="vn">{t("chart.regionVn")}</option>
+        <option value="world">{t("chart.regionWorld")}</option>
+      </select>
+    </div>
+  );
+}
+
+/** The bound a gauge or a progress bar reads its share against. */
+function MaxField({
+  chart,
+  onChange,
+}: {
+  chart: ChartConfig;
+  onChange: (chart: ChartConfig) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const chartMaxId = useId();
+  const { max } = chart.options;
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={chartMaxId}>
+        {t("chart.maxLabel")}
+      </label>
+      <input
+        className="input"
+        id={chartMaxId}
+        min={1}
+        type="number"
+        value={typeof max === "number" ? max : ""}
+        onChange={(event): void => {
+          // parseInt, not Number(): a bound on a dial, not an amount.
+          const parsed = Number.parseInt(event.currentTarget.value, 10);
+          const { max: _dropped, ...options } = chart.options;
+          onChange({
+            ...chart,
+            options: Number.isFinite(parsed) && parsed > 0 ? { ...options, max: parsed } : options,
+          });
+        }}
+      />
+    </div>
+  );
+}
+
+/** Which columns are plotted. Only the numeric ones are offered, so a pick can be drawn. */
+function ValueColumns({
+  chart,
+  numeric,
+  onChange,
+}: {
+  chart: ChartConfig;
+  numeric: readonly { name: string }[];
+  onChange: (chart: ChartConfig) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <fieldset className="index">
+      <legend className="label index__legend">{t("chart.yLabel")}</legend>
+      <div className="index__cols">
+        {numeric.map((column) => (
+          <label key={column.name} className="punch">
+            <input
+              type="checkbox"
+              checked={chart.y.includes(column.name)}
+              onChange={(event): void => {
+                onChange({
+                  ...chart,
+                  y: event.currentTarget.checked
+                    ? [...chart.y, column.name]
+                    : chart.y.filter((name) => name !== column.name),
+                });
+              }}
+            />
+            <span className="punch__box" />
+            <span>{column.name}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

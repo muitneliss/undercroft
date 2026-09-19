@@ -8,8 +8,6 @@
  * `bun run geo:build`. The provenance is in `apps/ui/public/geo/README.md`.
  */
 
-// biome-ignore-all lint/correctness/noNodejsModules: This is a build script running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-
 import { copyFileSync, mkdirSync } from "node:fs";
 import process from "node:process";
 import { fileURLToPath } from "node:url";

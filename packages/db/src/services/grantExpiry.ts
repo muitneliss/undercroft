@@ -18,8 +18,6 @@
  * we do not have is left empty rather than filled with the nearest number to hand.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: The sixty days are Xero's, named where they are used.
-
 const DAY_MS = 86_400_000;
 const XERO_REFRESH_TOKEN_DAYS = 60;
 
