@@ -57,7 +57,6 @@ import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { openDrivePicker } from "@/lib/drivePicker.ts";
 import type { BrowsedLabel } from "@/lib/labelIndex.ts";
-import { describeXeroEntity, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
 import { type ChosenFile, type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 

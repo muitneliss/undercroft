@@ -104,10 +104,17 @@ interface SeriesRequest {
   readonly otherLabel: string;
 }
 
-function bySeries(request: SeriesRequest): Series {
-  const { result, x, seriesAt, yName, otherLabel } = request;
-  const yAt = index(result, yName);
-  const type = typeAt(result, yAt);
+/**
+ * The two axes of the pivot, in the order the rows first mention them.
+ *
+ * Row order, never sorted: the query said what order it wanted, and a chart that re-sorts an
+ * `ORDER BY` is a chart that disagrees with the table beside it.
+ */
+function axesOf(
+  result: TableResult,
+  x: number,
+  seriesAt: number,
+): { labels: string[]; names: string[] } {
   const labels: string[] = [];
   const names: string[] = [];
   for (const row of result.rows) {
@@ -120,20 +127,22 @@ function bySeries(request: SeriesRequest): Series {
       names.push(name);
     }
   }
-  const kept = names.slice(0, MAX_SERIES);
-  const folded = names.length > MAX_SERIES;
-  const datasets: {
-    label: string;
-    values: (number | null)[];
-    raw: (string | null)[];
-    colour: string;
-  }[] = kept.map((name, i) => ({
+  return { labels, names };
+}
+
+/** One empty dataset per kept series, plus the fold's own when there is one. */
+function emptySeries(
+  labels: readonly string[],
+  kept: readonly string[],
+  otherLabel: string | null,
+): Dataset[] {
+  const datasets: Dataset[] = kept.map((name, i) => ({
     label: name,
     values: labels.map(() => null),
     raw: labels.map(() => null),
     colour: colourFor(i),
   }));
-  if (folded) {
+  if (otherLabel !== null) {
     datasets.push({
       label: otherLabel,
       values: labels.map(() => null),
@@ -141,23 +150,67 @@ function bySeries(request: SeriesRequest): Series {
       colour: OTHER,
     });
   }
+  return datasets;
+}
+
+/** Where each row's value goes: which position on the axis, and which dataset holds it. */
+interface Fill {
+  readonly result: TableResult;
+  readonly x: number;
+  readonly seriesAt: number;
+  readonly yAt: number;
+  readonly type: string;
+  readonly labels: readonly string[];
+  readonly kept: readonly string[];
+}
+
+/** A named series takes the position AND the readable figure behind it. */
+function writeNamed(dataset: Dataset, at: number, cell: Cell, type: string): void {
+  dataset.values[at] = plotValue(cell, type);
+  dataset.raw[at] = rawOf(cell);
+}
+
+/**
+ * The fold takes a sum of positions only.
+ *
+ * Its `raw` stays null on purpose: a sum of floats is not a figure anybody may read, and
+ * printing one in a tooltip would be exactly the invisible wrongness rule 2 exists to
+ * prevent. A null contributes nothing rather than counting as a zero.
+ */
+function addFolded(dataset: Dataset, at: number, cell: Cell, type: string): void {
+  const value = plotValue(cell, type);
+  if (value !== null) {
+    dataset.values[at] = (dataset.values[at] ?? 0) + value;
+  }
+}
+
+/** Write every row into the dataset its series names, or into the fold. */
+function fillSeries(datasets: Dataset[], fill: Fill): void {
+  const { result, x, seriesAt, yAt, type, labels, kept } = fill;
   for (const row of result.rows) {
-    const li = labels.indexOf(labelOf(x < 0 ? null : (row[x] ?? null)));
-    const name = labelOf(row[seriesAt] ?? null);
-    const ki = kept.indexOf(name);
-    const di = ki >= 0 ? ki : datasets.length - 1;
-    const dataset = datasets[di];
+    const at = labels.indexOf(labelOf(x < 0 ? null : (row[x] ?? null)));
+    const ki = kept.indexOf(labelOf(row[seriesAt] ?? null));
+    const dataset = datasets[ki >= 0 ? ki : datasets.length - 1];
     if (dataset === undefined) {
       continue;
     }
-    const value = plotValue(row[yAt] ?? null, type);
     if (ki >= 0) {
-      dataset.values[li] = value;
-      dataset.raw[li] = rawOf(row[yAt] ?? null);
-    } else if (value !== null) {
-      dataset.values[li] = (dataset.values[li] ?? 0) + value;
+      writeNamed(dataset, at, row[yAt] ?? null, type);
+    } else {
+      addFolded(dataset, at, row[yAt] ?? null, type);
     }
   }
+}
+
+function bySeries(request: SeriesRequest): Series {
+  const { result, x, seriesAt, yName, otherLabel } = request;
+  const yAt = index(result, yName);
+  const type = typeAt(result, yAt);
+  const { labels, names } = axesOf(result, x, seriesAt);
+  const kept = names.slice(0, MAX_SERIES);
+  const datasets = emptySeries(labels, kept, names.length > MAX_SERIES ? otherLabel : null);
+
+  fillSeries(datasets, { result, x, seriesAt, yAt, type, labels, kept });
   return { labels, datasets, x: result.columns[x]?.name ?? null, y: [yName] };
 }
 

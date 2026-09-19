@@ -721,6 +721,21 @@
       "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
     },
 
+    // The UI has exactly ONE store, and `state.md` names the file: `apps/ui/src/store.ts`,
+    // `useUiStore`. That is the whole rule -- client state has one owner, and `useState` is
+    // banned because a second owner is how two values that should be one drift apart.
+    //
+    // The file is already split INSIDE itself: `UiState` declares what the store holds and
+    // five slice functions implement it, one per draft. Splitting it across modules would put
+    // the declaration in one file and its implementations in five, and the next reader asking
+    // "where does the selected tenant live" would have six answers instead of one. The length
+    // is the number of drafts the interface has, which is a product fact rather than a file
+    // that grew.
+    {
+      "includes": ["apps/ui/src/store.ts"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
     // The deploy client, read top to bottom as the sequence of a deploy: configure, call,
     // trigger, wait, verify, smoke, report. Its long functions are split -- `verifyService`
     // answers one service -- but the FILE stays one file, and that is deliberate.
