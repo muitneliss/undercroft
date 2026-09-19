@@ -1,11 +1,11 @@
 /**
- * Google Drive: PDFs from what the admin picked, into the lake.
+ * Google Drive: matching files from what the admin picked, into the lake.
  *
  * The scope is `drive.file`, not `drive.readonly`, and that is a security decision rather
  * than a preference. `drive.file` grants access only to items the user chose through the
- * Google Picker, so "PDFs inside the folders you select. No other folder is read" -- copy
- * this product already ships -- is enforced by Google rather than by our own `q=` filter.
- * It is also not a Google "restricted" scope, so it needs no annual CASA assessment.
+ * Google Picker, so "the files you select, of the types you allow. No other folder is read"
+ * -- copy this product already ships -- is enforced by Google rather than by our own `q=`
+ * filter. It is also not a Google "restricted" scope, so it needs no annual CASA assessment.
  *
  * A consequence worth stating: a listing here cannot see anything that was not picked, so a
  * wrong filter fails closed. The filter is still written narrowly, because failing closed is
@@ -15,10 +15,16 @@
  * not. Recursive descent through a shared drive can reach folders the admin never saw in
  * the Picker, which would make the printed promise false even where Google would allow the
  * read.
+ *
+ * **Which types are allowed is a second, independent filter**, on top of folder-boundedness:
+ * `scope.fileTypes` (empty means every type, the same recorded-decision idiom as an empty
+ * label or entity list -- `@undercroft/contracts`). A folder listing asks Google's `q=` for
+ * only the allowed types; a directly-picked single file is checked after the fact, because
+ * there is nothing to filter a lookup of one specific id by.
  */
 
+import { type DriveScope, allowsFileType } from "@undercroft/contracts";
 import { canonicalJson, getPath, getStringPath } from "@undercroft/core";
-import type { DriveScope } from "@undercroft/contracts";
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
@@ -26,10 +32,9 @@ import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 
 /** Why a pick was not taken. The one reason this collector has, and it is a refusal. */
-export const NOT_A_PDF = "not-a-pdf";
+export const NOT_ALLOWED_TYPE = "not-an-allowed-type";
 
 const DRIVE_BASE = "https://www.googleapis.com/drive/v3/files";
-const PDF = "application/pdf";
 const ENTITY = "files";
 const PAGE_SIZE = "100";
 const FIELDS = "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)";
@@ -43,9 +48,9 @@ export interface DriveHarvest {
   /**
    * What was picked and not taken, with why.
    *
-   * A directly-picked file that is not a PDF used to be dropped where it was found, which
-   * made "we were given nothing" and "we refused what we were given" the same green run
-   * landing 0. CLAUDE.md rule 2: recorded with its reason, never dropped.
+   * A directly-picked file outside the allow-list used to be dropped where it was found,
+   * which made "we were given nothing" and "we refused what we were given" the same green
+   * run landing 0. CLAUDE.md rule 2: recorded with its reason, never dropped.
    */
   readonly skipped: { fileId: string; reason: string }[];
 }
@@ -69,7 +74,11 @@ export async function harvestDrive(
     if (picked.kind === "folder") {
       folders += 1;
     }
-    const files = await pdfsOf(api, picked, records.length, skipped);
+    const files = await matchingFilesOf(api, picked, {
+      fileTypes: scope.fileTypes,
+      seen: records.length,
+      skipped,
+    });
 
     for (const file of files) {
       if (seen.has(file.id)) {
@@ -88,7 +97,7 @@ export async function harvestDrive(
     entity: ENTITY,
     folders,
     picks: scope.files.length,
-    pdfs: records.length,
+    matched: records.length,
     skipped: skipped.length,
   });
 
@@ -127,7 +136,7 @@ function toDocument(
 ): DocumentToLand {
   return {
     documentId: file.id,
-    contentType: PDF,
+    contentType: file.mimeType,
     declaredBytes: file.size,
     metadata: {
       mimeType: file.mimeType,
@@ -146,21 +155,23 @@ function toDocument(
 }
 
 /**
- * The PDFs one pick yields: a folder's, listed one level down, or the single file itself.
+ * The matching files one pick yields: a folder's, listed one level down, or the single file
+ * itself.
  *
- * A pick that yields nothing because it is not a PDF is appended to `skipped` rather than
- * returned empty, so the caller can refuse it with a reason instead of landing a silent zero.
+ * A pick that yields nothing because it is outside the allow-list is appended to `skipped`
+ * rather than returned empty, so the caller can refuse it with a reason instead of landing a
+ * silent zero.
  */
-async function pdfsOf(
+async function matchingFilesOf(
   api: GoogleApi,
   picked: DriveScope["files"][number],
-  seen: number,
-  skipped: DriveHarvest["skipped"],
+  options: { fileTypes: readonly string[]; seen: number; skipped: DriveHarvest["skipped"] },
 ): Promise<DriveFile[]> {
+  const { fileTypes, seen, skipped } = options;
   if (picked.kind === "folder") {
-    return listPdfsIn(api, picked.id, seen);
+    return listMatchingIn(api, picked.id, fileTypes, seen);
   }
-  const one = await readOneFile(api, picked.id, seen);
+  const one = await readOneFile(api, picked.id, fileTypes, seen);
   if (one.file === null) {
     skipped.push({ fileId: picked.id, reason: one.reason });
     return [];
@@ -178,15 +189,46 @@ interface DriveFile {
   readonly parents: string[];
 }
 
-async function listPdfsIn(api: GoogleApi, folderId: string, seen: number): Promise<DriveFile[]> {
+/**
+ * A value for Drive's query syntax, escaped.
+ *
+ * The folder id needs none of this -- it is Google-issued and opaque, and `'` is not in its
+ * alphabet -- but a file type can now come from the free-text field an admin typed into, and
+ * that IS ordinary text.
+ */
+function escapeDriveQueryValue(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+}
+
+/** "" for every type, one bare clause for one type, a parenthesized OR for several. */
+function mimeTypeClause(fileTypes: readonly string[]): string {
+  if (fileTypes.length === 0) {
+    return "";
+  }
+  const clauses = fileTypes.map((type) => `mimeType='${escapeDriveQueryValue(type)}'`).join(" or ");
+  if (fileTypes.length === 1) {
+    return clauses;
+  }
+  return `(${clauses})`;
+}
+
+async function listMatchingIn(
+  api: GoogleApi,
+  folderId: string,
+  fileTypes: readonly string[],
+  seen: number,
+): Promise<DriveFile[]> {
   const files: DriveFile[] = [];
   let pageToken: string | null = null;
+  const typeClause = mimeTypeClause(fileTypes);
+  const q =
+    typeClause === ""
+      ? `'${folderId}' in parents and trashed=false`
+      : `'${folderId}' in parents and ${typeClause} and trashed=false`;
 
   do {
     const url = new URL(DRIVE_BASE);
-    // Single quotes around the id are Drive's query syntax, not string building: the id is
-    // Google-issued and opaque, and `'` is not in its alphabet.
-    url.searchParams.set("q", `'${folderId}' in parents and mimeType='${PDF}' and trashed=false`);
+    url.searchParams.set("q", q);
     url.searchParams.set("fields", FIELDS);
     url.searchParams.set("pageSize", PAGE_SIZE);
     // A picked folder may live in a shared drive; without these the listing is silently
@@ -211,13 +253,15 @@ async function listPdfsIn(api: GoogleApi, folderId: string, seen: number): Promi
 /**
  * A directly picked file, or the reason it is not one we may take.
  *
- * Non-PDFs are refused: the consent says PDFs. The refusal is RETURNED rather than swallowed
- * so the caller can record it -- an admin who picked a spreadsheet is owed the sentence
- * "that pick is not a PDF" and not a run that quietly landed nothing.
+ * A file outside the allow-list is refused: the consent says which types may be read. The
+ * refusal is RETURNED rather than swallowed so the caller can record it -- an admin who
+ * picked a spreadsheet nobody allowed is owed the sentence "that pick is not an allowed type"
+ * and not a run that quietly landed nothing.
  */
 async function readOneFile(
   api: GoogleApi,
   fileId: string,
+  fileTypes: readonly string[],
   seen: number,
 ): Promise<{ file: DriveFile | null; reason: string }> {
   const url = new URL(`${DRIVE_BASE}/${encodeURIComponent(fileId)}`);
@@ -225,7 +269,9 @@ async function readOneFile(
   url.searchParams.set("supportsAllDrives", "true");
 
   const file = toFile(await api.getJson(url.toString(), ENTITY, seen));
-  return file.mimeType === PDF ? { file, reason: "" } : { file: null, reason: NOT_A_PDF };
+  return allowsFileType(fileTypes, file.mimeType)
+    ? { file, reason: "" }
+    : { file: null, reason: NOT_ALLOWED_TYPE };
 }
 
 function toFile(raw: unknown): DriveFile {

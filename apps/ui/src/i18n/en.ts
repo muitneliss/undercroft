@@ -299,7 +299,7 @@ export const en = {
   scopePicker: {
     title: "Choose what is read",
     leadGmail:
-      "Choose the labels to read. Only message headers and PDF attachments in those labels are read; no other label is read.",
+      "Choose the labels to read. Only message headers and matching attachments in those labels are read; no other label is read.",
     leadDrive:
       "Choose the folders or documents to read. Google permits us to read exactly what you pick here and nothing else.",
     leadXero:
@@ -327,8 +327,8 @@ export const en = {
     filterTallyRead: "Showing {{shown, number}} of {{total, number}} labels",
     noMatch: "No label matches what you typed.",
     echoHead: "Will read",
-    echoChosen_one: "Headers and PDF attachments in {{count, number}} chosen label",
-    echoChosen_other: "Headers and PDF attachments in {{count, number}} chosen labels",
+    echoChosen_one: "Headers and matching attachments in {{count, number}} chosen label",
+    echoChosen_other: "Headers and matching attachments in {{count, number}} chosen labels",
     clearAll: "Clear all",
     pickFromDrive: "Choose from Google Drive",
     nothingToChoose: "There is nothing to choose from yet.",
@@ -337,19 +337,38 @@ export const en = {
     notSaved: "The selection could not be saved.",
     pickerUnavailable:
       "Google’s picker is not available. Reload the page; if it persists, Google Drive is not configured.",
+    fileTypesHead: "File types",
+    anyFileTypeHint:
+      "Choosing no file type means every file type is read. That is a deliberate choice, not an empty one.",
+    fileTypesCustomLabel: "Add another file type",
+    fileTypesCustomPlaceholder: "e.g. image/png",
+    fileTypesCustomAdd: "Add",
+    fileTypesCustomInvalid: "Enter a file type as type/subtype, such as image/png.",
   },
 
   scope: {
-    driveFolders_one: "PDFs in {{count, number}} selected folder",
-    driveFolders_other: "PDFs in {{count, number}} selected folders",
+    driveFolders_one: "Matching files in {{count, number}} selected folder",
+    driveFolders_other: "Matching files in {{count, number}} selected folders",
     xeroContacts: "Contacts",
     xeroInvoices: "Invoices",
     xeroPayments: "Payments",
     xeroCreditNotes: "Credit notes",
     xeroAll: "Every kind of data: contacts, invoices, payments, credit notes",
     xeroEntities: "{{entities}}",
-    gmailWholeMailbox: "Headers and PDF attachments, whole mailbox",
-    gmailLabels: "Headers and PDF attachments in {{labels}}",
+    gmailWholeMailbox: "Headers and matching attachments, whole mailbox",
+    gmailLabels: "Headers and matching attachments in {{labels}}",
+    anyFileType: "Any file type",
+    fileTypesChosen_one: "{{count, number}} file type chosen",
+    fileTypesChosen_other: "{{count, number}} file types chosen",
+    fileTypePdf: "PDF",
+    fileTypeDocx: "Word document (.docx)",
+    fileTypeDoc: "Word document (.doc)",
+    fileTypeXlsx: "Excel spreadsheet (.xlsx)",
+    fileTypeXls: "Excel spreadsheet (.xls)",
+    fileTypeCsv: "CSV file",
+    fileTypeTxt: "Plain text",
+    fileTypeJpeg: "JPEG image",
+    fileTypePng: "PNG image",
   },
 
   when: {
@@ -442,7 +461,7 @@ export const en = {
       entityDone:
         "Finished {{entity}}: {{landed}} landed, {{created}} new, {{changed}} changed, {{refused}} refused.",
       picksListed:
-        "Listed {{folders}} picked folders and found {{pdfs}} PDFs. Sub-folders are not read.",
+        "Listed {{folders}} picked folders and found {{matched}} matching files. Sub-folders are not read.",
       documentsLanded:
         "Documents: {{created}} new, {{unchanged}} unchanged, {{skipped}} skipped, {{failed}} failed.",
       noModels: "This customer has no models yet, so there was nothing to build.",
@@ -742,7 +761,8 @@ export const en = {
     readOnly: "Nothing. Read-only access, and you can disconnect at any time.",
     hubspotReads: "Companies, contacts and deals from your CRM.",
     xeroReads: "Invoices, payments, credit notes and contacts from one organisation you choose.",
-    gmailReads: "Message headers and PDF attachments from the mailbox you connect.",
-    driveReads: "PDF documents inside the folders you select. No other folder is read.",
+    gmailReads: "Message headers and the attachment types you allow, from the mailbox you connect.",
+    driveReads:
+      "The documents inside the folders you select, in the file types you allow. No other folder is read.",
   },
 };

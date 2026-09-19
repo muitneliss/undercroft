@@ -133,7 +133,7 @@ export function eventSentence(
         refused: n("refused"),
       });
     case "picks_listed":
-      return t("journal.event.picksListed", { folders: n("folders"), pdfs: n("pdfs") });
+      return t("journal.event.picksListed", { folders: n("folders"), matched: n("matched") });
     case "documents_landed":
       return t("journal.event.documentsLanded", {
         created: n("created"),

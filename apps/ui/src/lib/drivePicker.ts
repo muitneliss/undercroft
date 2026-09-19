@@ -22,7 +22,6 @@ import type { ChosenFile } from "@/store.ts";
 const GSI_SRC = "https://accounts.google.com/gsi/client";
 const GAPI_SRC = "https://apis.google.com/js/api.js";
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-const PDF_MIME = "application/pdf";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 export interface GooglePickerConfig {
@@ -75,9 +74,16 @@ function loadScript(src: string): Promise<void> {
  *
  * Resolves when the dialog closes. A cancelled pick calls back with nothing rather than
  * raising -- cancelling is a decision, not a fault.
+ *
+ * `fileTypes` is the allow-list already chosen in the scope picker, so a Drive admin who has
+ * ticked "Word documents" sees Word files as pickable here too -- the dialog's own filter and
+ * the worker's later filter must agree, or a file visibly pickable today could be silently
+ * refused once the run reads it back. Empty means every type, so the Picker gets no filter at
+ * all: Google's own reference for `setMimeTypes` says omitting it shows every type.
  */
 export async function openDrivePicker(
   config: GooglePickerConfig,
+  fileTypes: readonly string[],
   onPicked: (files: ChosenFile[]) => void,
 ): Promise<void> {
   await Promise.all([loadScript(GSI_SRC), loadScript(GAPI_SRC)]);
@@ -104,8 +110,10 @@ export async function openDrivePicker(
 
   const view = new picker.DocsView(picker.ViewId.DOCS)
     .setIncludeFolders(true)
-    .setSelectFolderEnabled(true)
-    .setMimeTypes(`${PDF_MIME},${FOLDER_MIME}`);
+    .setSelectFolderEnabled(true);
+  if (fileTypes.length > 0) {
+    view.setMimeTypes([...fileTypes, FOLDER_MIME].join(","));
+  }
 
   new picker.PickerBuilder()
     .setOAuthToken(accessToken)
