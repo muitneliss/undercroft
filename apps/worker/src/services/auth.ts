@@ -16,9 +16,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { hashToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
-import { findByDigest, type IngestKeyRow } from "../repos/ingestKey.ts";
+import { findByDigest } from "../repos/ingestKey.ts";
 
-export type { IngestKeyRow };
+export type { IngestKeyRow } from "../repos/ingestKey.ts";
 
 export type AuthOutcome =
   | { ok: true; scope: "service" | { tenantId: string } }

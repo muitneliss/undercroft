@@ -39,19 +39,19 @@ import { trpc } from "@/trpc.ts";
 export function Tenants(): React.JSX.Element {
   const { t } = useTranslation();
   const utils = trpc.useUtils();
-  const idField = useRef<HTMLInputElement>(null);
-  const nameField = useRef<HTMLInputElement>(null);
+  const idFieldRef = useRef<HTMLInputElement>(null);
+  const nameFieldRef = useRef<HTMLInputElement>(null);
 
   const tenants = trpc.tenants.list.useQuery();
   const session = trpc.session.me.useQuery();
 
   const addTenant = trpc.tenants.create.useMutation({
     onSuccess: async () => {
-      if (idField.current !== null) {
-        idField.current.value = "";
+      if (idFieldRef.current !== null) {
+        idFieldRef.current.value = "";
       }
-      if (nameField.current !== null) {
-        nameField.current.value = "";
+      if (nameFieldRef.current !== null) {
+        nameFieldRef.current.value = "";
       }
       // The new customer belongs in the list beside the others, and the cache is the only
       // copy of that list -- there is no second one here to keep in step.
@@ -123,8 +123,8 @@ export function Tenants(): React.JSX.Element {
               className="stack stack--tight"
               onSubmit={(event): void => {
                 event.preventDefault();
-                const tenantId = idField.current?.value.trim() ?? "";
-                const displayName = nameField.current?.value.trim() ?? "";
+                const tenantId = idFieldRef.current?.value.trim() ?? "";
+                const displayName = nameFieldRef.current?.value.trim() ?? "";
                 if (tenantId === "") {
                   return;
                 }
@@ -142,7 +142,7 @@ export function Tenants(): React.JSX.Element {
                   id="tenant-id"
                   name="tenantId"
                   placeholder={t("tenants.idPlaceholder")}
-                  ref={idField}
+                  ref={idFieldRef}
                   required={true}
                   type="text"
                 />
@@ -160,7 +160,7 @@ export function Tenants(): React.JSX.Element {
                   id="tenant-name"
                   name="displayName"
                   placeholder={t("tenants.namePlaceholder")}
-                  ref={nameField}
+                  ref={nameFieldRef}
                   type="text"
                 />
               </div>

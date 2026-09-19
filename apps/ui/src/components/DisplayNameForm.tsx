@@ -38,7 +38,7 @@ export function DisplayNameForm({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const utils = trpc.useUtils();
-  const nameField = useRef<HTMLInputElement>(null);
+  const nameFieldRef = useRef<HTMLInputElement>(null);
 
   const rename = trpc.tenants.rename.useMutation({
     onSuccess: async () => {
@@ -62,7 +62,7 @@ export function DisplayNameForm({
         className="stack stack--tight"
         onSubmit={(event): void => {
           event.preventDefault();
-          rename.mutate({ tenantId, displayName: nameField.current?.value.trim() ?? "" });
+          rename.mutate({ tenantId, displayName: nameFieldRef.current?.value.trim() ?? "" });
         }}
       >
         <div className="field">
@@ -82,7 +82,7 @@ export function DisplayNameForm({
             key={displayName}
             name="displayName"
             placeholder={t("tenants.namePlaceholder")}
-            ref={nameField}
+            ref={nameFieldRef}
             type="text"
           />
         </div>

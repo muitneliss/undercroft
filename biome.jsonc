@@ -505,6 +505,20 @@
       "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
     },
 
+    // `import * as connections from "../services/connections.ts"` is what makes the tRPC
+    // router readable: `connections.list`, `people.invite`, `tenants.rename` line up with the
+    // procedure names they are bound to, and the alternative is importing forty functions by
+    // name into one file. The rule's concern is bundle size in code that ships to a browser;
+    // these three files are server-side and never bundled. `apps/ui` keeps the rule.
+    {
+      "includes": [
+        "apps/control-plane/src/handlers/router.ts",
+        "apps/control-plane/src/inviteCli.ts",
+        "apps/control-plane/src/services/people.ts"
+      ],
+      "linter": { "rules": { "performance": { "noNamespaceImport": "off" } } }
+    },
+
     // A module named for a pair: `email.ts` holds the transport and its error, `store.ts` the
     // lake store and the error it raises. One class per file would put an error in a file of
     // its own, away from the only thing that throws it.

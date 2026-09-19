@@ -33,7 +33,7 @@ import { exchangeCode, type GoogleIngestConfig, redirectUri } from "./googleExch
 import type { WorkerClient } from "./workerClient.ts";
 
 // Re-exported so callers keep naming one seam: this module is what they reason about.
-export type { GoogleIngestConfig };
+export type { GoogleIngestConfig } from "./googleExchange.ts";
 
 export const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 

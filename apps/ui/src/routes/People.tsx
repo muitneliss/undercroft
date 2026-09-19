@@ -31,8 +31,8 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const utils = trpc.useUtils();
-  const emailField = useRef<HTMLInputElement>(null);
-  const roleField = useRef<HTMLSelectElement>(null);
+  const emailFieldRef = useRef<HTMLInputElement>(null);
+  const roleFieldRef = useRef<HTMLSelectElement>(null);
 
   const tenant = trpc.tenants.get.useQuery({ tenantId });
   const members = trpc.people.members.useQuery({ tenantId });
@@ -45,8 +45,8 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   const invite = trpc.people.invite.useMutation({
     onSuccess: async () => {
-      if (emailField.current !== null) {
-        emailField.current.value = "";
+      if (emailFieldRef.current !== null) {
+        emailFieldRef.current.value = "";
       }
       await invalidate();
     },
@@ -157,8 +157,8 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
             className="stack stack--tight"
             onSubmit={(event): void => {
               event.preventDefault();
-              const email = emailField.current?.value.trim() ?? "";
-              const role = roleField.current?.value ?? "viewer";
+              const email = emailFieldRef.current?.value.trim() ?? "";
+              const role = roleFieldRef.current?.value ?? "viewer";
               if (email === "") {
                 return;
               }
@@ -181,7 +181,7 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
                 autoComplete="off"
                 required={true}
                 placeholder={t("people.invitePlaceholder")}
-                ref={emailField}
+                ref={emailFieldRef}
                 disabled={invite.isPending}
               />
               <p className="field__hint">{t("people.inviteHint")}</p>
@@ -195,7 +195,7 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
                 className="input"
                 id="invite-role"
                 name="role"
-                ref={roleField}
+                ref={roleFieldRef}
                 disabled={invite.isPending}
                 defaultValue="viewer"
               >

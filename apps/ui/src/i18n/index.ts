@@ -100,4 +100,4 @@ export function translatorFor(locale: Locale): TFunction {
   return i18next.getFixedT(locale);
 }
 
-export { i18next };
+export { default as i18next } from "i18next";

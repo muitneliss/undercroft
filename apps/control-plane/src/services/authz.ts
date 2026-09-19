@@ -24,7 +24,7 @@ import { type Role, roleFor as roleForMember } from "../repos/membership.ts";
 import { findTenant } from "../repos/tenant.ts";
 import { isSuperadmin, type Superadmins } from "./superadmin.ts";
 
-export type { Role };
+export type { Role } from "../repos/membership.ts";
 
 export const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2 };
 

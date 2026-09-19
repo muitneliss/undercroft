@@ -43,8 +43,8 @@ const WHEEL: string[] = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();
-  const emailField = useRef<HTMLInputElement>(null);
-  const codeField = useRef<HTMLInputElement>(null);
+  const emailFieldRef = useRef<HTMLInputElement>(null);
+  const codeFieldRef = useRef<HTMLInputElement>(null);
 
   const sendCode = useMutation({
     mutationFn: (variables: { email: string }) => sendSignInCode(variables.email),
@@ -126,7 +126,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             className="stack stack--tight"
             onSubmit={(event): void => {
               event.preventDefault();
-              const email = emailField.current?.value.trim() ?? "";
+              const email = emailFieldRef.current?.value.trim() ?? "";
               if (email !== "") {
                 sendCode.mutate({ email });
               }
@@ -144,7 +144,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
                 autoComplete="email"
                 required={true}
                 placeholder={t("signIn.emailPlaceholder")}
-                ref={emailField}
+                ref={emailFieldRef}
                 disabled={sendCode.isPending}
               />
             </div>
@@ -167,7 +167,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             className="stack stack--tight"
             onSubmit={(event): void => {
               event.preventDefault();
-              const otp = codeField.current?.value.trim() ?? "";
+              const otp = codeFieldRef.current?.value.trim() ?? "";
               if (otp !== "") {
                 signIn.mutate({ email: sentTo, otp });
               }
@@ -187,7 +187,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
                 required={true}
                 maxLength={6}
                 placeholder="000000"
-                ref={codeField}
+                ref={codeFieldRef}
                 disabled={signIn.isPending}
               />
               {/*

@@ -26,7 +26,8 @@ import {
   type Tenant,
 } from "../repos/tenant.ts";
 
-export type { MemberTenant, Tenant };
+export type { MemberTenant } from "../repos/membership.ts";
+export type { Tenant } from "../repos/tenant.ts";
 
 /**
  * The tenants this caller may see. Non-membership is invisible, not forbidden.

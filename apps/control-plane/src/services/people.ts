@@ -25,7 +25,7 @@ import { record as recordAudit } from "../repos/auditLog.ts";
 import * as invitations from "../repos/invitation.ts";
 import { listMembers, type Member, roleForEmail } from "../repos/membership.ts";
 
-export type { Member };
+export type { Member } from "../repos/membership.ts";
 export type Invitation = invitations.InvitationRow;
 
 /** How long an invitation stays open. Long enough to be acted on, short enough to expire. */

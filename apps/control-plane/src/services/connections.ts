@@ -33,7 +33,7 @@ import { record as recordAudit } from "../repos/auditLog.ts";
 import { grantCovers, requestedScopeFor } from "./oauth.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
-export type { Connection };
+export type { Connection } from "@undercroft/db/repos";
 
 /**
  * The sources the schedule always shows.

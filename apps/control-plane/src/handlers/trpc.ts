@@ -116,7 +116,7 @@ export interface Context {
   readonly googlePicker: { clientId: string; apiKey: string; appId: string } | null;
 }
 
-export type { Role };
+export type { Role } from "../services/authz.ts";
 
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
