@@ -29,7 +29,7 @@ export type LastRun = NonNullable<Connection["lastRun"]>;
 export type RunStatus = LastRun["status"];
 
 /** A vendor's own name where we have one; the source's id where we do not. */
-function sourceLabel(source: string): string {
+export function sourceLabel(source: string): string {
   return isSource(source) ? SOURCE_LABEL[source] : source;
 }
 
@@ -84,23 +84,49 @@ export function triggerLabel(t: TFunction, trigger: RunView["trigger"]): string 
  * next run. No due time at all means no source is ready, and the sentence says where to
  * go rather than that there is nothing here.
  */
+export type FirstRun = { kind: "none" } | { kind: "due-now" } | { kind: "at"; at: string };
+
+/**
+ * When the first run comes, wordlessly: nothing is scheduled, it is due at the next tick,
+ * or it is at an instant. The journal and the lake each word it in their own sentence;
+ * the decision is made once, here.
+ */
+export function firstRun(
+  connections: readonly Pick<Connection, "nextRunAt">[],
+  now: Date = new Date(),
+): FirstRun {
+  const due = connections
+    .map((c) => (c.nextRunAt === null ? Number.NaN : new Date(c.nextRunAt).getTime()))
+    .filter((ms) => !Number.isNaN(ms));
+  if (due.length === 0) {
+    return { kind: "none" };
+  }
+  const earliest = Math.min(...due);
+  if (earliest <= now.getTime()) {
+    return { kind: "due-now" };
+  }
+  return { kind: "at", at: new Date(earliest).toISOString() };
+}
+
 export function journalEmptyBody(
   t: TFunction,
   locale: Locale,
   connections: readonly Pick<Connection, "nextRunAt">[],
   now: Date = new Date(),
 ): string {
-  const due = connections
-    .map((c) => (c.nextRunAt === null ? Number.NaN : new Date(c.nextRunAt).getTime()))
-    .filter((ms) => !Number.isNaN(ms));
-  if (due.length === 0) {
-    return t("journal.emptyBodyNoSchedule");
+  const first = firstRun(connections, now);
+  switch (first.kind) {
+    case "none":
+      return t("journal.emptyBodyNoSchedule");
+    case "due-now":
+      return t("journal.emptyBodyDueNow");
+    case "at":
+      return t("journal.emptyBody", { when: formatDateTime(first.at, locale) });
+    default: {
+      const exhaustive: never = first;
+      return exhaustive;
+    }
   }
-  const earliest = Math.min(...due);
-  if (earliest <= now.getTime()) {
-    return t("journal.emptyBodyDueNow");
-  }
-  return t("journal.emptyBody", { when: formatDateTime(new Date(earliest).toISOString(), locale) });
 }
 
 export function runMark(status: RunStatus | null): CardFacts["mark"] {

@@ -1942,6 +1942,38 @@
     display: block;
   }
 
+  /* -- the raw lake ------------------------------------------------------------ */
+
+  /* A payload is disclosed, not printed: a plate that is a <summary>, the same die as
+   the token form's, and beneath it the source's JSON exactly as Postgres rendered it,
+   in the mono face, wrapping rather than widening the table. */
+  .payload > summary.plate {
+    list-style: none;
+  }
+
+  .payload > summary.plate::-webkit-details-marker {
+    display: none;
+  }
+
+  .payload[open] > summary.plate {
+    background: var(--ink);
+    color: var(--leaf);
+  }
+
+  .payload__text {
+    margin: var(--s-2) 0 0;
+    padding: var(--s-3);
+    max-height: 24rem;
+    overflow: auto;
+    font-family: var(--face-mono);
+    font-size: var(--t-micro);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+    border-left: 2px solid var(--rule-strong);
+  }
+
   code {
     font-family: var(--face-mono);
     font-size: 0.9em;

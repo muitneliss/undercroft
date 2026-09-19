@@ -27,7 +27,6 @@ import { isSource } from "@/api/types.ts";
 import { Book } from "@/components/Book.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import type { DivisionId } from "@/lib/divisions.ts";
-import { Lake } from "@/routes/Lake.tsx";
 import { People } from "@/routes/People.tsx";
 import { ScopePicker } from "@/routes/ScopePicker.tsx";
 import { SignIn } from "@/routes/SignIn.tsx";
@@ -46,6 +45,7 @@ import { trpc } from "@/trpc.ts";
 const Journal = lazy(() =>
   import("@/routes/Journal.tsx").then((module) => ({ default: module.Journal })),
 );
+const Lake = lazy(() => import("@/routes/Lake.tsx").then((module) => ({ default: module.Lake })));
 const Models = lazy(() =>
   import("@/routes/Models.tsx").then((module) => ({ default: module.Models })),
 );
@@ -150,7 +150,11 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/lake"
         element={
           <Opened division="lake" signedInAs={signedInAs}>
-            {(tenantId) => <Lake tenantId={tenantId} />}
+            {(tenantId) => (
+              <Suspense fallback={<Skeleton rows={5} />}>
+                <Lake tenantId={tenantId} />
+              </Suspense>
+            )}
           </Opened>
         }
       />
