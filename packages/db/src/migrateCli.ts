@@ -19,14 +19,22 @@
  * evidence at all.
  */
 
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
-
 import process from "node:process";
-import { migrate } from "./migrate.ts";
+import { migrate, type PlatformLoginRole, setRolePassword } from "./migrate.ts";
 import { asExecutor, createPool } from "./pool.ts";
+
+/**
+ * Which environment variable carries each platform role's password.
+ *
+ * Read here, in the composition root, and only here. A variable that is unset or empty
+ * leaves that role's password alone, which is what a developer running `bun run migrate`
+ * against a scratch database wants; the compose files mark both as required, so a deploy
+ * cannot forget one silently.
+ */
+const ROLE_PASSWORDS: ReadonlyArray<readonly [PlatformLoginRole, string]> = [
+  ["undercroft_app", "UNDERCROFT_APP_PG_PASSWORD"],
+  ["undercroft_worker", "UNDERCROFT_WORKER_PG_PASSWORD"],
+];
 
 async function main(): Promise<void> {
   const dsn = process.env.UNDERCROFT_POSTGRES_DSN;
@@ -36,7 +44,8 @@ async function main(): Promise<void> {
 
   const pool = createPool(dsn);
   try {
-    const result = await migrate(asExecutor(pool));
+    const exec = asExecutor(pool);
+    const result = await migrate(exec);
     for (const name of result.skipped) {
       process.stdout.write(`skip   ${name}\n`);
     }
@@ -48,6 +57,17 @@ async function main(): Promise<void> {
         ? "already up to date\n"
         : `applied ${String(result.applied.length)} migration(s)\n`,
     );
+
+    // The role's name is reported; its password never is.
+    for (const [role, variable] of ROLE_PASSWORDS) {
+      const password = process.env[variable];
+      if (password === undefined || password === "") {
+        process.stdout.write(`skip   password for ${role} (${variable} unset)\n`);
+      } else {
+        await setRolePassword(exec, role, password);
+        process.stdout.write(`set    password for ${role}\n`);
+      }
+    }
   } finally {
     await pool.end();
   }

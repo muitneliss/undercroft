@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "dev": "bun --watch src/server.ts"
+  },
   "dependencies": {
     "@undercroft/core": "workspace:*",
     "@undercroft/contracts": "workspace:*",

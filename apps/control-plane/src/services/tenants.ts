@@ -1,5 +1,6 @@
 /**
- * Which tenants a caller can see, what one of them is called, and how a new one comes to be.
+ * Which tenants a caller can see, what one of them is called, how a new one comes to be, and
+ * how its name is corrected afterwards.
  *
  * `get` returns `null` for a tenant that does not exist and leaves the reporting to the
  * handler. It does not take the caller's role into account: membership has already been
@@ -14,14 +15,21 @@
  * gets widened by accident.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-
 import type { SqlExecutor } from "@undercroft/db";
+import { isRoleCollision, provisionTenantRoles } from "@undercroft/db/repos";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import { listForUser, type MemberTenant } from "../repos/membership.ts";
-import { createTenant, findTenant, listAllTenants, type Tenant } from "../repos/tenant.ts";
+import {
+  createTenant,
+  findTenant,
+  listAllTenants,
+  renameTenant,
+  type Tenant,
+  undoCreateTenant,
+} from "../repos/tenant.ts";
 
-export type { MemberTenant, Tenant };
+export type { MemberTenant } from "../repos/membership.ts";
+export type { Tenant } from "../repos/tenant.ts";
 
 /**
  * The tenants this caller may see. Non-membership is invisible, not forbidden.
@@ -50,15 +58,27 @@ export function get(exec: SqlExecutor, tenantId: string): Promise<Tenant | null>
 export type CreateResult =
   | { readonly ok: true; readonly tenant: Tenant }
   /** The reference is already in use. Reported, never a success that quietly changed nothing. */
-  | { readonly ok: false; readonly reason: "already-exists" };
+  | { readonly ok: false; readonly reason: "already-exists" }
+  /**
+   * The reference folds to the same Postgres role name as an existing customer's --
+   * `CASE-0042` and `case_0042` would share a login. Refused, and the row undone.
+   */
+  | { readonly ok: false; readonly reason: "role-collision" };
 
 /**
- * Create a customer.
+ * Create a customer, and the two database roles that are its own.
  *
  * A value, not an exception, like every other decision in this layer -- `handlers/router.ts`
  * is where `already-exists` becomes a CONFLICT. Authority is NOT re-checked here: this is
  * reachable only through `superadminProcedure`, and a second check in a second place is the
  * arrangement where one of the two is later relaxed alone.
+ *
+ * The roles are provisioned in the same call because a customer without them is a customer
+ * whose first build and first report would fail with a login nobody can explain. When the
+ * provisioning is refused -- the one refusal it has is a slug collision -- the row it
+ * followed is taken back, so the operator is left with a refusal and not with a half-made
+ * customer. A transaction would do the same; the explicit undo keeps this layer on the plain
+ * executor every other decision uses.
  *
  * The audit row is written in the same call rather than by the handler, because "a customer
  * was created, and by whom" is one fact. Its `tenantId` is the new customer, so the record
@@ -73,6 +93,16 @@ export async function create(
     return { ok: false, reason: "already-exists" };
   }
 
+  try {
+    await provisionTenantRoles(exec, input.tenantId);
+  } catch (error) {
+    if (isRoleCollision(error)) {
+      await undoCreateTenant(exec, input.tenantId);
+      return { ok: false, reason: "role-collision" };
+    }
+    throw error;
+  }
+
   await recordAudit(exec, {
     tenantId: input.tenantId,
     actor: input.actor,
@@ -81,4 +111,44 @@ export async function create(
   });
 
   return { ok: true, tenant: { id: input.tenantId, displayName: input.displayName } };
+}
+
+/**
+ * Retitle a customer.
+ *
+ * Only the display name moves, and the split between the two columns is the whole reason
+ * this is safe to offer at all: the id reaches the raw lake as an object-key prefix and can
+ * never be changed once a byte has landed under it, while the display name reaches nothing
+ * but this row. An operator who mistyped a customer's name had no way to repair it before
+ * this existed -- the create form was the only writer -- so the typo outlived the mistake.
+ *
+ * `null` for a tenant that is not there, like `get`: whether absent is a 404 is argued in
+ * `handlers/router.ts`. In practice `tenantProcedure` has already established authority over
+ * a tenant that exists, so this answers `null` only in a race with a deletion.
+ *
+ * The audit row carries both names. "Acme is now Acme Holdings" is the fact worth keeping;
+ * the new name alone would leave a reader unable to tell what was repaired.
+ */
+export async function rename(
+  exec: SqlExecutor,
+  input: { tenantId: string; displayName: string; actor: string },
+): Promise<Tenant | null> {
+  const before = await findTenant(exec, input.tenantId);
+  if (before === null) {
+    return null;
+  }
+
+  const renamed = await renameTenant(exec, input.tenantId, input.displayName);
+  if (renamed === null) {
+    return null;
+  }
+
+  await recordAudit(exec, {
+    tenantId: input.tenantId,
+    actor: input.actor,
+    action: "tenants.rename",
+    detail: JSON.stringify({ from: before.displayName, to: renamed.displayName }),
+  });
+
+  return renamed;
 }

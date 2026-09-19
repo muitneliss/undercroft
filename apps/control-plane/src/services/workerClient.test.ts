@@ -8,9 +8,6 @@
  * rather than a detail, and it is pinned here.
  */
 
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(status).toBe(403)` says what the code must do; naming it says only that two names agree, and it can pass while both are wrong.
-
 import { describe, expect, test as it } from "bun:test";
 
 import { createHttpWorkerClient, type WorkerClient } from "./workerClient.ts";

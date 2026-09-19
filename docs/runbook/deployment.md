@@ -2,24 +2,24 @@
 
 Undercroft runs on the Dokploy instance at `lowbit.link` as a single raw-compose stack.
 
-**Live surfaces:**
+**Live surface:**
 
-- https://undercroft.lowbit.link — the control plane (`control-plane`).
-- https://undercroft-bi.lowbit.link — Metabase.
+- https://undercroft.lowbit.link — the control plane (`control-plane`). The Reports
+  division inside it is the BI; Metabase is gone (ADR 0020).
 
 Everything else talks over the compose network and publishes nothing.
 
 ## What is deployed
 
-| Service                      | Reachable from       | Notes                                                                |
-| ---------------------------- | -------------------- | -------------------------------------------------------------------- |
-| `control-plane`              | the internet, HTTPS  | tRPC + sign-in + SPA. **Configure sign-in — see the warning below.** |
-| `metabase`                   | the internet, HTTPS  | Dashboards. Has its own `metabase-postgres`.                         |
-| `worker`                     | compose network only | Ingestion + dbt subprocess; HTTP trigger on :8081                    |
-| `minio`                      | compose network only | Raw lake                                                             |
-| `postgres`                   | compose network only | Curated + control-plane schema                                       |
-| `kestra` + `kestra-postgres` | compose network only | Scheduling                                                           |
-| `metabase-postgres`          | compose network only | Metabase's own content                                               |
+| Service                      | Reachable from       | Notes                                                                  |
+| ---------------------------- | -------------------- | ---------------------------------------------------------------------- |
+| `control-plane`              | the internet, HTTPS  | tRPC + sign-in + SPA. **Configure sign-in — see the warning below.**   |
+| `worker`                     | compose network only | Ingestion, dbt per tenant, the BI query runner; HTTP verbs on :8081    |
+| `minio`                      | compose network only | Raw lake                                                               |
+| `postgres`                   | compose network only | Curated + control-plane schema                                         |
+| `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 15 minutes                              |
+| `db-migrate`                 | one-shot, exits 0    | Applies `packages/db/sql`, sets the two platform roles' passwords      |
+| `kestra-flows`               | one-shot, exits 0    | Delivers `flows/` to Kestra from the control-plane image, every deploy |
 
 > **Sign-in must be configured, or the control plane has no way in.** Authentication is
 > wired (invite-only, Google or an emailed code — ADR 0010), but it is assembled only when
@@ -33,18 +33,16 @@ Everything else talks over the compose network and publishes nothing.
 
 `deploy/compose/docker-compose.yml` is for development (it `build:`s the images and binds
 ports to localhost). `docker-compose.server.yml` is what Dokploy holds a copy of. It differs
-in four ways, each a failure that happened once:
+in three ways, each a failure that happened once:
 
 1. **Published images**, `ghcr.io/muitneliss/undercroft-{worker,control-plane}:${IMAGE_TAG:-latest}`.
    Dokploy raw compose has no checkout, so `build:` has no context there.
-2. **No host ports.** Only the two public surfaces are reachable, through Dokploy's proxy.
+2. **No host ports.** Only the control plane is reachable, through Dokploy's proxy.
 3. **A unique network alias per service** (`undercroft-postgres`, `undercroft-minio`, …), and
    every reference uses it. A service with a domain is attached to the shared
    `dokploy-network`, where `postgres` and `minio` are names other projects use too — on the
-   old stack, Metabase authenticated against another project's database, stopped only by a
-   password mismatch.
-4. **Metabase has its own database.** In development it shares the platform's; on the server
-   that would put BI's tables inside the schema ADR 0005 governs.
+   old stack, the Metabase it then carried authenticated against another project's database,
+   stopped only by a password mismatch.
 
 Keep the two files in step. A change to the development file that is not mirrored to the
 server file will not survive a deploy.
@@ -52,8 +50,9 @@ server file will not survive a deploy.
 ## How a deploy happens
 
 **Automatically, on a release.** Merge the release-please PR → `version` bumps, a tag is cut
-→ the images build → `scripts/dokploy.ts` runs `preflight → deploy → verify → smoke`. See
-ADR 0008. Nothing else deploys; a plain push to `main` ships nothing.
+→ the images build → `deploy.yml` runs `task cd:preflight → cd:deploy → cd:verify →
+cd:smoke` (each wrapping `scripts/dokploy.ts`). See ADR 0008 and ADR 0023. Nothing else
+deploys; a plain push to `main` ships nothing.
 
 release-please opens that PR as a **GitHub App**, not as `github-actions[bot]`. Since June
 2026 GitHub holds every workflow run on a PR the default token authored behind "requires
@@ -71,18 +70,21 @@ repository and nothing else, and it must be installed on it. It is an App rather
 personal token because a PAT expires and makes every release read as authored by whoever
 minted it.
 
-**By hand**, using the same client (needs the three env vars — never write them to a file):
+**By hand**, using the same client, wrapped in Task (needs the three env vars — never write
+them to a file):
 
 ```bash
 export DOKPLOY_API_ENDPOINT=https://lowbit.link/api
 export DOKPLOY_API_KEY=...           # from Dokploy → Settings → API
 export DOKPLOY_COMPOSE_ID=...        # the undercroft compose
 
-bun run scripts/dokploy.ts preflight   # panel points at published images and pulls them
-bun run scripts/dokploy.ts deploy      # trigger, then wait for the record THIS run created
-bun run scripts/dokploy.ts verify v1.2.3  # every released container runs that tag's digest
-bun run scripts/dokploy.ts smoke https://undercroft.lowbit.link/api/health https://undercroft-bi.lowbit.link/api/health
+task cd:preflight              # panel points at published images and pulls them
+task cd:deploy TAG=v1.2.3      # trigger, then wait for the record THIS run created
+task cd:verify TAG=v1.2.3      # every released container runs that tag's digest
+task cd:smoke                  # defaults to https://undercroft.lowbit.link/api/health
 ```
+
+Or all four in sequence, the same way `deploy.yml` does: `task cd:release TAG=v1.2.3`.
 
 The API is the only channel for a change. SSH is for reading state, never making one: a
 direct edit on the host is drift the next deploy silently reverts.
@@ -102,9 +104,9 @@ when there is no release being rolled out.
 
 Two services need different questions, and `verify` reads which is which from the compose
 file's own `condition: service_completed_successfully` declarations rather than from a list
-it keeps: a long-running service must be `running`, while a one-shot job (`db-migrate`) must
-have **exited 0**. Both still have their digest checked — a migration that exited 0 on last
-release's image is still the wrong thing having run.
+it keeps: a long-running service must be `running`, while a one-shot job (`db-migrate`,
+`kestra-flows`) must have **exited 0**. Both still have their digest checked — a migration
+that exited 0 on last release's image is still the wrong thing having run.
 
 ## Environment variables
 
@@ -116,9 +118,28 @@ Production values live in Dokploy's environment and in a local gitignored file; 
 never committed. `deploy/compose/.env.example` lists the names. The `:?set in .env` variables
 have no default and hard-fail the stack if unset:
 `UNDERCROFT_S3_ACCESS_KEY`, `UNDERCROFT_S3_SECRET_KEY`, `UNDERCROFT_PG_PASSWORD`,
+`UNDERCROFT_APP_PG_PASSWORD`, `UNDERCROFT_WORKER_PG_PASSWORD`, `UNDERCROFT_KESTRA_PASSWORD`,
 `UNDERCROFT_KESTRA_PG_PASSWORD`, `UNDERCROFT_TRIGGER_TOKEN`, `UNDERCROFT_SECRET_KEY`,
-`UNDERCROFT_SESSION_SECRET`, `UNDERCROFT_DBT_PASSWORD`, `UNDERCROFT_METABASE_PG_PASSWORD`,
-`UNDERCROFT_PUBLIC_URL`.
+`UNDERCROFT_SESSION_SECRET`, `UNDERCROFT_PUBLIC_URL`.
+
+The per-source clients default to empty and are set when the source is offered:
+`UNDERCROFT_GOOGLE_INGEST_CLIENT_ID/SECRET` (Gmail, Drive) and
+`UNDERCROFT_XERO_CLIENT_ID/SECRET` (Xero, see [xero-setup.md](./xero-setup.md)). A source whose
+client is unset cannot be connected, and the card says so; HubSpot needs no client, because
+its token is pasted. Neither dbt nor BI has a password of its own any more: each build and
+each question runs as the tenant's own login, whose password the worker mints right before
+(ADR 0018). `UNDERCROFT_DBT_PASSWORD` and `UNDERCROFT_METABASE_PG_PASSWORD` are dead, and
+removing them from Dokploy's environment — with the `undercroft-bi.lowbit.link` domain — is a
+human's step in rolling this release out, because CI never writes the blob.
+
+**Each service connects as its own role.** `db-migrate` is the one service that connects as
+the bootstrap superuser: it applies the schema and then sets `undercroft_app`'s and
+`undercroft_worker`'s passwords from `UNDERCROFT_APP_PG_PASSWORD` and
+`UNDERCROFT_WORKER_PG_PASSWORD`. The control plane and the worker connect as those roles, so
+the grant model in `packages/db/sql` is what binds them — and a repo statement missing a grant
+fails in the offline gate, where every suite runs as the role that runs it in production
+(`db.become(...)` in `@undercroft/db/testing`). Adding the two variables to Dokploy's
+environment is part of rolling this release out; without them `db-migrate` refuses to start.
 
 ## Applying migrations
 
@@ -135,7 +156,7 @@ To apply by hand — a database restored from backup, or a migration you want in
 deploy:
 
 ```sh
-UNDERCROFT_POSTGRES_DSN=... bun run migrate
+UNDERCROFT_POSTGRES_DSN=... task db:migrate
 ```
 
 It prints what it applied and what it skipped: "already up to date" and "applied 1
@@ -237,10 +258,19 @@ reported, not a bug in the check: the release genuinely did not reach the host.
 
 ## Administering Kestra
 
-Kestra has no domain by design — it is an operator surface holding flow history. To load or
-inspect flows, tunnel to it over read-only SSH; a tunnel carries application data (flows,
-executions), which is not a Dokploy configuration change and so is not the thing the
-API-only rule is about.
+**The flows are delivered by the deploy.** `flows/` is baked into the control-plane image,
+and the `kestra-flows` one-shot service runs `scripts/kestraFlows.ts` against Kestra's API
+on every deploy — `PUT` per flow, `POST` when it is new — and exits non-zero on a flow Kestra
+rejects, so the worker (which waits on it) never starts against a scheduler holding last
+release's flow. There is nothing to upload by hand; a flow that is only on the server is
+drift the next deploy reverts. The one flow, `ingest_due`, asks the worker every fifteen
+minutes which (customer, source) pairs are due and starts each; a pair already running is a
+409 the flow ignores.
+
+Kestra has no domain by design — it is an operator surface holding execution history. To
+inspect executions, tunnel to it over read-only SSH; a tunnel carries application data,
+which is not a Dokploy configuration change and so is not the thing the API-only rule is
+about.
 
 Two Kestra behaviours that waste time otherwise:
 
@@ -259,8 +289,11 @@ Two Kestra behaviours that waste time otherwise:
   emits unqualified table names against a pool whose `search_path` is `app`; the offline gate
   uses its memory adapter. A mistake here fails loudly (`Database schema mismatch`)
   rather than silently, and `bun run migrate` is what prevents it.
-- The `undercroft_dbt` role that `dbt/profiles.yml` connects as is not created by any
-  migration on this branch; the transform verb will fail until it exists.
+- **A real login is proven in the Docker tier, not the gate.** PGlite has no authentication,
+  so the offline suites stand in a `SET ROLE` for a login. `task ci:itest` brings up the
+  compose Postgres and opens a connection _as_ a tenant's role against it, proving it sees
+  only its tenant and that `RESET ROLE` gives it nothing more. Run it after any change to
+  `packages/db/sql`.
 - The raw lake is not in a backup set — it is object storage with its own durability story,
   and the one layer that cannot be regenerated. Versioning and replication, not a nightly
   dump. Recorded rather than quietly omitted.

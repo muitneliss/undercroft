@@ -6,19 +6,6 @@
  * returning nothing and reading as an empty mailbox.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One design document and one deploy client, each of which argues with itself across its length. Splitting at 300 lines would cut a single argument in half.
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { createPacer, createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { writeConnectionDetail } from "@undercroft/db/repos";
@@ -46,6 +33,8 @@ beforeEach(async () => {
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
   fetcher = new InMemoryByteFetcher();
+  // Seeded as the superuser; from here on every statement runs as the worker does.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {
@@ -57,11 +46,15 @@ async function connect(source: string, selection: unknown): Promise<void> {
     "INSERT INTO ops.connection (tenant_id, source, status) VALUES ($1, $2, 'connected')",
     [TENANT, source],
   );
-  await writeConnectionDetail(db, {
-    tenantId: TENANT,
-    source,
-    selectionJson: JSON.stringify(selection),
-  });
+  // A chosen scope is an admin's decision recorded by the control plane; the worker may
+  // read it and never write it, so the fixture is planted as the superuser.
+  await db.asSuperuser((tx) =>
+    writeConnectionDetail(tx, {
+      tenantId: TENANT,
+      source,
+      selectionJson: JSON.stringify(selection),
+    }),
+  );
 }
 
 function collect(source: "gmail" | "drive") {
@@ -121,6 +114,34 @@ function message(id: string, labelIds: string[], withPdf = true): unknown {
   };
 }
 
+/** A message carrying whichever attachment parts a file-type test asks for, not just a PDF. */
+function messageWithAttachments(
+  id: string,
+  labelIds: string[],
+  attachments: readonly { mimeType: string; filename: string }[],
+): unknown {
+  return {
+    id,
+    threadId: `t-${id}`,
+    labelIds,
+    internalDate: "1789400000000",
+    payload: {
+      headers: [
+        { name: "Subject", value: `Invoice ${id}` },
+        { name: "From", value: "billing@acme.test" },
+      ],
+      parts: [
+        { mimeType: "text/plain", body: { size: "12" } },
+        ...attachments.map((attachment, index) => ({
+          mimeType: attachment.mimeType,
+          filename: attachment.filename,
+          body: { size: String(PDF.byteLength), attachmentId: `att-${id}-${index}` },
+        })),
+      ],
+    },
+  };
+}
+
 describe("a scope is required, never assumed", () => {
   it("a connection with no recorded scope is refused rather than defaulted", async () => {
     // The firing side. "Nobody has chosen yet" and "somebody chose everything" are
@@ -135,7 +156,7 @@ describe("a scope is required, never assumed", () => {
 
   it("an empty label list is a recorded decision and does run", async () => {
     // The quiet side: empty labels means the whole mailbox, which the card renders as
-    // "Headers and PDF attachments, whole mailbox".
+    // "Headers and matching attachments, whole mailbox".
     await connect("gmail", { labels: [] });
     fetcher.on("GET", listUrl(null), { body: { messages: [] } });
 
@@ -264,15 +285,95 @@ describe("gmail", () => {
 
     expect(result.documents.skipped).toBe(1);
   });
+
+  it("an attachment outside the allow-list is excluded, but a matching one still lands", async () => {
+    // Default scope: PDF only. The Excel part must not widen what is stored beyond it.
+    await connect("gmail", { labels: [] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments(
+          "m1",
+          ["Label_A"],
+          [
+            { mimeType: "application/pdf", filename: "invoice-m1.pdf" },
+            { mimeType: "application/vnd.ms-excel", filename: "budget-m1.xlsx" },
+          ],
+        ),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } });
+
+    const result = await collect("gmail");
+
+    expect(result.documents.created).toBe(1);
+    const { rows } = await db.query<{ document_id: string }>(
+      "SELECT document_id FROM raw.documents",
+    );
+    expect(rows.map((r) => r.document_id)).toEqual(["m1:002"]);
+  });
+
+  it("an allow-listed non-PDF attachment lands with its own content type", async () => {
+    await connect("gmail", { labels: [], fileTypes: ["application/vnd.ms-excel"] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments(
+          "m1",
+          ["Label_A"],
+          [{ mimeType: "application/vnd.ms-excel", filename: "budget-m1.xlsx" }],
+        ),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } });
+
+    const result = await collect("gmail");
+
+    expect(result.documents.created).toBe(1);
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  it("an empty allow-list lands attachments of every type in one message", async () => {
+    await connect("gmail", { labels: [], fileTypes: [] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments(
+          "m1",
+          ["Label_A"],
+          [
+            { mimeType: "application/pdf", filename: "invoice-m1.pdf" },
+            { mimeType: "application/vnd.ms-excel", filename: "budget-m1.xlsx" },
+          ],
+        ),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-1`, { body: { data: PDF_B64 } });
+
+    const result = await collect("gmail");
+
+    expect(result.documents.created).toBe(2);
+  });
 });
 
 describe("drive", () => {
-  function listUrlFor(folderId: string): string {
+  /** Reproduces the collector's own query, so a test proves the allow-list actually threads
+   * through rather than merely trusting it did: the default one-type case must stay
+   * byte-identical to what shipped before file types were configurable. */
+  function listUrlFor(
+    folderId: string,
+    fileTypes: readonly string[] = ["application/pdf"],
+  ): string {
+    const joined = fileTypes.map((type) => `mimeType='${type}'`).join(" or ");
+    const typeClause = fileTypes.length > 1 ? `(${joined})` : joined;
+    const q =
+      fileTypes.length === 0
+        ? `'${folderId}' in parents and trashed=false`
+        : `'${folderId}' in parents and ${typeClause} and trashed=false`;
+
     const url = new URL(DRIVE);
-    url.searchParams.set(
-      "q",
-      `'${folderId}' in parents and mimeType='application/pdf' and trashed=false`,
-    );
+    url.searchParams.set("q", q);
     url.searchParams.set(
       "fields",
       "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)",
@@ -283,11 +384,11 @@ describe("drive", () => {
     return url.toString();
   }
 
-  function file(id: string) {
+  function file(id: string, mimeType = "application/pdf") {
     return {
       id,
       name: `statement-${id}.pdf`,
-      mimeType: "application/pdf",
+      mimeType,
       size: String(PDF.byteLength),
       modifiedTime: "2026-09-17T12:00:00.000Z",
       md5Checksum: "abc",
@@ -355,5 +456,107 @@ describe("drive", () => {
 
     await expect(collect("drive")).resolves.toMatchObject({ source: "drive" });
     expect(fetcher.calls.map((c) => c.url)).not.toContain(listUrlFor("sub"));
+  });
+
+  function fileUrlFor(id: string): string {
+    const url = new URL(`${DRIVE}/${id}`);
+    url.searchParams.set("fields", "id,name,mimeType,size,modifiedTime,md5Checksum,parents");
+    url.searchParams.set("supportsAllDrives", "true");
+    return url.toString();
+  }
+
+  it("a picked file outside the allow-list is refused with its reason, not dropped", async () => {
+    // It used to be dropped where it was found, so the run landed 0 and said nothing --
+    // indistinguishable from "the picker gave us nothing". CLAUDE.md rule 2.
+    await connect("drive", { files: [{ id: "x1", name: "budget", kind: "file" }] });
+    fetcher.on("GET", fileUrlFor("x1"), {
+      body: { id: "x1", name: "budget.xlsx", mimeType: "application/vnd.ms-excel", size: "10" },
+    });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([
+      { entity: "files", sourceRecordId: "x1", reason: "not-an-allowed-type" },
+    ]);
+  });
+
+  it("a picked file that is a PDF is landed and refused nothing", async () => {
+    await connect("drive", { files: [{ id: "f1", name: "statement", kind: "file" }] });
+    fetcher
+      .on("GET", fileUrlFor("f1"), { body: file("f1") })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([]);
+    expect(result.documents.created).toBe(1);
+  });
+
+  it("a directly-picked file matching a custom allow-list lands with its own content type", async () => {
+    await connect("drive", {
+      files: [{ id: "x1", name: "budget", kind: "file" }],
+      fileTypes: ["application/vnd.ms-excel"],
+    });
+    fetcher
+      .on("GET", fileUrlFor("x1"), { body: file("x1", "application/vnd.ms-excel") })
+      .on("GET", `${DRIVE}/x1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([]);
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  it("an empty allow-list accepts a directly-picked file of any type", async () => {
+    await connect("drive", { files: [{ id: "x1", name: "budget", kind: "file" }], fileTypes: [] });
+    fetcher
+      .on("GET", fileUrlFor("x1"), { body: file("x1", "application/vnd.ms-excel") })
+      .on("GET", `${DRIVE}/x1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([]);
+    expect(result.documents.created).toBe(1);
+  });
+
+  it("a folder listing's query is built from the chosen allow-list", async () => {
+    // If the implementation forgot to thread `fileTypes` into the query, this listing's URL
+    // would not match anything registered and the refusing fetcher would fail the test loudly.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      fileTypes: ["application/vnd.ms-excel"],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", ["application/vnd.ms-excel"]), {
+        body: { files: [file("f1", "application/vnd.ms-excel")] },
+      })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(1);
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  it("an empty allow-list's folder query omits the type filter", async () => {
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      fileTypes: [],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", []), {
+        body: { files: [file("f1", "application/vnd.ms-excel")] },
+      })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(1);
   });
 });

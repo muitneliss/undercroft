@@ -22,13 +22,12 @@ COPY packages ./packages
 COPY apps ./apps
 RUN bun install --frozen-lockfile --production
 
-# Connector specs and the dbt project are read at run time.
+# Connector specs are read at run time. There is no dbt project in the image: a tenant's
+# project is generated from its models in Postgres right before each build, into a
+# directory that is removed after. See packages/db/src/services/dbtProject.ts.
 COPY specs ./specs
-COPY dbt ./dbt
 
-ENV UNDERCROFT_SPECS_DIR=/app/specs/connectors \
-    UNDERCROFT_DBT_PROJECT_DIR=/app/dbt/undercroft_starter \
-    UNDERCROFT_DBT_PROFILES_DIR=/app/dbt
+ENV UNDERCROFT_SPECS_DIR=/app/specs/connectors
 EXPOSE 8081
 
 # Idle until called. Kestra invokes the HTTP verbs on a schedule; the worker starts no work

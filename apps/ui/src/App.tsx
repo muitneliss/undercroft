@@ -10,24 +10,13 @@
  * division decides the board hue; the board hue decides the acetate's solved alpha.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
-
-import type { ReactNode } from "react";
+import { lazy, type ReactNode, Suspense } from "react";
 import { Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 
-import type { Source } from "@/api/types.ts";
-import { SOURCES } from "@/api/types.ts";
+import { isSource } from "@/api/types.ts";
 import { Book } from "@/components/Book.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import type { DivisionId } from "@/lib/divisions.ts";
-import { Lake } from "@/routes/Lake.tsx";
 import { People } from "@/routes/People.tsx";
 import { ScopePicker } from "@/routes/ScopePicker.tsx";
 import { SignIn } from "@/routes/SignIn.tsx";
@@ -35,9 +24,33 @@ import { TenantOverview } from "@/routes/TenantOverview.tsx";
 import { Tenants } from "@/routes/Tenants.tsx";
 import { trpc } from "@/trpc.ts";
 
-function isSource(value: string | undefined): value is Source {
-  return SOURCES.includes(value as Source);
-}
+/**
+ * The three divisions that closed the ring load on demand.
+ *
+ * Each is its own chunk, so the models editor and the charts -- the two heaviest things
+ * the interface will ever carry -- never ride in the bundle an operator downloads to read
+ * a schedule of grants. The Suspense boundary sits INSIDE the book, below the keyed leaf,
+ * so the page turn still fires once for the division rather than once for the chunk.
+ */
+const Journal = lazy(() =>
+  import("@/routes/Journal.tsx").then((module) => ({ default: module.Journal })),
+);
+const Lake = lazy(() => import("@/routes/Lake.tsx").then((module) => ({ default: module.Lake })));
+const Models = lazy(() =>
+  import("@/routes/Models.tsx").then((module) => ({ default: module.Models })),
+);
+const ModelEditor = lazy(() =>
+  import("@/routes/ModelEditor.tsx").then((module) => ({ default: module.ModelEditor })),
+);
+const Reports = lazy(() =>
+  import("@/routes/Reports.tsx").then((module) => ({ default: module.Reports })),
+);
+const Question = lazy(() =>
+  import("@/routes/Question.tsx").then((module) => ({ default: module.Question })),
+);
+const Dashboard = lazy(() =>
+  import("@/routes/Dashboard.tsx").then((module) => ({ default: module.Dashboard })),
+);
 
 /**
  * A signed-in page: the book opened at one division.
@@ -55,7 +68,7 @@ function Opened({
   children: (tenantId: string) => ReactNode;
 }): React.JSX.Element {
   const params = useParams();
-  const tenantId = params.tenantId;
+  const { tenantId } = params;
 
   if (!tenantId) {
     return <Navigate to="/tenants" replace={true} />;
@@ -70,8 +83,7 @@ function Opened({
 
 function ScopeRoute({ signedInAs }: { signedInAs: string }): React.JSX.Element {
   const params = useParams();
-  const tenantId = params.tenantId;
-  const source = params.source;
+  const { tenantId, source } = params;
 
   if (!tenantId) {
     return <Navigate to="/tenants" replace={true} />;
@@ -116,15 +128,113 @@ export function App(): React.JSX.Element {
 
   return (
     <Routes>
+      <DivisionRoutes signedInAs={signedInAs} />
+      <TenantRoutes signedInAs={signedInAs} />
+    </Routes>
+  );
+}
+
+/**
+ * The routes reached from the tab rail, and the two that stand outside it.
+ *
+ * Split only because the table grew past what one function may be; the ORDER is unchanged and
+ * still matters -- `path="*"` has to stay last, and it lives with the second half.
+ */
+function DivisionRoutes({ signedInAs }: { signedInAs: string }): React.JSX.Element {
+  return (
+    <>
       <Route
         path="/tenants/:tenantId/connect/:source/scope"
         element={<ScopeRoute signedInAs={signedInAs} />}
       />
       <Route
+        path="/tenants/:tenantId/journal/:runId?"
+        element={
+          <Opened division="journal" signedInAs={signedInAs}>
+            {(tenantId): React.JSX.Element => (
+              <Suspense fallback={<Skeleton rows={6} />}>
+                <Journal tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
         path="/tenants/:tenantId/lake"
         element={
           <Opened division="lake" signedInAs={signedInAs}>
-            {(tenantId) => <Lake tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => (
+              <Suspense fallback={<Skeleton rows={5} />}>
+                <Lake tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/models"
+        element={
+          <Opened division="models" signedInAs={signedInAs}>
+            {(tenantId): React.JSX.Element => (
+              <Suspense fallback={<Skeleton rows={4} />}>
+                <Models tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/models/:name"
+        element={
+          <Opened division="models" signedInAs={signedInAs}>
+            {(tenantId): React.JSX.Element => (
+              <Suspense fallback={<Skeleton rows={6} />}>
+                <ModelEditor tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+    </>
+  );
+}
+
+function TenantRoutes({ signedInAs }: { signedInAs: string }): React.JSX.Element {
+  return (
+    <>
+      <Route
+        path="/tenants/:tenantId/reports"
+        element={
+          <Opened division="reports" signedInAs={signedInAs}>
+            {(tenantId): React.JSX.Element => (
+              <Suspense fallback={<Skeleton rows={4} />}>
+                <Reports tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/reports/questions/:id"
+        element={
+          <Opened division="reports" signedInAs={signedInAs}>
+            {(tenantId): React.JSX.Element => (
+              <Suspense fallback={<Skeleton rows={6} />}>
+                <Question tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/reports/dashboards/:id"
+        element={
+          <Opened division="reports" signedInAs={signedInAs}>
+            {(tenantId): React.JSX.Element => (
+              <Suspense fallback={<Skeleton rows={6} />}>
+                <Dashboard tenantId={tenantId} />
+              </Suspense>
+            )}
           </Opened>
         }
       />
@@ -132,7 +242,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId/people"
         element={
           <Opened division="people" signedInAs={signedInAs}>
-            {(tenantId) => <People tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => <People tenantId={tenantId} />}
           </Opened>
         }
       />
@@ -140,7 +250,7 @@ export function App(): React.JSX.Element {
         path="/tenants/:tenantId"
         element={
           <Opened division="sources" signedInAs={signedInAs}>
-            {(tenantId) => <TenantOverview tenantId={tenantId} />}
+            {(tenantId): React.JSX.Element => <TenantOverview tenantId={tenantId} />}
           </Opened>
         }
       />
@@ -153,6 +263,6 @@ export function App(): React.JSX.Element {
         }
       />
       <Route path="*" element={<Navigate to="/tenants" replace={true} />} />
-    </Routes>
+    </>
   );
 }

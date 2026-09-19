@@ -1,10 +1,3 @@
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { migrate } from "../migrate.ts";
 import {
@@ -62,7 +55,7 @@ describe("needsRefresh treats missing expiry as fresh", () => {
 
 describe("accessToken refreshes and writes the rotated token back", () => {
   it("returns the stored token when it is still fresh", async () => {
-    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: null }), env);
+    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: null }), { env });
     const token = await accessToken(db, "CASE-1", "xero", { env });
     expect(token).toBe("access-1");
   });
@@ -72,7 +65,7 @@ describe("accessToken refreshes and writes the rotated token back", () => {
     // the connection is lost. Prove the NEW refresh token is what is now on disk.
     const now = new Date("2026-01-01T00:00:00Z");
     const expired = new Date(now.getTime() + 60_000).toISOString();
-    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: expired }), env);
+    await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: expired }), { env });
 
     function refresher(old: string): Promise<Credential> {
       expect(old).toBe("refresh-1");
@@ -93,13 +86,9 @@ describe("accessToken refreshes and writes the rotated token back", () => {
   it("an expired token with no refresher marks the connection expired and raises", async () => {
     const now = new Date("2026-01-01T00:00:00Z");
     const expired = new Date(now.getTime() + 60_000).toISOString();
-    await writeCredential(
-      db,
-      "CASE-1",
-      "xero",
-      cred({ refreshToken: "", expiresAt: expired }),
+    await writeCredential(db, "CASE-1", "xero", cred({ refreshToken: "", expiresAt: expired }), {
       env,
-    );
+    });
 
     await expect(accessToken(db, "CASE-1", "xero", { now, env })).rejects.toBeInstanceOf(
       ConnectionRegistryError,

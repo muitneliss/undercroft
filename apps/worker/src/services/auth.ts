@@ -13,17 +13,37 @@
  * enumeration defence belongs to the browser surface, not here.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-
 import { timingSafeEqual } from "node:crypto";
 import { hashToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
-import { findByDigest, type IngestKeyRow } from "../repos/ingestKey.ts";
+import { findByDigest, type IngestKeyRow, touchLastUsed } from "@undercroft/db/repos";
 
-export type { IngestKeyRow };
+export type { IngestKeyRow } from "@undercroft/db/repos";
+
+/**
+ * How often a key's `last_used_at` is written: once a minute per key, not once a request.
+ *
+ * The column exists so an admin can see whether a key is still in use, and "within the
+ * last minute" answers that as well as "this second" does -- while a script posting a
+ * hundred batches a minute would otherwise turn every admission into a write.
+ */
+export const TOUCH_INTERVAL_MS = 60_000;
+
+/** When each key was last recorded as used, by this process. Reset only for tests. */
+const touched = new Map<string, number>();
+
+export function resetKeyUseThrottle(): void {
+  touched.clear();
+}
+
+async function noteUse(exec: SqlExecutor, key: IngestKeyRow, now: Date): Promise<void> {
+  const last = touched.get(key.id);
+  if (last !== undefined && now.getTime() - last < TOUCH_INTERVAL_MS) {
+    return;
+  }
+  touched.set(key.id, now.getTime());
+  await touchLastUsed(exec, key.id, now);
+}
 
 export type AuthOutcome =
   | { ok: true; scope: "service" | { tenantId: string } }
@@ -79,5 +99,6 @@ export async function authenticate(
       message: `token is not scoped to source ${opts.source}`,
     };
   }
+  await noteUse(exec, key, now);
   return { ok: true, scope: { tenantId: key.tenant_id } };
 }

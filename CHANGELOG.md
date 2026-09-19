@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.9.0](https://github.com/muitneliss/undercroft/compare/v1.8.0...v1.9.0) (2026-09-19)
+
+
+### Features
+
+* close the ring, from a connected source to a dashboard with evidence at every step ([#52](https://github.com/muitneliss/undercroft/issues/52)) ([5c2393c](https://github.com/muitneliss/undercroft/commit/5c2393c5d487d68287f93d46632f6bd0704947c1))
+
+## [1.8.0](https://github.com/muitneliss/undercroft/compare/v1.7.0...v1.8.0) (2026-09-19)
+
+
+### Features
+
+* **tenants:** correct a display name, and name the id plainly ([#50](https://github.com/muitneliss/undercroft/issues/50)) ([d53dc11](https://github.com/muitneliss/undercroft/commit/d53dc11546d42bbc5e6970fa930d20981a2de6fe))
+
+
+### Bug Fixes
+
+* **connections:** stop showing the access token's expiry as the grant's ([#48](https://github.com/muitneliss/undercroft/issues/48)) ([500a8f3](https://github.com/muitneliss/undercroft/commit/500a8f35040d1b67119cff26e503327762758cea))
+
 ## [1.7.0](https://github.com/muitneliss/undercroft/compare/v1.6.1...v1.7.0) (2026-09-19)
 
 

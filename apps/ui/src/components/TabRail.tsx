@@ -19,7 +19,7 @@
  * the division and not a count of the current customer's rows (see
  * `@/lib/divisions`), so the navigation never resizes under the cursor.
  *
- * FACE-DOWN, NOT HIDDEN. Three of the four divisions are sections of one
+ * FACE-DOWN, NOT HIDDEN. Six of the seven divisions are sections of one
  * customer's book and cannot be opened until a customer is chosen. They render
  * face-down -- the leaf turned over, showing unprinted board back -- rather than
  * disappearing, because a division that vanishes teaches nobody that it exists,
@@ -32,12 +32,6 @@
  * stylistic position, it is a defect; it is the only place this build departs
  * from the form.
  */
-
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/nursery/noInlineStyles: Every one of these is data becoming a style: the tab rail's flexGrow IS the division's extent, the skeleton's width varies per row, the colour wheel paints each swatch its own hue. Biome's fix deletes the attribute rather than relocating it, which removes the feature.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
 
 // A plain Link, deliberately not a NavLink. NavLink decides "active" by path
 // prefix, so `/tenants` stayed active inside `/tenants/CASE-.../lake` and two

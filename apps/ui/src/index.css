@@ -45,48 +45,13 @@
  * correct and the solver only ever adjusts it.
  */
 
-/**
- * biome-ignore-all lint/style/noHexColors: The palette has to stay hex because
- * `@/lib/acetate` reads `--leaf` and `--ink` back out of the computed styles and
- * parses them with `parseHex`, which accepts `#rgb`/`#rrggbb` and returns null for
- * anything else rather than guessing. Rewriting these as oklch() would make that
- * parse fail, and the solver would fall back to its hardcoded defaults -- a guessed
- * colour in the code path that guarantees WCAG contrast, which is exactly the
- * failure rule 2 is about. Moving off hex means rewriting the colour pipeline and
- * its tests, not editing this file.
- */
-
-/**
- * biome-ignore-all lint/nursery/noUnusedClasses: The rule cannot see a class name
- * assembled at runtime, and this UI assembles them -- `className={`mark mark--${mark}`}`
- * in StatusMark.tsx builds one per state. Every name it reports is reachable that
- * way, so acting on this rule would delete live styles.
- */
-
-/**
- * biome-ignore-all lint/nursery/useBaseline: Four progressive enhancements --
- * `scrollbar-color`, `::selection`, `user-select` and `overflow-x: clip`. Each degrades
- * to the browser default where it is unsupported, and the form tells no state by one of
- * these alone. The clip is the only one worth a sentence: where it is not supported the
- * axis falls back to `visible`, so a leaf mid-turn can briefly overhang the binder --
- * a 190ms cosmetic overflow, not a broken layout, and the alternative (`hidden`) fails
- * in the worse direction by moving the document's scroll inside `.book`.
- */
-
-/**
- * biome-ignore-all lint/style/noExcessiveLinesPerFile: This is one document, not a
- * module that grew. The board, the leaf and the rail are defined against each other
- * -- the comments argue contrast ratios across sections -- and cutting it at 300
- * lines would split a single argument across files.
- */
-
-/**
- * biome-ignore-all lint/style/noDescendingSpecificity: `.colophon .datum` is grouped
- * with the colophon, which puts it above the generic `.datum`. The specific rule
- * still wins -- specificity decides this, not source order -- so the cascade is what
- * it reads as; moving the block would separate it from the component it belongs to.
- */
-
+/* `@xyflow/react`'s own base stylesheet: the positioning, panning and clipping rules
+ * the run's-shape canvas needs underneath it (`position: absolute` on a node,
+ * `overflow: hidden` on the pane) that this file only ever overrides, never supplies
+ * from scratch. Named and layered below `undercroft` (declared after it, so it wins
+ * the cascade layer order) rather than left unlayered, where an import would beat
+ * every rule in this file regardless of specificity. */
+@import "@xyflow/react/dist/style.css" layer(xyflow);
 /* -- faces ------------------------------------------------------------------
  *
  * Self-hosted, not from a font CDN. This origin holds the session cookie that
@@ -265,9 +230,10 @@
     --rule-strong: rgba(22, 21, 15, 0.44);
     --hair: 1px;
 
-    /* The section wheel. Seven hues divide the book and are taken in order; four
-     are spoken for and three are the system's room to grow. Vermilion is not in
-     the wheel -- see --errata. */
+    /* The section wheel. Seven hues divide the book and are taken in order; all
+     seven are spoken for since the ring closed (ADR 0019), so an eighth section
+     is a decision about the wheel first. Vermilion is not in the wheel -- see
+     --errata. */
     --hue-oxide: #b24b1a;
     --hue-chrome: #eda600;
     --hue-grass: #3e782b;
@@ -1442,6 +1408,23 @@
     text-align: right;
   }
 
+  /* A run's line: the mark, then how long ago, then how much. Inline, so the three
+     read as one fact set against the column's edge rather than three stacked lines. */
+  .grant__run {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
+  /* A select is an input with a die-cut edge, sized to its words rather than stretched
+     to the column: it is one choice among four, not a field to fill. */
+  .input--select {
+    align-self: flex-end;
+    width: auto;
+  }
+
   .grant__actions {
     display: flex;
     gap: var(--s-2);
@@ -1873,6 +1856,397 @@
     text-align: right;
   }
 
+  /* -- a form hinged into a row ------------------------------------------------ */
+
+  /* A plate that is a <summary>: the same die, the disclosure triangle removed. Open, it
+   is struck -- the ink fills the plate -- because the leaf beneath it is the thing that
+   is now on the page. */
+  .tokenform > summary.plate {
+    list-style: none;
+  }
+
+  .tokenform > summary.plate::-webkit-details-marker {
+    display: none;
+  }
+
+  .tokenform[open] > summary.plate {
+    background: var(--ink);
+    color: var(--leaf);
+  }
+
+  /* The leaf lies below the plate, full width of the actions cell, not beside it. */
+  .tokenform {
+    flex-basis: 100%;
+  }
+
+  /* -- the journal ------------------------------------------------------------- */
+
+  /* The open row: its leaf is hinged down in the row beneath it, and the row itself
+   takes the board's wash so the eye finds which line the leaf belongs to. The same
+   wash as the hover, held. */
+  .table tbody tr[aria-current] td {
+    background: color-mix(in srgb, var(--board) 14%, transparent);
+  }
+
+  /* The hinge row carries the leaf and nothing else: no cell padding to double the
+   leaf's own, and no hover wash beneath a leaf that is already open. */
+  .table__hinge td,
+  .table tbody tr.table__hinge:hover td {
+    padding: 0 0 var(--s-4);
+    background: transparent;
+  }
+
+  /* What a run did, as the line the reader follows into the leaf; who started it,
+   set beneath in the quiet face. */
+  .journal__what {
+    display: block;
+    font-weight: 700;
+  }
+
+  .journal__trigger {
+    display: block;
+  }
+
+  /* -- the run's own shape, drawn ------------------------------------------------
+   *
+   * `@xyflow/react` supplies only the canvas; everything it draws by default is
+   * overridden below. No grid, no minimap, no zoom -- this is a schedule read left
+   * to right, not an infinite canvas -- and a node is the same die-cut plate as
+   * everywhere else, its connection points the punched hole the hinge and the
+   * punch already use. The canvas is `aria-hidden` (see RunFlow.tsx); the chain
+   * links either side of it are real text and carry their own style below.
+   */
+
+  .run-flow__chain {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+    margin: 0;
+  }
+
+  .run-flow__chain a {
+    font-family: var(--face-display);
+    font-size: var(--t-small);
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* Matches RunFlow.tsx's own CANVAS_HEIGHT: the two have no way to share one number
+   across CSS and JS, so a change to either changes both. */
+  .run-flow__canvas {
+    width: 100%;
+    height: 7.625rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .run-flow__canvas .react-flow {
+    background: transparent;
+  }
+
+  .run-flow__canvas .react-flow__pane {
+    cursor: default;
+  }
+
+  .run-flow__canvas .react-flow__edge-path {
+    stroke: var(--rule-strong);
+    stroke-width: 1.5px;
+    fill: none;
+    transition: stroke var(--pass);
+  }
+
+  .run-flow__canvas .react-flow__edge.run-flow__edge--active .react-flow__edge-path {
+    stroke: var(--ink-2);
+  }
+
+  .run-flow__canvas .react-flow__handle {
+    width: 9px;
+    height: 9px;
+    min-width: 0;
+    min-height: 0;
+    border: var(--hair) solid var(--ink);
+    border-radius: 50%;
+    background: var(--page);
+    box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+  }
+
+  /* Required by @xyflow/react's license, not decoration: kept visible and linked,
+   just not dressed as a floating pill, which this system has none of. */
+  .run-flow__canvas .react-flow__attribution {
+    padding: 0 var(--s-1);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .run-flow__canvas .react-flow__attribution a {
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    letter-spacing: 0.04em;
+    color: var(--ink-3);
+  }
+
+  .run-flow__plate {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--s-1);
+    width: 100%;
+    height: 100%;
+    padding: var(--s-2) var(--s-3);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+    overflow: hidden;
+  }
+
+  .run-flow__plate--link {
+    background: var(--page);
+    border-style: dashed;
+  }
+
+  /* Two rows, not three: the name, then the mark and its figure together. Both rows
+   are `flex-shrink: 0` on purpose -- a plate too small for its content should clip
+   the second row's overflow, never silently squash every row to fit. */
+  .run-flow__label {
+    flex-shrink: 0;
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 84;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .run-flow__foot {
+    display: flex;
+    flex-shrink: 0;
+    align-items: baseline;
+    gap: var(--s-2);
+    min-width: 0;
+  }
+
+  .run-flow__foot .mark {
+    flex-shrink: 0;
+  }
+
+  .run-flow__detail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The one live signal a stage still in progress can honestly show: lines of type
+   being set, the same motion the skeleton uses while a leaf is still loading. */
+  .run-flow__plate--pending::after {
+    content: "";
+    position: absolute;
+    inset-inline: var(--s-3);
+    bottom: 0.3rem;
+    height: 3px;
+    background: repeating-linear-gradient(90deg, var(--rule-strong) 0 50%, transparent 50% 100%);
+    background-size: 6px 100%;
+    animation: set-line 1.1s steps(6, end) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .run-flow__plate--pending::after {
+      animation: none;
+    }
+  }
+
+  /* -- the raw lake ------------------------------------------------------------ */
+
+  /* A payload is disclosed, not printed: a plate that is a <summary>, the same die as
+   the token form's, and beneath it the source's JSON exactly as Postgres rendered it,
+   in the mono face, wrapping rather than widening the table. */
+  .payload > summary.plate {
+    list-style: none;
+  }
+
+  .payload > summary.plate::-webkit-details-marker {
+    display: none;
+  }
+
+  .payload[open] > summary.plate {
+    background: var(--ink);
+    color: var(--leaf);
+  }
+
+  .payload__text {
+    margin: var(--s-2) 0 0;
+    padding: var(--s-3);
+    max-height: 24rem;
+    overflow: auto;
+    font-family: var(--face-mono);
+    font-size: var(--t-micro);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+    border-left: 2px solid var(--rule-strong);
+  }
+
+  /* -- the model editor ---------------------------------------------------------- */
+
+  /* Monaco draws its own text; the frame is ours: the same die-cut edge as an input, tall
+   enough to hold a model without scrolling the page for it. */
+  .editor {
+    min-height: 26rem;
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+    background: var(--leaf);
+    overflow: hidden;
+  }
+
+  .editor--readonly {
+    opacity: 0.85;
+  }
+
+  /* A result can be wider than the leaf; it scrolls sideways rather than breaking it. */
+  .result {
+    overflow-x: auto;
+  }
+
+  .result__type {
+    display: block;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+  }
+
+  /* -- charts ---------------------------------------------------------------------- */
+
+  /* The frame a chart is drawn in. Chart.js can only ease, so it is told not to move;
+   the frame inks in with the same two steps a table row does. A fixed height, because
+   the canvas fills its box and a box with no height is a box with no chart. */
+  .plot {
+    position: relative;
+    height: 22rem;
+    animation: ink-set var(--pass) both;
+  }
+
+  .plot--gauge {
+    height: 14rem;
+  }
+
+  .plot--progress {
+    height: 6rem;
+  }
+
+  /* A map is taller than a chart: Vietnam is a long country, and the world's outline is
+   the width of the leaf. The height follows the width so the projection is not squashed
+   on a phone, capped where a desktop leaf would otherwise scroll past it. */
+  .plot--map {
+    height: auto;
+    aspect-ratio: 4 / 3;
+    max-height: 32rem;
+  }
+
+  /* One figure, large, in the mono face: the number a KPI tile exists to show, printed
+   from the digits the database holds. */
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    animation: ink-set var(--pass) both;
+  }
+
+  .tile__figure {
+    font-family: var(--face-mono);
+    font-size: var(--t-h1);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  /* -- the question builder ------------------------------------------------------ */
+
+  /* A column is a punch and, once chosen, the aggregate beside it. */
+  .builder__column {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+  }
+
+  /* A filter row wraps rather than overflowing the leaf; the value grows, the rest keeps. */
+  .builder__filter .input:not(.input--select) {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  /* -- dashboards ---------------------------------------------------------------- */
+
+  /* Twelve columns, as every grid a reader has met. A tile names its cells inline from
+   the layout the author saved; the rows are fixed so a chart has a height to fill. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: 4.5rem;
+    gap: var(--s-3);
+  }
+
+  /* A tile is a small leaf: the same paper and hairline, inking in like a row. */
+  .grid__tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    min-height: 0;
+    min-width: 0;
+    padding: var(--s-3);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    animation: ink-set var(--pass) both;
+  }
+
+  .grid__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
+  .grid__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  /* Inside a tile the chart takes the tile's height rather than its own. */
+  .grid__body .plot {
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .grid__controls {
+    display: flex;
+    gap: var(--s-1);
+    flex-wrap: wrap;
+  }
+
+  /* The shared filters: each keeps its width, the row wraps. */
+  .filters {
+    display: flex;
+    gap: var(--s-4);
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .filters__presets {
+    display: flex;
+    gap: var(--s-1);
+    flex-wrap: wrap;
+  }
+
   code {
     font-family: var(--face-mono);
     font-size: 0.9em;
@@ -2076,6 +2450,12 @@
     .grant__when {
       text-align: left;
     }
+    .grant__run {
+      justify-content: flex-start;
+    }
+    .input--select {
+      align-self: flex-start;
+    }
     .grant__actions {
       justify-content: flex-start;
       grid-column: 1 / -1;
@@ -2115,6 +2495,17 @@
     .leaf__spine,
     .leaf__caption {
       display: none;
+    }
+
+    /* The dashboard's grid becomes a column. With the grid gone, a tile's inline placement
+     has nothing to place it on, and each takes the width in reading order. */
+    .grid {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .grid__tile {
+      min-height: 18rem;
     }
 
     /* Flush with the wordmark above it. The side padding that separates the record

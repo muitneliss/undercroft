@@ -11,9 +11,6 @@
  * nobody recorded fails loudly here rather than reading as an empty mailbox.
  */
 
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/style/useFilenamingConvention: One file named for the thing it exports, matching every other module in its directory.
-
 import { createPacer, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { beforeEach, expect, test as it } from "bun:test";
 

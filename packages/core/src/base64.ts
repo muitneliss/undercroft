@@ -11,8 +11,8 @@
  * says which encoding it believes it has.
  */
 
-// biome-ignore-all lint/nursery/useValidTestTitle: A false positive. The rule reads `/\s/.test(value)` -- RegExp#test on a regex literal -- as a test-framework `test()` call with a non-string title. There is no test in this file.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+/** RFC 4648 §5: the base64 alphabet with `-` and `_`, padding optional. */
+const BASE64URL = /^[A-Za-z0-9_-]*={0,2}$/u;
 
 /**
  * Decode base64url text to bytes.
@@ -23,7 +23,7 @@
  * store and discover later.
  */
 export function decodeBase64Url(text: string): Uint8Array {
-  if (!/^[A-Za-z0-9_-]*={0,2}$/u.test(text)) {
+  if (!BASE64URL.test(text)) {
     throw new RangeError("not base64url: expected only A-Z a-z 0-9 - _ and optional = padding");
   }
   return new Uint8Array(Buffer.from(text, "base64url"));

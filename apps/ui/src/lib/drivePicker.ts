@@ -17,19 +17,11 @@
  * connects Drive should not be fetching Google's JavaScript on every page.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import type { ChosenFile } from "@/store.ts";
 
 const GSI_SRC = "https://accounts.google.com/gsi/client";
 const GAPI_SRC = "https://apis.google.com/js/api.js";
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-const PDF_MIME = "application/pdf";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 export interface GooglePickerConfig {
@@ -67,10 +59,10 @@ function loadScript(src: string): Promise<void> {
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
-    script.onload = () => {
+    script.onload = (): void => {
       resolve();
     };
-    script.onerror = () => {
+    script.onerror = (): void => {
       reject(new Error(`could not load ${src}`));
     };
     document.head.append(script);
@@ -82,9 +74,16 @@ function loadScript(src: string): Promise<void> {
  *
  * Resolves when the dialog closes. A cancelled pick calls back with nothing rather than
  * raising -- cancelling is a decision, not a fault.
+ *
+ * `fileTypes` is the allow-list already chosen in the scope picker, so a Drive admin who has
+ * ticked "Word documents" sees Word files as pickable here too -- the dialog's own filter and
+ * the worker's later filter must agree, or a file visibly pickable today could be silently
+ * refused once the run reads it back. Empty means every type, so the Picker gets no filter at
+ * all: Google's own reference for `setMimeTypes` says omitting it shows every type.
  */
 export async function openDrivePicker(
   config: GooglePickerConfig,
+  fileTypes: readonly string[],
   onPicked: (files: ChosenFile[]) => void,
 ): Promise<void> {
   await Promise.all([loadScript(GSI_SRC), loadScript(GAPI_SRC)]);
@@ -111,8 +110,10 @@ export async function openDrivePicker(
 
   const view = new picker.DocsView(picker.ViewId.DOCS)
     .setIncludeFolders(true)
-    .setSelectFolderEnabled(true)
-    .setMimeTypes(`${PDF_MIME},${FOLDER_MIME}`);
+    .setSelectFolderEnabled(true);
+  if (fileTypes.length > 0) {
+    view.setMimeTypes([...fileTypes, FOLDER_MIME].join(","));
+  }
 
   new picker.PickerBuilder()
     .setOAuthToken(accessToken)

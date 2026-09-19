@@ -11,15 +11,17 @@
  * the consent sentences. Money is a string here for the reason given in `@/lib/money`.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
-import type { Money } from "@/lib/money.ts";
 
 export type Source = "hubspot" | "xero" | "gmail" | "drive";
 
 export const SOURCES: readonly Source[] = ["hubspot", "xero", "gmail", "drive"] as const;
+
+/** Whether a string from a URL or a ledger row names one of the four. */
+export function isSource(value: string | undefined): value is Source {
+  return SOURCES.some((source) => source === value);
+}
 
 /**
  * Not in the catalogue, and deliberately: these are the vendors' own names for their own
@@ -66,73 +68,44 @@ export type Connection = inferRouterOutputs<AppRouter>["connections"]["list"][nu
 
 export type ConnectionStatus = Connection["status"];
 
-export interface Tenant {
-  id: string;
-  display_name: string;
-  status: string;
-  created_at: string;
-}
+/** One line of the ledger, exactly as `runs.list` returns it. */
+export type RunView = inferRouterOutputs<AppRouter>["runs"]["list"]["items"][number];
 
-export interface Member {
-  id: string;
-  email: string;
-  display_name: string;
-  is_staff: boolean;
-  role: string | null;
-}
+/** One run in full, as `runs.get` returns it: the line plus what it recorded beneath. */
+export type RunDetail = inferRouterOutputs<AppRouter>["runs"]["get"];
 
-export interface SessionUser {
-  id: string;
-  email: string;
-  display_name: string;
-  is_staff: boolean;
-}
+/** One line of what a run said while it ran, as `runs.events` returns it. */
+export type RunEventView = inferRouterOutputs<AppRouter>["runs"]["events"][number];
 
-export interface LakeObject {
-  key: string;
-  versions: number;
-  newest_sha256: string | null;
-  bytes: number | null;
-}
+/** One ingest key as `keys.list` returns it. Never the token itself, which is minted once. */
+export type IngestKey = inferRouterOutputs<AppRouter>["keys"]["list"][number];
 
-/**
- * One observation of an object, from `vcdo/lake/store.py`.
- *
- * Every field is optional because a manifest is written once and never migrated
- * -- an object observed by an older build genuinely may not carry a field a
- * newer one writes. Marking them required would make the type lie about the
- * lake's oldest contents, and the interface renders each absence as MISSING
- * rather than as a zero or an empty cell.
- */
-export interface LakeManifest {
-  stamp: string;
-  source_key?: string;
-  sha256?: string;
-  blob_key?: string;
-  bytes?: number;
-  run_id?: string;
-  observed_at?: string;
-  reason?: string;
-}
+/** What has landed, per stream, as `lake.summary` returns it. */
+export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 
-export interface LakeManifests {
-  key: string;
-  versions: LakeManifest[];
-}
+/** One model on the list, as `models.list` returns it: its name and its last build. */
+export type ModelItem = inferRouterOutputs<AppRouter>["models"]["list"][number];
 
-/**
- * Totals for one customer.
- *
- * NO ENDPOINT SERVES THIS YET. `curated.customer_commercial_overview` exists in
- * migration 006 and nothing in `vcdo/api/routers/` exposes it, so nothing in the
- * interface renders a money figure. The type and `@/lib/money` stay because the
- * discipline they encode is the expensive part -- an amount crosses as a string
- * and is never parsed into a JavaScript number -- and re-deriving that later,
- * against a UI already rendering floats, is how the rule gets broken once and
- * for good.
- */
-export interface CustomerTotals {
-  customer: string;
-  invoiced: Money | null;
-  outstanding: Money | null;
-}
+/** One model in full, as `models.get` returns it: the item plus its SQL and tests. */
+export type ModelDetail = inferRouterOutputs<AppRouter>["models"]["get"];
+
+/** What a build answered: the run, its steps, and the model's first rows. */
+export type BuildResult = inferRouterOutputs<AppRouter>["models"]["build"];
+
+/** A query result as every tenant-scoped read answers it: columns, rows, and whether cut. */
+export type TableResult = BuildResult["preview"] & object;
+
+/** One saved question in full, as `bi.questions.get` returns it. */
+export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get"];
+
+/** One saved question on the list, as `bi.questions.list` returns it: no SQL, no rows. */
+export type QuestionItem = inferRouterOutputs<AppRouter>["bi"]["questions"]["list"][number];
+
+/** One dashboard in full, as `bi.dashboards.get` returns it. */
+export type DashboardView = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["get"];
+
+/** One dashboard on the list, as `bi.dashboards.list` returns it. */
+export type DashboardItem = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["list"][number];
+
+/** The tenant's analytics schema as its read-only login sees it. */
+export type SchemaView = inferRouterOutputs<AppRouter>["bi"]["schema"];

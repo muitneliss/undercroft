@@ -8,15 +8,17 @@
  * See `.claude/rules/layering.md` and docs/adr/0011.
  */
 
-// biome-ignore-all lint/performance/noBarrelFile: `index.ts` is each package's public entry point, which is the seam `.claude/rules/layering.md` is built on and what `.claude/rules/tests.md` means by testing through the public API. The re-export cost the rule is about applies to a bundle; these are workspace packages consumed by name.
-
-export type { QueryResult, SqlExecutor } from "./executor.ts";
+export type { QueryField, QueryResult, SqlExecutor } from "./executor.ts";
 export { loadMigrations, type MigrateResult, type Migration, migrate } from "./migrate.ts";
 export {
   asExecutor,
+  connectionOf,
   createPool,
+  createRolePool,
+  type DatabaseAddress,
   type Pool,
   type PoolClient,
   pinTypeParsers,
+  type RoleLogin,
   withTransaction,
 } from "./pool.ts";

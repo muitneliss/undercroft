@@ -3,22 +3,30 @@
  *
  * `presentStatus` is pure, so the rule deciding whether a customer is asked to reconnect is
  * asked from both sides with no database. The rest runs against real Postgres, because the
- * interesting part -- that a join reaching into `app.connection_secret` brings back an
- * expiry and never a ciphertext -- is a property of the query.
+ * interesting part -- what a join reaching into `app.connection_secret` is allowed to bring
+ * back, and what it must leave behind -- is a property of the query.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: The long function here is a `describe` block, whose length is the number of card states asked about rather than complexity in any one of them. Splitting it would group the same question under two headings.
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { migrate } from "@undercroft/db";
-import { upsertConnection, writeConnectionDetail, writeCredential } from "@undercroft/db/repos";
+import {
+  openRun,
+  upsertConnection,
+  writeConnectionDetail,
+  writeCredential,
+} from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
-import { disconnect, KNOWN_SOURCES, list, presentStatus, setScope } from "./connections.ts";
-import { InMemoryWorkerClient } from "./workerClient.ts";
+import {
+  disconnect,
+  KNOWN_SOURCES,
+  list,
+  presentStatus,
+  setCadence,
+  setScope,
+  setToken,
+} from "./connections.ts";
+import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 
 const TENANT = "CASE-0042";
 const ENV = { UNDERCROFT_SECRET_KEY: Buffer.alloc(32, 5).toString("base64") };
@@ -33,6 +41,7 @@ beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {
@@ -152,17 +161,21 @@ describe("the schedule", () => {
     expect(rows.every((r) => r.status === "disconnected")).toBe(true);
   });
 
-  it("an expiry is read without the credential it belongs to", async () => {
-    // The licence for joining `app.connection_secret` at all: knowing WHEN a credential
-    // expires turns "which connections need attention" into a query, and the control plane
-    // could not open the credential anyway -- it holds no master key.
+  it("the credential's own expiry stays off the card, along with the credential", async () => {
+    // The licence for joining `app.connection_secret` at all is that the control plane may
+    // know WHEN a credential expires and may never know what it is. Knowing is not showing:
+    // `expiresAt: row.expiresAt` wired the access token's HOURLY rotation to the field the
+    // card reads as "when must the customer consent again", so every freshly connected Google
+    // source announced "expires today" and then turned itself into "reconnect" an hour later,
+    // for a token the worker refreshes unattended. No provider tells us when a GRANT ends, so
+    // the card gets null and says "no expiry recorded" -- true, where the number to hand was not.
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
     await writeCredential(
       db,
       TENANT,
       "gmail",
       { accessToken: "at", refreshToken: "rt", expiresAt: "2099-01-01T00:00:00.000Z" },
-      ENV,
+      { env: ENV },
     );
     await writeConnectionDetail(db, {
       tenantId: TENANT,
@@ -172,7 +185,8 @@ describe("the schedule", () => {
 
     const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
 
-    expect(gmail?.expiresAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(gmail?.expiresAt).toBeNull();
+    expect(JSON.stringify(gmail)).not.toContain("2099-01-01T00:00:00.000Z");
     expect(JSON.stringify(gmail)).not.toContain("ciphertext");
     expect(JSON.stringify(gmail)).not.toContain("rt");
   });
@@ -193,6 +207,82 @@ describe("the schedule", () => {
     const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
 
     expect(gmail?.scopes).toEqual(["openid", "https://www.googleapis.com/auth/gmail.readonly"]);
+  });
+
+  it("the card says how often the source is read and when it is next due", async () => {
+    // The same rule the scheduler's due list applies, so the card and the ledger agree.
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "hourly",
+      actor: "ada@example.test",
+    });
+    await openRun(db, {
+      id: "r-1",
+      tenantId: TENANT,
+      source: "hubspot",
+      verb: "ingest",
+      trigger: "schedule",
+    });
+    const startedAt = (await list(db, TENANT)).find((r) => r.source === "hubspot")?.lastRun
+      ?.startedAt;
+
+    const hubspot = (await list(db, TENANT, new Date("2026-03-01T10:00:00.000Z"))).find(
+      (r) => r.source === "hubspot",
+    );
+    expect(hubspot?.cadence).toBe("hourly");
+    expect(hubspot?.nextRunAt).toBe(
+      new Date(new Date(startedAt ?? "").getTime() + 3_600_000).toISOString(),
+    );
+  });
+
+  it("a paused source, and one still waiting for its scope, have no next run", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "paused",
+      actor: "ada@example.test",
+    });
+    await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
+
+    const cards = await list(db, TENANT);
+    expect(cards.find((r) => r.source === "hubspot")?.nextRunAt).toBeNull();
+    expect(cards.find((r) => r.source === "gmail")?.nextRunAt).toBeNull();
+    // A source nobody has connected reads the default and will not run.
+    expect(cards.find((r) => r.source === "xero")).toMatchObject({
+      cadence: "daily",
+      nextRunAt: null,
+    });
+  });
+});
+
+describe("choosing a cadence", () => {
+  it("is recorded on the connection and in the trail", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    const result = await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "every_6h",
+      actor: "ada@example.test",
+    });
+    expect(result).toEqual({ ok: true });
+    const { rows } = await db.query<{ action: string; detail: unknown }>(
+      "SELECT action, detail FROM ops.audit_log",
+    );
+    expect(rows[0]?.action).toBe("connection.cadence_set");
+    expect(JSON.stringify(rows[0]?.detail)).toContain('"cadence":"every_6h"');
+  });
+
+  it("a source nobody has connected has nothing to set it on", async () => {
+    const result = await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "hourly",
+      actor: "ada@example.test",
+    });
+    expect(result).toEqual({ ok: false, reason: "no-connection" });
   });
 });
 
@@ -216,6 +306,37 @@ describe("choosing a scope", () => {
     expect(gmail?.config.labels).toEqual(["Invoices"]);
   });
 
+  it("a scope saved with no file types defaults to PDF only", async () => {
+    // GMAIL_SCOPE carries no `fileTypes` key at all -- exactly what every selection saved
+    // before this field existed looks like -- and the card must still say PDF only.
+    await setScope(db, {
+      tenantId: TENANT,
+      source: "gmail",
+      selectionJson: GMAIL_SCOPE,
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    expect(gmail?.config.fileTypes).toEqual(["application/pdf"]);
+  });
+
+  it("a scope's file types are surfaced on the card", async () => {
+    await setScope(db, {
+      tenantId: TENANT,
+      source: "gmail",
+      selectionJson: JSON.stringify({
+        labels: [{ id: "Label_8", name: "Invoices" }],
+        fileTypes: ["application/vnd.ms-excel", "text/csv"],
+      }),
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    expect(gmail?.config.fileTypes).toEqual(["application/vnd.ms-excel", "text/csv"]);
+  });
+
   it("a selection that does not match the source is refused", async () => {
     // The firing side. A picker that saved a Drive shape under gmail would otherwise store
     // something the collector cannot read, and the run would fail far from the cause.
@@ -228,6 +349,29 @@ describe("choosing a scope", () => {
     });
 
     expect(result).toEqual({ ok: false, reason: "unsupported-source" });
+  });
+
+  it("a Xero choice records the organisation's id for runs and its name for the card", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "xero", status: "connected" });
+
+    const result = await setScope(db, {
+      tenantId: TENANT,
+      source: "xero",
+      selectionJson: JSON.stringify({
+        organisation: { id: "org-9f2a", name: "Acme Pte Ltd" },
+        entities: ["invoices", "contacts"],
+      }),
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    expect(result.ok).toBe(true);
+    const xero = (await list(db, TENANT)).find((r) => r.source === "xero");
+    expect(xero?.status).toBe("connected");
+    // The id is what a run sends as `xero-tenant-id`; the name is what a person reads.
+    expect(xero?.externalAccountId).toBe("org-9f2a");
+    expect(xero?.externalAccountLabel).toBe("Acme Pte Ltd");
+    expect(xero?.config.entities).toEqual(["invoices", "contacts"]);
   });
 
   it("the audit entry counts what was chosen and never names it", async () => {
@@ -247,6 +391,62 @@ describe("choosing a scope", () => {
     expect(rows[0]?.action).toBe("connection.scope_set");
     expect(JSON.stringify(rows[0]?.detail)).toContain('"count":1');
     expect(JSON.stringify(rows[0]?.detail)).not.toContain("Invoices");
+  });
+});
+
+describe("connecting with a pasted token", () => {
+  it("hands the token to the worker to be proven and sealed, and audits the source alone", async () => {
+    const worker = new InMemoryWorkerClient().backedBy(db);
+
+    const result = await setToken(db, worker, {
+      tenantId: TENANT,
+      source: "hubspot",
+      token: "pat-na1-secret",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(worker.stored[0]).toMatchObject({
+      source: "hubspot",
+      validate: true,
+      externalAccountId: "",
+    });
+    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    expect(hubspot?.status).toBe("connected");
+    const { rows } = await db.query<{ action: string; detail: unknown }>(
+      "SELECT action, detail FROM ops.audit_log",
+    );
+    expect(rows[0]?.action).toBe("connection.connected");
+    expect(JSON.stringify(rows[0]?.detail)).not.toContain("pat-na1-secret");
+  });
+
+  it("a token the provider refused is reported as such, and nothing is audited", async () => {
+    const worker = new InMemoryWorkerClient().failing("credential-rejected");
+
+    const result = await setToken(db, worker, {
+      tenantId: TENANT,
+      source: "hubspot",
+      token: "typo",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "rejected" });
+    const { rows } = await db.query("SELECT 1 FROM ops.audit_log");
+    expect(rows).toHaveLength(0);
+  });
+
+  it("a source that consents rather than pastes is refused before the worker is asked", async () => {
+    const worker = new InMemoryWorkerClient();
+
+    const result = await setToken(db, worker, {
+      tenantId: TENANT,
+      source: "gmail",
+      token: "t",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "unsupported-source" });
+    expect(worker.stored).toHaveLength(0);
   });
 });
 

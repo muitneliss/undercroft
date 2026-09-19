@@ -10,22 +10,46 @@ grant model a security boundary, not configuration.
 
 ## NEVER
 
-- **NEVER write a second `ALTER DEFAULT PRIVILEGES`.** There is exactly one in the whole
-  database — `FOR ROLE undercroft_dbt IN SCHEMA analytics GRANT SELECT ON TABLES TO
-undercroft_bi`. The `FOR ROLE` clause is load-bearing: without it a default attaches to
-  whoever ran the migration, and grants become unpredictable. A gate test enumerates
-  `pg_default_acl` and fails if a second row ever appears.
-- **NEVER grant the BI role USAGE on `app`, `raw`, or `dq`.** `app` holds sealed
-  credentials, `raw` holds unreviewed source payloads, `dq` holds dbt's store_failures
-  output (which contains source data). A dashboard user must reach none of them.
-- **NEVER let dbt create outside `analytics` and `dq`.** dbt's role has no USAGE on `app`,
-  so a model cannot read a credential; keep it that way.
+- **NEVER write an `ALTER DEFAULT PRIVILEGES` by hand.** Every one in the database is issued
+  by `ops.provision_tenant`, scoped `FOR ROLE <the tenant's own dbt role> IN SCHEMA <that
+role's own analytics schema>`, plus the one legacy row `FOR ROLE undercroft_dbt IN SCHEMA
+analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches to whoever
+  ran the migration, and grants become unpredictable. The gate test derives the expected set
+  from `ops.tenant_role` and compares `pg_default_acl` in full, so a hand-written default
+  and a forgotten tenant fail the same way. ADR 0018.
+- **NEVER grant a BI role USAGE on `app`, `raw`, `ops` or any `dq*` schema.** `app` holds
+  sealed credentials, `raw` holds unreviewed source payloads, `dq_<slug>` holds dbt's
+  store_failures output (which contains source data). A dashboard reader must reach none of
+  them, and a tenant's BI role reaches only `analytics_<slug>`.
+- **NEVER let a dbt role create outside its own two schemas.** A tenant's dbt role owns
+  `analytics_<slug>` and `dq_<slug>` and has `CREATE` nowhere else; `ops.guard_ddl()` is the
+  tripwire behind that privilege. No dbt role has USAGE on `app`, so a model cannot read a
+  credential; keep it that way.
+- **NEVER key row-level security on a session setting or on `SET ROLE`.** A SQL author can
+  `SET` any GUC and `RESET ROLE`; the only thing they cannot change is which login they are.
+  `raw.tenant_of(current_user)` is the policy's one input.
+- **NEVER store a tenant role's password.** `ops.rotate_tenant_password` mints one for the
+  worker right before a build or a query session and returns it; the worker forgets it after.
 
 ## Follow
 
-- Five roles: `undercroft_owner` (NOLOGIN, owns everything), `_app`, `_worker`, `_dbt`,
-  `_bi`. Migrations `SET ROLE` to the owner; nothing logs in as it.
-- The worker gets `SELECT, UPDATE` on `app.connection_secret` and nothing else in `app`.
+- Five platform roles: `undercroft_owner` (NOLOGIN, owns the schemas), `_app`, `_worker`,
+  `_dbt` (legacy, matches no tenant and reads zero rows of `raw`), `_bi` (for an external SQL
+  client). Plus **two LOGIN roles per tenant**, `undercroft_dbt_<slug>` and
+  `undercroft_bi_<slug>`, recorded in `ops.tenant_role` — the only authority for which login
+  belongs to which customer.
+- **Migrations run as the bootstrap superuser** (`db-migrate` uses `POSTGRES_USER`), which
+  therefore owns every table; `undercroft_owner` owns the schemas. The two `SECURITY DEFINER`
+  functions in `080_tenant_isolation.sql` are owned by that bootstrap role and are the only
+  code that creates a role, a schema or a default privilege.
+- The worker's reach into `app` is exactly what its verbs need, column-scoped where a column
+  is all it writes: `SELECT, INSERT, UPDATE, DELETE` on `app.connection_secret` (it seals,
+  refreshes and revokes), `SELECT` on `app.connection_detail` (the chosen scope),
+  `SELECT` + `UPDATE (last_used_at)` on `app.ingest_key`, and `SELECT` +
+  `UPDATE (columns)` on `app.model` (it reads the SQL to build and records the columns a
+  build produced). Nothing on `app.app_user`, the auth tables, the questions or the
+  dashboards. A new worker verb that needs a table adds its grant in the migration that
+  creates the table, never in `040_grants.sql`.
 - Every grant is explicit; `PUBLIC` is revoked.
 - **A migration that creates a table must grant that table in the same file.**
   `040_grants.sql` says `GRANT ... ON ALL TABLES IN SCHEMA app`, which Postgres expands to

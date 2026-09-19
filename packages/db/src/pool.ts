@@ -15,13 +15,8 @@
  * it down; a lint rule keeps `pool.query` out of the rest of the codebase.
  */
 
-// biome-ignore-all lint/correctness/noUnresolvedImports: `react` and `pg` resolve through the workspace package that depends on them; Biome's module resolver does not walk a Bun workspace layout. tsc and the build both resolve them.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
 import pg from "pg";
-import type { SqlExecutor } from "./executor.ts";
+import type { QueryResult, SqlExecutor } from "./executor.ts";
 
 const NUMERIC_OID = 1700;
 const INT8_OID = 20;
@@ -59,15 +54,62 @@ export function createPool(connectionString: string, options: PoolOptions = {}):
   });
 }
 
+export interface RoleLogin {
+  readonly user: string;
+  readonly password: string;
+  /** Connections at most. A tenant role's limit is four; a session needs one. */
+  readonly max?: number;
+}
+
+/**
+ * A pool that logs in as one tenant's role, to the same server the platform DSN names.
+ *
+ * The other place a pool is built, and the only one that logs in as anything but a
+ * platform role. The worker mints the password right before, holds the pool for one build
+ * or one query session, and ends it; nothing stores the password. The user and password
+ * given here override the DSN's own, which is how one connection string serves every role.
+ */
+export function createRolePool(connectionString: string, login: RoleLogin): pg.Pool {
+  return new pg.Pool({
+    connectionString,
+    user: login.user,
+    password: login.password,
+    max: login.max ?? 1,
+  });
+}
+
+export interface DatabaseAddress {
+  readonly host: string;
+  readonly port: number;
+  readonly dbname: string;
+}
+
+const POSTGRES_PORT = 5432;
+const LEADING_SLASH = /^\//u;
+
+/** Where a DSN points: the host, port and database a generated dbt profile needs. */
+export function connectionOf(connectionString: string): DatabaseAddress {
+  const url = new URL(connectionString);
+  return {
+    host: url.hostname,
+    // parseInt, not Number(): a port, not an amount.
+    port: url.port === "" ? POSTGRES_PORT : Number.parseInt(url.port, 10),
+    dbname: url.pathname.replace(LEADING_SLASH, ""),
+  };
+}
+
 /** Wrap a `pg` client as the narrow {@link SqlExecutor} the runner and repos speak. */
 export function asExecutor(client: pg.PoolClient | pg.Pool): SqlExecutor {
   return {
     async query<T = Record<string, unknown>>(
       text: string,
       params?: readonly unknown[],
-    ): Promise<{ rows: T[] }> {
+    ): Promise<QueryResult<T>> {
       const result = await client.query(text, params as unknown[] | undefined);
-      return { rows: result.rows as T[] };
+      return {
+        rows: result.rows as T[],
+        fields: result.fields.map((f) => ({ name: f.name, dataTypeID: f.dataTypeID })),
+      };
     },
     async exec(sql: string): Promise<void> {
       // No parameters, so the simple query protocol runs every statement in the string.

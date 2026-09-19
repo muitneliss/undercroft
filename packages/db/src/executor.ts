@@ -7,8 +7,20 @@
  * privilege tests into the offline gate rather than the Docker tier.
  */
 
+/** One column of a result, as the server described it: its name and its type's OID. */
+export interface QueryField {
+  readonly name: string;
+  readonly dataTypeID: number;
+}
+
 export interface QueryResult<T> {
   readonly rows: T[];
+  /**
+   * The result's columns in order, when the driver reports them. Repos never need this --
+   * they name their columns -- but a query an author wrote has columns nobody named in
+   * advance, and this is how the runner learns them.
+   */
+  readonly fields?: readonly QueryField[];
 }
 
 export interface SqlExecutor {

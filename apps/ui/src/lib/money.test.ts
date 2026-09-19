@@ -7,12 +7,26 @@
  * formatMoney into something that parses.
  */
 
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-
 import { describe, expect, test as it } from "bun:test";
 
-import { exactAmount, formatCount, formatMoney, MISSING, orMissing } from "./money.ts";
+import {
+  exactAmount,
+  formatCount,
+  formatDecimal,
+  formatMoney,
+  MISSING,
+  orMissing,
+} from "./money.ts";
+
+describe("formatDecimal", () => {
+  it("groups the whole part and keeps every digit of the fraction, with no currency", () => {
+    expect(formatDecimal("9007199254740993.0001")).toBe("9,007,199,254,740,993.0001");
+    expect(formatDecimal("-1234.5")).toBe("-1,234.5");
+    expect(formatDecimal("42")).toBe("42");
+    // Not a decimal: shown as it came, not as missing.
+    expect(formatDecimal("n/a")).toBe("n/a");
+  });
+});
 
 describe("formatMoney", () => {
   it("keeps every digit of an amount a double could not hold", () => {

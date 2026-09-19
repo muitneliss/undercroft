@@ -6,22 +6,18 @@
  * called; it starts no work on its own, so a restart never re-runs a sync.
  */
 
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-
-// biome-ignore-all lint/style/noDefaultExport: The default export IS this entry point's contract -- Bun reads a server object and Vite reads a config that way, by name.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
-
 import { join } from "node:path";
 import process from "node:process";
-import { createByteFetcher } from "@undercroft/core";
-import { asExecutor, createPool, withTransaction } from "@undercroft/db";
+import { createByteFetcher, createLogger } from "@undercroft/core";
+import { asExecutor, connectionOf, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { createLakeApi } from "./handlers/lake.ts";
+import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
-import type { Refresher } from "./services/ingest.ts";
+import type { Refresher } from "./services/runTypes.ts";
+import { closeAbandonedRuns } from "./services/ledger.ts";
+import { createTenantSessions } from "./services/tenantSession.ts";
+import { xeroRefresher } from "./services/xero/refresh.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -32,27 +28,46 @@ function required(name: string): string {
 }
 
 /**
- * The Google sources share one OAuth client, so they share one refresher.
- *
- * With no client configured this is an empty map rather than a broken entry: `gmail` and
- * `drive` then behave the way an unconfigured source should -- a run finds no credential
- * and says so -- rather than failing later with something that reads like a Google outage.
- *
- * HubSpot and Xero are deliberately absent. Neither has ever had a refresher, and Xero's
- * rotation semantics (the old token dies the instant the new one is issued) deserve their
- * own change rather than a line in this one.
+ * The Xero client, when this deployment has one. The worker refreshes with it (Xero rotates,
+ * and the rotated pair is written back under the row lock) and revokes with it.
  */
-function googleRefreshers(): Record<string, Refresher> {
-  const clientId = process.env.UNDERCROFT_GOOGLE_INGEST_CLIENT_ID ?? "";
-  const clientSecret = process.env.UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET ?? "";
-  if (clientId === "" || clientSecret === "") {
-    return {};
-  }
-  const refresh = googleRefresher({ clientId, clientSecret, fetcher: createByteFetcher() });
-  return { gmail: refresh, drive: refresh };
+function xeroClient(): XeroClient | undefined {
+  const clientId = process.env.UNDERCROFT_XERO_CLIENT_ID ?? "";
+  const clientSecret = process.env.UNDERCROFT_XERO_CLIENT_SECRET ?? "";
+  return clientId === "" || clientSecret === "" ? undefined : { clientId, clientSecret };
 }
 
-const pool = createPool(required("UNDERCROFT_POSTGRES_DSN"));
+/**
+ * One refresher per source that can refresh.
+ *
+ * The Google sources share one OAuth client, so they share one refresher. With no client
+ * configured a source is simply absent from the map rather than a broken entry: a run then
+ * finds no credential and says so, rather than failing later with something that reads like
+ * a provider outage. HubSpot is deliberately absent: a private-app token has nothing to
+ * refresh with.
+ */
+function refreshers(xeroClientOrNone: XeroClient | undefined): Record<string, Refresher> {
+  const found: Record<string, Refresher> = {};
+  const clientId = process.env.UNDERCROFT_GOOGLE_INGEST_CLIENT_ID ?? "";
+  const clientSecret = process.env.UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET ?? "";
+  if (clientId !== "" && clientSecret !== "") {
+    const refresh = googleRefresher({ clientId, clientSecret, fetcher: createByteFetcher() });
+    found.gmail = refresh;
+    found.drive = refresh;
+  }
+  if (xeroClientOrNone !== undefined) {
+    found.xero = xeroRefresher({ ...xeroClientOrNone, fetcher: createByteFetcher() });
+  }
+  return found;
+}
+
+// JSONL on stdout, the same shape the control plane writes; the container runtime collects
+// it. Before this the worker's whole output was the startup line, so a run that failed at
+// 02:00 left no evidence anywhere.
+const log = createLogger({ component: "worker" });
+
+const dsn = required("UNDERCROFT_POSTGRES_DSN");
+const pool = createPool(dsn);
 const store = new S3ObjectStore({
   bucket: required("UNDERCROFT_S3_BUCKET_RAW"),
   ...(process.env.UNDERCROFT_S3_ENDPOINT === undefined
@@ -67,11 +82,15 @@ const store = new S3ObjectStore({
     : {}),
 });
 
+const xero = xeroClient();
+
 const app = createLakeApi({
   lake: new LakeStore(store),
   exec: asExecutor(pool),
   serviceToken: required("UNDERCROFT_TRIGGER_TOKEN"),
-  refreshers: googleRefreshers(),
+  log,
+  refreshers: refreshers(xero),
+  ...(xero === undefined ? {} : { xero }),
   // Without this the `SELECT ... FOR UPDATE` in `accessToken` holds a lock for one
   // statement and protects nothing, which is what lets two concurrent runs spend the same
   // refresh token. See `services/ingest.ts`.
@@ -79,20 +98,23 @@ const app = createLakeApi({
   specsDir:
     process.env.UNDERCROFT_SPECS_DIR ??
     join(import.meta.dirname, "..", "..", "..", "specs", "connectors"),
+  // A tenant's project is generated per build from `app.model` and pointed at the same
+  // server this process is on; the worker becomes the tenant to build and to read. The
+  // child's environment is this process's, so `PATH` finds the `dbt` the image installed.
   dbt: {
-    projectDir:
-      process.env.UNDERCROFT_DBT_PROJECT_DIR ??
-      join(import.meta.dirname, "..", "..", "..", "dbt", "undercroft_starter"),
-    profilesDir:
-      process.env.UNDERCROFT_DBT_PROFILES_DIR ?? join(import.meta.dirname, "..", "..", "..", "dbt"),
+    database: connectionOf(dsn),
+    sessions: createTenantSessions({ exec: asExecutor(pool), dsn }),
+    env: process.env,
   },
 });
 
+// Whatever the previous process was in the middle of is over; the ledger says so before the
+// first request can collide with a row that would otherwise stay `running` forever.
+await closeAbandonedRuns(asExecutor(pool), log);
+
 // parseInt, not Number(): a port, not an amount (the money lint rule bans Number()).
 const port = Number.parseInt(process.env.UNDERCROFT_WORKER_PORT ?? "8081", 10);
-// The startup line an operator greps to learn which port the worker actually bound. stdout is
-// where a container puts it, and the composition root is the one place a process speaks for itself.
-// biome-ignore lint/suspicious/noConsole: the startup line; see above.
-console.log(`undercroft worker listening on :${port}`);
+// The startup line an operator greps to learn which port the worker actually bound.
+log.info("listening", { port });
 
 export default { port, fetch: app.fetch };

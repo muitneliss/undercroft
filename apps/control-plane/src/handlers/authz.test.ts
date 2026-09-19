@@ -6,16 +6,6 @@
  * Postgres grants and rows.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: One design document and one deploy client, each of which argues with itself across its length. Splitting at 300 lines would cut a single argument in half.
-
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
@@ -81,6 +71,9 @@ async function errorCode(fn: () => Promise<unknown>): Promise<string> {
 beforeEach(async () => {
   db = await createTestDatabase();
   await migrate(db);
+  // Every statement runs as the control plane does, fixtures included: `undercroft_app`
+  // holds DML on every table in `app` and `ops`, which is what the seeding helpers need.
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {
@@ -221,20 +214,6 @@ describe("unauthenticated access", () => {
     await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-other')");
     const tenants = await caller({ userId: user, email: "u@example.test" }).tenants.list();
     expect(tenants.map((t) => t.id)).toEqual(["CASE-1"]);
-  });
-});
-
-describe("models.preview keeps money as a string", () => {
-  it("a numeric column comes back as a string, never a float", async () => {
-    const user = await seedUser("u@example.test");
-    await seedMembership("CASE-1", user, "member");
-    await db.exec("CREATE TABLE analytics.fct_demo (amount numeric(18,4))");
-    await db.query("INSERT INTO analytics.fct_demo (amount) VALUES (8500.0001)");
-    const result = await caller({ userId: user, email: "u@example.test" }).models.preview({
-      tenantId: "CASE-1",
-      table: "fct_demo",
-    });
-    expect(typeof (result.rows[0] as { amount: unknown }).amount).toBe("string");
   });
 });
 
@@ -379,5 +358,56 @@ describe("a customer reference is refused rather than reinterpreted", () => {
         }),
       ),
     ).toBe("BAD_REQUEST");
+  });
+});
+
+describe("a customer can be retitled, but never re-identified", () => {
+  it("an admin corrects the display name and the id is left alone", async () => {
+    // The pairing that matters: the name a person reads is repairable, the id the lake
+    // writes under is not. Asserting both in one test is what proves they were separated.
+    const user = await seedUser("admin@example.test");
+    await seedMembership("CASE-0001", user, "admin");
+    const admin = caller({ userId: user, email: "admin@example.test" });
+
+    const renamed = await admin.tenants.rename({
+      tenantId: "CASE-0001",
+      displayName: "Acme Holdings",
+    });
+
+    expect(renamed.displayName).toBe("Acme Holdings");
+    expect(renamed.id).toBe("CASE-0001");
+  });
+
+  it("a member is refused, so the name is not a thing any signed-in colleague can change", async () => {
+    const user = await seedUser("member@example.test");
+    await seedMembership("CASE-0001", user, "member");
+
+    expect(
+      await errorCode(() =>
+        caller({ userId: user, email: "member@example.test" }).tenants.rename({
+          tenantId: "CASE-0001",
+          displayName: "Renamed By A Member",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+
+    // Aliased rather than typed as `display_name`: the column is snake_case and the lint
+    // rule that governs identifiers here is not worth a file-wide suppression for one row.
+    const { rows } = await db.query<{ name: string }>(
+      'SELECT display_name AS "name" FROM ops.tenant WHERE id = $1',
+      ["CASE-0001"],
+    );
+    expect(rows[0]!.name).toBe("");
+  });
+
+  it("an empty name falls back to the id rather than blanking the row", async () => {
+    const user = await seedUser("admin@example.test");
+    await seedMembership("CASE-0001", user, "admin");
+    const admin = caller({ userId: user, email: "admin@example.test" });
+    await admin.tenants.rename({ tenantId: "CASE-0001", displayName: "Acme" });
+
+    const cleared = await admin.tenants.rename({ tenantId: "CASE-0001", displayName: "" });
+
+    expect(cleared.displayName).toBe("CASE-0001");
   });
 });

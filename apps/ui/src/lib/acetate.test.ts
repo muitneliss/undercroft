@@ -12,13 +12,6 @@
  * extremes a hand-picked alpha would fail on.
  */
 
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
-// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-
 import { describe, expect, test as it } from "bun:test";
 
 import { DIVISIONS } from "@/lib/divisions.ts";
@@ -35,7 +28,7 @@ import {
 
 const LEAF = PAPER;
 
-/** Every hue in the wheel, including the three no division has claimed. */
+/** Every hue in the wheel, as a literal: the seven the divisions claim, in the wheel's order. */
 const WHEEL = ["#b24b1a", "#eda600", "#3e782b", "#0f7673", "#234c9e", "#634cb0", "#7f4023"];
 
 describe("solveLeaf", () => {

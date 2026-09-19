@@ -6,13 +6,6 @@
  * the way in fail for different reasons and are read at different times.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
@@ -64,6 +57,7 @@ beforeEach(async () => {
       id_token: ID_TOKEN,
     },
   };
+  await db.become("undercroft_app");
 });
 
 afterEach(async () => {
@@ -164,5 +158,41 @@ describe("starting a consent", () => {
     );
 
     expect(started).toEqual({ ok: false, reason: "unsupported-source" });
+  });
+
+  it("xero goes to Xero's authorize endpoint, with its own callback and no PKCE", async () => {
+    // A confidential client with a secret: Xero takes it in a Basic header at the token
+    // endpoint and reserves PKCE for clients that have none. `offline_access` is what makes
+    // it issue a refresh token at all.
+    const xero = {
+      clientId: "xero-client",
+      clientSecret: "xero-secret",
+      publicUrl: "https://undercroft.test",
+    };
+    const started = await startConsent(
+      { exec: db, google, xero },
+      { tenantId: TENANT, source: "xero", startedBy: ADMIN.userId },
+    );
+    if (!started.ok) {
+      throw new Error("expected the consent to start");
+    }
+
+    const url = new URL(started.authorizeUrl);
+    expect(url.origin + url.pathname).toBe("https://login.xero.com/identity/connect/authorize");
+    expect(url.searchParams.get("redirect_uri")).toBe(
+      "https://undercroft.test/oauth/xero/callback",
+    );
+    expect(url.searchParams.get("scope")).toContain("offline_access");
+    expect(url.searchParams.get("code_challenge")).toBeNull();
+    expect(url.searchParams.get("client_id")).toBe("xero-client");
+  });
+
+  it("xero with no Xero client configured is refused, even with Google configured", async () => {
+    const started = await startConsent(
+      { exec: db, google },
+      { tenantId: TENANT, source: "xero", startedBy: ADMIN.userId },
+    );
+
+    expect(started).toEqual({ ok: false, reason: "not-configured" });
   });
 });

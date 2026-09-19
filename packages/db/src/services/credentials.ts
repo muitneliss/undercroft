@@ -14,9 +14,6 @@
  * `.claude/rules/layering.md`: repos read and write, services decide.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
 import type { SqlExecutor } from "../executor.ts";
 import {
   ConnectionRegistryError,
@@ -25,6 +22,7 @@ import {
   setStatus,
   writeCredential,
 } from "../repos/connections.ts";
+import { grantExpiryFor } from "./grantExpiry.ts";
 
 /** Refresh this far before the token actually expires -- a run takes minutes. */
 export const REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -81,6 +79,11 @@ export async function accessToken(
   }
 
   const refreshed = await opts.refresher(credential.refreshToken);
-  await writeCredential(exec, tenantId, source, refreshed, opts.env);
+  // A refresh renews the grant too, where the provider dates one: Xero's sixty days count
+  // from the last use, so every successful refresh moves the warning further away.
+  await writeCredential(exec, tenantId, source, refreshed, {
+    ...(opts.env === undefined ? {} : { env: opts.env }),
+    grantExpiresAt: grantExpiryFor(source, opts.now),
+  });
   return refreshed.accessToken;
 }

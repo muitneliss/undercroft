@@ -1,11 +1,11 @@
 /**
- * Gmail: message headers into `raw.records`, PDF attachments into the lake.
+ * Gmail: message headers into `raw.records`, matching attachments into the lake.
  *
  * What is promised on the consent card is what this reads and no more: "message headers and
- * PDF attachments from the mailbox you connect", scoped to chosen labels or deliberately to
- * the whole mailbox. Bodies are never fetched.
+ * the attachment types you allow, from the mailbox you connect", scoped to chosen labels or
+ * deliberately to the whole mailbox. Bodies are never fetched.
  *
- * TWO THINGS HERE ARE EASY TO GET WRONG AND EXPENSIVE TO GET WRONG.
+ * THREE THINGS HERE ARE EASY TO GET WRONG AND EXPENSIVE TO GET WRONG.
  *
  * **`labelIds` is AND, not OR.** One query carrying three label ids returns only the
  * messages that hold all three, which for most selections is none. A single query looks
@@ -14,36 +14,29 @@
  * label, unioned by message id.
  *
  * **`attachmentId` is not stable.** It is scoped to one message read and changes between
- * fetches, so keying a document on it re-lands the same PDF under a new key every run --
- * unbounded storage growth that looks like legitimate history. The stable identity is
+ * fetches, so keying a document on it re-lands the same attachment under a new key every run
+ * -- unbounded storage growth that looks like legitimate history. The stable identity is
  * `(messageId, partIndex)`.
+ *
+ * **Which types are allowed is `scope.fileTypes`, checked client-side.** Gmail's API has no
+ * request-level filter on an attachment's MIME type -- only `labelIds` narrows what is fetched
+ * at all -- so every part of every fetched message is walked and matched here. Empty means
+ * every type, the same recorded-decision idiom `@undercroft/contracts` uses for an empty
+ * label or entity list.
  *
  * Headers are extracted rather than stored whole: the body of a message is not ours to
  * keep, and `format=metadata` is what the consent says we ask for.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/nursery/useValidTestTitle: A false positive. The rule reads `/\s/.test(value)` -- RegExp#test on a regex literal -- as a test-framework `test()` call with a non-string title. There is no test in this file.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
-
+import { type GmailScope, allowsFileType } from "@undercroft/contracts";
 import { canonicalJson, decodeBase64Url, getPath, getStringPath } from "@undercroft/core";
-import type { GmailScope } from "@undercroft/contracts";
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
+import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
-const PDF = "application/pdf";
 const ENTITY = "messages";
 /** Page size. Gmail caps at 500; 100 keeps a page's follow-up fetches bounded. */
 const PAGE_SIZE = "100";
@@ -99,14 +92,28 @@ function labelKind(reported: string): "system" | "user" | null {
  * Returns what to land rather than landing it, so the decision of what a mailbox contains
  * is testable without a lake or a database.
  */
-export async function harvestGmail(api: GoogleApi, scope: GmailScope): Promise<GmailHarvest> {
+export async function harvestGmail(
+  api: GoogleApi,
+  scope: GmailScope,
+  journal: RunJournal = SILENT_JOURNAL,
+): Promise<GmailHarvest> {
   const selected = new Set(scope.labels.map((l) => l.id));
   const messageIds = await listMessageIds(api, scope);
 
   const records: RecordToLand[] = [];
   const documents: DocumentToLand[] = [];
 
+  // The most useful line this run writes. What follows is one paced request per message --
+  // minutes for a real mailbox -- and until now the first sign of how long that would take
+  // was the run ending. A total up front turns a blank screen into a quantity.
+  journal.info("work_listed", { entity: ENTITY, total: messageIds.length });
+
   for (const messageId of messageIds) {
+    journal.progress("records_read", {
+      entity: ENTITY,
+      read: records.length,
+      total: messageIds.length,
+    });
     const message = await api.getJson(messageUrl(messageId), ENTITY, records.length);
     const labelIds = strings(getPath(message, "labelIds"));
 
@@ -119,58 +126,86 @@ export async function harvestGmail(api: GoogleApi, scope: GmailScope): Promise<G
 
     const headers = headerMap(message);
     const internalDate = str(message, "internalDate");
-    records.push({
-      entity: ENTITY,
-      sourceRecordId: messageId,
-      sourceUpdatedAt: isoFromEpochMillis(internalDate),
-      // Built from extracted fields, then canonicalised -- never re-serialised from a
-      // parsed payload, and carrying no plain JS number (`canonicalJson` refuses one, and
-      // an id that had been through a float would be a different id).
-      payloadText: canonicalJson({
-        id: messageId,
-        threadId: str(message, "threadId"),
-        labelIds,
-        headers,
-        snippetOmitted: true,
-        internalDate,
-      }),
-    });
-
-    for (const part of pdfParts(message)) {
-      const attachmentId = part.attachmentId;
-      documents.push({
-        // (messageId, partIndex), never attachmentId. See the module docstring.
-        documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
-        contentType: PDF,
-        declaredBytes: part.size,
-        // Opaque ids, enumerations and counts only -- this reaches dbt.
-        metadata: {
-          labelIds,
-          partIndex: String(part.index),
-          messageId,
-        },
-        // Names a human wrote. The lake manifest, which dbt and BI cannot reach.
-        manifest: {
-          filename: part.filename,
-          subject: headers.Subject ?? "",
-          from: headers.From ?? "",
-          to: headers.To ?? "",
-          messageId,
-        },
-        sourceUpdatedAt: isoFromEpochMillis(internalDate),
-        fetchBytes: async () => {
-          const body = await api.getJson(
-            `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
-            "attachments",
-            records.length,
-          );
-          return decodeBase64Url(str(body, "data"));
-        },
-      });
+    records.push(messageRecord(messageId, message, labelIds, internalDate));
+    for (const part of matchingParts(message, scope.fileTypes)) {
+      documents.push(attachment(api, { messageId, headers, labelIds, internalDate }, part));
     }
   }
 
   return { records, documents };
+}
+
+/**
+ * One message as a record to land.
+ *
+ * Built from extracted fields, then canonicalised -- never re-serialised from a parsed
+ * payload, and carrying no plain JS number (`canonicalJson` refuses one, and an id that had
+ * been through a float would be a different id).
+ */
+function messageRecord(
+  messageId: string,
+  message: unknown,
+  labelIds: string[],
+  internalDate: string,
+): RecordToLand {
+  return {
+    entity: ENTITY,
+    sourceRecordId: messageId,
+    sourceUpdatedAt: isoFromEpochMillis(internalDate),
+    payloadText: canonicalJson({
+      id: messageId,
+      threadId: str(message, "threadId"),
+      labelIds,
+      headers: headerMap(message),
+      snippetOmitted: true,
+      internalDate,
+    }),
+  };
+}
+
+/** What a message says about itself that its attachments need. */
+interface MessageFacts {
+  readonly messageId: string;
+  readonly headers: Record<string, string>;
+  readonly labelIds: string[];
+  readonly internalDate: string;
+}
+
+/**
+ * One matching attachment as a document to land.
+ *
+ * The split between `metadata` and `manifest` is the whole point and it is load-bearing:
+ * `metadata` reaches `raw.documents`, which dbt and BI can read, so it carries opaque ids,
+ * enumerations and counts only. Every name a human wrote goes in `manifest`, which lives in
+ * the access-controlled object store. `pii.md`, ADR 0015.
+ */
+function attachment(api: GoogleApi, facts: MessageFacts, part: MatchingPart): DocumentToLand {
+  const { messageId, headers, labelIds, internalDate } = facts;
+  const { attachmentId } = part;
+
+  return {
+    // (messageId, partIndex), never attachmentId. See the module docstring.
+    documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
+    contentType: part.mimeType,
+    declaredBytes: part.size,
+    metadata: { labelIds, partIndex: String(part.index), messageId },
+    manifest: {
+      filename: part.filename,
+      subject: headers.Subject ?? "",
+      from: headers.From ?? "",
+      to: headers.To ?? "",
+      messageId,
+    },
+    sourceUpdatedAt: isoFromEpochMillis(internalDate),
+    fetchBytes: async (): Promise<Uint8Array> => {
+      const body = await api.getJson(
+        `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+        "attachments",
+        0,
+      );
+      return decodeBase64Url(str(body, "data"));
+    },
+  };
 }
 
 /**
@@ -185,30 +220,48 @@ async function listMessageIds(api: GoogleApi, scope: GmailScope): Promise<string
   const ids = new Set<string>();
 
   for (const labelId of queries) {
-    let pageToken: string | null = null;
-    do {
-      const url = new URL(`${GMAIL_BASE}/messages`);
-      url.searchParams.set("maxResults", PAGE_SIZE);
-      if (labelId !== null) {
-        url.searchParams.set("labelIds", labelId);
-      }
-      if (pageToken !== null) {
-        url.searchParams.set("pageToken", pageToken);
-      }
-
-      const page = await api.getJson(url.toString(), ENTITY, ids.size);
-      for (const message of asArray(getPath(page, "messages"))) {
-        const id = str(message, "id");
-        if (id !== "") {
-          ids.add(id);
-        }
-      }
-      const next = str(page, "nextPageToken");
-      pageToken = next === "" ? null : next;
-    } while (pageToken !== null);
+    await collectLabelIds(api, labelId, ids);
   }
 
   return [...ids];
+}
+
+/** The URL of one page of message ids: the label, if any, and the cursor, if any. */
+function listUrl(labelId: string | null, pageToken: string | null): string {
+  const url = new URL(`${GMAIL_BASE}/messages`);
+  url.searchParams.set("maxResults", PAGE_SIZE);
+  if (labelId !== null) {
+    url.searchParams.set("labelIds", labelId);
+  }
+  if (pageToken !== null) {
+    url.searchParams.set("pageToken", pageToken);
+  }
+  return url.toString();
+}
+
+/**
+ * Every message id under one label, page by page, added to the union.
+ *
+ * Sequential because each page's cursor comes out of the one before it -- there is nothing to
+ * parallelise, and Gmail's pacing is per request either way.
+ */
+async function collectLabelIds(
+  api: GoogleApi,
+  labelId: string | null,
+  ids: Set<string>,
+): Promise<void> {
+  let pageToken: string | null = null;
+  do {
+    const page = await api.getJson(listUrl(labelId, pageToken), ENTITY, ids.size);
+    for (const message of asArray(getPath(page, "messages"))) {
+      const id = str(message, "id");
+      if (id !== "") {
+        ids.add(id);
+      }
+    }
+    const next = str(page, "nextPageToken");
+    pageToken = next === "" ? null : next;
+  } while (pageToken !== null);
 }
 
 function messageUrl(messageId: string): string {
@@ -220,22 +273,23 @@ function messageUrl(messageId: string): string {
   return url.toString();
 }
 
-interface PdfPart {
+interface MatchingPart {
   readonly index: number;
   readonly attachmentId: string;
   readonly filename: string;
   readonly size: string;
+  readonly mimeType: string;
 }
 
 /**
- * Every PDF attachment in a message, walked depth-first.
+ * Every attachment in a message whose type the scope allows, walked depth-first.
  *
  * Recursive because a forwarded mail nests `parts` inside `parts`, and an attachment two
  * levels down is still an attachment. The index counts every part visited, so it is stable
  * for a given message shape -- which is what makes it usable as half of the document id.
  */
-function pdfParts(message: unknown): PdfPart[] {
-  const found: PdfPart[] = [];
+function matchingParts(message: unknown, fileTypes: readonly string[]): MatchingPart[] {
+  const found: MatchingPart[] = [];
   let index = 0;
 
   function walk(part: unknown): void {
@@ -243,12 +297,13 @@ function pdfParts(message: unknown): PdfPart[] {
     const mimeType = str(part, "mimeType");
     const attachmentId = str(part, "body.attachmentId");
     const filename = str(part, "filename");
-    if (mimeType === PDF && attachmentId !== "") {
+    if (allowsFileType(fileTypes, mimeType) && attachmentId !== "") {
       found.push({
         index,
         attachmentId,
         filename,
         size: str(part, "body.size") || "0",
+        mimeType,
       });
     }
     for (const child of asArray(getPath(part, "parts"))) {
@@ -279,8 +334,10 @@ function headerMap(message: unknown): Record<string, string> {
  * Unreadable is `null`, never a guess and never `0` -- an epoch-zero timestamp downstream
  * is indistinguishable from a real 1970 date, and a wrong value is worse than a missing one.
  */
+const EPOCH_MILLIS = /^\d+$/u;
+
 function isoFromEpochMillis(value: string): string | null {
-  if (!/^\d+$/u.test(value)) {
+  if (!EPOCH_MILLIS.test(value)) {
     return null;
   }
   // parseInt, not Number(): the money rule bans Number() repo-wide, and this is an

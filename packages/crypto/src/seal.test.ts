@@ -1,13 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/suspicious/noBitwiseOperators: Byte and hash arithmetic, where bitwise operators are the operation rather than a clever substitute for one.
-
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-
 import { describe, expect, test as it } from "bun:test";
 import { currentKeyVersion, SecretKeyMissing, seal, unseal } from "./seal.ts";
 import { createPkce, hashToken, tokenMatches } from "./tokens.ts";
@@ -44,6 +34,7 @@ describe("tampering is caught, never opened as empty", () => {
     const sealed = seal("secret", { env: e });
     const tampered = Buffer.from(sealed.blob);
     const last = tampered.byteLength - 1;
+    // biome-ignore lint/suspicious/noBitwiseOperators: Flipping one bit of the GCM tag IS the test. Any other way of corrupting the blob proves something weaker.
     tampered[last] = (tampered[last] ?? 0) ^ 0x01; // flip a tag bit
     expect(() => unseal({ blob: tampered, keyVersion: sealed.keyVersion }, e)).toThrow();
   });

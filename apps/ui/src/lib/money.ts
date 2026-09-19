@@ -25,13 +25,6 @@
  * beside the digits, which is what makes the fixed format unambiguous.
  */
 
-// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
-
 import type { Locale } from "@undercroft/core/locale";
 
 export interface Money {
@@ -42,6 +35,9 @@ export interface Money {
 /** What a missing value looks like. An em dash, never a zero. */
 export const MISSING = "—";
 
+/** A plain decimal: optional sign, whole part, optional fraction. Nothing else. */
+const DECIMAL = /^(?<sign>-?)(?<whole>\d+)(?:\.(?<fraction>\d*))?$/u;
+
 /**
  * Split a decimal string into its parts without arithmetic.
  *
@@ -49,15 +45,16 @@ export const MISSING = "—";
  * read is reported as unreadable rather than coerced into something plausible.
  */
 function parts(amount: string): { sign: string; whole: string; fraction: string } | null {
-  const match = /^(-?)(\d+)(?:\.(\d*))?$/u.exec(amount.trim());
+  const match = DECIMAL.exec(amount.trim());
   if (!match) {
     return null;
   }
-  return { sign: match[1] ?? "", whole: match[2] ?? "0", fraction: match[3] ?? "" };
+  const { sign = "", whole = "0", fraction = "" } = match.groups ?? {};
+  return { sign, whole, fraction };
 }
 
 function group(whole: string): string {
-  return whole.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
+  return whole.replace(/\B(?=(?:\d{3})+(?!\d))/gu, ",");
 }
 
 /**
@@ -85,6 +82,26 @@ export function formatMoney(money: Money | null | undefined, dp = 2): string {
 /** The unrounded digits, for a tooltip or a copy button. */
 export function exactAmount(money: Money | null | undefined): string {
   return money ? `${money.amount} ${money.currency}` : MISSING;
+}
+
+/**
+ * A decimal string with its whole part grouped and its fraction exactly as it came.
+ *
+ * For a `numeric` column on a chart's tooltip or a KPI tile: the same digits the database
+ * holds, grouped for the eye, never parsed. No currency, because a query result does not
+ * say which -- and no rounding, because a figure a reader can read is a figure they may
+ * quote. An unreadable value is shown as it came rather than as MISSING: it is a value,
+ * just not a decimal.
+ */
+export function formatDecimal(value: string): string {
+  const split = parts(value);
+  if (!split) {
+    return value;
+  }
+  const whole = group(split.whole);
+  return split.fraction === ""
+    ? `${split.sign}${whole}`
+    : `${split.sign}${whole}.${split.fraction}`;
 }
 
 /**

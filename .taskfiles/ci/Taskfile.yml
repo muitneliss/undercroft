@@ -1,0 +1,94 @@
+# The gate, and its individual steps. `ci:verify` is what .github/workflows/ci.yml runs --
+# the same command a developer runs locally, so there is exactly one definition of green.
+version: "3"
+
+vars:
+  COMPOSE_FILE: "{{.ROOT_DIR}}/deploy/compose/docker-compose.yml"
+  COMPOSE_SERVER_FILE: "{{.ROOT_DIR}}/deploy/compose/docker-compose.server.yml"
+  COMPOSE_EXAMPLE_ENV: "{{.ROOT_DIR}}/deploy/compose/.env.example"
+
+tasks:
+  typecheck:
+    desc: tsc -b across the workspace.
+    cmds:
+      - bun run typecheck
+
+  lint:
+    desc: Biome lint, including the money/no-mocks/ui-server-import GritQL plugins.
+    cmds:
+      - bun run lint
+
+  lint-rules:
+    desc: ast-grep layering and no-useState rules.
+    cmds:
+      - bun run lint:rules
+
+  format:
+    desc: Write formatting fixes (Biome + Prettier for Markdown/YAML).
+    cmds:
+      - bun run format
+
+  format-check:
+    desc: Check formatting without writing -- what the gate runs.
+    cmds:
+      - bun run format:check
+
+  spec-validate:
+    desc: Validate every shipped connector spec against its schema.
+    cmds:
+      - bun run spec:validate
+
+  build-ui:
+    desc: The SPA build step of the gate (tsc can't see what Rollup refuses -- see CLAUDE.md).
+    cmds:
+      - task: :build:ui
+
+  test:
+    desc: The offline unit/component test suite (bun test).
+    cmds:
+      - bun run test
+
+  verify:
+    desc: >-
+      THE gate: typecheck, lint, lint:rules, format:check, spec:validate, build:ui, test.
+      No Docker, no network, no credentials.
+    cmds:
+      - bun run verify
+
+  itest:
+    desc: The Docker-backed integration tier (needs deploy/compose/.env and Postgres).
+    deps: [":dev:env"]
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} up -d --wait postgres
+      - UNDERCROFT_ITEST=1 bun test integration
+
+  compose-check:
+    desc: Assert every compose service (dev + server variant) declares a memory limit.
+    cmds:
+      - |
+        fail=0
+        for file in {{.COMPOSE_FILE}} {{.COMPOSE_SERVER_FILE}}; do
+          missing=$(docker compose -f "$file" --env-file {{.COMPOSE_EXAMPLE_ENV}} config --format json \
+            | python3 -c 'import json,sys; c=json.load(sys.stdin); \
+              print("\n".join(n for n,s in c["services"].items() \
+              if not s.get("deploy",{}).get("resources",{}).get("limits",{}).get("memory")))')
+          if [ -n "$missing" ]; then echo "$file: services with no memory limit:"; echo "$missing"; fail=1; fi
+        done
+        exit $fail
+
+  secrets-check:
+    desc: Assert secret-bearing paths (.env files) are not tracked by git.
+    cmds:
+      - |
+        fail=0
+        for path in deploy/compose/.env .env; do
+          if git -C {{.ROOT_DIR}} ls-files --error-unmatch "$path" >/dev/null 2>&1; then
+            echo "$path is tracked and must not be"; fail=1
+          fi
+        done
+        exit $fail
+
+  wiki-check:
+    desc: The wiki's coverage and provenance gate.
+    cmds:
+      - bun run wiki:check

@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-19T00:00:00.000Z",
+  "title": "Design System: Undercroft",
+  "extensions": {
+    "colorMeta": {
+      "chrome": {
+        "role": "primary",
+        "displayName": "Chrome yellow",
+        "canonical": "#eda600",
+        "tonalRamp": [
+          "#2b1e00",
+          "#4a3300",
+          "#6b4a00",
+          "#8f6300",
+          "#b57e00",
+          "#eda600",
+          "#f6cf66",
+          "#fbe9b8"
+        ]
+      },
+      "oxide": {
+        "role": "secondary",
+        "displayName": "Oxide",
+        "canonical": "#b24b1a",
+        "tonalRamp": [
+          "#2a1106",
+          "#4a1e0b",
+          "#6a2c10",
+          "#8c3a14",
+          "#b24b1a",
+          "#cf6f3f",
+          "#e6a180",
+          "#f6d9c9"
+        ]
+      },
+      "grass": {
+        "role": "secondary",
+        "displayName": "Grass",
+        "canonical": "#3e782b",
+        "tonalRamp": [
+          "#0e1d0a",
+          "#193313",
+          "#264c1c",
+          "#326124",
+          "#3e782b",
+          "#63994f",
+          "#98bf88",
+          "#d3e4cb"
+        ]
+      },
+      "teal": {
+        "role": "secondary",
+        "displayName": "Teal",
+        "canonical": "#0f7673",
+        "tonalRamp": [
+          "#031c1b",
+          "#063230",
+          "#094b49",
+          "#0c6060",
+          "#0f7673",
+          "#3f9896",
+          "#83bfbd",
+          "#c9e4e3"
+        ]
+      },
+      "ultramarine": {
+        "role": "secondary",
+        "displayName": "Ultramarine",
+        "canonical": "#234c9e",
+        "tonalRamp": [
+          "#081226",
+          "#0f2147",
+          "#173368",
+          "#1d3f83",
+          "#234c9e",
+          "#5272b7",
+          "#8fa5d2",
+          "#cdd7ec"
+        ]
+      },
+      "violet": {
+        "role": "secondary",
+        "displayName": "Violet",
+        "canonical": "#634cb0",
+        "tonalRamp": [
+          "#17122a",
+          "#29204d",
+          "#3e3070",
+          "#503e90",
+          "#634cb0",
+          "#8672c4",
+          "#b0a3d9",
+          "#dcd6ee"
+        ]
+      },
+      "sienna": {
+        "role": "secondary",
+        "displayName": "Sienna",
+        "canonical": "#7f4023",
+        "tonalRamp": [
+          "#1e0f08",
+          "#361b0f",
+          "#502816",
+          "#67341c",
+          "#7f4023",
+          "#a4633f",
+          "#c89577",
+          "#e8d0bf"
+        ]
+      },
+      "errata": {
+        "role": "tertiary",
+        "displayName": "Vermilion",
+        "canonical": "#cf2f16",
+        "tonalRamp": [
+          "#2e0a05",
+          "#55130a",
+          "#8c1c09",
+          "#ad2510",
+          "#cf2f16",
+          "#e2604d",
+          "#ef9b8e",
+          "#fdf0eb"
+        ]
+      },
+      "bone": {
+        "role": "neutral",
+        "displayName": "Bone",
+        "canonical": "#efe9d9",
+        "tonalRamp": [
+          "#2a2818",
+          "#4a4630",
+          "#6b664a",
+          "#8f8968",
+          "#b5ae8d",
+          "#d6cfba",
+          "#efe9d9",
+          "#f7f3e7"
+        ]
+      },
+      "page": {
+        "role": "neutral",
+        "displayName": "Page",
+        "canonical": "#f7f3e7"
+      },
+      "leaf": {
+        "role": "neutral",
+        "displayName": "Leaf",
+        "canonical": "#fbf8f0"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#16150f",
+        "tonalRamp": [
+          "#16150f",
+          "#2b2919",
+          "#3f3c26",
+          "#56513f",
+          "#6b6450",
+          "#8f8768",
+          "#b5ae8d",
+          "#d6cfba"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The one h1 on a leaf. Archivo caps set narrow; 1.9rem on a phone."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "A section head inside a leaf."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "A grant's name, an unprinted leaf's title. Uppercase."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "The Garamond sentence under an h1 saying what the leaf is."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Consent, refusals, notes and hints: sentences a person must read to act. Max 62ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Every head in the margin column, column heading, tab and plate. Uppercase, tracked 0.15em."
+      },
+      "datum": {
+        "displayName": "Datum",
+        "purpose": "Ids, addresses, dates, counts and amounts, with tabular figures."
+      }
+    },
+    "shadows": [
+      {
+        "name": "ply",
+        "value": "0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13)",
+        "purpose": "The hinged leaf standing off the board it is hinged above. Nothing else."
+      },
+      {
+        "name": "punched-hole",
+        "value": "inset 0 1px 1px rgba(22, 21, 15, 0.4)",
+        "purpose": "A hole showing the page beneath: the selected tab, a hinged leaf's punches, a checked punch."
+      }
+    ],
+    "motion": [
+      {
+        "name": "hinge",
+        "value": "90ms steps(2, end)",
+        "purpose": "A part moving: a plate, a punch, an input rule, a tab."
+      },
+      {
+        "name": "tip",
+        "value": "150ms steps(3, end)",
+        "purpose": "A loose slip laid onto the page: errata, a status note."
+      },
+      {
+        "name": "turn",
+        "value": "190ms steps(4, end)",
+        "purpose": "A whole leaf turning about its spine when the division or customer changes."
+      },
+      {
+        "name": "pass",
+        "value": "120ms steps(2, end)",
+        "purpose": "Ink going down in passes of the press; opacity only; untouched by reduced motion."
+      }
+    ],
+    "breakpoints": [
+      { "name": "two-column", "value": "1100px" },
+      { "name": "phone", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Plate",
+      "kind": "button",
+      "refersTo": "plate",
+      "description": "The secondary control: a die-cut plate with no ink in it. Hover inverts; a struck plate travels one pixel.",
+      "html": "<button class=\"ds-plate\" type=\"button\">Đổi dữ liệu đồng bộ</button>",
+      "css": ".ds-plate { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; background: transparent; color: #16150f; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 86; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end), transform 90ms steps(2, end); } .ds-plate:hover { background: #16150f; color: #fbf8f0; } .ds-plate:active { background: #56513f; color: #fbf8f0; transform: translateY(1px); } .ds-plate:focus-visible { outline: 2px solid #16150f; outline-offset: 2px; } .ds-plate:disabled { border-color: rgba(22, 21, 15, 0.44); color: #6b6450; cursor: not-allowed; }"
+    },
+    {
+      "name": "Plate primary",
+      "kind": "button",
+      "refersTo": "plate-primary",
+      "description": "The primary action: chrome-yellow ground and the arrow the manual uses for 'go on'.",
+      "html": "<button class=\"ds-plate-primary\" type=\"button\">Kết nối Gmail <svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 8h11M9 3.5 13.5 8 9 12.5\"/></svg></button>",
+      "css": ".ds-plate-primary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; background: #eda600; color: #16150f; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 86; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; transition: background 90ms steps(2, end), color 90ms steps(2, end), transform 90ms steps(2, end); } .ds-plate-primary:hover { background: #16150f; color: #eda600; } .ds-plate-primary:active { background: #56513f; color: #fbf8f0; transform: translateY(1px); } .ds-plate-primary:focus-visible { outline: 2px solid #16150f; outline-offset: 2px; } .ds-plate-primary:disabled { background: #ece7d6; color: #6b6450; border-color: rgba(22, 21, 15, 0.44); cursor: not-allowed; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A field on a leaf: mono text, hairline keyline, an inset ring on focus and no glow.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-label\">Mời một địa chỉ</span><input class=\"ds-input\" type=\"email\" placeholder=\"dongnghiep@example.com\"></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.5rem; } .ds-label { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 82; letter-spacing: 0.15em; text-transform: uppercase; color: #56513f; } .ds-input { font-family: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; padding: 0.5rem 0.65rem; background: #fbf8f0; color: #16150f; border: 1px solid rgba(22, 21, 15, 0.44); border-radius: 2px; caret-color: #16150f; transition: border-color 90ms steps(2, end); } .ds-input::placeholder { color: #6b6450; } .ds-input:hover { border-color: #56513f; } .ds-input:focus { outline: none; border-color: #16150f; box-shadow: inset 0 0 0 1px #16150f; } .ds-input:disabled { background: #e9e2d0; color: #6b6450; cursor: not-allowed; }"
+    },
+    {
+      "name": "Punch",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "The checkbox: a hole punched through the leaf when a thing is selected, filled with the current board hue.",
+      "html": "<label class=\"ds-punch\"><input type=\"checkbox\" checked><span class=\"ds-punch-box\"></span>Hoá đơn</label>",
+      "css": ".ds-punch { position: relative; display: inline-flex; align-items: center; gap: 0.75rem; cursor: pointer; font-family: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8125rem; padding: 0.28rem 0; color: #16150f; } .ds-punch input { position: absolute; opacity: 0; width: 15px; height: 15px; margin: 0; cursor: pointer; } .ds-punch-box { position: relative; flex: none; width: 15px; height: 15px; border: 1px solid #16150f; border-radius: 50%; background: #fbf8f0; transition: background 90ms steps(2, end); } .ds-punch input:checked + .ds-punch-box { background: #eda600; box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45); } .ds-punch input:focus-visible + .ds-punch-box { outline: 2px solid #16150f; outline-offset: 2px; }"
+    },
+    {
+      "name": "Errata slip",
+      "kind": "custom",
+      "refersTo": "errata",
+      "description": "The correction a publisher tips into a book: vermilion rules, the correction in Garamond, one action. The only object allowed to wear vermilion.",
+      "html": "<div class=\"ds-errata\" role=\"alert\"><span class=\"ds-errata-mark\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><path d=\"M2 14 14 2M2 2l12 12\"/></svg>Đính chính</span><p class=\"ds-errata-body\">Quyền truy cập đã cấp nay đã hết hiệu lực hoặc bị thu hồi. Không có dữ liệu nào bị mất — kết nối lại sẽ tiếp tục từ lần đồng bộ gần nhất.</p></div>",
+      "css": ".ds-errata { border-top: 2px solid #cf2f16; border-bottom: 2px solid #cf2f16; background: #fdf0eb; padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; border-radius: 1px; max-width: 40rem; } .ds-errata-mark { display: flex; align-items: center; gap: 0.5rem; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 80; letter-spacing: 0.2em; text-transform: uppercase; color: #8c1c09; } .ds-errata-body { margin: 0; font-family: 'EB Garamond', ui-serif, Georgia, serif; font-size: 1.0625rem; line-height: 1.5; max-width: 62ch; color: #16150f; }"
+    },
+    {
+      "name": "Status mark",
+      "kind": "chip",
+      "refersTo": "plate-small",
+      "description": "Geometry first, word second, hue third: solid, half, struck and open shapes for granted, pending, lapsed and absent.",
+      "html": "<span class=\"ds-mark ds-mark--granted\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"6\" fill=\"currentColor\"/></svg>Đã cấp</span> <span class=\"ds-mark ds-mark--pending\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 2a6 6 0 0 0 0 12z\" fill=\"currentColor\"/><circle cx=\"8\" cy=\"8\" r=\"5.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/></svg>Chờ chọn phạm vi</span> <span class=\"ds-mark ds-mark--lapsed\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><path d=\"M3.5 12.5 12.5 3.5\" stroke=\"currentColor\" stroke-width=\"1.6\"/></svg>Cần kết nối lại</span> <span class=\"ds-mark ds-mark--absent\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/></svg>Chưa cấp</span>",
+      "css": ".ds-mark { display: inline-flex; align-items: center; gap: 0.5rem; margin-right: 1rem; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 84; letter-spacing: 0.13em; text-transform: uppercase; white-space: nowrap; } .ds-mark svg { flex: none; } .ds-mark--granted { color: #1c5c33; } .ds-mark--pending { color: #6b4a00; } .ds-mark--lapsed { color: #8c1c09; } .ds-mark--absent { color: #56513f; }"
+    },
+    {
+      "name": "Table",
+      "kind": "custom",
+      "refersTo": "input",
+      "description": "A schedule: caps caption and heads over a strong hairline, cells ruled beneath, numbers right-aligned, the row wash arriving in two frames.",
+      "html": "<table class=\"ds-table\"><caption>2 người có quyền truy cập</caption><thead><tr><th scope=\"col\">Địa chỉ</th><th scope=\"col\">Vai trò</th></tr></thead><tbody><tr><td class=\"ds-datum\">an@example.test</td><td>admin</td></tr><tr><td class=\"ds-datum\">binh@example.test</td><td>viewer</td></tr></tbody></table>",
+      "css": ".ds-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; color: #16150f; font-family: 'EB Garamond', ui-serif, Georgia, serif; } .ds-table caption { text-align: left; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 80; letter-spacing: 0.16em; text-transform: uppercase; color: #56513f; padding-bottom: 0.5rem; } .ds-table th { text-align: left; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 80; letter-spacing: 0.14em; text-transform: uppercase; color: #56513f; padding: 0.5rem 0.75rem 0.5rem 0; border-bottom: 1px solid rgba(22, 21, 15, 0.44); white-space: nowrap; } .ds-table td { padding: 0.75rem 0.75rem 0.75rem 0; border-bottom: 1px solid rgba(22, 21, 15, 0.16); vertical-align: baseline; transition: background 90ms steps(2, end); } .ds-table tbody tr:hover td { background: rgba(237, 166, 0, 0.08); } .ds-table td:last-child, .ds-table th:last-child { padding-right: 0; text-align: right; } .ds-datum { font-family: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; color: #56513f; }"
+    },
+    {
+      "name": "Tab strip",
+      "kind": "nav",
+      "refersTo": "plate",
+      "description": "Top tabs across the head of the book, each in its division's hue; the current one stands proud with a punched hole, a locked one lies face-down.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"Sections\"><a class=\"ds-tab\" href=\"#\" style=\"flex-grow:2;background:#b24b1a\">Khách hàng</a><a class=\"ds-tab\" href=\"#\" aria-current=\"page\" style=\"flex-grow:4;background:#eda600;color:#16150f\">Nguồn dữ liệu</a><a class=\"ds-tab\" href=\"#\" style=\"flex-grow:3;background:#0f7673\">Hồ dữ liệu thô</a><span class=\"ds-tab ds-tab--down\" aria-disabled=\"true\" style=\"flex-grow:2\">Người dùng</span></nav>",
+      "css": ".ds-rail { display: flex; gap: 2px; padding: 1rem 1.5rem 0; background: #efe9d9; } .ds-tab { position: relative; display: flex; align-items: center; justify-content: flex-start; border: none; border-bottom: 1px solid rgba(22, 21, 15, 0.44); border-radius: 3px 3px 0 0; color: #fff; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; font-variation-settings: 'wdth' 86; letter-spacing: 0.15em; text-transform: uppercase; text-decoration: none; white-space: nowrap; cursor: pointer; padding: 1rem 1rem 1.5rem 2.4rem; transform: translateY(0.75rem); transition: transform 90ms steps(2, end); } .ds-tab:hover:not([aria-disabled='true']) { transform: translateY(0.5rem); } .ds-tab[aria-current='page'] { transform: none; } .ds-tab[aria-current='page']::after { content: ''; position: absolute; top: 1rem; margin-top: 0.34em; left: 1.05rem; width: 9px; height: 9px; border-radius: 50%; background: #f7f3e7; box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4); } .ds-tab--down { background: repeating-linear-gradient(135deg, #d6cfba, #d6cfba 3px, #cec7b1 3px, #cec7b1 6px); color: #524a37; cursor: not-allowed; transform: translateY(1rem); }"
+    },
+    {
+      "name": "Hinged leaf",
+      "kind": "card",
+      "refersTo": "hinge",
+      "description": "A translucent acetate leaf hinged down over the board inside its own row, punched at the binding edge, never a modal.",
+      "html": "<div class=\"ds-hinge\"><span class=\"ds-hinge-punch ds-hinge-punch--a\"></span><span class=\"ds-hinge-punch ds-hinge-punch--b\"></span><p class=\"ds-hinge-lead\">Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp PDF đính kèm trong những nhãn đó được đọc.</p><button class=\"ds-hinge-plate\" type=\"button\">Lưu</button></div>",
+      "css": ".ds-hinge { position: relative; padding: calc(1.5rem + 9px) calc(1.5rem + 9px) calc(1.5rem + 9px) calc(3rem + 9px); border-radius: 3px; background: #eda600; box-shadow: 0 2px 3px rgba(22, 21, 15, 0.1), 0 8px 18px rgba(22, 21, 15, 0.13); } .ds-hinge::before { content: ''; position: absolute; inset: 9px; border-radius: 2px; background: rgba(251, 248, 240, 0.203); } .ds-hinge > * { position: relative; z-index: 1; } .ds-hinge-punch { position: absolute; z-index: 2; left: calc(1rem + 8px); width: 10px; height: 10px; border-radius: 50%; background: #f7f3e7; box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.4); } .ds-hinge-punch--a { top: 1.5rem; } .ds-hinge-punch--b { bottom: 1.5rem; } .ds-hinge-lead { margin: 0 0 1rem; font-family: 'EB Garamond', ui-serif, Georgia, serif; font-size: 1.0625rem; line-height: 1.5; max-width: 58ch; color: #16150f; } .ds-hinge-plate { display: inline-flex; padding: 0.5rem 0.9rem; border: 1px solid #16150f; border-radius: 2px; background: transparent; color: #16150f; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; cursor: pointer; } .ds-hinge-plate:hover { background: #16150f; color: #fbf8f0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Undercroft",
+    "overview": "Printed, exact, unhurried, warm. The vaulted chamber beneath a building holds everything up and outlives what stands on it, and the interface is built the way such a place is used: a reference book of customer cases kept on a desk, with divisions cut as tabs across the head, one leaf lying open on a section board, and a running head naming whose book is open. Nothing here is a screen pretending to be paper; it is printed matter that happens to be read on a screen, so the ground is warm bone, the rules are hairlines, the type is set in caps and Garamond, and a control is a die-cut plate rather than a button.\n\nDensity is that of a working schedule, not a marketing page. The operator is usually mid-call about one customer and reads down a column of sources the way they read any ledger, so every state gets the height it deserves: a granted source is one line, a source awaiting its scope is half-hinged off its binding edge, a lapsed grant tips in a correction slip. Motion is the movement of printed leaves — stepped, never eased — and the number of frames says what size of thing just moved.\n\nThe system rejects the generated-interface vocabulary on purpose: no rounded cards in a grid, no coloured side-tab accents, no gradient pills, no spinners, no modals, no easing curves.",
+    "keyCharacteristics": [
+      "One warm stock (bone, page, leaf) under a seven-hue wheel that means division, never accent",
+      "Hairline rules and one ply shadow carry all depth; nothing floats",
+      "Archivo caps for labels and heads, EB Garamond for sentences a person must act on, Spline Sans Mono for every datum and amount",
+      "Four stepped motion tokens; the frame count is the size of the object that moved",
+      "Vermilion appears on exactly one object, the errata slip",
+      "Selection is a punched hole; absence is an em dash; a new row inks in"
+    ],
+    "rules": [
+      {
+        "name": "The Wheel Rule",
+        "body": "A hue in the wheel means which division is open and paints only the board, the tabs, the punch holes and the hinged leaf. It is never used for emphasis, a badge, a chart series or a button inside a page.",
+        "section": "colors"
+      },
+      {
+        "name": "The Vermilion Rule",
+        "body": "Vermilion is held out of the wheel so the errata slip can be the only thing wearing it. A destructive plate is an ordinary plate; the safety is the confirmation step, not the colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Absence Rule",
+        "body": "A value the system does not have renders as an em dash in Ink 3, never as a zero, never as an empty cell.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Caps for wayfinding, Garamond for anything a person must read to decide. Consent copy set in 13px UI sans is boilerplate, and boilerplate is what it must not be.",
+        "section": "typography"
+      },
+      {
+        "name": "The Digits Rule",
+        "body": "A figure is always mono with tabular numerals. An amount is a string all the way to the DOM and is grouped with , in every language; a count follows the reader's language.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ply Rule",
+        "body": "Elevation is declared once, by the shadow. A surface that carries a hairline border does not also carry a shadow, and a surface with a shadow does not also carry a border.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put every head in the margin column and let it trail its rule to the edge; no page needs an eyebrow.",
+      "Do give each state its own height and its own single next action: one line for a healthy row, a half-hinged leaf for pending, a tipped-in slip for a lapse.",
+      "Do carry state by shape and word before hue: the four status geometries, the punched hole, the em dash.",
+      "Do pick a motion token by the size of the object: --hinge (90ms, 2 frames) for a part, --tip (150ms, 3) for a slip, --turn (190ms, 4) for a leaf, --pass (120ms, 2, opacity only) for ink going down.",
+      "Do render a missing value as an em dash in Ink 3 and a count through the reader's locale.",
+      "Do open a panel as a hinged leaf inside its own row, with the page still in the tab order."
+    ],
+    "donts": [
+      "Don't use an easing curve anywhere; every transition is steps(n, end).",
+      "Don't put vermilion on anything but an errata slip or a lapsed mark.",
+      "Don't use a wheel hue as an accent, badge, chart colour or button inside a page.",
+      "Don't lay out a list as a grid of equal cards, add a coloured side-tab bar, a gradient pill, a spinner, or a modal.",
+      "Don't put a hairline border under a shadow; ply is declared once.",
+      "Don't let a heading scale with the viewport; sizes are fixed in rem.",
+      "Don't stagger a list's arrival; only a row that is genuinely new inks in."
+    ]
+  }
+}

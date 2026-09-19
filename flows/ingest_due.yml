@@ -1,0 +1,77 @@
+id: ingest_due
+namespace: undercroft
+
+description: |
+  Every fifteen minutes, ask the worker which (tenant, source) pairs are due and start
+  each one.
+
+  The flow takes no input. Its predecessor took a `tenantId`, which meant one execution
+  could read one customer and a schedule could only ever be one customer's -- so it
+  scheduled nobody. The worker owns the schedule (`ops.connection.cadence`, and the rule
+  in packages/contracts/src/cadence.ts); this flow is the tick.
+
+  Calls the worker's HTTP trigger rather than running containers itself. Kestra therefore
+  needs no access to the Docker socket, which on a shared host would make a Kestra
+  compromise a host compromise. The trigger can start a fixed set of named verbs and
+  nothing else.
+
+  Each start answers 202 with the run's id and the worker carries on without us; the
+  ledger is the record of what happened next. A 409 is a pair already running -- the
+  worker's own guard -- and is not a failure of this flow, hence `allowFailed`.
+
+  Concurrency CANCEL: a tick that finds the previous one still running has nothing to
+  add, because the previous one already asked the same question.
+
+labels:
+  owner: data-platform
+
+concurrency:
+  behavior: CANCEL
+  limit: 1
+
+tasks:
+  - id: due
+    type: io.kestra.plugin.core.http.Request
+    uri: http://undercroft-worker:8081/v1/runs/due
+    method: GET
+    headers:
+      Authorization: "Bearer {{ envs.trigger_token }}"
+    options:
+      connectTimeout: PT30S
+      readIdleTimeout: PT1M
+
+  - id: start
+    type: io.kestra.plugin.core.flow.ForEach
+    values: "{{ json(outputs.due.body).due }}"
+    concurrencyLimit: 1
+    tasks:
+      - id: ingest
+        type: io.kestra.plugin.core.http.Request
+        uri: http://undercroft-worker:8081/v1/runs/ingest
+        method: POST
+        contentType: application/json
+        body: "{{ taskrun.value }}"
+        headers:
+          Authorization: "Bearer {{ envs.trigger_token }}"
+        allowFailed: true
+        options:
+          connectTimeout: PT30S
+          readIdleTimeout: PT1M
+
+  - id: report
+    type: io.kestra.plugin.core.log.Log
+    message: "asked the worker to start {{ json(outputs.due.body).due | length }} due pair(s)"
+
+triggers:
+  - id: every_15_minutes
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "*/15 * * * *"
+
+errors:
+  - id: alert
+    type: io.kestra.plugin.core.log.Log
+    level: ERROR
+    message: |
+      ingest_due FAILED. execution={{ execution.id }}
+      The worker could not be asked what is due. Nothing was started; the previous data
+      keeps serving, stale rather than wrong.

@@ -20,12 +20,6 @@
  * sentence a reader actually sees rather than a key.
  */
 
-// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
@@ -43,6 +37,7 @@ const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
 
 const DATE = new Map<Locale, Intl.DateTimeFormat>();
 const DATE_TIME = new Map<Locale, Intl.DateTimeFormat>();
+const TIME = new Map<Locale, Intl.DateTimeFormat>();
 
 /**
  * Formatters are built once per locale and kept.
@@ -84,6 +79,32 @@ function dateTimeFormat(locale: Locale): Intl.DateTimeFormat {
   return made;
 }
 
+/**
+ * Clock time to the second, with no date.
+ *
+ * For a list of instants that all belong to one thing on one day -- the lines of a run's
+ * feed. Repeating the date on every line would push the sentence, which is the part worth
+ * reading, off to the right. Seconds are kept: a run's steps are seconds apart, and a feed
+ * whose lines all read 12:42 says nothing about what followed what.
+ *
+ * Same zone as everything else in this module, for the reason at the top of the file.
+ */
+function timeFormat(locale: Locale): Intl.DateTimeFormat {
+  const held = TIME.get(locale);
+  if (held) {
+    return held;
+  }
+  const made = new Intl.DateTimeFormat(CLDR[locale], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: ZONE,
+  });
+  TIME.set(locale, made);
+  return made;
+}
+
 function parse(iso: string | null | undefined): Date | null {
   if (!iso) {
     return null;
@@ -100,6 +121,11 @@ export function formatDate(iso: string | null | undefined, locale: Locale): stri
 export function formatDateTime(iso: string | null | undefined, locale: Locale): string {
   const date = parse(iso);
   return date ? dateTimeFormat(locale).format(date) : MISSING;
+}
+
+export function formatTime(iso: string | null | undefined, locale: Locale): string {
+  const date = parse(iso);
+  return date ? timeFormat(locale).format(date) : MISSING;
 }
 
 const DAY_MS = 86_400_000;
@@ -147,33 +173,116 @@ export function expiryNote(t: TFunction, iso: string | null | undefined, now = n
   return t("when.expiresInDays", { count: days });
 }
 
+const RELATIVE = new Map<Locale, Intl.RelativeTimeFormat>();
+
+function relativeFormat(locale: Locale): Intl.RelativeTimeFormat {
+  const held = RELATIVE.get(locale);
+  if (held) {
+    return held;
+  }
+  const made = new Intl.RelativeTimeFormat(CLDR[locale], { numeric: "auto" });
+  RELATIVE.set(locale, made);
+  return made;
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+/** Past this, "34 days ago" tells a reader less than the date does. */
+const RELATIVE_HORIZON_MS: number = 30 * DAY_MS;
+
 /**
- * A cron expression in words, for the handful of shapes this product writes.
+ * How long ago an instant was, in the reader's language: "5 phút trước", "2 hours ago".
  *
- * Deliberately narrow: it recognises a daily and an hourly schedule and returns
- * the expression itself for anything else. A general cron-to-English translator
- * that is subtly wrong about a schedule is worse than showing the operator the
- * five fields they already know how to read -- and a general cron-to-*two*-language
- * translator is worse still, because only one of its two answers ever gets checked.
+ * For the run column, where "just now" and "yesterday" are what an operator on a call
+ * wants and a timestamp is what they would have to convert. Past thirty days the date
+ * itself is the better answer and it is formatted in the fixed zone like every other date
+ * here. Unreadable is MISSING, never "now".
  */
-export function describeSchedule(t: TFunction, cron: string): string {
-  const fields = cron.trim().split(/\s+/u);
-  if (fields.length !== 5) {
-    return cron.trim();
+export function relativeTime(
+  iso: string | null | undefined,
+  locale: Locale,
+  now = new Date(),
+): string {
+  const date = parse(iso);
+  if (!date) {
+    return MISSING;
   }
-
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = fields;
-  const everyDay = dayOfMonth === "*" && month === "*" && dayOfWeek === "*";
-
-  if (everyDay && hour === "*" && minute === "0") {
-    return t("when.hourly");
+  const elapsed = now.getTime() - date.getTime();
+  if (Math.abs(elapsed) >= RELATIVE_HORIZON_MS) {
+    return formatDateTime(iso, locale);
   }
-
-  if (everyDay && /^\d{1,2}$/u.test(hour ?? "") && /^\d{1,2}$/u.test(minute ?? "")) {
-    const hh = (hour ?? "0").padStart(2, "0");
-    const mm = (minute ?? "0").padStart(2, "0");
-    return t("when.dailyAt", { time: `${hh}:${mm}` });
+  const format = relativeFormat(locale);
+  if (Math.abs(elapsed) < MINUTE_MS) {
+    return format.format(0, "second");
   }
+  if (Math.abs(elapsed) < HOUR_MS) {
+    return format.format(-Math.round(elapsed / MINUTE_MS), "minute");
+  }
+  if (Math.abs(elapsed) < DAY_MS) {
+    return format.format(-Math.round(elapsed / HOUR_MS), "hour");
+  }
+  return format.format(-Math.round(elapsed / DAY_MS), "day");
+}
 
-  return cron.trim();
+/**
+ * When a key was last used, or that it never was.
+ *
+ * "Never" is a fact worth its own words: a dash reads as data nobody recorded, and the
+ * question an admin is asking of this column is whether the key can be revoked safely.
+ */
+export function lastUsedNote(
+  t: TFunction,
+  locale: Locale,
+  iso: string | null | undefined,
+  now = new Date(),
+): string {
+  if (iso === null || iso === undefined) {
+    return t("when.neverUsed");
+  }
+  return relativeTime(iso, locale, now);
+}
+
+type DurationUnit = "second" | "minute" | "hour";
+
+const DURATION = new Map<string, Intl.NumberFormat>();
+
+function durationFormat(locale: Locale, unit: DurationUnit): Intl.NumberFormat {
+  const key = `${locale}/${unit}`;
+  const held = DURATION.get(key);
+  if (held) {
+    return held;
+  }
+  const made = new Intl.NumberFormat(CLDR[locale], {
+    style: "unit",
+    unit,
+    unitDisplay: "short",
+    maximumFractionDigits: unit === "hour" ? 1 : 0,
+  });
+  DURATION.set(key, made);
+  return made;
+}
+
+/**
+ * How long a run took, in the reader's language: "12 giây", "2 min", "1.5 hr".
+ *
+ * A run still in progress has no duration and gets MISSING, not a count that is still
+ * growing; so does a pair of instants that cannot be read or that run backwards.
+ */
+export function formatDuration(startedAt: string, endedAt: string | null, locale: Locale): string {
+  const start = parse(startedAt);
+  const end = parse(endedAt);
+  if (start === null || end === null) {
+    return MISSING;
+  }
+  const ms = end.getTime() - start.getTime();
+  if (ms < 0) {
+    return MISSING;
+  }
+  if (ms < MINUTE_MS) {
+    return durationFormat(locale, "second").format(ms / 1000);
+  }
+  if (ms < HOUR_MS) {
+    return durationFormat(locale, "minute").format(ms / MINUTE_MS);
+  }
+  return durationFormat(locale, "hour").format(ms / HOUR_MS);
 }

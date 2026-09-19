@@ -11,14 +11,6 @@
  * so that is all this supports.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
-
 import { isLosslessNumber } from "lossless-json";
 
 /**
@@ -30,6 +22,13 @@ import { isLosslessNumber } from "lossless-json";
  * value gets into the lake.
  */
 const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
+/** A dot-path segment: a name, then any number of `[n]` subscripts. */
+const SEGMENT = /^(?<name>[^[\]]*)(?<indices>(?:\[\d+\])*)$/u;
+
+/** `typeof x === "object"` still admits null and says nothing about indexing. This does. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 export function parsePath(path: string): string[] {
   if (path === "") {
@@ -37,16 +36,16 @@ export function parsePath(path: string): string[] {
   }
   const segments: string[] = [];
   for (const part of path.split(".")) {
-    const match = /^([^[\]]*)((?:\[\d+\])*)$/u.exec(part);
+    const match = SEGMENT.exec(part);
     if (match === null) {
       throw new TypeError(`unreadable path segment ${JSON.stringify(part)}`);
     }
-    const [, name = "", indices = ""] = match;
+    const { name = "", indices = "" } = match.groups ?? {};
     if (name !== "") {
       segments.push(name);
     }
-    for (const index of indices.matchAll(/\[(\d+)\]/gu)) {
-      segments.push(index[1]!);
+    for (const index of indices.matchAll(/\[(?<index>\d+)\]/gu)) {
+      segments.push(index.groups?.index ?? "");
     }
   }
   return segments;
@@ -70,13 +69,13 @@ export function getPath(root: unknown, path: string): unknown {
       current = current[index];
       continue;
     }
-    if (typeof current !== "object") {
+    if (!isRecord(current)) {
       return undefined;
     }
     if (!Object.hasOwn(current, segment)) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[segment];
+    current = current[segment];
   }
   return current;
 }

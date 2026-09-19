@@ -1,0 +1,279 @@
+/**
+ * What a run looks like from the card, and when the next one is.
+ *
+ * A run has three outcomes and the card has four marks, and the mapping is the whole point
+ * of this module: an `ok` run is a granted mark, a `running` one is pending, a `failed` one
+ * is lapsed, and no run at all is absent. The same four geometries the grant itself uses,
+ * so a schedule of sources reads the same way at the run column as at the status column --
+ * and survives greyscale for the same reason.
+ *
+ * `nextRunNote` words the server's `nextRunAt`, which is the one schedule rule
+ * (`@undercroft/contracts`). A value in the past is not a missed run: the scheduler asks
+ * every fifteen minutes, so it means "at the next tick", and the note says that rather than
+ * printing a time that already went by.
+ */
+
+import type { Locale } from "@undercroft/core/locale";
+import type { TFunction } from "i18next";
+
+import {
+  type Connection,
+  isSource,
+  type RunEventView,
+  type RunView,
+  SOURCE_LABEL,
+} from "@/api/types.ts";
+import type { CardFacts } from "@/lib/connectionState.ts";
+import { formatCount, MISSING } from "@/lib/money.ts";
+import { formatDateTime } from "@/lib/when.ts";
+
+export type LastRun = NonNullable<Connection["lastRun"]>;
+export type RunStatus = LastRun["status"];
+
+/** A vendor's own name where we have one; the source's id where we do not. */
+export function sourceLabel(source: string): string {
+  return isSource(source) ? SOURCE_LABEL[source] : source;
+}
+
+/**
+ * What a run did, as one line of the journal: the source and what it read, or that it was
+ * a build of the models. Entity names stay as the source calls them -- `deals`, `contacts`
+ * -- because they are identifiers a reader will meet again in the raw lake.
+ */
+export function describeRun(
+  t: TFunction,
+  run: Pick<RunView, "kind" | "source" | "entities">,
+): string {
+  const source = run.source === null ? "" : sourceLabel(run.source);
+  switch (run.kind) {
+    case "ingest":
+      return run.entities.length === 0 ? source : `${source} · ${run.entities.join(", ")}`;
+    case "lake-api":
+      return t("journal.kindLakeApi", { source });
+    case "transform":
+      return t("journal.kindModels");
+    case "build":
+      return t("journal.kindBuild");
+    default: {
+      const exhaustive: never = run.kind;
+      throw new Error(`unhandled run kind ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** Who or what started the run, in the quiet face beneath the line. */
+export function triggerLabel(t: TFunction, trigger: RunView["trigger"]): string {
+  switch (trigger) {
+    case "schedule":
+      return t("journal.triggerSchedule");
+    case "manual":
+      return t("journal.triggerManual");
+    case "build":
+      return t("journal.triggerBuild");
+    case "lake-api":
+      return t("journal.triggerLakeApi");
+    default: {
+      const exhaustive: never = trigger;
+      throw new Error(`unhandled trigger ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * One count out of an event's detail, formatted for the reader.
+ *
+ * Anything that is not a number is MISSING rather than a `0`: a count the worker did not
+ * send is not a count of nothing, and the two must not look the same. Same rule as
+ * `formatMoney`'s, for the same reason.
+ */
+function counted(detail: Record<string, unknown>, key: string, locale: Locale): string {
+  const value = detail[key];
+  return formatCount(typeof value === "number" ? value : null, locale);
+}
+
+/**
+ * One line of a run's feed, as a sentence.
+ *
+ * The worker writes an enumerated verb and a handful of counts; the wording is entirely
+ * here, which is what lets the same feed read in Vietnamese and in English without the
+ * worker knowing either language. An event this does not know renders as itself rather than
+ * disappearing: a feed that silently dropped a line the worker thought worth writing would
+ * be the exact failure this whole division exists to fix.
+ *
+ * Counts arrive pre-formatted through `formatCount`, so an absent one renders as MISSING
+ * rather than as a `0` that would read as a real zero. Same reason `formatMoney` does it.
+ */
+export function eventSentence(
+  t: TFunction,
+  locale: Locale,
+  event: Pick<RunEventView, "event" | "entity" | "detail">,
+): string {
+  const entity = event.entity ?? "";
+  function n(key: string): string {
+    return counted(event.detail, key, locale);
+  }
+
+  switch (event.event) {
+    case "run_opened":
+      return t("journal.event.runOpened");
+    case "entity_started":
+      return t("journal.event.entityStarted", { entity });
+    case "work_listed":
+      return t("journal.event.workListed", { entity, total: n("total") });
+    case "records_read":
+      return event.detail.total === undefined
+        ? t("journal.event.recordsRead", { entity, read: n("read") })
+        : t("journal.event.recordsReadOf", { entity, read: n("read"), total: n("total") });
+    case "entity_done":
+      return t("journal.event.entityDone", {
+        entity,
+        landed: n("landed"),
+        created: n("created"),
+        changed: n("changed"),
+        refused: n("refused"),
+      });
+    case "picks_listed":
+      return t("journal.event.picksListed", { folders: n("folders"), matched: n("matched") });
+    case "documents_landed":
+      return t("journal.event.documentsLanded", {
+        created: n("created"),
+        unchanged: n("unchanged"),
+        skipped: n("skipped"),
+        failed: n("failed"),
+      });
+    case "no_models":
+      return t("journal.event.noModels");
+    case "dbt_finished":
+      return t("journal.event.dbtFinished", {
+        models: n("models"),
+        tests: n("tests"),
+        testsFailed: n("testsFailed"),
+      });
+    case "run_closed":
+      return event.detail.status === "ok"
+        ? t("journal.event.runClosedOk")
+        : t("journal.event.runClosedFailed");
+    case "run_failed":
+      return t("journal.event.runFailed", { errorType: String(event.detail.errorType ?? "") });
+    case "events_truncated":
+      return t("journal.event.truncated", { at: n("at") });
+    default:
+      return t("journal.event.unknown", { event: event.event });
+  }
+}
+
+/**
+ * What an empty journal teaches: when the first run comes, or what stands in its way.
+ *
+ * The earliest due time across the customer's sources, worded the way the card words a
+ * next run. No due time at all means no source is ready, and the sentence says where to
+ * go rather than that there is nothing here.
+ */
+export type FirstRun = { kind: "none" } | { kind: "due-now" } | { kind: "at"; at: string };
+
+/**
+ * When the first run comes, wordlessly: nothing is scheduled, it is due at the next tick,
+ * or it is at an instant. The journal and the lake each word it in their own sentence;
+ * the decision is made once, here.
+ */
+export function firstRun(
+  connections: readonly Pick<Connection, "nextRunAt">[],
+  now: Date = new Date(),
+): FirstRun {
+  const due = connections
+    .map((c) => (c.nextRunAt === null ? Number.NaN : new Date(c.nextRunAt).getTime()))
+    .filter((ms) => !Number.isNaN(ms));
+  if (due.length === 0) {
+    return { kind: "none" };
+  }
+  const earliest = Math.min(...due);
+  if (earliest <= now.getTime()) {
+    return { kind: "due-now" };
+  }
+  return { kind: "at", at: new Date(earliest).toISOString() };
+}
+
+export function journalEmptyBody(
+  t: TFunction,
+  locale: Locale,
+  connections: readonly Pick<Connection, "nextRunAt">[],
+  now: Date = new Date(),
+): string {
+  const first = firstRun(connections, now);
+  switch (first.kind) {
+    case "none":
+      return t("journal.emptyBodyNoSchedule");
+    case "due-now":
+      return t("journal.emptyBodyDueNow");
+    case "at":
+      return t("journal.emptyBody", { when: formatDateTime(first.at, locale) });
+    default: {
+      const exhaustive: never = first;
+      return exhaustive;
+    }
+  }
+}
+
+export function runMark(status: RunStatus | null): CardFacts["mark"] {
+  switch (status) {
+    case "ok":
+      return "granted";
+    case "running":
+      return "pending";
+    case "failed":
+      return "lapsed";
+    case null:
+      return "absent";
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`unhandled run status ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** The word beside the mark: the outcome, or that there has never been one. */
+export function runMarkLabel(t: TFunction, status: RunStatus | null): string {
+  switch (status) {
+    case "ok":
+      return t("run.ok");
+    case "running":
+      return t("run.running");
+    case "failed":
+      return t("run.failed");
+    case null:
+      return t("run.never");
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`unhandled run status ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * When the source next runs, as the card says it.
+ *
+ * Paused says so rather than showing a dash that reads as missing data; a source that is
+ * waiting for a scope has no next run and the card's own state already explains why, so it
+ * gets MISSING; a due time already past means the scheduler's next tick.
+ */
+export function nextRunNote(
+  t: TFunction,
+  locale: Locale,
+  connection: Pick<Connection, "cadence" | "nextRunAt">,
+  now: Date = new Date(),
+): string {
+  if (connection.cadence === "paused") {
+    return t("when.pausedNoNext");
+  }
+  if (connection.nextRunAt === null) {
+    return MISSING;
+  }
+  const due = new Date(connection.nextRunAt);
+  if (Number.isNaN(due.getTime())) {
+    return MISSING;
+  }
+  if (due.getTime() <= now.getTime()) {
+    return t("when.dueNow");
+  }
+  return formatDateTime(connection.nextRunAt, locale);
+}

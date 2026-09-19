@@ -1,5 +1,3 @@
-// biome-ignore-all lint/performance/noBarrelFile: `index.ts` is each package's public entry point, which is the seam `.claude/rules/layering.md` is built on and what `.claude/rules/tests.md` means by testing through the public API. The re-export cost the rule is about applies to a bundle; these are workspace packages consumed by name.
-
 export {
   type ConnectorAuth,
   type ConnectorEntity,
@@ -15,7 +13,53 @@ export {
   StoreCredentialRequest,
   StoreCredentialResponse,
 } from "./connectionApi.ts";
-export { ConnectionScope, DriveScope, GmailScope, parseScope } from "./connectionScope.ts";
+export {
+  Aggregate,
+  AGGREGATES,
+  bindParams,
+  CHART_TYPES,
+  ChartConfig,
+  ChartType,
+  compile,
+  compileVisual,
+  DashboardFilter,
+  DashboardFilters,
+  DashboardLayout,
+  DashboardTile,
+  Field,
+  Filter,
+  FILTER_OPS,
+  FilterOp,
+  IDENTIFIER,
+  Identifier,
+  MAX_TILES,
+  ParamMissing,
+  paramNames,
+  QueryParams,
+  QuestionDefinition,
+  quoteIdent,
+  quoteLiteral,
+  SqlDefinition,
+  VisualDefinition,
+} from "./bi.ts";
+export {
+  CADENCE_INTERVAL_MS,
+  CADENCES,
+  Cadence,
+  isDue,
+  nextRunAt,
+  type ScheduleFacts,
+} from "./cadence.ts";
+export {
+  allowsFileType,
+  ConnectionScope,
+  DriveScope,
+  GmailScope,
+  needsScope,
+  parseScope,
+  SCOPED_SOURCES,
+  XeroScope,
+} from "./connectionScope.ts";
 export {
   ApiError,
   LandRecordInput,
@@ -26,5 +70,28 @@ export {
   MAX_RECORDS_PER_BATCH,
 } from "./lakeApi.ts";
 export { parseSpec, SpecError } from "./loadSpec.ts";
+export {
+  MAX_IDENTIFIER_CHARS,
+  MAX_MODEL_SQL_BYTES,
+  MODEL_NAME,
+  ModelName,
+  ModelTests,
+  TEST_KINDS,
+  TestKind,
+} from "./models.ts";
 export { documentKeyOf, documentPrefixOf, RawDocument } from "./rawDocument.ts";
+export {
+  BuildModelRequest,
+  BuildModelResponse,
+  Cell,
+  DEFAULT_QUERY_ROWS,
+  DqFailuresRequest,
+  MAX_PREVIEW_ROWS,
+  MAX_QUERY_ROWS,
+  MAX_QUERY_SQL_BYTES,
+  RunQueryRequest,
+  RunStepShape,
+  SchemaResponse,
+  TableResult,
+} from "./transformApi.ts";
 export { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";

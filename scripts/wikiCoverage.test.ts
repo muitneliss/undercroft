@@ -15,10 +15,6 @@
  * and ADR 0014 arriving with no page.
  */
 
-// biome-ignore-all lint/correctness/noNodejsModules: This is a build script running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/style/noMagicNumbers: The 8 in `"deadbeef".repeat(8)` is how a 64-character digest is spelled from an 8-character word. Naming it would hide the arithmetic the reader needs to check.
-
 import { afterAll, expect, test as it } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";

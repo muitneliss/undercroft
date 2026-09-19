@@ -1,0 +1,83 @@
+/**
+ * What a stored selection means: chosen, chosen-nothing, or not chosen at all. The three are
+ * different facts, and a collector that read one as another would read far more than anyone
+ * agreed to.
+ */
+
+import { describe, expect, test as it } from "bun:test";
+
+import { allowsFileType, needsScope, parseScope } from "./connectionScope.ts";
+
+describe("parseScope", () => {
+  it("a Gmail selection with no file types recorded defaults to PDF only", () => {
+    const scope = parseScope("gmail", JSON.stringify({ labels: [] }));
+    expect(scope).toMatchObject({ fileTypes: ["application/pdf"] });
+  });
+
+  it("an explicit file-type allow-list is read back exactly", () => {
+    const scope = parseScope(
+      "drive",
+      JSON.stringify({ files: [], fileTypes: ["application/vnd.ms-excel", "text/csv"] }),
+    );
+    expect(scope).toMatchObject({ fileTypes: ["application/vnd.ms-excel", "text/csv"] });
+  });
+
+  it("an empty file-type list is a recorded decision: any file type", () => {
+    const scope = parseScope("drive", JSON.stringify({ files: [], fileTypes: [] }));
+    expect(scope).toMatchObject({ fileTypes: [] });
+  });
+
+  it("reads a Xero selection: the organisation, and which entities", () => {
+    const scope = parseScope(
+      "xero",
+      JSON.stringify({
+        organisation: { id: "org-1", name: "Acme Pte Ltd" },
+        entities: ["invoices"],
+      }),
+    );
+    expect(scope).toEqual({
+      kind: "xero",
+      organisation: { id: "org-1", name: "Acme Pte Ltd" },
+      entities: ["invoices"],
+    });
+  });
+
+  it("an empty entity list is a recorded decision: every entity the spec declares", () => {
+    const scope = parseScope("xero", JSON.stringify({ organisation: { id: "org-1", name: "A" } }));
+    expect(scope).toMatchObject({ kind: "xero", entities: [] });
+  });
+
+  it("no organisation is no selection, and a Gmail shape under xero is none either", () => {
+    expect(parseScope("xero", "{}")).toBeNull();
+    expect(parseScope("xero", JSON.stringify({ labels: [] }))).toBeNull();
+    expect(parseScope("xero", JSON.stringify({ organisation: "org-1" }))).toBeNull();
+  });
+
+  it("a source that takes no scope never parses to one", () => {
+    expect(
+      parseScope("hubspot", JSON.stringify({ organisation: { id: "x", name: "y" } })),
+    ).toBeNull();
+  });
+});
+
+describe("needsScope", () => {
+  it("fires for a scoped source with nothing chosen and stays quiet otherwise", () => {
+    expect(needsScope("xero", "{}")).toBe(true);
+    expect(needsScope("xero", JSON.stringify({ organisation: { id: "o", name: "n" } }))).toBe(
+      false,
+    );
+    expect(needsScope("hubspot", "{}")).toBe(false);
+  });
+});
+
+describe("allowsFileType", () => {
+  it("an empty allow-list matches any type", () => {
+    expect(allowsFileType([], "application/pdf")).toBe(true);
+    expect(allowsFileType([], "image/png")).toBe(true);
+  });
+
+  it("a non-empty allow-list matches only what it names", () => {
+    expect(allowsFileType(["application/pdf"], "application/pdf")).toBe(true);
+    expect(allowsFileType(["application/pdf"], "image/png")).toBe(false);
+  });
+});

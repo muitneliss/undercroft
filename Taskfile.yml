@@ -1,0 +1,41 @@
+# The single entrypoint for every operation in this repo -- dev, build, CI, CD, the database.
+# `bun run <x>` and raw docker/shell invocations stay as the implementation underneath; this
+# is the one place that enumerates what you can do, and the only one anyone should type.
+# Never invoke a bun script, scripts/*.ts, or docker compose directly -- add or extend a task
+# instead. See .claude/rules/tooling.md and docs/adr/0023.
+version: "3"
+
+output: prefixed
+
+# Included Taskfiles can't declare their own dotenv, so it lives here even though only the
+# dev namespace uses it -- it's deploy/compose/.env, the single source of local secrets/config
+# every "Path B" native process re-derives its localhost DSNs and URLs from.
+dotenv:
+  - "{{.ROOT_DIR}}/deploy/compose/.env"
+
+includes:
+  dev:
+    taskfile: ./.taskfiles/dev/Taskfile.yml
+    dir: "{{.ROOT_DIR}}"
+  build:
+    # Directory is "artifacts", not "build": this repo's .gitignore has a bare `build/` rule
+    # (matches at any depth), which would silently exclude a `.taskfiles/build/` from git
+    # entirely -- exactly the failure this comment exists to not repeat.
+    taskfile: ./.taskfiles/artifacts/Taskfile.yml
+    dir: "{{.ROOT_DIR}}"
+  ci:
+    taskfile: ./.taskfiles/ci/Taskfile.yml
+    dir: "{{.ROOT_DIR}}"
+  cd:
+    taskfile: ./.taskfiles/cd/Taskfile.yml
+    dir: "{{.ROOT_DIR}}"
+  db:
+    taskfile: ./.taskfiles/db/Taskfile.yml
+    dir: "{{.ROOT_DIR}}"
+
+tasks:
+  default:
+    desc: List every available task, grouped by namespace.
+    silent: true
+    cmds:
+      - task --list-all

@@ -11,12 +11,6 @@
  * is used here.
  */
 
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/style/noIncrementDecrement: `i += 1` is already the form used throughout; what remains is inside for-loop headers, where `i++` is the idiom the language reads best.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
 export interface Clock {
   now: () => Date;
   sleep: (ms: number) => Promise<void>;
@@ -79,7 +73,7 @@ export class TestClock implements Clock {
 
     // Loop, because a woken caller may immediately sleep again for a duration that is
     // already elapsed -- a retry whose backoff is shorter than the step just taken.
-    for (let guard = 0; guard < 1000; guard++) {
+    for (let guard = 0; guard < 1000; guard += 1) {
       const due = this.#sleepers.filter((s) => s.dueAt <= this.#nowMs);
       if (due.length === 0) {
         return;

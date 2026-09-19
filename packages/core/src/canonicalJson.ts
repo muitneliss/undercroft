@@ -32,14 +32,6 @@
  * real observation about the provider, and recording it is the correct outcome.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/style/noContinue: Each `continue` here skips one item in a loop with a stated reason on the line above. Restructuring to avoid it means nesting the body in an `if`, which adds a level of indentation and says nothing new.
-// biome-ignore-all lint/style/noIncrementDecrement: `i += 1` is already the form used throughout; what remains is inside for-loop headers, where `i++` is the idiom the language reads best.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noBitwiseOperators: Byte and hash arithmetic, where bitwise operators are the operation rather than a clever substitute for one.
-
 import { isLosslessNumber, parse as losslessParse } from "lossless-json";
 
 const SHORT_ESCAPES: Readonly<Record<string, string>> = {
@@ -99,13 +91,18 @@ function byCodePoint(a: string, b: string): number {
   const left = [...a];
   const right = [...b];
   const shared = Math.min(left.length, right.length);
-  for (let i = 0; i < shared; i++) {
+  for (let i = 0; i < shared; i += 1) {
     const diff = left[i]!.codePointAt(0)! - right[i]!.codePointAt(0)!;
     if (diff !== 0) {
       return diff;
     }
   }
   return left.length - right.length;
+}
+
+/** `typeof x === "object"` still admits null and says nothing about indexing. This does. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function serialise(value: unknown): string {
@@ -140,8 +137,8 @@ function serialise(value: unknown): string {
     return `[${value.map(serialise).join(",")}]`;
   }
 
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
+  if (isRecord(value)) {
+    const entries = Object.entries(value)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => byCodePoint(a, b));
     return `{${entries.map(([k, v]) => `${escapeString(k)}:${serialise(v)}`).join(",")}}`;

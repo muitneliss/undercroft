@@ -13,20 +13,26 @@
  * `InMemoryWorkerClient` without a socket.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
 import type {
   BrowseScopeResponse,
+  BuildModelResponse,
   CredentialInput,
+  DqFailuresRequest,
   RevokeConnectionResponse,
+  RunQueryRequest,
+  SchemaResponse,
   StoreCredentialResponse,
+  TableResult,
 } from "@undercroft/contracts";
-import type { SqlExecutor } from "@undercroft/db";
-import { upsertConnection } from "@undercroft/db/repos";
 
-export type WorkerOutcome<T> = { ok: true; value: T } | { ok: false; reason: WorkerFailure };
+export type WorkerOutcome<T> =
+  | { ok: true; value: T }
+  | {
+      ok: false;
+      reason: WorkerFailure;
+      /** The worker's own sentence, for the one refusal an author can act on: a failed query. */
+      message?: string;
+    };
 
 /**
  * Why a call did not succeed, in the three shapes a caller acts on differently.
@@ -40,7 +46,15 @@ export type WorkerOutcome<T> = { ok: true; value: T } | { ok: false; reason: Wor
  * reconnecting the source and granting the permission that was withheld. Worded as an
  * outage -- which is what it was -- it sends them off to wait for a service that is fine.
  */
-export type WorkerFailure = "unreachable" | "refused" | "scope-insufficient";
+export type WorkerFailure =
+  | "unreachable"
+  | "refused"
+  | "scope-insufficient"
+  | "credential-rejected"
+  /** The worker's 409: the tenant already has a run of this kind going. */
+  | "in-progress"
+  /** The author's SQL did not run. The outcome carries Postgres's sentence about it. */
+  | "query-failed";
 
 export interface StoreCredentialInput {
   readonly source: string;
@@ -48,19 +62,49 @@ export interface StoreCredentialInput {
   readonly externalAccountId: string;
   readonly scope: string;
   readonly credential: CredentialInput;
+  /** Prove a pasted token against the provider before sealing it. See the worker. */
+  readonly validate?: boolean;
 }
+
+/**
+ * Starting a run has one more answer than the other verbs: "already running, as this id".
+ * Not a failure to retry and not a refusal to word as one -- the person pressing Run now
+ * wants to watch the run that exists.
+ */
+export type TriggerOutcome =
+  | { readonly ok: true; readonly runId: string }
+  | { readonly ok: false; readonly reason: "in-progress"; readonly runId: string }
+  | { readonly ok: false; readonly reason: WorkerFailure };
 
 export interface WorkerClient {
   storeCredential: (input: StoreCredentialInput) => Promise<WorkerOutcome<StoreCredentialResponse>>;
   browseScope: (input: {
     source: string;
     tenantId: string;
-    kind: "labels";
+    kind: "labels" | "organisations";
   }) => Promise<WorkerOutcome<BrowseScopeResponse>>;
   revokeConnection: (input: {
     source: string;
     tenantId: string;
   }) => Promise<WorkerOutcome<RevokeConnectionResponse>>;
+  /** Start an ingest for one source. `triggeredBy` is an `app_user` uuid, never an address. */
+  triggerIngest: (input: {
+    source: string;
+    tenantId: string;
+    triggeredBy: string;
+  }) => Promise<TriggerOutcome>;
+  /** Build one model and wait for it: the editor is looking. */
+  buildModel: (input: {
+    tenantId: string;
+    model: string;
+    triggeredBy: string;
+  }) => Promise<WorkerOutcome<BuildModelResponse>>;
+  /** The rows a failed test stored, as the worker reads them for an admin. */
+  dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
+  /** SQL an author wrote, run as the tenant's read-only login. */
+  runQuery: (input: RunQueryRequest) => Promise<WorkerOutcome<TableResult>>;
+  /** The tenant's analytics schema, as that login sees it. */
+  readSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
 }
 
 /**
@@ -82,23 +126,42 @@ export interface HttpWorkerConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** A synchronous build: the worker's two-minute deadline, and a little for the rows. */
+const BUILD_DEADLINE_MS = 150_000;
 
+/** The worker's answer for SQL that did not run, whose body names why. */
+const BAD_REQUEST = 400;
 /** The worker's answer for a credential Google refused. Every other status is a refusal. */
 const FORBIDDEN = 403;
+/** The worker's answer for a run already in progress, whose body names it. */
+const CONFLICT = 409;
+/** The worker's answer for a pasted credential the provider turned away. */
+const UNPROCESSABLE = 422;
 
-export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
-  const doFetch = config.fetch ?? globalThis.fetch;
-  const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+/** Where the worker is and how to reach it. Passed rather than closed over, so the two
+ * request helpers below can live at module scope and be read on their own. */
+interface WorkerTransport {
+  readonly doFetch: (input: string, init?: RequestInit) => Promise<Response>;
+  readonly timeoutMs: number;
+  readonly baseUrl: string;
+  readonly triggerToken: string;
+}
 
-  async function post<T>(path: string, body: unknown): Promise<WorkerOutcome<T>> {
+/** One POST to the worker, with its refusals mapped onto `WorkerOutcome`. */
+function postTo(t: WorkerTransport): typeof post {
+  async function post<T>(
+    path: string,
+    body: unknown,
+    deadlineMs: number = t.timeoutMs,
+  ): Promise<WorkerOutcome<T>> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), deadlineMs);
     try {
-      const response = await doFetch(`${config.baseUrl}${path}`, {
+      const response = await t.doFetch(`${t.baseUrl}${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${config.triggerToken}`,
+          authorization: `Bearer ${t.triggerToken}`,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -111,6 +174,12 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
         if (response.status === FORBIDDEN) {
           return { ok: false, reason: "scope-insufficient" };
         }
+        if (response.status === UNPROCESSABLE) {
+          return { ok: false, reason: "credential-rejected" };
+        }
+        if (response.status === CONFLICT) {
+          return { ok: false, reason: "in-progress" };
+        }
         return { ok: false, reason: "refused" };
       }
       return { ok: true, value: (await response.json()) as T };
@@ -121,99 +190,119 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     }
   }
 
+  /**
+   * The one call whose refusal body IS read: a 409 `run_in_progress` carries the running
+   * run's id in `details`, which is a run id and never a token. Every other status is
+   * handled as `post` handles it.
+   */
+  return post;
+}
+
+/** Starting a run, whose refusal carries a runId when one is already in flight. */
+function triggerOn(t: WorkerTransport): typeof trigger {
+  async function trigger(input: {
+    source: string;
+    tenantId: string;
+    triggeredBy: string;
+  }): Promise<TriggerOutcome> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), t.timeoutMs);
+    try {
+      const response = await t.doFetch(`${t.baseUrl}/v1/runs/ingest`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${t.triggerToken}`,
+        },
+        body: JSON.stringify({ ...input, trigger: "manual", chain: true }),
+        signal: controller.signal,
+      });
+      if (response.status === CONFLICT) {
+        const body = (await response.json().catch(() => null)) as {
+          code?: unknown;
+          details?: unknown;
+        } | null;
+        if (body?.code === "run_in_progress" && Array.isArray(body.details)) {
+          return { ok: false, reason: "in-progress", runId: String(body.details[0] ?? "") };
+        }
+        return { ok: false, reason: "refused" };
+      }
+      if (!response.ok) {
+        return { ok: false, reason: "refused" };
+      }
+      const started = (await response.json()) as { runId: string };
+      return { ok: true, runId: started.runId };
+    } catch {
+      return { ok: false, reason: "unreachable" };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return trigger;
+}
+
+export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
+  const doFetch = config.fetch ?? globalThis.fetch;
+  const t: WorkerTransport = {
+    doFetch: config.fetch ?? globalThis.fetch,
+    timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    baseUrl: config.baseUrl,
+    triggerToken: config.triggerToken,
+  };
+  const post = postTo(t);
+  const trigger = triggerOn(t);
+
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
     browseScope: (input) => post("/v1/connections/browse", input),
     revokeConnection: (input) => post("/v1/connections/revoke", input),
+    triggerIngest: trigger,
+    // The worker's own build deadline plus room for the rows; the default would cut a
+    // build that is legitimately slow and report it as unreachable.
+    buildModel: (input) => post("/v1/models/build", input, BUILD_DEADLINE_MS),
+    dqFailures: (input) => post("/v1/dq/failures", input),
+    runQuery: query,
+    readSchema: (input) => post("/v1/queries/schema", input),
   };
-}
-
-/**
- * A worker that answers from memory.
- *
- * A real implementation of the seam, not a mock: it records what it was asked and refuses
- * anything it was not set up for, so a flow that called the wrong verb fails loudly instead
- * of passing on a default.
- */
-export class InMemoryWorkerClient implements WorkerClient {
-  readonly stored: StoreCredentialInput[] = [];
-  readonly revoked: { source: string; tenantId: string }[] = [];
-  #labels: BrowseScopeResponse["items"] = [];
-  #failWith: WorkerFailure | null = null;
-  #exec: SqlExecutor | null = null;
 
   /**
-   * Honour the side effect the real worker has: a stored credential leaves a connected
-   * `ops.connection` row behind.
-   *
-   * Not decoration. `app.connection_detail` has a foreign key to that row, so a caller that
-   * writes an account label after a successful store depends on it existing. A fake that
-   * skipped it would make the callback pass here and fail against the real worker -- which
-   * is the failure mode `.claude/rules/tests.md` means by "a fake that never refuses makes a
-   * broken boundary look fine".
+   * The other call whose refusal body IS read: a 400 `query_failed` carries Postgres's
+   * sentence about the author's SQL, which quotes the author's own text and nothing else,
+   * and is the one thing that lets them fix it. Every other status is handled as `post`
+   * handles it.
    */
-  backedBy(exec: SqlExecutor): this {
-    this.#exec = exec;
-    return this;
-  }
-
-  /** Make every call fail, to exercise the caller's failure path. */
-  failing(reason: WorkerFailure): this {
-    this.#failWith = reason;
-    return this;
-  }
-
-  withLabels(labels: BrowseScopeResponse["items"]): this {
-    this.#labels = labels;
-    return this;
-  }
-
-  async storeCredential(
-    input: StoreCredentialInput,
-  ): Promise<WorkerOutcome<StoreCredentialResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    this.stored.push(input);
-    if (this.#exec !== null) {
-      await upsertConnection(this.#exec, {
-        tenantId: input.tenantId,
-        source: input.source,
-        status: "connected",
-        externalAccountId: input.externalAccountId,
-        scope: input.scope,
+  async function query(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), t.timeoutMs);
+    try {
+      const response = await doFetch(`${config.baseUrl}/v1/queries/run`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${config.triggerToken}`,
+        },
+        body: JSON.stringify(input),
+        signal: controller.signal,
       });
+      if (response.status === BAD_REQUEST) {
+        const body = (await response.json().catch(() => null)) as {
+          code?: unknown;
+          message?: unknown;
+        } | null;
+        if (body?.code === "query_failed" && typeof body.message === "string") {
+          return { ok: false, reason: "query-failed", message: body.message };
+        }
+        return { ok: false, reason: "refused" };
+      }
+      if (!response.ok) {
+        return { ok: false, reason: "refused" };
+      }
+      return { ok: true, value: (await response.json()) as TableResult };
+    } catch {
+      return { ok: false, reason: "unreachable" };
+    } finally {
+      clearTimeout(timer);
     }
-    return Promise.resolve({
-      ok: true,
-      value: {
-        tenantId: input.tenantId,
-        source: input.source,
-        status: "connected",
-        expiresAt: input.credential.expiresAt,
-      },
-    });
-  }
-
-  browseScope(): Promise<WorkerOutcome<BrowseScopeResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    return Promise.resolve({ ok: true, value: { items: this.#labels } });
-  }
-
-  revokeConnection(input: {
-    source: string;
-    tenantId: string;
-  }): Promise<WorkerOutcome<RevokeConnectionResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    this.revoked.push(input);
-    return Promise.resolve({ ok: true, value: { revokedUpstream: true } });
-  }
-
-  #fail<T>(): Promise<WorkerOutcome<T>> {
-    return Promise.resolve({ ok: false, reason: this.#failWith ?? "unreachable" });
   }
 }

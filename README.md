@@ -66,14 +66,19 @@ and any BI tool that speaks Postgres.
 
 ## Development
 
+Every operation goes through [Task](https://taskfile.dev) (`brew install go-task` or see
+[the install docs](https://taskfile.dev/installation)) — never a bare `bun run` typed by
+hand. `task --list-all` enumerates everything; see `.claude/rules/tooling.md` for why.
+
 ```sh
 bun install
-bun run verify      # typecheck, lint, format, tests -- offline, no credentials needed
-bun run migrate     # apply the schema to a real Postgres (UNDERCROFT_POSTGRES_DSN)
+task ci:verify      # typecheck, lint, format, tests -- offline, no credentials needed
+task dev:run        # the whole local stack -- Postgres, MinIO, Kestra, the worker, the
+                     # control plane, the UI -- with hot reload, one command
 ```
 
-`verify` is the gate and runs with no Docker, no network and no credentials. `bun run
-itest` adds the Docker-backed integration tier.
+`ci:verify` is the gate and runs with no Docker, no network and no credentials. `task
+ci:itest` adds the Docker-backed integration tier.
 
 Signing in to the control plane is **invite-only**, by Google or a one-time code.
 [docs/runbook/sign-in-setup.md](docs/runbook/sign-in-setup.md) walks through the OAuth client,

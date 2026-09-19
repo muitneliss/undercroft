@@ -1,16 +1,8 @@
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: The 50 sites whose type the compiler could print are annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type is supplied contextually and writing it out means naming a library-internal type that will drift on the next upgrade.
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags high-entropy string literals, and these are test fixtures with invented values (per .claude/rules/pii.md, fixtures are invented rather than anonymised), plus base64url sample tokens and SQL role names. No real credential is in any tracked file; CI enforces that separately.
-// biome-ignore-all lint/suspicious/useAwait: An async function with no await, because the port it implements returns a promise. The contract is the signature, not the body -- `.claude/rules/tests.md` and the ESLint config this replaced both called this out by name.
-
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { canonicalJson, createStampSource, TestClock } from "@undercroft/core";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { canonicalJson, createLogger, createStampSource, TestClock } from "@undercroft/core";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
@@ -52,6 +44,8 @@ beforeEach(async () => {
   await db.exec(
     "CREATE TABLE raw.records_hubspot PARTITION OF raw.records FOR VALUES IN ('hubspot')",
   );
+  // Seeded as the superuser; from here on every statement runs as the worker does.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {
@@ -132,6 +126,112 @@ describe("the lake records API", () => {
     const json = (await res.json()) as { code: string; details: string[] };
     expect(json.code).toBe("invalid_request");
     expect(json.details.length).toBeGreaterThan(0);
+  });
+
+  it("every batch is a run in the ledger, and batches under one id add up", async () => {
+    function batch(id: string): unknown {
+      return {
+        source: "hubspot",
+        tenantId: "CASE-1",
+        runId: "ext-1",
+        records: [
+          {
+            entity: "deals",
+            sourceRecordId: id,
+            sourceUpdatedAt: null,
+            payloadText: `{"id":"${id}"}`,
+          },
+        ],
+      };
+    }
+    expect((await post(batch("1"))).status).toBe(200);
+    expect((await post(batch("2"))).status).toBe(200);
+
+    const { rows } = await db.query<{ trigger: string; status: string; created: number }>(
+      "SELECT trigger, status, created FROM ops.run WHERE id = 'ext-1'",
+    );
+    expect(rows[0]).toEqual({ trigger: "lake-api", status: "ok", created: 2 });
+  });
+
+  it("a run id that already belongs to another tenant is refused before anything lands", async () => {
+    await db.asSuperuser((tx) => tx.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-2')"));
+    expect(
+      (
+        await post({
+          source: "hubspot",
+          tenantId: "CASE-1",
+          runId: "shared",
+          records: [
+            { entity: "deals", sourceRecordId: "1", sourceUpdatedAt: null, payloadText: "{}" },
+          ],
+        })
+      ).status,
+    ).toBe(200);
+    const blobs = (await backing.list("_blobs/")).length;
+
+    const res = await post({
+      source: "hubspot",
+      tenantId: "CASE-2",
+      runId: "shared",
+      records: [{ entity: "deals", sourceRecordId: "9", sourceUpdatedAt: null, payloadText: "{}" }],
+    });
+    expect(res.status).toBe(400);
+    expect((await backing.list("_blobs/")).length).toBe(blobs);
+  });
+});
+
+describe("the request line and the error boundary", () => {
+  function lines(): { sink: string[]; log: ReturnType<typeof createLogger> } {
+    const sink: string[] = [];
+    return { sink, log: createLogger({ component: "worker", sink: (line) => sink.push(line) }) };
+  }
+
+  it("a healthy request answers with an x-request-id and writes exactly one request line", async () => {
+    const { sink, log } = lines();
+    const res = await createLakeApi({ lake, exec: db, serviceToken: "svc-token", log }).request(
+      "/health",
+    );
+    expect(res.status).toBe(200);
+    const requestId = res.headers.get("x-request-id");
+    expect(requestId).not.toBeNull();
+
+    const events = sink.map((line) => JSON.parse(line) as { event: string; requestId?: string });
+    expect(events.map((e) => e.event)).toEqual(["request"]);
+    expect(events[0]?.requestId).toBe(requestId ?? "");
+  });
+
+  it("an unexpected failure is a 500 whose body repeats none of the error, and the log has the type", async () => {
+    const { sink, log } = lines();
+    // A specs directory holding no spec: the ingest verb reads `demo.yaml` and gets ENOENT,
+    // which is the kind of error nobody mapped -- and whose message names a filesystem path.
+    const specsDir = mkdtempSync(join(tmpdir(), "undercroft-empty-specs-"));
+    const res = await createLakeApi({
+      lake,
+      exec: db,
+      serviceToken: "svc-token",
+      log,
+      specsDir,
+    }).request("/v1/runs/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer svc-token" },
+      body: JSON.stringify({ source: "demo", tenantId: "CASE-1" }),
+    });
+    expect(res.status).toBe(500);
+    const json = (await res.json()) as { code: string; message: string };
+    expect(json.code).toBe("internal_error");
+    expect(json.message).not.toContain(specsDir);
+
+    const events = sink.map(
+      (line) => JSON.parse(line) as { event: string; errorType?: string; status?: number },
+    );
+    // The spec is read before a run is opened, so a missing one leaves no run behind: the
+    // boundary's two lines are the whole record. The failure line carries the type, never
+    // the path in the message.
+    expect(events.map((e) => e.event)).toEqual(["request_failed", "request"]);
+    expect(events[0]?.errorType).toBe("Error");
+    expect(events[1]?.status).toBe(500);
+    const { rows } = await db.query<{ n: string }>("SELECT count(*)::text AS n FROM ops.run");
+    expect(rows[0]?.n).toBe("0");
   });
 });
 
