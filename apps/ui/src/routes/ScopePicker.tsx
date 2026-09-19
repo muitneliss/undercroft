@@ -2,9 +2,10 @@
  * Choosing what a connected source may read.
  *
  * This screen is the difference between a consent card that tells the truth and one that
- * does not. The card promises "PDFs inside the folders you select. No other folder is read"
- * and "headers and PDF attachments in {{labels}}"; without somewhere to make that selection,
- * connecting Gmail would read an entire mailbox while the screen claimed otherwise.
+ * does not. The card promises "the documents inside the folders you select, in the file types
+ * you allow" and "headers and matching attachments in {{labels}}"; without somewhere to make
+ * that selection, connecting Gmail would read an entire mailbox while the screen claimed
+ * otherwise.
  *
  * THE TWO SOURCES CHOOSE DIFFERENTLY, AND FOR A REASON WORTH KNOWING.
  *
@@ -51,13 +52,14 @@ import { useNavigate } from "react-router-dom";
 import type { Connection, Source } from "@/api/types.ts";
 import { SOURCE_LABEL } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
+import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
 import { LabelIndex } from "@/components/LabelIndex.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { openDrivePicker } from "@/lib/drivePicker.ts";
 import type { BrowsedLabel } from "@/lib/labelIndex.ts";
-import { type ChosenFile, type ScopeDraft, useUiStore } from "@/store.ts";
+import { type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 /** Which lead each source's picker opens with. HubSpot never reaches this leaf. */
@@ -77,6 +79,7 @@ const NOTHING_CHOSEN: Omit<ScopeDraft, "source"> = {
   files: [],
   organisation: null,
   entities: [],
+  fileTypes: [],
 };
 
 /**
@@ -103,6 +106,9 @@ function useStoredScope(source: Source, connections: readonly Connection[] | und
           ? null
           : { id: current.externalAccountId, name: current.externalAccountLabel },
       entities: current.config.entities ?? [],
+      // A connection never scoped at all has no `fileTypes` to read back; PDF-only is what
+      // every source has always meant until an admin visits this screen and says otherwise.
+      fileTypes: current.config.fileTypes ?? ["application/pdf"],
     });
   }, [current, source, setDraft]);
 }
@@ -124,12 +130,13 @@ function selectionFor(
         id: items.find((i) => i.name === name)?.id ?? name,
         name,
       })),
+      fileTypes: chosen.fileTypes,
     };
   }
   if (source === "xero") {
     return { organisation: chosen.organisation, entities: chosen.entities };
   }
-  return { files: chosen.files };
+  return { files: chosen.files, fileTypes: chosen.fileTypes };
 }
 
 export function ScopePicker({
@@ -276,10 +283,20 @@ function SourceChoice({
     );
   }
   if (source === "gmail") {
-    return <GmailChoice source={source} items={items} chosen={chosen.labels} />;
+    return (
+      <>
+        <GmailChoice source={source} items={items} chosen={chosen.labels} />
+        <FileTypeChoice source={source} fileTypes={chosen.fileTypes} />
+      </>
+    );
   }
   if (source === "drive") {
-    return <DriveChoice source={source} files={chosen.files} />;
+    return (
+      <>
+        <DriveChoice source={source} chosen={chosen} />
+        <FileTypeChoice source={source} fileTypes={chosen.fileTypes} />
+      </>
+    );
   }
   return null;
 }
@@ -345,10 +362,10 @@ function GmailChoice({
  */
 function DriveChoice({
   source,
-  files,
+  chosen,
 }: {
   source: Source;
-  files: readonly ChosenFile[];
+  chosen: Omit<ScopeDraft, "source">;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const setDraft = useUiStore((s) => s.setScopeDraft);
@@ -367,8 +384,11 @@ function DriveChoice({
           if (picker === undefined || picker === null) {
             return;
           }
-          void openDrivePicker(picker, (picked) => {
-            setDraft({ source, labels: [], files: picked, organisation: null, entities: [] });
+          void openDrivePicker(picker, chosen.fileTypes, (picked) => {
+            // Spread `chosen` rather than re-listing every other field: this used to hardcode
+            // `fileTypes` (and every field but `files`) back to empty, so picking one more
+            // file after choosing "Word documents" silently reset the run to "any file type".
+            setDraft({ ...chosen, source, files: picked });
           });
         }}
       >
@@ -378,7 +398,7 @@ function DriveChoice({
         <p className="note">{t("scopePicker.pickerUnavailable")}</p>
       ) : (
         <ul className="stack stack--tight">
-          {files.map((file) => (
+          {chosen.files.map((file) => (
             <li key={file.id}>{file.name}</li>
           ))}
         </ul>

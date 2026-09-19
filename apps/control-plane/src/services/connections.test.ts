@@ -306,6 +306,37 @@ describe("choosing a scope", () => {
     expect(gmail?.config.labels).toEqual(["Invoices"]);
   });
 
+  it("a scope saved with no file types defaults to PDF only", async () => {
+    // GMAIL_SCOPE carries no `fileTypes` key at all -- exactly what every selection saved
+    // before this field existed looks like -- and the card must still say PDF only.
+    await setScope(db, {
+      tenantId: TENANT,
+      source: "gmail",
+      selectionJson: GMAIL_SCOPE,
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    expect(gmail?.config.fileTypes).toEqual(["application/pdf"]);
+  });
+
+  it("a scope's file types are surfaced on the card", async () => {
+    await setScope(db, {
+      tenantId: TENANT,
+      source: "gmail",
+      selectionJson: JSON.stringify({
+        labels: [{ id: "Label_8", name: "Invoices" }],
+        fileTypes: ["application/vnd.ms-excel", "text/csv"],
+      }),
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    expect(gmail?.config.fileTypes).toEqual(["application/vnd.ms-excel", "text/csv"]);
+  });
+
   it("a selection that does not match the source is refused", async () => {
     // The firing side. A picker that saved a Drive shape under gmail would otherwise store
     // something the collector cannot read, and the run would fail far from the cause.
