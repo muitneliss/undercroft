@@ -68,6 +68,15 @@ const FIXTURES: Record<string, string> = {
     export const x = 1;
   `,
 
+  // Prose that NAMES the banned spellings without being one. The rules first shipped matching
+  // any comment containing the string, which made them fire on their own documentation.
+  "packages/demo/src/prose.ts": `
+    /**
+     * Explains why // biome-ignore-all lint: is banned, and mentions ast-grep-ignore too.
+     */
+    export const x = 1;
+  `,
+
   // no-ast-grep-ignore
   "packages/demo/src/escape.ts": `
     // ast-grep-ignore
@@ -167,6 +176,10 @@ describe("the biome-ignore-all ban", () => {
   it("stays quiet on a source file that carries none", () => {
     expect(rulesOn("packages/demo/src/clean.ts")).toEqual([]);
     expect(rulesOn("apps/ui/src/clean.tsx")).toEqual([]);
+  });
+
+  it("stays quiet on prose that NAMES a suppression without being one", () => {
+    expect(rulesOn("packages/demo/src/prose.ts")).toEqual([]);
   });
 
   it("leaves a test suite its headers, which biome.jsonc answers instead", () => {

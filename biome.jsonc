@@ -634,6 +634,20 @@
       "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
     },
 
+    // The deploy client, read top to bottom as the sequence of a deploy: configure, call,
+    // trigger, wait, verify, smoke, report. Its long functions are split -- `verifyService`
+    // answers one service -- but the FILE stays one file, and that is deliberate.
+    //
+    // `deployment.md` makes this script the only channel for a change to the running system
+    // and requires a deploy to be verified rather than assumed. Cutting it into three modules
+    // inside a lint migration puts churn on the one path whose failure mode is a production
+    // deploy that reports success, for a rule about line count. Split it in a change whose
+    // diff is about the deploy client, where the smoke test that follows is the review.
+    {
+      "includes": ["scripts/dokploy.ts"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
     // The argument parser walks `argv` by index because an option CONSUMES THE NEXT ELEMENT
     // (`--tenant CASE-0042`), so the loop advances by one inside its own body. `for...of` has
     // no cursor to advance.

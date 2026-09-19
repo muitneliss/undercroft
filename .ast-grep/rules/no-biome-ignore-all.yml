@@ -28,7 +28,7 @@ ignores:
   - "**/*.test.ts"
 rule:
   kind: comment
-  regex: "biome-ignore-all"
+  regex: "^//\\s*biome-ignore-all\\b"
 ---
 id: no-biome-ignore-all-tsx
 language: tsx
@@ -43,7 +43,7 @@ ignores:
   - "**/*.test.tsx"
 rule:
   kind: comment
-  regex: "biome-ignore-all"
+  regex: "^//\\s*biome-ignore-all\\b"
 ---
 # The two spellings that silence the GritQL plugins, banned EVERYWHERE -- test files included.
 #
@@ -60,7 +60,7 @@ message: >-
   the individual rule, or answer it in biome.jsonc. See .claude/rules/suppressions.md.
 rule:
   kind: comment
-  regex: "biome-ignore(-all)?\\s+(lint|lint/plugin|plugin/[a-z]+)\\s*:"
+  regex: "^//\\s*biome-ignore(-all)?\\s+(lint|lint/plugin|plugin/[a-z]+)\\s*:"
 ---
 id: no-blanket-biome-ignore-tsx
 language: tsx
@@ -70,7 +70,7 @@ message: >-
   the individual rule, or answer it in biome.jsonc. See .claude/rules/suppressions.md.
 rule:
   kind: comment
-  regex: "biome-ignore(-all)?\\s+(lint|lint/plugin|plugin/[a-z]+)\\s*:"
+  regex: "^//\\s*biome-ignore(-all)?\\s+(lint|lint/plugin|plugin/[a-z]+)\\s*:"
 ---
 # The second escape hatch. `bun run lint:rules` is the hard gate for `state.md`, `layering.md`
 # and this file; an `ast-grep-ignore` turns any of them off at a line, and nothing reports it.
@@ -83,7 +83,7 @@ message: >-
   Fix the code, or change the rule deliberately. See .claude/rules/suppressions.md.
 rule:
   kind: comment
-  regex: "ast-grep-ignore"
+  regex: "^//\\s*ast-grep-ignore\\b"
 ---
 id: no-ast-grep-ignore-tsx
 language: tsx
@@ -93,4 +93,4 @@ message: >-
   Fix the code, or change the rule deliberately. See .claude/rules/suppressions.md.
 rule:
   kind: comment
-  regex: "ast-grep-ignore"
+  regex: "^//\\s*ast-grep-ignore\\b"
