@@ -681,7 +681,7 @@
     // reordering and insertion, neither of which these lists do.
     {
       "includes": [
-        "apps/ui/src/components/QuestionBuilder.tsx",
+        "apps/ui/src/components/QuestionFilters.tsx",
         "apps/ui/src/components/ResultTable.tsx",
         "apps/ui/src/components/charts/ChartFrame.tsx"
       ],
