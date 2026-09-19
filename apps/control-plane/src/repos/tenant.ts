@@ -71,6 +71,17 @@ export async function createTenant(
 }
 
 /**
+ * Remove a tenant row that was created moments ago and cannot be kept.
+ *
+ * One caller: `services/tenants.create`, undoing its own insert when the roles for the new
+ * id cannot be provisioned. There is no other deletion path in the product -- a customer
+ * with data is never removed by a request -- and the name says so: this is not `deleteTenant`.
+ */
+export async function undoCreateTenant(exec: SqlExecutor, tenantId: string): Promise<void> {
+  await exec.query("DELETE FROM ops.tenant WHERE id = $1", [tenantId]);
+}
+
+/**
  * Change a tenant's display name. The id is never touched.
  *
  * The `SET` list names one column deliberately. `ops.tenant.id` becomes an S3 key prefix in

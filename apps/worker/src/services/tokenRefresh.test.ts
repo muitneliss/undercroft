@@ -36,6 +36,8 @@ beforeEach(async () => {
     "INSERT INTO ops.connection (tenant_id, source, status) VALUES ($1, $2, 'connected')",
     [INPUT.tenantId, INPUT.source],
   );
+  // Seeded as the superuser; from here on every statement runs as the worker does.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {

@@ -7,3 +7,13 @@
  */
 
 export { accessToken, needsRefresh, REFRESH_SKEW_MS } from "./credentials.ts";
+export {
+  MACROS,
+  parseRunResults,
+  PASSWORD_VAR,
+  type ProjectInput,
+  type ProjectModel,
+  renderProject,
+  SOURCES_YML,
+} from "./dbtProject.ts";
+export { grantExpiryFor } from "./grantExpiry.ts";

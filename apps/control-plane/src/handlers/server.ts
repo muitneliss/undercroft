@@ -13,6 +13,17 @@
  * (Kestra -> worker -> lake -> raw) untouched. ADR 0004.
  */
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
+// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`, and DOM globals in .tsx files. tsc resolves all of them, and tsc is the check that binds here.
+// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
+// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
+// biome-ignore-all lint/performance/noBarrelFile: `index.ts` is each package's public entry point, which is the seam `.claude/rules/layering.md` is built on and what `.claude/rules/tests.md` means by testing through the public API. The re-export cost the rule is about applies to a bundle; these are workspace packages consumed by name.
+// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
+// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
+// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
+
 import { extname, join, normalize, sep } from "node:path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
@@ -20,7 +31,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { Hono } from "hono";
 import { isAdminIn } from "../services/authz.ts";
 import { appUserForEmail } from "../services/invite.ts";
-import { type GoogleIngestConfig, startConsent } from "../services/oauth.ts";
+import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
@@ -84,6 +95,8 @@ export interface ServerDeps {
    * page while verification is still pending.
    */
   readonly googleIngest?: GoogleIngestConfig;
+  /** The Xero client. Absent means Xero reads "not connected" and its button says why. */
+  readonly xero?: ProviderConfig;
   /**
    * The worker: the only process holding the master key, and so the only one that can seal
    * a credential. Absent disables the consent flow with it. ADR 0016.
@@ -91,18 +104,44 @@ export interface ServerDeps {
   readonly worker?: WorkerClient;
 }
 
-/**
- * The tRPC endpoint, and the one place a request's locale and caller are resolved.
- *
- * Both are read ONCE, from the request, and carried on the context: two concurrent requests
- * in two languages must not answer each other's, and every refusal and every email this
- * request causes is worded in the locale resolved here. See `../i18n`.
- */
-function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
+export function createServer(deps: ServerDeps): Hono {
+  const app = new Hono();
+
+  app.get("/api/health", (c) => c.json({ ok: true }));
+
+  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
+  // matter: the catch-all answers any GET with index.html, so an auth route registered
+  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
+  // the app shell -- a sign-in that silently never completes.
+  if (deps.auth !== undefined) {
+    const auth = deps.auth;
+    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+  }
+
+  // The per-tenant consent callback, and the same hazard: registered here so it wins over
+  // the catch-all at the foot of this function. Unconditional, because a callback that 404s
+  // is a diagnosable misconfiguration whereas one that serves the app shell is a consent
+  // that appears to work and never completes. With no client or worker configured the
+  // service refuses it, which is the honest answer.
+  registerOAuthRoutes(app, {
+    exec: deps.exec,
+    ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
+    ...(deps.xero === undefined ? {} : { xero: deps.xero }),
+    ...(deps.worker === undefined ? {} : { worker: deps.worker }),
+    // Through `authz.isAdminIn`, which is the same policy `tenantProcedure` resolves. Asking
+    // `roleFor` here instead -- as this line first did -- reads a `tenant_member` row that a
+    // superadmin deliberately does not have, so the platform administrator who is the only
+    // person able to set a fresh deployment up was the one person who could never finish a
+    // consent.
+    hasAdminAuthority: (tenantId, caller) =>
+      isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
+    resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
+  });
+
   app.all("/trpc/*", async (c) => {
-    const { headers } = c.req.raw;
+    const headers = c.req.raw.headers;
     const { user, sessionId, superadmin } = await resolveCaller(deps, headers);
-    const { auth } = deps;
+    const auth = deps.auth;
     // Resolved once, from the request, and carried on the context. Every refusal this
     // request produces and every email it causes to be sent is worded in it -- including the
     // invitation, which goes to somebody whose own language nobody here knows. See `../i18n`.
@@ -144,23 +183,14 @@ function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
             {
               exec: deps.exec,
               ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
+              ...(deps.xero === undefined ? {} : { xero: deps.xero }),
             },
             start,
           ),
       }),
     });
   });
-}
 
-/**
- * The built SPA, registered LAST so /api and /trpc always win over the catch-all.
- *
- * A real built asset gets that file; anything else gets index.html, because a 404 is a blank
- * page in the browser and a deep link like /tenants/42 is the SPA's to resolve. A hashed
- * asset filename is immutable; index.html must never be, or a cached shell keeps pointing at
- * the previous build's bundle.
- */
-function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
   // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a
   // real built asset gets that file; anything else gets index.html, because the router lives
   // in the browser and a deep link like /tenants/42 is the SPA's to resolve, not a 404.
@@ -186,44 +216,6 @@ function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
       });
     });
   }
-}
-
-export function createServer(deps: ServerDeps): Hono {
-  const app = new Hono();
-
-  app.get("/api/health", (c) => c.json({ ok: true }));
-
-  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
-  // matter: the catch-all answers any GET with index.html, so an auth route registered
-  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
-  // the app shell -- a sign-in that silently never completes.
-  if (deps.auth !== undefined) {
-    const { auth } = deps;
-    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
-  }
-
-  // The per-tenant consent callback, and the same hazard: registered here so it wins over
-  // the catch-all at the foot of this function. Unconditional, because a callback that 404s
-  // is a diagnosable misconfiguration whereas one that serves the app shell is a consent
-  // that appears to work and never completes. With no client or worker configured the
-  // service refuses it, which is the honest answer.
-  registerOAuthRoutes(app, {
-    exec: deps.exec,
-    ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
-    ...(deps.worker === undefined ? {} : { worker: deps.worker }),
-    // Through `authz.isAdminIn`, which is the same policy `tenantProcedure` resolves. Asking
-    // `roleFor` here instead -- as this line first did -- reads a `tenant_member` row that a
-    // superadmin deliberately does not have, so the platform administrator who is the only
-    // person able to set a fresh deployment up was the one person who could never finish a
-    // consent.
-    hasAdminAuthority: (tenantId, caller) =>
-      isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
-    resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
-  });
-
-  registerTrpcRoute(app, deps);
-
-  registerSpaRoutes(app, deps);
 
   return app;
 }
@@ -302,16 +294,13 @@ async function resolveCaller(
   };
 }
 
-/** Any run of leading `../` (or `..\`) segments, which is how a path escapes `dist`. */
-const LEADING_PARENT_SEGMENTS = /^(?:\.\.(?:\/|\\|$))+/u;
-
 /**
  * Map a URL path to a file inside `dist`, or null to fall back to index.html. Returns null
  * for `/` and for anything that escapes `dist` — a request for `/../secrets` normalizes and
  * is refused rather than reaching outside the build.
  */
 async function resolveAsset(dist: string, urlPath: string): Promise<string | null> {
-  const rel = normalize(decodeURIComponent(urlPath)).replace(LEADING_PARENT_SEGMENTS, "");
+  const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.(\/|\\|$))+/u, "");
   if (rel === "/" || rel === "." || rel === sep) {
     return null;
   }
@@ -321,3 +310,6 @@ async function resolveAsset(dist: string, urlPath: string): Promise<string | nul
   }
   return (await Bun.file(candidate).exists()) ? candidate : null;
 }
+
+export type { AppRouter } from "./router.ts";
+export { appRouter } from "./router.ts";

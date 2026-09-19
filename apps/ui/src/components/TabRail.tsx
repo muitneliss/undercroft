@@ -19,7 +19,7 @@
  * the division and not a count of the current customer's rows (see
  * `@/lib/divisions`), so the navigation never resizes under the cursor.
  *
- * FACE-DOWN, NOT HIDDEN. Three of the four divisions are sections of one
+ * FACE-DOWN, NOT HIDDEN. Six of the seven divisions are sections of one
  * customer's book and cannot be opened until a customer is chosen. They render
  * face-down -- the leaf turned over, showing unprinted board back -- rather than
  * disappearing, because a division that vanishes teaches nobody that it exists,

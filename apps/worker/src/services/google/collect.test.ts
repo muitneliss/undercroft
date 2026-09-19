@@ -41,6 +41,8 @@ beforeEach(async () => {
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
   fetcher = new InMemoryByteFetcher();
+  // Seeded as the superuser; from here on every statement runs as the worker does.
+  await db.become("undercroft_worker");
 });
 
 afterEach(async () => {
@@ -52,11 +54,15 @@ async function connect(source: string, selection: unknown): Promise<void> {
     "INSERT INTO ops.connection (tenant_id, source, status) VALUES ($1, $2, 'connected')",
     [TENANT, source],
   );
-  await writeConnectionDetail(db, {
-    tenantId: TENANT,
-    source,
-    selectionJson: JSON.stringify(selection),
-  });
+  // A chosen scope is an admin's decision recorded by the control plane; the worker may
+  // read it and never write it, so the fixture is planted as the superuser.
+  await db.asSuperuser((tx) =>
+    writeConnectionDetail(tx, {
+      tenantId: TENANT,
+      source,
+      selectionJson: JSON.stringify(selection),
+    }),
+  );
 }
 
 function collect(source: "gmail" | "drive") {

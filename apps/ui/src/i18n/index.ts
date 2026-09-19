@@ -91,7 +91,7 @@ useUiStore.subscribe((state) => {
 /**
  * A `t` bound to one language, for callers that are not components.
  *
- * The pure libraries (`@/lib/connectionState`, `@/lib/when`, `@/lib/verdict`) take a `t`
+ * The pure libraries (`@/lib/connectionState`, `@/lib/when`) take a `t`
  * rather than reaching for a global, which is what lets a test render the same card in both
  * languages in one run and compare them. Production code inside React should use
  * `useTranslation()` instead, so it re-renders when the language changes.

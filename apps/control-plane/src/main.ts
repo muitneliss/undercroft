@@ -10,12 +10,21 @@
  */
 
 import process from "node:process";
-import { createHttpEmailSender, createLogger, type EmailSender } from "@undercroft/core";
+import {
+  createHttpEmailSender,
+  createLogger,
+  describeError,
+  type EmailSender,
+} from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
+import { runAlerts } from "./services/alerts.ts";
 import { parseSuperadmins } from "./services/superadmin.ts";
 import { createHttpWorkerClient } from "./services/workerClient.ts";
+
+/** How often failures and expiries are looked for. A minute: a notice is not a page. */
+const ALERT_TICK_MS = 60_000;
 
 function required(name: string): string {
   const value = process.env[name];
@@ -79,6 +88,18 @@ const googleIngest =
           ? {}
           : { projectNumber: required("UNDERCROFT_GOOGLE_PROJECT_NUMBER") }),
       };
+
+/**
+ * The Xero client. The control plane runs the consent with it; the worker holds the same
+ * two values to refresh and revoke. Unset means Xero reads "not connected" and its button
+ * says why, exactly as the Google client does.
+ */
+const xeroClientId = optional("UNDERCROFT_XERO_CLIENT_ID");
+const xeroClientSecret = optional("UNDERCROFT_XERO_CLIENT_SECRET");
+const xero =
+  xeroClientId === undefined || xeroClientSecret === undefined || publicUrl === undefined
+    ? undefined
+    : { clientId: xeroClientId, clientSecret: xeroClientSecret, publicUrl };
 
 /**
  * The worker: the only process holding the master key, and so the only one that may seal a
@@ -172,6 +193,29 @@ if (superadmins.addresses.size === 0) {
   log.info("superadmins_configured", { count: superadmins.addresses.size });
 }
 
+/**
+ * The alert tick: failed runs and expiring grants and keys, emailed to a tenant's admins.
+ *
+ * Needs a sender and a public origin for the links, and starts only with both: a tick that
+ * claimed failures and then could not send would mark them as told about. With either
+ * absent the ledger still records everything; only the email is missing, and the boot line
+ * says so.
+ */
+if (email === undefined || publicUrl === undefined) {
+  log.warn("alerts_unconfigured", {
+    email: email !== undefined,
+    publicUrl: publicUrl !== undefined,
+  });
+} else {
+  const alertDeps = { exec, email, publicUrl, superadmins: superadmins.addresses, log };
+  setInterval(() => {
+    runAlerts(alertDeps).catch((error: unknown) => {
+      log.error("alerts_tick_failed", describeError(error));
+    });
+  }, ALERT_TICK_MS);
+  log.info("alerts_configured", { everyMs: ALERT_TICK_MS });
+}
+
 // The image bakes the built SPA in and points here; a bare `bun run` with the variable
 // unset serves the API alone. Spread so the optional stays absent rather than `undefined`,
 // which exactOptionalPropertyTypes forbids.
@@ -188,6 +232,7 @@ const app = createServer({
   ...(publicUrl === undefined ? {} : { publicUrl }),
   ...(uiDist === undefined ? {} : { uiDist }),
   ...(googleIngest === undefined ? {} : { googleIngest }),
+  ...(xero === undefined ? {} : { xero }),
   ...(worker === undefined ? {} : { worker }),
 });
 

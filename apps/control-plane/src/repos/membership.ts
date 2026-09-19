@@ -14,6 +14,9 @@
  * the membership is the filter, so the query belongs on this side of the join.
  */
 
+// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
+
+import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 
 export type Role = "viewer" | "member" | "admin";
@@ -57,6 +60,28 @@ export async function listForUser(exec: SqlExecutor, userId: string): Promise<Me
     [userId],
   );
   return rows.map((r) => ({ id: r.id, displayName: r.display_name, role: r.role }));
+}
+
+/** Someone an alert about a tenant goes to, in the language they read. */
+export interface Recipient {
+  readonly email: string;
+  readonly locale: Locale;
+}
+
+/**
+ * The tenant's administrators, with the language each has chosen.
+ *
+ * Admins only: an alert says "reconnect this source" or "the run failed", and those are an
+ * admin's to act on. A viewer told the same thing can do nothing but worry.
+ */
+export async function listAdmins(exec: SqlExecutor, tenantId: string): Promise<Recipient[]> {
+  const { rows } = await exec.query<{ email: string; locale: Locale }>(
+    `SELECT u.email, u.locale
+     FROM app.tenant_member m JOIN app.app_user u ON u.id = m.user_id
+     WHERE m.tenant_id = $1 AND m.role = 'admin' ORDER BY u.email`,
+    [tenantId],
+  );
+  return rows;
 }
 
 /** Everyone with access to one tenant, by address. */

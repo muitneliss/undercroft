@@ -12,31 +12,69 @@
  * entry so production code cannot import PGlite by accident.
  */
 
+// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
+
+// biome-ignore-all lint/style/useNamingConvention: `dataTypeID` is the field name pg and PGlite both report a result column under, and the seam carries it as they spell it; a camelCase respelling would be a second name for the same thing.
+
 import { PGlite } from "@electric-sql/pglite";
 import type { QueryResult, SqlExecutor } from "./executor.ts";
 
 export interface TestDatabase extends SqlExecutor {
-  /** Run a block as another role, resetting afterwards even on failure. */
+  /** Run a block as another role, returning to the role in force afterwards even on failure. */
   asRole: <T>(role: string, fn: (tx: SqlExecutor) => Promise<T>) => Promise<T>;
+  /**
+   * Run every statement from here on as `role`.
+   *
+   * A suite seeds its fixtures as the superuser and then becomes the role that runs the code
+   * under test in production -- `undercroft_worker` for a worker suite, `undercroft_app` for
+   * a control-plane one -- so a repo statement missing a grant fails in the gate rather than
+   * at 02:00 with "permission denied for table". Before this existed every suite ran as the
+   * superuser, and so did every service, and the grant model bound nowhere.
+   *
+   * PGlite's session user stays the superuser, so `asRole` can still step into any role
+   * from inside a `become`, and `RESET ROLE` would step out of it; that is why `asRole`
+   * returns to the become'd role rather than resetting.
+   */
+  become: (role: string) => Promise<void>;
+  /**
+   * Seed a fixture as the superuser from inside a `become`, then return to the role.
+   *
+   * For the rows a suite has to plant that its role may not write -- a chosen scope in
+   * `app.connection_detail` for a worker suite, say. The seam is named for what it is, so a
+   * reader can tell a fixture from a statement the code under test actually issues.
+   */
+  asSuperuser: <T>(fn: (tx: SqlExecutor) => Promise<T>) => Promise<T>;
   close: () => Promise<void>;
 }
 
 export async function createTestDatabase(): Promise<TestDatabase> {
   const db = new PGlite();
   await db.waitReady;
+  let current: string | null = null;
 
   const base: SqlExecutor = {
     async query<T = Record<string, unknown>>(
       text: string,
       params?: readonly unknown[],
-    ): Promise<{ rows: T[] }> {
+    ): Promise<QueryResult<T>> {
       const result = await db.query<T>(text, params as unknown[] | undefined);
-      return { rows: result.rows } satisfies QueryResult<T>;
+      return {
+        rows: result.rows,
+        fields: result.fields.map((f) => ({ name: f.name, dataTypeID: f.dataTypeID })),
+      };
     },
     async exec(sql: string): Promise<void> {
       await db.exec(sql);
     },
   };
+
+  async function restore(): Promise<void> {
+    if (current === null) {
+      await base.query("RESET ROLE");
+    } else {
+      await base.query(`SET ROLE ${current}`);
+    }
+  }
 
   return {
     ...base,
@@ -45,7 +83,19 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       try {
         return await fn(base);
       } finally {
-        await base.query("RESET ROLE");
+        await restore();
+      }
+    },
+    async become(role: string): Promise<void> {
+      current = role;
+      await base.query(`SET ROLE ${role}`);
+    },
+    async asSuperuser<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> {
+      await base.query("RESET ROLE");
+      try {
+        return await fn(base);
+      } finally {
+        await restore();
       }
     },
     async close(): Promise<void> {

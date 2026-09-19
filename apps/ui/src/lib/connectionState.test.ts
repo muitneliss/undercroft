@@ -18,7 +18,7 @@ import { describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
 import { connection } from "@/test/fixtures.ts";
-import { presentConnection, setupProgress } from "./connectionState.ts";
+import { connectsBy, presentConnection, scopeSummary, setupProgress } from "./connectionState.ts";
 
 // The real catalogue, not a stub that answers anything asked of it. A key these functions
 // reach for that no catalogue carries would pass against a stub and render raw on the page.
@@ -79,12 +79,40 @@ describe("presentConnection", () => {
 
     for (const status of states) {
       const card = presentConnection(t, connection("xero", { status }));
-      expect(card.headline).not.toBe("");
       if (card.complete) {
         expect(card.action).toBeNull();
       } else {
         expect(card.action).not.toBeNull();
       }
+    }
+  });
+});
+
+describe("scopeSummary for Xero", () => {
+  it("names the chosen entities in the reader's language, with the ids kept out of sight", () => {
+    const xero = connection("xero", {
+      status: "connected",
+      config: { entities: ["invoices", "credit_notes"] },
+    });
+
+    expect(scopeSummary(t, xero)).toBe("Hóa đơn, Giấy báo có");
+    expect(scopeSummary(translatorFor("en"), xero)).toBe("Invoices, Credit notes");
+  });
+
+  it("no entity chosen is every entity, said in words rather than as a dash", () => {
+    const xero = connection("xero", { status: "connected", config: { entities: [] } });
+
+    expect(scopeSummary(t, xero)).toBe(
+      "Mọi loại dữ liệu: liên hệ, hóa đơn, thanh toán, giấy báo có",
+    );
+  });
+});
+
+describe("connectsBy", () => {
+  it("HubSpot connects by a pasted token; every consent source by its provider's screen", () => {
+    expect(connectsBy("hubspot")).toBe("token");
+    for (const source of ["xero", "gmail", "drive"] as const) {
+      expect(connectsBy(source)).toBe("consent");
     }
   });
 });

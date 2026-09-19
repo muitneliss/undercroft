@@ -21,6 +21,12 @@ globs: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
   fine.
 - **A guard needs two tests:** one where it fires, one where it stays quiet. A rule with
   only the firing case can be satisfied by code that always throws.
+- **A suite runs as the role that runs the code in production.** Seed fixtures as the
+  superuser, then `await db.become("undercroft_worker")` (or `"undercroft_app"`) at the end
+  of `beforeEach`; plant any later fixture the role may not write through `db.asSuperuser`.
+  A repo statement missing a grant then fails in the gate rather than at 02:00 with
+  "permission denied for table". Every suite ran as the superuser until release 1.8, and so
+  did every service.
 - **Assert observable behaviour**, not internals — public values, states, errors.
 - **PGlite proves the grants are correct**, not that a hostile connection cannot escalate
   past `SET ROLE`; that, and `FOR UPDATE` concurrency, are integration-tier against real

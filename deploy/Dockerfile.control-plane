@@ -39,6 +39,12 @@ RUN bun install --frozen-lockfile --production
 # it in on top of the source copied above.
 COPY --from=ui /app/apps/ui/dist ./apps/ui/dist
 
+# The Kestra flows and the script that delivers them. Dokploy raw compose has no checkout
+# to mount, so the `kestra-flows` one-shot runs from this image; a flow that is only in the
+# repository schedules nothing.
+COPY flows ./flows
+COPY scripts/kestraFlows.ts ./scripts/kestraFlows.ts
+
 EXPOSE 3000
 
 CMD ["bun", "run", "apps/control-plane/src/main.ts"]

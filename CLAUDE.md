@@ -113,12 +113,13 @@ file, in a test exactly as in a source file. ADR 0017 supersedes that paragraph 
 
 ## Deploying
 
-One Dokploy raw-compose stack on `lowbit.link`; the control plane and Metabase are the only
-public surfaces. Merging the release-please PR cuts a tag, which builds the images and
-deploys them — nothing else does. The Dokploy API is the only channel for a change (SSH is
-read-only), and `scripts/dokploy.ts` verifies a rollout landed rather than trusting
-Dokploy's `done`. See `.claude/rules/deployment.md`, `docs/runbook/deployment.md`, and
-ADR 0008.
+One Dokploy raw-compose stack on `lowbit.link`; the control plane is the only public
+surface — the Reports division inside it is the BI, and Metabase is gone (ADR 0020).
+Merging the release-please PR cuts a tag, which builds the images and deploys them,
+Kestra's flows included — nothing else does. The Dokploy API is the only channel for a
+change (SSH is read-only), and `scripts/dokploy.ts` verifies a rollout landed rather than
+trusting Dokploy's `done`. See `.claude/rules/deployment.md`, `docs/runbook/deployment.md`,
+and ADR 0008.
 
 ## Conventions
 

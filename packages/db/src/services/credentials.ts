@@ -22,6 +22,7 @@ import {
   setStatus,
   writeCredential,
 } from "../repos/connections.ts";
+import { grantExpiryFor } from "./grantExpiry.ts";
 
 /** Refresh this far before the token actually expires -- a run takes minutes. */
 export const REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -78,6 +79,11 @@ export async function accessToken(
   }
 
   const refreshed = await opts.refresher(credential.refreshToken);
-  await writeCredential(exec, tenantId, source, refreshed, opts.env);
+  // A refresh renews the grant too, where the provider dates one: Xero's sixty days count
+  // from the last use, so every successful refresh moves the warning further away.
+  await writeCredential(exec, tenantId, source, refreshed, {
+    ...(opts.env === undefined ? {} : { env: opts.env }),
+    grantExpiresAt: grantExpiryFor(source, opts.now),
+  });
   return refreshed.accessToken;
 }

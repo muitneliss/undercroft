@@ -22,10 +22,13 @@
 - [ADR 0015 A First-Party Collector for Byte Sources](sources/adr-0015-a-first-party-collector-for-byte-sources.md)
 - [ADR 0016 The Worker Seals the Control Plane Consents](sources/adr-0016-the-worker-seals-the-control-plane-consents.md)
 - [ADR 0017 Tests Are a Category in the Lint Config](sources/adr-0017-tests-are-a-category-in-the-lint-config.md)
-- [ADR 0018 A Lint Decision Lives in the Config](sources/adr-0018-a-lint-decision-lives-in-the-config.md)
+- [ADR 0018: per-tenant roles and row-level security](sources/adr-0018-per-tenant-roles-and-row-level-security.md)
+- [ADR 0019: the wheel is full](sources/adr-0019-the-wheel-is-full.md)
+- [ADR 0020: BI is first-party, Metabase leaves the stack](sources/adr-0020-bi-is-first-party-metabase-leaves-the-stack.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
+- [Runbook Xero Setup](sources/runbook-xero-setup.md)
 
 ## Notes
 

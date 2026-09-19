@@ -43,6 +43,37 @@ export interface MigrateResult {
   readonly skipped: string[];
 }
 
+/** The login roles a deploy sets a password on. Nothing else may be named to `setRolePassword`. */
+export const PLATFORM_LOGIN_ROLES = ["undercroft_app", "undercroft_worker"] as const;
+export type PlatformLoginRole = (typeof PLATFORM_LOGIN_ROLES)[number];
+
+/**
+ * Give a platform role the password its service will connect with.
+ *
+ * `001_roles.sql` creates the roles with no password and says the password is "set out of
+ * band". For two releases nothing set one, so every service connected as the bootstrap
+ * superuser and the whole grant model was proven in PGlite and bound nowhere. The deploy's
+ * `db-migrate` step calls this with the values from its environment; see `migrateCli.ts`.
+ *
+ * The role is an allow-listed literal and the password is quoted as a SQL literal, because
+ * `ALTER ROLE` takes neither as a bind parameter. Idempotent, like everything else this
+ * runner does: setting the same password twice is a no-op.
+ */
+export async function setRolePassword(
+  executor: SqlExecutor,
+  role: PlatformLoginRole,
+  password: string,
+): Promise<void> {
+  if (!PLATFORM_LOGIN_ROLES.includes(role)) {
+    throw new Error(`refusing to set a password on ${role}: not a platform login role`);
+  }
+  if (password === "") {
+    throw new Error(`refusing to set an empty password on ${role}`);
+  }
+  const literal = password.replaceAll("'", "''");
+  await executor.exec(`ALTER ROLE ${role} PASSWORD '${literal}'`);
+}
+
 /**
  * Apply every pending migration. Returns what it applied and what it skipped.
  *

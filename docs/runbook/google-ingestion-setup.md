@@ -112,12 +112,14 @@ SELECT action, actor FROM ops.audit_log ORDER BY at DESC LIMIT 5;
 
 ## 7. Run an ingest
 
-```sh
-curl -sS -X POST localhost:18081/v1/runs/ingest \
-  -H "Authorization: Bearer $UNDERCROFT_TRIGGER_TOKEN" \
-  -H 'content-type: application/json' \
-  -d '{"source":"gmail","tenantId":"CASE-0042"}'
-```
+Press **Run now** on the source's card (an admin sees it). The card shows _Running_ and
+polls; when the run ends the mark flips and the line reads the count landed and when the
+next run is due. The **Journal** division lists the run, and opening its row shows the
+per-entity counts and any record the pipeline refused, with the reason. A second _Run now_
+while one is in progress is refused with the running run's id, not queued.
+
+The worker's HTTP verb behind the plate is on the compose network only; nothing publishes
+it to the host, so there is no `curl` to run.
 
 ```sql
 SELECT count(*) FROM raw.records WHERE source = 'gmail';
