@@ -17,6 +17,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import {
   entitiesForRuns,
   eventsFor,
+  findChildRun,
   getRun,
   listRuns,
   refusalsFor,
@@ -56,10 +57,28 @@ export interface RunView {
   readonly parentRunId: string | null;
 }
 
+/**
+ * A doorway to a run on the other side of a chain, not that run in full: enough to name it,
+ * show its own outcome, and link to it. `RunDetail.get` resolves both directions off
+ * `parentRunId` -- which has named a run's parent since `090_runs.sql` -- so a leaf open on
+ * either end of an ingest-then-build chain can point across it without a second round trip.
+ */
+export interface RunLink {
+  readonly id: string;
+  readonly kind: RunKind;
+  readonly source: string | null;
+  readonly status: Run["status"];
+  readonly testsFailed: number | null;
+}
+
 export interface RunDetail extends RunView {
   readonly entityCounts: RunEntity[];
   readonly refusals: (RunRefusal & { at: string })[];
   readonly steps: RunStep[];
+  /** The run this one was chained from, if `parentRunId` names one that still exists. */
+  readonly parentRun: RunLink | null;
+  /** The run this one chained into, once it exists -- `null` before or without one. */
+  readonly childRun: RunLink | null;
 }
 
 function kindOf(run: Run): RunKind {
@@ -67,6 +86,16 @@ function kindOf(run: Run): RunKind {
     return run.trigger === "build" ? "build" : "transform";
   }
   return run.trigger === "lake-api" ? "lake-api" : "ingest";
+}
+
+function toLink(run: Run): RunLink {
+  return {
+    id: run.id,
+    kind: kindOf(run),
+    source: run.source === SOURCE_OF_TRANSFORM ? null : run.source,
+    status: run.status,
+    testsFailed: run.testsFailed,
+  };
 }
 
 function present(run: Run, entities: RunEntity[]): RunView {
@@ -148,8 +177,20 @@ export async function get(
     return null;
   }
   const entities = (await entitiesForRuns(exec, [run.id])).get(run.id) ?? [];
-  const [refusals, steps] = await Promise.all([refusalsFor(exec, run.id), stepsFor(exec, run.id)]);
-  return { ...present(run, entities), entityCounts: entities, refusals, steps };
+  const [refusals, steps, childRun, parentRun] = await Promise.all([
+    refusalsFor(exec, run.id),
+    stepsFor(exec, run.id),
+    findChildRun(exec, tenantId, run.id),
+    run.parentRunId === null ? Promise.resolve(null) : getRun(exec, tenantId, run.parentRunId),
+  ]);
+  return {
+    ...present(run, entities),
+    entityCounts: entities,
+    refusals,
+    steps,
+    parentRun: parentRun === null ? null : toLink(parentRun),
+    childRun: childRun === null ? null : toLink(childRun),
+  };
 }
 
 /**

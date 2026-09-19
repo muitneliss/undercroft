@@ -456,6 +456,20 @@ export const en = {
       truncated: "{{at}} lines recorded; from here only warnings and errors are kept.",
       unknown: "Event {{event}}.",
     },
+
+    flow: {
+      head: "Map",
+      models: "Models",
+      modelsNone: "No models",
+      modelsSummary: "{{models}} models · {{tests}} tests",
+      modelsSummaryFailed: "{{models}} models · {{tests}} tests · {{testsFailed}} failed",
+      entityDone: "Done",
+      entityActive: "In progress",
+      entityInterrupted: "Stopped here",
+      entityLandedRefused: "{{landed}} · {{refused}} refused",
+      chainedFrom: "Chained from the {{source}} ingest",
+      chainedTo: "Chained into a model build",
+    },
   },
 
   models: {

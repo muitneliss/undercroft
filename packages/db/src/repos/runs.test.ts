@@ -17,6 +17,7 @@ import {
   closeRun,
   entitiesForRuns,
   eventsFor,
+  findChildRun,
   getRun,
   listRuns,
   openRun,
@@ -120,6 +121,29 @@ describe("what a closed run keeps", () => {
   it("a run of another tenant is not found through this tenant", async () => {
     await openRun(db, { id: "r1", ...PAIR });
     expect(await getRun(db, "CASE-0043", "r1")).toBeNull();
+  });
+});
+
+describe("a run's chained child", () => {
+  it("is found by the parent's id, once it exists", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    expect(await findChildRun(db, "CASE-0042", "r1")).toBeNull();
+
+    await closeRun(db, "r1", { status: "ok" });
+    await openRun(db, { id: "r2", ...PAIR, verb: "transform", source: "*", parentRunId: "r1" });
+
+    const child = await findChildRun(db, "CASE-0042", "r1");
+    expect(child?.id).toBe("r2");
+    expect(child?.parentRunId).toBe("r1");
+  });
+
+  it("is not found through another tenant, or for a run nothing chained from", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await closeRun(db, "r1", { status: "ok" });
+    await openRun(db, { id: "r2", ...PAIR, verb: "transform", source: "*", parentRunId: "r1" });
+
+    expect(await findChildRun(db, "CASE-0043", "r1")).toBeNull();
+    expect(await findChildRun(db, "CASE-0042", "r2")).toBeNull();
   });
 });
 

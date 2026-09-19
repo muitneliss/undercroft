@@ -66,6 +66,7 @@ export {
   entitiesForRuns,
   eventsFor,
   type FailedRunNotice,
+  findChildRun,
   findRunById,
   getRun,
   listRuns,

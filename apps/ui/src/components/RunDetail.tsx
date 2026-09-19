@@ -9,7 +9,8 @@
  * the run's own error in an errata slip, every record the run refused with its reason, and
  * every dbt step with its failing-row count. A section with nothing in it is not drawn --
  * an empty refusals table would say "refusals" over a run that refused nothing -- and a run
- * that recorded nothing beyond its outcome says so in one line.
+ * that recorded nothing beyond its outcome says so in one line. `RunFlow` is the one
+ * exception: it always has at least its own outcome to draw, so it is never gated on `bare`.
  */
 
 // biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
@@ -21,8 +22,10 @@
 
 import { useTranslation } from "react-i18next";
 
+import type { RunDetail as RunDetailView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { RunEvents } from "@/components/RunEvents.tsx";
+import { RunFlow } from "@/components/RunFlow.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
 import { formatCount, orMissing } from "@/lib/money.ts";
@@ -35,6 +38,16 @@ import { trpc } from "@/trpc.ts";
 const RUNNING_POLL_MS = 5000;
 
 /**
+ * How long after an ingest closes ok to keep polling for a chained build to appear.
+ *
+ * `startIngestJob` opens the child only after the parent's `done` settles (jobs.ts), which
+ * is a moment after this leaf's own poll already saw `status: "ok"` and would otherwise stop.
+ * Bounded rather than indefinite: a tenant with no dbt configured, or `chain: false`, closes
+ * an ingest that will never grow a child, and polling one forever would buy nothing.
+ */
+const CHAIN_GRACE_MS = 20_000;
+
+/**
  * How often the feed re-reads while a run is live.
  *
  * Faster than the detail beside it, because this is the part a person is watching. Not
@@ -42,6 +55,28 @@ const RUNNING_POLL_MS = 5000;
  * reading more often than it writes would buy nothing.
  */
 const LIVE_POLL_MS = 2000;
+
+/**
+ * How long until the leaf should re-read this run, or never.
+ *
+ * A run still running always does. One that just closed ok, as an ingest, with no child yet,
+ * gets the same short poll for a bounded grace window -- see {@link CHAIN_GRACE_MS}. Anything
+ * else (failed, a transform, a lake-api run, or an ingest whose child has already appeared)
+ * has nothing left to wait for.
+ */
+function runDetailRefetchInterval(data: RunDetailView | undefined): number | false {
+  if (data === undefined) {
+    return false;
+  }
+  if (data.status === "running") {
+    return RUNNING_POLL_MS;
+  }
+  if (data.kind === "ingest" && data.status === "ok" && data.childRun === null) {
+    const closedAgo = data.endedAt === null ? 0 : Date.now() - new Date(data.endedAt).getTime();
+    return closedAgo < CHAIN_GRACE_MS ? RUNNING_POLL_MS : false;
+  }
+  return false;
+}
 
 export function RunDetail({
   tenantId,
@@ -54,10 +89,7 @@ export function RunDetail({
   const locale = useUiStore((state) => state.locale);
   const run = trpc.runs.get.useQuery(
     { tenantId, runId },
-    {
-      refetchInterval: (query) =>
-        query.state.data?.status === "running" ? RUNNING_POLL_MS : false,
-    },
+    { refetchInterval: (query) => runDetailRefetchInterval(query.state.data) },
   );
   // The feed is read on its own and faster: it is the part that changes while somebody is
   // watching, where the detail beside it only changes when the run ends.
@@ -91,7 +123,9 @@ export function RunDetail({
     detail.entityCounts.length === 0 &&
     detail.refusals.length === 0 &&
     detail.steps.length === 0 &&
-    events.length === 0;
+    events.length === 0 &&
+    detail.parentRun === null &&
+    detail.childRun === null;
 
   return (
     <div className="hinge stack">
@@ -124,6 +158,8 @@ export function RunDetail({
       {detail.error === null ? null : (
         <Errata heading={t("journal.errorHead")}>{detail.error}</Errata>
       )}
+
+      <RunFlow tenantId={tenantId} run={detail} events={events} locale={locale} />
 
       {/* Above the counts, because while the run is going the counts are not there yet. */}
       {events.length > 0 ? <RunEvents events={events} locale={locale} live={running} /> : null}
