@@ -35,6 +35,12 @@ silences the rule for the **whole file**, and Biome never reports one that has g
   does not.
 - **A genuine one-off gets the line-level `// biome-ignore`**, which Biome expires by itself —
   `bun run lint` runs with `--error-on-warnings`, so an unused one fails the gate.
+- **A plugin is suppressed by NAME: `// biome-ignore lint/plugin/money:`.** Measured against
+  Biome 2.5.14: naming the plugin silences that plugin and no other, and Biome reports the
+  suppression as unused when the violation on that line came from a different one — which is
+  exactly the property `lint/plugin:` throws away. `apps/ui/src/lib/plot.ts` is the one place
+  in the tree that needs it, for the `Big#toNumber()` that positions a chart; money.grit's own
+  docstring sanctions that call and says why a chart is not a ledger.
 - **A framework's domain is `none` unless that framework is in `package.json`.** Turning
   `solid` on in a repo with no Solid does not add strictness, it adds 255 findings that were
   never about this codebase, and the suppressions they force teach readers to skip

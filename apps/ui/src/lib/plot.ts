@@ -52,7 +52,7 @@ export function plotValue(cell: Cell, pgType: string): number | null {
     return null;
   }
   try {
-    // biome-ignore lint/plugin: money.grit's own words: "`Big#toNumber()` is the float you spent a library avoiding. It exists for charting, and a chart is not a ledger." This is the charting; every readable figure comes from the string.
+    // biome-ignore lint/plugin/money: money.grit's own words: "`Big#toNumber()` is the float you spent a library avoiding. It exists for charting, and a chart is not a ledger." This is the charting; every readable figure comes from the string.
     return new Big(cell).toNumber();
   } catch {
     return null;
