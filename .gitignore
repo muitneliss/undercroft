@@ -28,3 +28,8 @@ fixtures/live/
 
 .DS_Store
 .bun/
+
+# Task's own checksum/status cache, and the local dbt venv `task dev:worker` provisions
+# (mirrors the versions pinned in deploy/Dockerfile.worker). Neither is portable or shared.
+.task/
+.dbt-venv/

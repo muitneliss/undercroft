@@ -50,21 +50,25 @@ server file will not survive a deploy.
 ## How a deploy happens
 
 **Automatically, on a release.** Merge the release-please PR → `version` bumps, a tag is cut
-→ the images build → `scripts/dokploy.ts` runs `preflight → deploy → verify → smoke`. See
-ADR 0008. Nothing else deploys; a plain push to `main` ships nothing.
+→ the images build → `deploy.yml` runs `task cd:preflight → cd:deploy → cd:verify →
+cd:smoke` (each wrapping `scripts/dokploy.ts`). See ADR 0008 and ADR 0023. Nothing else
+deploys; a plain push to `main` ships nothing.
 
-**By hand**, using the same client (needs the three env vars — never write them to a file):
+**By hand**, using the same client, wrapped in Task (needs the three env vars — never write
+them to a file):
 
 ```bash
 export DOKPLOY_API_ENDPOINT=https://lowbit.link/api
 export DOKPLOY_API_KEY=...           # from Dokploy → Settings → API
 export DOKPLOY_COMPOSE_ID=...        # the undercroft compose
 
-bun run scripts/dokploy.ts preflight   # panel points at published images and pulls them
-bun run scripts/dokploy.ts deploy      # trigger, then wait for the record THIS run created
-bun run scripts/dokploy.ts verify v1.2.3  # every released container runs that tag's digest
-bun run scripts/dokploy.ts smoke https://undercroft.lowbit.link/api/health
+task cd:preflight              # panel points at published images and pulls them
+task cd:deploy TAG=v1.2.3      # trigger, then wait for the record THIS run created
+task cd:verify TAG=v1.2.3      # every released container runs that tag's digest
+task cd:smoke                  # defaults to https://undercroft.lowbit.link/api/health
 ```
+
+Or all four in sequence, the same way `deploy.yml` does: `task cd:release TAG=v1.2.3`.
 
 The API is the only channel for a change. SSH is for reading state, never making one: a
 direct edit on the host is drift the next deploy silently reverts.
@@ -136,7 +140,7 @@ To apply by hand — a database restored from backup, or a migration you want in
 deploy:
 
 ```sh
-UNDERCROFT_POSTGRES_DSN=... bun run migrate
+UNDERCROFT_POSTGRES_DSN=... task db:migrate
 ```
 
 It prints what it applied and what it skipped: "already up to date" and "applied 1
@@ -270,11 +274,10 @@ Two Kestra behaviours that waste time otherwise:
   uses its memory adapter. A mistake here fails loudly (`Database schema mismatch`)
   rather than silently, and `bun run migrate` is what prevents it.
 - **A real login is proven in the Docker tier, not the gate.** PGlite has no authentication,
-  so the offline suites stand in a `SET ROLE` for a login. `bun run itest` opens a connection
-  _as_ a tenant's role against the compose Postgres (start it with
-  `docker compose -f deploy/compose/docker-compose.yml up -d postgres`, with
-  `deploy/compose/.env` filled in) and proves it sees only its tenant and that `RESET ROLE`
-  gives it nothing more. Run it after any change to `packages/db/sql`.
+  so the offline suites stand in a `SET ROLE` for a login. `task ci:itest` brings up the
+  compose Postgres and opens a connection _as_ a tenant's role against it, proving it sees
+  only its tenant and that `RESET ROLE` gives it nothing more. Run it after any change to
+  `packages/db/sql`.
 - The raw lake is not in a backup set — it is object storage with its own durability story,
   and the one layer that cannot be regenerated. Versioning and replication, not a nightly
   dump. Recorded rather than quietly omitted.

@@ -7,6 +7,9 @@
     ".": "./src/handlers/server.ts",
     "./router": "./src/handlers/router.ts"
   },
+  "scripts": {
+    "dev": "bun --watch src/main.ts"
+  },
   "dependencies": {
     "@trpc/server": "11.0.0",
     "@undercroft/contracts": "workspace:*",

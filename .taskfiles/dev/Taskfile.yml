@@ -1,0 +1,193 @@
+# Local dev: bring the stack up, run it with hot reload, tear it down.
+#
+# Infra (Postgres, MinIO, Kestra) runs in Docker; the control plane, the worker and the UI
+# run natively so `bun --watch` / Vite can hot-reload them. That's the same "Path B" already
+# documented in docs/runbook/sign-in-setup.md -- this just automates the two-terminal dance
+# and extends it to Kestra and dbt, instead of inventing a new workflow.
+version: "3"
+
+# dotenv (deploy/compose/.env) is declared in the root Taskfile.yml -- Task refuses it in an
+# included file. It's loaded there so every namespace can see it; only this one uses it.
+vars:
+  COMPOSE_FILE: "{{.ROOT_DIR}}/deploy/compose/docker-compose.yml"
+  ENV_FILE: "{{.ROOT_DIR}}/deploy/compose/.env"
+  DBT_VENV: "{{.ROOT_DIR}}/.dbt-venv"
+  PG_PORT: '{{.UNDERCROFT_PORT_POSTGRES | default "15432"}}'
+  PG_DB: '{{.UNDERCROFT_PG_DB | default "undercroft"}}'
+  PG_USER: '{{.UNDERCROFT_PG_USER | default "undercroft"}}'
+  MINIO_PORT: '{{.UNDERCROFT_PORT_MINIO | default "19000"}}'
+  KESTRA_PORT: '{{.UNDERCROFT_PORT_KESTRA | default "18080"}}'
+  WORKER_PORT: '{{.UNDERCROFT_WORKER_PORT | default "8081"}}'
+  API_PORT: '{{.UNDERCROFT_API_PORT | default "3000"}}'
+
+tasks:
+  env:
+    desc: Bootstrap deploy/compose/.env from the example, if it doesn't exist yet.
+    run: once
+    status:
+      - test -f {{.ENV_FILE}}
+    cmds:
+      - cp {{.ROOT_DIR}}/deploy/compose/.env.example {{.ENV_FILE}}
+      - echo "wrote {{.ENV_FILE}} -- fill in the secrets before 'task dev:run' (see docs/runbook/sign-in-setup.md)"
+
+  up:
+    desc: Start infra only (Postgres, MinIO, Kestra). The apps run natively -- see dev:run.
+    run: once
+    deps: [env]
+    cmds:
+      # minio-init is one-shot and exits 0 on success; `--wait` only tolerates that for a
+      # service something else declares `service_completed_successfully` on (that's `worker`,
+      # which isn't in this list), so it runs as its own attached step instead.
+      - docker compose -f {{.COMPOSE_FILE}} up -d --wait minio postgres kestra-postgres kestra
+      - docker compose -f {{.COMPOSE_FILE}} up minio-init
+
+  up-all:
+    desc: Start the ENTIRE stack in Docker, including built worker/control-plane images (no hot reload -- this is Path A, "just try it").
+    deps: [env]
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} up -d --wait
+
+  down:
+    desc: Stop and remove every compose container. Volumes (and their data) are kept.
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} down
+
+  destroy:
+    desc: Stop and remove every compose container AND its volumes -- a clean slate.
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} down -v
+
+  reset:
+    desc: Wipe local infra and re-provision the schema from scratch (no seed data).
+    cmds:
+      - task: destroy
+      - task: up
+      - task: migrate
+
+  ps:
+    desc: Show the status of every compose container.
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} ps
+
+  logs:
+    desc: Follow the infra containers' logs. App logs print directly in dev:run's terminal.
+    cmds:
+      - docker compose -f {{.COMPOSE_FILE}} logs -f minio postgres kestra-postgres kestra
+
+  dbt-setup:
+    desc: Provision a local dbt venv matching deploy/Dockerfile.worker's pinned versions.
+    run: once
+    status:
+      - test -x {{.DBT_VENV}}/bin/dbt
+    preconditions:
+      - sh: command -v python3
+        msg: "python3 is required to run dbt locally (it mirrors deploy/Dockerfile.worker's venv). Install Python 3 and retry."
+    cmds:
+      - python3 -m venv {{.DBT_VENV}}
+      - "{{.DBT_VENV}}/bin/pip install --quiet --no-cache-dir dbt-core==1.9.1 dbt-postgres==1.9.0"
+
+  migrate:
+    desc: Apply the schema to the local compose Postgres (localhost, mapped port).
+    run: once
+    env:
+      UNDERCROFT_POSTGRES_DSN: "postgres://{{.PG_USER}}:{{.UNDERCROFT_PG_PASSWORD}}@localhost:{{.PG_PORT}}/{{.PG_DB}}"
+      UNDERCROFT_APP_PG_PASSWORD: "{{.UNDERCROFT_APP_PG_PASSWORD}}"
+      UNDERCROFT_WORKER_PG_PASSWORD: "{{.UNDERCROFT_WORKER_PG_PASSWORD}}"
+    cmds:
+      - bun run migrate
+
+  invite:
+    desc: "Invite a user locally. Usage: task dev:invite -- you@x.test --tenant CASE-0001 --role admin --create-tenant"
+    env:
+      UNDERCROFT_POSTGRES_DSN: "postgres://{{.PG_USER}}:{{.UNDERCROFT_PG_PASSWORD}}@localhost:{{.PG_PORT}}/{{.PG_DB}}"
+    cmds:
+      - bun run invite -- {{.CLI_ARGS}}
+
+  kestra-flows:
+    desc: Deliver flows/ to the local Kestra.
+    run: once
+    env:
+      UNDERCROFT_KESTRA_URL: "http://localhost:{{.KESTRA_PORT}}"
+      UNDERCROFT_KESTRA_USER: "{{.UNDERCROFT_KESTRA_USER}}"
+      UNDERCROFT_KESTRA_PASSWORD: "{{.UNDERCROFT_KESTRA_PASSWORD}}"
+    cmds:
+      - bun run kestra:flows
+
+  api:
+    desc: Run the control plane natively, with hot reload (bun --watch).
+    deps: [migrate]
+    env:
+      UNDERCROFT_POSTGRES_DSN: "postgres://undercroft_app:{{.UNDERCROFT_APP_PG_PASSWORD}}@localhost:{{.PG_PORT}}/{{.PG_DB}}"
+      UNDERCROFT_SECRET_KEY: "{{.UNDERCROFT_SECRET_KEY}}"
+      UNDERCROFT_SESSION_SECRET: "{{.UNDERCROFT_SESSION_SECRET}}"
+      UNDERCROFT_WORKER_URL: "http://localhost:{{.WORKER_PORT}}"
+      UNDERCROFT_TRIGGER_TOKEN: "{{.UNDERCROFT_TRIGGER_TOKEN}}"
+      UNDERCROFT_PUBLIC_URL: "http://localhost:5173"
+      UNDERCROFT_API_PORT: "{{.API_PORT}}"
+      UNDERCROFT_GOOGLE_CLIENT_ID: "{{.UNDERCROFT_GOOGLE_CLIENT_ID}}"
+      UNDERCROFT_GOOGLE_CLIENT_SECRET: "{{.UNDERCROFT_GOOGLE_CLIENT_SECRET}}"
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: "{{.UNDERCROFT_GOOGLE_INGEST_CLIENT_ID}}"
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: "{{.UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET}}"
+      UNDERCROFT_GOOGLE_PICKER_API_KEY: "{{.UNDERCROFT_GOOGLE_PICKER_API_KEY}}"
+      UNDERCROFT_GOOGLE_PROJECT_NUMBER: "{{.UNDERCROFT_GOOGLE_PROJECT_NUMBER}}"
+      UNDERCROFT_XERO_CLIENT_ID: "{{.UNDERCROFT_XERO_CLIENT_ID}}"
+      UNDERCROFT_XERO_CLIENT_SECRET: "{{.UNDERCROFT_XERO_CLIENT_SECRET}}"
+      UNDERCROFT_EMAIL_API_KEY: "{{.UNDERCROFT_EMAIL_API_KEY}}"
+      UNDERCROFT_EMAIL_FROM: "{{.UNDERCROFT_EMAIL_FROM}}"
+      UNDERCROFT_EMAIL_API_URL: "{{.UNDERCROFT_EMAIL_API_URL}}"
+      UNDERCROFT_SUPERADMINS: "{{.UNDERCROFT_SUPERADMINS}}"
+    cmds:
+      - bun run --filter '@undercroft/control-plane' dev
+
+  worker:
+    desc: Run the worker natively, with hot reload (bun --watch); dbt is put on PATH.
+    deps: [migrate, dbt-setup]
+    env:
+      UNDERCROFT_POSTGRES_DSN: "postgres://undercroft_worker:{{.UNDERCROFT_WORKER_PG_PASSWORD}}@localhost:{{.PG_PORT}}/{{.PG_DB}}"
+      UNDERCROFT_S3_ENDPOINT: "http://localhost:{{.MINIO_PORT}}"
+      UNDERCROFT_S3_BUCKET_RAW: "{{.UNDERCROFT_S3_BUCKET_RAW}}"
+      UNDERCROFT_S3_ACCESS_KEY: "{{.UNDERCROFT_S3_ACCESS_KEY}}"
+      UNDERCROFT_S3_SECRET_KEY: "{{.UNDERCROFT_S3_SECRET_KEY}}"
+      UNDERCROFT_SECRET_KEY: "{{.UNDERCROFT_SECRET_KEY}}"
+      UNDERCROFT_TRIGGER_TOKEN: "{{.UNDERCROFT_TRIGGER_TOKEN}}"
+      UNDERCROFT_WORKER_PORT: "{{.WORKER_PORT}}"
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: "{{.UNDERCROFT_GOOGLE_INGEST_CLIENT_ID}}"
+      UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: "{{.UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET}}"
+      UNDERCROFT_XERO_CLIENT_ID: "{{.UNDERCROFT_XERO_CLIENT_ID}}"
+      UNDERCROFT_XERO_CLIENT_SECRET: "{{.UNDERCROFT_XERO_CLIENT_SECRET}}"
+      # Set directly rather than `export ... &&`-prefixing the command below: a compound
+      # shell statement runs bun as a child of Task's shell interpreter instead of the
+      # command it directly execs, which is what triggers a spurious EADDRINUSE from
+      # `bun --watch`'s hot-reload bookkeeping the moment it boots. A single plain command
+      # (this one) doesn't have that problem.
+      PATH: "{{.DBT_VENV}}/bin:{{.PATH}}"
+    cmds:
+      - bun run --filter '@undercroft/worker' dev
+
+  ui:
+    desc: Run the UI dev server (Vite; hot module reload already built in).
+    dir: "{{.ROOT_DIR}}/apps/ui"
+    cmds:
+      - bun run dev
+
+  serve:
+    desc: Fan out api/worker/ui in parallel and block until Ctrl+C.
+    internal: true
+    deps: [api, worker, ui]
+
+  run:
+    desc: >-
+      THE one command: the full local stack (infra + migrate + Kestra flows + api/worker/ui),
+      hot reload on every app. Ctrl+C stops the apps; infra stays up in the background
+      (task dev:down to stop it too).
+    cmds:
+      - task: up
+      - task: migrate
+      # Best-effort: Kestra is a Java standalone that can take a minute to answer (or, on a
+      # machine where it's misbehaving, up to its own five-minute deadline before it says so).
+      # Delivering flows only matters for testing the scheduled trigger itself, so it must not
+      # hold up the API/worker/UI you actually came here to iterate on -- the failure still
+      # prints (it never fails silently), it just doesn't stop the line below from running.
+      - task: kestra-flows
+        ignore_error: true
+      - task: serve

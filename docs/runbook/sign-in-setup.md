@@ -22,17 +22,19 @@ walkthrough.
 
 ## 0. What you need
 
+- [Task](https://taskfile.dev) (`brew install go-task`) — every command below is `task ...`,
+  never a bare `bun`/`docker` command. See `.claude/rules/tooling.md`.
 - Docker (for Postgres, or the whole stack)
 - A Google account that can create an OAuth client in [Google Cloud Console](https://console.cloud.google.com)
 - Optional, for code-by-email: an account with a mail API provider ([Resend](https://resend.com) works out of the box)
 
 Pick a path:
 
-|            | Path A — full stack in Docker          | Path B — local dev loop                  |
-| ---------- | -------------------------------------- | ---------------------------------------- |
-| You browse | `http://localhost:13000`               | `http://localhost:5173` (Vite)           |
-| Good for   | trying it, or anything production-like | iterating on the UI                      |
-| Runs       | everything in compose                  | Postgres in compose, the rest with `bun` |
+|            | Path A — full stack in Docker             | Path B — local dev loop                                            |
+| ---------- | ----------------------------------------- | ------------------------------------------------------------------ |
+| You browse | `http://localhost:13000`                  | `http://localhost:5173` (Vite)                                     |
+| Good for   | trying it, or anything production-like    | iterating on the UI/API/worker, hot reload                         |
+| Runs       | everything in compose (`task dev:up-all`) | Postgres/MinIO/Kestra in compose, the rest native (`task dev:run`) |
 
 The steps are the same either way; only `UNDERCROFT_PUBLIC_URL` and how you start things
 differ. **`UNDERCROFT_PUBLIC_URL` must be the origin your browser uses**, because Google's
@@ -81,11 +83,10 @@ have verified a domain of your own.
 ## 4. Write the environment file
 
 ```sh
-cd deploy/compose
-cp .env.example .env
+task dev:env
 ```
 
-Then fill in, at minimum:
+Then fill in `deploy/compose/.env`, at minimum:
 
 ```sh
 UNDERCROFT_PG_PASSWORD=some-local-password
@@ -109,19 +110,21 @@ UNDERCROFT_EMAIL_FROM=Undercroft <onboarding@resend.dev>
 
 ```sh
 # Path A: everything
-docker compose -f deploy/compose/docker-compose.yml up -d
+task dev:up-all
 
-# Path B: just the database
-docker compose -f deploy/compose/docker-compose.yml up -d postgres
+# Path B: infra only (Postgres, MinIO, Kestra) -- the apps run natively, see step 6
+task dev:up
 ```
 
 Then, from the repo root:
 
 ```sh
 bun install
-UNDERCROFT_POSTGRES_DSN='postgres://undercroft:<UNDERCROFT_PG_PASSWORD>@localhost:15432/undercroft' \
-  bun run migrate
+task dev:migrate
 ```
+
+(`task dev:run` in step 6 also does both of the above, so if you're going straight for
+Path B's hot-reload loop you can skip ahead — this step exists to check each part on its own.)
 
 **Check it worked.** You want `060_auth.sql` in the applied or skipped list:
 
@@ -149,22 +152,19 @@ while still logging `sign_in_configured` at boot. So "configured" in the log doe
 
 **Path A** — already running. Skip to step 7.
 
-**Path B**, in two terminals from the repo root:
+**Path B**, one command from the repo root:
 
 ```sh
-# terminal 1 — the API
-UNDERCROFT_POSTGRES_DSN='postgres://undercroft:<password>@localhost:15432/undercroft' \
-UNDERCROFT_SESSION_SECRET='<step 1>' \
-UNDERCROFT_PUBLIC_URL='http://localhost:5173' \
-UNDERCROFT_GOOGLE_CLIENT_ID='<step 2>' \
-UNDERCROFT_GOOGLE_CLIENT_SECRET='<step 2>' \
-UNDERCROFT_EMAIL_API_KEY='<step 3>' \
-UNDERCROFT_EMAIL_FROM='Undercroft <onboarding@resend.dev>' \
-  bun run apps/control-plane/src/main.ts
-
-# terminal 2 — the UI
-cd apps/ui && bun run dev
+task dev:run
 ```
+
+This reads everything it needs from `deploy/compose/.env` (step 4) and re-derives the
+localhost DSN/URLs itself — no env vars to copy by hand. It starts the control plane and the
+worker (both `bun --watch`, restarting on change) and the UI (Vite, hot module reload) in
+parallel, having already brought infra up and applied the schema (step 5, redone here
+harmlessly since both are idempotent). Ctrl+C stops the three apps; infra keeps running
+(`task dev:down` to stop that too). Want just one piece? `task dev:api`, `task dev:worker`,
+`task dev:ui` run any of them alone.
 
 **Check it worked.** The boot log should say sign-in is configured:
 
@@ -221,14 +221,13 @@ Three things worth knowing:
 - **A superadmin administers every customer**, present and future. It is not the top of the
   `viewer`/`member`/`admin` ladder, it is beside it. ADR 0013.
 
-### The way that needs no deploy: `bun run invite`
+### The way that needs no deploy: `task dev:invite`
 
 Still the right tool for inviting somebody to **one** customer, and the one to use if you
 would rather nobody held platform authority. One command, once:
 
 ```sh
-UNDERCROFT_POSTGRES_DSN='postgres://undercroft:<password>@localhost:15432/undercroft' \
-  bun run invite -- you@yourdomain.com --tenant CASE-0001 --role admin --create-tenant
+task dev:invite -- you@yourdomain.com --tenant CASE-0001 --role admin --create-tenant
 ```
 
 ```

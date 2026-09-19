@@ -5,8 +5,9 @@
 # the release that is already running. This runs from release.yml after the images are
 # built, or by hand.
 #
-# Every step is `bun run scripts/dokploy.ts <cmd>` -- the same client an operator runs. The
-# Dokploy API is the only channel for a change; SSH is for reading state, never making one.
+# Every step is `task cd:<cmd>` -- the same command an operator runs by hand, wrapping
+# `bun run scripts/dokploy.ts <cmd>`. The Dokploy API is the only channel for a change; SSH
+# is for reading state, never making one. See .claude/rules/tooling.md.
 name: deploy
 
 on:
@@ -67,15 +68,17 @@ jobs:
         with:
           bun-version-file: .bun-version
 
+      - uses: go-task/setup-task@v1
+
       - run: bun install --frozen-lockfile
 
       # The gate before anything is queued, when failing is free: the panel must point at
       # published images and be told to pull them.
       - name: Preflight
-        run: bun run scripts/dokploy.ts preflight
+        run: task cd:preflight
 
       - name: Deploy and wait for it to settle
-        run: bun run scripts/dokploy.ts deploy ${{ inputs.tag }}
+        run: task cd:deploy TAG=${{ inputs.tag }}
 
       # BEFORE the smoke probes: Dokploy reports `done` for a deploy that changed nothing,
       # and every probe passes against the old images. This asks the host which image digest
@@ -85,13 +88,13 @@ jobs:
       # `latest` (the panel's IMAGE_TAG), and comparing `latest` to itself would prove only
       # that a moving pointer equals itself.
       - name: Verify the host runs the published images
-        run: bun run scripts/dokploy.ts verify ${{ inputs.tag }}
+        run: task cd:verify TAG=${{ inputs.tag }}
 
       - name: Smoke-test the public surface
-        run: bun run scripts/dokploy.ts smoke https://undercroft.lowbit.link/api/health
+        run: task cd:smoke URL=https://undercroft.lowbit.link/api/health
 
       # Otherwise the only record of why a rollout failed lives in a panel the reader may not
       # have access to, and Dokploy prunes it.
       - name: Collect the deployment log
         if: failure()
-        run: bun run scripts/dokploy.ts logs
+        run: task cd:logs

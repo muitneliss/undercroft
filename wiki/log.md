@@ -49,3 +49,7 @@
 ## [2026-09-19] ingest | Runbook Google Ingestion Setup
 ## [2026-09-19] ingest | ADR 0021 Run Evidence Is a Ledger, Not a Log Stream
 ## [2026-09-19] ingest | ADR 0022 A Test File Is Not an Exception
+## [2026-09-19] remove | ADR 0022 Task Is the Mandatory Command Entrypoint
+## [2026-09-19] ingest | ADR 0023 Task Is the Mandatory Command Entrypoint
+## [2026-09-19] ingest | Runbook Deployment
+## [2026-09-19] ingest | Runbook Sign-In Setup
