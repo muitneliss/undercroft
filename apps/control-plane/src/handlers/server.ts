@@ -35,6 +35,9 @@ import type { Context, SessionUser } from "./trpc.ts";
  * under Bun and under the test harness's DOM globals -- an unknown extension is served as
  * an opaque download rather than guessed.
  */
+/** Any run of leading `../` (or `..\`) segments, which is how a path escapes `dist`. */
+const LEADING_PARENT_SEGMENTS = /^(?:\.\.(?:\/|\\|$))+/u;
+
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -289,7 +292,7 @@ async function resolveCaller(
  * is refused rather than reaching outside the build.
  */
 async function resolveAsset(dist: string, urlPath: string): Promise<string | null> {
-  const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.(\/|\\|$))+/u, "");
+  const rel = normalize(decodeURIComponent(urlPath)).replace(LEADING_PARENT_SEGMENTS, "");
   if (rel === "/" || rel === "." || rel === sep) {
     return null;
   }
@@ -300,5 +303,3 @@ async function resolveAsset(dist: string, urlPath: string): Promise<string | nul
   return (await Bun.file(candidate).exists()) ? candidate : null;
 }
 
-export type { AppRouter } from "./router.ts";
-export { appRouter } from "./router.ts";

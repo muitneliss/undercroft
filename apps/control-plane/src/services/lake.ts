@@ -27,7 +27,7 @@ import {
   summariseRecords,
 } from "../repos/rawLake.ts";
 
-export type { DocumentSummary, Page, RawDocument, RawRecord, RecordStreamSummary };
+export type { DocumentSummary, Page, RawDocument, RawRecord, RecordStreamSummary } from "../repos/rawLake.ts";
 
 export interface LakeSummary {
   readonly records: RecordStreamSummary[];

@@ -56,6 +56,9 @@ export interface ProviderShape {
   readonly identity: boolean;
 }
 
+/** Trailing slashes on the configured public URL, so the callback path joins cleanly. */
+const TRAILING_SLASHES = /\/+$/u;
+
 export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
   google: {
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -117,5 +120,5 @@ export function providerOf(source: string): Provider | null {
 
 /** Where a provider is told to come back to. One URI per provider, registered in its console. */
 export function redirectUri(publicUrl: string, provider: Provider): string {
-  return `${publicUrl.replace(/\/+$/u, "")}/oauth/${provider}/callback`;
+  return `${publicUrl.replace(TRAILING_SLASHES, "")}/oauth/${provider}/callback`;
 }

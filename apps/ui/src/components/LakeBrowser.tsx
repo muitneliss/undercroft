@@ -54,7 +54,6 @@ function RecordsTable({
   source: string;
   entity: string;
 }): React.JSX.Element {
-  const lakeStreamId = useId();
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const rows = trpc.lake.records.useInfiniteQuery(

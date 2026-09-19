@@ -37,8 +37,8 @@ const SERVER_ERROR = 500;
 /** The two shapes Kestra's flow API has had: with the tenant in the path, and without. */
 const FLOW_PATHS = ["/api/v1/main/flows", "/api/v1/flows"] as const;
 
-const ID_LINE = /^id:\s*([A-Za-z0-9_-]+)\s*$/mu;
-const NAMESPACE_LINE = /^namespace:\s*([A-Za-z0-9_.-]+)\s*$/mu;
+const ID_LINE = /^id:\s*(?<id>[A-Za-z0-9_-]+)\s*$/mu;
+const NAMESPACE_LINE = /^namespace:\s*(?<namespace>[A-Za-z0-9_.-]+)\s*$/mu;
 const TRAILING_SLASHES = /\/+$/u;
 
 export interface Config {
@@ -123,8 +123,8 @@ export function readFlowsDir(dir: string): FlowFile[] {
  * read as having none.
  */
 export function identify(flow: FlowFile): { id: string; namespace: string } {
-  const id = ID_LINE.exec(flow.yaml)?.[1];
-  const namespace = NAMESPACE_LINE.exec(flow.yaml)?.[1];
+  const id = ID_LINE.exec(flow.yaml)?.groups?.id;
+  const namespace = NAMESPACE_LINE.exec(flow.yaml)?.groups?.namespace;
   if (id === undefined || namespace === undefined) {
     throw new Error(`${flow.file}: a flow needs top-level \`id:\` and \`namespace:\` lines`);
   }

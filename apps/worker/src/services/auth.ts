@@ -18,7 +18,7 @@ import { hashToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { findByDigest, type IngestKeyRow, touchLastUsed } from "@undercroft/db/repos";
 
-export type { IngestKeyRow };
+export type { IngestKeyRow } from "@undercroft/db/repos";
 
 /**
  * How often a key's `last_used_at` is written: once a minute per key, not once a request.

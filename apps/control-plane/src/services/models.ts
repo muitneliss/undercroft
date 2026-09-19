@@ -36,7 +36,7 @@ import { MACROS, SOURCES_YML } from "@undercroft/db/services";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
-export type { LastBuild, Model };
+export type { LastBuild, Model } from "@undercroft/db/repos";
 
 export interface ModelItem {
   readonly name: string;

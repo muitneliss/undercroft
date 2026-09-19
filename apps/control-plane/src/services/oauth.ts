@@ -48,7 +48,7 @@ import { exchangeCode } from "./tokenExchange.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
 // Re-exported so callers keep naming one seam: this module is what they reason about.
-export type { GoogleIngestConfig, Provider, ProviderConfig };
+export type { GoogleIngestConfig, Provider, ProviderConfig } from "./oauthProviders.ts";
 
 /** Minutes, not hours: a consent is a thing somebody is doing right now. */
 const HANDSHAKE_TTL_MS = 15 * 60 * 1000;

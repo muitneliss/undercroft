@@ -85,12 +85,14 @@ export interface LakeApiDeps {
   readonly xero?: XeroClient;
 }
 
+const BEARER = /^Bearer\s+(?<token>.+)$/iu;
+
 function bearerOf(header: string | undefined): string | null {
   if (header === undefined) {
     return null;
   }
-  const match = /^Bearer\s+(.+)$/iu.exec(header);
-  return match?.[1] ?? null;
+  const match = BEARER.exec(header);
+  return match?.groups?.token ?? null;
 }
 
 export function createLakeApi(deps: LakeApiDeps): Hono {

@@ -67,10 +67,22 @@ export interface RunContext {
  * Named, never arbitrary code: a spec is configuration a user writes, and a template that
  * could execute would make every connector spec a script.
  */
+/**
+ * The compile-time end of an exhaustive switch.
+ *
+ * Adding a member to one of these unions -- a new pagination kind, a second batch template --
+ * stops compiling HERE rather than falling out of the switch and returning undefined.
+ */
+function assertNever(value: never, what: string): never {
+  throw new Error(`unhandled ${what}: ${JSON.stringify(value)}`);
+}
+
 function renderBatchBody(template: "hubspot-batch-inputs", ids: readonly string[]): string {
   switch (template) {
     case "hubspot-batch-inputs":
       return JSON.stringify({ inputs: ids.map((id) => ({ id })) });
+    default:
+      return assertNever(template, "batch body template");
   }
 }
 
@@ -131,14 +143,17 @@ function buildUrl(baseUrl: string, path: string, query: Record<string, string>):
 }
 
 /** Advance to the next page's URL, or null when the source signals it is done. */
-function nextPageUrl(
-  entity: ConnectorEntity,
-  spec: ConnectorSpec,
-  parsed: unknown,
-  pageIndex: number,
-  recordsThisPage: number,
-  currentUrl: string,
-): string | null {
+interface PageCursor {
+  readonly entity: ConnectorEntity;
+  readonly spec: ConnectorSpec;
+  readonly parsed: unknown;
+  readonly pageIndex: number;
+  readonly recordsThisPage: number;
+  readonly currentUrl: string;
+}
+
+function nextPageUrl(page: PageCursor): string | null {
+  const { entity, spec, parsed, pageIndex, recordsThisPage, currentUrl } = page;
   const pagination = entity.pagination ?? spec.defaults.pagination;
   switch (pagination.kind) {
     case "none":
@@ -178,9 +193,10 @@ function nextPageUrl(
       url.searchParams.set(pagination.param, cursor);
       return url.toString();
     }
+    default:
+      return assertNever(pagination, "pagination kind");
   }
 }
-
 function extractRecords(entity: ConnectorEntity, spec: ConnectorSpec, parsed: unknown): unknown[] {
   const container =
     entity.envelopePath === undefined ? parsed : getPath(parsed, entity.envelopePath);
@@ -227,7 +243,7 @@ export async function* readEntity(
 
   /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
   async function fetchJson(request: HttpRequest): Promise<unknown> {
-    return withRetry(
+    return await withRetry(
       async () => {
         await pacer.acquire();
         const response = await ctx.fetcher.send(request);
@@ -309,7 +325,14 @@ export async function* readEntity(
         }
       }
 
-      const next = nextPageUrl(entity, spec, parsed, pageIndex, pageSize, currentUrl);
+      const next = nextPageUrl({
+        entity,
+        spec,
+        parsed,
+        pageIndex,
+        recordsThisPage: pageSize,
+        currentUrl,
+      });
       pageIndex += 1;
       if (next === null) {
         break;

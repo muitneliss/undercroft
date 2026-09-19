@@ -19,7 +19,7 @@ import { type IngestKey, insertKey, listKeys, revokeKey } from "@undercroft/db/r
 
 import { record as recordAudit } from "../repos/auditLog.ts";
 
-export type { IngestKey };
+export type { IngestKey } from "@undercroft/db/repos";
 
 const ID_PREFIX = "uk_";
 /** Eight base64url characters: enough to be unique across one platform, short enough to read out. */
