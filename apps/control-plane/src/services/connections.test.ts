@@ -3,8 +3,8 @@
  *
  * `presentStatus` is pure, so the rule deciding whether a customer is asked to reconnect is
  * asked from both sides with no database. The rest runs against real Postgres, because the
- * interesting part -- that a join reaching into `app.connection_secret` brings back an
- * expiry and never a ciphertext -- is a property of the query.
+ * interesting part -- what a join reaching into `app.connection_secret` is allowed to bring
+ * back, and what it must leave behind -- is a property of the query.
  */
 
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: The long function here is a `describe` block, whose length is the number of card states asked about rather than complexity in any one of them. Splitting it would group the same question under two headings.
@@ -152,10 +152,14 @@ describe("the schedule", () => {
     expect(rows.every((r) => r.status === "disconnected")).toBe(true);
   });
 
-  it("an expiry is read without the credential it belongs to", async () => {
-    // The licence for joining `app.connection_secret` at all: knowing WHEN a credential
-    // expires turns "which connections need attention" into a query, and the control plane
-    // could not open the credential anyway -- it holds no master key.
+  it("the credential's own expiry stays off the card, along with the credential", async () => {
+    // The licence for joining `app.connection_secret` at all is that the control plane may
+    // know WHEN a credential expires and may never know what it is. Knowing is not showing:
+    // `expiresAt: row.expiresAt` wired the access token's HOURLY rotation to the field the
+    // card reads as "when must the customer consent again", so every freshly connected Google
+    // source announced "expires today" and then turned itself into "reconnect" an hour later,
+    // for a token the worker refreshes unattended. No provider tells us when a GRANT ends, so
+    // the card gets null and says "no expiry recorded" -- true, where the number to hand was not.
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
     await writeCredential(
       db,
@@ -172,7 +176,8 @@ describe("the schedule", () => {
 
     const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
 
-    expect(gmail?.expiresAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(gmail?.expiresAt).toBeNull();
+    expect(JSON.stringify(gmail)).not.toContain("2099-01-01T00:00:00.000Z");
     expect(JSON.stringify(gmail)).not.toContain("ciphertext");
     expect(JSON.stringify(gmail)).not.toContain("rt");
   });
