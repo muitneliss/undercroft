@@ -82,5 +82,9 @@ export const en = {
     runNotStarted:
       "The sync could not be started. The processing service did not answer; try again in a few minutes.",
     runRefused: "The processing service refused to sync {{source}}.",
+    tokenRejected:
+      "{{source}} did not accept this token. Check the pasted token and the private app's scopes, then try again.",
+    tokenNotStored:
+      "The token for {{source}} could not be stored. The processing service refused it.",
   },
 };

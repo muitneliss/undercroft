@@ -38,6 +38,12 @@ export const StoreCredentialRequest = z.object({
   /** The space-delimited scope string Google actually granted, which may be narrower. */
   scope: z.string().default(""),
   credential: CredentialInput,
+  /**
+   * Probe the provider with the credential before sealing it. For a token an admin pasted
+   * rather than one a provider just issued: a typo would otherwise seal cleanly, read as
+   * "connected", and 401 at the next run far from the paste that caused it.
+   */
+  validate: z.boolean().default(false),
 });
 
 export const StoreCredentialResponse = z.object({

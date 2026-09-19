@@ -127,5 +127,12 @@ export const vi = {
     runNotStarted: "Chưa chạy được đồng bộ. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /** The worker answered and said no: a source not connected, or one this build cannot run. */
     runRefused: "Dịch vụ xử lý từ chối chạy đồng bộ cho nguồn {{source}}.",
+    /**
+     * The provider turned the pasted token away. Names what to check -- the token and its
+     * scopes -- because the person reading this is the one who pasted it.
+     */
+    tokenRejected:
+      "{{source}} không chấp nhận mã này. Hãy kiểm tra lại mã đã dán và các quyền của ứng dụng riêng, rồi thử lại.",
+    tokenNotStored: "Chưa lưu được mã cho nguồn {{source}}. Dịch vụ xử lý đã từ chối.",
   },
 };

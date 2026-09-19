@@ -20,7 +20,7 @@
 
 import type { CredentialInput } from "@undercroft/contracts";
 import type { ByteFetcher } from "@undercroft/core";
-import { ConnectorError, HttpError, raiseForByteStatus } from "@undercroft/core";
+import { ConnectorError, createByteFetcher, HttpError, raiseForByteStatus } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteCredential,
@@ -35,6 +35,7 @@ import { createGoogleApi } from "./google/api.ts";
 import { isGoogleSource } from "./google/collect.ts";
 import { type GmailLabel, listLabels } from "./google/gmail.ts";
 import type { Transactor } from "./ingest.ts";
+import { validateCredential } from "./validateCredential.ts";
 import { listOrganisations, type XeroOrganisation } from "./xero/organisations.ts";
 import { xeroClientAuthorization } from "./xero/refresh.ts";
 
@@ -52,11 +53,17 @@ export interface StoreCredentialDeps {
   readonly exec: SqlExecutor;
   readonly transactor?: Transactor;
   readonly env?: NodeJS.ProcessEnv;
+  /** For probing a pasted token before it is sealed. Absent, `validate` cannot be honoured. */
+  readonly fetcher?: ByteFetcher;
 }
 
 export type StoreCredentialOutcome =
   | { ok: true; expiresAt: string | null }
-  | { ok: false; reason: "unknown-tenant" };
+  | { ok: false; reason: "unknown-tenant" }
+  /** The provider refused the credential; nothing was written. */
+  | { ok: false; reason: "credential-rejected" }
+  /** Validation was asked for and this source has no way to be probed; nothing was written. */
+  | { ok: false; reason: "cannot-validate" };
 
 /**
  * Record a connection and seal its credential.
@@ -65,6 +72,10 @@ export type StoreCredentialOutcome =
  * the order is forced -- and a half-applied consent leaves a connection the UI shows as
  * live with nothing behind it, which fails at the next run rather than at the click that
  * caused it.
+ *
+ * With `validate`, the credential is proven against the provider BEFORE either write. A
+ * pasted token that fails the probe leaves no row behind, so the card keeps saying "not
+ * connected" -- which is the truth -- rather than "connected" over a token that cannot read.
  */
 export async function storeCredential(
   deps: StoreCredentialDeps,
@@ -74,12 +85,26 @@ export async function storeCredential(
     externalAccountId: string;
     scope: string;
     credential: CredentialInput;
+    validate?: boolean;
   },
 ): Promise<StoreCredentialOutcome> {
   if (!(await tenantExists(deps.exec, input.tenantId))) {
     // Checked rather than left to the foreign key, so the answer is a refusal the handler
     // can turn into a 404 instead of a constraint violation that reads as a server fault.
     return { ok: false, reason: "unknown-tenant" };
+  }
+
+  if (input.validate === true) {
+    const proven = await validateCredential(
+      { fetcher: deps.fetcher ?? createByteFetcher() },
+      { source: input.source, token: input.credential.accessToken },
+    );
+    if (!proven.ok) {
+      return {
+        ok: false,
+        reason: proven.reason === "rejected" ? "credential-rejected" : "cannot-validate",
+      };
+    }
   }
 
   const run: Transactor = deps.transactor ?? ((fn) => fn(deps.exec));

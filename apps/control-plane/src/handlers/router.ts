@@ -26,6 +26,24 @@ import {
 
 const Role = z.enum(["viewer", "member", "admin"]);
 
+/** Which sentence a refused pasted token gets: the token is wrong, the source cannot, or the worker would not. */
+function tokenRefusalKey(
+  reason: "rejected" | "unsupported-source" | "refused",
+): "error.tokenRejected" | "error.sourceNotConnectable" | "error.tokenNotStored" {
+  switch (reason) {
+    case "rejected":
+      return "error.tokenRejected";
+    case "unsupported-source":
+      return "error.sourceNotConnectable";
+    case "refused":
+      return "error.tokenNotStored";
+    default: {
+      const exhaustive: never = reason;
+      throw new Error(`unhandled refusal ${String(exhaustive)}`);
+    }
+  }
+}
+
 /**
  * A tenant reference, as typed into the create form.
  *
@@ -296,6 +314,41 @@ export const appRouter = router({
           });
         }
         return { ok: true };
+      }),
+
+    /**
+     * Connect a source with a pasted token. Admin-only: it is a credential into a customer's
+     * account. The worker proves the token before sealing it, so a refusal here is worded
+     * for the person who pasted it -- the token is wrong, not the platform.
+     */
+    setToken: requireRole("admin")
+      .input(z.object({ source: z.string().min(1), token: z.string().min(1).max(512) }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        const result = await connections.setToken(ctx.exec, ctx.worker, {
+          tenantId: ctx.tenantId,
+          source: input.source,
+          token: input.token,
+          actor: ctx.user.email,
+        });
+        if (result.ok) {
+          return { ok: true };
+        }
+        if (result.reason === "unreachable") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: messages(ctx.locale)(tokenRefusalKey(result.reason), { source: input.source }),
+        });
       }),
 
     /**

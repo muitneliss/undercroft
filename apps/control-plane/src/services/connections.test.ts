@@ -26,6 +26,7 @@ import {
   presentStatus,
   setCadence,
   setScope,
+  setToken,
 } from "./connections.ts";
 import { InMemoryWorkerClient } from "./workerClient.ts";
 
@@ -361,6 +362,62 @@ describe("choosing a scope", () => {
     expect(rows[0]?.action).toBe("connection.scope_set");
     expect(JSON.stringify(rows[0]?.detail)).toContain('"count":1');
     expect(JSON.stringify(rows[0]?.detail)).not.toContain("Invoices");
+  });
+});
+
+describe("connecting with a pasted token", () => {
+  it("hands the token to the worker to be proven and sealed, and audits the source alone", async () => {
+    const worker = new InMemoryWorkerClient().backedBy(db);
+
+    const result = await setToken(db, worker, {
+      tenantId: TENANT,
+      source: "hubspot",
+      token: "pat-na1-secret",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(worker.stored[0]).toMatchObject({
+      source: "hubspot",
+      validate: true,
+      externalAccountId: "",
+    });
+    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    expect(hubspot?.status).toBe("connected");
+    const { rows } = await db.query<{ action: string; detail: unknown }>(
+      "SELECT action, detail FROM ops.audit_log",
+    );
+    expect(rows[0]?.action).toBe("connection.connected");
+    expect(JSON.stringify(rows[0]?.detail)).not.toContain("pat-na1-secret");
+  });
+
+  it("a token the provider refused is reported as such, and nothing is audited", async () => {
+    const worker = new InMemoryWorkerClient().failing("credential-rejected");
+
+    const result = await setToken(db, worker, {
+      tenantId: TENANT,
+      source: "hubspot",
+      token: "typo",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "rejected" });
+    const { rows } = await db.query("SELECT 1 FROM ops.audit_log");
+    expect(rows).toHaveLength(0);
+  });
+
+  it("a source that consents rather than pastes is refused before the worker is asked", async () => {
+    const worker = new InMemoryWorkerClient();
+
+    const result = await setToken(db, worker, {
+      tenantId: TENANT,
+      source: "gmail",
+      token: "t",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "unsupported-source" });
+    expect(worker.stored).toHaveLength(0);
   });
 });
 

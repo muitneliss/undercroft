@@ -41,7 +41,11 @@ export type WorkerOutcome<T> = { ok: true; value: T } | { ok: false; reason: Wor
  * reconnecting the source and granting the permission that was withheld. Worded as an
  * outage -- which is what it was -- it sends them off to wait for a service that is fine.
  */
-export type WorkerFailure = "unreachable" | "refused" | "scope-insufficient";
+export type WorkerFailure =
+  | "unreachable"
+  | "refused"
+  | "scope-insufficient"
+  | "credential-rejected";
 
 export interface StoreCredentialInput {
   readonly source: string;
@@ -49,6 +53,8 @@ export interface StoreCredentialInput {
   readonly externalAccountId: string;
   readonly scope: string;
   readonly credential: CredentialInput;
+  /** Prove a pasted token against the provider before sealing it. See the worker. */
+  readonly validate?: boolean;
 }
 
 /**
@@ -104,6 +110,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const FORBIDDEN = 403;
 /** The worker's answer for a run already in progress, whose body names it. */
 const CONFLICT = 409;
+/** The worker's answer for a pasted credential the provider turned away. */
+const UNPROCESSABLE = 422;
 
 export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const doFetch = config.fetch ?? globalThis.fetch;
@@ -129,6 +137,9 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
         // it the right place to tell a withheld permission from every other refusal.
         if (response.status === FORBIDDEN) {
           return { ok: false, reason: "scope-insufficient" };
+        }
+        if (response.status === UNPROCESSABLE) {
+          return { ok: false, reason: "credential-rejected" };
         }
         return { ok: false, reason: "refused" };
       }

@@ -363,10 +363,34 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
         exec: deps.exec,
         ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
         ...(deps.env === undefined ? {} : { env: deps.env }),
+        ...(deps.byteFetcher === undefined ? {} : { fetcher: deps.byteFetcher }),
       },
       parsed.data,
     );
     if (!outcome.ok) {
+      // Three refusals, three statuses, because the remedies differ: a tenant that does not
+      // exist, a token the provider turned away (422: the body was well-formed and wrong),
+      // and a source nobody can probe.
+      if (outcome.reason === "credential-rejected") {
+        return c.json(
+          {
+            code: "credential_rejected",
+            message: "the provider refused this credential",
+            details: [],
+          },
+          422,
+        );
+      }
+      if (outcome.reason === "cannot-validate") {
+        return c.json(
+          {
+            code: "invalid_request",
+            message: `${parsed.data.source} cannot be validated`,
+            details: [],
+          },
+          400,
+        );
+      }
       return c.json({ code: "invalid_request", message: "unknown tenant", details: [] }, 404);
     }
     return c.json(

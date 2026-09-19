@@ -313,6 +313,63 @@ export async function setScope(
   return { ok: true };
 }
 
+/** Sources whose credential is a token an admin pastes, rather than an OAuth consent. */
+const PASTED_TOKEN_SOURCES: ReadonlySet<string> = new Set(["hubspot"]);
+
+export type SetTokenOutcome =
+  | { ok: true }
+  | { ok: false; reason: "unsupported-source" | "rejected" | "unreachable" | "refused" };
+
+/**
+ * Connect a source with a token the admin pasted.
+ *
+ * The token goes to the worker to be PROVEN and sealed, and nowhere else: not to this
+ * process's log, not to the audit row, not back to the browser. The worker probes the
+ * provider with it before writing anything, so a typo is refused here and now rather than
+ * sealed into a "connected" card that 401s at its first run.
+ *
+ * `externalAccountId` is empty: a private app names no account, and inventing one would
+ * be a guess on a column BI can read.
+ */
+export async function setToken(
+  exec: SqlExecutor,
+  worker: WorkerClient,
+  input: { tenantId: string; source: string; token: string; actor: string },
+): Promise<SetTokenOutcome> {
+  if (!PASTED_TOKEN_SOURCES.has(input.source)) {
+    return { ok: false, reason: "unsupported-source" };
+  }
+
+  const stored = await worker.storeCredential({
+    source: input.source,
+    tenantId: input.tenantId,
+    externalAccountId: "",
+    scope: "",
+    credential: { accessToken: input.token, refreshToken: "", expiresAt: null },
+    validate: true,
+  });
+  if (!stored.ok) {
+    if (stored.reason === "credential-rejected") {
+      return { ok: false, reason: "rejected" };
+    }
+    return { ok: false, reason: stored.reason === "unreachable" ? "unreachable" : "refused" };
+  }
+
+  try {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "connection.connected",
+      // Which source, and that it was a pasted token. Never the token.
+      detail: JSON.stringify({ source: input.source, method: "token" }),
+    });
+  } catch {
+    // Swallowed like every other audit write here: a failed insert must not undo a
+    // connection the worker has already sealed.
+  }
+  return { ok: true };
+}
+
 export interface DisconnectResult {
   /** Whether the provider was told. Reported, never assumed; see `revokeConnection`. */
   readonly revokedUpstream: boolean;
