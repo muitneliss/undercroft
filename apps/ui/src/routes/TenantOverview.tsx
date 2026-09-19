@@ -57,6 +57,115 @@ function connectFailureKey(
   return "grant.connectFailed";
 }
 
+/**
+ * Everything that can go wrong with a consent, said out loud.
+ *
+ * Four separate states rather than one "something failed": a refusal to START the consent
+ * is the server declining to make a URL, a refusal to finish it came back on the redirect,
+ * and a disconnect that did not revoke upstream is REPORTED rather than assumed -- our row
+ * is gone but the grant may still stand at Google, and only the customer can finish that.
+ */
+function ConsentNotices({
+  failed,
+  reason,
+  startOAuth,
+  disconnect,
+}: {
+  failed: boolean;
+  reason: string | null;
+  startOAuth: { isError: boolean; error: { message: string } | null };
+  disconnect: {
+    isError: boolean;
+    error: { message: string } | null;
+    isSuccess: boolean;
+    data?: { revokedUpstream: boolean } | undefined;
+  };
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <>
+      {failed ? (
+        <Errata heading={t("grant.connectFailed")} live={true}>
+          {t(connectFailureKey(reason))}
+        </Errata>
+      ) : null}
+
+      {/*
+      A refusal to START a consent, which the server now words rather than answering with
+      a URL it made up. Without this the navigation below simply never happened and the
+      page sat there looking like a dead button.
+    */}
+      {startOAuth.isError ? (
+        <Errata heading={t("grant.connectFailed")} live={true}>
+          {startOAuth.error?.message ?? ""}
+        </Errata>
+      ) : null}
+
+      {disconnect.isError ? (
+        <Errata heading={t("grant.disconnectFailed")} live={true}>
+          {disconnect.error?.message ?? ""}
+        </Errata>
+      ) : null}
+
+      {disconnect.isSuccess && disconnect.data?.revokedUpstream === false ? (
+        // Reported, never assumed: our row is gone but the grant may still stand at
+        // Google, and only the customer can finish that.
+        <Errata heading={t("grant.disconnected")} live={true}>
+          {t("grant.disconnectedNotRevoked")}
+        </Errata>
+      ) : null}
+    </>
+  );
+}
+
+/** The schedule of standing grants: one card per source the tenant could connect. */
+function GrantSchedule({
+  list,
+  tenantId,
+  isAdmin,
+  startOAuth,
+  disconnect,
+}: {
+  list: readonly Connection[];
+  tenantId: string;
+  isAdmin: boolean;
+  startOAuth: { isPending: boolean; mutate: (input: { tenantId: string; source: string }) => void };
+  disconnect: {
+    isPending: boolean;
+    mutate: (input: { tenantId: string; source: string }) => void;
+  };
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <>
+      {list.length === 0 ? (
+        <p className="note">{t("common.nothingToShow")}</p>
+      ) : (
+        <div className="schedule">
+          {list.map((connection: Connection) => (
+            <ConnectionCard
+              key={connection.source}
+              connection={connection}
+              busy={startOAuth.isPending || disconnect.isPending || !isAdmin}
+              onConnect={(): void => {
+                startOAuth.mutate({ tenantId, source: connection.source });
+              }}
+              onScope={(): void => {
+                globalThis.location.assign(
+                  `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
+                );
+              }}
+              onDisconnect={(): void => {
+                disconnect.mutate({ tenantId, source: connection.source });
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
@@ -102,66 +211,25 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
           {list.length === 0 ? t("sources.none") : t("sources.count", { count: list.length })}
         </p>
 
-        {failed ? (
-          <Errata heading={t("grant.connectFailed")} live={true}>
-            {t(connectFailureKey(params.get("reason")))}
-          </Errata>
-        ) : null}
-
-        {/*
-          A refusal to START a consent, which the server now words rather than answering with
-          a URL it made up. Without this the navigation below simply never happened and the
-          page sat there looking like a dead button.
-        */}
-        {startOAuth.isError ? (
-          <Errata heading={t("grant.connectFailed")} live={true}>
-            {startOAuth.error.message}
-          </Errata>
-        ) : null}
-
-        {disconnect.isError ? (
-          <Errata heading={t("grant.disconnectFailed")} live={true}>
-            {disconnect.error.message}
-          </Errata>
-        ) : null}
-
-        {disconnect.isSuccess && !disconnect.data.revokedUpstream ? (
-          // Reported, never assumed: our row is gone but the grant may still stand at
-          // Google, and only the customer can finish that.
-          <Errata heading={t("grant.disconnected")} live={true}>
-            {t("grant.disconnectedNotRevoked")}
-          </Errata>
-        ) : null}
+        <ConsentNotices
+          failed={failed}
+          reason={params.get("reason")}
+          startOAuth={startOAuth}
+          disconnect={disconnect}
+        />
       </div>
 
       <div className="band-rule" />
 
       <div className="head">{t("sources.grantsHead")}</div>
       <div className="body">
-        {list.length === 0 ? (
-          <p className="note">{t("common.nothingToShow")}</p>
-        ) : (
-          <div className="schedule">
-            {list.map((connection: Connection) => (
-              <ConnectionCard
-                key={connection.source}
-                connection={connection}
-                busy={startOAuth.isPending || disconnect.isPending || !isAdmin}
-                onConnect={(): void => {
-                  startOAuth.mutate({ tenantId, source: connection.source });
-                }}
-                onScope={(): void => {
-                  globalThis.location.assign(
-                    `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
-                  );
-                }}
-                onDisconnect={(): void => {
-                  disconnect.mutate({ tenantId, source: connection.source });
-                }}
-              />
-            ))}
-          </div>
-        )}
+        <GrantSchedule
+          list={list}
+          tenantId={tenantId}
+          isAdmin={isAdmin}
+          startOAuth={startOAuth}
+          disconnect={disconnect}
+        />
       </div>
 
       <div className="band-rule" />
