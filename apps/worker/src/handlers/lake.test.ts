@@ -133,6 +133,57 @@ describe("the lake records API", () => {
     expect(json.code).toBe("invalid_request");
     expect(json.details.length).toBeGreaterThan(0);
   });
+
+  it("every batch is a run in the ledger, and batches under one id add up", async () => {
+    function batch(id: string): unknown {
+      return {
+        source: "hubspot",
+        tenantId: "CASE-1",
+        runId: "ext-1",
+        records: [
+          {
+            entity: "deals",
+            sourceRecordId: id,
+            sourceUpdatedAt: null,
+            payloadText: `{"id":"${id}"}`,
+          },
+        ],
+      };
+    }
+    expect((await post(batch("1"))).status).toBe(200);
+    expect((await post(batch("2"))).status).toBe(200);
+
+    const { rows } = await db.query<{ trigger: string; status: string; created: number }>(
+      "SELECT trigger, status, created FROM ops.run WHERE id = 'ext-1'",
+    );
+    expect(rows[0]).toEqual({ trigger: "lake-api", status: "ok", created: 2 });
+  });
+
+  it("a run id that already belongs to another tenant is refused before anything lands", async () => {
+    await db.asSuperuser((tx) => tx.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-2')"));
+    expect(
+      (
+        await post({
+          source: "hubspot",
+          tenantId: "CASE-1",
+          runId: "shared",
+          records: [
+            { entity: "deals", sourceRecordId: "1", sourceUpdatedAt: null, payloadText: "{}" },
+          ],
+        })
+      ).status,
+    ).toBe(200);
+    const blobs = (await backing.list("_blobs/")).length;
+
+    const res = await post({
+      source: "hubspot",
+      tenantId: "CASE-2",
+      runId: "shared",
+      records: [{ entity: "deals", sourceRecordId: "9", sourceUpdatedAt: null, payloadText: "{}" }],
+    });
+    expect(res.status).toBe(400);
+    expect((await backing.list("_blobs/")).length).toBe(blobs);
+  });
 });
 
 describe("the request line and the error boundary", () => {
@@ -179,9 +230,16 @@ describe("the request line and the error boundary", () => {
     const events = sink.map(
       (line) => JSON.parse(line) as { event: string; errorType?: string; status?: number },
     );
-    expect(events.map((e) => e.event)).toEqual(["request_failed", "request"]);
-    expect(events[0]?.errorType).toBe("Error");
-    expect(events[1]?.status).toBe(500);
+    // The run opened and failed before the boundary saw the error; the boundary's two lines
+    // close the request. The failure line carries the type, never the path in the message.
+    expect(events.map((e) => e.event)).toEqual([
+      "run_opened",
+      "run_failed",
+      "request_failed",
+      "request",
+    ]);
+    expect(events[2]?.errorType).toBe("Error");
+    expect(events[3]?.status).toBe(500);
   });
 });
 

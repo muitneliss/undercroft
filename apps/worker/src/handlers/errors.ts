@@ -19,6 +19,7 @@ import type { ApiError } from "@undercroft/contracts";
 import { ConnectorError, HttpError } from "@undercroft/core";
 
 import { ScopeNotChosen } from "../services/google/collect.ts";
+import { RunInProgress } from "../services/ingest.ts";
 
 const INTERNAL: Failure = {
   status: 500,
@@ -35,6 +36,10 @@ export interface Failure {
 export function failureOf(error: unknown): Failure {
   if (error instanceof ScopeNotChosen) {
     return { status: 409, code: "scope_not_chosen", message: error.message };
+  }
+  // The message names the run in progress, which is what a caller wanting to watch it needs.
+  if (error instanceof RunInProgress) {
+    return { status: 409, code: "run_in_progress", message: error.message };
   }
   // Matched by name, not by class. The registry error lives in `@undercroft/db/repos`, which
   // a handler may not import even for a type (`layer-handler-no-repo`), and the class sets

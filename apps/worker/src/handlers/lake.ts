@@ -9,6 +9,7 @@
 
 // biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
 
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
 // biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
@@ -40,6 +41,7 @@ import { authenticate } from "../services/auth.ts";
 import { browseScope, revokeConnection, storeCredential } from "../services/connections.ts";
 import { type Refresher, resolveToken, runIngest, type Transactor } from "../services/ingest.ts";
 import { landRecords } from "../services/land.ts";
+import { claimExternal, recordExternal } from "../services/ledger.ts";
 import { runTransform } from "../services/transform.ts";
 import { failureOf } from "./errors.ts";
 
@@ -160,6 +162,25 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
       );
     }
 
+    // The caller's run id is claimed BEFORE anything is landed. A script posts batches under
+    // an id of its own choosing, and an id that already names another tenant's run must be
+    // refused rather than merged into it.
+    const claimed = await claimExternal(deps.exec, {
+      runId: body.runId,
+      tenantId: body.tenantId,
+      source: body.source,
+    });
+    if (!claimed) {
+      return c.json(
+        {
+          code: "invalid_request",
+          message: "runId already belongs to a run for another tenant or source",
+          details: [],
+        },
+        400,
+      );
+    }
+
     const result = await landRecords(deps.lake, {
       source: body.source,
       tenantId: body.tenantId,
@@ -167,6 +188,7 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
       reason: body.reason,
       records: body.records,
     });
+    await recordExternal(deps.exec, body.runId, result);
 
     // If any record failed, the response is 422 -- never a 200 with a failed count, which
     // a caller checking only the status code would read as success.
@@ -203,6 +225,7 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
         lake: deps.lake,
         exec: deps.exec,
         specsDir: deps.specsDir,
+        ...(deps.log === undefined ? {} : { log: deps.log }),
         ...(deps.env ? { env: deps.env } : {}),
         ...(refresher === undefined ? {} : { refresher }),
         ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),

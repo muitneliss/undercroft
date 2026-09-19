@@ -22,6 +22,7 @@ import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { createLakeApi } from "./handlers/lake.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
 import type { Refresher } from "./services/ingest.ts";
+import { closeAbandonedRuns } from "./services/ledger.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -93,6 +94,10 @@ const app = createLakeApi({
       process.env.UNDERCROFT_DBT_PROFILES_DIR ?? join(import.meta.dirname, "..", "..", "..", "dbt"),
   },
 });
+
+// Whatever the previous process was in the middle of is over; the ledger says so before the
+// first request can collide with a row that would otherwise stay `running` forever.
+await closeAbandonedRuns(asExecutor(pool), log);
 
 // parseInt, not Number(): a port, not an amount (the money lint rule bans Number()).
 const port = Number.parseInt(process.env.UNDERCROFT_WORKER_PORT ?? "8081", 10);

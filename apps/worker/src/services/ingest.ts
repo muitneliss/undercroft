@@ -1,13 +1,25 @@
 /**
- * Ingest: the whole vertical slice in one call.
+ * Ingest: the whole vertical slice in one call, and the run that records it.
  *
  * Read a connector spec, drive the generic runtime, land into the lake, project into
  * `raw.records`. One of the two verbs the worker exposes -- `handlers/lake.ts` holds the
  * allowlist that fronts them, which is the privilege boundary: a compromised scheduler can
  * start these verbs and nothing else, which is why Kestra needs no Docker socket.
  *
- * The other verb, `transform`, hands off to dbt in its own container; the worker does not
- * embed dbt.
+ * The other verb, `transform`, spawns dbt as a subprocess in this image (ADR 0007).
+ *
+ * ## Every run is a row before it is anything else
+ *
+ * `runIngest` opens an `ops.run` row before it reads a byte and closes it whatever happens,
+ * so a run that landed nothing still exists and a run that failed says why. What it refused
+ * -- a record with no id, a document over the size ceiling -- goes to `ops.run_refusal`
+ * with its reason, which is what CLAUDE.md rule 2 asks: recorded, never dropped. The
+ * counts and refusals are gathered into a ledger as each entity finishes, so a run that
+ * fails on its third entity still records the two it completed.
+ *
+ * A second run for the same (tenant, source) while one is in progress is refused by the
+ * database, not by this code: `run_one_running` in `090_runs.sql` is what makes the rule
+ * hold for every caller at once.
  */
 
 // biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
@@ -20,6 +32,8 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 
 // biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One verb, one file. A run's opening, the two collector paths and its closing are one sequential procedure a reader follows top to bottom; splitting it by length would put the ledger in a different file from the run it records.
+// biome-ignore-all lint/style/noParameterProperties: TypeScript parameter properties in one error class. The alternative is declaring each field and then assigning it in the constructor, which is the same information written twice.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -30,11 +44,29 @@ import {
   readEntity,
 } from "@undercroft/connector-runtime";
 import { parseSpec } from "@undercroft/contracts";
-import { type ByteFetcher, createByteFetcher, newRunId } from "@undercroft/core";
+import {
+  type ByteFetcher,
+  createByteFetcher,
+  describeError,
+  type Logger,
+  newRunId,
+  UndercroftError,
+} from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
+import {
+  closeRun,
+  ConnectionRegistryError,
+  type Credential,
+  openRun,
+  recordEntities,
+  recordRefusals,
+  type RunEntity,
+  type RunRefusal,
+  type RunTrigger,
+  setStatus,
+} from "@undercroft/db/repos";
 import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
-import { ConnectionRegistryError, type Credential, setStatus } from "@undercroft/db/repos";
 import { createGoogleApi } from "./google/api.ts";
 import { type GoogleSource, isGoogleSource, runGoogleCollect } from "./google/collect.ts";
 import { landRecords, type RecordToLand } from "./land.ts";
@@ -80,6 +112,8 @@ export interface RunDeps {
    * which is safe only because no refresher is wired in that case.
    */
   readonly transactor?: Transactor;
+  /** Where the run's opening, closing and failure are written. Absent means silence. */
+  readonly log?: Logger;
 }
 
 export interface IngestResult {
@@ -90,7 +124,29 @@ export interface IngestResult {
     landed: number;
     loadedCreated: number;
     loadedChanged: number;
+    loadedUnchanged: number;
+    refused: number;
   }[];
+  /** Every record or document this run refused, with why. Never a payload. */
+  readonly refusals: RunRefusal[];
+}
+
+/** What a run wants to know about why it was started. Both default to the scheduler's. */
+export interface RunOpening {
+  readonly trigger?: RunTrigger;
+  /** An `app_user` uuid. Never an address: `ops.run` is readable by BI. */
+  readonly triggeredBy?: string;
+}
+
+/** A run for the same (tenant, source) is already in progress. `runId` names it. */
+export class RunInProgress extends UndercroftError {
+  constructor(
+    readonly source: string,
+    readonly tenantId: string,
+    readonly runId: string,
+  ) {
+    super(`${source} for tenant ${JSON.stringify(tenantId)} is already running as ${runId}`);
+  }
 }
 
 /**
@@ -137,8 +193,14 @@ export async function resolveToken(
   }
 }
 
+/** What a run has done so far, gathered as it goes so a failure still records the rest. */
+interface Ledger {
+  readonly entities: IngestResult["entities"];
+  readonly refusals: RunRefusal[];
+}
+
 /**
- * Ingest one source for one tenant: spec -> runtime -> lake -> raw.records.
+ * Ingest one source for one tenant: spec -> runtime -> lake -> raw.records, as one run.
  *
  * A token resolver is passed to the runtime that opens the sealed per-tenant credential
  * under a row lock; the worker holds the master key, the scheduler never sees it.
@@ -149,25 +211,100 @@ export async function resolveToken(
  */
 export async function runIngest(
   deps: RunDeps,
-  input: { source: string; tenantId: string },
+  input: { source: string; tenantId: string } & RunOpening,
 ): Promise<IngestResult> {
-  if (isGoogleSource(input.source)) {
-    return runGoogleIngest(deps, { source: input.source, tenantId: input.tenantId });
+  const runId = newRunId();
+  const trigger = input.trigger ?? "schedule";
+  const opened = await openRun(deps.exec, {
+    id: runId,
+    tenantId: input.tenantId,
+    source: input.source,
+    verb: "ingest",
+    trigger,
+    triggeredBy: input.triggeredBy ?? "",
+  });
+  if (!opened.ok) {
+    throw new RunInProgress(input.source, input.tenantId, opened.runId);
   }
-  return runSpecIngest(deps, input);
+  const log = deps.log?.child({ runId, tenantId: input.tenantId, source: input.source });
+  log?.info("run_opened", { verb: "ingest", trigger });
+
+  const ledger: Ledger = { entities: [], refusals: [] };
+  try {
+    if (isGoogleSource(input.source)) {
+      await runGoogleIngest(
+        deps,
+        { source: input.source, tenantId: input.tenantId, runId },
+        ledger,
+      );
+    } else {
+      await runSpecIngest(deps, { ...input, runId }, ledger);
+    }
+    await settle(deps.exec, runId, ledger, { status: "ok" });
+    log?.info("run_closed", { status: "ok", ...totals(ledger) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await settle(deps.exec, runId, ledger, { status: "failed", error: message });
+    log?.error("run_failed", { ...totals(ledger), ...describeError(error) });
+    throw error;
+  }
+
+  return { runId, source: input.source, entities: ledger.entities, refusals: ledger.refusals };
+}
+
+function totals(ledger: Ledger): {
+  created: number;
+  changed: number;
+  unchanged: number;
+  refused: number;
+} {
+  let created = 0;
+  let changed = 0;
+  let unchanged = 0;
+  for (const e of ledger.entities) {
+    created += e.loadedCreated;
+    changed += e.loadedChanged;
+    unchanged += e.loadedUnchanged;
+  }
+  return { created, changed, unchanged, refused: ledger.refusals.length };
+}
+
+/** Write what the ledger holds and close the row, in that order, so a reader of `ended_at` finds the rest. */
+async function settle(
+  exec: SqlExecutor,
+  runId: string,
+  ledger: Ledger,
+  outcome: { status: "ok" | "failed"; error?: string },
+): Promise<void> {
+  const entities: RunEntity[] = ledger.entities.map((e) => ({
+    entity: e.entity,
+    landed: e.landed,
+    created: e.loadedCreated,
+    changed: e.loadedChanged,
+    unchanged: e.loadedUnchanged,
+    refused: e.refused,
+  }));
+  await recordEntities(exec, runId, entities);
+  await recordRefusals(exec, runId, ledger.refusals);
+  await closeRun(exec, runId, {
+    status: outcome.status,
+    ...totals(ledger),
+    ...(outcome.error === undefined ? {} : { error: outcome.error }),
+  });
 }
 
 /**
  * The Google path, reported in the same shape as a spec run.
  *
- * Documents are counted into `landed` alongside records: from the caller's side one run
- * landed a number of things, and a scheduler that saw a green run with a zero count would
- * have no way to tell "the mailbox is empty" from "the PDFs all failed".
+ * Documents are counted as their own entity beside the records: from the caller's side one
+ * run landed a number of things, and a scheduler that saw a green run with a zero count
+ * would have no way to tell "the mailbox is empty" from "the PDFs all failed".
  */
 async function runGoogleIngest(
   deps: RunDeps,
-  input: { source: GoogleSource; tenantId: string },
-): Promise<IngestResult> {
+  input: { source: GoogleSource; tenantId: string; runId: string },
+  ledger: Ledger,
+): Promise<void> {
   const api = createGoogleApi(input.source, {
     fetcher: deps.byteFetcher ?? createByteFetcher(),
     token: () => resolveToken(deps, input),
@@ -175,31 +312,33 @@ async function runGoogleIngest(
 
   const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api }, input);
 
-  return {
-    runId: result.runId,
-    source: result.source,
-    entities: [
-      {
-        entity: input.source === "gmail" ? "messages" : "files",
-        landed: result.records.landed,
-        loadedCreated: result.records.loadedCreated,
-        loadedChanged: result.records.loadedChanged,
-      },
-      {
-        entity: "documents",
-        landed: result.documents.created + result.documents.unchanged,
-        loadedCreated: result.documents.created,
-        loadedChanged: 0,
-      },
-    ],
-  };
+  const records = result.refusals.filter((r) => r.entity !== "documents").length;
+  ledger.entities.push(
+    {
+      entity: input.source === "gmail" ? "messages" : "files",
+      landed: result.records.landed,
+      loadedCreated: result.records.loadedCreated,
+      loadedChanged: result.records.loadedChanged,
+      loadedUnchanged: result.records.loadedUnchanged,
+      refused: records,
+    },
+    {
+      entity: "documents",
+      landed: result.documents.created + result.documents.unchanged,
+      loadedCreated: result.documents.created,
+      loadedChanged: 0,
+      loadedUnchanged: result.documents.unchanged,
+      refused: result.refusals.length - records,
+    },
+  );
+  ledger.refusals.push(...result.refusals);
 }
 
 async function runSpecIngest(
   deps: RunDeps,
-  input: { source: string; tenantId: string },
-): Promise<IngestResult> {
-  const runId = newRunId();
+  input: { source: string; tenantId: string; runId: string },
+  ledger: Ledger,
+): Promise<void> {
   const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
 
   const ctx: RunContext = {
@@ -213,7 +352,6 @@ async function runSpecIngest(
         }),
   };
 
-  const entities: IngestResult["entities"] = [];
   // Ids per entity, so a `batch-from` relation can read against the entity it references.
   // Spec order matters: the referenced entity must be declared before the relation, which
   // the spec schema checks by refusing an unknown reference.
@@ -241,7 +379,7 @@ async function runSpecIngest(
     const landed = await landRecords(deps.lake, {
       source: input.source,
       tenantId: input.tenantId,
-      runId,
+      runId: input.runId,
       records: batch,
     });
     const loaded = await loadStreamToRaw(deps.exec, deps.lake, {
@@ -249,13 +387,22 @@ async function runSpecIngest(
       tenantId: input.tenantId,
       entity: entity.name,
     });
-    entities.push({
+    for (const result of landed.results) {
+      if (result.status === "failed") {
+        ledger.refusals.push({
+          entity: result.entity,
+          sourceRecordId: result.sourceRecordId,
+          reason: result.reason ?? "refused",
+        });
+      }
+    }
+    ledger.entities.push({
       entity: entity.name,
       landed: landed.created + landed.unchanged,
       loadedCreated: loaded.created,
       loadedChanged: loaded.changed,
+      loadedUnchanged: loaded.unchanged,
+      refused: landed.failed,
     });
   }
-
-  return { runId, source: input.source, entities };
 }

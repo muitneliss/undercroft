@@ -20,7 +20,7 @@ export function connection(source: Source, over: Partial<Connection> = {}): Conn
     scopes: [],
     config: {},
     scheduleCron: "",
-    lastRunId: "",
+    lastRun: null,
     expiresAt: null,
     ...over,
   };

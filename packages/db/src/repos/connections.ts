@@ -316,7 +316,23 @@ export interface ConnectionView extends Connection {
    * later, for a credential the worker refreshes without anybody being asked.
    */
   readonly credentialExpiresAt: string | null;
-  readonly lastRunId: string;
+  /**
+   * The newest run for this source, or `null` when there has never been one. Enough for a
+   * card to say whether the last run worked, when, and how much it saw; the ledger holds
+   * the rest.
+   */
+  readonly lastRun: LastRun | null;
+}
+
+export interface LastRun {
+  readonly id: string;
+  readonly status: "running" | "ok" | "failed";
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+  /** Records the run saw in raw: created + changed + unchanged. A count, not an amount. */
+  readonly seen: number;
+  readonly refused: number;
+  readonly error: string | null;
 }
 
 export async function listConnectionViews(
@@ -334,6 +350,12 @@ export async function listConnectionViews(
     chosenAt: Date | string | null;
     credentialExpiresAt: Date | string | null;
     lastRunId: string | null;
+    lastRunStatus: LastRun["status"] | null;
+    lastRunStartedAt: Date | string | null;
+    lastRunEndedAt: Date | string | null;
+    lastRunSeen: number | null;
+    lastRunRefused: number | null;
+    lastRunError: string | null;
   }>(
     `SELECT c.tenant_id AS "tenantId", c.source, c.status,
             c.external_account_id AS "externalAccountId", c.scope,
@@ -341,14 +363,22 @@ export async function listConnectionViews(
             d.selection::text     AS "selectionJson",
             d.chosen_at           AS "chosenAt",
             s.expires_at          AS "credentialExpiresAt",
-            r.id                  AS "lastRunId"
+            r.id                  AS "lastRunId",
+            r.status              AS "lastRunStatus",
+            r.started_at          AS "lastRunStartedAt",
+            r.ended_at            AS "lastRunEndedAt",
+            r.seen                AS "lastRunSeen",
+            r.refused             AS "lastRunRefused",
+            r.error               AS "lastRunError"
      FROM ops.connection c
      LEFT JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
      LEFT JOIN app.connection_secret s ON s.tenant_id = c.tenant_id AND s.source = c.source
      LEFT JOIN LATERAL (
-       SELECT id FROM ops.run
-       WHERE tenant_id = c.tenant_id AND source = c.source
-       ORDER BY started_at DESC LIMIT 1
+       SELECT id, status, started_at, ended_at, created + changed + unchanged AS seen,
+              refused, error
+       FROM ops.run
+       WHERE tenant_id = c.tenant_id AND source = c.source AND verb = 'ingest'
+       ORDER BY started_at DESC, id DESC LIMIT 1
      ) r ON true
      WHERE c.tenant_id = $1
      ORDER BY c.source`,
@@ -366,6 +396,18 @@ export async function listConnectionViews(
     chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),
     credentialExpiresAt:
       row.credentialExpiresAt === null ? null : new Date(row.credentialExpiresAt).toISOString(),
-    lastRunId: row.lastRunId ?? "",
+    lastRun:
+      row.lastRunId === null || row.lastRunStatus === null || row.lastRunStartedAt === null
+        ? null
+        : {
+            id: row.lastRunId,
+            status: row.lastRunStatus,
+            startedAt: new Date(row.lastRunStartedAt).toISOString(),
+            endedAt:
+              row.lastRunEndedAt === null ? null : new Date(row.lastRunEndedAt).toISOString(),
+            seen: row.lastRunSeen ?? 0,
+            refused: row.lastRunRefused ?? 0,
+            error: row.lastRunError,
+          },
   }));
 }

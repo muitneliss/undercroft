@@ -11,6 +11,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import * as people from "../services/people.ts";
+import * as runs from "../services/runs.ts";
 import * as tenants from "../services/tenants.ts";
 import {
   authedProcedure,
@@ -377,6 +378,34 @@ export const appRouter = router({
   }),
 
   runs: router({
+    /**
+     * The ledger, newest first. Any member of the tenant may read it: whether a run happened
+     * is the question the whole division exists to answer, and hiding it from a viewer would
+     * hide the one thing they came to look at.
+     */
+    list: tenantProcedure
+      .input(
+        z.object({
+          limit: z.number().int().min(1).max(100).default(50),
+          cursor: z.string().optional(),
+        }),
+      )
+      .query(({ ctx, input }) =>
+        runs.list(ctx.exec, input.tenantId, { limit: input.limit, cursor: input.cursor ?? null }),
+      ),
+
+    // A run that is not this tenant's is NOT_FOUND, not FORBIDDEN, for the reason
+    // `tenantProcedure` gives: the id must not confirm that another customer's run exists.
+    get: tenantProcedure
+      .input(z.object({ runId: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        const run = await runs.get(ctx.exec, input.tenantId, input.runId);
+        if (run === null) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        return run;
+      }),
+
     // Triggering a run proxies to the worker's verb allowlist with the same bearer token
     // Kestra uses; the control plane gains no wider privilege than the scheduler.
     trigger: requireRole("member")

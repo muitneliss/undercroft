@@ -27,6 +27,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import {
   type Connection,
   type ConnectionView,
+  type LastRun,
   getConnection,
   listConnections,
   listConnectionViews,
@@ -90,7 +91,11 @@ export interface ConnectionCardView {
    * nearest number to hand.
    */
   readonly expiresAt: string | null;
-  readonly lastRunId: string;
+  /**
+   * The newest ingest run for this source, or `null` when there has never been one. The
+   * card prints its outcome, its time and how much it saw; the Journal holds the rest.
+   */
+  readonly lastRun: LastRun | null;
   /**
    * Always `""` for now. Kestra owns schedules and nothing in this database writes one; a
    * column would be a promise nobody keeps, and the card already renders an absent value as
@@ -172,7 +177,7 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Connect
         scopes: [],
         config: {},
         expiresAt: null,
-        lastRunId: "",
+        lastRun: null,
         scheduleCron: "",
       };
     }
@@ -186,7 +191,7 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<Connect
       config: configOf(row.source, row.selectionJson),
       // Not `row.credentialExpiresAt`. See the field.
       expiresAt: null,
-      lastRunId: row.lastRunId,
+      lastRun: row.lastRun,
       scheduleCron: "",
     };
   });
