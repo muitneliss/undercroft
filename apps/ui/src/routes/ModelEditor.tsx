@@ -18,19 +18,16 @@
  * regardless.
  */
 
-import { TEST_KINDS } from "@undercroft/contracts/models";
-import { Suspense, lazy, useEffect, useId, useRef } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import type { BuildResult } from "@/api/types.ts";
+import type { ModelDetail } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
-import { ResultTable } from "@/components/ResultTable.tsx";
+import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { StepsTable } from "@/components/StepsTable.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
-import { isModelName } from "@/lib/modelName.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -38,23 +35,56 @@ const SqlEditor = lazy(() =>
   import("@/components/SqlEditor.tsx").then((module) => ({ default: module.SqlEditor })),
 );
 
-/** Which catalogue key names each test kind's column in the tests table. */
-const TEST_HEAD = { not_null: "models.colNotNull", unique: "models.colUnique" } as const;
+type Save = ReturnType<typeof trpc.models.save.useMutation>;
+type Build = ReturnType<typeof trpc.models.build.useMutation>;
+type Remove = ReturnType<typeof trpc.models.delete.useMutation>;
 
-export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Element {
-  const { t } = useTranslation();
-  const params = useParams();
-  const name = params.name ?? "";
-  const locale = useUiStore((state) => state.locale);
+/** Save and Build, plus whether any request is in flight; one press at a time, page-wide. */
+interface ModelActions {
+  readonly save: Save;
+  readonly build: Build;
+  readonly busy: boolean;
+}
+
+/**
+ * Seed the draft from the server the first time THIS model is opened.
+ *
+ * A draft already held for it -- edits from an earlier visit -- is kept, which is the point
+ * of the store: an author who leaves to read a failed build comes back to their own text.
+ */
+function useModelDraft(
+  tenantId: string,
+  name: string,
+  stored: ModelDetail | undefined,
+): ModelDraft | null {
   const draft = useUiStore((state) => state.modelDraft);
   const setModelDraft = useUiStore((state) => state.setModelDraft);
-  const setModelSql = useUiStore((state) => state.setModelSql);
+  const held = draft !== null && draft.tenantId === tenantId && draft.name === name ? draft : null;
+
+  useEffect(() => {
+    if (stored === undefined || held !== null) {
+      return;
+    }
+    setModelDraft(draftFrom(tenantId, stored));
+  }, [stored, held, tenantId, setModelDraft]);
+
+  return held;
+}
+
+/**
+ * The three verbs, wired to what each invalidates.
+ *
+ * Together because "one request at a time" is a page-wide fact: the list is about to be
+ * re-read, and a second press answers about a model that no longer looks like this one.
+ */
+function useModelActions(
+  tenantId: string,
+  name: string,
+): ModelActions & { readonly remove: Remove } {
+  const setModelDraft = useUiStore((state) => state.setModelDraft);
   const markModelSaved = useUiStore((state) => state.markModelSaved);
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-
-  const model = trpc.models.get.useQuery({ tenantId, name }, { enabled: name !== "" });
-  const tenant = trpc.tenants.get.useQuery({ tenantId });
 
   const save = trpc.models.save.useMutation({
     onSuccess: async () => {
@@ -78,15 +108,24 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
     },
   });
 
-  // Seed the draft from the server the first time THIS model is opened. A draft already
-  // held for it -- edits from an earlier visit -- is kept, which is the point of the store.
-  const held = draft !== null && draft.tenantId === tenantId && draft.name === name ? draft : null;
-  useEffect(() => {
-    if (model.data === undefined || held !== null) {
-      return;
-    }
-    setModelDraft(draftFrom(tenantId, model.data));
-  }, [model.data, held, tenantId, setModelDraft]);
+  return {
+    save,
+    build,
+    remove,
+    busy: save.isPending || build.isPending || remove.isPending,
+  };
+}
+
+export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  const params = useParams();
+  const name = params.name ?? "";
+  const locale = useUiStore((state) => state.locale);
+
+  const model = trpc.models.get.useQuery({ tenantId, name }, { enabled: name !== "" });
+  const tenant = trpc.tenants.get.useQuery({ tenantId });
+  const held = useModelDraft(tenantId, name, model.data);
+  const { save, build, remove, busy } = useModelActions(tenantId, name);
 
   if (model.isPending || tenant.isPending || (model.isSuccess && held === null)) {
     return <Skeleton rows={6} />;
@@ -103,92 +142,25 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
   }
 
   const isAdmin = tenant.data.role === "admin";
-  const dirty = isDirty(held);
-  const busy = save.isPending || build.isPending || remove.isPending;
-  const columns = model.data.lastBuild?.columns ?? [];
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("models.head")}</div>
-      <div className="body stack">
-        <p className="prose">
-          <Link className="plate plate--small" to={divisionPath("models", tenantId)}>
-            {t("models.backToList")}
-          </Link>
-        </p>
-        <h1>{name}</h1>
 
-        {isAdmin ? null : <p className="note">{t("models.readOnlyNote")}</p>}
-
-        <Suspense fallback={<Skeleton rows={6} />}>
-          <SqlEditor
-            key={`${tenantId}/${name}`}
-            value={held.sql}
-            onChange={setModelSql}
-            readOnly={!isAdmin}
-            label={t("models.sqlLabel")}
-          />
-        </Suspense>
-
-        {isAdmin ? (
-          <div className="row">
-            <button
-              className="plate plate--primary"
-              disabled={busy || !dirty}
-              type="button"
-              onClick={(): void => {
-                save.mutate({
-                  tenantId,
-                  name,
-                  sql: held.sql,
-                  tests: testsFor(held),
-                  create: false,
-                });
-              }}
-            >
-              {save.isPending ? t("models.saving") : t("models.save")}
-            </button>
-            <button
-              className="plate"
-              disabled={busy || dirty}
-              title={dirty ? t("models.buildHint") : undefined}
-              type="button"
-              onClick={(): void => {
-                build.mutate({ tenantId, name });
-              }}
-            >
-              {build.isPending ? t("models.building") : t("models.build")}
-            </button>
-            {dirty ? (
-              <span className="datum datum--quiet">{t("models.unsaved")}</span>
-            ) : save.isSuccess ? (
-              <span className="datum datum--quiet" role="status">
-                {t("models.savedNote")}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {save.isError ? (
-          <Errata heading={t("models.notSaved")} live={true}>
-            {save.error.message}
-          </Errata>
-        ) : null}
-        {build.isError ? (
-          <Errata heading={t("models.notBuilt")} live={true}>
-            {build.error.message}
-          </Errata>
-        ) : null}
-        {build.isSuccess ? (
-          <BuildPanel tenantId={tenantId} result={build.data} locale={locale} />
-        ) : null}
-      </div>
+      <EditorBand
+        tenantId={tenantId}
+        name={name}
+        draft={held}
+        isAdmin={isAdmin}
+        locale={locale}
+        actions={{ save, build, busy }}
+      />
 
       <div className="band-rule" />
       <div className="head">{t("models.testsHead")}</div>
       <div className="body stack">
         <p className="prose">{t("models.testsLead")}</p>
-        <TestsForm draft={held} columns={columns} canEdit={isAdmin} />
+        <TestsForm draft={held} columns={model.data.lastBuild?.columns ?? []} canEdit={isAdmin} />
       </div>
 
       <div className="band-rule" />
@@ -197,237 +169,188 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
         <Reference tenantId={tenantId} />
       </div>
 
-      {isAdmin ? (
-        <>
-          <div className="band-rule" />
-          <div className="head">{t("models.deleteHead")}</div>
-          <div className="body stack">
-            <p className="prose">{t("models.deleteLead", { name })}</p>
-            <details className="tokenform">
-              <summary className="plate">{t("models.deleteHead")}</summary>
-              <div className="hinge stack">
-                <button
-                  className="plate plate--primary"
-                  disabled={busy}
-                  type="button"
-                  onClick={(): void => {
-                    remove.mutate({ tenantId, name });
-                  }}
-                >
-                  {remove.isPending ? t("models.deleting") : t("models.deleteConfirm", { name })}
-                </button>
-                {remove.isError ? (
-                  <Errata heading={t("models.notDeleted")} live={true}>
-                    {remove.error.message}
-                  </Errata>
-                ) : null}
-              </div>
-            </details>
-          </div>
-        </>
-      ) : null}
+      <DeleteBand tenantId={tenantId} name={name} isAdmin={isAdmin} busy={busy} remove={remove} />
     </div>
   );
 }
 
-/** What the build did: its outcome, its steps, and the first rows of the table it made. */
-function BuildPanel({
+/**
+ * The SQL, the two verbs, and what they answered.
+ *
+ * Save stores what is on screen and executes nothing; Build runs dbt for this model alone,
+ * from the SAVED version -- which is why it is disabled while the draft is dirty and says so
+ * rather than quietly building something else.
+ */
+function EditorBand({
   tenantId,
-  result,
+  name,
+  draft,
+  isAdmin,
   locale,
+  actions,
 }: {
   tenantId: string;
-  result: BuildResult;
-  locale: "vi" | "en";
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const journal = `${divisionPath("journal", tenantId)}/${result.runId}`;
-
-  return (
-    <div className="hinge stack">
-      <span className="hinge__punch hinge__punch--a" aria-hidden="true" />
-      <span className="hinge__punch hinge__punch--b" aria-hidden="true" />
-      <span className="label">
-        {result.ok ? t("models.buildOkHead") : t("models.buildFailedHead")}
-      </span>
-      {result.error === null ? null : (
-        <Errata heading={t("models.buildFailedHead")}>{result.error}</Errata>
-      )}
-      {result.testsFailed > 0 ? (
-        <p className="note">{t("models.testsFailed", { count: result.testsFailed })}</p>
-      ) : null}
-      {result.steps.length > 0 ? <StepsTable steps={result.steps} locale={locale} /> : null}
-      {result.preview === null ? null : (
-        <>
-          <span className="label">{t("models.previewHead")}</span>
-          {result.preview.rows.length === 0 ? (
-            <p className="note">{t("models.previewEmpty")}</p>
-          ) : (
-            <ResultTable result={result.preview} locale={locale} />
-          )}
-        </>
-      )}
-      <div className="row">
-        <Link className="plate plate--small" to={journal}>
-          {t("models.openInJournal")}
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-/** The tests per column, as the draft holds them; every change is a write to the store. */
-function TestsForm({
-  draft,
-  columns,
-  canEdit,
-}: {
+  name: string;
   draft: ModelDraft;
-  columns: readonly string[];
-  canEdit: boolean;
+  isAdmin: boolean;
+  locale: "vi" | "en";
+  actions: ModelActions;
 }): React.JSX.Element {
-  const modelTestColumnId = useId();
-  const modelColumnsId = useId();
   const { t } = useTranslation();
-  const setModelTest = useUiStore((state) => state.setModelTest);
-  const addColumn = useUiStore((state) => state.addModelTestColumn);
-  const removeColumn = useUiStore((state) => state.removeModelTestColumn);
-  const columnFieldRef = useRef<HTMLInputElement>(null);
-  const rows = Object.entries(draft.tests);
+  const setModelSql = useUiStore((state) => state.setModelSql);
+  const { save, build } = actions;
 
   return (
-    <div className="stack stack--tight">
-      {rows.length === 0 ? (
-        <p className="note">{t("models.noTests")}</p>
-      ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th scope="col">{t("models.colColumn")}</th>
-              {TEST_KINDS.map((kind) => (
-                <th key={kind} scope="col">
-                  {t(TEST_HEAD[kind])}
-                </th>
-              ))}
-              <th scope="col">{canEdit ? t("models.removeColumn") : ""}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([column, kinds]) => (
-              <tr key={column}>
-                <td className="datum">{column}</td>
-                {TEST_KINDS.map((kind) => (
-                  <td key={kind}>
-                    <label className="punch">
-                      <input
-                        checked={kinds.includes(kind)}
-                        disabled={!canEdit}
-                        type="checkbox"
-                        onChange={(event): void => {
-                          setModelTest(column, kind, event.currentTarget.checked);
-                        }}
-                      />
-                      <span className="punch__box" />
-                      <span className="datum datum--quiet">{t(TEST_HEAD[kind])}</span>
-                    </label>
-                  </td>
-                ))}
-                <td>
-                  {canEdit ? (
-                    <button
-                      className="plate plate--small"
-                      type="button"
-                      onClick={(): void => {
-                        removeColumn(column);
-                      }}
-                    >
-                      {t("models.removeColumn")}
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+    <div className="body stack">
+      <p className="prose">
+        <Link className="plate plate--small" to={divisionPath("models", tenantId)}>
+          {t("models.backToList")}
+        </Link>
+      </p>
+      <h1>{name}</h1>
 
-      {canEdit ? (
-        <form
-          className="stack stack--tight"
-          onSubmit={(event): void => {
-            event.preventDefault();
-            const field = columnFieldRef.current;
-            const column = field?.value.trim() ?? "";
-            if (field === null || !isModelName(column)) {
-              field?.reportValidity();
-              return;
-            }
-            addColumn(column);
-            field.value = "";
-          }}
-        >
-          <div className="field">
-            <label className="label" htmlFor={modelTestColumnId}>
-              {t("models.addColumnLabel")}
-            </label>
-            <input
-              autoComplete="off"
-              className="input"
-              id={modelTestColumnId}
-              list="model-columns"
-              maxLength={63}
-              name="column"
-              pattern="[a-z][a-z0-9_]*"
-              ref={columnFieldRef}
-              required={true}
-              title={t("models.nameInvalid")}
-              type="text"
-            />
-            <datalist id={modelColumnsId}>
-              {columns.map((column) => (
-                <option key={column} value={column} />
-              ))}
-            </datalist>
-            <p className="field__hint">{t("models.addColumnHint")}</p>
-          </div>
-          <div className="row">
-            <button className="plate" type="submit">
-              {t("models.addColumn")}
-            </button>
-          </div>
-        </form>
+      {isAdmin ? null : <p className="note">{t("models.readOnlyNote")}</p>}
+
+      <Suspense fallback={<Skeleton rows={6} />}>
+        <SqlEditor
+          key={`${tenantId}/${name}`}
+          value={draft.sql}
+          onChange={setModelSql}
+          readOnly={!isAdmin}
+          label={t("models.sqlLabel")}
+        />
+      </Suspense>
+
+      {isAdmin ? (
+        <ModelVerbs tenantId={tenantId} name={name} draft={draft} actions={actions} />
+      ) : null}
+
+      {save.isError ? (
+        <Errata heading={t("models.notSaved")} live={true}>
+          {save.error.message}
+        </Errata>
+      ) : null}
+      {build.isError ? (
+        <Errata heading={t("models.notBuilt")} live={true}>
+          {build.error.message}
+        </Errata>
+      ) : null}
+      {build.isSuccess ? (
+        <BuildPanel tenantId={tenantId} result={build.data} locale={locale} />
       ) : null}
     </div>
   );
 }
 
-/** The platform's source and macros, disclosed on demand. Read-only by construction. */
-function Reference({ tenantId }: { tenantId: string }): React.JSX.Element {
+/**
+ * Deleting the model, behind a disclosure.
+ *
+ * The row goes; the built table stays until the next build, and the lead says so -- a delete
+ * that silently left a stale table in `analytics` would be a dashboard reading a model
+ * nobody can find.
+ */
+function DeleteBand({
+  tenantId,
+  name,
+  isAdmin,
+  busy,
+  remove,
+}: {
+  tenantId: string;
+  name: string;
+  isAdmin: boolean;
+  busy: boolean;
+  remove: Remove;
+}): React.JSX.Element | null {
   const { t } = useTranslation();
-  const reference = trpc.models.reference.useQuery({ tenantId });
+
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
-    <details className="tokenform">
-      <summary className="plate">{t("models.referenceHead")}</summary>
-      <div className="hinge stack">
-        <p className="prose">{t("models.referenceLead")}</p>
-        {reference.isPending ? <Skeleton rows={3} /> : null}
-        {reference.isError ? (
-          <Errata heading={t("common.notLoaded")}>{reference.error.message}</Errata>
-        ) : null}
-        {reference.isSuccess ? (
-          <>
-            <span className="label">{t("models.sourcesHead")}</span>
-            <pre className="payload__text">{reference.data.sourcesYml}</pre>
-            <span className="label">{t("models.macrosHead")}</span>
-            {reference.data.macros.map((macro) => (
-              <pre key={macro.name} className="payload__text">
-                {macro.sql}
-              </pre>
-            ))}
-          </>
-        ) : null}
+    <>
+      <div className="band-rule" />
+      <div className="head">{t("models.deleteHead")}</div>
+      <div className="body stack">
+        <p className="prose">{t("models.deleteLead", { name })}</p>
+        <details className="tokenform">
+          <summary className="plate">{t("models.deleteHead")}</summary>
+          <div className="hinge stack">
+            <button
+              className="plate plate--primary"
+              disabled={busy}
+              type="button"
+              onClick={(): void => {
+                remove.mutate({ tenantId, name });
+              }}
+            >
+              {remove.isPending ? t("models.deleting") : t("models.deleteConfirm", { name })}
+            </button>
+            {remove.isError ? (
+              <Errata heading={t("models.notDeleted")} live={true}>
+                {remove.error.message}
+              </Errata>
+            ) : null}
+          </div>
+        </details>
       </div>
-    </details>
+    </>
+  );
+}
+
+/**
+ * Save and Build, and what the state of the draft says about each.
+ *
+ * Build is disabled while the draft is dirty and says why in its title, because it runs the
+ * SAVED version: a Build that quietly ran last night's SQL under this morning's text is a
+ * result nobody could reproduce.
+ */
+function ModelVerbs({
+  tenantId,
+  name,
+  draft,
+  actions,
+}: {
+  tenantId: string;
+  name: string;
+  draft: ModelDraft;
+  actions: ModelActions;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const { save, build, busy } = actions;
+  const dirty = isDirty(draft);
+
+  return (
+    <div className="row">
+      <button
+        className="plate plate--primary"
+        disabled={busy || !dirty}
+        type="button"
+        onClick={(): void => {
+          save.mutate({ tenantId, name, sql: draft.sql, tests: testsFor(draft), create: false });
+        }}
+      >
+        {save.isPending ? t("models.saving") : t("models.save")}
+      </button>
+      <button
+        className="plate"
+        disabled={busy || dirty}
+        title={dirty ? t("models.buildHint") : undefined}
+        type="button"
+        onClick={(): void => {
+          build.mutate({ tenantId, name });
+        }}
+      >
+        {build.isPending ? t("models.building") : t("models.build")}
+      </button>
+      {dirty ? (
+        <span className="datum datum--quiet">{t("models.unsaved")}</span>
+      ) : save.isSuccess ? (
+        <span className="datum datum--quiet" role="status">
+          {t("models.savedNote")}
+        </span>
+      ) : null}
+    </div>
   );
 }
