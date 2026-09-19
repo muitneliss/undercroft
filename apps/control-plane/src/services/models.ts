@@ -18,7 +18,12 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
 
-import { ModelTests } from "@undercroft/contracts";
+import {
+  type BuildModelResponse,
+  type DqFailuresRequest,
+  ModelTests,
+  type TableResult,
+} from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   deleteModel,
@@ -30,8 +35,10 @@ import {
   type Model,
   saveModel,
 } from "@undercroft/db/repos";
+import { MACROS, SOURCES_YML } from "@undercroft/db/services";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
+import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
 export type { LastBuild, Model };
 
@@ -113,6 +120,48 @@ export async function save(
     detail: JSON.stringify({ name: input.name, created: input.create }),
   });
   return { ok: true };
+}
+
+/**
+ * Build one model through the worker and wait: the editor is looking. The audit row names
+ * the model and the run; the run itself is in the ledger, where the journal reads it.
+ */
+export async function build(
+  exec: SqlExecutor,
+  worker: WorkerClient,
+  input: { tenantId: string; name: string; actor: string; actorId: string },
+): Promise<WorkerOutcome<BuildModelResponse>> {
+  const outcome = await worker.buildModel({
+    tenantId: input.tenantId,
+    model: input.name,
+    triggeredBy: input.actorId,
+  });
+  if (outcome.ok) {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "models.build",
+      detail: JSON.stringify({
+        name: input.name,
+        runId: outcome.value.runId,
+        ok: outcome.value.ok,
+      }),
+    });
+  }
+  return outcome;
+}
+
+/** What the platform ships into every project, for the editor's reference panel. */
+export function reference(): { sourcesYml: string; macros: { name: string; sql: string }[] } {
+  return { sourcesYml: SOURCES_YML, macros: MACROS.map((m) => ({ name: m.name, sql: m.sql })) };
+}
+
+/** The rows a failed test stored, through the worker; nothing here decides who may look. */
+export function dqFailures(
+  worker: WorkerClient,
+  input: DqFailuresRequest,
+): Promise<WorkerOutcome<TableResult>> {
+  return worker.dqFailures(input);
 }
 
 /** Remove the model. `false` when there was none; the handler decides that is NOT_FOUND. */

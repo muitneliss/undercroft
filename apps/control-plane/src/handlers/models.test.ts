@@ -16,6 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
+import { InMemoryWorkerClient, type WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
 
@@ -37,7 +38,12 @@ async function seedMember(email: string, role: Role): Promise<string> {
   return userId;
 }
 
-function caller(userId: string, email: string, locale: "vi" | "en" = "vi") {
+function caller(
+  userId: string,
+  email: string,
+  locale: "vi" | "en" = "vi",
+  worker: WorkerClient | null = null,
+) {
   const ctx: Context = {
     exec: db,
     user: { userId, email },
@@ -47,7 +53,7 @@ function caller(userId: string, email: string, locale: "vi" | "en" = "vi") {
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
-    worker: null,
+    worker,
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);
@@ -119,6 +125,73 @@ describe("models.save", () => {
       caller(admin, "a@example.test").models.save({ ...DRAFT, name: "Deals-2026" }),
     );
     expect(got.code).toBe("BAD_REQUEST");
+  });
+});
+
+describe("models.build", () => {
+  it("a member is refused; an admin's build reaches the worker and is on the trail", async () => {
+    const member = await seedMember("m@example.test", "member");
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient();
+
+    const got = await refusal(() =>
+      caller(member, "m@example.test", "vi", worker).models.build({
+        tenantId: TENANT,
+        name: "stg_deals",
+      }),
+    );
+    expect(got.code).toBe("FORBIDDEN");
+
+    const built = await caller(admin, "a@example.test", "vi", worker).models.build({
+      tenantId: TENANT,
+      name: "stg_deals",
+    });
+    expect(built.ok).toBe(true);
+    expect(worker.built).toEqual([{ tenantId: TENANT, model: "stg_deals", triggeredBy: admin }]);
+    const { rows } = await db.query<{ action: string }>(
+      "SELECT action FROM ops.audit_log WHERE tenant_id = $1",
+      [TENANT],
+    );
+    expect(rows.map((r) => r.action)).toEqual(["models.build"]);
+  });
+
+  it("a build already running is a CONFLICT the person can wait out, worded", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().failing("in-progress");
+    const got = await refusal(() =>
+      caller(admin, "a@example.test", "en", worker).models.build({
+        tenantId: TENANT,
+        name: "stg_deals",
+      }),
+    );
+    expect(got.code).toBe("CONFLICT");
+    expect(got.message).toContain("already running");
+  });
+
+  it("the reference names the platform's source and its macros for any member", async () => {
+    const viewer = await seedMember("v@example.test", "viewer");
+    const reference = await caller(viewer, "v@example.test").models.reference({ tenantId: TENANT });
+    expect(reference.sourcesYml).toContain("name: undercroft");
+    expect(reference.macros.map((m) => m.name)).toEqual(["parse_amount", "generate_schema_name"]);
+  });
+});
+
+describe("dq.failures", () => {
+  it("a member is refused: failing rows are source data; an admin reads them", async () => {
+    const member = await seedMember("m@example.test", "member");
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient();
+    const input = { tenantId: TENANT, runId: "r-1", uniqueId: "test.undercroft.x.a1" };
+
+    const got = await refusal(() =>
+      caller(member, "m@example.test", "vi", worker).dq.failures(input),
+    );
+    expect(got.code).toBe("FORBIDDEN");
+    expect(await caller(admin, "a@example.test", "vi", worker).dq.failures(input)).toEqual({
+      columns: [],
+      rows: [],
+      truncated: false,
+    });
   });
 });
 

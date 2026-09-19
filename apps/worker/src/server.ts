@@ -17,13 +17,14 @@
 import { join } from "node:path";
 import process from "node:process";
 import { createByteFetcher, createLogger } from "@undercroft/core";
-import { asExecutor, createPool, withTransaction } from "@undercroft/db";
+import { asExecutor, connectionOf, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { createLakeApi } from "./handlers/lake.ts";
 import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
 import type { Refresher } from "./services/ingest.ts";
 import { closeAbandonedRuns } from "./services/ledger.ts";
+import { createTenantSessions } from "./services/tenantSession.ts";
 import { xeroRefresher } from "./services/xero/refresh.ts";
 
 function required(name: string): string {
@@ -73,7 +74,8 @@ function refreshers(xeroClientOrNone: XeroClient | undefined): Record<string, Re
 // 02:00 left no evidence anywhere.
 const log = createLogger({ component: "worker" });
 
-const pool = createPool(required("UNDERCROFT_POSTGRES_DSN"));
+const dsn = required("UNDERCROFT_POSTGRES_DSN");
+const pool = createPool(dsn);
 const store = new S3ObjectStore({
   bucket: required("UNDERCROFT_S3_BUCKET_RAW"),
   ...(process.env.UNDERCROFT_S3_ENDPOINT === undefined
@@ -104,12 +106,13 @@ const app = createLakeApi({
   specsDir:
     process.env.UNDERCROFT_SPECS_DIR ??
     join(import.meta.dirname, "..", "..", "..", "specs", "connectors"),
+  // A tenant's project is generated per build from `app.model` and pointed at the same
+  // server this process is on; the worker becomes the tenant to build and to read. The
+  // child's environment is this process's, so `PATH` finds the `dbt` the image installed.
   dbt: {
-    projectDir:
-      process.env.UNDERCROFT_DBT_PROJECT_DIR ??
-      join(import.meta.dirname, "..", "..", "..", "dbt", "undercroft_starter"),
-    profilesDir:
-      process.env.UNDERCROFT_DBT_PROFILES_DIR ?? join(import.meta.dirname, "..", "..", "..", "dbt"),
+    database: connectionOf(dsn),
+    sessions: createTenantSessions({ exec: asExecutor(pool), dsn }),
+    env: process.env,
   },
 });
 

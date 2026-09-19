@@ -7,7 +7,13 @@
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
 
 import { TRPCError } from "@trpc/server";
-import { Cadence, MAX_MODEL_SQL_BYTES, ModelName, ModelTests } from "@undercroft/contracts";
+import {
+  Cadence,
+  MAX_MODEL_SQL_BYTES,
+  MAX_PREVIEW_ROWS,
+  ModelName,
+  ModelTests,
+} from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
@@ -612,6 +618,72 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND" });
         }
         return { ok: true };
+      }),
+
+    /**
+     * Build one model and wait for the answer. Admin-only like save: a build creates the
+     * table a dashboard reads. A build already running for the tenant is a CONFLICT the
+     * person can act on; a worker that did not answer is a precondition they cannot.
+     */
+    build: requireRole("admin")
+      .input(z.object({ name: ModelName }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.buildNotStarted"),
+          });
+        }
+        const outcome = await models.build(ctx.exec, ctx.worker, {
+          tenantId: ctx.tenantId,
+          name: input.name,
+          actor: ctx.user.email,
+          actorId: ctx.user.userId,
+        });
+        if (!outcome.ok) {
+          throw new TRPCError({
+            code: outcome.reason === "in-progress" ? "CONFLICT" : "PRECONDITION_FAILED",
+            message: messages(ctx.locale)(
+              outcome.reason === "in-progress" ? "error.buildInProgress" : "error.buildNotStarted",
+            ),
+          });
+        }
+        return outcome.value;
+      }),
+
+    /** The sources and macros every project carries, for the editor's reference panel. */
+    reference: tenantProcedure.query(() => models.reference()),
+  }),
+
+  dq: router({
+    /**
+     * The rows a failed test stored. Admin-only: they are source data, the same rows the
+     * dq schema exists to keep off dashboards. NOT_FOUND for a step that is not this
+     * tenant's, BAD_REQUEST for one that stored nothing.
+     */
+    failures: requireRole("admin")
+      .input(
+        z.object({
+          runId: z.string().min(1),
+          uniqueId: z.string().min(1),
+          limit: z.number().int().min(1).max(MAX_PREVIEW_ROWS).default(MAX_PREVIEW_ROWS),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.dqNotRead"),
+          });
+        }
+        const outcome = await models.dqFailures(ctx.worker, { ...input, tenantId: ctx.tenantId });
+        if (!outcome.ok) {
+          throw new TRPCError({
+            code: outcome.reason === "refused" ? "NOT_FOUND" : "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.dqNotRead"),
+          });
+        }
+        return outcome.value;
       }),
   }),
 

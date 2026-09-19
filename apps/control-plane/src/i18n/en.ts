@@ -71,6 +71,11 @@ export const en = {
       "The tenant ID {{tenantId}} is too close to another customer's (it differs only in case or punctuation). Choose one that differs in more than that.",
     modelNameTaken:
       "A model named {{name}} already exists. Open it to edit, or choose another name.",
+    buildInProgress:
+      "A build is already running for this customer. Wait for it to finish, then try again.",
+    buildNotStarted:
+      "The model could not be built. The processing service did not answer; try again in a few minutes.",
+    dqNotRead: "The failing rows for this step could not be read.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
     scopeInsufficient:

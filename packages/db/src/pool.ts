@@ -59,6 +59,50 @@ export function createPool(connectionString: string, options: PoolOptions = {}):
   });
 }
 
+export interface RoleLogin {
+  readonly user: string;
+  readonly password: string;
+  /** Connections at most. A tenant role's limit is four; a session needs one. */
+  readonly max?: number;
+}
+
+/**
+ * A pool that logs in as one tenant's role, to the same server the platform DSN names.
+ *
+ * The other place a pool is built, and the only one that logs in as anything but a
+ * platform role. The worker mints the password right before, holds the pool for one build
+ * or one query session, and ends it; nothing stores the password. The user and password
+ * given here override the DSN's own, which is how one connection string serves every role.
+ */
+export function createRolePool(connectionString: string, login: RoleLogin): pg.Pool {
+  return new pg.Pool({
+    connectionString,
+    user: login.user,
+    password: login.password,
+    max: login.max ?? 1,
+  });
+}
+
+export interface DatabaseAddress {
+  readonly host: string;
+  readonly port: number;
+  readonly dbname: string;
+}
+
+const POSTGRES_PORT = 5432;
+const LEADING_SLASH = /^\//u;
+
+/** Where a DSN points: the host, port and database a generated dbt profile needs. */
+export function connectionOf(connectionString: string): DatabaseAddress {
+  const url = new URL(connectionString);
+  return {
+    host: url.hostname,
+    // parseInt, not Number(): a port, not an amount.
+    port: url.port === "" ? POSTGRES_PORT : Number.parseInt(url.port, 10),
+    dbname: url.pathname.replace(LEADING_SLASH, ""),
+  };
+}
+
 /** Wrap a `pg` client as the narrow {@link SqlExecutor} the runner and repos speak. */
 export function asExecutor(client: pg.PoolClient | pg.Pool): SqlExecutor {
   return {

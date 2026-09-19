@@ -24,4 +24,4 @@ export {
   MAX_DOCUMENT_BYTES,
 } from "./services/landDocument.ts";
 export { type LoadResult, loadStreamToRaw } from "./services/loadToRaw.ts";
-export { runTransform, type TransformDeps, type TransformResult } from "./services/transform.ts";
+export { runTransform, type TransformDeps, type TransformOutcome } from "./services/transform.ts";

@@ -14,9 +14,13 @@ export type { QueryResult, SqlExecutor } from "./executor.ts";
 export { loadMigrations, type MigrateResult, type Migration, migrate } from "./migrate.ts";
 export {
   asExecutor,
+  connectionOf,
   createPool,
+  createRolePool,
+  type DatabaseAddress,
   type Pool,
   type PoolClient,
   pinTypeParsers,
+  type RoleLogin,
   withTransaction,
 } from "./pool.ts";

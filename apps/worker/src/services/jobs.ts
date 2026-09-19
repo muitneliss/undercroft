@@ -14,18 +14,25 @@
 
 // biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
 // biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
+// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
+import { type BuildModelResponse, MAX_PREVIEW_ROWS, type TableResult } from "@undercroft/contracts";
 import { describeError, newRunId } from "@undercroft/core";
 import {
   closeRun,
+  getRun,
+  MAX_ERROR_CHARS,
   openRun,
+  recordSteps,
   type RunTrigger,
   SOURCE_OF_TRANSFORM,
-  MAX_ERROR_CHARS,
+  stepsFor,
+  tenantRolesFor,
 } from "@undercroft/db/repos";
 
 import { type RunDeps, RunInProgress, startIngest } from "./ingest.ts";
+import { readRelation } from "./preview.ts";
 import { runTransform, type TransformDeps } from "./transform.ts";
 
 export interface JobDeps extends RunDeps {
@@ -89,6 +96,8 @@ interface TransformOpening {
   readonly triggeredBy?: string;
   readonly parentRunId?: string | null;
   readonly select?: string;
+  /** A build the editor is waiting on gets a shorter deadline than a scheduled one. */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -127,11 +136,24 @@ async function startTransform(
   const log = deps.log?.child({ runId, tenantId: input.tenantId, source: SOURCE_OF_TRANSFORM });
   log?.info("run_opened", { verb: "transform", trigger: input.trigger });
 
-  const done = runTransform(dbt, selectOf(input)).then(
-    async () => {
-      await closeRun(deps.exec, runId, { status: "ok" });
-      log?.info("run_closed", { status: "ok" });
-      return true;
+  const done = runTransform(dbt, {
+    tenantId: input.tenantId,
+    ...selectOf(input),
+    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+  }).then(
+    async (outcome) => {
+      await recordSteps(deps.exec, runId, outcome.steps);
+      await closeRun(deps.exec, runId, {
+        status: outcome.ok ? "ok" : "failed",
+        testsFailed: outcome.testsFailed,
+        ...(outcome.error === null ? {} : { error: outcome.error.slice(0, MAX_ERROR_CHARS) }),
+      });
+      log?.info("run_closed", {
+        status: outcome.ok ? "ok" : "failed",
+        steps: outcome.steps.length,
+        testsFailed: outcome.testsFailed,
+      });
+      return outcome.ok;
     },
     async (error: unknown) => {
       await closeRun(deps.exec, runId, { status: "failed", error: messageOf(error) });
@@ -166,6 +188,112 @@ export async function startTransformJob(
   const started = await startTransform(deps, input);
   track(started.done);
   return { runId: started.runId };
+}
+
+/** How long a build the editor is waiting on may take. Two minutes is a long wait at a desk. */
+export const BUILD_TIMEOUT_MS = 120_000;
+
+/**
+ * Build one model and look at it, synchronously: the editor is waiting.
+ *
+ * A run in the ledger like any other transform, with `trigger: build` and `--select` for
+ * the one model, so it sits in the journal beside the scheduled builds. What comes back is
+ * read from the ledger the run just wrote -- its steps, its error, its failing-test count --
+ * plus the model's first rows as the tenant's BI login, which is what proves the relation is
+ * there for a dashboard and not only for its author.
+ */
+export async function buildModel(
+  deps: JobDeps,
+  input: { tenantId: string; model: string; triggeredBy: string },
+): Promise<BuildModelResponse> {
+  const { dbt } = deps;
+  if (dbt === undefined) {
+    throw new Error("transform is not configured");
+  }
+  const started = await startTransform(deps, {
+    tenantId: input.tenantId,
+    trigger: "build",
+    triggeredBy: input.triggeredBy,
+    select: input.model,
+    timeoutMs: BUILD_TIMEOUT_MS,
+  });
+  const ok = await started.done;
+  const [run, steps] = await Promise.all([
+    getRun(deps.exec, input.tenantId, started.runId),
+    stepsFor(deps.exec, started.runId),
+  ]);
+  const roles = await tenantRolesFor(deps.exec, input.tenantId);
+  const preview =
+    ok && roles !== null
+      ? await readRelation(dbt.sessions, {
+          tenantId: input.tenantId,
+          kind: "bi",
+          schema: roles.analyticsSchema,
+          relation: input.model,
+          limit: MAX_PREVIEW_ROWS,
+        })
+      : null;
+  return {
+    runId: started.runId,
+    ok,
+    testsFailed: run?.testsFailed ?? 0,
+    error: run?.error ?? null,
+    steps,
+    preview,
+  };
+}
+
+export type DqOutcome =
+  | { readonly ok: true; readonly value: TableResult }
+  | { readonly ok: false; readonly reason: "run-not-found" | "step-not-found" | "not-dq" };
+
+/** `"undercroft"."dq_case_0042"."not_null_stg_deals_deal_id"` -> its schema and name. */
+const RELATION = /^"(?<database>[^"]+)"\."(?<schema>[^"]+)"\."(?<relation>[^"]+)"$/u;
+
+/**
+ * The rows a failed test stored, read as the tenant's dbt login (which owns the dq schema).
+ *
+ * The step names the relation dbt wrote; this refuses to read anything outside the
+ * tenant's own dq schema, so a step whose relation was tampered into naming another schema
+ * is `not-dq` rather than a read. The BI login has no USAGE on dq by design; an admin sees
+ * these rows here and nowhere a dashboard could.
+ */
+export async function dqFailures(
+  deps: JobDeps,
+  input: { tenantId: string; runId: string; uniqueId: string; limit: number },
+): Promise<DqOutcome> {
+  const { dbt } = deps;
+  if (dbt === undefined) {
+    throw new Error("transform is not configured");
+  }
+  const run = await getRun(deps.exec, input.tenantId, input.runId);
+  if (run === null) {
+    return { ok: false, reason: "run-not-found" };
+  }
+  const step = (await stepsFor(deps.exec, input.runId)).find((s) => s.uniqueId === input.uniqueId);
+  if (step === undefined || step.kind !== "test") {
+    return { ok: false, reason: "step-not-found" };
+  }
+  const roles = await tenantRolesFor(deps.exec, input.tenantId);
+  const match = step.relation === null ? null : RELATION.exec(step.relation);
+  const schema = match?.groups?.schema;
+  const relation = match?.groups?.relation;
+  if (
+    roles === null ||
+    schema === undefined ||
+    relation === undefined ||
+    schema !== roles.dqSchema
+  ) {
+    return { ok: false, reason: "not-dq" };
+  }
+  const value = await readRelation(dbt.sessions, {
+    tenantId: input.tenantId,
+    kind: "dbt",
+    schema,
+    relation,
+    limit: input.limit,
+  });
+  return { ok: true, value };
 }
 
 /**

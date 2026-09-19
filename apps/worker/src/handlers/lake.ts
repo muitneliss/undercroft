@@ -22,6 +22,8 @@
 
 import {
   BrowseScopeRequest,
+  BuildModelRequest,
+  DqFailuresRequest,
   LandRecordsRequest,
   MAX_BATCH_BYTES,
   RevokeConnectionRequest,
@@ -46,10 +48,17 @@ import {
   type XeroClient,
 } from "../services/connections.ts";
 import { type Refresher, resolveToken, type Transactor } from "../services/ingest.ts";
-import { type JobDeps, startIngestJob, startTransformJob } from "../services/jobs.ts";
+import {
+  buildModel,
+  dqFailures,
+  type JobDeps,
+  startIngestJob,
+  startTransformJob,
+} from "../services/jobs.ts";
 import { landRecords } from "../services/land.ts";
 import { claimExternal, findRun, recordExternal } from "../services/ledger.ts";
 import { listDue } from "../services/schedule.ts";
+import type { TransformDeps } from "../services/transform.ts";
 import { failureOf } from "./errors.ts";
 
 export interface LakeApiDeps {
@@ -78,8 +87,11 @@ export interface LakeApiDeps {
   readonly byteFetcher?: ByteFetcher;
   /** The text seam for the spec-driven ingest verb. Injected in tests, as above. */
   readonly fetcher?: Fetcher;
-  /** dbt project and profiles directories. Absent disables /v1/runs/transform. */
-  readonly dbt?: { projectDir: string; profilesDir: string };
+  /**
+   * How a tenant's models are built: where dbt should point, how the worker becomes the
+   * tenant, and the spawn seam. Absent disables the transform, build and dq verbs.
+   */
+  readonly dbt?: Omit<TransformDeps, "exec">;
   /** The Xero client, for revoking a grant. Absent means a disconnect only forgets our copy. */
   readonly xero?: XeroClient;
 }
@@ -222,7 +234,7 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
       ...(refresher === undefined ? {} : { refresher }),
       ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
       ...(deps.fetcher === undefined ? {} : { fetcher: deps.fetcher }),
-      ...(deps.dbt === undefined ? {} : { dbt: deps.dbt }),
+      ...(deps.dbt === undefined ? {} : { dbt: { ...deps.dbt, exec: deps.exec } }),
     };
   }
 
@@ -295,6 +307,68 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
       ...(typeof body.select === "string" ? { select: body.select } : {}),
     });
     return c.json(started, 202);
+  });
+
+  /**
+   * Build one model and answer with what it did and its first rows. Synchronous, unlike
+   * the two verbs above: the person who pressed Build is looking at the editor, and a run
+   * id they would have to poll is a worse answer than the rows. Bounded by the build's own
+   * deadline. A build already in progress for the tenant is 409 through the boundary.
+   */
+  app.post("/v1/models/build", async (c) => {
+    if (deps.dbt === undefined) {
+      return c.json(
+        { code: "invalid_request", message: "transform is not configured", details: [] },
+        400,
+      );
+    }
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
+    }
+    const parsed = BuildModelRequest.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json(
+        { code: "invalid_request", message: "tenantId and model are required", details: [] },
+        400,
+      );
+    }
+    const built = await buildModel(jobDeps("*", deps.specsDir ?? ""), parsed.data);
+    return c.json(built, 200);
+  });
+
+  /** The rows a failed test stored, for the admin who is looking at the step. */
+  app.post("/v1/dq/failures", async (c) => {
+    if (deps.dbt === undefined) {
+      return c.json(
+        { code: "invalid_request", message: "transform is not configured", details: [] },
+        400,
+      );
+    }
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
+    }
+    const parsed = DqFailuresRequest.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json(
+        {
+          code: "invalid_request",
+          message: "tenantId, runId and uniqueId are required",
+          details: [],
+        },
+        400,
+      );
+    }
+    const outcome = await dqFailures(jobDeps("*", deps.specsDir ?? ""), parsed.data);
+    if (!outcome.ok) {
+      if (outcome.reason === "not-dq") {
+        return c.json(
+          { code: "invalid_request", message: "the step stored no failing rows", details: [] },
+          400,
+        );
+      }
+      return c.json({ code: "not_found", message: "no such step", details: [] }, 404);
+    }
+    return c.json(outcome.value, 200);
   });
 
   /**

@@ -219,12 +219,9 @@ services:
       # values the control plane runs the consent with. Unset means Xero cannot be connected.
       UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
       UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
-      # dbt runs as a subprocess in this image (ADR 0007) and connects as `undercroft_dbt`,
-      # never as the platform role. dbt/profiles.yml reads these three; without the password
-      # the transform verb fails at the point of use, far from anything that names it.
-      UNDERCROFT_PG_HOST: undercroft-postgres
-      UNDERCROFT_PG_DB: ${UNDERCROFT_PG_DB:-undercroft}
-      UNDERCROFT_DBT_PASSWORD: ${UNDERCROFT_DBT_PASSWORD:?set in .env}
+      # dbt runs as a subprocess in this image (ADR 0007) as each TENANT'S OWN login (ADR
+      # 0018). The worker points the generated profile at the server its own DSN names and
+      # mints the login's password right before a build; no variable here carries one.
     networks:
       default:
         aliases:

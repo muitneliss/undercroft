@@ -52,4 +52,13 @@ export {
   TestKind,
 } from "./models.ts";
 export { documentKeyOf, documentPrefixOf, RawDocument } from "./rawDocument.ts";
+export {
+  BuildModelRequest,
+  BuildModelResponse,
+  Cell,
+  DqFailuresRequest,
+  MAX_PREVIEW_ROWS,
+  RunStepShape,
+  TableResult,
+} from "./transformApi.ts";
 export { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";

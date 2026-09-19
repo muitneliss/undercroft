@@ -100,6 +100,11 @@ export const vi = {
     tenantRoleCollision:
       "Mã khách hàng {{tenantId}} quá giống mã của một khách hàng khác (chỉ khác chữ hoa/thường hoặc dấu). Hãy chọn một mã khác hẳn.",
     modelNameTaken: "Đã có một mô hình tên {{name}}. Hãy mở mô hình đó để sửa, hoặc chọn tên khác.",
+    buildInProgress:
+      "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
+    buildNotStarted:
+      "Không dựng được mô hình. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    dqNotRead: "Không đọc được các dòng không đạt kiểm tra của bước này.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**

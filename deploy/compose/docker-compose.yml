@@ -175,10 +175,9 @@ services:
       # The Xero client, for refreshing and revoking; the control plane runs the consent.
       UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
       UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
-      # dbt runs as a subprocess here (ADR 0007) and connects as `undercroft_dbt`, never as
-      # the platform role. dbt/profiles.yml reads this; without it the transform verb fails
-      # inside dbt, far from anything that names the variable.
-      UNDERCROFT_DBT_PASSWORD: ${UNDERCROFT_DBT_PASSWORD:?set in .env}
+      # dbt runs as a subprocess here (ADR 0007) as each TENANT'S OWN login (ADR 0018). The
+      # worker mints that login's password right before a build and hands it to the child
+      # by environment; no variable here carries a dbt password any more.
     deploy:
       resources:
         limits:

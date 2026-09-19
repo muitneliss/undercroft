@@ -13,6 +13,7 @@
  * `InMemoryWorkerClient` without a socket.
  */
 
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: One channel, one file: the interface, the HTTP implementation and its in-memory double are three views of one seam, and a reader checking that the double honours the contract wants them side by side rather than in three files that agree by convention.
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
 // biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
 // biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
@@ -20,9 +21,12 @@
 
 import type {
   BrowseScopeResponse,
+  BuildModelResponse,
   CredentialInput,
+  DqFailuresRequest,
   RevokeConnectionResponse,
   StoreCredentialResponse,
+  TableResult,
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import { upsertConnection } from "@undercroft/db/repos";
@@ -45,7 +49,9 @@ export type WorkerFailure =
   | "unreachable"
   | "refused"
   | "scope-insufficient"
-  | "credential-rejected";
+  | "credential-rejected"
+  /** The worker's 409: the tenant already has a run of this kind going. */
+  | "in-progress";
 
 export interface StoreCredentialInput {
   readonly source: string;
@@ -84,6 +90,14 @@ export interface WorkerClient {
     tenantId: string;
     triggeredBy: string;
   }) => Promise<TriggerOutcome>;
+  /** Build one model and wait for it: the editor is looking. */
+  buildModel: (input: {
+    tenantId: string;
+    model: string;
+    triggeredBy: string;
+  }) => Promise<WorkerOutcome<BuildModelResponse>>;
+  /** The rows a failed test stored, as the worker reads them for an admin. */
+  dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
 }
 
 /**
@@ -105,6 +119,8 @@ export interface HttpWorkerConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** A synchronous build: the worker's two-minute deadline, and a little for the rows. */
+const BUILD_DEADLINE_MS = 150_000;
 
 /** The worker's answer for a credential Google refused. Every other status is a refusal. */
 const FORBIDDEN = 403;
@@ -117,9 +133,13 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const doFetch = config.fetch ?? globalThis.fetch;
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  async function post<T>(path: string, body: unknown): Promise<WorkerOutcome<T>> {
+  async function post<T>(
+    path: string,
+    body: unknown,
+    deadlineMs: number = timeoutMs,
+  ): Promise<WorkerOutcome<T>> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), deadlineMs);
     try {
       const response = await doFetch(`${config.baseUrl}${path}`, {
         method: "POST",
@@ -140,6 +160,9 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
         }
         if (response.status === UNPROCESSABLE) {
           return { ok: false, reason: "credential-rejected" };
+        }
+        if (response.status === CONFLICT) {
+          return { ok: false, reason: "in-progress" };
         }
         return { ok: false, reason: "refused" };
       }
@@ -200,6 +223,10 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     browseScope: (input) => post("/v1/connections/browse", input),
     revokeConnection: (input) => post("/v1/connections/revoke", input),
     triggerIngest: trigger,
+    // The worker's own build deadline plus room for the rows; the default would cut a
+    // build that is legitimately slow and report it as unreachable.
+    buildModel: (input) => post("/v1/models/build", input, BUILD_DEADLINE_MS),
+    dqFailures: (input) => post("/v1/dq/failures", input),
   };
 }
 
@@ -214,6 +241,7 @@ export class InMemoryWorkerClient implements WorkerClient {
   readonly stored: StoreCredentialInput[] = [];
   readonly revoked: { source: string; tenantId: string }[] = [];
   readonly triggered: { source: string; tenantId: string; triggeredBy: string }[] = [];
+  readonly built: { tenantId: string; model: string; triggeredBy: string }[] = [];
   #labels: BrowseScopeResponse["items"] = [];
   #failWith: WorkerFailure | null = null;
   #runningAs: string | null = null;
@@ -309,6 +337,36 @@ export class InMemoryWorkerClient implements WorkerClient {
     }
     this.triggered.push(input);
     return Promise.resolve({ ok: true, runId: `run-mem-${String(this.triggered.length)}` });
+  }
+
+  /** A build that succeeded with nothing to show: no steps, an empty relation. */
+  buildModel(input: {
+    tenantId: string;
+    model: string;
+    triggeredBy: string;
+  }): Promise<WorkerOutcome<BuildModelResponse>> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    this.built.push(input);
+    return Promise.resolve({
+      ok: true,
+      value: {
+        runId: `run-mem-build-${String(this.built.length)}`,
+        ok: true,
+        testsFailed: 0,
+        error: null,
+        steps: [],
+        preview: { columns: [], rows: [], truncated: false },
+      },
+    });
+  }
+
+  dqFailures(): Promise<WorkerOutcome<TableResult>> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    return Promise.resolve({ ok: true, value: { columns: [], rows: [], truncated: false } });
   }
 
   #fail<T>(): Promise<WorkerOutcome<T>> {
