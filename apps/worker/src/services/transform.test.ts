@@ -226,6 +226,8 @@ describe("runTransform", () => {
       { tenantId: "CASE-2" },
     );
     expect(spawned).toBe(0);
-    expect(outcome).toEqual({ ok: true, steps: [], testsFailed: 0, error: null });
+    // `models: 0` is the difference between "nothing to build" and "a build that found
+    // nothing", which the journal turns into two different sentences on the screen.
+    expect(outcome).toEqual({ ok: true, steps: [], testsFailed: 0, error: null, models: 0 });
   });
 });

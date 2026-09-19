@@ -4,8 +4,17 @@
 
 import { describe, expect, test as it } from "bun:test";
 
+import type { RunEventView } from "@/api/types.ts";
 import { translatorFor } from "@/i18n/index.ts";
-import { describeRun, journalEmptyBody, nextRunNote, runMark, runMarkLabel } from "./runs.ts";
+import { MISSING } from "@/lib/money.ts";
+import {
+  describeRun,
+  eventSentence,
+  journalEmptyBody,
+  nextRunNote,
+  runMark,
+  runMarkLabel,
+} from "./runs.ts";
 
 const en = translatorFor("en");
 const vi = translatorFor("vi");
@@ -88,6 +97,43 @@ describe("journalEmptyBody", () => {
     );
     expect(journalEmptyBody(en, "en", [{ nextRunAt: null }], NOW)).toBe(
       "No source is ready to run. Connect one and choose what to sync under Sources.",
+    );
+  });
+});
+
+describe("eventSentence", () => {
+  function event(
+    name: string,
+    detail: Record<string, unknown>,
+    entity: string | null = null,
+  ): RunEventView {
+    return { at: "2026-09-19T12:42:22.000Z", level: "info", event: name, entity, detail };
+  }
+
+  it("words a run's own line in the reader's language, grouping the counts their way", () => {
+    const listed = event("work_listed", { total: 12_431 }, "messages");
+    expect(eventSentence(vi, "vi", listed)).toBe("Cần đọc 12.431 messages.");
+    expect(eventSentence(en, "en", listed)).toBe("12,431 messages to read.");
+  });
+
+  it("says why a green run built nothing, which the counts alone could not", () => {
+    expect(eventSentence(vi, "vi", event("no_models", {}))).toBe(
+      "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
+    );
+    expect(eventSentence(en, "en", event("picks_listed", { folders: 1, pdfs: 0 }))).toBe(
+      "Listed 1 picked folders and found 0 PDFs. Sub-folders are not read.",
+    );
+  });
+
+  it("a count the worker did not send is MISSING, never a zero that reads as a real one", () => {
+    expect(eventSentence(en, "en", event("work_listed", {}, "files"))).toBe(
+      `${MISSING} files to read.`,
+    );
+  });
+
+  it("an event this release does not know renders as itself rather than vanishing", () => {
+    expect(eventSentence(en, "en", event("landed_on_the_moon", {}))).toBe(
+      "Event landed_on_the_moon.",
     );
   });
 });

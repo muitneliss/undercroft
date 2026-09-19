@@ -10,7 +10,7 @@ import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { createStampSource, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
 import { migrate } from "@undercroft/db";
-import { openRun } from "@undercroft/db/repos";
+import { eventsFor, openRun } from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
@@ -169,6 +169,58 @@ describe("every run is a row in the ledger", () => {
       { source: "demo", tenantId: "CASE-1" },
     );
     expect(next.entities[0]?.landed).toBe(2);
+  });
+
+  it("and narrates itself as it goes, so a run in progress is not a blank screen", async () => {
+    const result = await runIngest(
+      { lake, exec: db, specsDir, fetcher: goodFetcher(), env: { UNDERCROFT_SECRET_KEY: KEY } },
+      { source: "demo", tenantId: "CASE-1", trigger: "manual" },
+    );
+
+    const events = await eventsFor(db, result.runId);
+    expect(events.map((e) => e.event)).toEqual([
+      "run_opened",
+      "entity_started",
+      "records_read",
+      "entity_done",
+      "run_closed",
+    ]);
+    // The feed's counts are the ledger's counts: two ways of saying one thing would be two
+    // things to keep in step.
+    expect(events.find((e) => e.event === "entity_done")?.detail).toEqual({
+      landed: 2,
+      created: 2,
+      changed: 0,
+      unchanged: 0,
+      refused: 0,
+    });
+  });
+
+  it("a run that failed says so in its feed, with the fault's type and no payload", async () => {
+    let runId = "";
+    try {
+      await runIngest(
+        {
+          lake,
+          exec: db,
+          specsDir,
+          fetcher: new InMemoryFetcher(),
+          env: { UNDERCROFT_SECRET_KEY: KEY },
+        },
+        { source: "demo", tenantId: "CASE-1" },
+      );
+    } catch {
+      const { rows } = await db.query<{ id: string }>(
+        "SELECT id FROM ops.run WHERE tenant_id = 'CASE-1' AND source = 'demo'",
+      );
+      runId = rows[0]?.id ?? "";
+    }
+
+    const last = (await eventsFor(db, runId)).at(-1);
+    expect(last?.event).toBe("run_failed");
+    expect(last?.level).toBe("error");
+    expect(last?.detail.errorType).toBe("ConnectorError");
+    expect(last?.detail).not.toHaveProperty("errorMessage");
   });
 
   it("a run while one is in progress is refused, naming the run that is running", async () => {

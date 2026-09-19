@@ -33,6 +33,7 @@ import {
 import { landRecords } from "../land.ts";
 import { landDocuments } from "../landDocument.ts";
 import { loadStreamToRaw } from "../loadToRaw.ts";
+import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
 import { harvestGmail } from "./gmail.ts";
@@ -59,6 +60,8 @@ export interface CollectDeps {
   readonly exec: SqlExecutor;
   readonly api: GoogleApi;
   readonly now?: () => Date;
+  /** Where this collection narrates itself. Absent means a caller with no run to narrate. */
+  readonly journal?: RunJournal;
 }
 
 export interface CollectResult {
@@ -102,10 +105,13 @@ export async function runGoogleCollect(
     throw new ScopeNotChosen(input.source, input.tenantId);
   }
 
+  const journal = deps.journal ?? SILENT_JOURNAL;
+  journal.info("entity_started", { entity: scope.kind === "gmail" ? "messages" : "files" });
+
   const harvest =
     scope.kind === "gmail"
-      ? { ...(await harvestGmail(deps.api, scope)), seenIds: null }
-      : await harvestDrive(deps.api, scope);
+      ? { ...(await harvestGmail(deps.api, scope, journal)), seenIds: null, skipped: [] }
+      : await harvestDrive(deps.api, scope, journal);
 
   const entity = scope.kind === "gmail" ? "messages" : "files";
 
@@ -185,6 +191,20 @@ export async function runGoogleCollect(
       });
     }
   }
+  // A pick the harvest would not take. Drive's alone today, and the id is Google's opaque
+  // one -- never the filename, which the admin saw and the lake manifest keeps.
+  for (const pick of harvest.skipped) {
+    refusals.push({ entity, sourceRecordId: pick.fileId, reason: pick.reason });
+  }
+
+  journal.info("documents_landed", {
+    entity: "documents",
+    created: landedDocuments.created,
+    unchanged: landedDocuments.unchanged,
+    skipped: landedDocuments.skipped,
+    failed: landedDocuments.failed,
+    tombstoned,
+  });
 
   return {
     runId,

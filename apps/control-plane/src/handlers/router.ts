@@ -972,6 +972,26 @@ export const appRouter = router({
       }),
 
     /**
+     * What the worker is saying about a run, as it says it.
+     *
+     * Its own procedure rather than part of `get`, because the leaf re-reads this every
+     * couple of seconds while a run is live and re-reading the refusals and the dbt steps
+     * at that rate would be a page of unchanged rows each time.
+     *
+     * Any member may read it, like the ledger above it: it carries counts, enumerations and
+     * opaque provider ids, which is the same category of fact as the row itself.
+     */
+    events: tenantProcedure
+      .input(z.object({ runId: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        const feed = await runs.events(ctx.exec, input.tenantId, input.runId);
+        if (feed === null) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        return feed;
+      }),
+
+    /**
      * Run now. Admin-only: starting a read of a customer's accounts is the same authority
      * as connecting them. The call proxies to the worker's verb allowlist with the same
      * bearer token Kestra uses, so the control plane gains no wider privilege than the

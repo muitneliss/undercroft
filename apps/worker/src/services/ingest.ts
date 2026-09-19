@@ -81,6 +81,7 @@ import {
 } from "./google/collect.ts";
 import { landRecords, type RecordToLand } from "./land.ts";
 import { loadStreamToRaw } from "./loadToRaw.ts";
+import { createRunJournal, type RunJournal } from "./runJournal.ts";
 
 /**
  * Run `fn` inside one transaction on one connection.
@@ -284,18 +285,25 @@ export async function startIngest(
     throw new RunInProgress(input.source, input.tenantId, opened.runId);
   }
   const log = deps.log?.child({ runId, tenantId: input.tenantId, source: input.source });
-  log?.info("run_opened", { verb: "ingest", trigger });
+  // One narrator for both channels. Every line below goes to stdout as it always did AND
+  // into `ops.run_event`, where the person who pressed Run now can read it.
+  const journal = createRunJournal({
+    exec: deps.exec,
+    runId,
+    ...(log === undefined ? {} : { log }),
+  });
+  journal.info("run_opened", { verb: "ingest", trigger });
 
   return {
     runId,
-    done: execute(deps, { source: input.source, tenantId: input.tenantId, runId }, log),
+    done: execute(deps, { source: input.source, tenantId: input.tenantId, runId }, journal),
   };
 }
 
 async function execute(
   deps: RunDeps,
   input: { source: string; tenantId: string; runId: string },
-  log: Logger | undefined,
+  journal: RunJournal,
 ): Promise<IngestResult> {
   const { runId } = input;
   const ledger: Ledger = { entities: [], refusals: [] };
@@ -305,18 +313,24 @@ async function execute(
         deps,
         { source: input.source, tenantId: input.tenantId, runId },
         ledger,
+        journal,
       );
     } else {
-      await runSpecIngest(deps, input, ledger);
+      await runSpecIngest(deps, input, ledger, journal);
     }
     await settle(deps.exec, runId, ledger, { status: "ok" });
-    log?.info("run_closed", { status: "ok", ...totals(ledger) });
+    journal.info("run_closed", { status: "ok", ...totals(ledger) });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await settle(deps.exec, runId, ledger, { status: "failed", error: message });
-    log?.error("run_failed", { ...totals(ledger), ...describeError(error) });
+    // Everything goes to stdout as before; the journal keeps `errorMessage` out of the feed
+    // itself, because a provider's sentence can quote the record that caused it and the
+    // ledger's own `error` column is where that belongs. See `runJournal.ts`.
+    journal.error("run_failed", { ...totals(ledger), ...describeError(error) });
+    await journal.flush();
     throw error;
   }
+  await journal.flush();
 
   return { runId, source: input.source, entities: ledger.entities, refusals: ledger.refusals };
 }
@@ -422,13 +436,14 @@ async function runGoogleIngest(
   deps: RunDeps,
   input: { source: GoogleSource; tenantId: string; runId: string },
   ledger: Ledger,
+  journal: RunJournal,
 ): Promise<void> {
   const api = createGoogleApi(input.source, {
     fetcher: deps.byteFetcher ?? createByteFetcher(),
     token: () => resolveToken(deps, input),
   });
 
-  const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api }, input);
+  const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api, journal }, input);
 
   const records = result.refusals.filter((r) => r.entity !== "documents").length;
   ledger.entities.push(
@@ -450,12 +465,23 @@ async function runGoogleIngest(
     },
   );
   ledger.refusals.push(...result.refusals);
+  for (const entity of ledger.entities) {
+    journal.info("entity_done", {
+      entity: entity.entity,
+      landed: entity.landed,
+      created: entity.loadedCreated,
+      changed: entity.loadedChanged,
+      unchanged: entity.loadedUnchanged,
+      refused: entity.refused,
+    });
+  }
 }
 
 async function runSpecIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string; runId: string },
   ledger: Ledger,
+  journal: RunJournal,
 ): Promise<void> {
   const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
   const chosen = await chosenFor(deps, input);
@@ -492,6 +518,8 @@ async function runSpecIngest(
         ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }
         : ctx;
 
+    journal.info("entity_started", { entity: entity.name });
+
     const batch: RecordToLand[] = [];
     for await (const record of readEntity(spec, entity, entityCtx)) {
       batch.push({
@@ -500,6 +528,8 @@ async function runSpecIngest(
         sourceUpdatedAt: record.sourceUpdatedAt,
         payloadText: record.payloadText,
       });
+      // Coalesced by the journal: a line per record would be the run written twice.
+      journal.progress("records_read", { entity: entity.name, read: batch.length });
     }
     idsByEntity.set(
       entity.name,
@@ -531,6 +561,14 @@ async function runSpecIngest(
       loadedCreated: loaded.created,
       loadedChanged: loaded.changed,
       loadedUnchanged: loaded.unchanged,
+      refused: landed.failed,
+    });
+    journal.info("entity_done", {
+      entity: entity.name,
+      landed: landed.created + landed.unchanged,
+      created: loaded.created,
+      changed: loaded.changed,
+      unchanged: loaded.unchanged,
       refused: landed.failed,
     });
   }

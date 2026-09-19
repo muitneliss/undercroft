@@ -40,6 +40,7 @@ import type { GmailScope } from "@undercroft/contracts";
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
+import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -99,14 +100,28 @@ function labelKind(reported: string): "system" | "user" | null {
  * Returns what to land rather than landing it, so the decision of what a mailbox contains
  * is testable without a lake or a database.
  */
-export async function harvestGmail(api: GoogleApi, scope: GmailScope): Promise<GmailHarvest> {
+export async function harvestGmail(
+  api: GoogleApi,
+  scope: GmailScope,
+  journal: RunJournal = SILENT_JOURNAL,
+): Promise<GmailHarvest> {
   const selected = new Set(scope.labels.map((l) => l.id));
   const messageIds = await listMessageIds(api, scope);
 
   const records: RecordToLand[] = [];
   const documents: DocumentToLand[] = [];
 
+  // The most useful line this run writes. What follows is one paced request per message --
+  // minutes for a real mailbox -- and until now the first sign of how long that would take
+  // was the run ending. A total up front turns a blank screen into a quantity.
+  journal.info("work_listed", { entity: ENTITY, total: messageIds.length });
+
   for (const messageId of messageIds) {
+    journal.progress("records_read", {
+      entity: ENTITY,
+      read: records.length,
+      total: messageIds.length,
+    });
     const message = await api.getJson(messageUrl(messageId), ENTITY, records.length);
     const labelIds = strings(getPath(message, "labelIds"));
 
