@@ -55,6 +55,9 @@ const ModelEditor = lazy(() =>
 const Reports = lazy(() =>
   import("@/routes/Reports.tsx").then((module) => ({ default: module.Reports })),
 );
+const Question = lazy(() =>
+  import("@/routes/Question.tsx").then((module) => ({ default: module.Question })),
+);
 
 /**
  * A signed-in page: the book opened at one division.
@@ -192,6 +195,18 @@ export function App(): React.JSX.Element {
             {(tenantId) => (
               <Suspense fallback={<Skeleton rows={4} />}>
                 <Reports tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/reports/questions/:id"
+        element={
+          <Opened division="reports" signedInAs={signedInAs}>
+            {(tenantId) => (
+              <Suspense fallback={<Skeleton rows={6} />}>
+                <Question tenantId={tenantId} />
               </Suspense>
             )}
           </Opened>

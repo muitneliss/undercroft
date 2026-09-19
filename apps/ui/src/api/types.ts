@@ -90,3 +90,12 @@ export type BuildResult = inferRouterOutputs<AppRouter>["models"]["build"];
 
 /** A query result as every tenant-scoped read answers it: columns, rows, and whether cut. */
 export type TableResult = BuildResult["preview"] & object;
+
+/** One saved question in full, as `bi.questions.get` returns it. */
+export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get"];
+
+/** One dashboard in full, as `bi.dashboards.get` returns it. */
+export type DashboardView = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["get"];
+
+/** The tenant's analytics schema as its read-only login sees it. */
+export type SchemaView = inferRouterOutputs<AppRouter>["bi"]["schema"];

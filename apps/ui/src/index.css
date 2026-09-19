@@ -2002,6 +2002,22 @@
     font-weight: 400;
   }
 
+  /* -- the question builder ------------------------------------------------------ */
+
+  /* A column is a punch and, once chosen, the aggregate beside it. */
+  .builder__column {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+  }
+
+  /* A filter row wraps rather than overflowing the leaf; the value grows, the rest keeps. */
+  .builder__filter .input:not(.input--select) {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
   code {
     font-family: var(--face-mono);
     font-size: 0.9em;

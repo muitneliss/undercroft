@@ -36,12 +36,14 @@
 // biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 
+import type { ChartConfig, VisualDefinition } from "@undercroft/contracts/bi";
 import type { TestKind } from "@undercroft/contracts/models";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type { ModelDraft } from "@/lib/modelDraft.ts";
+import { patchVisual, type QuestionDraft, switchToSql } from "@/lib/questionDraft.ts";
 
 /** One item an admin picked, as both the picker and the card need to see it. */
 export interface ChosenFile {
@@ -126,6 +128,18 @@ interface UiState {
   removeModelTestColumn: (column: string) => void;
   /** The server now holds what the draft holds: nothing is unsaved. */
   markModelSaved: () => void;
+  /** The question being edited, or null. Same rules as `modelDraft`. */
+  questionDraft: QuestionDraft | null;
+  setQuestionDraft: (draft: QuestionDraft | null) => void;
+  setQuestionName: (name: string) => void;
+  /** The builder's definition with `patch` applied. No effect on a SQL question. */
+  patchQuestionVisual: (patch: Partial<Omit<VisualDefinition, "kind">>) => void;
+  setQuestionSql: (sql: string) => void;
+  /** One way: the builder's compiled SQL becomes the question. */
+  switchQuestionToSql: (sql: string) => void;
+  setQuestionChart: (chart: ChartConfig) => void;
+  /** The server now holds what the draft holds, under `id`. */
+  markQuestionSaved: (id: string) => void;
 }
 
 /**
@@ -221,6 +235,48 @@ export const useUiStore = create<UiState>()(
             return {};
           }
           return { modelDraft: { ...draft, saved: { sql: draft.sql, tests: draft.tests } } };
+        }),
+      questionDraft: null,
+      setQuestionDraft: (questionDraft): unknown => set({ questionDraft }),
+      setQuestionName: (name): unknown =>
+        set((state) =>
+          state.questionDraft === null ? {} : { questionDraft: { ...state.questionDraft, name } },
+        ),
+      patchQuestionVisual: (patch): unknown =>
+        set((state) =>
+          state.questionDraft === null
+            ? {}
+            : { questionDraft: patchVisual(state.questionDraft, patch) },
+        ),
+      setQuestionSql: (sql): unknown =>
+        set((state) =>
+          state.questionDraft === null || state.questionDraft.definition.kind !== "sql"
+            ? {}
+            : { questionDraft: { ...state.questionDraft, definition: { kind: "sql", sql } } },
+        ),
+      switchQuestionToSql: (sql): unknown =>
+        set((state) =>
+          state.questionDraft === null
+            ? {}
+            : { questionDraft: switchToSql(state.questionDraft, sql) },
+        ),
+      setQuestionChart: (chart): unknown =>
+        set((state) =>
+          state.questionDraft === null ? {} : { questionDraft: { ...state.questionDraft, chart } },
+        ),
+      markQuestionSaved: (id): unknown =>
+        set((state) => {
+          const draft = state.questionDraft;
+          if (draft === null) {
+            return {};
+          }
+          return {
+            questionDraft: {
+              ...draft,
+              id,
+              saved: { name: draft.name, definition: draft.definition, chart: draft.chart },
+            },
+          };
         }),
     }),
     {
