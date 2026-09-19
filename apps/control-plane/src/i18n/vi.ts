@@ -53,6 +53,13 @@ export const vi = {
      */
     requiresSuperadmin: "Thao tác này cần quyền quản trị toàn hệ thống.",
     tenantExists: "Mã khách hàng {{tenantId}} đã được dùng cho một khách hàng khác.",
+    /**
+     * Two references that differ only in case or punctuation fold to one database login.
+     * The sentence names the fix -- a reference that differs in more than that -- rather
+     * than the mechanism, which the operator cannot see.
+     */
+    tenantRoleCollision:
+      "Mã khách hàng {{tenantId}} quá giống mã của một khách hàng khác (chỉ khác chữ hoa/thường hoặc dấu). Hãy chọn một mã khác hẳn.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**

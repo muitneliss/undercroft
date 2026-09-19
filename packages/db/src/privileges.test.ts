@@ -37,18 +37,208 @@ async function expectDenied(fn: () => Promise<unknown>): Promise<void> {
   }
 }
 
-describe("the default-privilege grant is unique and correctly scoped", () => {
-  it("pg_default_acl has exactly one row: dbt -> bi in analytics", async () => {
-    // The structural control. A second ALTER DEFAULT PRIVILEGES anywhere -- the exact
-    // shape of the original hazard -- makes this fail.
-    const { rows } = await db.query<{ grantor: string; schema: string; objtype: string }>(
-      `SELECT pg_get_userbyid(defaclrole) AS grantor,
-              n.nspname AS schema,
-              defaclobjtype AS objtype
-       FROM pg_default_acl d
-       JOIN pg_namespace n ON n.oid = d.defaclnamespace`,
+/** What a call was refused with, or `""` when it was not refused at all. */
+async function refusalOf(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+    return "";
+  } catch (error) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return String(error);
+  }
+}
+
+async function defaultAcls(): Promise<{ grantor: string; schema: string; objtype: string }[]> {
+  const { rows } = await db.query<{ grantor: string; schema: string; objtype: string }>(
+    `SELECT pg_get_userbyid(defaclrole) AS grantor,
+            n.nspname AS schema,
+            defaclobjtype AS objtype
+     FROM pg_default_acl d
+     JOIN pg_namespace n ON n.oid = d.defaclnamespace
+     ORDER BY 1, 2`,
+  );
+  return rows;
+}
+
+describe("every default privilege is the one a tenant's own role was given, and no other", () => {
+  it("with no tenant, pg_default_acl has exactly the legacy row: dbt -> bi in analytics", async () => {
+    // The structural control ADR 0005 introduced, kept: a hand-written ALTER DEFAULT
+    // PRIVILEGES anywhere -- the exact shape of the original hazard -- makes this fail.
+    expect(await defaultAcls()).toEqual([
+      { grantor: "undercroft_dbt", schema: "analytics", objtype: "r" },
+    ]);
+  });
+
+  it("with tenants, the set is derived from ops.tenant_role and matches in full", async () => {
+    // ADR 0018: none written by hand, one per tenant issued by provisioning. Derived rather
+    // than listed, so a provisioning bug that forgets a tenant fails the same way a stray
+    // default does.
+    await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+    await db.query("SELECT ops.provision_tenant('CASE-0043')");
+
+    const { rows: tenants } = await db.query<{ role_name: string; slug: string }>(
+      "SELECT role_name, slug FROM ops.tenant_role WHERE kind = 'dbt' ORDER BY role_name",
     );
-    expect(rows).toEqual([{ grantor: "undercroft_dbt", schema: "analytics", objtype: "r" }]);
+    const expected = [
+      { grantor: "undercroft_dbt", schema: "analytics", objtype: "r" },
+      ...tenants.map((t) => ({
+        grantor: t.role_name,
+        schema: `analytics_${t.slug}`,
+        objtype: "r",
+      })),
+    ].sort((a, b) => a.grantor.localeCompare(b.grantor));
+    expect(await defaultAcls()).toEqual(expected);
+  });
+});
+
+describe("each tenant's SQL runs as its own role and sees only its own rows", () => {
+  beforeEach(async () => {
+    await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+    await db.query("SELECT ops.provision_tenant('CASE-0043')");
+    await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
+    // One row per tenant in each table, so "only its own" has something to be measured against.
+    await db.exec(
+      `INSERT INTO raw.records (source, tenant_id, entity, source_record_id, payload,
+         content_sha256, observed_at, lake_key, lake_stamp, run_id)
+       VALUES ('demo', 'CASE-0042', 'things', '1', '{"n":1}'::jsonb, repeat('0', 64), now(), 'k', 's', 'r'),
+              ('demo', 'CASE-0043', 'things', '1', '{"n":1}'::jsonb, repeat('0', 64), now(), 'k', 's', 'r')`,
+    );
+    await db.exec(
+      `INSERT INTO raw.documents (source, tenant_id, document_id, lake_key, sha256, byte_length, observed_at, run_id)
+       VALUES ('demo', 'CASE-0042', 'd1', 'k', repeat('0', 64), 1, now(), 'r'),
+              ('demo', 'CASE-0043', 'd1', 'k', repeat('0', 64), 1, now(), 'r')`,
+    );
+  });
+
+  it("provisioning is idempotent and names the roles and schemas from the slug", async () => {
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+    const { rows } = await db.query<{ kind: string; role_name: string; slug: string }>(
+      "SELECT kind, role_name, slug FROM ops.tenant_role WHERE tenant_id = 'CASE-0042' ORDER BY kind",
+    );
+    expect(rows).toEqual([
+      { kind: "bi", role_name: "undercroft_bi_case_0042", slug: "case_0042" },
+      { kind: "dbt", role_name: "undercroft_dbt_case_0042", slug: "case_0042" },
+    ]);
+    const { rows: schemas } = await db.query<{ nspname: string; owner: string }>(
+      `SELECT nspname, pg_get_userbyid(nspowner) AS owner FROM pg_namespace
+       WHERE nspname IN ('analytics_case_0042', 'dq_case_0042') ORDER BY nspname`,
+    );
+    expect(schemas).toEqual([
+      { nspname: "analytics_case_0042", owner: "undercroft_dbt_case_0042" },
+      { nspname: "dq_case_0042", owner: "undercroft_dbt_case_0042" },
+    ]);
+  });
+
+  it("a tenant's dbt role reads its own rows and no other tenant's, through the parent", async () => {
+    const seen = await db.asRole("undercroft_dbt_case_0042", (tx) =>
+      tx.query<{ tenant_id: string }>("SELECT tenant_id FROM raw.records ORDER BY tenant_id"),
+    );
+    expect(seen.rows.map((r) => r.tenant_id)).toEqual(["CASE-0042"]);
+
+    const docs = await db.asRole("undercroft_dbt_case_0042", (tx) =>
+      tx.query<{ tenant_id: string }>("SELECT tenant_id FROM raw.documents"),
+    );
+    expect(docs.rows.map((r) => r.tenant_id)).toEqual(["CASE-0042"]);
+  });
+
+  it("naming a partition directly is a permission error, not a way round the policy", async () => {
+    await db.asRole("undercroft_dbt_case_0042", async (tx) => {
+      await expectDenied(() => tx.query("SELECT * FROM raw.records_demo"));
+      await expectDenied(() => tx.query("SELECT * FROM raw.records_default"));
+    });
+  });
+
+  it("the platform roles still see every row, and the legacy shared dbt role sees none", async () => {
+    const worker = await db.asRole("undercroft_worker", (tx) =>
+      tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.records"),
+    );
+    expect(worker.rows[0]?.n).toBe("2");
+    const app = await db.asRole("undercroft_app", (tx) =>
+      tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.records"),
+    );
+    expect(app.rows[0]?.n).toBe("2");
+    const legacy = await db.asRole("undercroft_dbt", (tx) =>
+      tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.records"),
+    );
+    expect(legacy.rows[0]?.n).toBe("0");
+  });
+
+  it("a tenant's dbt role creates in its own schemas and is refused everywhere else", async () => {
+    await db.asRole("undercroft_dbt_case_0042", async (tx) => {
+      await tx.exec("CREATE TABLE analytics_case_0042.fct AS SELECT 1 AS n");
+      await tx.exec("CREATE TABLE dq_case_0042.failures AS SELECT 1 AS n");
+      await expectDenied(() => tx.exec("CREATE TABLE analytics_case_0043.sneaky (n int)"));
+      await expectDenied(() => tx.exec("CREATE TABLE analytics.sneaky (n int)"));
+      await expectDenied(() => tx.exec("CREATE TABLE ops.sneaky (n int)"));
+      await expectDenied(() => tx.query("SELECT * FROM app.connection_secret"));
+    });
+  });
+
+  it("a tenant's bi role reads what its dbt role created afterwards, and nothing else", async () => {
+    await db.asRole("undercroft_dbt_case_0042", async (tx) => {
+      await tx.exec("CREATE TABLE analytics_case_0042.fct AS SELECT 1 AS n");
+      await tx.exec("CREATE TABLE dq_case_0042.failures AS SELECT 1 AS n");
+    });
+    await db.asRole("undercroft_dbt_case_0043", async (tx) => {
+      await tx.exec("CREATE TABLE analytics_case_0043.fct AS SELECT 2 AS n");
+    });
+
+    const own = await db.asRole("undercroft_bi_case_0042", (tx) =>
+      tx.query<{ n: number }>("SELECT n FROM analytics_case_0042.fct"),
+    );
+    expect(own.rows[0]?.n).toBe(1);
+
+    await db.asRole("undercroft_bi_case_0042", async (tx) => {
+      await expectDenied(() => tx.query("SELECT * FROM analytics_case_0043.fct"));
+      await expectDenied(() => tx.query("SELECT * FROM dq_case_0042.failures"));
+      await expectDenied(() => tx.query("SELECT * FROM raw.records"));
+      await expectDenied(() => tx.query("SELECT * FROM app.connection_secret"));
+      await expectDenied(() => tx.query("SELECT * FROM ops.tenant_role"));
+      await expectDenied(() => tx.exec("CREATE TABLE analytics_case_0042.mine (n int)"));
+    });
+  });
+
+  it("only the worker may rotate a password, and the value it gets is not stored anywhere", async () => {
+    const minted = await db.asRole("undercroft_worker", (tx) =>
+      tx.query<{ password: string }>(
+        "SELECT ops.rotate_tenant_password('CASE-0042', 'bi') AS password",
+      ),
+    );
+    const password = minted.rows[0]?.password ?? "";
+    expect(password).toMatch(/^[0-9a-f]{64}$/u);
+
+    const { rows } = await db.query<{ rolvaliduntil: string | null }>(
+      "SELECT rolvaliduntil::text FROM pg_roles WHERE rolname = 'undercroft_bi_case_0042'",
+    );
+    expect(rows[0]?.rolvaliduntil).not.toBeNull();
+
+    await db.asRole("undercroft_app", async (tx) => {
+      await expectDenied(() => tx.query("SELECT ops.rotate_tenant_password('CASE-0042', 'bi')"));
+    });
+    await db.asRole("undercroft_bi_case_0042", async (tx) => {
+      await expectDenied(() => tx.query("SELECT ops.rotate_tenant_password('CASE-0042', 'bi')"));
+    });
+  });
+
+  it("a reference that folds to an existing tenant's slug is refused before any role exists", async () => {
+    await db.exec("INSERT INTO ops.tenant (id) VALUES ('case_0042')");
+    const refusal = await refusalOf(() => db.query("SELECT ops.provision_tenant('case_0042')"));
+    expect(refusal).toMatch(/already belongs to another tenant/u);
+    const { rows } = await db.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM ops.tenant_role WHERE tenant_id = 'case_0042'",
+    );
+    expect(rows[0]?.n).toBe("0");
+  });
+
+  it("a reference too long to make a role name is refused", async () => {
+    const long = `CASE-${"x".repeat(50)}`;
+    await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [long]);
+    const refusal = await refusalOf(() => db.query("SELECT ops.provision_tenant($1)", [long]));
+    expect(refusal).toMatch(/no usable role name/u);
   });
 });
 

@@ -26,4 +26,12 @@ export {
   writeConnectionDetail,
   writeCredential,
 } from "./connections.ts";
+export {
+  isRoleCollision,
+  provisionTenantRoles,
+  rotateTenantPassword,
+  type TenantRoleKind,
+  type TenantRoles,
+  tenantRolesFor,
+} from "./tenantRoles.ts";
 export { tenantExists } from "./tenants.ts";

@@ -128,7 +128,10 @@ export const appRouter = router({
         if (!result.ok) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: messages(ctx.locale)("error.tenantExists", { tenantId: input.tenantId }),
+            message:
+              result.reason === "role-collision"
+                ? messages(ctx.locale)("error.tenantRoleCollision", { tenantId: input.tenantId })
+                : messages(ctx.locale)("error.tenantExists", { tenantId: input.tenantId }),
           });
         }
 
