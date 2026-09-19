@@ -19,6 +19,7 @@ import {
   ModelTests,
   QueryParams,
   QuestionDefinition,
+  type TableResult,
 } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core/locale";
 import { z } from "zod";
@@ -34,6 +35,7 @@ import * as runs from "../services/runs.ts";
 import * as tenants from "../services/tenants.ts";
 import {
   authedProcedure,
+  type Context,
   publicProcedure,
   requireRole,
   router,
@@ -90,6 +92,24 @@ function answerRefusal(
         message: messages(locale)("error.queryNotRun"),
       });
   }
+}
+
+/** A saved question answered through the worker, or the refusal it earns. */
+async function answerSaved(
+  ctx: Pick<Context, "exec" | "worker" | "locale">,
+  input: { tenantId: string; questionId: string; params: QueryParams },
+): Promise<TableResult> {
+  if (ctx.worker === null) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: messages(ctx.locale)("error.workerUnavailable"),
+    });
+  }
+  const outcome = await bi.answerQuestion(ctx.exec, ctx.worker, input);
+  if (!outcome.ok) {
+    throw answerRefusal(ctx.locale, outcome);
+  }
+  return outcome.value;
 }
 
 /**
@@ -731,23 +751,13 @@ export const appRouter = router({
     /** Answer a saved question. Any member of the tenant: the question was saved for them. */
     runQuestion: tenantProcedure
       .input(z.object({ questionId: z.string().uuid(), params: QueryParams.default({}) }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.worker === null) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: messages(ctx.locale)("error.workerUnavailable"),
-          });
-        }
-        const outcome = await bi.answerQuestion(ctx.exec, ctx.worker, {
+      .mutation(({ ctx, input }) =>
+        answerSaved(ctx, {
           tenantId: input.tenantId,
           questionId: input.questionId,
           params: input.params,
-        });
-        if (!outcome.ok) {
-          throw answerRefusal(ctx.locale, outcome);
-        }
-        return outcome.value;
-      }),
+        }),
+      ),
 
     /** What a definition compiles to, for the builder to show beside itself. Pure. */
     compile: requireRole("member")
@@ -768,6 +778,22 @@ export const appRouter = router({
           }
           return question;
         }),
+
+      /**
+       * A saved question's answer under bound parameters, as a READ. A dashboard's tiles
+       * fetch through the query cache keyed on the parameters, so a filter change refetches
+       * each tile once and coming back to the dashboard costs nothing. The same answer as
+       * `runQuestion`, which stays a mutation for the Run plate on the question's own leaf.
+       */
+      answer: tenantProcedure
+        .input(z.object({ id: z.string().uuid(), params: QueryParams.default({}) }))
+        .query(({ ctx, input }) =>
+          answerSaved(ctx, {
+            tenantId: input.tenantId,
+            questionId: input.id,
+            params: input.params,
+          }),
+        ),
 
       /** Store a question. Executes nothing; a member or an admin, never a viewer. */
       save: requireRole("member")

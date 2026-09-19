@@ -112,7 +112,17 @@ describe("bi.answer and bi.runQuestion", () => {
       questionId: saved.id,
     });
     expect(answered.rows).toEqual([[1]]);
-    expect(worker.queries.map((q) => q.sql)).toEqual(["select 1 as n", "select 1 as n"]);
+    // The read a dashboard's tile makes is the same answer, by the question's id.
+    const read = await caller(viewer, "v@example.test", worker).bi.questions.answer({
+      tenantId: TENANT,
+      id: saved.id,
+    });
+    expect(read.rows).toEqual([[1]]);
+    expect(worker.queries.map((q) => q.sql)).toEqual([
+      "select 1 as n",
+      "select 1 as n",
+      "select 1 as n",
+    ]);
   });
 
   it("SQL that did not run, and a parameter with no value, are BAD_REQUEST worded in the caller's language", async () => {

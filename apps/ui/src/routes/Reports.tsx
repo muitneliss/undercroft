@@ -92,7 +92,11 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
                 <tbody>
                   {dashboards.data.map((dashboard) => (
                     <tr key={dashboard.id}>
-                      <td className="datum">{dashboard.name}</td>
+                      <td>
+                        <Link className="journal__what" to={`${base}/dashboards/${dashboard.id}`}>
+                          {dashboard.name}
+                        </Link>
+                      </td>
                       <td className="num datum">
                         {formatCount(dashboard.layout.tiles.length, locale)}
                       </td>
@@ -104,6 +108,13 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
                 </tbody>
               </table>
             )}
+            {canAuthor ? (
+              <div className="row">
+                <Link className="plate" to={`${base}/dashboards/new`}>
+                  {t("bi.newDashboard")}
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           <div className="band-rule" />
@@ -154,6 +165,20 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
           </div>
         </>
       )}
+      {nothing && canAuthor ? (
+        <>
+          <div className="band-rule" />
+          <div className="head">{t("bi.dashboardsHead")}</div>
+          <div className="body stack">
+            <p className="note">{t("bi.noDashboards")}</p>
+            <div className="row">
+              <Link className="plate" to={`${base}/dashboards/new`}>
+                {t("bi.newDashboard")}
+              </Link>
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -36,12 +36,18 @@
 // biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 
-import type { ChartConfig, VisualDefinition } from "@undercroft/contracts/bi";
+import type {
+  ChartConfig,
+  DashboardFilter,
+  DashboardLayout,
+  VisualDefinition,
+} from "@undercroft/contracts/bi";
 import type { TestKind } from "@undercroft/contracts/models";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import type { DashboardDraft } from "@/lib/dashboardDraft.ts";
 import type { ModelDraft } from "@/lib/modelDraft.ts";
 import { patchVisual, type QuestionDraft, switchToSql } from "@/lib/questionDraft.ts";
 
@@ -140,6 +146,15 @@ interface UiState {
   setQuestionChart: (chart: ChartConfig) => void;
   /** The server now holds what the draft holds, under `id`. */
   markQuestionSaved: (id: string) => void;
+  /** The dashboard being edited, or null. Same rules as `questionDraft`. */
+  dashboardDraft: DashboardDraft | null;
+  setDashboardDraft: (draft: DashboardDraft | null) => void;
+  setDashboardName: (name: string) => void;
+  /** The grid after one of `lib/dashboardLayout.ts`'s moves. */
+  setDashboardLayout: (layout: DashboardLayout) => void;
+  setDashboardFilters: (filters: DashboardFilter[]) => void;
+  /** The server now holds what the draft holds, under `id`. */
+  markDashboardSaved: (id: string) => void;
 }
 
 /**
@@ -275,6 +290,40 @@ export const useUiStore = create<UiState>()(
               ...draft,
               id,
               saved: { name: draft.name, definition: draft.definition, chart: draft.chart },
+            },
+          };
+        }),
+      dashboardDraft: null,
+      setDashboardDraft: (dashboardDraft): unknown => set({ dashboardDraft }),
+      setDashboardName: (name): unknown =>
+        set((state) =>
+          state.dashboardDraft === null
+            ? {}
+            : { dashboardDraft: { ...state.dashboardDraft, name } },
+        ),
+      setDashboardLayout: (layout): unknown =>
+        set((state) =>
+          state.dashboardDraft === null
+            ? {}
+            : { dashboardDraft: { ...state.dashboardDraft, layout } },
+        ),
+      setDashboardFilters: (filters): unknown =>
+        set((state) =>
+          state.dashboardDraft === null
+            ? {}
+            : { dashboardDraft: { ...state.dashboardDraft, filters } },
+        ),
+      markDashboardSaved: (id): unknown =>
+        set((state) => {
+          const draft = state.dashboardDraft;
+          if (draft === null) {
+            return {};
+          }
+          return {
+            dashboardDraft: {
+              ...draft,
+              id,
+              saved: { name: draft.name, layout: draft.layout, filters: draft.filters },
             },
           };
         }),

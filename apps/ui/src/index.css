@@ -2062,6 +2062,72 @@
     min-width: 0;
   }
 
+  /* -- dashboards ---------------------------------------------------------------- */
+
+  /* Twelve columns, as every grid a reader has met. A tile names its cells inline from
+   the layout the author saved; the rows are fixed so a chart has a height to fill. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: 4.5rem;
+    gap: var(--s-3);
+  }
+
+  /* A tile is a small leaf: the same paper and hairline, inking in like a row. */
+  .grid__tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    min-height: 0;
+    min-width: 0;
+    padding: var(--s-3);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    animation: ink-set var(--pass) both;
+  }
+
+  .grid__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
+  .grid__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  /* Inside a tile the chart takes the tile's height rather than its own. */
+  .grid__body .plot {
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .grid__controls {
+    display: flex;
+    gap: var(--s-1);
+    flex-wrap: wrap;
+  }
+
+  /* The shared filters: each keeps its width, the row wraps. */
+  .filters {
+    display: flex;
+    gap: var(--s-4);
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .filters__presets {
+    display: flex;
+    gap: var(--s-1);
+    flex-wrap: wrap;
+  }
+
   code {
     font-family: var(--face-mono);
     font-size: 0.9em;
@@ -2310,6 +2376,17 @@
     .leaf__spine,
     .leaf__caption {
       display: none;
+    }
+
+    /* The dashboard's grid becomes a column. With the grid gone, a tile's inline placement
+     has nothing to place it on, and each takes the width in reading order. */
+    .grid {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .grid__tile {
+      min-height: 18rem;
     }
 
     /* Flush with the wordmark above it. The side padding that separates the record
