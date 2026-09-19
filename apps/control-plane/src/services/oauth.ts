@@ -131,7 +131,7 @@ export async function startConsent(
   deps: OAuthDeps,
   input: { tenantId: string; source: string; startedBy: string },
 ): Promise<StartOutcome> {
-  const google = deps.google;
+  const { google } = deps;
   if (google === undefined) {
     return { ok: false, reason: "not-configured" };
   }
@@ -221,8 +221,8 @@ export async function completeConsent(
   deps: CompleteDeps,
   input: { state: string; code: string; caller: { userId: string; email: string } | null },
 ): Promise<CompleteOutcome> {
-  const google = deps.google;
-  const worker = deps.worker;
+  const { google } = deps;
+  const { worker } = deps;
   if (google === undefined || worker === undefined) {
     return { ok: false, reason: "not-configured" };
   }
@@ -233,7 +233,7 @@ export async function completeConsent(
     return { ok: false, reason: "bad-state" };
   }
 
-  const caller = input.caller;
+  const { caller } = input;
   if (caller === null || !(await deps.hasAdminAuthority(handshake.tenantId, caller))) {
     return {
       ok: false,

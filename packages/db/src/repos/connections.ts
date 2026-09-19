@@ -169,7 +169,7 @@ export async function readCredential(
      WHERE tenant_id = $1 AND source = $2${opts.forUpdate === true ? " FOR UPDATE" : ""}`,
     [tenantId, source],
   );
-  const row = rows[0];
+  const [row] = rows;
   if (row === undefined) {
     throw new ConnectionRegistryError(
       `no stored credential for tenant ${JSON.stringify(tenantId)} source ${JSON.stringify(source)}; ` +
@@ -212,7 +212,7 @@ export async function readConnectionDetail(
      FROM app.connection_detail WHERE tenant_id = $1 AND source = $2`,
     [tenantId, source],
   );
-  const row = rows[0];
+  const [row] = rows;
   if (row === undefined) {
     return null;
   }

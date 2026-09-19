@@ -28,7 +28,7 @@ export async function findTenant(exec: SqlExecutor, tenantId: string): Promise<T
     "SELECT id, display_name FROM ops.tenant WHERE id = $1",
     [tenantId],
   );
-  const row = rows[0];
+  const [row] = rows;
   return row === undefined ? null : { id: row.id, displayName: row.display_name };
 }
 
@@ -93,7 +93,7 @@ export async function renameTenant(
      RETURNING id, display_name`,
     [tenantId, displayName],
   );
-  const row = rows[0];
+  const [row] = rows;
   return row === undefined ? null : { id: row.id, displayName: row.display_name };
 }
 

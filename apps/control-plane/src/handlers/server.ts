@@ -101,7 +101,7 @@ export function createServer(deps: ServerDeps): Hono {
   // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
   // the app shell -- a sign-in that silently never completes.
   if (deps.auth !== undefined) {
-    const auth = deps.auth;
+    const { auth } = deps;
     app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
   }
 
@@ -125,9 +125,9 @@ export function createServer(deps: ServerDeps): Hono {
   });
 
   app.all("/trpc/*", async (c) => {
-    const headers = c.req.raw.headers;
+    const { headers } = c.req.raw;
     const { user, sessionId, superadmin } = await resolveCaller(deps, headers);
-    const auth = deps.auth;
+    const { auth } = deps;
     // Resolved once, from the request, and carried on the context. Every refusal this
     // request produces and every email it causes to be sent is worded in it -- including the
     // invitation, which goes to somebody whose own language nobody here knows. See `../i18n`.

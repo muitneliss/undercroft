@@ -129,8 +129,8 @@ const t = initTRPC.context<Context>().create({
   },
 });
 
-export const router = t.router;
-export const publicProcedure = t.procedure;
+export const { router } = t;
+export const { procedure: publicProcedure } = t;
 
 export const authedProcedure = t.procedure.use(({ ctx, next }) => {
   if (ctx.user === null) {

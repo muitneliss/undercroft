@@ -247,7 +247,7 @@ export async function* readEntity(
     // because a relation like HubSpot's deal->company associations is a different route
     // with a different shape, and bending it into the object reader is how a connector
     // becomes hundreds of lines of special cases.
-    const request = entity.request;
+    const { request } = entity;
     const ids = ctx.sourceIds ?? [];
     const url = buildUrl(spec.baseUrl, request.path, {});
 
@@ -267,7 +267,7 @@ export async function* readEntity(
       }
     }
   } else {
-    const request = entity.request;
+    const { request } = entity;
     let url = buildUrl(spec.baseUrl, request.path, request.query);
     let pageIndex = 0;
 

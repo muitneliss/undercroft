@@ -29,7 +29,7 @@ function isNoSuchKey(error: unknown): boolean {
   if (typeof error !== "object" || error === null) {
     return false;
   }
-  const name = (error as { name?: unknown }).name;
+  const { name } = error as { name?: unknown };
   const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
   return name === "NoSuchKey" || name === "NotFound" || status === 404;
 }

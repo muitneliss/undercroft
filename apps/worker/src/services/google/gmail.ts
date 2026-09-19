@@ -126,7 +126,7 @@ export async function harvestGmail(api: GoogleApi, scope: GmailScope): Promise<G
     });
 
     for (const part of pdfParts(message)) {
-      const attachmentId = part.attachmentId;
+      const { attachmentId } = part;
       documents.push({
         // (messageId, partIndex), never attachmentId. See the module docstring.
         documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,

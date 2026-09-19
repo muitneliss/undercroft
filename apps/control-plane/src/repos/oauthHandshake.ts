@@ -74,7 +74,7 @@ export async function consumeHandshake(
      RETURNING tenant_id, source, verifier, requested_scope, started_by`,
     [stateSha256],
   );
-  const row = rows[0];
+  const [row] = rows;
   if (row === undefined) {
     return null;
   }

@@ -310,7 +310,7 @@ export class LakeStore {
       throw new RangeError(`no observations at ${key}`);
     }
     const man = await this.manifest(key, chosen);
-    const blobKey = man.blobKey;
+    const { blobKey } = man;
     if (typeof blobKey !== "string") {
       throw new Error(`manifest for ${key}/${chosen} has no blobKey`);
     }

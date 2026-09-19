@@ -55,7 +55,7 @@ export async function migrate(
   executor: SqlExecutor,
   migrations: Migration[] = loadMigrations(),
 ): Promise<MigrateResult> {
-  const roles = migrations[0];
+  const [roles] = migrations;
   if (roles === undefined) {
     return { applied: [], skipped: [] };
   }

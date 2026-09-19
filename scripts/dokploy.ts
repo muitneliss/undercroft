@@ -208,7 +208,7 @@ export async function deployAndWait(
       );
     }
   }
-  const deploymentId = ours.deploymentId;
+  const { deploymentId } = ours;
   deps.log(`deployment ${deploymentId} queued`);
 
   // Phase two: watch that record, and only that record, until it settles.
@@ -274,9 +274,9 @@ export function releasedServices(
   const found: { service: string; image: string }[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
-    const serviceMatch = TOP_LEVEL_SERVICE.exec(line);
-    if (serviceMatch?.[1] !== undefined) {
-      service = serviceMatch[1];
+    const [, matchedService] = TOP_LEVEL_SERVICE.exec(line) ?? [];
+    if (matchedService !== undefined) {
+      service = matchedService;
     }
     const imageMatch = IMAGE_LINE.exec(line);
     if (imageMatch?.[1]?.startsWith(RELEASED_IMAGE_PREFIX)) {
@@ -301,9 +301,9 @@ export function oneShotServices(composeFile: string): Set<string> {
   const found = new Set<string>();
   let candidate = "";
   for (const line of composeFile.split("\n")) {
-    const nameMatch = NESTED_NAME.exec(line);
-    if (nameMatch?.[1] !== undefined) {
-      candidate = nameMatch[1];
+    const [, matchedName] = NESTED_NAME.exec(line) ?? [];
+    if (matchedName !== undefined) {
+      candidate = matchedName;
     }
     if (COMPLETED_CONDITION.test(line) && candidate !== "") {
       found.add(candidate);
