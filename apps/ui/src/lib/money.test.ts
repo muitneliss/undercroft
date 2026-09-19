@@ -7,9 +7,6 @@
  * formatMoney into something that parses.
  */
 
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-
 import { describe, expect, test as it } from "bun:test";
 
 import { exactAmount, formatCount, formatMoney, MISSING, orMissing } from "./money.ts";

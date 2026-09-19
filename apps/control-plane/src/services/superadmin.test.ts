@@ -7,8 +7,6 @@
  * is why "what does it refuse" is tested as carefully as "what does it accept".
  */
 
-// biome-ignore-all lint/nursery/noBunModules: Bun is the test runner, per CLAUDE.md: 'Bun is the runtime, package manager, workspace manager and test runner.' `bun:test` is the toolchain, not an accidental dependency.
-
 import { describe, expect, test as it } from "bun:test";
 import { isSuperadmin, NO_SUPERADMINS, parseSuperadmins } from "./superadmin.ts";
 

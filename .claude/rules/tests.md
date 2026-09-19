@@ -26,3 +26,9 @@ globs: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
   past `SET ROLE`; that, and `FOR UPDATE` concurrency, are integration-tier against real
   Postgres.
 - The offline gate (`bun run verify`) must pass with no Docker, no network, no credentials.
+- **Do not paste a `biome-ignore-all` header into a new suite.** The ten rules whose answer
+  is "because it is a test" — `noBunModules`, `noMagicNumbers`, `useExpect`, the two length
+  rules and five more — are answered once in the `biome.jsonc` override for
+  `**/*.test.ts(x)`, and a copy in the file is dead prose the next reader still has to check.
+  A rule that fires for a reason about _this_ suite keeps its own header, with that reason.
+  ADR 0017.

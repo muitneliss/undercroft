@@ -177,6 +177,75 @@
           }
         }
       }
+    },
+
+    // The one place a rule is switched OFF rather than suppressed at the file, and the
+    // boundary is narrow: a rule lands here only when the reason is "because it is a test" --
+    // true of every test file, identically, and of nothing else. ADR 0017 supersedes that
+    // paragraph of ADR 0012 and records why: these ten reasons had been copy-pasted into 137
+    // headers across 60 files, and `noBunModules` alone appeared in all 58 suites. A sentence
+    // repeated 58 times is not one a reviewer re-reads, and it cannot be deleted when it
+    // stops being true, because it lives in 58 places.
+    //
+    // Everything else still argues for itself at the file it applies to, in a test exactly as
+    // in a source file: `noUnsafeTypeAssertion`, `useExplicitType`, `useTopLevelRegex`,
+    // `useNamingConvention`, `noTernary`, `noSecrets` and `noNonNullAssertion` are suppressed
+    // per file, with per-file reasons, and stay that way.
+    //
+    // Pinned from both sides by `scripts/biomeTestOverride.test.ts`, which runs the real
+    // config: the rules fire in a `.ts` twin, stay quiet in the `.test.ts` fixture, and a
+    // money violation in that same fixture is still reported -- so this is an override, not
+    // Biome quietly skipping the suite.
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            // A `describe` block is long because of how many behaviours it pins, not because
+            // of complexity inside any one of them. Splitting it groups one question under
+            // two headings.
+            "noExcessiveLinesPerFunction": "off"
+          },
+          "correctness": {
+            // A suite reads fixtures, makes temp directories and hashes bytes. `node:` is the
+            // platform a test runs on, not a portability hazard.
+            "noNodejsModules": "off",
+            // Qwik-domain rule about what may cross a `$()` serialization boundary. There is
+            // no Qwik in this repo; in a suite it fires on ordinary closures.
+            "useQwikValidLexicalScope": "off"
+          },
+          "nursery": {
+            // Bun is the test runner, per CLAUDE.md. `bun:test` is the toolchain, not an
+            // accidental dependency.
+            "noBunModules": "off",
+            // These assert inside a callback the code under test invokes -- a refresher, an
+            // onRetry hook -- which is how a collaborator is checked without a mock.
+            // `.claude/rules/tests.md` bans the mock alternative outright.
+            "noConditionalExpect": "off",
+            // Test bodies whose assertion is that the call did not throw, written in the
+            // guard style `tests.md` prescribes rather than as an `expect()`.
+            "useExpect": "off",
+            // The titles this flags are full sentences naming the promise under test, which
+            // is exactly what `tests.md` asks a title to be. The rule wants a shorter shape.
+            "useValidTestTitle": "off"
+          },
+          "style": {
+            // A suite is as long as its subject has behaviours, and the harnesses that make
+            // one long -- a loopback server, Better Auth on its memory adapter, PGlite -- are
+            // the ones too delicate to keep two copies of.
+            "noExcessiveLinesPerFile": "off",
+            // In a test the number IS the assertion. `expect(status).toBe(403)` says what the
+            // code must do; `expect(status).toBe(EXPECTED_STATUS)` says only that two names
+            // agree, and it passes while both are wrong. Source files get named constants.
+            "noMagicNumbers": "off"
+          },
+          "suspicious": {
+            // Assertions inside a helper that several tests call, which is how the repeated
+            // part of a check is named once.
+            "noMisplacedAssertion": "off"
+          }
+        }
+      }
     }
   ]
 }

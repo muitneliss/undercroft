@@ -86,10 +86,18 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
 Where a rule can be made mechanical it is.
 
 **Biome is the linter and the formatter**, at `preset: "all"` — every rule it ships, at
-error severity, with every domain on. No rule is switched off in `biome.jsonc`. Where a rule
-cannot apply here it is suppressed at the file it applies to, with the reason written beside
-it, so a reviewer can check each one and delete it when it stops being true. Prettier is kept
-for Markdown and YAML alone, the two languages Biome cannot format.
+error severity, with every domain on. Where a rule cannot apply here it is suppressed at the
+file it applies to, with the reason written beside it, so a reviewer can check each one and
+delete it when it stops being true. Prettier is kept for Markdown and YAML alone, the two
+languages Biome cannot format.
+
+**One exception, and it is scoped to test files.** Ten rules whose whole answer is "because
+it is a test" — `noBunModules`, `noMagicNumbers`, `useExpect`, the two length rules, and five
+more — are switched off once, in the `biome.jsonc` override for `**/*.test.ts(x)`, rather
+than in every suite. The same sentence pasted into 58 files is not one a reviewer re-reads,
+and it cannot be deleted when it stops being true. Anything else argues for itself at the
+file, in a test exactly as in a source file. ADR 0017 supersedes that paragraph of ADR 0012;
+`scripts/biomeTestOverride.test.ts` pins the boundary from both sides.
 
 ## Deploying
 

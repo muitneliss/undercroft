@@ -21,6 +21,7 @@
 - [ADR 0014 Frames Are Size, Nothing Eases](sources/adr-0014-frames-are-size-nothing-eases.md)
 - [ADR 0015 A First-Party Collector for Byte Sources](sources/adr-0015-a-first-party-collector-for-byte-sources.md)
 - [ADR 0016 The Worker Seals the Control Plane Consents](sources/adr-0016-the-worker-seals-the-control-plane-consents.md)
+- [ADR 0017 Tests Are a Category in the Lint Config](sources/adr-0017-tests-are-a-category-in-the-lint-config.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
