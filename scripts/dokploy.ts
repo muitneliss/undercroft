@@ -10,16 +10,16 @@
  * Three things here look like over-engineering and are not. Each is a failure that has
  * already shipped somewhere:
  *
- *   * `deploy` snapshots the deployment ids BEFORE triggering and refuses to read a verdict
+ *   - `deploy` snapshots the deployment ids BEFORE triggering and refuses to read a verdict
  *     out of a record that already existed. `compose.deploy` only queues, so for the first
  *     seconds the newest record is still the PREVIOUS release's -- `status: done`, finished
  *     hours ago, exit 0. That is how a release reports success while the host goes on
  *     running the build before it.
- *   * `verify` compares image CONFIG digests against what ghcr serves, because Dokploy
+ *   - `verify` compares image CONFIG digests against what ghcr serves, because Dokploy
  *     reports `done` for a deploy that changed nothing. Config digest, not index digest:
  *     buildx attestations change the index digest on every build, so two builds of an
  *     identical image compare unequal there and equal here.
- *   * Reads retry; the trigger never does. A retried trigger queues a second concurrent
+ *   - Reads retry; the trigger never does. A retried trigger queues a second concurrent
  *     `docker compose up` against the same stack.
  *
  * Credentials come from the environment and are never written to a file -- all three or
