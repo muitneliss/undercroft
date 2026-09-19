@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/muitneliss/undercroft/compare/v1.6.1...v1.7.0) (2026-09-19)
+
+
+### Features
+
+* **ui:** set the Gmail scope picker's labels as a bounded index ([#46](https://github.com/muitneliss/undercroft/issues/46)) ([269cd32](https://github.com/muitneliss/undercroft/commit/269cd3205375cb31c0d4109ce4b76a710fa8b168))
+
+
+### Bug Fixes
+
+* **connections:** refuse a partial Google consent, and name the remedy ([#44](https://github.com/muitneliss/undercroft/issues/44)) ([a61469f](https://github.com/muitneliss/undercroft/commit/a61469f1ab310d5901d8eaed5ab6cd4af0f78e93))
+
 ## [1.6.1](https://github.com/muitneliss/undercroft/compare/v1.6.0...v1.6.1) (2026-09-18)
 
 
