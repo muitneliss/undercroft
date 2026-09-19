@@ -1,8 +1,10 @@
 /**
- * The connection verbs: mint a credential, browse a source's scope, revoke a grant.
+ * The connection verbs, for the control plane's OAuth flow.
  *
- * Split from `lake.ts` because they authenticate differently and the difference is the whole
- * point -- see `serviceTokenOk` below.
+ * **Service token only, deliberately.** `authenticate()` is not called here, unlike
+ * `/v1/lake/records`: an ingest key is a per-tenant grant to LAND data, and accepting one to
+ * mint or destroy a credential would quietly widen every key ever issued into a
+ * credential-management capability.
  */
 
 import {
@@ -11,37 +13,27 @@ import {
   StoreCredentialRequest,
 } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
-import type { Context, Hono } from "hono";
+import type { Hono } from "hono";
 import { browseScope, revokeConnection, storeCredential } from "../services/connections.ts";
-import { resolveToken } from "../services/ingest.ts";
-import { bearerOf } from "./bearer.ts";
+import { serviceTokenOk, tokenFor, UNAUTHENTICATED } from "./bearer.ts";
 import type { LakeApiDeps } from "./lake.ts";
 
-/**
- * Service token only, deliberately.
- *
- * `authenticate()` is NOT called on these three routes, unlike `/v1/lake/records`: an ingest
- * key is a per-tenant grant to LAND data, and accepting one to mint or destroy a credential
- * would quietly widen every key ever issued into a credential-management capability.
- */
-function serviceTokenOk(deps: LakeApiDeps, c: Context): boolean {
-  return deps.serviceToken !== "" && bearerOf(c.req.header("authorization")) === deps.serviceToken;
-}
-
-const UNAUTHENTICATED = {
-  code: "unauthenticated",
-  message: "the trigger token is required",
-  details: [],
-};
-
-/** The connection verbs, for the control plane's OAuth flow. */
 export function registerConnectionRoutes(app: Hono, deps: LakeApiDeps): void {
-  registerCredentialRoute(app, deps);
-  registerBrowseRoute(app, deps);
-  registerRevokeRoute(app, deps);
+  /**
+   * The connection verbs, for the control plane's OAuth flow.
+   *
+   * **Service token only, deliberately.** `authenticate()` is not called here, unlike
+   * `/v1/lake/records`: an ingest key is a per-tenant grant to LAND data, and accepting one
+   * to mint or destroy a credential would quietly widen every key ever issued into a
+   * credential-management capability.
+   */
+
+  registerConnectionsCredentialRoute(app, deps);
+  registerConnectionsBrowseRoute(app, deps);
+  registerConnectionsRevokeRoute(app, deps);
 }
 
-function registerCredentialRoute(app: Hono, deps: LakeApiDeps): void {
+function registerConnectionsCredentialRoute(app: Hono, deps: LakeApiDeps): void {
   app.post("/v1/connections/credential", async (c) => {
     if (!serviceTokenOk(deps, c)) {
       return c.json(UNAUTHENTICATED, 401);
@@ -65,10 +57,34 @@ function registerCredentialRoute(app: Hono, deps: LakeApiDeps): void {
         exec: deps.exec,
         ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
         ...(deps.env === undefined ? {} : { env: deps.env }),
+        ...(deps.byteFetcher === undefined ? {} : { fetcher: deps.byteFetcher }),
       },
       parsed.data,
     );
     if (!outcome.ok) {
+      // Three refusals, three statuses, because the remedies differ: a tenant that does not
+      // exist, a token the provider turned away (422: the body was well-formed and wrong),
+      // and a source nobody can probe.
+      if (outcome.reason === "credential-rejected") {
+        return c.json(
+          {
+            code: "credential_rejected",
+            message: "the provider refused this credential",
+            details: [],
+          },
+          422,
+        );
+      }
+      if (outcome.reason === "cannot-validate") {
+        return c.json(
+          {
+            code: "invalid_request",
+            message: `${parsed.data.source} cannot be validated`,
+            details: [],
+          },
+          400,
+        );
+      }
       return c.json({ code: "invalid_request", message: "unknown tenant", details: [] }, 404);
     }
     return c.json(
@@ -83,7 +99,7 @@ function registerCredentialRoute(app: Hono, deps: LakeApiDeps): void {
   });
 }
 
-function registerBrowseRoute(app: Hono, deps: LakeApiDeps): void {
+function registerConnectionsBrowseRoute(app: Hono, deps: LakeApiDeps): void {
   app.post("/v1/connections/browse", async (c) => {
     if (!serviceTokenOk(deps, c)) {
       return c.json(UNAUTHENTICATED, 401);
@@ -133,7 +149,7 @@ function registerBrowseRoute(app: Hono, deps: LakeApiDeps): void {
   });
 }
 
-function registerRevokeRoute(app: Hono, deps: LakeApiDeps): void {
+function registerConnectionsRevokeRoute(app: Hono, deps: LakeApiDeps): void {
   app.post("/v1/connections/revoke", async (c) => {
     if (!serviceTokenOk(deps, c)) {
       return c.json(UNAUTHENTICATED, 401);
@@ -152,24 +168,11 @@ function registerRevokeRoute(app: Hono, deps: LakeApiDeps): void {
         exec: deps.exec,
         fetcher: deps.byteFetcher ?? createByteFetcher(),
         token: () => tokenFor(deps, parsed.data),
+        ...(deps.xero === undefined ? {} : { xero: deps.xero }),
+        ...(deps.env === undefined ? {} : { env: deps.env }),
       },
       parsed.data,
     );
     return c.json(result, 200);
   });
-}
-
-/** The access token for a connection, refreshing under a lock if one is due. */
-function tokenFor(deps: LakeApiDeps, input: { source: string; tenantId: string }): Promise<string> {
-  return resolveToken(
-    {
-      exec: deps.exec,
-      ...(deps.env === undefined ? {} : { env: deps.env }),
-      ...(deps.refreshers?.[input.source] === undefined
-        ? {}
-        : { refresher: deps.refreshers[input.source] }),
-      ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
-    },
-    input,
-  );
 }

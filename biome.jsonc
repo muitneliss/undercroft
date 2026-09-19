@@ -695,6 +695,31 @@
       "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
     },
 
+    // A catalogue is a list, and its length is how many things the product says. `i18n.md`
+    // makes `vi.ts` the source of truth for WHICH KEYS EXIST and the compiler requires `en.ts`
+    // to answer every one; splitting either into parts breaks the one property that pairing
+    // rests on, and `i18n.test.tsx` compares the two key sets as whole files.
+    {
+      "includes": [
+        "apps/ui/src/i18n/vi.ts",
+        "apps/ui/src/i18n/en.ts",
+        "packages/contracts/src/bi.ts"
+      ],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
+    // One repo per table group, named for the tables -- `layering.md`. The length of a repo is
+    // the number of columns its tables have, and cutting `connections.ts` or `runs.ts` in two
+    // would put half a table group in each, which is the thing that rule exists to prevent.
+    {
+      "includes": [
+        "packages/db/src/repos/connections.ts",
+        "packages/db/src/repos/runs.ts",
+        "apps/control-plane/src/services/connections.ts"
+      ],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
     // The deploy client, read top to bottom as the sequence of a deploy: configure, call,
     // trigger, wait, verify, smoke, report. Its long functions are split -- `verifyService`
     // answers one service -- but the FILE stays one file, and that is deliberate.
