@@ -108,8 +108,6 @@ export const en = {
     count_one: "{{count, number}} source on record.",
     count_other: "{{count, number}} sources on record.",
     grantsHead: "Grants",
-    colSource: "Source",
-    colStatus: "Status",
     notLoaded:
       "This customer’s grants could not be loaded, or you do not have access to them. Nothing has been changed.",
   },
@@ -177,12 +175,10 @@ export const en = {
     reconnect: "Reconnect {{name}}",
     changeScope: "Change what syncs",
     disconnect: "Disconnect",
-    connecting: "Taking you to Google…",
     connectFailed: "This source could not be connected.",
     connectDeclined: "You cancelled at Google’s screen. Nothing was granted.",
     connectScopeDeclined:
       "A permission this source needs was unticked at Google’s screen, so nothing was saved. Connect again and leave every tick in place.",
-    disconnecting: "Disconnecting…",
     disconnectFailed: "This could not be disconnected.",
     disconnected: "Disconnected.",
     disconnectedNotRevoked:
@@ -193,18 +189,11 @@ export const en = {
   },
 
   grantState: {
-    lapsedHeadline: "Reconnect needed",
     lapsedDetail:
       "The access we were granted has lapsed or been withdrawn. Nothing has been lost — reconnecting picks up where the last sync finished.",
-    notConnectedHeadline: "Not connected",
-    needsScopeHeadline: "Choose what to sync",
     needsScopeDetail: "Connected. Tell us which account to read before the first sync.",
     needsScopeDetailNamed: "Connected to {{account}}. Choose what to sync before the first run.",
-    connectedHeadline: "Connected",
     connectedDetail: "Syncing on schedule.",
-    actionConnect: "Connect",
-    actionChoose: "Choose",
-    actionReconnect: "Reconnect",
   },
 
   scopePicker: {
@@ -213,7 +202,6 @@ export const en = {
       "Choose the labels to read. Only message headers and PDF attachments in those labels are read; no other label is read.",
     leadDrive:
       "Choose the folders or documents to read. Google permits us to read exactly what you pick here and nothing else.",
-    wholeMailbox: "Read the whole mailbox",
     wholeMailboxHint:
       "Choosing no label means the whole mailbox. That is a deliberate choice, not an empty one.",
     directChildrenOnly: "Only files directly inside a chosen folder are read. Sub-folders are not.",
@@ -234,11 +222,9 @@ export const en = {
     clearAll: "Clear all",
     pickFromDrive: "Choose from Google Drive",
     nothingToChoose: "There is nothing to choose from yet.",
-    notLoaded: "The list could not be loaded from Google. Nothing has been changed.",
     save: "Save selection",
     saving: "Saving…",
     notSaved: "The selection could not be saved.",
-    saved: "Selection saved.",
     pickerUnavailable:
       "Google’s picker is not available. Reload the page; if it persists, Google Drive is not configured.",
   },
@@ -261,15 +247,6 @@ export const en = {
     expiresInDays_other: "Expires in {{count, number}} days",
     hourly: "Hourly",
     dailyAt: "Daily at {{time}} SGT",
-  },
-
-  verdict: {
-    okLabel: "Reconciled",
-    okDescription: "Checked against the source and matching.",
-    mismatchLabel: "Mismatch",
-    mismatchDescription: "Checked against the source and disagreeing.",
-    unverifiedLabel: "Not verified",
-    unverifiedDescription: "No evidence either way. Absence of a mismatch is not a match.",
   },
 
   source: {

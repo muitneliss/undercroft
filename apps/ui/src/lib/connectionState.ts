@@ -61,11 +61,18 @@ export interface CardFacts {
   complete: boolean;
 }
 
+/**
+ * The facts plus the one sentence the card prints beneath them.
+ *
+ * No headline and no action label: the card's heading is the source's own name, and each
+ * plate writes its own words (`grant.connect`, `grant.chooseScope`, ...). Both used to be
+ * computed here and rendered by nothing, which left a translated catalogue entry that no
+ * reader ever saw and no test could miss.
+ */
 export type CardPresentation = CardFacts & {
-  headline: string;
   detail: string;
-  /** The next action, named for the reader. Null when there is nothing to do. */
-  action: { label: string; kind: ActionKind } | null;
+  /** The next action. Null when there is nothing to do. */
+  action: { kind: ActionKind } | null;
 };
 
 /**
@@ -96,39 +103,21 @@ export function connectionFacts(connection: Connection): CardFacts {
   }
 }
 
-const ACTION_LABEL: Record<
-  ActionKind,
-  "grantState.actionConnect" | "grantState.actionChoose" | "grantState.actionReconnect"
-> = {
-  connect: "grantState.actionConnect",
-  scope: "grantState.actionChoose",
-  reconnect: "grantState.actionReconnect",
-};
-
 /** The card's state, with the words a reader of `t`'s language sees. */
 export function presentConnection(t: TFunction, connection: Connection): CardPresentation {
   const card = connectionFacts(connection);
-  const action =
-    card.actionKind === null
-      ? null
-      : { label: t(ACTION_LABEL[card.actionKind]), kind: card.actionKind };
+  const action = card.actionKind === null ? null : { kind: card.actionKind };
 
   switch (card.state) {
     case "needs_reconnect":
-      return {
-        ...card,
-        headline: t("grantState.lapsedHeadline"),
-        detail: t("grantState.lapsedDetail"),
-        action,
-      };
+      return { ...card, detail: t("grantState.lapsedDetail"), action };
 
     case "not_connected":
-      return { ...card, headline: t("grantState.notConnectedHeadline"), detail: "", action };
+      return { ...card, detail: "", action };
 
     case "needs_scope":
       return {
         ...card,
-        headline: t("grantState.needsScopeHeadline"),
         detail:
           connection.externalAccountLabel === ""
             ? t("grantState.needsScopeDetail")
@@ -139,14 +128,7 @@ export function presentConnection(t: TFunction, connection: Connection): CardPre
       };
 
     case "connected":
-      return {
-        ...card,
-        // The account's own name where there is one: an operator on a call needs to know
-        // *which* mailbox is connected, not merely that one is.
-        headline: connection.externalAccountLabel || t("grantState.connectedHeadline"),
-        detail: t("grantState.connectedDetail"),
-        action,
-      };
+      return { ...card, detail: t("grantState.connectedDetail"), action };
 
     default: {
       const exhaustive: never = card.state;

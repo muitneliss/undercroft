@@ -10,23 +10,24 @@
  * would be a third, unowned source of truth competing with the query cache and this store;
  * the ast-grep hard gate (`bun run lint:state`) fails the build if one appears.
  *
- * `selectedTenantId` is the first such piece: the control plane's data path (connectors,
- * runs, model preview) hangs off a tenant, so which tenant is in focus is a client choice.
+ * `locale` is the first such piece, and it is the one that would most obviously have been
+ * kept somewhere else. i18next holds a current language of its own, and react-i18next
+ * re-renders off it -- but it is a PROJECTION of this field, not a second owner: `@/i18n`
+ * subscribes here and pushes the value down. Reversing that, and calling
+ * `i18n.changeLanguage` from a button, would put the user's choice in a library's internals
+ * where the store cannot see it and where nothing persists it. See `docs/adr/0012`.
  *
- * `locale` is the second, and it is the one that would most obviously have been kept
- * somewhere else. i18next holds a current language of its own, and react-i18next re-renders
- * off it -- but it is a PROJECTION of this field, not a second owner: `@/i18n` subscribes
- * here and pushes the value down. Reversing that, and calling `i18n.changeLanguage` from a
- * button, would put the user's choice in a library's internals where the store cannot see
- * it and where nothing persists it. See `docs/adr/0012`.
+ * The tenant in focus is deliberately NOT here. It belongs to the URL, which already
+ * survives a reload and can be pasted to a colleague; a `selectedTenantId` used to sit
+ * beside `locale`, read by nothing, and a remembered selection that disagrees with the
+ * address bar is exactly the drift this store exists to prevent.
  *
  * ## Why `persist`, and why only over `locale`
  *
  * A language chosen on one visit and forgotten by the next is not a chosen language. So the
- * locale is written to `localStorage` and read back at startup. `selectedTenantId` is
- * deliberately NOT persisted: the tenant in focus belongs to the URL, which already survives
- * a reload and can be pasted to a colleague, and a remembered selection that disagrees with
- * the address bar is exactly the drift this store exists to prevent.
+ * locale is written to `localStorage` and read back at startup. The drafts below are not:
+ * a half-made choice restored days later, after the thing it referred to may have changed,
+ * is worse than an empty form.
  */
 
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
@@ -60,12 +61,6 @@ export interface ScopeDraft {
 }
 
 interface UiState {
-  /** The tenant the operator is currently focused on, or null when none is selected. */
-  selectedTenantId: string | null;
-  /** Focus a tenant. Selecting the already-selected tenant clears the selection (toggle). */
-  selectTenant: (id: string) => void;
-  /** Clear the selection outright, e.g. when the selected tenant is no longer visible. */
-  clearTenant: () => void;
   /** The language every surface is rendered in, and the one the server is asked to answer in. */
   locale: Locale;
   /** Change language. The only writer; `@/i18n` follows this, never the other way round. */
@@ -109,10 +104,6 @@ interface UiState {
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
-      selectedTenantId: null,
-      selectTenant: (id): unknown =>
-        set((state) => ({ selectedTenantId: state.selectedTenantId === id ? null : id })),
-      clearTenant: () => set({ selectedTenantId: null }),
       locale: DEFAULT_LOCALE,
       setLocale: (locale): unknown => set({ locale }),
       scopeDraft: null,

@@ -144,8 +144,6 @@ export const vi = {
     none: "Khách hàng này chưa kết nối nguồn nào.",
     count_other: "Có {{count, number}} nguồn được ghi nhận.",
     grantsHead: "Quyền đã cấp",
-    colSource: "Nguồn",
-    colStatus: "Trạng thái",
     notLoaded:
       "Không tải được các quyền của khách hàng này, hoặc bạn không có quyền xem chúng. Không có gì bị thay đổi.",
   },
@@ -211,7 +209,6 @@ export const vi = {
     reconnect: "Kết nối lại {{name}}",
     changeScope: "Đổi dữ liệu đồng bộ",
     disconnect: "Ngắt kết nối",
-    connecting: "Đang chuyển tới Google…",
     connectFailed: "Chưa kết nối được nguồn này.",
     connectDeclined: "Bạn đã huỷ ở màn hình của Google. Không có gì được cấp.",
     /**
@@ -221,7 +218,6 @@ export const vi = {
      */
     connectScopeDeclined:
       "Ở màn hình của Google, quyền cần thiết đã bị bỏ tích nên kết nối chưa được lưu. Hãy kết nối lại và giữ nguyên mọi dấu tích.",
-    disconnecting: "Đang ngắt kết nối…",
     disconnectFailed: "Chưa ngắt kết nối được.",
     disconnected: "Đã ngắt kết nối.",
     disconnectedNotRevoked:
@@ -231,21 +227,20 @@ export const vi = {
     whatWeChange: "Chúng tôi thay đổi gì",
   },
 
-  /** What a connection card says in each state. Chosen by `@/lib/connectionState`. */
+  /**
+   * What a connection card says in each state. Chosen by `@/lib/connectionState`.
+   *
+   * Only the sentence the card prints. The headline is the source's own name and the
+   * action's label is written on its plate, so neither is worded here; keys that were
+   * translated and never reached a screen have been removed rather than kept "in case".
+   */
   grantState: {
-    lapsedHeadline: "Cần kết nối lại",
     lapsedDetail:
       "Quyền truy cập đã cấp nay đã hết hiệu lực hoặc bị thu hồi. Không có dữ liệu nào bị mất — kết nối lại sẽ tiếp tục từ lần đồng bộ gần nhất.",
-    notConnectedHeadline: "Chưa kết nối",
-    needsScopeHeadline: "Chọn dữ liệu cần đồng bộ",
     needsScopeDetail: "Đã kết nối. Hãy cho biết cần đọc tài khoản nào trước lần đồng bộ đầu tiên.",
     needsScopeDetailNamed:
       "Đã kết nối tới {{account}}. Hãy chọn dữ liệu cần đồng bộ trước lần chạy đầu tiên.",
-    connectedHeadline: "Đã kết nối",
     connectedDetail: "Đang đồng bộ theo lịch.",
-    actionConnect: "Kết nối",
-    actionChoose: "Chọn",
-    actionReconnect: "Kết nối lại",
   },
 
   /** What a live grant permits, in the customer's words. `@/lib/connectionState`. */
@@ -255,7 +250,6 @@ export const vi = {
       "Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp PDF đính kèm trong những nhãn đó được đọc; không nhãn nào khác được đọc.",
     leadDrive:
       "Chọn thư mục hoặc tài liệu cần đọc. Google chỉ cho phép đọc đúng những gì bạn chọn ở đây.",
-    wholeMailbox: "Đọc toàn bộ hòm thư",
     wholeMailboxHint:
       "Không chọn nhãn nào nghĩa là đọc toàn bộ hòm thư. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
     directChildrenOnly:
@@ -279,11 +273,9 @@ export const vi = {
     clearAll: "Bỏ chọn tất cả",
     pickFromDrive: "Chọn từ Google Drive",
     nothingToChoose: "Chưa có mục nào để chọn.",
-    notLoaded: "Không tải được danh sách từ Google. Không có gì bị thay đổi.",
     save: "Lưu lựa chọn",
     saving: "Đang lưu…",
     notSaved: "Không lưu được lựa chọn.",
-    saved: "Đã lưu lựa chọn.",
     pickerUnavailable:
       "Bộ chọn của Google chưa sẵn sàng. Hãy tải lại trang; nếu vẫn vậy, kết nối Google Drive chưa được cấu hình.",
   },
@@ -304,17 +296,6 @@ export const vi = {
     expiresInDays_other: "Còn {{count, number}} ngày nữa là hết hạn",
     hourly: "Mỗi giờ",
     dailyAt: "Hằng ngày lúc {{time}} SGT",
-  },
-
-  /** The three-valued comparison, kept three-valued. `@/lib/verdict`. */
-  verdict: {
-    okLabel: "Đã đối chiếu khớp",
-    okDescription: "Đã kiểm tra với nguồn và khớp.",
-    mismatchLabel: "Lệch",
-    mismatchDescription: "Đã kiểm tra với nguồn và không khớp.",
-    unverifiedLabel: "Chưa kiểm chứng",
-    unverifiedDescription:
-      "Không có bằng chứng theo hướng nào. Không có sai lệch không có nghĩa là khớp.",
   },
 
   /**
