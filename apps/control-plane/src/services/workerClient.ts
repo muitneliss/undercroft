@@ -24,8 +24,6 @@ import type {
   StoreCredentialResponse,
   TableResult,
 } from "@undercroft/contracts";
-import type { SqlExecutor } from "@undercroft/db";
-import { upsertConnection } from "@undercroft/db/repos";
 
 export type WorkerOutcome<T> =
   | { ok: true; value: T }
@@ -140,23 +138,30 @@ const CONFLICT = 409;
 /** The worker's answer for a pasted credential the provider turned away. */
 const UNPROCESSABLE = 422;
 
-export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
-  const doFetch = config.fetch ?? globalThis.fetch;
-  const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+/** Where the worker is and how to reach it. Passed rather than closed over, so the two
+ * request helpers below can live at module scope and be read on their own. */
+interface WorkerTransport {
+  readonly doFetch: (input: string, init?: RequestInit) => Promise<Response>;
+  readonly timeoutMs: number;
+  readonly baseUrl: string;
+  readonly triggerToken: string;
+}
 
+/** One POST to the worker, with its refusals mapped onto `WorkerOutcome`. */
+function postTo(t: WorkerTransport): typeof post {
   async function post<T>(
     path: string,
     body: unknown,
-    deadlineMs: number = timeoutMs,
+    deadlineMs: number = t.timeoutMs,
   ): Promise<WorkerOutcome<T>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), deadlineMs);
     try {
-      const response = await doFetch(`${config.baseUrl}${path}`, {
+      const response = await t.doFetch(`${t.baseUrl}${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${config.triggerToken}`,
+          authorization: `Bearer ${t.triggerToken}`,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -190,19 +195,24 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
    * run's id in `details`, which is a run id and never a token. Every other status is
    * handled as `post` handles it.
    */
+  return post;
+}
+
+/** Starting a run, whose refusal carries a runId when one is already in flight. */
+function triggerOn(t: WorkerTransport): typeof trigger {
   async function trigger(input: {
     source: string;
     tenantId: string;
     triggeredBy: string;
   }): Promise<TriggerOutcome> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), t.timeoutMs);
     try {
-      const response = await doFetch(`${config.baseUrl}/v1/runs/ingest`, {
+      const response = await t.doFetch(`${t.baseUrl}/v1/runs/ingest`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${config.triggerToken}`,
+          authorization: `Bearer ${t.triggerToken}`,
         },
         body: JSON.stringify({ ...input, trigger: "manual", chain: true }),
         signal: controller.signal,
@@ -229,6 +239,20 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     }
   }
 
+  return trigger;
+}
+
+export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
+  const doFetch = config.fetch ?? globalThis.fetch;
+  const t: WorkerTransport = {
+    doFetch: config.fetch ?? globalThis.fetch,
+    timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    baseUrl: config.baseUrl,
+    triggerToken: config.triggerToken,
+  };
+  const post = postTo(t);
+  const trigger = triggerOn(t);
+
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
     browseScope: (input) => post("/v1/connections/browse", input),
@@ -250,7 +274,7 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
    */
   async function query(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), t.timeoutMs);
     try {
       const response = await doFetch(`${config.baseUrl}/v1/queries/run`, {
         method: "POST",
@@ -280,184 +304,5 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     } finally {
       clearTimeout(timer);
     }
-  }
-}
-
-/**
- * A worker that answers from memory.
- *
- * A real implementation of the seam, not a mock: it records what it was asked and refuses
- * anything it was not set up for, so a flow that called the wrong verb fails loudly instead
- * of passing on a default.
- */
-export class InMemoryWorkerClient implements WorkerClient {
-  readonly stored: StoreCredentialInput[] = [];
-  readonly revoked: { source: string; tenantId: string }[] = [];
-  readonly triggered: { source: string; tenantId: string; triggeredBy: string }[] = [];
-  readonly built: { tenantId: string; model: string; triggeredBy: string }[] = [];
-  #labels: BrowseScopeResponse["items"] = [];
-  #failWith: WorkerFailure | null = null;
-  #runningAs: string | null = null;
-  #exec: SqlExecutor | null = null;
-
-  /** Answer every trigger with "already running as `runId`", the worker's 409. */
-  runningAs(runId: string): this {
-    this.#runningAs = runId;
-    return this;
-  }
-
-  /**
-   * Honour the side effect the real worker has: a stored credential leaves a connected
-   * `ops.connection` row behind.
-   *
-   * Not decoration. `app.connection_detail` has a foreign key to that row, so a caller that
-   * writes an account label after a successful store depends on it existing. A fake that
-   * skipped it would make the callback pass here and fail against the real worker -- which
-   * is the failure mode `.claude/rules/tests.md` means by "a fake that never refuses makes a
-   * broken boundary look fine".
-   */
-  backedBy(exec: SqlExecutor): this {
-    this.#exec = exec;
-    return this;
-  }
-
-  /** Make every call fail, to exercise the caller's failure path. */
-  failing(reason: WorkerFailure): this {
-    this.#failWith = reason;
-    return this;
-  }
-
-  withLabels(labels: BrowseScopeResponse["items"]): this {
-    this.#labels = labels;
-    return this;
-  }
-
-  async storeCredential(
-    input: StoreCredentialInput,
-  ): Promise<WorkerOutcome<StoreCredentialResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    this.stored.push(input);
-    if (this.#exec !== null) {
-      await upsertConnection(this.#exec, {
-        tenantId: input.tenantId,
-        source: input.source,
-        status: "connected",
-        externalAccountId: input.externalAccountId,
-        scope: input.scope,
-      });
-    }
-    return Promise.resolve({
-      ok: true,
-      value: {
-        tenantId: input.tenantId,
-        source: input.source,
-        status: "connected",
-        expiresAt: input.credential.expiresAt,
-      },
-    });
-  }
-
-  browseScope(): Promise<WorkerOutcome<BrowseScopeResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    return Promise.resolve({ ok: true, value: { items: this.#labels } });
-  }
-
-  revokeConnection(input: {
-    source: string;
-    tenantId: string;
-  }): Promise<WorkerOutcome<RevokeConnectionResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    this.revoked.push(input);
-    return Promise.resolve({ ok: true, value: { revokedUpstream: true } });
-  }
-
-  triggerIngest(input: {
-    source: string;
-    tenantId: string;
-    triggeredBy: string;
-  }): Promise<TriggerOutcome> {
-    if (this.#failWith !== null) {
-      return Promise.resolve({ ok: false, reason: this.#failWith });
-    }
-    if (this.#runningAs !== null) {
-      return Promise.resolve({ ok: false, reason: "in-progress", runId: this.#runningAs });
-    }
-    this.triggered.push(input);
-    return Promise.resolve({ ok: true, runId: `run-mem-${String(this.triggered.length)}` });
-  }
-
-  /** A build that succeeded with nothing to show: no steps, an empty relation. */
-  buildModel(input: {
-    tenantId: string;
-    model: string;
-    triggeredBy: string;
-  }): Promise<WorkerOutcome<BuildModelResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    this.built.push(input);
-    return Promise.resolve({
-      ok: true,
-      value: {
-        runId: `run-mem-build-${String(this.built.length)}`,
-        ok: true,
-        testsFailed: 0,
-        error: null,
-        steps: [],
-        preview: { columns: [], rows: [], truncated: false },
-      },
-    });
-  }
-
-  dqFailures(): Promise<WorkerOutcome<TableResult>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    return Promise.resolve({ ok: true, value: { columns: [], rows: [], truncated: false } });
-  }
-
-  /** Every query this double was asked to run, in order. */
-  readonly queries: RunQueryRequest[] = [];
-  #answer: TableResult = { columns: [], rows: [], truncated: false };
-  #refusal: string | null = null;
-
-  /** Answer every query with `result`. */
-  answering(result: TableResult): this {
-    this.#answer = result;
-    return this;
-  }
-
-  /** Refuse every query with Postgres's sentence, as the real worker would for bad SQL. */
-  refusingQueries(message: string): this {
-    this.#refusal = message;
-    return this;
-  }
-
-  runQuery(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    this.queries.push(input);
-    if (this.#refusal !== null) {
-      return Promise.resolve({ ok: false, reason: "query-failed", message: this.#refusal });
-    }
-    return Promise.resolve({ ok: true, value: this.#answer });
-  }
-
-  readSchema(): Promise<WorkerOutcome<SchemaResponse>> {
-    if (this.#failWith !== null) {
-      return this.#fail();
-    }
-    return Promise.resolve({ ok: true, value: { tables: [] } });
-  }
-
-  #fail<T>(): Promise<WorkerOutcome<T>> {
-    return Promise.resolve({ ok: false, reason: this.#failWith ?? "unreachable" });
   }
 }

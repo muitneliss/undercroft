@@ -28,7 +28,7 @@ import {
   setScope,
   setToken,
 } from "./connections.ts";
-import { InMemoryWorkerClient } from "./workerClient.ts";
+import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 
 const TENANT = "CASE-0042";
 const ENV = { UNDERCROFT_SECRET_KEY: Buffer.alloc(32, 5).toString("base64") };

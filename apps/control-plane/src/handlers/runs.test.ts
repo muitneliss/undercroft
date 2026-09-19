@@ -16,7 +16,8 @@ import { closeRun, openRun, recordEntities, recordRefusals } from "@undercroft/d
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { messages } from "../i18n/index.ts";
-import { InMemoryWorkerClient, type WorkerClient } from "../services/workerClient.ts";
+import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
+import { type WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
 

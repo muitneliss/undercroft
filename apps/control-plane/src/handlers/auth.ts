@@ -166,57 +166,59 @@ export interface Auth {
   };
 }
 
-export function createAuth(config: AuthConfig): Auth {
-  // Resolved once, so the three gates below cannot end up consulting different lists.
-  const superadmins = config.superadmins ?? NO_SUPERADMINS;
-
-  return betterAuth({
-    database: config.database,
-    secret: config.secret,
-    baseURL: config.baseUrl,
-    // Same-origin: the SPA is served by this process, so the only trusted origin is itself.
-    trustedOrigins: [config.baseUrl],
-
-    user: {
-      modelName: "auth_user",
-      fields: {
-        emailVerified: "email_verified",
-        createdAt: "created_at",
-        updatedAt: "updated_at",
-      },
-      /**
-       * The identity gate, and the outermost of the three.
-       *
-       * Better Auth calls this before creating a user, before linking an account, and --
-       * the part that matters -- on every OAuth *sign-in*, including a returning one. So
-       * withdrawing someone's access takes effect on their next Google sign-in rather than
-       * whenever their session happens to expire.
-       *
-       * It is read-only by construction (`isAdmissible`, not `resolveInvitedUser`) because
-       * it runs on paths where nothing should be provisioned. The library fails this hook
-       * CLOSED: if it throws, the sign-in is refused rather than allowed.
-       */
-      validateUserInfo: async ({ user }) => {
-        // An identity with no address cannot be matched to an invitation, so it is refused:
-        // `isAdmissible("")` is false. Failing closed on a missing email is the point.
-        if (await isAdmissible(config.exec, user.email ?? "", superadmins)) {
-          return;
-        }
-
-        // Recorded, because the person on the other side sees only "No access" and the
-        // operator needs to know WHICH address was turned away -- usually a typo or the
-        // wrong Google account.
-        await recordRefusal(config.exec, { email: user.email ?? "", via: "google" });
-
-        return {
-          error: "not_invited",
-          errorDescription:
-            "That address has not been invited. Ask an administrator for an invitation, " +
-            "and sign in with the exact address it was sent to.",
-        };
-      },
+/**
+ * The `user` model, and the outermost of the three invite-only gates.
+ *
+ * Lifted out of `createAuth` so the gate has a name: the reasoning on `validateUserInfo` is
+ * the load-bearing part of this file and was forty lines deep inside a config literal.
+ */
+function userModel(config: AuthConfig, superadmins: Superadmins): BetterAuthOptions["user"] {
+  return {
+    modelName: "auth_user",
+    fields: {
+      emailVerified: "email_verified",
+      createdAt: "created_at",
+      updatedAt: "updated_at",
     },
+    /**
+     * The identity gate, and the outermost of the three.
+     *
+     * Better Auth calls this before creating a user, before linking an account, and --
+     * the part that matters -- on every OAuth *sign-in*, including a returning one. So
+     * withdrawing someone's access takes effect on their next Google sign-in rather than
+     * whenever their session happens to expire.
+     *
+     * It is read-only by construction (`isAdmissible`, not `resolveInvitedUser`) because
+     * it runs on paths where nothing should be provisioned. The library fails this hook
+     * CLOSED: if it throws, the sign-in is refused rather than allowed.
+     */
+    validateUserInfo: async ({
+      user,
+    }): Promise<{ error: string; errorDescription: string } | undefined> => {
+      // An identity with no address cannot be matched to an invitation, so it is refused:
+      // `isAdmissible("")` is false. Failing closed on a missing email is the point.
+      if (await isAdmissible(config.exec, user.email ?? "", superadmins)) {
+        return;
+      }
 
+      // Recorded, because the person on the other side sees only "No access" and the
+      // operator needs to know WHICH address was turned away -- usually a typo or the
+      // wrong Google account.
+      await recordRefusal(config.exec, { email: user.email ?? "", via: "google" });
+
+      return {
+        error: "not_invited",
+        errorDescription:
+          "That address has not been invited. Ask an administrator for an invitation, " +
+          "and sign in with the exact address it was sent to.",
+      };
+    },
+  };
+}
+
+/** The three remaining models, mapped onto the snake_case columns `060_auth.sql` created. */
+function authModels(): Pick<BetterAuthOptions, "session" | "account" | "verification"> {
+  return {
     session: {
       modelName: "auth_session",
       fields: {
@@ -256,6 +258,120 @@ export function createAuth(config: AuthConfig): Auth {
         updatedAt: "updated_at",
       },
     },
+  };
+}
+
+/**
+ * The plugins, which carry the second gate: `sendVerificationOTP` will not put a code in the
+ * post for an address that could not use it, so this platform cannot be made to email
+ * strangers. A security decision does not belong seventy lines inside a config literal.
+ */
+function authPlugins(
+  config: AuthConfig,
+  superadmins: Superadmins,
+): NonNullable<BetterAuthOptions["plugins"]> {
+  return [
+    emailOTP({
+      otpLength: 6,
+      expiresIn: OTP_EXPIRES_SECONDS,
+      allowedAttempts: 3,
+      // Hashed at rest, the same stance app.invitation takes with token_sha256: a
+      // database read must not yield something replayable.
+      storeOTP: "hashed",
+      sendVerificationOTP: async ({ email, otp }, context): Promise<void> => {
+        // Do not put a code in the post for an address that could never use it. Without
+        // this, anyone could make this platform email an arbitrary stranger on demand --
+        // our mail reputation spending itself on someone else's spam.
+        //
+        // It returns normally instead of raising, so the caller cannot tell "not invited"
+        // from "sent". Answering honestly here would turn the sign-in form into an
+        // oracle for which addresses have access, which is the same enumeration argument
+        // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
+        if (!(await isAdmissible(config.exec, email, superadmins))) {
+          // Silent to the caller, not to the operator: the response must not reveal that
+          // this address has no access, but the trail must say so.
+          await recordRefusal(config.exec, { email, via: "email-otp" });
+          return;
+        }
+
+        // In the language the browser asked for. This is the one email whose recipient
+        // IS the person at the keyboard, so their choice of language is known exactly --
+        // `apps/ui/src/auth.ts` sends `accept-language` on this very call.
+        const t = messages(localeOf(context));
+
+        // Deliberately not awaited: how long the send takes is a signal for whether the
+        // address exists, and the response should not carry it.
+        void config.email
+          .send({
+            to: email,
+            subject: t("signInCode.subject"),
+            text: t("signInCode.body", {
+              otp,
+              minutes: String(OTP_EXPIRES_SECONDS / 60),
+            }),
+          })
+          .catch((error: unknown) => config.onEmailError?.(error));
+      },
+    }),
+  ];
+}
+
+/** The hooks that admit a platform superadmin on a fresh install. ADR 0013. */
+function bootstrapHooks(
+  config: AuthConfig,
+  superadmins: Superadmins,
+): BetterAuthOptions["databaseHooks"] {
+  return {
+    user: {
+      create: {
+        /**
+         * Redeem the invitation. Fires once, when a new authentication identity is about
+         * to exist, which is the moment the `app_user` and its memberships must.
+         *
+         * It re-checks admission rather than trusting `validateUserInfo` to have run:
+         * this is the only path that WRITES, so it is the one place where being wrong
+         * grants access rather than merely failing to refuse it. Throwing `APIError`
+         * aborts the sign-in, and its message is the one kind of error text Better Auth
+         * passes to the client verbatim.
+         */
+        before: async (user, context): Promise<{ data: typeof user }> => {
+          const locale = localeOf(context);
+          const invited = await config.transactor(async (tx) => {
+            const resolved = await resolveInvitedUser(tx, user.email, superadmins);
+            // The language of the request that signed them in is the best guess the
+            // platform has for the emails it will send while no browser is open; the
+            // switcher on any page corrects it (`session.setLocale`).
+            if (resolved !== null) {
+              await setLocale(tx, resolved.appUserId, locale);
+            }
+            return resolved;
+          });
+          if (invited === null) {
+            throw new APIError("FORBIDDEN", {
+              message: messages(locale)("error.notInvited"),
+            });
+          }
+          return { data: user };
+        },
+      },
+    },
+  };
+}
+
+export function createAuth(config: AuthConfig): Auth {
+  // Resolved once, so the three gates below cannot end up consulting different lists.
+  const superadmins = config.superadmins ?? NO_SUPERADMINS;
+
+  return betterAuth({
+    database: config.database,
+    secret: config.secret,
+    baseURL: config.baseUrl,
+    // Same-origin: the SPA is served by this process, so the only trusted origin is itself.
+    trustedOrigins: [config.baseUrl],
+
+    user: userModel(config, superadmins),
+
+    ...authModels(),
 
     ...(config.google === undefined
       ? {}
@@ -272,85 +388,8 @@ export function createAuth(config: AuthConfig): Auth {
           },
         }),
 
-    plugins: [
-      emailOTP({
-        otpLength: 6,
-        expiresIn: OTP_EXPIRES_SECONDS,
-        allowedAttempts: 3,
-        // Hashed at rest, the same stance app.invitation takes with token_sha256: a
-        // database read must not yield something replayable.
-        storeOTP: "hashed",
-        sendVerificationOTP: async ({ email, otp }, context): Promise<void> => {
-          // Do not put a code in the post for an address that could never use it. Without
-          // this, anyone could make this platform email an arbitrary stranger on demand --
-          // our mail reputation spending itself on someone else's spam.
-          //
-          // It returns normally instead of raising, so the caller cannot tell "not invited"
-          // from "sent". Answering honestly here would turn the sign-in form into an
-          // oracle for which addresses have access, which is the same enumeration argument
-          // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
-          if (!(await isAdmissible(config.exec, email, superadmins))) {
-            // Silent to the caller, not to the operator: the response must not reveal that
-            // this address has no access, but the trail must say so.
-            await recordRefusal(config.exec, { email, via: "email-otp" });
-            return;
-          }
+    plugins: authPlugins(config, superadmins),
 
-          // In the language the browser asked for. This is the one email whose recipient
-          // IS the person at the keyboard, so their choice of language is known exactly --
-          // `apps/ui/src/auth.ts` sends `accept-language` on this very call.
-          const t = messages(localeOf(context));
-
-          // Deliberately not awaited: how long the send takes is a signal for whether the
-          // address exists, and the response should not carry it.
-          void config.email
-            .send({
-              to: email,
-              subject: t("signInCode.subject"),
-              text: t("signInCode.body", {
-                otp,
-                minutes: String(OTP_EXPIRES_SECONDS / 60),
-              }),
-            })
-            .catch((error: unknown) => config.onEmailError?.(error));
-        },
-      }),
-    ],
-
-    databaseHooks: {
-      user: {
-        create: {
-          /**
-           * Redeem the invitation. Fires once, when a new authentication identity is about
-           * to exist, which is the moment the `app_user` and its memberships must.
-           *
-           * It re-checks admission rather than trusting `validateUserInfo` to have run:
-           * this is the only path that WRITES, so it is the one place where being wrong
-           * grants access rather than merely failing to refuse it. Throwing `APIError`
-           * aborts the sign-in, and its message is the one kind of error text Better Auth
-           * passes to the client verbatim.
-           */
-          before: async (user, context) => {
-            const locale = localeOf(context);
-            const invited = await config.transactor(async (tx) => {
-              const resolved = await resolveInvitedUser(tx, user.email, superadmins);
-              // The language of the request that signed them in is the best guess the
-              // platform has for the emails it will send while no browser is open; the
-              // switcher on any page corrects it (`session.setLocale`).
-              if (resolved !== null) {
-                await setLocale(tx, resolved.appUserId, locale);
-              }
-              return resolved;
-            });
-            if (invited === null) {
-              throw new APIError("FORBIDDEN", {
-                message: messages(locale)("error.notInvited"),
-              });
-            }
-            return { data: user };
-          },
-        },
-      },
-    },
+    databaseHooks: bootstrapHooks(config, superadmins),
   });
 }

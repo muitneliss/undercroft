@@ -96,40 +96,13 @@ export interface ServerDeps {
   readonly worker?: WorkerClient;
 }
 
-export function createServer(deps: ServerDeps): Hono {
-  const app = new Hono();
-
-  app.get("/api/health", (c) => c.json({ ok: true }));
-
-  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
-  // matter: the catch-all answers any GET with index.html, so an auth route registered
-  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
-  // the app shell -- a sign-in that silently never completes.
-  if (deps.auth !== undefined) {
-    const { auth } = deps;
-    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
-  }
-
-  // The per-tenant consent callback, and the same hazard: registered here so it wins over
-  // the catch-all at the foot of this function. Unconditional, because a callback that 404s
-  // is a diagnosable misconfiguration whereas one that serves the app shell is a consent
-  // that appears to work and never completes. With no client or worker configured the
-  // service refuses it, which is the honest answer.
-  registerOAuthRoutes(app, {
-    exec: deps.exec,
-    ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
-    ...(deps.xero === undefined ? {} : { xero: deps.xero }),
-    ...(deps.worker === undefined ? {} : { worker: deps.worker }),
-    // Through `authz.isAdminIn`, which is the same policy `tenantProcedure` resolves. Asking
-    // `roleFor` here instead -- as this line first did -- reads a `tenant_member` row that a
-    // superadmin deliberately does not have, so the platform administrator who is the only
-    // person able to set a fresh deployment up was the one person who could never finish a
-    // consent.
-    hasAdminAuthority: (tenantId, caller) =>
-      isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
-    resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
-  });
-
+/**
+ * The tRPC endpoint, and the one place a request's locale and caller are resolved.
+ *
+ * Both are read ONCE, from the request, and carried on the context: two concurrent requests
+ * in two languages must not answer each other's.
+ */
+function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
   app.all("/trpc/*", async (c) => {
     const { headers } = c.req.raw;
     const { user, sessionId, superadmin } = await resolveCaller(deps, headers);
@@ -182,10 +155,14 @@ export function createServer(deps: ServerDeps): Hono {
       }),
     });
   });
+}
 
-  // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a
-  // real built asset gets that file; anything else gets index.html, because the router lives
-  // in the browser and a deep link like /tenants/42 is the SPA's to resolve, not a 404.
+/**
+ * The built SPA, registered LAST so /api and /trpc always win over the catch-all. A real
+ * built asset gets that file; anything else gets index.html, because a 404 is a blank page
+ * and a deep link like /tenants/42 is the SPA's to resolve.
+ */
+function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
   if (deps.uiDist !== undefined) {
     const dist = deps.uiDist;
     const indexHtml = join(dist, "index.html");
@@ -208,6 +185,48 @@ export function createServer(deps: ServerDeps): Hono {
       });
     });
   }
+}
+
+export function createServer(deps: ServerDeps): Hono {
+  const app = new Hono();
+
+  app.get("/api/health", (c) => c.json({ ok: true }));
+
+  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
+  // matter: the catch-all answers any GET with index.html, so an auth route registered
+  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
+  // the app shell -- a sign-in that silently never completes.
+  if (deps.auth !== undefined) {
+    const { auth } = deps;
+    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+  }
+
+  // The per-tenant consent callback, and the same hazard: registered here so it wins over
+  // the catch-all at the foot of this function. Unconditional, because a callback that 404s
+  // is a diagnosable misconfiguration whereas one that serves the app shell is a consent
+  // that appears to work and never completes. With no client or worker configured the
+  // service refuses it, which is the honest answer.
+  registerOAuthRoutes(app, {
+    exec: deps.exec,
+    ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
+    ...(deps.xero === undefined ? {} : { xero: deps.xero }),
+    ...(deps.worker === undefined ? {} : { worker: deps.worker }),
+    // Through `authz.isAdminIn`, which is the same policy `tenantProcedure` resolves. Asking
+    // `roleFor` here instead -- as this line first did -- reads a `tenant_member` row that a
+    // superadmin deliberately does not have, so the platform administrator who is the only
+    // person able to set a fresh deployment up was the one person who could never finish a
+    // consent.
+    hasAdminAuthority: (tenantId, caller) =>
+      isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
+    resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
+  });
+
+  registerTrpcRoute(app, deps);
+
+  // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a
+  // real built asset gets that file; anything else gets index.html, because the router lives
+  // in the browser and a deep link like /tenants/42 is the SPA's to resolve, not a 404.
+  registerSpaRoutes(app, deps);
 
   return app;
 }

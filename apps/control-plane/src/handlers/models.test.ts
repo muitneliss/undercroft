@@ -16,7 +16,8 @@ import { TRPCError } from "@trpc/server";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
-import { InMemoryWorkerClient, type WorkerClient } from "../services/workerClient.ts";
+import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
+import { type WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
 

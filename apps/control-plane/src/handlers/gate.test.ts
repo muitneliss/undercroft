@@ -34,7 +34,7 @@ import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { startConsent } from "../services/oauth.ts";
-import { InMemoryWorkerClient } from "../services/workerClient.ts";
+import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import { createAuth } from "./auth.ts";
 import { createServer } from "./server.ts";
 
