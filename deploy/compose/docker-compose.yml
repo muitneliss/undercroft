@@ -292,26 +292,6 @@ services:
         limits:
           memory: 512m
 
-  metabase:
-    <<: *restart
-    image: metabase/metabase:v0.64.x
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      MB_DB_TYPE: postgres
-      MB_DB_HOST: postgres
-      MB_DB_PORT: "5432"
-      MB_DB_DBNAME: ${UNDERCROFT_PG_DB:-undercroft}
-      MB_DB_USER: ${UNDERCROFT_PG_USER:-undercroft}
-      MB_DB_PASS: ${UNDERCROFT_PG_PASSWORD}
-    ports:
-      - "127.0.0.1:${UNDERCROFT_PORT_METABASE:-13001}:3000"
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-
 volumes:
   minio-data:
   postgres-data:

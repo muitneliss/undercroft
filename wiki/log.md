@@ -44,3 +44,6 @@
 ## [2026-09-19] ingest | Runbook Deployment
 ## [2026-09-19] ingest | ADR 0019: the wheel is full
 ## [2026-09-19] ingest | Runbook Xero Setup
+## [2026-09-19] ingest | ADR 0020: BI is first-party, Metabase leaves the stack
+## [2026-09-19] ingest | Runbook Deployment
+## [2026-09-19] ingest | Runbook Google Ingestion Setup

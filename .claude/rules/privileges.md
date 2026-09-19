@@ -42,7 +42,14 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   therefore owns every table; `undercroft_owner` owns the schemas. The two `SECURITY DEFINER`
   functions in `080_tenant_isolation.sql` are owned by that bootstrap role and are the only
   code that creates a role, a schema or a default privilege.
-- The worker gets `SELECT, UPDATE` on `app.connection_secret` and nothing else in `app`.
+- The worker's reach into `app` is exactly what its verbs need, column-scoped where a column
+  is all it writes: `SELECT, INSERT, UPDATE, DELETE` on `app.connection_secret` (it seals,
+  refreshes and revokes), `SELECT` on `app.connection_detail` (the chosen scope),
+  `SELECT` + `UPDATE (last_used_at)` on `app.ingest_key`, and `SELECT` +
+  `UPDATE (columns)` on `app.model` (it reads the SQL to build and records the columns a
+  build produced). Nothing on `app.app_user`, the auth tables, the questions or the
+  dashboards. A new worker verb that needs a table adds its grant in the migration that
+  creates the table, never in `040_grants.sql`.
 - Every grant is explicit; `PUBLIC` is revoked.
 - **A migration that creates a table must grant that table in the same file.**
   `040_grants.sql` says `GRANT ... ON ALL TABLES IN SCHEMA app`, which Postgres expands to

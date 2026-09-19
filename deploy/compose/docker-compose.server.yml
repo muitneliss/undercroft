@@ -4,22 +4,21 @@
 # the source of truth; the copy is never edited on the server, because a direct edit is
 # drift the next deploy silently reverts.
 #
-# Four differences from the development file, each of which is a failure that has already
+# Three differences from the development file, each of which is a failure that has already
 # happened once on this host:
 #
 #   1. The first-party services use PUBLISHED IMAGES. Dokploy raw compose has no repo
 #      checkout, so `build:` has no context and cannot work there.
-#   2. NO host ports. The development file binds six to 127.0.0.1 for convenience. Here,
-#      only the control plane and Metabase are reachable, through Dokploy's proxy. MinIO,
-#      Postgres and Kestra each hold or can reach customer data, on a host shared with
-#      eleven other projects.
+#   2. NO host ports. The development file binds five to 127.0.0.1 for convenience. Here,
+#      only the control plane is reachable, through Dokploy's proxy. MinIO, Postgres and
+#      Kestra each hold or can reach customer data, on a host shared with eleven other
+#      projects.
 #   3. Every service carries a UNIQUE NETWORK ALIAS and every reference uses it. A service
 #      with a domain is attached to the shared `dokploy-network` as well as ours, and on
-#      that network `postgres` and `minio` are names other projects use too. Metabase
-#      resolved plain `postgres` to ANOTHER PROJECT'S database and tried to authenticate
-#      against it; only a password mismatch stopped the connection.
-#   4. Metabase has its OWN database. In development it shares the platform's, which would
-#      have BI write its application tables into the database ADR 0005 keeps it out of.
+#      that network `postgres` and `minio` are names other projects use too. The Metabase
+#      this stack used to carry resolved plain `postgres` to ANOTHER PROJECT'S database and
+#      tried to authenticate against it; only a password mismatch stopped the connection.
+#      Metabase is gone (ADR 0020: the Reports division is first-party), the lesson stays.
 #
 # IMAGE_TAG is the deploy pointer. It defaults to `latest`, which the release pipeline
 # moves to the version it just published; the immutable `vX.Y.Z` tag is pushed alongside,
@@ -352,66 +351,9 @@ services:
         limits:
           memory: 512m
 
-  # Metabase's own database. Its questions, dashboards and permissions live here, so this
-  # volume is business content rather than a cache — and keeping it out of the platform
-  # database is what stops BI from holding tables inside the schema ADR 0005 governs.
-  metabase-postgres:
-    <<: *restart
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: metabase
-      POSTGRES_PASSWORD: ${UNDERCROFT_METABASE_PG_PASSWORD:?set in .env}
-      POSTGRES_DB: metabase
-    volumes: [metabase-postgres-data:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U metabase"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      default:
-        aliases:
-          - undercroft-metabase-postgres
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-
-  metabase:
-    <<: *restart
-    image: metabase/metabase:v0.64.x
-    depends_on:
-      metabase-postgres:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    environment:
-      MB_DB_TYPE: postgres
-      MB_DB_HOST: undercroft-metabase-postgres
-      MB_DB_PORT: "5432"
-      MB_DB_DBNAME: metabase
-      MB_DB_USER: metabase
-      MB_DB_PASS: ${UNDERCROFT_METABASE_PG_PASSWORD:?set in .env}
-      JAVA_TOOL_OPTIONS: -Xmx1g
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    networks:
-      default:
-        aliases:
-          - undercroft-metabase
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-
 volumes:
   minio-data:
   postgres-data:
   kestra-postgres-data:
   kestra-storage:
   kestra-workdir:
-  metabase-postgres-data:
