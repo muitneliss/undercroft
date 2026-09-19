@@ -17,6 +17,13 @@ const en = translatorFor("en");
 const vi = translatorFor("vi");
 const NOW = new Date("2026-09-17T12:00:00Z");
 
+// The decision under test is ours -- which unit fits, and the figure in it -- and the
+// abbreviation is CLDR's, which has moved between ICU builds ("2 min" on one, "2 mins" on
+// another). Pinning the digits and the unit family holds the promise on both.
+const TWELVE_SECONDS = /^12 secs?$/u;
+const TWO_MINUTES = /^2 mins?$/u;
+const NINETY_MINUTES = /^1\.5 hrs?$/u;
+
 describe("formatDate", () => {
   it("changes language without changing timezone", () => {
     // 17:30 UTC on the 17th is 01:30 on the 18th in Singapore. Vietnam is UTC+7, so a
@@ -87,10 +94,10 @@ describe("formatDuration", () => {
   it("says how long a run took in the reader's language, in the unit that fits", () => {
     const start = "2026-09-17T11:00:00Z";
 
-    expect(formatDuration(start, "2026-09-17T11:00:12Z", "en")).toBe("12 secs");
+    expect(formatDuration(start, "2026-09-17T11:00:12Z", "en")).toMatch(TWELVE_SECONDS);
     expect(formatDuration(start, "2026-09-17T11:00:12Z", "vi")).toBe("12 giây");
-    expect(formatDuration(start, "2026-09-17T11:02:00Z", "en")).toBe("2 min");
-    expect(formatDuration(start, "2026-09-17T12:30:00Z", "en")).toBe("1.5 hrs");
+    expect(formatDuration(start, "2026-09-17T11:02:00Z", "en")).toMatch(TWO_MINUTES);
+    expect(formatDuration(start, "2026-09-17T12:30:00Z", "en")).toMatch(NINETY_MINUTES);
   });
 
   it("a run still in progress has no duration", () => {
