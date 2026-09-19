@@ -36,7 +36,7 @@ export interface Money {
 export const MISSING = "—";
 
 /** A plain decimal: optional sign, whole part, optional fraction. Nothing else. */
-const DECIMAL = /^(-?)(\d+)(?:\.(\d*))?$/u;
+const DECIMAL = /^(?<sign>-?)(?<whole>\d+)(?:\.(?<fraction>\d*))?$/u;
 
 /**
  * Split a decimal string into its parts without arithmetic.
@@ -49,11 +49,12 @@ function parts(amount: string): { sign: string; whole: string; fraction: string 
   if (!match) {
     return null;
   }
-  return { sign: match[1] ?? "", whole: match[2] ?? "0", fraction: match[3] ?? "" };
+  const { sign = "", whole = "0", fraction = "" } = match.groups ?? {};
+  return { sign, whole, fraction };
 }
 
 function group(whole: string): string {
-  return whole.replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
+  return whole.replace(/\B(?=(?:\d{3})+(?!\d))/gu, ",");
 }
 
 /**

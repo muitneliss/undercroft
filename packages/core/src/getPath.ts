@@ -23,7 +23,7 @@ import { isLosslessNumber } from "lossless-json";
  */
 const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
 /** A dot-path segment: a name, then any number of `[n]` subscripts. */
-const SEGMENT = /^([^[\]]*)((?:\[\d+\])*)$/u;
+const SEGMENT = /^(?<name>[^[\]]*)(?<indices>(?:\[\d+\])*)$/u;
 
 export function parsePath(path: string): string[] {
   if (path === "") {
@@ -35,12 +35,12 @@ export function parsePath(path: string): string[] {
     if (match === null) {
       throw new TypeError(`unreadable path segment ${JSON.stringify(part)}`);
     }
-    const [, name = "", indices = ""] = match;
+    const { name = "", indices = "" } = match.groups ?? {};
     if (name !== "") {
       segments.push(name);
     }
-    for (const index of indices.matchAll(/\[(\d+)\]/gu)) {
-      segments.push(index[1]!);
+    for (const index of indices.matchAll(/\[(?<index>\d+)\]/gu)) {
+      segments.push(index.groups?.index ?? "");
     }
   }
   return segments;

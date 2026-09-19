@@ -42,10 +42,10 @@ const RELEASED_IMAGE_PREFIX = "ghcr.io/muitneliss/undercroft-";
 /** A trailing slash on the configured endpoint, so paths join without doubling it. */
 const TRAILING_SLASH = /\/$/u;
 /** A compose service key at the top level: exactly two spaces of indent. */
-const TOP_LEVEL_SERVICE = /^ {2}([a-z0-9][a-z0-9-]*):\s*$/u;
-const IMAGE_LINE = /^\s+image:\s*(\S+)\s*$/u;
+const TOP_LEVEL_SERVICE = /^ {2}(?<name>[a-z0-9][a-z0-9-]*):\s*$/u;
+const IMAGE_LINE = /^\s+image:\s*(?<image>\S+)\s*$/u;
 /** A key at any depth, used to track which service a `depends_on` entry sits under. */
-const NESTED_NAME = /^\s+([a-z0-9][a-z0-9-]*):\s*$/u;
+const NESTED_NAME = /^\s+(?<name>[a-z0-9][a-z0-9-]*):\s*$/u;
 const COMPLETED_CONDITION = /^\s+condition:\s*service_completed_successfully\s*$/u;
 
 /** Flags the stored compose command must carry. Asserted by `preflight`, never written by CI. */
@@ -254,8 +254,9 @@ export async function composeRecord(cfg: Config, deps: Deps): Promise<ComposeRec
  */
 export function expandEnv(value: string, env: Record<string, string | undefined>): string {
   return value.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/gu,
-    (_match: string, name: string, fallback: string | undefined) => {
+    /\$\{(?<name>[A-Za-z_][A-Za-z0-9_]*)(?::-(?<fallback>[^}]*))?\}/gu,
+    (...args: unknown[]) => {
+      const { name, fallback } = args.at(-1) as { name: string; fallback?: string };
       const resolved = env[name];
       return resolved !== undefined && resolved !== "" ? resolved : (fallback ?? "");
     },
@@ -274,13 +275,13 @@ export function releasedServices(
   const found: { service: string; image: string }[] = [];
   let service = "";
   for (const line of composeFile.split("\n")) {
-    const [, matchedService] = TOP_LEVEL_SERVICE.exec(line) ?? [];
+    const matchedService = TOP_LEVEL_SERVICE.exec(line)?.groups?.name;
     if (matchedService !== undefined) {
       service = matchedService;
     }
-    const imageMatch = IMAGE_LINE.exec(line);
-    if (imageMatch?.[1]?.startsWith(RELEASED_IMAGE_PREFIX)) {
-      found.push({ service, image: expandEnv(imageMatch[1], env) });
+    const matchedImage = IMAGE_LINE.exec(line)?.groups?.image;
+    if (matchedImage?.startsWith(RELEASED_IMAGE_PREFIX) === true) {
+      found.push({ service, image: expandEnv(matchedImage, env) });
     }
   }
   return found;
@@ -301,7 +302,7 @@ export function oneShotServices(composeFile: string): Set<string> {
   const found = new Set<string>();
   let candidate = "";
   for (const line of composeFile.split("\n")) {
-    const [, matchedName] = NESTED_NAME.exec(line) ?? [];
+    const matchedName = NESTED_NAME.exec(line)?.groups?.name;
     if (matchedName !== undefined) {
       candidate = matchedName;
     }

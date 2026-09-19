@@ -280,7 +280,7 @@ async function resolveCaller(
 }
 
 /** Any run of leading `../` (or `..\`) segments, which is how a path escapes `dist`. */
-const LEADING_PARENT_SEGMENTS = /^(\.\.(\/|\\|$))+/u;
+const LEADING_PARENT_SEGMENTS = /^(?:\.\.(?:\/|\\|$))+/u;
 
 /**
  * Map a URL path to a file inside `dist`, or null to fall back to index.html. Returns null

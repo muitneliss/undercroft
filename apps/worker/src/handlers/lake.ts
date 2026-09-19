@@ -47,14 +47,14 @@ export interface LakeApiDeps {
   readonly dbt?: { projectDir: string; profilesDir: string };
 }
 
-const BEARER = /^Bearer\s+(.+)$/iu;
+const BEARER = /^Bearer\s+(?<token>.+)$/iu;
 
 function bearerOf(header: string | undefined): string | null {
   if (header === undefined) {
     return null;
   }
   const match = BEARER.exec(header);
-  return match?.[1] ?? null;
+  return match?.groups?.token ?? null;
 }
 
 export function createLakeApi(deps: LakeApiDeps): Hono {

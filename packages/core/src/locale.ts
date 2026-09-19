@@ -33,7 +33,7 @@ export const LOCALES: readonly Locale[] = ["vi", "en"] as const;
 export const DEFAULT_LOCALE: Locale = "vi";
 
 /** A `q` value of zero, in any of its spellings: the client refusing that language. */
-const ZERO_WEIGHT = /^0(\.0+)?$/u;
+const ZERO_WEIGHT = /^0(?:\.0+)?$/u;
 
 function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);
