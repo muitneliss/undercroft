@@ -43,6 +43,7 @@ import type { Connection } from "@/api/types.ts";
 import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { IngestKeys } from "@/components/IngestKeys.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { TokenForm } from "@/components/TokenForm.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -223,6 +224,18 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
           </div>
         )}
       </div>
+
+      {/* Keys are minted and revoked by admins; a member or viewer is not shown a band they
+          cannot act in, and the server refuses regardless. */}
+      {isAdmin ? (
+        <>
+          <div className="band-rule" />
+          <div className="head">{t("keys.head")}</div>
+          <div className="body stack">
+            <IngestKeys tenantId={tenantId} />
+          </div>
+        </>
+      ) : null}
 
       <div className="band-rule" />
 

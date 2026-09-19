@@ -11,7 +11,7 @@
 import { describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
-import { expiryNote, formatDate, formatDuration, relativeTime } from "./when.ts";
+import { expiryNote, formatDate, formatDuration, lastUsedNote, relativeTime } from "./when.ts";
 
 const en = translatorFor("en");
 const vi = translatorFor("vi");
@@ -72,6 +72,14 @@ describe("relativeTime", () => {
   it("an unreadable instant is missing, never 'now'", () => {
     expect(relativeTime("not a date", "vi", NOW)).toBe("—");
     expect(relativeTime(null, "vi", NOW)).toBe("—");
+  });
+});
+
+describe("lastUsedNote", () => {
+  it("a key never used says so in words; one used says how long ago", () => {
+    expect(lastUsedNote(vi, "vi", null, NOW)).toBe("Chưa dùng lần nào");
+    expect(lastUsedNote(en, "en", null, NOW)).toBe("Never used");
+    expect(lastUsedNote(en, "en", "2026-09-17T11:55:00Z", NOW)).toBe("5 minutes ago");
   });
 });
 

@@ -152,6 +152,46 @@ export const vi = {
       "Không tải được các quyền của khách hàng này, hoặc bạn không có quyền xem chúng. Không có gì bị thay đổi.",
   },
 
+  /** Ingest keys: the credential a script presents to land data. Shown once, at minting. */
+  keys: {
+    head: "Khoá ghi dữ liệu",
+    lead: "Khoá để một kịch bản hay bộ điều phối ghi dữ liệu vào hồ thay mặt {{tenantId}}. Mỗi khoá chỉ hiển thị một lần, lúc tạo.",
+    notLoaded: "Không tải được danh sách khoá.",
+    caption_other: "{{count, number}} khoá",
+    colLabel: "Nhãn",
+    colSources: "Nguồn",
+    colCreated: "Tạo",
+    colLastUsed: "Dùng gần nhất",
+    colExpires: "Hết hạn",
+    colRevoke: "Thu hồi",
+    allSources: "Mọi nguồn",
+    noExpiry: "Không hết hạn",
+    revoked: "Đã thu hồi",
+    revoke: "Thu hồi",
+    notRevoked: "Chưa thu hồi được",
+    none: "Chưa có khoá nào.",
+    mintHead: "Tạo khoá mới",
+    labelLabel: "Nhãn",
+    labelPlaceholder: "Ví dụ: kịch bản nhập hoá đơn",
+    sourcesLabel: "Nguồn được phép",
+    sourcesHint: "Không chọn nguồn nào nghĩa là mọi nguồn.",
+    expiresLabel: "Hết hạn sau",
+    expiresNever: "Không hết hạn",
+    expires30: "30 ngày",
+    expires90: "90 ngày",
+    expires365: "1 năm",
+    mint: "Tạo khoá",
+    minting: "Đang tạo…",
+    notMinted: "Chưa tạo được khoá",
+    mintedHead: "Khoá mới",
+    mintedNote:
+      "Sao chép ngay: khoá này sẽ không hiển thị lại. Nếu mất, hãy tạo khoá khác và thu hồi khoá này.",
+    copy: "Sao chép",
+    copied: "Đã sao chép vào bộ nhớ tạm.",
+    notCopied: "Không sao chép được. Hãy chọn và sao chép bằng tay.",
+    done: "Xong",
+  },
+
   lake: {
     head: "Hồ dữ liệu",
     title: "Hồ dữ liệu thô",
@@ -339,6 +379,7 @@ export const vi = {
     pausedNoNext: "Không chạy khi đang tạm dừng",
     /** The scheduler asks every fifteen minutes; a due time already past means its next ask. */
     dueNow: "Ở lượt kế tiếp, trong vòng 15 phút",
+    neverUsed: "Chưa dùng lần nào",
   },
 
   /** A run as the card prints it. Chosen by `@/lib/runs`. */

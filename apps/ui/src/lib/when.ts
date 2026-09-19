@@ -198,6 +198,24 @@ export function relativeTime(
   return format.format(-Math.round(elapsed / DAY_MS), "day");
 }
 
+/**
+ * When a key was last used, or that it never was.
+ *
+ * "Never" is a fact worth its own words: a dash reads as data nobody recorded, and the
+ * question an admin is asking of this column is whether the key can be revoked safely.
+ */
+export function lastUsedNote(
+  t: TFunction,
+  locale: Locale,
+  iso: string | null | undefined,
+  now = new Date(),
+): string {
+  if (iso === null || iso === undefined) {
+    return t("when.neverUsed");
+  }
+  return relativeTime(iso, locale, now);
+}
+
 type DurationUnit = "second" | "minute" | "hour";
 
 const DURATION = new Map<string, Intl.NumberFormat>();
