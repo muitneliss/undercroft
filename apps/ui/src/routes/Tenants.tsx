@@ -36,6 +36,108 @@ import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { trpc } from "@/trpc.ts";
 
+/**
+ * Creating a customer, which only a platform superadmin may do.
+ *
+ * The refusal shown here is the SERVER's own words, never a restatement: a reference that is
+ * already taken is something the operator can act on, and a second copy of that sentence in
+ * the catalogue would drift out of step with the refusal that actually fired.
+ */
+function AddTenantPanel({
+  isSuperadmin,
+  addTenant,
+  idFieldRef,
+  nameFieldRef,
+  tenantIdFieldId,
+  tenantNameId,
+}: {
+  isSuperadmin: boolean;
+  addTenant: {
+    isPending: boolean;
+    isError: boolean;
+    error: { message: string } | null;
+    mutate: (input: { tenantId: string; displayName: string }) => void;
+  };
+  idFieldRef: React.RefObject<HTMLInputElement | null>;
+  nameFieldRef: React.RefObject<HTMLInputElement | null>;
+  tenantIdFieldId: string;
+  tenantNameId: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <>
+      {isSuperadmin ? (
+        <>
+          <p className="note">{t("tenants.addLead")}</p>
+
+          <form
+            className="stack stack--tight"
+            onSubmit={(event): void => {
+              event.preventDefault();
+              const tenantId = idFieldRef.current?.value.trim() ?? "";
+              const displayName = nameFieldRef.current?.value.trim() ?? "";
+              if (tenantId === "") {
+                return;
+              }
+              addTenant.mutate({ tenantId, displayName });
+            }}
+          >
+            <div className="field">
+              <label className="label" htmlFor={tenantIdFieldId}>
+                {t("tenants.idLabel")}
+              </label>
+              <input
+                autoComplete="off"
+                className="input"
+                disabled={addTenant.isPending}
+                id={tenantIdFieldId}
+                name="tenantId"
+                placeholder={t("tenants.idPlaceholder")}
+                ref={idFieldRef}
+                required={true}
+                type="text"
+              />
+              <p className="field__hint">{t("tenants.idHint")}</p>
+            </div>
+
+            <div className="field">
+              <label className="label" htmlFor={tenantNameId}>
+                {t("tenants.nameLabel")}
+              </label>
+              <input
+                autoComplete="off"
+                className="input"
+                disabled={addTenant.isPending}
+                id={tenantNameId}
+                name="displayName"
+                placeholder={t("tenants.namePlaceholder")}
+                ref={nameFieldRef}
+                type="text"
+              />
+            </div>
+
+            <button className="plate" disabled={addTenant.isPending} type="submit">
+              {addTenant.isPending ? t("tenants.adding") : t("tenants.add")}
+            </button>
+          </form>
+
+          {/* The server's own words. A reference already in use is the one failure an
+            operator can act on, and it arrives worded in their language from
+            `error.tenantExists` -- restating it here would be a second copy to keep in
+            step with the refusal that actually happened. */}
+          {addTenant.isError ? (
+            <Errata heading={t("tenants.notAdded")} live={true}>
+              {addTenant.error?.message ?? ""}
+            </Errata>
+          ) : null}
+        </>
+      ) : (
+        <p className="note">{t("tenants.addNote")}</p>
+      )}
+    </>
+  );
+}
+
 export function Tenants(): React.JSX.Element {
   const { t } = useTranslation();
   const tenantIdFieldId = useId();
@@ -117,74 +219,14 @@ export function Tenants(): React.JSX.Element {
 
       <div className="head">{t("tenants.addHead")}</div>
       <div className="body stack">
-        {session.data?.superadmin === true ? (
-          <>
-            <p className="note">{t("tenants.addLead")}</p>
-
-            <form
-              className="stack stack--tight"
-              onSubmit={(event): void => {
-                event.preventDefault();
-                const tenantId = idFieldRef.current?.value.trim() ?? "";
-                const displayName = nameFieldRef.current?.value.trim() ?? "";
-                if (tenantId === "") {
-                  return;
-                }
-                addTenant.mutate({ tenantId, displayName });
-              }}
-            >
-              <div className="field">
-                <label className="label" htmlFor={tenantIdFieldId}>
-                  {t("tenants.idLabel")}
-                </label>
-                <input
-                  autoComplete="off"
-                  className="input"
-                  disabled={addTenant.isPending}
-                  id={tenantIdFieldId}
-                  name="tenantId"
-                  placeholder={t("tenants.idPlaceholder")}
-                  ref={idFieldRef}
-                  required={true}
-                  type="text"
-                />
-                <p className="field__hint">{t("tenants.idHint")}</p>
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor={tenantNameId}>
-                  {t("tenants.nameLabel")}
-                </label>
-                <input
-                  autoComplete="off"
-                  className="input"
-                  disabled={addTenant.isPending}
-                  id={tenantNameId}
-                  name="displayName"
-                  placeholder={t("tenants.namePlaceholder")}
-                  ref={nameFieldRef}
-                  type="text"
-                />
-              </div>
-
-              <button className="plate" disabled={addTenant.isPending} type="submit">
-                {addTenant.isPending ? t("tenants.adding") : t("tenants.add")}
-              </button>
-            </form>
-
-            {/* The server's own words. A reference already in use is the one failure an
-                operator can act on, and it arrives worded in their language from
-                `error.tenantExists` -- restating it here would be a second copy to keep in
-                step with the refusal that actually happened. */}
-            {addTenant.isError ? (
-              <Errata heading={t("tenants.notAdded")} live={true}>
-                {addTenant.error.message}
-              </Errata>
-            ) : null}
-          </>
-        ) : (
-          <p className="note">{t("tenants.addNote")}</p>
-        )}
+        <AddTenantPanel
+          isSuperadmin={session.data?.superadmin === true}
+          addTenant={addTenant}
+          idFieldRef={idFieldRef}
+          nameFieldRef={nameFieldRef}
+          tenantIdFieldId={tenantIdFieldId}
+          tenantNameId={tenantNameId}
+        />
       </div>
     </div>
   );

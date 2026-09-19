@@ -41,6 +41,153 @@ import { DIVISIONS } from "@/lib/divisions.ts";
 /** The full wheel, including the three hues no division has claimed yet. */
 const WHEEL: string[] = [...DIVISIONS.map((d) => d.hue), "#3e782b", "#634cb0", "#7f4023"];
 
+/** Step one: the address a code is sent to. */
+function AddressForm({
+  sendCode,
+  emailFieldRef,
+  emailId,
+}: {
+  sendCode: {
+    isPending: boolean;
+    isError: boolean;
+    error: { message: string } | null;
+    mutate: (input: { email: string }) => void;
+  };
+  emailFieldRef: React.RefObject<HTMLInputElement | null>;
+  emailId: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <form
+      key="address"
+      className="stack stack--tight"
+      onSubmit={(event): void => {
+        event.preventDefault();
+        const email = emailFieldRef.current?.value.trim() ?? "";
+        if (email !== "") {
+          sendCode.mutate({ email });
+        }
+      }}
+    >
+      <div className="field">
+        <label className="label" htmlFor={emailId}>
+          {t("signIn.emailLabel")}
+        </label>
+        <input
+          className="input"
+          id={emailId}
+          name="email"
+          type="email"
+          autoComplete="email"
+          required={true}
+          placeholder={t("signIn.emailPlaceholder")}
+          ref={emailFieldRef}
+          disabled={sendCode.isPending}
+        />
+      </div>
+
+      {sendCode.isError ? (
+        <Errata heading={t("signIn.notSent")} live={true}>
+          {sendCode.error?.message ?? ""}
+        </Errata>
+      ) : null}
+
+      <div className="row">
+        <button className="plate" type="submit" disabled={sendCode.isPending}>
+          {sendCode.isPending ? t("signIn.sending") : t("signIn.sendCode")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Step two: the code itself.
+ *
+ * Keyed separately from the address form so React remounts rather than reconciling. That is
+ * the honest shape -- a different form asking a different question -- and it is also what
+ * lets the slip-tip animation run and the uncontrolled input clear itself.
+ */
+function CodeForm({
+  sentTo,
+  sendCode,
+  signIn,
+  codeFieldRef,
+  codeId,
+}: {
+  sentTo: string;
+  sendCode: { reset: () => void };
+  signIn: {
+    isPending: boolean;
+    isError: boolean;
+    error: { message: string } | null;
+    mutate: (input: { email: string; otp: string }) => void;
+  };
+  codeFieldRef: React.RefObject<HTMLInputElement | null>;
+  codeId: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <form
+      key="code"
+      className="stack stack--tight"
+      onSubmit={(event): void => {
+        event.preventDefault();
+        const otp = codeFieldRef.current?.value.trim() ?? "";
+        if (otp !== "") {
+          signIn.mutate({ email: sentTo, otp });
+        }
+      }}
+    >
+      <div className="field">
+        <label className="label" htmlFor={codeId}>
+          {t("signIn.codeLabel")}
+        </label>
+        <input
+          className="input"
+          id={codeId}
+          name="otp"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          required={true}
+          maxLength={6}
+          placeholder="000000"
+          ref={codeFieldRef}
+          disabled={signIn.isPending}
+        />
+        {/*
+         * Honest on purpose. The server will not say whether an address has access,
+         * because that would make this form a list of who does -- so this cannot
+         * promise that a code actually went out.
+         */}
+        <p className="field__hint">{t("signIn.codeHint", { email: sentTo })}</p>
+      </div>
+
+      {signIn.isError ? (
+        <Errata heading={t("signIn.notSignedIn")} live={true}>
+          {signIn.error?.message ?? ""}
+        </Errata>
+      ) : null}
+
+      <div className="row">
+        <button className="plate plate--primary" type="submit" disabled={signIn.isPending}>
+          {signIn.isPending ? t("signIn.signingIn") : t("signIn.signIn")}
+        </button>
+        <button
+          className="plate plate--small"
+          type="button"
+          onClick={(): void => {
+            sendCode.reset();
+          }}
+        >
+          {t("signIn.useAnotherAddress")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();
   const emailId = useId();
@@ -123,104 +270,15 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
          * it are cleared by the remount rather than by hand.
          */}
         {sentTo === null ? (
-          <form
-            key="address"
-            className="stack stack--tight"
-            onSubmit={(event): void => {
-              event.preventDefault();
-              const email = emailFieldRef.current?.value.trim() ?? "";
-              if (email !== "") {
-                sendCode.mutate({ email });
-              }
-            }}
-          >
-            <div className="field">
-              <label className="label" htmlFor={emailId}>
-                {t("signIn.emailLabel")}
-              </label>
-              <input
-                className="input"
-                id={emailId}
-                name="email"
-                type="email"
-                autoComplete="email"
-                required={true}
-                placeholder={t("signIn.emailPlaceholder")}
-                ref={emailFieldRef}
-                disabled={sendCode.isPending}
-              />
-            </div>
-
-            {sendCode.isError ? (
-              <Errata heading={t("signIn.notSent")} live={true}>
-                {sendCode.error.message}
-              </Errata>
-            ) : null}
-
-            <div className="row">
-              <button className="plate" type="submit" disabled={sendCode.isPending}>
-                {sendCode.isPending ? t("signIn.sending") : t("signIn.sendCode")}
-              </button>
-            </div>
-          </form>
+          <AddressForm sendCode={sendCode} emailFieldRef={emailFieldRef} emailId={emailId} />
         ) : (
-          <form
-            key="code"
-            className="stack stack--tight"
-            onSubmit={(event): void => {
-              event.preventDefault();
-              const otp = codeFieldRef.current?.value.trim() ?? "";
-              if (otp !== "") {
-                signIn.mutate({ email: sentTo, otp });
-              }
-            }}
-          >
-            <div className="field">
-              <label className="label" htmlFor={codeId}>
-                {t("signIn.codeLabel")}
-              </label>
-              <input
-                className="input"
-                id={codeId}
-                name="otp"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required={true}
-                maxLength={6}
-                placeholder="000000"
-                ref={codeFieldRef}
-                disabled={signIn.isPending}
-              />
-              {/*
-               * Honest on purpose. The server will not say whether an address has access,
-               * because that would make this form a list of who does -- so this cannot
-               * promise that a code actually went out.
-               */}
-              <p className="field__hint">{t("signIn.codeHint", { email: sentTo })}</p>
-            </div>
-
-            {signIn.isError ? (
-              <Errata heading={t("signIn.notSignedIn")} live={true}>
-                {signIn.error.message}
-              </Errata>
-            ) : null}
-
-            <div className="row">
-              <button className="plate plate--primary" type="submit" disabled={signIn.isPending}>
-                {signIn.isPending ? t("signIn.signingIn") : t("signIn.signIn")}
-              </button>
-              <button
-                className="plate plate--small"
-                type="button"
-                onClick={(): void => {
-                  sendCode.reset();
-                }}
-              >
-                {t("signIn.useAnotherAddress")}
-              </button>
-            </div>
-          </form>
+          <CodeForm
+            sentTo={sentTo}
+            sendCode={sendCode}
+            signIn={signIn}
+            codeFieldRef={codeFieldRef}
+            codeId={codeId}
+          />
         )}
 
         {/* The imprint opens this page and the colophon closes it, on the same hairline
