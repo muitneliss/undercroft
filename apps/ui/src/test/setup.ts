@@ -9,7 +9,15 @@ import { fileURLToPath, URL } from "node:url";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-GlobalRegistrator.register();
+/**
+ * With a URL, because a browser always has one and `about:blank` reports its origin as the
+ * string `"null"`. Better Auth reads `window.location.origin` when no base URL is configured
+ * and refuses `"null"` outright -- and `@/auth` builds that client at module scope, so any
+ * suite reaching `SignIn` (which is every suite that renders `App`) would fail on an import
+ * rather than on anything it asserts. The host is invented, per `.claude/rules/pii.md`, and
+ * nothing asserts it.
+ */
+GlobalRegistrator.register({ url: "https://undercroft.test/" });
 
 /**
  * `bun test` does not run `vite.config.ts`, so `__UNDERCROFT_RELEASE__` would be undefined
