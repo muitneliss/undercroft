@@ -8,12 +8,6 @@
  * would, as the login the real one would be, and writes dbt's own results file.
  */
 
-// biome-ignore-all lint/correctness/noNodejsModules: A test that writes dbt's results file into the directory the code under test made; the platform is Bun.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a Hono app shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs where the type arrives contextually.
-// biome-ignore-all lint/style/useNamingConvention: `run_results`, `unique_id` and `relation_name` are dbt's own names, written to the file dbt owns.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

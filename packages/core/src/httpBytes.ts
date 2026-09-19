@@ -18,12 +18,6 @@
  * `Fetcher` is load-bearing for four connectors that must not change.
  */
 
-// biome-ignore-all lint/nursery/useValidTestTitle: A false positive. The rule reads `/\s/.test(value)` -- RegExp#test on a regex literal -- as a test-framework `test()` call with a non-string title. There is no test in this file.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
-
 import { HttpError } from "./errors.ts";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -32,6 +26,8 @@ const OK_MAX = 300;
 /** How much of an error body to keep. Enough to carry a provider's message, never a file. */
 const EXCERPT_BYTES = 500;
 const MS_PER_SECOND = 1000;
+/** `Retry-After` in its delay-seconds form; the HTTP-date form is handled by `retry.ts`. */
+const WHOLE_SECONDS = /^\d+$/u;
 
 export interface ByteRequest {
   readonly url: string;
@@ -92,7 +88,7 @@ export function raiseForByteStatus(request: ByteRequest, response: ByteResponse)
   // parseInt, not Number(): the money rule bans Number() repo-wide, and this is a seconds
   // count rather than an amount.
   const retryAfterMs =
-    retryAfter !== null && /^\d+$/u.test(retryAfter)
+    retryAfter !== null && WHOLE_SECONDS.test(retryAfter)
       ? Number.parseInt(retryAfter, 10) * MS_PER_SECOND
       : null;
   const excerpt = new TextDecoder("utf-8", { fatal: false }).decode(

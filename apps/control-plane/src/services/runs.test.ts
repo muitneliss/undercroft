@@ -7,8 +7,6 @@
  * control plane cannot write them -- only the worker can, which is the grant model working.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, run_id, started_at), a source API's payload keys, HTTP header names, and Better Auth's option keys. strictCase cannot be satisfied by code that talks to another system.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";

@@ -9,9 +9,6 @@
  * lake-api run's, a chain link's) have no use for any of it.
  */
 
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES -- see the file-level note in runFlow.ts, which this module is too small to repeat.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 

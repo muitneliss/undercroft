@@ -12,11 +12,6 @@
  * BI has no USAGE on -- see `packages/db/sql/070_google_ingestion.sql`.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/style/noNestedTernary: Three chained conditions that map one value onto three outcomes. Written as nested if/else they occupy fifteen lines to say the same thing.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import { z } from "zod";
 
 const Chosen = z.object({
@@ -24,6 +19,11 @@ const Chosen = z.object({
   /** As the customer sees it. PII: never copied into `raw.documents.metadata` or a key. */
   name: z.string(),
 });
+
+/** `typeof x === "object"` still admits null and says nothing about indexing. This does. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 export const GmailScope = z.object({
   kind: z.literal("gmail"),
@@ -112,7 +112,7 @@ export function parseScope(source: string, selectionJson: string): ConnectionSco
   // the rest of this file exists to prevent. It also catches a Drive-shaped selection saved
   // under Gmail: the key it carries is not the key that source uses.
   const key = SELECTION_KEY[source];
-  const carried = key === undefined ? undefined : (raw as Record<string, unknown>)[key];
+  const carried = key === undefined || !isRecord(raw) ? undefined : raw[key];
   if (carried === undefined || carried === null || typeof carried !== "object") {
     return null;
   }

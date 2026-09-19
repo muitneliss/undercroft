@@ -13,8 +13,6 @@
  * bar of invented height.
  */
 
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-
 import Big from "big.js";
 
 import type { Cell } from "@/lib/cells.ts";
@@ -54,7 +52,7 @@ export function plotValue(cell: Cell, pgType: string): number | null {
     return null;
   }
   try {
-    // biome-ignore lint/plugin: money.grit's own words: "`Big#toNumber()` is the float you spent a library avoiding. It exists for charting, and a chart is not a ledger." This is the charting; every readable figure comes from the string.
+    // biome-ignore lint/plugin/money: money.grit's own words: "`Big#toNumber()` is the float you spent a library avoiding. It exists for charting, and a chart is not a ledger." This is the charting; every readable figure comes from the string.
     return new Big(cell).toNumber();
   } catch {
     return null;

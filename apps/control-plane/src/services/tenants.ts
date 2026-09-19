@@ -15,8 +15,6 @@
  * gets widened by accident.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-
 import type { SqlExecutor } from "@undercroft/db";
 import { isRoleCollision, provisionTenantRoles } from "@undercroft/db/repos";
 import { record as recordAudit } from "../repos/auditLog.ts";
@@ -30,7 +28,8 @@ import {
   undoCreateTenant,
 } from "../repos/tenant.ts";
 
-export type { MemberTenant, Tenant };
+export type { MemberTenant } from "../repos/membership.ts";
+export type { Tenant } from "../repos/tenant.ts";
 
 /**
  * The tenants this caller may see. Non-membership is invisible, not forbidden.

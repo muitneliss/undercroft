@@ -4,8 +4,6 @@
  * literal with its quotes doubled, or refused when unbound; and `*` is count's alone.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: `is_null` and `not_null` are the filter ops as stored and sent over the wire.
-
 import { describe, expect, test as it } from "bun:test";
 
 import {

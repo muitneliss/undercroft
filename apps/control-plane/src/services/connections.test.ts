@@ -7,8 +7,6 @@
  * back, and what it must leave behind -- is a property of the query.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { migrate } from "@undercroft/db";
 import {
   openRun,
@@ -28,7 +26,7 @@ import {
   setScope,
   setToken,
 } from "./connections.ts";
-import { InMemoryWorkerClient } from "./workerClient.ts";
+import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 
 const TENANT = "CASE-0042";
 const ENV = { UNDERCROFT_SECRET_KEY: Buffer.alloc(32, 5).toString("base64") };

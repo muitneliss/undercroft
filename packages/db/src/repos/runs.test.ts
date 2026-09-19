@@ -3,9 +3,6 @@
  * that do not skip or repeat, and an external caller's id kept to its own tenant.
  */
 
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Three runs opened and closed one after another on one PGlite connection are the fixture the page order is measured against; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { migrate } from "../migrate.ts";

@@ -6,9 +6,6 @@
  * No mocks: the real component, the real i18next instance, the real catalogues.
  */
 
-// biome-ignore-all lint/style/useFilenamingConvention: One file named for the thing it tests, matching every other module in its directory.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-
 import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";

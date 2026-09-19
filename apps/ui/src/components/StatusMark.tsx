@@ -18,9 +18,6 @@
  * showing it to everyone else once.
  */
 
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for this rule makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off globally.
-
 import { MarkAbsent, MarkGranted, MarkLapsed, MarkPending } from "@/components/Icon.tsx";
 import type { CardPresentation } from "@/lib/connectionState.ts";
 

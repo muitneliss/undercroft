@@ -13,17 +13,13 @@
  * presented id proves nothing on its own.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. That ordering carries meaning; the rule's preferred one does not.
-
 import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { type IngestKey, insertKey, listKeys, revokeKey } from "@undercroft/db/repos";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
 
-export type { IngestKey };
+export type { IngestKey } from "@undercroft/db/repos";
 
 const ID_PREFIX = "uk_";
 /** Eight base64url characters: enough to be unique across one platform, short enough to read out. */

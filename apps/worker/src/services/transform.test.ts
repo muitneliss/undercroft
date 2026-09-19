@@ -9,10 +9,6 @@
  * the `run_results.json` the real one writes. PGlite proves the grants that lets it.
  */
 
-// biome-ignore-all lint/correctness/noNodejsModules: A test that inspects the directory the code under test wrote; the platform is Bun.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useNamingConvention: `run_results`, `unique_id` and `relation_name` are dbt's own names, written to the file dbt owns.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import {
   existsSync,

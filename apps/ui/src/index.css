@@ -45,48 +45,6 @@
  * correct and the solver only ever adjusts it.
  */
 
-/**
- * biome-ignore-all lint/style/noHexColors: The palette has to stay hex because
- * `@/lib/acetate` reads `--leaf` and `--ink` back out of the computed styles and
- * parses them with `parseHex`, which accepts `#rgb`/`#rrggbb` and returns null for
- * anything else rather than guessing. Rewriting these as oklch() would make that
- * parse fail, and the solver would fall back to its hardcoded defaults -- a guessed
- * colour in the code path that guarantees WCAG contrast, which is exactly the
- * failure rule 2 is about. Moving off hex means rewriting the colour pipeline and
- * its tests, not editing this file.
- */
-
-/**
- * biome-ignore-all lint/nursery/noUnusedClasses: The rule cannot see a class name
- * assembled at runtime, and this UI assembles them -- `className={`mark mark--${mark}`}`
- * in StatusMark.tsx builds one per state. Every name it reports is reachable that
- * way, so acting on this rule would delete live styles.
- */
-
-/**
- * biome-ignore-all lint/nursery/useBaseline: Four progressive enhancements --
- * `scrollbar-color`, `::selection`, `user-select` and `overflow-x: clip`. Each degrades
- * to the browser default where it is unsupported, and the form tells no state by one of
- * these alone. The clip is the only one worth a sentence: where it is not supported the
- * axis falls back to `visible`, so a leaf mid-turn can briefly overhang the binder --
- * a 190ms cosmetic overflow, not a broken layout, and the alternative (`hidden`) fails
- * in the worse direction by moving the document's scroll inside `.book`.
- */
-
-/**
- * biome-ignore-all lint/style/noExcessiveLinesPerFile: This is one document, not a
- * module that grew. The board, the leaf and the rail are defined against each other
- * -- the comments argue contrast ratios across sections -- and cutting it at 300
- * lines would split a single argument across files.
- */
-
-/**
- * biome-ignore-all lint/style/noDescendingSpecificity: `.colophon .datum` is grouped
- * with the colophon, which puts it above the generic `.datum`. The specific rule
- * still wins -- specificity decides this, not source order -- so the cascade is what
- * it reads as; moving the block would separate it from the component it belongs to.
- */
-
 /* `@xyflow/react`'s own base stylesheet: the positioning, panning and clipping rules
  * the run's-shape canvas needs underneath it (`position: absolute` on a node,
  * `overflow: hidden` on the pane) that this file only ever overrides, never supplies
@@ -94,7 +52,6 @@
  * the cascade layer order) rather than left unlayered, where an import would beat
  * every rule in this file regardless of specificity. */
 @import "@xyflow/react/dist/style.css" layer(xyflow);
-
 /* -- faces ------------------------------------------------------------------
  *
  * Self-hosted, not from a font CDN. This origin holds the session cookie that

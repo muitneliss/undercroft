@@ -1,9 +1,19 @@
 /**
  * The test-file override in `biome.jsonc`, pinned from both sides.
  *
- * `biome.jsonc` switches ten rules OFF for `**\/*.test.ts(x)` -- the ones whose reason is
- * "because it is a test" rather than anything about the file. ADR 0017 records why that is
- * the one place a rule is disabled in the config rather than suppressed at the file.
+ * `biome.jsonc` switches twelve rules OFF for `**\/*.test.ts(x)` -- the ones whose reason is
+ * "because it is a test" rather than anything about the file. ADR 0017 records why they are
+ * disabled in the config rather than suppressed at the file; ADR 0018 extends the same
+ * reasoning to the rules that cannot hold anywhere in this repo, which is why this is no
+ * longer the only override. Three of the original ten left for that wider block:
+ * `noMagicNumbers` and `useValidTestTitle` are off repo-wide now, and
+ * `useQwikValidLexicalScope` went with the Qwik domain -- scoping any of them to tests had
+ * stopped saying anything.
+ *
+ * Five joined it when the headers came out of the suites themselves: `noUnsafeTypeAssertion`,
+ * `useExplicitReturnType`, `useTopLevelRegex`, `noSecrets` and `useAwait` accounted for 134
+ * of the 148 findings the 241 headers had been hiding, and each is the same sentence in every
+ * suite. The other 14 were fixed as code or kept a line-level suppression of their own.
  *
  * A scoped `off` fails in two directions and, as with the GritQL plugins, the quiet one is
  * worse. Too narrow, and the suppression headers this replaced come back file by file. Too
@@ -16,9 +26,12 @@
  * The third assertion is the one that matters: a money violation in the `.test.ts` fixture is
  * still reported, so this is an override and not Biome skipping the suite.
  *
- * Seven of the ten rules are not exercised here, and deliberately: the suite itself pins
- * them. Their `biome-ignore-all` headers are gone from ~60 test files, so dropping any one
- * from the override fails `bun run lint` on the files that needed it.
+ * Four of the twelve are not exercised here, and deliberately: the suite itself pins them.
+ * `noExcessiveLinesPerFunction`, `noExcessiveLinesPerFile`, `noConditionalExpect` and
+ * `noMisplacedAssertion` need a file long or convoluted enough to trip them, which a fixture
+ * cannot be without becoming the thing it measures. Their `biome-ignore-all` headers are gone
+ * from every test file in the tree, so dropping any one from the override fails
+ * `bun run lint` on the suites that needed it.
  *
  * The REAL `biome.jsonc` is copied in -- byte for byte, not a second description of it --
  * along with the `.biome/plugins` it names, so this cannot pass against a stale copy of the
@@ -28,10 +41,6 @@
  * No Docker, no network: it runs the `biome` binary this repo already pins, the same one
  * `bun run lint` runs.
  */
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is a build-tier script running on Bun. `node:` builtins are the platform here, not a portability hazard.
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Globals the runtime supplies that Biome's resolver does not model -- Bun's own `Bun`. tsc resolves it, and tsc is the check that binds here.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: One read of the reporter's JSON, which genuinely is `unknown` until it is parsed. Every field touched after it is checked for what it must be.
 
 import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -44,15 +53,31 @@ const BIOME = join(REPO, "node_modules", ".bin", "biome");
 /**
  * One body, written twice under two names.
  *
- * It trips three of the overridden rules at once -- `noBunModules` on the import,
- * `noMagicNumbers` on the status code, `useExpect` on a test body that asserts nothing --
- * and the money plugin, which is not overridden anywhere and must survive in both.
+ * It trips EIGHT of the overridden rules at once -- `noBunModules` on the `bun:test` import,
+ * `noNodejsModules` on the `node:fs` one, `useExpect` on a test body that asserts nothing,
+ * `noSecrets` on the invented token, `noUnsafeTypeAssertion` on the parsed body,
+ * `useTopLevelRegex` on the two patterns inside the function, `useExplicitReturnType` on the
+ * inner arrow and `useAwait` on the `async` that never awaits -- and the money plugin, which
+ * is not overridden anywhere and must survive in both.
+ *
+ * Every rule the override names has a line here on purpose. An assertion that a rule is
+ * absent from the suite means nothing unless the same body makes it fire in the twin, and
+ * that is the failure mode this pair exists to catch.
+ *
+ * The fixtures sit at `src/probe.ts`, which matches none of the path-scoped overrides ADR
+ * 0018 added, so `noNodejsModules` is genuinely on for the twin. That is the point: the only
+ * thing that may silence it here is the name `.test.ts`.
  */
 const BODY = `import { test } from "bun:test";
+import { readFileSync } from "node:fs";
 
-export function probe(status: number): boolean {
+const TOKEN = "ya29.a0AfH6SMBx7QK3nP2vL9wZ8cR4tY6uI0oE5sD1fG7hJ";
+
+export async function probe(path: string): Promise<boolean> {
   test("x", () => undefined);
-  return status === 403;
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as { ok: boolean };
+  const stamp = (value: string) => value.replace(/[a-z]+/u, TOKEN);
+  return parsed.ok && /^\\d+$/u.test(stamp(path));
 }
 
 export const total = Number(row.amount);
@@ -60,6 +85,18 @@ export const total = Number(row.amount);
 
 const TWIN = "src/probe.ts";
 const SUITE = "src/probe.test.ts";
+
+/** The eight rules this fixture is written to trip, each one named by the override. */
+const OVERRIDDEN: readonly string[] = [
+  "lint/correctness/noNodejsModules",
+  "lint/nursery/noBunModules",
+  "lint/nursery/noUnsafeTypeAssertion",
+  "lint/nursery/useExpect",
+  "lint/nursery/useExplicitReturnType",
+  "lint/performance/useTopLevelRegex",
+  "lint/security/noSecrets",
+  "lint/suspicious/useAwait",
+];
 
 interface Diagnostic {
   readonly category: string;
@@ -109,20 +146,21 @@ afterAll(() => {
 
 describe("the test-file override", () => {
   it("leaves the rules on everywhere else, so the twin is reported", () => {
-    expect(rulesOn(TWIN)).toEqual(
-      expect.arrayContaining([
-        "lint/nursery/noBunModules",
-        "lint/style/noMagicNumbers",
-        "lint/nursery/useExpect",
-      ]),
-    );
+    expect(rulesOn(TWIN)).toEqual(expect.arrayContaining([...OVERRIDDEN]));
   });
 
-  it("silences them in a file whose only difference is the name", () => {
+  it("silences every one of them in a file whose only difference is the name", () => {
     const reported = rulesOn(SUITE);
-    expect(reported).not.toContain("lint/nursery/noBunModules");
-    expect(reported).not.toContain("lint/style/noMagicNumbers");
-    expect(reported).not.toContain("lint/nursery/useExpect");
+    for (const rule of OVERRIDDEN) {
+      expect(reported).not.toContain(rule);
+    }
+  });
+
+  it("leaves a rule the override does NOT name reported in both", () => {
+    // The glob that matched everything, and the `off` that reset its whole group, both look
+    // exactly like a clean run. This is what tells them apart.
+    expect(rulesOn(TWIN)).toContain("lint/correctness/noUndeclaredVariables");
+    expect(rulesOn(SUITE)).toContain("lint/correctness/noUndeclaredVariables");
   });
 
   it("still lints the suite -- money that became a float is reported there too", () => {

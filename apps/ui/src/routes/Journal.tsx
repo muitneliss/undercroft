@@ -16,18 +16,6 @@
  * switching here shows the mark flip when the run ends.
  */
 
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: Same functions as noExcessiveLinesPerFunction: one sequential procedure each, whose branches are the states the thing being driven can actually be in.
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
-// biome-ignore-all lint/correctness/noSolidDestructuredProps: Solid-domain rule: destructuring props defeats Solid's reactivity, because there `props` is a proxy. React props are a plain object and destructuring them is the idiomatic form.
-// biome-ignore-all lint/correctness/noUnresolvedImports: Biome's resolver does not see `Fragment` in @types/react 19, which declares it inside the `React` namespace it re-exports; `tsc` resolves it and so does the bundler, and both are in the gate.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/noJsxPropsBind: An inline handler on one plate. The re-render the rule is about matters under a memoised list of hundreds; this is one button.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
@@ -104,50 +92,7 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
             }
           />
         ) : (
-          <table className="table">
-            <caption>{t("journal.caption", { count: items.length })}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("journal.colWhen")}</th>
-                <th scope="col">{t("journal.colWhat")}</th>
-                <th scope="col">{t("journal.colOutcome")}</th>
-                <th scope="col" className="num">
-                  {t("journal.colLanded")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colCreated")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colChanged")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colRefused")}
-                </th>
-                <th scope="col" className="num">
-                  {t("journal.colDuration")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((run) => (
-                <Fragment key={run.id}>
-                  <RunRow
-                    run={run}
-                    locale={locale}
-                    open={run.id === openId}
-                    href={`${base}/${run.id}`}
-                  />
-                  {run.id === openId ? (
-                    <tr className="table__hinge">
-                      <td colSpan={COLUMNS}>
-                        <RunDetail tenantId={tenantId} runId={run.id} />
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+          <RunTable items={items} tenantId={tenantId} openId={openId} base={base} />
         )}
 
         {runs.hasNextPage ? (
@@ -156,7 +101,7 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
               className="plate"
               type="button"
               disabled={runs.isFetchingNextPage}
-              onClick={() => {
+              onClick={(): void => {
                 void runs.fetchNextPage();
               }}
             >
@@ -166,5 +111,70 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
         ) : null}
       </div>
     </div>
+  );
+}
+
+type Run = React.ComponentProps<typeof RunRow>["run"];
+
+/**
+ * The ledger itself: one row per run, and the open one's detail on a hinge row beneath it.
+ *
+ * Its own component because the eight columns are the bulk of this page and none of them is
+ * a decision -- the decisions (which run is open, whether there is another page) stay above.
+ */
+function RunTable({
+  items,
+  tenantId,
+  openId,
+  base,
+}: {
+  items: readonly Run[];
+  tenantId: string;
+  openId: string | null;
+  base: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+
+  return (
+    <table className="table">
+      <caption>{t("journal.caption", { count: items.length })}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{t("journal.colWhen")}</th>
+          <th scope="col">{t("journal.colWhat")}</th>
+          <th scope="col">{t("journal.colOutcome")}</th>
+          <th scope="col" className="num">
+            {t("journal.colLanded")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colCreated")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colChanged")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colRefused")}
+          </th>
+          <th scope="col" className="num">
+            {t("journal.colDuration")}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((run) => (
+          <Fragment key={run.id}>
+            <RunRow run={run} locale={locale} open={run.id === openId} href={`${base}/${run.id}`} />
+            {run.id === openId ? (
+              <tr className="table__hinge">
+                <td colSpan={COLUMNS}>
+                  <RunDetail tenantId={tenantId} runId={run.id} />
+                </td>
+              </tr>
+            ) : null}
+          </Fragment>
+        ))}
+      </tbody>
+    </table>
   );
 }

@@ -26,19 +26,6 @@
  *   which would turn the callback into an oracle for whether a guessed state ever existed.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-
-// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: These are the functions that hold one decision each -- the connector page loop, the deploy poller, the grant migration -- and the way to shorten them is to split one sequential procedure across several names, which makes the order it happens in harder to follow rather than easier.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noMagicNumbers: In a test the number IS the assertion. `expect(delayMs).toBe(5000)` says what the code must do; `expect(delayMs).toBe(EXPECTED_BACKOFF_MS)` says only that two names agree, and it can pass while both are wrong. Naming a fixture value also puts the expected result somewhere other than the line asserting it, which is the opposite of what .claude/rules/tests.md asks for. Source files get named constants; test files keep their literals.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useDestructuring: Style preference with no correctness content, and it fires where the current form names the source of the value (`params.tenantId`), which is the thing worth seeing at the call site.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { createPkce, hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { writeConnectionDetail } from "@undercroft/db/repos";
@@ -61,7 +48,7 @@ import { exchangeCode } from "./tokenExchange.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
 // Re-exported so callers keep naming one seam: this module is what they reason about.
-export type { GoogleIngestConfig, Provider, ProviderConfig };
+export type { GoogleIngestConfig, Provider, ProviderConfig } from "./oauthProviders.ts";
 
 /** Minutes, not hours: a consent is a thing somebody is doing right now. */
 const HANDSHAKE_TTL_MS = 15 * 60 * 1000;
@@ -169,7 +156,7 @@ export async function startConsent(
 
   const state = randomToken();
   const pkce = createPkce();
-  const now = (deps.now ?? (() => new Date()))();
+  const now = (deps.now ?? ((): Date => new Date()))();
 
   await startHandshake(deps.exec, {
     stateSha256: hashToken(state),
@@ -241,67 +228,26 @@ export interface CompleteDeps extends OAuthDeps {
  * spent. A code exchanged before those checks is a token minted into a customer's account
  * on the strength of a request nobody verified.
  */
-export async function completeConsent(
+/**
+ * Everything after the consent is known good: seal the credential, label the card, audit it.
+ *
+ * The ORDER is the point. The worker seals first, because it is the only process holding the
+ * master key (ADR 0016); the address is written only once the worker has confirmed, since a
+ * label for a connection that does not exist is worse than no label; and the audit insert is
+ * swallowed, because a failed audit must not undo a consent Google has already accepted.
+ */
+async function sealAndRecord(
   deps: CompleteDeps,
   input: {
-    provider: Provider;
-    state: string;
-    code: string;
-    caller: { userId: string; email: string } | null;
+    handshake: { tenantId: string; source: string };
+    exchanged: Awaited<ReturnType<typeof exchangeCode>> & object;
+    caller: { userId: string; email: string };
   },
 ): Promise<CompleteOutcome> {
-  const worker = deps.worker;
-  const config = configFor(deps, input.provider);
-  if (config === undefined || worker === undefined) {
+  const { handshake, exchanged, caller } = input;
+  const { worker } = deps;
+  if (worker === undefined) {
     return { ok: false, reason: "not-configured" };
-  }
-
-  const handshake = await consumeHandshake(deps.exec, hashToken(input.state));
-  // Unknown, already used, expired, and started with another provider: answered
-  // identically on purpose.
-  if (handshake === null || providerOf(handshake.source) !== input.provider) {
-    return { ok: false, reason: "bad-state" };
-  }
-
-  const caller = input.caller;
-  if (caller === null || !(await deps.hasAdminAuthority(handshake.tenantId, caller))) {
-    return {
-      ok: false,
-      reason: "not-admin",
-      tenantId: handshake.tenantId,
-      source: handshake.source,
-    };
-  }
-
-  const exchanged = await exchangeCode(input.provider, config, {
-    code: input.code,
-    verifier: handshake.verifier,
-  });
-  if (exchanged === null) {
-    return {
-      ok: false,
-      reason: "exchange-failed",
-      tenantId: handshake.tenantId,
-      source: handshake.source,
-    };
-  }
-
-  // Nothing is sealed for a grant that withheld what it was asked for. `requestedScope` is
-  // recorded on the handshake at the start of the flow for exactly this comparison, and
-  // this is the only place that can make it: by the time a collector gets a 403, the
-  // consent it came from is long gone. Storing the credential anyway is the guess rule 2
-  // forbids -- a `connected` card standing in for a grant that reads nothing.
-  //
-  // The token is not revoked upstream. What is left at Google after this refusal is
-  // `openid email`, which is what signing in already holds, and there is nothing here to
-  // revoke it with: sealing is the worker's, and this path never reached it.
-  if (!grantCovers(handshake.requestedScope, exchanged.scope)) {
-    return {
-      ok: false,
-      reason: "scope-declined",
-      tenantId: handshake.tenantId,
-      source: handshake.source,
-    };
   }
 
   const stored = await worker.storeCredential({
@@ -359,4 +305,70 @@ export async function completeConsent(
     source: handshake.source,
     accountLabel: exchanged.email,
   };
+}
+
+export async function completeConsent(
+  deps: CompleteDeps,
+  input: {
+    provider: Provider;
+    state: string;
+    code: string;
+    caller: { userId: string; email: string } | null;
+  },
+): Promise<CompleteOutcome> {
+  const { worker } = deps;
+  const config = configFor(deps, input.provider);
+  if (config === undefined || worker === undefined) {
+    return { ok: false, reason: "not-configured" };
+  }
+
+  const handshake = await consumeHandshake(deps.exec, hashToken(input.state));
+  // Unknown, already used, expired, and started with another provider: answered
+  // identically on purpose.
+  if (handshake === null || providerOf(handshake.source) !== input.provider) {
+    return { ok: false, reason: "bad-state" };
+  }
+
+  const { caller } = input;
+  if (caller === null || !(await deps.hasAdminAuthority(handshake.tenantId, caller))) {
+    return {
+      ok: false,
+      reason: "not-admin",
+      tenantId: handshake.tenantId,
+      source: handshake.source,
+    };
+  }
+
+  const exchanged = await exchangeCode(input.provider, config, {
+    code: input.code,
+    verifier: handshake.verifier,
+  });
+  if (exchanged === null) {
+    return {
+      ok: false,
+      reason: "exchange-failed",
+      tenantId: handshake.tenantId,
+      source: handshake.source,
+    };
+  }
+
+  // Nothing is sealed for a grant that withheld what it was asked for. `requestedScope` is
+  // recorded on the handshake at the start of the flow for exactly this comparison, and
+  // this is the only place that can make it: by the time a collector gets a 403, the
+  // consent it came from is long gone. Storing the credential anyway is the guess rule 2
+  // forbids -- a `connected` card standing in for a grant that reads nothing.
+  //
+  // The token is not revoked upstream. What is left at Google after this refusal is
+  // `openid email`, which is what signing in already holds, and there is nothing here to
+  // revoke it with: sealing is the worker's, and this path never reached it.
+  if (!grantCovers(handshake.requestedScope, exchanged.scope)) {
+    return {
+      ok: false,
+      reason: "scope-declined",
+      tenantId: handshake.tenantId,
+      source: handshake.source,
+    };
+  }
+
+  return await sealAndRecord(deps, { handshake, exchanged, caller });
 }

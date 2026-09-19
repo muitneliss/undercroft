@@ -1,6 +1,3 @@
-// biome-ignore-all lint/performance/noAwaitInLoops: Two statuses probed one after another against the same rule; running them concurrently would say nothing more and read worse.
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags the provider's probe URL and invented token fixtures as high-entropy literals; per .claude/rules/pii.md fixtures are invented, and no real credential is in any tracked file.
-
 import { describe, expect, test as it } from "bun:test";
 import { HttpError, InMemoryByteFetcher } from "@undercroft/core";
 

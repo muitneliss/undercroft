@@ -11,8 +11,6 @@
  * the consent sentences. Money is a string here for the reason given in `@/lib/money`.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
 
@@ -79,6 +77,9 @@ export type RunDetail = inferRouterOutputs<AppRouter>["runs"]["get"];
 /** One line of what a run said while it ran, as `runs.events` returns it. */
 export type RunEventView = inferRouterOutputs<AppRouter>["runs"]["events"][number];
 
+/** One ingest key as `keys.list` returns it. Never the token itself, which is minted once. */
+export type IngestKey = inferRouterOutputs<AppRouter>["keys"]["list"][number];
+
 /** What has landed, per stream, as `lake.summary` returns it. */
 export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 
@@ -97,8 +98,14 @@ export type TableResult = BuildResult["preview"] & object;
 /** One saved question in full, as `bi.questions.get` returns it. */
 export type QuestionView = inferRouterOutputs<AppRouter>["bi"]["questions"]["get"];
 
+/** One saved question on the list, as `bi.questions.list` returns it: no SQL, no rows. */
+export type QuestionItem = inferRouterOutputs<AppRouter>["bi"]["questions"]["list"][number];
+
 /** One dashboard in full, as `bi.dashboards.get` returns it. */
 export type DashboardView = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["get"];
+
+/** One dashboard on the list, as `bi.dashboards.list` returns it. */
+export type DashboardItem = inferRouterOutputs<AppRouter>["bi"]["dashboards"]["list"][number];
 
 /** The tenant's analytics schema as its read-only login sees it. */
 export type SchemaView = inferRouterOutputs<AppRouter>["bi"]["schema"];

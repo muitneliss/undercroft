@@ -8,10 +8,6 @@
  * of those paths need. These tests are what keeps them wired.
  */
 
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { seal } from "@undercroft/crypto";
 import { migrate, type SqlExecutor } from "@undercroft/db";
 import type { Credential } from "@undercroft/db/repos";
@@ -19,7 +15,7 @@ import { readCredential } from "@undercroft/db/repos";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
-import { resolveToken } from "./ingest.ts";
+import { resolveToken } from "./runTypes.ts";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const ENV = { UNDERCROFT_SECRET_KEY: KEY };

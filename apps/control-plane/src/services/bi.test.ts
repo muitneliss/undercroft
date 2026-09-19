@@ -8,8 +8,6 @@
  * Runs as `undercroft_app`, so a missing grant on the two tables fails here.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: `date_range` is the filter kind as stored and sent over the wire.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
@@ -23,7 +21,7 @@ import {
   saveDashboard,
   saveQuestion,
 } from "./bi.ts";
-import { InMemoryWorkerClient } from "./workerClient.ts";
+import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 
 const TENANT = "CASE-0042";
 const OTHER = "CASE-0043";

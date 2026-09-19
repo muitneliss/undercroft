@@ -26,7 +26,7 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc -b --pretty false",
-    "lint": "biome lint .",
+    "lint": "biome lint --error-on-warnings .",
     "lint:rules": "ast-grep scan",
     "migrate": "bun run packages/db/src/migrateCli.ts",
     "kestra:flows": "bun run scripts/kestraFlows.ts",

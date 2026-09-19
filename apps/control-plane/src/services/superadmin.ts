@@ -39,9 +39,6 @@
  * can read is reported, never guessed at.
  */
 
-// biome-ignore-all lint/nursery/useValidTestTitle: A false positive. The rule reads `/\s/.test(value)` -- RegExp#test on a regex literal -- as a test-framework `test()` call with a non-string title. There is no test in this file.
-// biome-ignore-all lint/style/useExportsLast: Reordering so every export sits at the bottom would put `parseSuperadmins` below the private helper it calls. The order here is deliberate: the type this module is about, then what operates on it.
-
 /** The accepted addresses, already normalised. Compared by exact match, never by pattern. */
 export type Superadmins = ReadonlySet<string>;
 

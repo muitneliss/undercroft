@@ -5,8 +5,6 @@
  * the failing tests counted.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: `not_null`, `unique_id` and `relation_name` are dbt's own names, read from and written to files dbt owns.
-
 import { describe, expect, test as it } from "bun:test";
 
 import { MACROS, parseRunResults, PASSWORD_VAR, renderProject } from "./dbtProject.ts";

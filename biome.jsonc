@@ -49,7 +49,17 @@
       "semicolons": "always",
       "trailingCommas": "all",
       "arrowParentheses": "always"
-    }
+    },
+
+    // Two globals TypeScript already knows about and Biome's resolver does not, which is why
+    // `noUndeclaredVariables` reported six names that `tsc` resolves without complaint.
+    //
+    // `Bun` is the runtime, per CLAUDE.md. `__UNDERCROFT_RELEASE__` is the Vite `define`
+    // injected in `apps/ui/vite.config.ts`, declared for `tsc` in `apps/ui/src/release.d.ts`
+    // and set by hand in `apps/ui/src/test/setup.ts` because `bun test` does not run the Vite
+    // config. Declaring them HERE keeps the rule on: an actually undeclared variable is still
+    // an error, which is what six per-file suppressions were costing us.
+    "globals": ["Bun", "__UNDERCROFT_RELEASE__"]
   },
 
   // ESLint's `no-restricted-syntax` has no equivalent rule in Biome, and the money and
@@ -77,10 +87,13 @@
     // entries escalate the ones whose default severity is `info` or `warn`, because a
     // warning that never fails the gate is a rule nobody fixes.
     //
-    // The cost is accepted knowingly: several rules here belong to frameworks this repo
-    // does not use, and they cannot be satisfied, only suppressed. Every such suppression
-    // is inline, at the line it applies to, with the reason written next to it -- never a
-    // blanket `off` in this file. See the ADR for why that trade was taken.
+    // Where a rule cannot apply here, it is answered ONCE in this file with the reason
+    // beside it, and never with a `biome-ignore-all` header in the source. ADR 0018
+    // supersedes ADR 0012 on that point and records the measurement behind it: the header
+    // form silences a rule for the WHOLE file rather than the line that needed it, and
+    // Biome never reports one that has stopped being needed -- so 17 of the 679 headers
+    // were already dead with the gate green. Outside a test file the header is now banned
+    // outright by `.ast-grep/rules/no-biome-ignore-all.yml`.
     "rules": {
       "preset": "all",
       "a11y": "error",
@@ -93,31 +106,42 @@
       "suspicious": "error"
     },
 
-    // Domains are Biome's per-framework rule bundles. All fifteen are on, which is what
-    // "every rule" means -- including `solid` and `qwik`, whose rules contradict React and
-    // are suppressed at their call sites rather than switched off here.
+    // Domains are Biome's per-framework rule bundles. Four are on: the four whose framework
+    // is actually in `package.json`. The other eleven are `none`, and that costs NO coverage
+    // -- a Solid rule only ever fires on Solid code, so switching it off in a repo with no
+    // Solid removes findings that were never about this codebase.
+    //
+    // Having all fifteen on was not strictness, it was noise, and the noise was paid for in
+    // suppressions: 255 of the findings behind the `biome-ignore-all` headers came from these
+    // eleven. `noReactSpecificProps` alone was 196 of them -- a Solid rule whose fix rewrites
+    // `className` to `class`, which does not compile in React and broke `tsc` the first time
+    // it ran (ADR 0012 records that). A rule that can only ever be wrong here is not a rule,
+    // and leaving it on to suppress it 196 times taught readers to skip suppression headers.
     //
     // `project` and `types` are the two that earn their keep: `project` walks the module
     // graph (undeclared dependencies, import cycles) and `types` runs the inference engine,
     // which is what carries `noFloatingPromises`, `noMisusedPromises` and
     // `noUnsafeTypeAssertion` across from `typescript-eslint`'s type-checked preset. Losing
     // those was the one real risk in dropping typescript-eslint.
+    //
+    // `react` is the UI (react 19.0.0) and `test` is the Bun suite. Turn a domain back on the
+    // day its framework enters `package.json`, not before. ADR 0018.
     "domains": {
-      "astro": "all",
-      "drizzle": "all",
-      "next": "all",
-      "playwright": "all",
+      "astro": "none",
+      "drizzle": "none",
+      "next": "none",
+      "playwright": "none",
       "project": "all",
-      "qwik": "all",
+      "qwik": "none",
       "react": "all",
-      "reactNative": "all",
-      "solid": "all",
-      "svelte": "all",
-      "tailwind": "all",
+      "reactNative": "none",
+      "solid": "none",
+      "svelte": "none",
+      "tailwind": "none",
       "test": "all",
-      "turborepo": "all",
+      "turborepo": "none",
       "types": "all",
-      "vue": "all"
+      "vue": "none"
     }
   },
 
@@ -182,18 +206,606 @@
       }
     },
 
-    // The one place a rule is switched OFF rather than suppressed at the file, and the
-    // boundary is narrow: a rule lands here only when the reason is "because it is a test" --
-    // true of every test file, identically, and of nothing else. ADR 0017 supersedes that
-    // paragraph of ADR 0012 and records why: these ten reasons had been copy-pasted into 137
-    // headers across 60 files, and `noBunModules` alone appeared in all 58 suites. A sentence
-    // repeated 58 times is not one a reviewer re-reads, and it cannot be deleted when it
-    // stops being true, because it lives in 58 places.
+    // Rules that cannot hold ANYWHERE in this repo. Off once, here, with the reason.
     //
-    // Everything else still argues for itself at the file it applies to, in a test exactly as
-    // in a source file: `noUnsafeTypeAssertion`, `useExplicitType`, `useTopLevelRegex`,
-    // `useNamingConvention`, `noTernary`, `noSecrets` and `noNonNullAssertion` are suppressed
-    // per file, with per-file reasons, and stay that way.
+    // ADR 0018. Each of these was previously a `biome-ignore-all` header repeated across the
+    // files it fired in -- `noTernary` in 62 of them -- and the header form is strictly worse
+    // than this block in three ways: it silences the rule for the whole file rather than the
+    // line, Biome never reports it once it stops being needed, and the same sentence in 62
+    // places is one no reviewer re-reads. Deleting an entry here turns the rule back on
+    // everywhere at once, which is the property the headers did not have.
+    {
+      "includes": ["**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            // 41 of its 58 findings are "the parameter doesn't have a type defined", on
+            // callback parameters that are CONTEXTUALLY typed -- `write(level, event, extra)`
+            // inside `const logger: Logger = {...}`, `fetch: (input, init)` inside
+            // `realDeps: Deps`, every Zustand action against `UiState`. Annotating them
+            // restates the interface the object is already being checked against, and a
+            // restatement is a second copy that can drift from the first.
+            //
+            // The half worth keeping is return types, and that is not lost: 12 of its 13
+            // return-type findings are reported at the same lines by `useExplicitReturnType`,
+            // which stays ON and is enforced.
+            //
+            // Five findings fall outside that overlap. `WHEEL` in `SignIn.tsx` was a genuine
+            // missing annotation and is fixed. The other four are tRPC's unnameable generics
+            // -- `export const router = t.router`, `t.procedure`, and the `errorFormatter`
+            // whose return is tRPC's own error shape -- where writing the type means naming
+            // an inferred generic the library does not export as a usable name. That is why
+            // tRPC's own documentation writes them exactly like this.
+            "useExplicitType": "off",
+            // The React Compiler is not enabled in `vite.config.ts` and is not a dependency,
+            // so its one finding is advice for a build step this repo does not run.
+            "useReactCompiler": "off",
+            // Reads `/\s/.test(value)` -- `RegExp#test` on a regex literal -- as a test
+            // framework's `test()` with a non-string title, in 19 files that contain no test.
+            // In a real suite it wants a shorter title shape than `tests.md` asks for, so it
+            // has nothing to say on either side of the line.
+            "useValidTestTitle": "off"
+          },
+          "complexity": {
+            // `void promise` is this repo's marker for a call that is deliberately not
+            // awaited, and every one of the seven sites says in a comment why: the i18next
+            // init that the module body cannot await, a sign-in redirect, a react-router
+            // transition nothing waits on, and the verification mail whose SEND DURATION
+            // would otherwise leak whether an address exists. Deleting the operator leaves
+            // the prose with nothing to point at. (Checked: `noFloatingPromises` does not
+            // currently report these, so this is about the reader, not a rule conflict.)
+            "noVoid": "off"
+          },
+          "performance": {
+            // These sequential awaits ARE the design, and running them concurrently is the
+            // bug this rule would introduce. `createPacer` sleeps between requests to hold a
+            // rate limit (`connectors.md`); `migrate()` runs SQL files in order and records
+            // each before the next; the connector runtime walks pages and id-chunks where
+            // page N+1 is not known until N returns; `acceptInvitations` writes through one
+            // `SqlExecutor`, which is a single connection and not safe to fan out on.
+            "noAwaitInLoops": "off",
+            // A micro-optimisation aimed at re-render cost, which this control plane does not
+            // have: the lists are a handful of tenants and connections. Satisfying it means
+            // wrapping 17 handlers in `useCallback`, which moves the handler away from the
+            // element it belongs to and adds a dependency array that has to be kept right --
+            // a new way to be wrong, bought with no measured gain.
+            "noJsxPropsBind": "off"
+          },
+          "style": {
+            // A guard at the top of a loop -- `if (result.status !== "created") continue;` --
+            // is the shape that keeps the body at one level of indent. What the rule wants
+            // instead is that body wrapped in an `if`, which buys nothing and costs a level
+            // everywhere it is applied.
+            "noContinue": "off",
+            // Money aside, the numbers left after the domain constants were named are
+            // structural: slice offsets, a `padStart` width, the radix argument, an HTTP
+            // status. `SLICE_START_OF_GREEN_CHANNEL` tells a reader nothing the expression
+            // did not, and the rule ships no allow-list option, so it is all or nothing.
+            "noMagicNumbers": "off",
+            // Nested only inside JSX, where the alternative is lifting a two-branch choice
+            // out of the element it belongs to. Same argument as `noTernary` above.
+            "noNestedTernary": "off",
+            // Every one of these asserts something the type system cannot see but the
+            // expression guarantees: `char.codePointAt(0)!` on a character that came from
+            // iterating a string, `split("/").at(-1)!` where `split` always yields at least
+            // one element. The fix is a branch that cannot be reached, which is worse than
+            // the assertion -- it is untestable, and `tests.md` asks for a test on both
+            // sides of a guard. `noUnsafeTypeAssertion` still covers the assertions that
+            // genuinely can be wrong, and those are being fixed rather than suppressed.
+            "noNonNullAssertion": "off",
+            // A ternary selects between two VALUES. What the rule wants instead is a mutable
+            // temporary plus a statement, which separates the condition from the value it
+            // chooses. Inside JSX it is additionally the only way to render conditionally
+            // inline, and 251 of these are in `.tsx`.
+            "noTernary": "off",
+            // A module puts the type it is about at the top, then what operates on it --
+            // the order CLAUDE.md names as the convention. Satisfying this rule means moving
+            // 51 exported types and interfaces to the BOTTOM of their files, away from the
+            // code they describe, in 51 separate places. The rule has one ordering in mind
+            // and this repo has a different one, deliberately.
+            "useExportsLast": "off",
+            // Most of what it flags is not ours to name: `access_token`, `refresh_token`,
+            // `hs_object_id`, `grant_type` are field names on the wire, and renaming them is
+            // breaking the contract with HubSpot, Xero and Google rather than tidying a
+            // local. The rule cannot tell a provider's payload from a variable.
+            "useNamingConvention": "off"
+          },
+          "suspicious": {
+            // This one is not opinionated, it is WRONG here, and acting on it would put a
+            // null dereference in the tree. It reports `if (!match)` after
+            // `DECIMAL.exec(amount)` in `apps/ui/src/lib/money.ts` as "always falsy" -- delete
+            // that guard and `tsc` answers `TS18047: 'match' is possibly 'null'`, which is
+            // exactly right, because `RegExp#exec` returns `RegExpExecArray | null`. Checked
+            // by running both.
+            //
+            // The other twelve findings are the same shape: `?? ""` on a header lookup, `?.`
+            // on `match.groups`. Biome's inference engine is nursery-grade and disagrees with
+            // `tsc`, and `tsc` is the check that binds. Reconsider on a Biome upgrade.
+            "noUnnecessaryConditions": "off"
+          }
+        }
+      }
+    },
+
+    // A React component file is PascalCase. That is the convention the whole `apps/ui` tree
+    // already follows, and the rule's default list does not include it, so `Icon.tsx` was the
+    // one file it could never be happy with. This is the rule aimed correctly, not switched
+    // off: a `snake_case` component would still be reported.
+    //
+    // It also has to be settled HERE rather than at the file. The diagnostic is anchored at
+    // line 0 -- the filename is not on any line -- so there is no line a `// biome-ignore`
+    // could attach to, and the file-wide header is banned now.
+    {
+      "includes": ["apps/ui/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": { "filenameCases": ["camelCase", "PascalCase", "export"] }
+            }
+          }
+        }
+      }
+    },
+
+    // Code that does not run in a browser. `noNodejsModules` is a portability rule for
+    // bundled code; `node:fs` and `node:crypto` are the platform for the two server apps, the
+    // shared packages, the build scripts and the agent hook. It stays ON for `apps/ui/src`,
+    // which is the only tree where importing one would be a real bug -- and that is the whole
+    // value of the rule here, so it is scoped rather than switched off.
+    //
+    // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
+    // respectively, never in the browser.
+    {
+      "includes": [
+        "apps/control-plane/**",
+        "apps/worker/**",
+        "packages/**",
+        "scripts/**",
+        ".claude/**",
+        "apps/ui/vite.config.ts",
+        "apps/ui/src/test/setup.ts"
+      ],
+      "linter": { "rules": { "correctness": { "noNodejsModules": "off" } } }
+    },
+
+    // The composition root is DEFINED as the place that reads the environment --
+    // `layering.md` requires it there and bans it everywhere below, which is a stricter rule
+    // than `noProcessEnv` and is enforced separately by `.ast-grep/rules/layer-injected-deps`.
+    // Leaving the Biome rule on here would report the one place the architecture demands.
+    {
+      "includes": [
+        "apps/*/src/main.ts",
+        "apps/worker/src/server.ts",
+        "apps/*/src/*Cli.ts",
+        "packages/*/src/*Cli.ts",
+        "scripts/**",
+        // DEBT, listed here rather than hidden: `keys()` takes an `env` and every public
+        // function in the module threads one through, but the parameter still DEFAULTS to
+        // `process.env`, so a caller that forgets gets ambient configuration in a package
+        // that sits below every layer. The fix is to make `env` required and thread it from
+        // the two call sites in `packages/db/src/repos/connections.ts` up to the composition
+        // roots -- a cross-package API change, not a lint edit, so it is not being done
+        // inside this PR. Until then the rule would report the one line that names the debt.
+        "packages/crypto/src/seal.ts"
+      ],
+      "linter": { "rules": { "style": { "noProcessEnv": "off" } } }
+    },
+
+    // A package entry point IS a barrel -- that is what `@undercroft/core` being importable as
+    // one name means. The rule's concern is a barrel in the middle of a tree, where it pulls
+    // in modules nobody asked for; ours are the published surface, and `build:ui` in the gate
+    // is what catches the cost the rule is really about (see CLAUDE.md on `node:crypto`).
+    {
+      "includes": ["**/index.ts"],
+      "linter": { "rules": { "performance": { "noBarrelFile": "off" } } }
+    },
+
+    // Imports Biome's resolver reads wrong and `tsc` reads right: React 19 does export
+    // `StrictMode`, `lazy`, `Suspense` and `Fragment`, and `pg` does have a default export
+    // through its CJS interop. Scoped to the files rather than switched off, so the rule still
+    // catches a genuinely missing module anywhere else -- which is most of what the `project`
+    // domain is worth.
+    {
+      "includes": [
+        "apps/ui/src/main.tsx",
+        "apps/ui/src/App.tsx",
+        "apps/ui/src/components/QuestionBands.tsx",
+        "apps/ui/src/components/QuestionResult.tsx",
+        "apps/ui/src/components/QuestionCard.tsx",
+        "apps/ui/src/components/charts/ChartFrame.tsx",
+        "apps/ui/src/routes/Journal.tsx",
+        "apps/ui/src/routes/Lake.tsx",
+        "apps/ui/src/routes/ModelEditor.tsx",
+        "apps/ui/src/routes/Question.tsx",
+        "packages/db/src/pool.ts"
+      ],
+      "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } }
+    },
+
+    // The stylesheet and the favicon. These five reasons were written at the top of
+    // `index.css` and are kept verbatim, because they are the argument, not decoration.
+    {
+      "includes": ["apps/ui/src/index.css", "**/*.svg"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            // The rule cannot see a class name assembled at runtime, and this UI assembles
+            // them -- ``className={`mark mark--${mark}`}`` in StatusMark.tsx builds one per
+            // state. Every name it reports is reachable that way, so acting on it would
+            // delete live styles.
+            "noUnusedClasses": "off",
+            // Four progressive enhancements -- `scrollbar-color`, `::selection`,
+            // `user-select` and `overflow-x: clip`. Each degrades to the browser default
+            // where unsupported, and the form tells no state by one of these alone. Where
+            // `clip` is unsupported the axis falls back to `visible`, so a leaf mid-turn can
+            // briefly overhang the binder: a 190ms cosmetic overflow, not a broken layout,
+            // and the alternative (`hidden`) fails worse by moving the document's scroll
+            // inside `.book`.
+            "useBaseline": "off",
+            // A cascade layer orders one sheet against another; an icon has nothing to
+            // cascade with, and `index.css` IS the sheet.
+            "useLayeredStyles": "off"
+          },
+          "style": {
+            // `.colophon .datum` is grouped with the colophon, which puts it above the
+            // generic `.datum`. The specific rule still wins -- specificity decides this, not
+            // source order -- so the cascade reads as written; moving the block would
+            // separate it from the component it belongs to.
+            "noDescendingSpecificity": "off",
+            // The palette has to stay hex because `@/lib/acetate` reads `--leaf` and `--ink`
+            // back out of the computed styles and parses them with `parseHex`, which accepts
+            // `#rgb`/`#rrggbb` and returns null for anything else rather than guessing.
+            // Rewriting these as `oklch()` makes that parse fail and the solver falls back to
+            // its hardcoded defaults -- a guessed colour in the code path that guarantees
+            // WCAG contrast, which is exactly the failure rule 2 is about.
+            "noHexColors": "off",
+            // One document, not a module that grew. The board, the leaf and the rail are
+            // defined against each other -- the comments argue contrast ratios across
+            // sections -- and cutting it at 300 lines splits a single argument across files.
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+
+    // Narrow scopes, below: a rule that is right almost everywhere and wrong at a handful of
+    // named places. These are the cases a `biome-ignore-all` header used to carry, kept as
+    // path entries so the rule stays ON for every file not listed -- which is the difference
+    // between an exception and switching the rule off. ADR 0018.
+
+    // `noSecrets` scores string ENTROPY, and these five are not credentials: a Drive `fields`
+    // mask, the connector runtime's cursor token, the AES key-derivation label, and two
+    // Dokploy endpoint paths. The rule stays on everywhere else, which is where a pasted key
+    // would actually land. The real guard against a committed secret is `pii.md` plus
+    // `.gitignore`.
+    {
+      "includes": [
+        "scripts/dokploy.ts",
+        "apps/worker/src/services/google/drive.ts",
+        "packages/connector-runtime/src/reader.ts",
+        "packages/crypto/src/seal.ts"
+      ],
+      "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // There is no Playwright here. The rule is nursery rather than playwright-domain, so
+    // `"playwright": "none"` does not reach it, and it reads two ordinary `describe`-shaped
+    // calls -- a Drive API request and a connector-runtime helper -- as test declarations.
+    {
+      "includes": [
+        "apps/worker/src/services/google/api.ts",
+        "packages/connector-runtime/src/reader.ts"
+      ],
+      "linter": { "rules": { "nursery": { "usePlaywrightValidDescribeCallback": "off" } } }
+    },
+
+    // The error types that cross package boundaries. Parameter properties ARE the shape of
+    // this module: `HttpError(status, url, bodyExcerpt, retryAfterMs)` carries the context
+    // that lets a reader tell a retry from an investigation, which the module docstring
+    // states as its whole purpose. Rewriting four classes into field declarations plus
+    // assignments doubles the file and says nothing new, and splitting one error per file
+    // scatters a set whose value is that it is one import.
+    {
+      "includes": ["packages/core/src/errors.ts"],
+      "linter": {
+        "rules": {
+          "complexity": { "useMaxParams": "off" },
+          "style": { "noExcessiveClassesPerFile": "off", "noParameterProperties": "off" }
+        }
+      }
+    },
+
+    // Same parameter-property reasoning for the one error class here.
+    {
+      "includes": ["packages/contracts/src/loadSpec.ts"],
+      "linter": { "rules": { "style": { "noParameterProperties": "off" } } }
+    },
+
+    // Surrogate-pair arithmetic: `offset >> 10` and `offset & 0x3ff` are the encoding, written
+    // the way the Unicode spec writes it. This function decides the bytes a record hashes to,
+    // and therefore its address in the lake -- `raw-lake.md` calls content addressing the
+    // default here. Restating it as division and modulo to satisfy a style rule is a rewrite
+    // of an encoding algorithm for no behavioural reason, which is exactly the class of change
+    // not worth making.
+    {
+      "includes": ["packages/core/src/canonicalJson.ts"],
+      "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
+    },
+
+    // `noUnsafeTypeAssertion` is one of the two rules the `types` domain was kept for, and it
+    // stays on everywhere. Ten of its findings were real and are fixed -- `isRecord` guards in
+    // `getPath`, `canonicalJson`, `connectionScope` and the S3 error shape, `instanceof Error`
+    // where `(error as Error).message` was assumed, and `.some()` where a readonly tuple was
+    // widened just to call `.includes`. What is left is three kinds of assertion the language
+    // gives no other spelling for, each listed at the file that needs it.
+
+    // Constructing a BRANDED type. `Amount` is a string with a phantom tag precisely so an
+    // arbitrary string cannot be passed as money (`money.md`), and the assertion at the
+    // constructor is the only way to mint one. Removing it removes the brand.
+    {
+      "includes": ["packages/core/src/money.ts"],
+      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
+    },
+
+    // The driver seam. `pg` types a result row as `any`, and `layering.md` makes these two
+    // files the only place a driver is touched -- so this is exactly where the `any` has to
+    // stop, and the assertion is what stops it. Repos above speak `SqlExecutor` and never
+    // assert.
+    {
+      "includes": ["packages/db/src/pool.ts", "packages/db/src/testing.ts"],
+      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
+    },
+
+    // Untyped parse boundaries: `JSON.parse`, `response.json()` and the YAML reader all return
+    // `any`, so the shape has to be stated somewhere. In every one of these the assertion is
+    // to `unknown`/`Record<string, unknown>` or is followed immediately by field checks --
+    // `typeof body.access_token === "string"`, `Array.isArray`, a Zod `safeParse` -- so the
+    // assertion names a shape rather than trusting one.
+    //
+    // The better answer is a Zod schema at each boundary, which `@undercroft/contracts`
+    // already provides for the lake's own request bodies. Doing that for a provider's token
+    // response and for ghcr's manifest is a change to what the code CHECKS, not to how it is
+    // spelled, so it is not folded into a lint pass. ADR 0018 records it as the follow-up.
+    {
+      "includes": [
+        "apps/control-plane/src/services/googleExchange.ts",
+        "apps/control-plane/src/services/workerClient.ts",
+        "apps/ui/src/lib/drivePicker.ts",
+        "apps/ui/src/test/setup.ts",
+        "apps/ui/vite.config.ts",
+        "apps/worker/src/handlers/lake.ts",
+        "apps/worker/src/handlers/analytics.ts",
+        "apps/worker/src/services/google/refresh.ts",
+        "apps/worker/src/services/loadToRaw.ts",
+        "apps/control-plane/src/services/oauth.ts",
+        "apps/control-plane/src/services/tokenExchange.ts",
+        "apps/worker/src/services/xero/organisations.ts",
+        "apps/worker/src/services/xero/refresh.ts",
+        "packages/db/src/repos/connections.ts",
+        "packages/lake/src/store.ts",
+        "scripts/dokploy.ts",
+        "scripts/geo/vnProvinces.ts",
+        "scripts/wikiCoverage.ts"
+      ],
+      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
+    },
+
+    // Three entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
+    // default export carrying `port` and `fetch` to start a server, and Vite reads a default
+    // export from its config. A named export is not an option a caller would accept.
+    {
+      "includes": ["apps/*/src/main.ts", "apps/worker/src/server.ts", "apps/ui/vite.config.ts"],
+      "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+    },
+
+    // Styles computed per element, which is the one thing a class cannot express: the tab
+    // rail's `flexGrow` IS the division's extent, the title-page wheel paints a different hue
+    // per span, and the skeleton's widths are derived so the placeholder does not look ruled.
+    // ADR 0012 records this rule's autofix DELETING the `flexGrow` that gives the rail its
+    // proportions, which is the failure mode to keep in mind if it is ever turned back on.
+    {
+      "includes": [
+        "apps/ui/src/components/TabRail.tsx",
+        "apps/ui/src/components/Skeleton.tsx",
+        "apps/ui/src/components/QuestionCard.tsx",
+        "apps/ui/src/routes/SignIn.tsx"
+      ],
+      "linter": { "rules": { "nursery": { "noInlineStyles": "off" } } }
+    },
+
+    // Three findings the rules cannot see through.
+    //
+    // `useErrorCause` at `api.ts` reports a throw that DOES pass `{ cause: error }` -- through
+    // `ConnectorError`, whose constructor forwards its options to `UndercroftError` and on to
+    // `Error`. The rule looks for the option on the `new` expression and stops there.
+    //
+    // `noMisleadingReturnType` wants `-1 | 0 | 1` on a comparator and a literal on a counter
+    // getter. `number` is the type `Array#sort` is declared against and the type a count has.
+    //
+    // `noLeakedRender` reports a ternary with two real branches, which is the shape it exists
+    // to recommend over `&&`.
+    {
+      "includes": ["apps/worker/src/services/google/api.ts", "packages/contracts/src/loadSpec.ts"],
+      "linter": { "rules": { "style": { "useErrorCause": "off" } } }
+    },
+    {
+      "includes": ["packages/core/src/pacer.ts", "packages/lake/src/objectStore.ts"],
+      "linter": { "rules": { "nursery": { "noMisleadingReturnType": "off" } } }
+    },
+    {
+      "includes": ["apps/ui/src/components/Book.tsx"],
+      "linter": { "rules": { "suspicious": { "noLeakedRender": "off" } } }
+    },
+
+    // `<div role="group" aria-label={...}>` around the two language buttons. The rule wants
+    // `<fieldset>`, which conveys EXACTLY the same thing to assistive technology as the role
+    // already does -- so the accessibility outcome is identical, and the change would be a
+    // swap of element plus the three UA-style resets (`border`, `margin`, `min-inline-size`)
+    // a fieldset needs before `display: inline-flex` lays out as it does today.
+    {
+      "includes": ["apps/ui/src/components/LanguageSwitcher.tsx"],
+      "linter": { "rules": { "a11y": { "useSemanticElements": "off" } } }
+    },
+
+    // `MonacoEnvironment` is declared on `Window` by monaco-editor's own types and nowhere
+    // else, so `globalThis.MonacoEnvironment` does not typecheck. The library reads it off the
+    // page object; this is the one spelling that both compiles and works.
+    {
+      "includes": ["apps/ui/src/components/SqlEditor.tsx"],
+      "linter": { "rules": { "style": { "useGlobalThis": "off" } } }
+    },
+
+    // Error classes that carry their context as parameter properties, same reasoning as
+    // `packages/core/src/errors.ts`: "failed after 412 records on entity deals" is what tells
+    // a retry from an investigation, and the fields ARE the message.
+    {
+      "includes": ["apps/worker/src/services/ingest.ts", "scripts/kestraFlows.ts"],
+      "linter": { "rules": { "style": { "noParameterProperties": "off" } } }
+    },
+
+    // Four more entropy false positives: two i18n key names that read like tokens, a public
+    // HubSpot API URL used to prove a credential, and the pinned upstream commit the province
+    // geometry is fetched from. None is a credential; the rule stays on everywhere else.
+    {
+      "includes": [
+        "apps/ui/src/lib/lake.ts",
+        "apps/ui/src/lib/runs.ts",
+        "apps/worker/src/services/validateCredential.ts",
+        "scripts/geo/vnProvinces.ts"
+      ],
+      "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // Rows rendered from a result set that has no key of its own: a query's output is
+    // positional by definition, and the filter list is a fixed-length editor. The rule guards
+    // reordering and insertion, neither of which these lists do.
+    {
+      "includes": [
+        "apps/ui/src/components/QuestionFilters.tsx",
+        "apps/ui/src/components/ResultTable.tsx",
+        "apps/ui/src/components/charts/ChartFrame.tsx"
+      ],
+      "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
+    },
+
+    // A fixed-length skeleton. The rule guards against reconciliation bugs when a keyed list
+    // is REORDERED, inserted into or filtered; this list is a placeholder of constant length
+    // whose items carry no identity and never move, so the index is the only id there is.
+    {
+      "includes": ["apps/ui/src/components/Skeleton.tsx"],
+      "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
+    },
+
+    // A catalogue is a list, and its length is how many things the product says. `i18n.md`
+    // makes `vi.ts` the source of truth for WHICH KEYS EXIST and the compiler requires `en.ts`
+    // to answer every one; splitting either into parts breaks the one property that pairing
+    // rests on, and `i18n.test.tsx` compares the two key sets as whole files.
+    {
+      "includes": [
+        "apps/ui/src/i18n/vi.ts",
+        "apps/ui/src/i18n/en.ts",
+        "packages/contracts/src/bi.ts"
+      ],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
+    // One repo per table group, named for the tables -- `layering.md`. The length of a repo is
+    // the number of columns its tables have, and cutting `connections.ts` or `runs.ts` in two
+    // would put half a table group in each, which is the thing that rule exists to prevent.
+    {
+      "includes": [
+        "packages/db/src/repos/connections.ts",
+        "packages/db/src/repos/runs.ts",
+        "apps/control-plane/src/services/connections.ts"
+      ],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
+    // The UI has exactly ONE store, and `state.md` names the file: `apps/ui/src/store.ts`,
+    // `useUiStore`. That is the whole rule -- client state has one owner, and `useState` is
+    // banned because a second owner is how two values that should be one drift apart.
+    //
+    // The file is already split INSIDE itself: `UiState` declares what the store holds and
+    // five slice functions implement it, one per draft. Splitting it across modules would put
+    // the declaration in one file and its implementations in five, and the next reader asking
+    // "where does the selected tenant live" would have six answers instead of one. The length
+    // is the number of drafts the interface has, which is a product fact rather than a file
+    // that grew.
+    {
+      "includes": ["apps/ui/src/store.ts"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
+    // The deploy client, read top to bottom as the sequence of a deploy: configure, call,
+    // trigger, wait, verify, smoke, report. Its long functions are split -- `verifyService`
+    // answers one service -- but the FILE stays one file, and that is deliberate.
+    //
+    // `deployment.md` makes this script the only channel for a change to the running system
+    // and requires a deploy to be verified rather than assumed. Cutting it into three modules
+    // inside a lint migration puts churn on the one path whose failure mode is a production
+    // deploy that reports success, for a rule about line count. Split it in a change whose
+    // diff is about the deploy client, where the smoke test that follows is the review.
+    {
+      "includes": ["scripts/dokploy.ts"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+
+    // The argument parser walks `argv` by index because an option CONSUMES THE NEXT ELEMENT
+    // (`--tenant CASE-0042`), so the loop advances by one inside its own body. `for...of` has
+    // no cursor to advance.
+    {
+      "includes": ["apps/control-plane/src/inviteCli.ts"],
+      "linter": { "rules": { "style": { "useForOf": "off" } } }
+    },
+
+    // `import * as connections from "../services/connections.ts"` is what makes the tRPC
+    // router readable: `connections.list`, `people.invite`, `tenants.rename` line up with the
+    // procedure names they are bound to, and the alternative is importing forty functions by
+    // name into one file. The rule's concern is bundle size in code that ships to a browser;
+    // these three files are server-side and never bundled. `apps/ui` keeps the rule.
+    {
+      "includes": [
+        "apps/control-plane/src/handlers/router.ts",
+        "apps/control-plane/src/handlers/connectionsRouter.ts",
+        "apps/control-plane/src/handlers/answers.ts",
+        "apps/control-plane/src/handlers/biRouter.ts",
+        "apps/control-plane/src/handlers/modelsRouter.ts",
+        "apps/control-plane/src/handlers/peopleRouter.ts",
+        "apps/control-plane/src/handlers/tenantsRouter.ts",
+        "apps/control-plane/src/inviteCli.ts",
+        "apps/control-plane/src/services/people.ts"
+      ],
+      "linter": { "rules": { "performance": { "noNamespaceImport": "off" } } }
+    },
+
+    // A module named for a pair: `email.ts` holds the transport and its error, `store.ts` the
+    // lake store and the error it raises. One class per file would put an error in a file of
+    // its own, away from the only thing that throws it.
+    {
+      "includes": [
+        "packages/core/src/email.ts",
+        "packages/lake/src/store.ts",
+        "apps/worker/src/services/ingest.ts",
+        "scripts/kestraFlows.ts"
+      ],
+      "linter": { "rules": { "style": { "noExcessiveClassesPerFile": "off" } } }
+    },
+
+    // `layering.md`: a repo takes `SqlExecutor` first, then the columns it writes. That is the
+    // signature every repo in the tree shares, and `writeCredential(exec, tenantId, source,
+    // credential, env?)` is five parameters because the row has four columns. Bundling them
+    // into an options object here alone would make this the one repo that reads differently.
+    {
+      "includes": ["packages/db/src/repos/**"],
+      "linter": { "rules": { "complexity": { "useMaxParams": "off" } } }
+    },
+
+    // Rules whose reason is "because it is a test" -- true of every test file, identically,
+    // and of nothing else. ADR 0017 records why these are answered here rather than in 137
+    // pasted headers; ADR 0018 extends the same reasoning to the blocks above, which is why
+    // this is no longer the only place a rule is switched off.
     //
     // Pinned from both sides by `scripts/biomeTestOverride.test.ts`, which runs the real
     // config: the rules fire in a `.ts` twin, stay quiet in the `.test.ts` fixture, and a
@@ -212,40 +824,60 @@
           "correctness": {
             // A suite reads fixtures, makes temp directories and hashes bytes. `node:` is the
             // platform a test runs on, not a portability hazard.
-            "noNodejsModules": "off",
-            // Qwik-domain rule about what may cross a `$()` serialization boundary. There is
-            // no Qwik in this repo; in a suite it fires on ordinary closures.
-            "useQwikValidLexicalScope": "off"
+            "noNodejsModules": "off"
           },
           "nursery": {
             // Bun is the test runner, per CLAUDE.md. `bun:test` is the toolchain, not an
             // accidental dependency.
             "noBunModules": "off",
+            // 39 findings, and every one is the same line: `(await res.json()) as { code:
+            // string }`. A response body IS `unknown` until something names it, and in a
+            // test the name is the assertion -- this endpoint promises a `code`, and the
+            // next line checks it. Writing a Zod schema per assertion would move the
+            // promise away from the test that pins it. `as unknown as` and casting builders
+            // remain banned by `.claude/rules/tests.md`, which this does not touch.
+            "noUnsafeTypeAssertion": "off",
+            // 32 findings on helper arrows inside a suite -- a fetch recorder, a `deps`
+            // factory. `useExplicitType` is already off repo-wide for the same reason and
+            // this is its other half; a test's helpers are read top to bottom with their
+            // call sites in view.
+            "useExplicitReturnType": "off",
             // These assert inside a callback the code under test invokes -- a refresher, an
             // onRetry hook -- which is how a collaborator is checked without a mock.
             // `.claude/rules/tests.md` bans the mock alternative outright.
             "noConditionalExpect": "off",
             // Test bodies whose assertion is that the call did not throw, written in the
             // guard style `tests.md` prescribes rather than as an `expect()`.
-            "useExpect": "off",
-            // The titles this flags are full sentences naming the promise under test, which
-            // is exactly what `tests.md` asks a title to be. The rule wants a shorter shape.
-            "useValidTestTitle": "off"
+            "useExpect": "off"
+          },
+          "performance": {
+            // 35 findings, all of them a regex written inside the assertion it belongs to.
+            // The rule guards a literal recompiled on a hot path; a test runs its assertion
+            // once, and hoisting the pattern to module scope puts it a screen away from the
+            // thing it describes.
+            "useTopLevelRegex": "off"
+          },
+          "security": {
+            // 23 findings and not one is a credential: a 25-digit money fixture, an invented
+            // `ya29.` token, a base64 blob. `.claude/rules/pii.md` requires fixtures to be
+            // INVENTED rather than anonymised, so a suite is exactly where high-entropy
+            // strings that are not secrets belong.
+            "noSecrets": "off"
           },
           "style": {
             // A suite is as long as its subject has behaviours, and the harnesses that make
             // one long -- a loopback server, Better Auth on its memory adapter, PGlite -- are
             // the ones too delicate to keep two copies of.
-            "noExcessiveLinesPerFile": "off",
-            // In a test the number IS the assertion. `expect(status).toBe(403)` says what the
-            // code must do; `expect(status).toBe(EXPECTED_STATUS)` says only that two names
-            // agree, and it passes while both are wrong. Source files get named constants.
-            "noMagicNumbers": "off"
+            "noExcessiveLinesPerFile": "off"
           },
           "suspicious": {
             // Assertions inside a helper that several tests call, which is how the repeated
             // part of a check is named once.
-            "noMisplacedAssertion": "off"
+            "noMisplacedAssertion": "off",
+            // 5 findings, all a seam whose TYPE is async: a `typeof fetch` recorder, a
+            // `run: () => Promise<string>` counter. The signature is the contract being
+            // stood in for; dropping `async` to satisfy the rule would stop it matching.
+            "useAwait": "off"
           }
         }
       }

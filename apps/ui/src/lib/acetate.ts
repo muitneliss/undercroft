@@ -27,14 +27,6 @@
  * design use a saturated ground under dense tabular content at all.
  */
 
-// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and not done here: hoisting these 45 literals is a real change to 22 files and belongs in its own commit where the diff is reviewable, not buried in a lint migration. Recorded rather than silently dropped.
-// biome-ignore-all lint/style/noMagicNumbers: What is left after the domain constants were named (see the WCAG block in acetate.ts) is structural: string slice offsets, the radix argument to parseInt, padStart widths, rounding factors. A name like SLICE_START_OF_GREEN_CHANNEL does not tell a reader anything the expression did not. The rule has no allow-list option, so it is per file or not at all.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
-// biome-ignore-all lint/correctness/useQwikValidLexicalScope: Qwik-domain rule about what may cross a `$()` serialization boundary. There is no Qwik in this repo.
-
 /** A gamma-encoded sRGB colour, 0-255 per channel. */
 export interface Rgb {
   r: number;
@@ -75,11 +67,15 @@ const LUMINANCE_BLUE = 0.0722;
 /** The flare constant. It keeps the ratio finite when one colour is pure black. */
 const CONTRAST_FLARE = 0.05;
 
+const LEADING_HASH = /^#/u;
+const HEX_SHORT = /^[0-9a-f]{3}$/iu;
+const HEX_LONG = /^[0-9a-f]{6}$/iu;
+
 /** Parse `#rgb` or `#rrggbb`. Returns null for anything else rather than guessing. */
 export function parseHex(hex: string): Rgb | null {
-  const value = hex.trim().replace(/^#/u, "");
+  const value = hex.trim().replace(LEADING_HASH, "");
 
-  if (/^[0-9a-f]{3}$/iu.test(value)) {
+  if (HEX_SHORT.test(value)) {
     const r = value.slice(0, 1);
     const g = value.slice(1, 2);
     const b = value.slice(2, 3);
@@ -90,7 +86,7 @@ export function parseHex(hex: string): Rgb | null {
     };
   }
 
-  if (/^[0-9a-f]{6}$/iu.test(value)) {
+  if (HEX_LONG.test(value)) {
     return {
       r: Number.parseInt(value.slice(0, 2), 16),
       g: Number.parseInt(value.slice(2, 4), 16),

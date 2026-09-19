@@ -33,6 +33,5 @@ export function markForStatus(status: "running" | "ok" | "failed"): StageMark {
   if (status === "running") {
     return "pending";
   }
-  // biome-ignore lint/style/noTernary: A ternary selects between two VALUES -- see the file-level note in runFlow.ts, which this module is too small to repeat.
   return status === "ok" ? "granted" : "lapsed";
 }

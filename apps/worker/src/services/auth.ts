@@ -13,17 +13,12 @@
  * enumeration defence belongs to the browser surface, not here.
  */
 
-// biome-ignore-all lint/style/noExportedImports: Re-exporting an imported type from a package entry point is what makes the entry point complete. Without it a consumer imports the value from one path and its type from another.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-
 import { timingSafeEqual } from "node:crypto";
 import { hashToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { findByDigest, type IngestKeyRow, touchLastUsed } from "@undercroft/db/repos";
 
-export type { IngestKeyRow };
+export type { IngestKeyRow } from "@undercroft/db/repos";
 
 /**
  * How often a key's `last_used_at` is written: once a minute per key, not once a request.

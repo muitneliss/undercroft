@@ -12,11 +12,11 @@
  *
  * Two things here are deliberate rather than cautious:
  *
- *   * It WAITS for Kestra rather than failing on the first refused connection. Kestra is a
+ *   - It WAITS for Kestra rather than failing on the first refused connection. Kestra is a
  *     Java standalone that takes a minute to answer, and this service starts alongside it.
  *     A flow Kestra rejects (a 4xx with a message) is a different matter and fails at once:
  *     retrying a broken flow produces the same rejection, later, with less context.
- *   * The API path carries the tenant. Kestra 1.0 put `/{tenant}/` into every path, `main`
+ *   - The API path carries the tenant. Kestra 1.0 put `/{tenant}/` into every path, `main`
  *     being the tenant an OSS install has; an older Kestra answers 404 to that shape, so the
  *     un-prefixed path is tried once before giving up. A 404 on CREATE cannot mean "no such
  *     flow", which is what makes it safe to read as "no such path".
@@ -24,17 +24,6 @@
  * Nothing about a flow is secret. `{{ envs.trigger_token }}` is a template Kestra resolves
  * at run time from its own environment; the token never passes through here.
  */
-
-// biome-ignore-all lint/correctness/noNodejsModules: This is server code running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/correctness/useSingleJsDocAsterisk: Bullet lists inside module docstrings. Biome's fix flattens them, which destroyed the list recording how invite-only is enforced in three independent places -- exactly the documentation that must not be damaged by a formatter.
-// biome-ignore-all lint/nursery/useNamedCaptureGroup: These regexes match one thing and read it out of group 1 on the next line. A name helps a pattern with several groups; every one of these has one.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point. Pacing a connector against a rate limit, walking Dokploy deployment records until one settles, and migrating SQL files in order all require the previous iteration to finish first; running them concurrently is the bug this rule would introduce.
-// biome-ignore-all lint/style/noExcessiveClassesPerFile: Two errors, one per remedy -- wait, or stop -- so the retry loop can tell them apart by `instanceof`. They belong beside the loop that reads them.
-// biome-ignore-all lint/style/noParameterProperties: TypeScript parameter properties in one error class. The alternative is declaring each field and then assigning it in the constructor, which is the same information written twice.
-// biome-ignore-all lint/style/noProcessEnv: The composition root reads configuration from the environment on purpose; `.claude/rules/layering.md` puts it here precisely so that no layer below does. That direction is enforced separately by the `layer-injected-deps` ast-grep rule, which is the check that actually binds.
-// biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Checks the inference engine believes are redundant which guard values arriving from outside the type system: a parsed payload, an environment variable, a row from a query. A check the compiler thinks is unnecessary is the one that catches the payload that lied.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -48,8 +37,8 @@ const SERVER_ERROR = 500;
 /** The two shapes Kestra's flow API has had: with the tenant in the path, and without. */
 const FLOW_PATHS = ["/api/v1/main/flows", "/api/v1/flows"] as const;
 
-const ID_LINE = /^id:\s*([A-Za-z0-9_-]+)\s*$/mu;
-const NAMESPACE_LINE = /^namespace:\s*([A-Za-z0-9_.-]+)\s*$/mu;
+const ID_LINE = /^id:\s*(?<id>[A-Za-z0-9_-]+)\s*$/mu;
+const NAMESPACE_LINE = /^namespace:\s*(?<namespace>[A-Za-z0-9_.-]+)\s*$/mu;
 const TRAILING_SLASHES = /\/+$/u;
 
 export interface Config {
@@ -134,8 +123,8 @@ export function readFlowsDir(dir: string): FlowFile[] {
  * read as having none.
  */
 export function identify(flow: FlowFile): { id: string; namespace: string } {
-  const id = ID_LINE.exec(flow.yaml)?.[1];
-  const namespace = NAMESPACE_LINE.exec(flow.yaml)?.[1];
+  const id = ID_LINE.exec(flow.yaml)?.groups?.id;
+  const namespace = NAMESPACE_LINE.exec(flow.yaml)?.groups?.namespace;
   if (id === undefined || namespace === undefined) {
     throw new Error(`${flow.file}: a flow needs top-level \`id:\` and \`namespace:\` lines`);
   }

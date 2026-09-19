@@ -17,13 +17,6 @@
  * Regenerate with `bun run geo:build`; the provenance is in `apps/ui/public/geo/README.md`.
  */
 
-// biome-ignore-all lint/correctness/noNodejsModules: This is a build script running on Bun. `node:` builtins are the platform here, not a portability hazard -- the rule exists for code that must also run in a browser.
-// biome-ignore-all lint/performance/noAwaitInLoops: These sequential awaits are the point: thirty-four fetches of one repository, one at a time, is polite to the host and fast enough for a script run once a year.
-// biome-ignore-all lint/style/noMagicNumbers: The size budget, the quantization grid and the simplification ladder are the numbers themselves, read beside the step they govern.
-
-// biome-ignore-all lint/security/noSecrets: False positive. The rule flags high-entropy string literals, and the one here is a public git commit hash -- the pin that makes a rerun of this script fetch the same boundary files. It is not a credential; it is in the upstream repository's history for anyone to read.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: One assertion, at the seam between two TopoJSON packages: topojson-server types a topology's properties as nullable GeoJSON properties, topojson-simplify demands non-null ones, and the properties here are the non-null ones this script itself wrote three lines earlier.
-
 import { mkdirSync, writeFileSync } from "node:fs";
 import process from "node:process";
 import { fileURLToPath } from "node:url";

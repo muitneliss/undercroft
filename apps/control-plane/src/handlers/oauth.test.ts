@@ -6,10 +6,6 @@
  * into a customer's Google account, so every check in front of it is the feature.
  */
 
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys (Invoices, InvoiceID), HTTP header names, and Better Auth's option keys (baseURL, storeOTP) and table names (auth_user). strictCase cannot be satisfied by code that talks to another system.
-
 import { migrate } from "@undercroft/db";
 import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
@@ -18,7 +14,7 @@ import { Hono } from "hono";
 import { isAdminIn } from "../services/authz.ts";
 import { startConsent } from "../services/oauth.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
-import { InMemoryWorkerClient } from "../services/workerClient.ts";
+import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
 
 const TENANT = "CASE-0042";

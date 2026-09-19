@@ -14,10 +14,6 @@
  * ledger with nothing in it.
  */
 
-// biome-ignore-all lint/style/noMagicNumbers: The hours in each cadence, named by the cadence they define rather than by a constant that says the same thing twice.
-// biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
-// biome-ignore-all lint/style/useNamingConvention: `every_6h` is the word stored in `ops.connection.cadence` and sent over the wire; the key is the value, and a camelCase spelling would be a second name for the same thing.
-
 import { z } from "zod";
 
 import { needsScope } from "./connectionScope.ts";

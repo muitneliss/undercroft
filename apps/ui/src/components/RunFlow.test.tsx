@@ -6,8 +6,6 @@
  * No mocks: the real component, the real i18next instance, a real router for the link.
  */
 
-// biome-ignore-all lint/style/useFilenamingConvention: One file named for the thing it tests, matching every other module in its directory.
-
 import { afterEach, describe, expect, test as it } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import { DEFAULT_LOCALE } from "@undercroft/core/locale";

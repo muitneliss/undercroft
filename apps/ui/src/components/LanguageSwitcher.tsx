@@ -16,11 +16,6 @@
  * local copy would be exactly the third unowned source of truth `state.md` describes.
  */
 
-// biome-ignore-all lint/a11y/useSemanticElements: The rule suggests <fieldset> for role="group". A fieldset takes its accessible name from a <legend> and brings default borders and box model that the design system would immediately have to undo; the explicit role plus aria-label gives assistive technology exactly the same grouping.
-// biome-ignore-all lint/performance/noJsxPropsBind: Inline handlers on components that render a handful of rows. The re-render the rule is about matters under a memoised list of hundreds; these lists are bounded by how many connections a tenant has.
-// biome-ignore-all lint/performance/useSolidForComponent: Solid-domain rule: it wants Solid's `<For>`, which does not exist in React. `Array#map` is how React renders a list.
-// biome-ignore-all lint/suspicious/noReactSpecificProps: Solid-domain rule: it wants `class` in place of `className`. This is a React app, where `class` is not a valid DOM prop -- Biome's own autofix for it makes `tsc` fail. Every domain is on in biome.jsonc, so the rule is suppressed where it is wrong rather than switched off.
-
 import { LOCALES, type Locale } from "@undercroft/core/locale";
 import { useTranslation } from "react-i18next";
 
