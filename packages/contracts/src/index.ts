@@ -51,6 +51,7 @@ export {
   type ScheduleFacts,
 } from "./cadence.ts";
 export {
+  allowsFileType,
   ConnectionScope,
   DriveScope,
   GmailScope,

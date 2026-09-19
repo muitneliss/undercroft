@@ -6,10 +6,10 @@
  * collector does not understand is a parse failure at the boundary rather than a run that
  * quietly reads nothing.
  *
- * Names are carried beside ids deliberately. The card says "PDFs in 2 selected folders" and
- * the picker has to re-render the choice without a round trip to Google, and neither works
- * from ids alone. This is exactly why the value lives in `app.connection_detail`, a schema
- * BI has no USAGE on -- see `packages/db/sql/070_google_ingestion.sql`.
+ * Names are carried beside ids deliberately. The card says "Matching files in 2 selected
+ * folders" and the picker has to re-render the choice without a round trip to Google, and
+ * neither works from ids alone. This is exactly why the value lives in `app.connection_detail`,
+ * a schema BI has no USAGE on -- see `packages/db/sql/070_google_ingestion.sql`.
  */
 
 import { z } from "zod";
@@ -25,6 +25,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+/**
+ * Which MIME types a Gmail or Drive connection may land, shared by both scopes.
+ *
+ * Empty is the same *recorded decision* idiom as `GmailScope.labels` and `XeroScope.entities`
+ * below: it means every file type, not an absent choice. The default is `application/pdf`
+ * alone, so a selection saved before this field existed -- every one of them -- keeps landing
+ * exactly what it always did; nothing widens until an admin visits the picker and says so.
+ */
+const FileTypes = z.array(z.string().min(1)).default(["application/pdf"]);
+
 export const GmailScope = z.object({
   kind: z.literal("gmail"),
   /**
@@ -33,6 +43,7 @@ export const GmailScope = z.object({
    * row at all, which is how `needs_scope` is told from "deliberately everything".
    */
   labels: z.array(Chosen).default([]),
+  fileTypes: FileTypes,
 });
 
 export const DriveScope = z.object({
@@ -43,6 +54,7 @@ export const DriveScope = z.object({
    * other folder is read" is not ours to keep or break.
    */
   files: z.array(Chosen.extend({ kind: z.enum(["folder", "file"]) })).default([]),
+  fileTypes: FileTypes,
 });
 
 /**
@@ -119,4 +131,14 @@ export function parseScope(source: string, selectionJson: string): ConnectionSco
 
   const parsed = ConnectionScope.safeParse({ ...raw, kind: source });
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Whether a landed file's MIME type is one a Gmail or Drive scope agreed to.
+ *
+ * The one place "empty means every type" is decided, so `drive.ts` and `gmail.ts` never each
+ * reimplement the rule -- and never quietly disagree on it.
+ */
+export function allowsFileType(fileTypes: readonly string[], mimeType: string): boolean {
+  return fileTypes.length === 0 || fileTypes.includes(mimeType);
 }

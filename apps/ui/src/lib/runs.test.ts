@@ -120,8 +120,8 @@ describe("eventSentence", () => {
     expect(eventSentence(vi, "vi", event("no_models", {}))).toBe(
       "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
     );
-    expect(eventSentence(en, "en", event("picks_listed", { folders: 1, pdfs: 0 }))).toBe(
-      "Listed 1 picked folders and found 0 PDFs. Sub-folders are not read.",
+    expect(eventSentence(en, "en", event("picks_listed", { folders: 1, matched: 0 }))).toBe(
+      "Listed 1 picked folders and found 0 matching files. Sub-folders are not read.",
     );
   });
 

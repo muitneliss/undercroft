@@ -73,7 +73,12 @@ export interface ConnectionCardView {
   readonly externalAccountId: string;
   readonly externalAccountLabel: string;
   readonly scopes: string[];
-  readonly config: { labels?: string[]; folderIds?: string[]; entities?: string[] };
+  readonly config: {
+    labels?: string[];
+    folderIds?: string[];
+    entities?: string[];
+    fileTypes?: string[];
+  };
   /**
    * When this GRANT lapses -- the date after which the customer has to consent again.
    *
@@ -431,19 +436,16 @@ function chosenCount(scope: ConnectionScope): number {
 }
 
 /** The shape `scopeSummary` in the UI reads. */
-function configOf(
-  source: string,
-  selectionJson: string,
-): { labels?: string[]; folderIds?: string[]; entities?: string[] } {
+function configOf(source: string, selectionJson: string): ConnectionCardView["config"] {
   const scope = parseScope(source, selectionJson);
   if (scope === null) {
     return {};
   }
   switch (scope.kind) {
     case "gmail":
-      return { labels: scope.labels.map((l) => l.name) };
+      return { labels: scope.labels.map((l) => l.name), fileTypes: scope.fileTypes };
     case "drive":
-      return { folderIds: scope.files.map((f) => f.id) };
+      return { folderIds: scope.files.map((f) => f.id), fileTypes: scope.fileTypes };
     case "xero":
       return { entities: scope.entities };
     default: {

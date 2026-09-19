@@ -6,9 +6,27 @@
 
 import { describe, expect, test as it } from "bun:test";
 
-import { needsScope, parseScope } from "./connectionScope.ts";
+import { allowsFileType, needsScope, parseScope } from "./connectionScope.ts";
 
 describe("parseScope", () => {
+  it("a Gmail selection with no file types recorded defaults to PDF only", () => {
+    const scope = parseScope("gmail", JSON.stringify({ labels: [] }));
+    expect(scope).toMatchObject({ fileTypes: ["application/pdf"] });
+  });
+
+  it("an explicit file-type allow-list is read back exactly", () => {
+    const scope = parseScope(
+      "drive",
+      JSON.stringify({ files: [], fileTypes: ["application/vnd.ms-excel", "text/csv"] }),
+    );
+    expect(scope).toMatchObject({ fileTypes: ["application/vnd.ms-excel", "text/csv"] });
+  });
+
+  it("an empty file-type list is a recorded decision: any file type", () => {
+    const scope = parseScope("drive", JSON.stringify({ files: [], fileTypes: [] }));
+    expect(scope).toMatchObject({ fileTypes: [] });
+  });
+
   it("reads a Xero selection: the organisation, and which entities", () => {
     const scope = parseScope(
       "xero",
@@ -49,5 +67,17 @@ describe("needsScope", () => {
       false,
     );
     expect(needsScope("hubspot", "{}")).toBe(false);
+  });
+});
+
+describe("allowsFileType", () => {
+  it("an empty allow-list matches any type", () => {
+    expect(allowsFileType([], "application/pdf")).toBe(true);
+    expect(allowsFileType([], "image/png")).toBe(true);
+  });
+
+  it("a non-empty allow-list matches only what it names", () => {
+    expect(allowsFileType(["application/pdf"], "application/pdf")).toBe(true);
+    expect(allowsFileType(["application/pdf"], "image/png")).toBe(false);
   });
 });

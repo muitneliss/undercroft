@@ -475,17 +475,19 @@
     // path entries so the rule stays ON for every file not listed -- which is the difference
     // between an exception and switching the rule off. ADR 0018.
 
-    // `noSecrets` scores string ENTROPY, and these five are not credentials: a Drive `fields`
-    // mask, the connector runtime's cursor token, the AES key-derivation label, and two
-    // Dokploy endpoint paths. The rule stays on everywhere else, which is where a pasted key
-    // would actually land. The real guard against a committed secret is `pii.md` plus
-    // `.gitignore`.
+    // `noSecrets` scores string ENTROPY, and these are not credentials: a Drive `fields`
+    // mask, the connector runtime's cursor token, the AES key-derivation label, two Dokploy
+    // endpoint paths, and two of the scope picker's own i18n key names (long, camelCase, and
+    // apparently entropic enough to trip the heuristic). The rule stays on everywhere else,
+    // which is where a pasted key would actually land. The real guard against a committed
+    // secret is `pii.md` plus `.gitignore`.
     {
       "includes": [
         "scripts/dokploy.ts",
         "apps/worker/src/services/google/drive.ts",
         "packages/connector-runtime/src/reader.ts",
-        "packages/crypto/src/seal.ts"
+        "packages/crypto/src/seal.ts",
+        "apps/ui/src/components/FileTypeChoice.tsx"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
     },

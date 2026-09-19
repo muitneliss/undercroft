@@ -1,11 +1,11 @@
 /**
- * Gmail: message headers into `raw.records`, PDF attachments into the lake.
+ * Gmail: message headers into `raw.records`, matching attachments into the lake.
  *
  * What is promised on the consent card is what this reads and no more: "message headers and
- * PDF attachments from the mailbox you connect", scoped to chosen labels or deliberately to
- * the whole mailbox. Bodies are never fetched.
+ * the attachment types you allow, from the mailbox you connect", scoped to chosen labels or
+ * deliberately to the whole mailbox. Bodies are never fetched.
  *
- * TWO THINGS HERE ARE EASY TO GET WRONG AND EXPENSIVE TO GET WRONG.
+ * THREE THINGS HERE ARE EASY TO GET WRONG AND EXPENSIVE TO GET WRONG.
  *
  * **`labelIds` is AND, not OR.** One query carrying three label ids returns only the
  * messages that hold all three, which for most selections is none. A single query looks
@@ -14,16 +14,22 @@
  * label, unioned by message id.
  *
  * **`attachmentId` is not stable.** It is scoped to one message read and changes between
- * fetches, so keying a document on it re-lands the same PDF under a new key every run --
- * unbounded storage growth that looks like legitimate history. The stable identity is
+ * fetches, so keying a document on it re-lands the same attachment under a new key every run
+ * -- unbounded storage growth that looks like legitimate history. The stable identity is
  * `(messageId, partIndex)`.
+ *
+ * **Which types are allowed is `scope.fileTypes`, checked client-side.** Gmail's API has no
+ * request-level filter on an attachment's MIME type -- only `labelIds` narrows what is fetched
+ * at all -- so every part of every fetched message is walked and matched here. Empty means
+ * every type, the same recorded-decision idiom `@undercroft/contracts` uses for an empty
+ * label or entity list.
  *
  * Headers are extracted rather than stored whole: the body of a message is not ours to
  * keep, and `format=metadata` is what the consent says we ask for.
  */
 
+import { type GmailScope, allowsFileType } from "@undercroft/contracts";
 import { canonicalJson, decodeBase64Url, getPath, getStringPath } from "@undercroft/core";
-import type { GmailScope } from "@undercroft/contracts";
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
@@ -31,7 +37,6 @@ import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
-const PDF = "application/pdf";
 const ENTITY = "messages";
 /** Page size. Gmail caps at 500; 100 keeps a page's follow-up fetches bounded. */
 const PAGE_SIZE = "100";
@@ -122,7 +127,7 @@ export async function harvestGmail(
     const headers = headerMap(message);
     const internalDate = str(message, "internalDate");
     records.push(messageRecord(messageId, message, labelIds, internalDate));
-    for (const part of pdfParts(message)) {
+    for (const part of matchingParts(message, scope.fileTypes)) {
       documents.push(attachment(api, { messageId, headers, labelIds, internalDate }, part));
     }
   }
@@ -167,21 +172,21 @@ interface MessageFacts {
 }
 
 /**
- * One PDF attachment as a document to land.
+ * One matching attachment as a document to land.
  *
  * The split between `metadata` and `manifest` is the whole point and it is load-bearing:
  * `metadata` reaches `raw.documents`, which dbt and BI can read, so it carries opaque ids,
  * enumerations and counts only. Every name a human wrote goes in `manifest`, which lives in
  * the access-controlled object store. `pii.md`, ADR 0015.
  */
-function attachment(api: GoogleApi, facts: MessageFacts, part: PdfPart): DocumentToLand {
+function attachment(api: GoogleApi, facts: MessageFacts, part: MatchingPart): DocumentToLand {
   const { messageId, headers, labelIds, internalDate } = facts;
   const { attachmentId } = part;
 
   return {
     // (messageId, partIndex), never attachmentId. See the module docstring.
     documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
-    contentType: PDF,
+    contentType: part.mimeType,
     declaredBytes: part.size,
     metadata: { labelIds, partIndex: String(part.index), messageId },
     manifest: {
@@ -268,22 +273,23 @@ function messageUrl(messageId: string): string {
   return url.toString();
 }
 
-interface PdfPart {
+interface MatchingPart {
   readonly index: number;
   readonly attachmentId: string;
   readonly filename: string;
   readonly size: string;
+  readonly mimeType: string;
 }
 
 /**
- * Every PDF attachment in a message, walked depth-first.
+ * Every attachment in a message whose type the scope allows, walked depth-first.
  *
  * Recursive because a forwarded mail nests `parts` inside `parts`, and an attachment two
  * levels down is still an attachment. The index counts every part visited, so it is stable
  * for a given message shape -- which is what makes it usable as half of the document id.
  */
-function pdfParts(message: unknown): PdfPart[] {
-  const found: PdfPart[] = [];
+function matchingParts(message: unknown, fileTypes: readonly string[]): MatchingPart[] {
+  const found: MatchingPart[] = [];
   let index = 0;
 
   function walk(part: unknown): void {
@@ -291,12 +297,13 @@ function pdfParts(message: unknown): PdfPart[] {
     const mimeType = str(part, "mimeType");
     const attachmentId = str(part, "body.attachmentId");
     const filename = str(part, "filename");
-    if (mimeType === PDF && attachmentId !== "") {
+    if (allowsFileType(fileTypes, mimeType) && attachmentId !== "") {
       found.push({
         index,
         attachmentId,
         filename,
         size: str(part, "body.size") || "0",
+        mimeType,
       });
     }
     for (const child of asArray(getPath(part, "parts"))) {

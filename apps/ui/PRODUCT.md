@@ -52,10 +52,10 @@ own database role, in that customer's own schema.
 
 - Each customer is a **case**, identified by a CASE-id (`CASE-0042`), never by a real name in
   any tracked file.
-- Sources today: Gmail (headers and PDF attachments in chosen labels), Google Drive (files
-  chosen in Google's own Picker), HubSpot CRM (private-app token), Xero Accounting (OAuth,
-  one organisation). Ingest runs on a per-source cadence chosen by the customer's admin
-  (hourly, every six hours, daily, paused) or on demand.
+- Sources today: Gmail (headers and attachments of admin-chosen file types in chosen labels),
+  Google Drive (files chosen in Google's own Picker, of admin-chosen file types), HubSpot CRM
+  (private-app token), Xero Accounting (OAuth, one organisation). Ingest runs on a per-source
+  cadence chosen by the customer's admin (hourly, every six hours, daily, paused) or on demand.
 - After each successful ingest, the customer's dbt models are built as that customer's role.
   Failing tests land in a per-customer `dq` schema.
 - Times are always shown in Asia/Singapore, in the reader's language. Amounts are never
