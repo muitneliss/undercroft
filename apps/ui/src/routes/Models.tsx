@@ -13,7 +13,7 @@
  * message at the field and not a refusal from the server; the server refuses regardless.
  */
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -121,10 +121,11 @@ export function Models({ tenantId }: { tenantId: string }): React.JSX.Element {
 }
 
 function NewModelForm({ tenantId }: { tenantId: string }): React.JSX.Element {
+  const modelNameId = useId();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const nameField = useRef<HTMLInputElement>(null);
+  const nameFieldRef = useRef<HTMLInputElement>(null);
 
   const create = trpc.models.save.useMutation({
     onSuccess: async (_result, variables) => {
@@ -138,7 +139,7 @@ function NewModelForm({ tenantId }: { tenantId: string }): React.JSX.Element {
       className="stack stack--tight"
       onSubmit={(event): void => {
         event.preventDefault();
-        const field = nameField.current;
+        const field = nameFieldRef.current;
         const name = field?.value.trim() ?? "";
         if (field === null || !isModelName(name)) {
           field?.reportValidity();
@@ -155,19 +156,19 @@ function NewModelForm({ tenantId }: { tenantId: string }): React.JSX.Element {
     >
       <p className="prose">{t("models.newLead")}</p>
       <div className="field">
-        <label className="label" htmlFor="model-name">
+        <label className="label" htmlFor={modelNameId}>
           {t("models.nameLabel")}
         </label>
         <input
           autoComplete="off"
           className="input"
           disabled={create.isPending}
-          id="model-name"
+          id={modelNameId}
           maxLength={NAME_MAX}
           name="name"
           pattern={NAME_PATTERN}
           placeholder="stg_deals"
-          ref={nameField}
+          ref={nameFieldRef}
           required={true}
           title={t("models.nameInvalid")}
           type="text"

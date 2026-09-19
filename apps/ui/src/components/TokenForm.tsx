@@ -29,7 +29,7 @@ export function TokenForm({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const utils = trpc.useUtils();
-  const tokenField = useRef<HTMLInputElement>(null);
+  const tokenFieldRef = useRef<HTMLInputElement>(null);
   const fieldId = `token-${source}`;
 
   const setToken = trpc.connections.setToken.useMutation({
@@ -43,7 +43,7 @@ export function TokenForm({
       className="stack stack--tight"
       onSubmit={(event): void => {
         event.preventDefault();
-        const token = tokenField.current?.value.trim() ?? "";
+        const token = tokenFieldRef.current?.value.trim() ?? "";
         if (token === "") {
           return;
         }
@@ -60,7 +60,7 @@ export function TokenForm({
           disabled={setToken.isPending}
           id={fieldId}
           name="token"
-          ref={tokenField}
+          ref={tokenFieldRef}
           required={true}
           type="password"
         />

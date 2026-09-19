@@ -25,6 +25,7 @@ import { useTranslation } from "react-i18next";
 import type { SchemaView } from "@/api/types.ts";
 import { arityOf, opLabel, opsFor } from "@/lib/biOps.ts";
 import { fieldAliases } from "@/lib/questionDraft.ts";
+import { useId } from "react";
 
 type Patch = Partial<Omit<VisualDefinition, "kind">>;
 
@@ -90,6 +91,9 @@ export function QuestionBuilder({
   onPatch: (patch: Patch) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const qLimitId = useId();
+  const qOrderId = useId();
+  const qTableId = useId();
   const table = schema.tables.find((candidate) => candidate.name === definition.table);
   const columns = table?.columns ?? [];
   const aliases = fieldAliases(definition);
@@ -99,12 +103,12 @@ export function QuestionBuilder({
   return (
     <div className="stack">
       <div className="field">
-        <label className="label" htmlFor="q-table">
+        <label className="label" htmlFor={qTableId}>
           {t("bi.tableLabel")}
         </label>
         <select
           className="input input--select"
-          id="q-table"
+          id={qTableId}
           value={definition.table}
           onChange={(event): void => {
             onPatch({
@@ -331,12 +335,12 @@ export function QuestionBuilder({
 
       <div className="row">
         <div className="field">
-          <label className="label" htmlFor="q-order">
+          <label className="label" htmlFor={qOrderId}>
             {t("bi.orderHead")}
           </label>
           <select
             className="input input--select"
-            id="q-order"
+            id={qOrderId}
             value={order?.by ?? NONE}
             onChange={(event): void => {
               const by = event.currentTarget.value;
@@ -369,12 +373,12 @@ export function QuestionBuilder({
           </select>
         )}
         <div className="field">
-          <label className="label" htmlFor="q-limit">
+          <label className="label" htmlFor={qLimitId}>
             {t("bi.limitLabel")}
           </label>
           <input
             className="input"
-            id="q-limit"
+            id={qLimitId}
             max={5000}
             min={1}
             type="number"

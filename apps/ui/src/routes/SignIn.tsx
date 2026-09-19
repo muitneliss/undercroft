@@ -29,7 +29,7 @@
  */
 
 import { useMutation } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth.ts";
 import { Colophon } from "@/components/Colophon.tsx";
@@ -43,8 +43,10 @@ const WHEEL = DIVISIONS.map((d) => d.hue);
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();
-  const emailField = useRef<HTMLInputElement>(null);
-  const codeField = useRef<HTMLInputElement>(null);
+  const signinCodeId = useId();
+  const signinEmailId = useId();
+  const emailFieldRef = useRef<HTMLInputElement>(null);
+  const codeFieldRef = useRef<HTMLInputElement>(null);
 
   const sendCode = useMutation({
     mutationFn: (variables: { email: string }) => sendSignInCode(variables.email),
@@ -126,25 +128,25 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             className="stack stack--tight"
             onSubmit={(event): void => {
               event.preventDefault();
-              const email = emailField.current?.value.trim() ?? "";
+              const email = emailFieldRef.current?.value.trim() ?? "";
               if (email !== "") {
                 sendCode.mutate({ email });
               }
             }}
           >
             <div className="field">
-              <label className="label" htmlFor="signin-email">
+              <label className="label" htmlFor={signinEmailId}>
                 {t("signIn.emailLabel")}
               </label>
               <input
                 className="input"
-                id="signin-email"
+                id={signinEmailId}
                 name="email"
                 type="email"
                 autoComplete="email"
                 required={true}
                 placeholder={t("signIn.emailPlaceholder")}
-                ref={emailField}
+                ref={emailFieldRef}
                 disabled={sendCode.isPending}
               />
             </div>
@@ -167,19 +169,19 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             className="stack stack--tight"
             onSubmit={(event): void => {
               event.preventDefault();
-              const otp = codeField.current?.value.trim() ?? "";
+              const otp = codeFieldRef.current?.value.trim() ?? "";
               if (otp !== "") {
                 signIn.mutate({ email: sentTo, otp });
               }
             }}
           >
             <div className="field">
-              <label className="label" htmlFor="signin-code">
+              <label className="label" htmlFor={signinCodeId}>
                 {t("signIn.codeLabel")}
               </label>
               <input
                 className="input"
-                id="signin-code"
+                id={signinCodeId}
                 name="otp"
                 type="text"
                 inputMode="numeric"
@@ -187,7 +189,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
                 required={true}
                 maxLength={6}
                 placeholder="000000"
-                ref={codeField}
+                ref={codeFieldRef}
                 disabled={signIn.isPending}
               />
               {/*

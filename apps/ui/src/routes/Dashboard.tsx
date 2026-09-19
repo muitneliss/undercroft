@@ -12,7 +12,7 @@
  */
 
 import { type DashboardFilter, IDENTIFIER } from "@undercroft/contracts/bi";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -134,6 +134,8 @@ function DashboardLeaf({
   onSaved: (id: string) => Promise<void>;
   onDeleted: () => Promise<void>;
 }): React.JSX.Element {
+  const dNameId = useId();
+  const dAddId = useId();
   const { t } = useTranslation();
   const [search, setSearch] = useSearchParams();
   const setDashboardName = useUiStore((state) => state.setDashboardName);
@@ -183,13 +185,13 @@ function DashboardLeaf({
         {canAuthor ? (
           edit ? (
             <div className="field">
-              <label className="label" htmlFor="d-name">
+              <label className="label" htmlFor={dNameId}>
                 {t("dashboard.nameLabel")}
               </label>
               <input
                 autoComplete="off"
                 className="input"
-                id="d-name"
+                id={dNameId}
                 maxLength={120}
                 placeholder={t("dashboard.namePlaceholder")}
                 type="text"
@@ -407,12 +409,12 @@ function DashboardLeaf({
               }}
             >
               <div className="field">
-                <label className="label" htmlFor="d-add">
+                <label className="label" htmlFor={dAddId}>
                   {t("dashboard.addQuestion")}
                 </label>
                 <select
                   className="input input--select"
-                  id="d-add"
+                  id={dAddId}
                   key={addable.map((question) => question.id).join(",")}
                   name="question"
                 >

@@ -6,7 +6,7 @@
  * customer's SQL be typed on a machine that reaches nothing but this server.
  *
  * Uncontrolled, on purpose. Monaco owns its text model the way a `<textarea>` owns its
- * value; the parent gives an initial value and hears every change, and remounts the editor
+ * value; the parent gives an initial value and hears every changeRef, and remounts the editor
  * by `key` when a different model is opened. Pushing a controlled value back into Monaco on
  * every keystroke would move the cursor and fight the undo stack. The store is still the
  * owner of the draft -- `onChange` writes it there -- and `.claude/rules/state.md` holds:
@@ -40,15 +40,15 @@ export function SqlEditor({
   readOnly?: boolean;
   label: string;
 }): React.JSX.Element {
-  const host = useRef<HTMLElement>(null);
-  const change = useRef(onChange);
+  const hostRef = useRef<HTMLElement>(null);
+  const changeRef = useRef(onChange);
 
   useEffect(() => {
-    change.current = onChange;
+    changeRef.current = onChange;
   }, [onChange]);
 
   useEffect(() => {
-    const element = host.current;
+    const element = hostRef.current;
     if (element === null) {
       return;
     }
@@ -68,7 +68,7 @@ export function SqlEditor({
       renderLineHighlight: "line",
     });
     const listening = editor.onDidChangeModelContent(() => {
-      change.current(editor.getValue());
+      changeRef.current(editor.getValue());
     });
     return (): void => {
       listening.dispose();
@@ -79,7 +79,7 @@ export function SqlEditor({
   // A named region, not a textbox: Monaco renders its own textbox inside, with its own name.
   return (
     <section
-      ref={host}
+      ref={hostRef}
       className={readOnly ? "editor editor--readonly" : "editor"}
       aria-label={label}
     />

@@ -11,6 +11,7 @@ import { CHART_TYPES, type ChartConfig, type ChartType } from "@undercroft/contr
 import { useTranslation } from "react-i18next";
 
 import { isNumericType } from "@/lib/plot.ts";
+import { useId } from "react";
 
 const TYPE_KEY = {
   table: "chart.table",
@@ -45,6 +46,11 @@ export function ChartOptions({
   onChange: (chart: ChartConfig) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const chartMaxId = useId();
+  const chartRegionId = useId();
+  const chartSeriesId = useId();
+  const chartTypeId = useId();
+  const chartXId = useId();
   const numeric = columns.filter((c) => isNumericType(c.type));
   const { max } = chart.options;
 
@@ -52,12 +58,12 @@ export function ChartOptions({
     <div className="stack stack--tight">
       <div className="row">
         <div className="field">
-          <label className="label" htmlFor="chart-type">
+          <label className="label" htmlFor={chartTypeId}>
             {t("chart.typeLabel")}
           </label>
           <select
             className="input input--select"
-            id="chart-type"
+            id={chartTypeId}
             value={chart.type}
             onChange={(event): void => {
               const chosen = event.currentTarget.value;
@@ -75,12 +81,12 @@ export function ChartOptions({
           </select>
         </div>
         <div className="field">
-          <label className="label" htmlFor="chart-x">
+          <label className="label" htmlFor={chartXId}>
             {t("chart.xLabel")}
           </label>
           <select
             className="input input--select"
-            id="chart-x"
+            id={chartXId}
             value={chart.x ?? NONE}
             onChange={(event): void => {
               const x = event.currentTarget.value;
@@ -97,12 +103,12 @@ export function ChartOptions({
           </select>
         </div>
         <div className="field">
-          <label className="label" htmlFor="chart-series">
+          <label className="label" htmlFor={chartSeriesId}>
             {t("chart.seriesLabel")}
           </label>
           <select
             className="input input--select"
-            id="chart-series"
+            id={chartSeriesId}
             value={chart.series ?? NONE}
             onChange={(event): void => {
               const series = event.currentTarget.value;
@@ -122,12 +128,12 @@ export function ChartOptions({
         </div>
         {chart.type === "map" ? (
           <div className="field">
-            <label className="label" htmlFor="chart-region">
+            <label className="label" htmlFor={chartRegionId}>
               {t("chart.regionLabel")}
             </label>
             <select
               className="input input--select"
-              id="chart-region"
+              id={chartRegionId}
               value={chart.options.region === "world" ? "world" : "vn"}
               onChange={(event): void => {
                 onChange({
@@ -143,12 +149,12 @@ export function ChartOptions({
         ) : null}
         {BOUNDED.has(chart.type) ? (
           <div className="field">
-            <label className="label" htmlFor="chart-max">
+            <label className="label" htmlFor={chartMaxId}>
               {t("chart.maxLabel")}
             </label>
             <input
               className="input"
-              id="chart-max"
+              id={chartMaxId}
               min={1}
               type="number"
               value={typeof max === "number" ? max : ""}

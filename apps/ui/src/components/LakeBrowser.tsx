@@ -34,6 +34,7 @@ import { formatBytes } from "@/lib/money.ts";
 import { formatDate, formatDateTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
+import { useId } from "react";
 
 const PAGE = 50;
 
@@ -53,6 +54,7 @@ function RecordsTable({
   source: string;
   entity: string;
 }): React.JSX.Element {
+  const lakeStreamId = useId();
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const rows = trpc.lake.records.useInfiniteQuery(
@@ -215,6 +217,7 @@ export function LakeBrowser({
   streams: readonly LakeStream[];
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const lakeStreamId = useId();
   const [params, setParams] = useSearchParams();
   const chosen = parseStream(params);
   const records = streams.filter((s) => s.kind === "records");
@@ -225,12 +228,12 @@ export function LakeBrowser({
       <p className="prose">{t("lake.browserLead")}</p>
 
       <div className="field">
-        <label className="label" htmlFor="lake-stream">
+        <label className="label" htmlFor={lakeStreamId}>
           {t("lake.streamLabel")}
         </label>
         <select
           className="input input--select"
-          id="lake-stream"
+          id={lakeStreamId}
           value={chosen === null ? "" : streamKey(chosen)}
           onChange={(event): void => {
             const next = streamFromKey(event.currentTarget.value);

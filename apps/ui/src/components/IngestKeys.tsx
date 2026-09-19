@@ -15,7 +15,7 @@
  */
 
 import { useMutation } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { isSource, SOURCE_LABEL, SOURCES } from "@/api/types.ts";
@@ -35,14 +35,16 @@ const EXPIRIES = [
 
 export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
+  const keyExpiresId = useId();
+  const keyLabelId = useId();
   const locale = useUiStore((state) => state.locale);
   const utils = trpc.useUtils();
-  const mintForm = useRef<HTMLFormElement>(null);
+  const mintFormRef = useRef<HTMLFormElement>(null);
 
   const keys = trpc.keys.list.useQuery({ tenantId });
   const mint = trpc.keys.mint.useMutation({
     onSuccess: async () => {
-      mintForm.current?.reset();
+      mintFormRef.current?.reset();
       await utils.keys.list.invalidate({ tenantId });
     },
   });
@@ -176,7 +178,7 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
       ) : (
         <form
           className="stack stack--tight"
-          ref={mintForm}
+          ref={mintFormRef}
           onSubmit={(event): void => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -198,14 +200,14 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
           <span className="label">{t("keys.mintHead")}</span>
 
           <div className="field">
-            <label className="label" htmlFor="key-label">
+            <label className="label" htmlFor={keyLabelId}>
               {t("keys.labelLabel")}
             </label>
             <input
               autoComplete="off"
               className="input"
               disabled={mint.isPending}
-              id="key-label"
+              id={keyLabelId}
               name="label"
               placeholder={t("keys.labelPlaceholder")}
               required={true}
@@ -228,14 +230,14 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
           </fieldset>
 
           <div className="field">
-            <label className="label" htmlFor="key-expires">
+            <label className="label" htmlFor={keyExpiresId}>
               {t("keys.expiresLabel")}
             </label>
             <select
               className="input input--select"
               defaultValue="90"
               disabled={mint.isPending}
-              id="key-expires"
+              id={keyExpiresId}
               name="expires"
             >
               {EXPIRIES.map((option) => (

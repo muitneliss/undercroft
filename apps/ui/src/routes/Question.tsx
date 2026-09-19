@@ -13,7 +13,7 @@
  */
 
 import { paramNames } from "@undercroft/contracts/bi";
-import { lazy, Suspense, useEffect } from "react";
+import { Suspense, lazy, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -135,6 +135,7 @@ function QuestionLeaf({
   onSaved: (id: string) => Promise<void>;
   onDeleted: () => Promise<void>;
 }): React.JSX.Element {
+  const qNameId = useId();
   const { t } = useTranslation();
   const [search, setSearch] = useSearchParams();
   const setQuestionName = useUiStore((state) => state.setQuestionName);
@@ -194,13 +195,13 @@ function QuestionLeaf({
 
         {canAuthor ? (
           <div className="field">
-            <label className="label" htmlFor="q-name">
+            <label className="label" htmlFor={qNameId}>
               {t("bi.nameLabel")}
             </label>
             <input
               autoComplete="off"
               className="input"
-              id="q-name"
+              id={qNameId}
               maxLength={120}
               placeholder={t("bi.namePlaceholder")}
               type="text"

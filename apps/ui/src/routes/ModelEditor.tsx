@@ -19,7 +19,7 @@
  */
 
 import { TEST_KINDS } from "@undercroft/contracts/models";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { Suspense, lazy, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -286,11 +286,13 @@ function TestsForm({
   columns: readonly string[];
   canEdit: boolean;
 }): React.JSX.Element {
+  const modelTestColumnId = useId();
+  const modelColumnsId = useId();
   const { t } = useTranslation();
   const setModelTest = useUiStore((state) => state.setModelTest);
   const addColumn = useUiStore((state) => state.addModelTestColumn);
   const removeColumn = useUiStore((state) => state.removeModelTestColumn);
-  const columnField = useRef<HTMLInputElement>(null);
+  const columnFieldRef = useRef<HTMLInputElement>(null);
   const rows = Object.entries(draft.tests);
 
   return (
@@ -354,7 +356,7 @@ function TestsForm({
           className="stack stack--tight"
           onSubmit={(event): void => {
             event.preventDefault();
-            const field = columnField.current;
+            const field = columnFieldRef.current;
             const column = field?.value.trim() ?? "";
             if (field === null || !isModelName(column)) {
               field?.reportValidity();
@@ -365,23 +367,23 @@ function TestsForm({
           }}
         >
           <div className="field">
-            <label className="label" htmlFor="model-test-column">
+            <label className="label" htmlFor={modelTestColumnId}>
               {t("models.addColumnLabel")}
             </label>
             <input
               autoComplete="off"
               className="input"
-              id="model-test-column"
+              id={modelTestColumnId}
               list="model-columns"
               maxLength={63}
               name="column"
               pattern="[a-z][a-z0-9_]*"
-              ref={columnField}
+              ref={columnFieldRef}
               required={true}
               title={t("models.nameInvalid")}
               type="text"
             />
-            <datalist id="model-columns">
+            <datalist id={modelColumnsId}>
               {columns.map((column) => (
                 <option key={column} value={column} />
               ))}
