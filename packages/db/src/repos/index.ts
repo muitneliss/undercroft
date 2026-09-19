@@ -34,7 +34,17 @@ export {
   writeConnectionDetail,
   writeCredential,
 } from "./connections.ts";
-export { claimExpiringKeys, type ExpiringKey } from "./ingestKeys.ts";
+export {
+  claimExpiringKeys,
+  type ExpiringKey,
+  findByDigest,
+  type IngestKey,
+  type IngestKeyRow,
+  insertKey,
+  listKeys,
+  revokeKey,
+  touchLastUsed,
+} from "./ingestKeys.ts";
 export {
   claimExternalRun,
   claimFailedRuns,

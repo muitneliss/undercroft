@@ -11,6 +11,7 @@ import { Cadence } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
+import * as keys from "../services/keys.ts";
 import * as people from "../services/people.ts";
 import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
@@ -386,6 +387,47 @@ export const appRouter = router({
           actor: ctx.user.email,
         }),
       ),
+  }),
+
+  /**
+   * Ingest keys: the credential a script presents to the lake write API. All admin-only --
+   * a key is a standing grant to land data as this customer -- and the token is returned by
+   * `mint` once and by nothing else.
+   */
+  keys: router({
+    list: requireRole("admin").query(({ ctx }) => keys.list(ctx.exec, ctx.tenantId)),
+
+    mint: requireRole("admin")
+      .input(
+        z.object({
+          label: z.string().trim().min(1).max(80),
+          allowedSources: z.array(z.enum(connections.KNOWN_SOURCES)).max(4).default([]),
+          expiresInDays: z.number().int().min(1).max(365).optional(),
+        }),
+      )
+      .mutation(({ ctx, input }) =>
+        keys.mint(ctx.exec, {
+          tenantId: ctx.tenantId,
+          label: input.label,
+          allowedSources: [...new Set(input.allowedSources)],
+          ...(input.expiresInDays === undefined ? {} : { expiresInDays: input.expiresInDays }),
+          actor: ctx.user.email,
+        }),
+      ),
+
+    revoke: requireRole("admin")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const revoked = await keys.revoke(ctx.exec, {
+          tenantId: ctx.tenantId,
+          id: input.id,
+          actor: ctx.user.email,
+        });
+        if (!revoked) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        return { ok: true };
+      }),
   }),
 
   /**
