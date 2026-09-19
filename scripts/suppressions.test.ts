@@ -2,10 +2,13 @@
  * The suppression ban, pinned from both sides.
  *
  * `.ast-grep/rules/no-biome-ignore-all.yml` is the only enforcement of
- * `.claude/rules/suppressions.md`, and it fails in two directions. Too narrow and the 524
- * headers ADR 0018 removed come back one PR at a time. Too wide is worse: a rule that fires
- * on every test suite gets switched off within a day, and then nothing is enforced -- which
- * is how the repo got 679 headers in the first place.
+ * `.claude/rules/suppressions.md`, and it fails in two directions. Too narrow and the headers
+ * ADR 0018 removed come back one PR at a time. Too wide is worse: a rule that fires where the
+ * codebase genuinely needs the construct gets switched off within a day, and then nothing is
+ * enforced -- which is how the repo got 679 headers in the first place.
+ *
+ * The ban covers test files as of ADR 0022. It did not while 241 headers still stood in the
+ * suites; they are gone, and an exemption with nothing left in it is only a hole.
  *
  * So each guard gets the two tests `.claude/rules/tests.md` requires, one where it fires and
  * one where it stays quiet, against fixtures in a throwaway project. The REAL rule files and
@@ -19,10 +22,6 @@
  *
  * No Docker, no network: the `ast-grep` and `biome` binaries this repo already pins.
  */
-
-// biome-ignore-all lint/correctness/noNodejsModules: A build-tier script on Bun; `node:` is the platform here.
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun's own `Bun`, which tsc resolves and Biome's resolver does not model.
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Two reads of a reporter's JSON, which genuinely is `unknown` until parsed.
 
 import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -53,8 +52,13 @@ const FIXTURES: Record<string, string> = {
   "apps/ui/src/clean.tsx": `
     export const x = 1;
   `,
+  // A suite is no longer exempt. It was, while 241 headers still stood in the suites; the
+  // rules they answered are in the `**/*.test.ts(x)` override now and the tree is at zero.
   "packages/demo/src/header.test.ts": `
     // biome-ignore-all lint/style/noTernary: answered for tests in biome.jsonc
+    export const x = 1;
+  `,
+  "packages/demo/src/clean.test.ts": `
     export const x = 1;
   `,
 
@@ -182,8 +186,12 @@ describe("the biome-ignore-all ban", () => {
     expect(rulesOn("packages/demo/src/prose.ts")).toEqual([]);
   });
 
-  it("leaves a test suite its headers, which biome.jsonc answers instead", () => {
-    expect(rulesOn("packages/demo/src/header.test.ts")).not.toContain("no-biome-ignore-all-ts");
+  it("fires in a test suite too -- the exemption is gone", () => {
+    expect(rulesOn("packages/demo/src/header.test.ts")).toContain("no-biome-ignore-all-ts");
+  });
+
+  it("stays quiet in a suite that carries none", () => {
+    expect(rulesOn("packages/demo/src/clean.test.ts")).toEqual([]);
   });
 });
 

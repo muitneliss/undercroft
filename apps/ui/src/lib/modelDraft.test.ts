@@ -4,8 +4,6 @@
  * contract's shape.
  */
 
-// biome-ignore-all lint/style/useNamingConvention: `not_null` and `deal_id` are dbt's own test name and a column name as SQL spells it; a camelCase spelling would be a second name for the same thing.
-
 import { describe, expect, test as it } from "bun:test";
 
 import type { ModelDetail } from "@/api/types.ts";

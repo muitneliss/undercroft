@@ -1,5 +1,3 @@
-// biome-ignore-all lint/style/noMagicNumbers: Grid coordinates and sizes are the fixture; naming each would be a second copy of the layout beside the one under test.
-
 import { describe, expect, test as it } from "bun:test";
 import type { DashboardLayout } from "@undercroft/contracts/bi";
 

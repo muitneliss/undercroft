@@ -80,9 +80,9 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
 - `no-usestate` and the `layer-*` rules are **ast-grep** rules that fail `bun run lint:rules`.
   Pinned by `scripts/layering.test.ts`.
 - `no-biome-ignore-all` is the same kind of rule and bans the lint bypass itself: no
-  `biome-ignore-all` outside a test file, no group-wide `lint:` / `lint/plugin:` spelling
-  anywhere (both reach the money plugin), no `ast-grep-ignore` at all. Pinned by
-  `scripts/suppressions.test.ts`, whose last two tests run Biome to prove the hole is real.
+  `biome-ignore-all` **anywhere**, test files included, no group-wide `lint:` /
+  `lint/plugin:` spelling (both reach the money plugin), no `ast-grep-ignore` at all. Pinned
+  by `scripts/suppressions.test.ts`, whose last two tests run Biome to prove the hole is real.
 - The money bans, the no-mock bans and the UI's type-only import of the server router are
   **Biome GritQL plugins** in `.biome/plugins/`, which fail `bun run lint`. Pinned by
   `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
@@ -103,12 +103,17 @@ the gate green. `.claude/rules/suppressions.md` and ADR 0018; ADR 0018 supersede
 this point. Prettier is kept for Markdown and YAML alone, the two languages Biome cannot
 format.
 
-**One exception, and it is scoped to test files.** Ten rules whose whole answer is "because
-it is a test" — `noBunModules`, `noMagicNumbers`, `useExpect`, the two length rules, and five
-more — are switched off once, in the `biome.jsonc` override for `**/*.test.ts(x)`, rather
-than in every suite. The same sentence pasted into 58 files is not one a reviewer re-reads,
-and it cannot be deleted when it stops being true. Anything else argues for itself at the
-file, in a test exactly as in a source file. ADR 0017 supersedes that paragraph of ADR 0012;
+**Tests are a category, not an exception.** Twelve rules whose whole answer is "because it is
+a test" — `noBunModules`, `useExpect`, `noSecrets`, `useTopLevelRegex`, the two length rules
+and six more — are switched off once, in the `biome.jsonc` override for `**/*.test.ts(x)`,
+rather than in every suite. The same sentence pasted into 58 files is not one a reviewer
+re-reads, and it cannot be deleted when it stops being true.
+
+A suite that needs something about **itself** writes a line-level `// biome-ignore` with that
+reason, which Biome expires by itself. It may not write a `biome-ignore-all`: the exemption
+that allowed one held 241 headers, of which 93 were already dead and 134 were the same
+sentence in every suite, so closing it cost nothing and shut the door the copies came
+through. ADR 0017 supersedes ADR 0012 here and ADR 0022 supersedes ADR 0017;
 `scripts/biomeTestOverride.test.ts` pins the boundary from both sides.
 
 ## Deploying

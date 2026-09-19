@@ -1,6 +1,3 @@
-// biome-ignore-all lint/style/noIncrementDecrement: `i += 1` is already the form used throughout; what remains is inside for-loop headers, where `i++` is the idiom the language reads best.
-// biome-ignore-all lint/style/noNonNullAssertion: Almost all of these are tests asserting on a fixture they created three lines earlier, which the ESLint config this replaced also exempted for the same reason. Biome's unsafe autofix for the rule deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-
 import { describe, expect, test as it } from "bun:test";
 import { TestClock } from "./clock.ts";
 import { createStampSource, formatStamp, isStamp, parseStamp } from "./stamp.ts";
@@ -52,7 +49,7 @@ describe("StampSource is strictly monotonic", () => {
     const stamps = createStampSource(new TestClock());
     let previous = "";
     const seen = new Set<string>();
-    for (let i = 0; i < 100_000; i++) {
+    for (let i = 0; i < 100_000; i += 1) {
       const stamp = stamps.next();
       expect(stamp > previous).toBe(true);
       previous = stamp;

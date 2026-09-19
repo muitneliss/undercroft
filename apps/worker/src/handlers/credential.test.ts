@@ -3,12 +3,6 @@
  * it is sealed, and a refused one leaves nothing behind.
  */
 
-// biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType above: what remains are contextually-typed callbacks and factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
-// biome-ignore-all lint/security/noSecrets: False positives. The rule flags the provider's probe URL and invented token fixtures as high-entropy literals; per .claude/rules/pii.md fixtures are invented, and no real credential is in any tracked file.
-// biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo -- here the environment variable name the sealing code reads -- and renaming it would break the call.
-
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { migrate } from "@undercroft/db";

@@ -11,10 +11,6 @@
  * the consent screen; and the only person who could fix it was being told to wait.
  */
 
-// biome-ignore-all lint/nursery/useExplicitReturnType: Same set as useExplicitType: what remains are contextually-typed factories whose inferred type is a tRPC router shape hundreds of characters wide.
-// biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is a factory returning a tRPC caller.
-// biome-ignore-all lint/style/noNonNullAssertion: A test asserting on a fixture it created three lines earlier. Biome's unsafe autofix deletes the `!` and leaves `string | undefined` flowing into a `string`, so it does not compile.
-
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
 import { migrate } from "@undercroft/db";

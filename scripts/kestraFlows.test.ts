@@ -7,8 +7,6 @@
  * reason `scripts/dokploy.test.ts` gives.
  */
 
-// biome-ignore-all lint/nursery/useValidTestTitle: The titles this flags are full sentences describing the promise under test -- "is clamped, so a hostile header cannot park a run for hours" -- which is exactly what the repo asks a test title to be. The rule wants a shorter shape.
-
 import { describe, expect, test as it } from "bun:test";
 
 import {

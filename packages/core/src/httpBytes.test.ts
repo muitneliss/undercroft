@@ -1,5 +1,3 @@
-// biome-ignore-all lint/performance/useTopLevelRegex: Worth doing, and deliberately not done here: hoisting these literals touches many files and belongs in its own commit where the diff is reviewable, rather than buried in a lint migration. Recorded rather than silently dropped.
-
 import { describe, expect, test as it } from "bun:test";
 import { HttpError } from "./errors.ts";
 import { type ByteRequest, InMemoryByteFetcher, raiseForByteStatus } from "./httpBytes.ts";

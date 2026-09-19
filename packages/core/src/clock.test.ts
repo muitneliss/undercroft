@@ -1,5 +1,3 @@
-// biome-ignore-all lint/complexity/noVoid: `void` here marks a promise deliberately not awaited, at the two places where that is correct and where dropping the marker would make it look like an oversight.
-
 import { describe, expect, test as it } from "bun:test";
 import { TestClock } from "./clock.ts";
 

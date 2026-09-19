@@ -1,5 +1,5 @@
-# Bans the file-wide lint bypass outside test files, and the two spellings that reach the
-# money and no-mock plugins anywhere at all.
+# Bans the file-wide lint bypass EVERYWHERE, and the two spellings that reach the money and
+# no-mock plugins along with it.
 #
 # `// biome-ignore-all lint/x/y` silences rule `y` from that comment to the END OF THE FILE,
 # not at the line that needed it -- so it also answers every violation written afterwards, by
@@ -9,9 +9,12 @@
 # its reason; a genuine one-off gets the line-level `// biome-ignore`, which Biome expires by
 # itself once `--error-on-warnings` is on.
 #
-# Test files keep theirs: their headers are answered by the `**/*.test.ts(x)` override in
-# `biome.jsonc` where the reason is "because it is a test", and the rest were left in place
-# deliberately. See ADR 0018 and `.claude/rules/suppressions.md`.
+# Test files are NOT exempt. They were, while 241 headers still stood in them; the twelve
+# rules those headers answered now live in the `**/*.test.ts(x)` override in `biome.jsonc`,
+# the fourteen findings that were about one suite were fixed as code or kept a line-level
+# `// biome-ignore`, and the tree reached zero. An exemption with nothing left in it is not a
+# concession, it is the hole the next pasted header comes through. ADR 0022 supersedes ADR
+# 0017 on this; see also ADR 0018 and `.claude/rules/suppressions.md`.
 #
 # Four rules because ast-grep binds one language per rule and `.tsx` parses as `tsx`.
 # Pinned from both sides -- fires, and stays quiet -- by `scripts/suppressions.test.ts`.
@@ -21,11 +24,9 @@ severity: error
 message: >-
   biome-ignore-all silences the rule for the whole file, and Biome never reports it once it
   stops being needed. Put the decision in biome.jsonc with its reason, or use a line-level
-  // biome-ignore. See .claude/rules/suppressions.md and docs/adr/0018.
+  // biome-ignore. See .claude/rules/suppressions.md and docs/adr/0022.
 files:
   - "**/*.ts"
-ignores:
-  - "**/*.test.ts"
 rule:
   kind: comment
   regex: "^//\\s*biome-ignore-all\\b"
@@ -36,11 +37,9 @@ severity: error
 message: >-
   biome-ignore-all silences the rule for the whole file, and Biome never reports it once it
   stops being needed. Put the decision in biome.jsonc with its reason, or use a line-level
-  // biome-ignore. See .claude/rules/suppressions.md and docs/adr/0018.
+  // biome-ignore. See .claude/rules/suppressions.md and docs/adr/0022.
 files:
   - "**/*.tsx"
-ignores:
-  - "**/*.test.tsx"
 rule:
   kind: comment
   regex: "^//\\s*biome-ignore-all\\b"
