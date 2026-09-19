@@ -302,4 +302,3 @@ async function resolveAsset(dist: string, urlPath: string): Promise<string | nul
   }
   return (await Bun.file(candidate).exists()) ? candidate : null;
 }
-

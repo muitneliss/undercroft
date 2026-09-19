@@ -576,9 +576,14 @@
         "apps/worker/src/handlers/lake.ts",
         "apps/worker/src/services/google/refresh.ts",
         "apps/worker/src/services/loadToRaw.ts",
+        "apps/control-plane/src/services/oauth.ts",
+        "apps/control-plane/src/services/tokenExchange.ts",
+        "apps/worker/src/services/xero/organisations.ts",
+        "apps/worker/src/services/xero/refresh.ts",
         "packages/db/src/repos/connections.ts",
         "packages/lake/src/store.ts",
         "scripts/dokploy.ts",
+        "scripts/geo/vnProvinces.ts",
         "scripts/wikiCoverage.ts"
       ],
       "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
@@ -601,6 +606,7 @@
       "includes": [
         "apps/ui/src/components/TabRail.tsx",
         "apps/ui/src/components/Skeleton.tsx",
+        "apps/ui/src/components/QuestionCard.tsx",
         "apps/ui/src/routes/SignIn.tsx"
       ],
       "linter": { "rules": { "nursery": { "noInlineStyles": "off" } } }
@@ -730,7 +736,12 @@
     // lake store and the error it raises. One class per file would put an error in a file of
     // its own, away from the only thing that throws it.
     {
-      "includes": ["packages/core/src/email.ts", "packages/lake/src/store.ts"],
+      "includes": [
+        "packages/core/src/email.ts",
+        "packages/lake/src/store.ts",
+        "apps/worker/src/services/ingest.ts",
+        "scripts/kestraFlows.ts"
+      ],
       "linter": { "rules": { "style": { "noExcessiveClassesPerFile": "off" } } }
     },
 

@@ -96,13 +96,16 @@ function byColumns(result: TableResult, x: number, y: string[]): Series {
  * Series beyond the palette fold into "Other" by summing positions; the folded raw is
  * null, because a sum of floats is not a figure anybody may read.
  */
-function bySeries(
-  result: TableResult,
-  x: number,
-  seriesAt: number,
-  yName: string,
-  otherLabel: string,
-): Series {
+interface SeriesRequest {
+  readonly result: TableResult;
+  readonly x: number;
+  readonly seriesAt: number;
+  readonly yName: string;
+  readonly otherLabel: string;
+}
+
+function bySeries(request: SeriesRequest): Series {
+  const { result, x, seriesAt, yName, otherLabel } = request;
   const yAt = index(result, yName);
   const type = typeAt(result, yAt);
   const labels: string[] = [];
@@ -164,7 +167,13 @@ export function toSeries(result: TableResult, chart: ChartConfig, otherLabel: st
   const xAt = index(result, x);
   const [firstY] = y;
   if (series !== null && firstY !== undefined) {
-    return bySeries(result, xAt, index(result, series), firstY, otherLabel);
+    return bySeries({
+      result,
+      x: xAt,
+      seriesAt: index(result, series),
+      yName: firstY,
+      otherLabel,
+    });
   }
   return byColumns(result, xAt, y);
 }

@@ -50,7 +50,7 @@ export function ChartOptions({
   const chartRegionId = useId();
   const chartSeriesId = useId();
   const chartTypeId = useId();
-  const chartXId = useId();
+  const chartXAxisId = useId();
   const numeric = columns.filter((c) => isNumericType(c.type));
   const { max } = chart.options;
 
@@ -81,12 +81,12 @@ export function ChartOptions({
           </select>
         </div>
         <div className="field">
-          <label className="label" htmlFor={chartXId}>
+          <label className="label" htmlFor={chartXAxisId}>
             {t("chart.xLabel")}
           </label>
           <select
             className="input input--select"
-            id={chartXId}
+            id={chartXAxisId}
             value={chart.x ?? NONE}
             onChange={(event): void => {
               const x = event.currentTarget.value;
