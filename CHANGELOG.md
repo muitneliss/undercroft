@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/muitneliss/undercroft/compare/v1.10.1...v1.11.0) (2026-09-19)
+
+
+### Features
+
+* **journal:** redraw a run as plates with the work flowing between them ([#63](https://github.com/muitneliss/undercroft/issues/63)) ([b1939fe](https://github.com/muitneliss/undercroft/commit/b1939fe1796d03677e054c0a9de8a72cf4eb958b))
+
 ## [1.10.1](https://github.com/muitneliss/undercroft/compare/v1.10.0...v1.10.1) (2026-09-19)
 
 
