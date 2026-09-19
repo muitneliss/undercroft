@@ -12,6 +12,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import * as keys from "../services/keys.ts";
+import * as lake from "../services/lake.ts";
 import * as people from "../services/people.ts";
 import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
@@ -504,6 +505,53 @@ export const appRouter = router({
         }
         return { ok: true };
       }),
+  }),
+
+  lake: router({
+    /**
+     * What has landed, per stream: counts and freshness, nothing a person wrote. Every
+     * member may read it; it is the Lake division's first screen.
+     */
+    summary: tenantProcedure.query(({ ctx, input }) => lake.summary(ctx.exec, input.tenantId)),
+
+    /**
+     * The rows themselves, admin-only: a payload is the source's data verbatim, and for a
+     * CRM or a mailbox that is names and addresses. The role gate is the whole of the
+     * decision; the service only pages.
+     */
+    records: requireRole("admin")
+      .input(
+        z.object({
+          source: z.string().trim().min(1).max(64),
+          entity: z.string().trim().min(1).max(128),
+          limit: z.number().int().min(1).max(50).default(50),
+          cursor: z.string().optional(),
+        }),
+      )
+      .query(({ ctx, input }) =>
+        lake.records(ctx.exec, ctx.tenantId, {
+          source: input.source,
+          entity: input.entity,
+          limit: input.limit,
+          cursor: input.cursor ?? null,
+        }),
+      ),
+
+    documents: requireRole("admin")
+      .input(
+        z.object({
+          source: z.string().trim().min(1).max(64),
+          limit: z.number().int().min(1).max(50).default(50),
+          cursor: z.string().optional(),
+        }),
+      )
+      .query(({ ctx, input }) =>
+        lake.documents(ctx.exec, ctx.tenantId, {
+          source: input.source,
+          limit: input.limit,
+          cursor: input.cursor ?? null,
+        }),
+      ),
   }),
 
   runs: router({

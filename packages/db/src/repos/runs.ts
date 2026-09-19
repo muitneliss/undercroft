@@ -21,6 +21,7 @@
 // biome-ignore-all lint/style/useNamingConvention: Every name this fires on is an identifier owned by something outside this repo, and renaming it would break the call: Postgres column names (tenant_id, expires_at, display_name), the AWS S3 SDK command shape (Bucket, Key, Body), Docker's inspect JSON (State, Status, ExitCode, Config, Image), a source API's payload keys, HTTP header names, and Better Auth's option keys and table names. strictCase cannot be satisfied by code that talks to another system.
 
 import type { SqlExecutor } from "../executor.ts";
+import { decodeCursor, encodeCursor } from "./cursor.ts";
 
 export type RunStatus = "running" | "ok" | "failed";
 export type RunVerb = "ingest" | "transform";
@@ -419,7 +420,7 @@ export async function listRuns(
   tenantId: string,
   page: { limit: number; cursor?: string | null },
 ): Promise<{ items: Run[]; nextCursor: string | null }> {
-  const after = decodeCursor(page.cursor ?? null);
+  const after = decodeCursor(page.cursor);
   const { rows } = await exec.query<RunRow>(
     after === null
       ? `SELECT ${RUN_COLUMNS} FROM ops.run WHERE tenant_id = $1
@@ -427,31 +428,13 @@ export async function listRuns(
       : `SELECT ${RUN_COLUMNS} FROM ops.run
          WHERE tenant_id = $1 AND (started_at, id) < ($3::timestamptz, $4)
          ORDER BY started_at DESC, id DESC LIMIT $2`,
-    after === null
-      ? [tenantId, page.limit + 1]
-      : [tenantId, page.limit + 1, after.startedAt, after.id],
+    after === null ? [tenantId, page.limit + 1] : [tenantId, page.limit + 1, after.at, after.id],
   );
   const items = rows.slice(0, page.limit).map(toRun);
   const last = items.at(-1);
   const nextCursor =
     rows.length > page.limit && last !== undefined ? encodeCursor(last.startedAt, last.id) : null;
   return { items, nextCursor };
-}
-
-export function encodeCursor(startedAt: string, id: string): string {
-  return Buffer.from(`${startedAt}|${id}`, "utf8").toString("base64url");
-}
-
-function decodeCursor(cursor: string | null): { startedAt: string; id: string } | null {
-  if (cursor === null || cursor === "") {
-    return null;
-  }
-  const text = Buffer.from(cursor, "base64url").toString("utf8");
-  const split = text.indexOf("|");
-  if (split <= 0) {
-    return null;
-  }
-  return { startedAt: text.slice(0, split), id: text.slice(split + 1) };
 }
 
 /** The entity names per run, for a page of runs, in one statement. */

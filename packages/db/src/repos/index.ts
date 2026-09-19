@@ -45,12 +45,12 @@ export {
   revokeKey,
   touchLastUsed,
 } from "./ingestKeys.ts";
+export { type CursorKey, decodeCursor, encodeCursor } from "./cursor.ts";
 export {
   claimExternalRun,
   claimFailedRuns,
   closeAbandoned,
   closeRun,
-  encodeCursor,
   entitiesForRuns,
   type FailedRunNotice,
   findRunById,
