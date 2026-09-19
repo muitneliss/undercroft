@@ -23,7 +23,11 @@ import {
   tombstoneMissing,
 } from "../../repos/rawDocuments.ts";
 import { landRecords } from "../land.ts";
-import { landDocuments } from "../landDocument.ts";
+import {
+  type DocumentToLand,
+  landDocuments,
+  type LandedDocument,
+} from "../landDocument.ts";
 import { loadStreamToRaw } from "../loadToRaw.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
@@ -69,6 +73,47 @@ export interface CollectResult {
   };
 }
 
+/**
+ * Catalogue rows for the documents that actually reached the lake.
+ *
+ * A skipped or failed document has no bytes to point at, and a row claiming otherwise is
+ * worse than no row -- so a result that is neither `created` nor `unchanged` produces none,
+ * and neither does one whose source document cannot be found to read its metadata from.
+ *
+ * `metadata`, never `manifest`: this row reaches `raw.documents`, which is granted to
+ * `undercroft_dbt`. See `.claude/rules/pii.md` and ADR 0015.
+ */
+function catalogueRows(
+  landed: readonly LandedDocument[],
+  documents: readonly DocumentToLand[],
+  stamp: { observedAt: string; runId: string },
+): RawDocumentRow[] {
+  const rows: RawDocumentRow[] = [];
+  for (const result of landed) {
+    if (result.status !== "created" && result.status !== "unchanged") {
+      continue;
+    }
+    const source = documents.find((d) => d.documentId === result.documentId);
+    if (source === undefined) {
+      continue;
+    }
+    rows.push({
+      documentId: result.documentId,
+      lakeKey: result.lakeKey ?? "",
+      sha256: result.sha256 ?? "",
+      byteLength: result.byteLength ?? "0",
+      contentType: source.contentType,
+      metadataJson: JSON.stringify({
+        ...source.metadata,
+        sourceUpdatedAt: source.sourceUpdatedAt,
+      }),
+      observedAt: stamp.observedAt,
+      runId: stamp.runId,
+    });
+  }
+  return rows;
+}
+
 export async function runGoogleCollect(
   deps: CollectDeps,
   input: { source: GoogleSource; tenantId: string },
@@ -108,31 +153,7 @@ export async function runGoogleCollect(
     documents: harvest.documents,
   });
 
-  // Catalogue only what actually reached the lake. A skipped or failed document has no
-  // bytes to point at, and a row claiming otherwise is worse than no row.
-  const rows: RawDocumentRow[] = [];
-  for (const result of landedDocuments.results) {
-    if (result.status !== "created" && result.status !== "unchanged") {
-      continue;
-    }
-    const source = harvest.documents.find((d) => d.documentId === result.documentId);
-    if (source === undefined) {
-      continue;
-    }
-    rows.push({
-      documentId: result.documentId,
-      lakeKey: result.lakeKey ?? "",
-      sha256: result.sha256 ?? "",
-      byteLength: result.byteLength ?? "0",
-      contentType: source.contentType,
-      metadataJson: JSON.stringify({
-        ...source.metadata,
-        sourceUpdatedAt: source.sourceUpdatedAt,
-      }),
-      observedAt,
-      runId,
-    });
-  }
+  const rows = catalogueRows(landedDocuments.results, harvest.documents, { observedAt, runId });
   await upsertDocuments(deps.exec, { source: input.source, tenantId: input.tenantId }, rows);
 
   // Drive only. A Gmail message that stops matching a label selection has been relabelled,

@@ -18,7 +18,7 @@ import {
   type RunContext,
   readEntity,
 } from "@undercroft/connector-runtime";
-import { parseSpec } from "@undercroft/contracts";
+import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
 import { type ByteFetcher, createByteFetcher, newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { accessToken } from "@undercroft/db/services";
@@ -185,6 +185,27 @@ async function runGoogleIngest(
   };
 }
 
+/**
+ * The context one run hands the connector runtime.
+ *
+ * A token resolver is attached only when the connector authenticates: under
+ * `exactOptionalPropertyTypes` an explicit `undefined` is not the same as omitting the key,
+ * and a spec with `auth.kind === "none"` must not be handed a resolver it would then be
+ * entitled to call.
+ */
+function runContextFor(
+  deps: RunDeps,
+  spec: ConnectorSpec,
+  input: { source: string; tenantId: string },
+): RunContext {
+  return {
+    fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),
+    ...(spec.auth.kind === "none"
+      ? {}
+      : { token: (): Promise<string> => resolveToken(deps, input) }),
+  };
+}
+
 async function runSpecIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string },
@@ -192,16 +213,7 @@ async function runSpecIngest(
   const runId = newRunId();
   const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
 
-  const ctx: RunContext = {
-    fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),
-    // Only attach a token resolver when the connector authenticates. Under
-    // exactOptionalPropertyTypes an explicit `undefined` is not the same as omitting it.
-    ...(spec.auth.kind === "none"
-      ? {}
-      : {
-          token: () => resolveToken(deps, input),
-        }),
-  };
+  const ctx = runContextFor(deps, spec, input);
 
   const entities: IngestResult["entities"] = [];
   // Ids per entity, so a `batch-from` relation can read against the entity it references.

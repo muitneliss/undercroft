@@ -181,6 +181,38 @@ export class LakeStore {
    * Returns `unchanged` without writing if the newest observation at this key already has
    * these bytes.
    */
+  /**
+   * Write the manifest, refusing to replace one.
+   *
+   * This is the create-only rule at its narrowest point: `raw-lake.md` says a store that can
+   * be overwritten is a cache rather than an archive, and this is the one statement that
+   * makes that true of an observation.
+   */
+  async #createManifest(versionKey: string, manifest: Record<string, unknown>): Promise<void> {
+    const manifestKey = `${versionKey}/manifest.json`;
+    if (await this.#store.exists(manifestKey)) {
+      throw new ObjectExists(
+        `refusing to overwrite an existing observation at ${manifestKey}. ` +
+          "The raw lake is create-only.",
+      );
+    }
+    await this.#store.put(manifestKey, encoder.encode(JSON.stringify(manifest, null, 2)));
+  }
+
+  /** The stream pointer that lets the loader page new observations with one prefix scan. */
+  async #createJournalPointer(
+    stream: string,
+    stamp: string,
+    digest: string,
+    sourceKey: string,
+  ): Promise<void> {
+    const journalKey = LakeStore.journalKey(stream, stamp, digest);
+    await this.#store.put(
+      journalKey,
+      encoder.encode(JSON.stringify({ sourceKey, stamp, sha256: digest })),
+    );
+  }
+
   async put(
     sourceKey: string,
     data: Uint8Array,
@@ -220,15 +252,7 @@ export class LakeStore {
 
     const stamp = this.#stamps.next();
     const versionKey = `${key}/${stamp}`;
-    const manifestKey = `${versionKey}/manifest.json`;
-    if (await this.#store.exists(manifestKey)) {
-      throw new ObjectExists(
-        `refusing to overwrite an existing observation at ${manifestKey}. ` +
-          "The raw lake is create-only.",
-      );
-    }
-
-    const manifest: Record<string, unknown> = {
+    await this.#createManifest(versionKey, {
       sourceKey: key,
       sha256: digest,
       blobKey: blob,
@@ -239,17 +263,12 @@ export class LakeStore {
       // `rowCount` is deliberately absent unless a caller supplies one it can define.
       // A number with no definition is worse than no number.
       ...(opts.extra ?? {}),
-    };
-    await this.#store.put(manifestKey, encoder.encode(JSON.stringify(manifest, null, 2)));
+    });
 
     // Journal pointer, written on `created` only. Lets the loader page new observations
     // for a stream with a single prefix scan instead of re-reading every key.
     if (opts.stream !== undefined) {
-      const journalKey = LakeStore.journalKey(opts.stream, stamp, digest);
-      await this.#store.put(
-        journalKey,
-        encoder.encode(JSON.stringify({ sourceKey: key, stamp, sha256: digest })),
-      );
+      await this.#createJournalPointer(opts.stream, stamp, digest, key);
     }
 
     const pruned = await this.prune(key);

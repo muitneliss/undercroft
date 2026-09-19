@@ -75,69 +75,77 @@ export async function landDocuments(
   },
 ): Promise<LandDocumentsResult> {
   const results: LandedDocument[] = [];
-  let created = 0;
-  let unchanged = 0;
-  let skipped = 0;
-  let failed = 0;
+  const tally: Record<LandedDocument["status"], number> = {
+    created: 0,
+    unchanged: 0,
+    skipped: 0,
+    failed: 0,
+  };
 
   for (const document of input.documents) {
-    const identity = {
+    const result = await landOne(lake, input, document);
+    results.push(result);
+    tally[result.status] += 1;
+  }
+
+  return { ...tally, results };
+}
+
+/**
+ * Land one document, reporting rather than raising.
+ *
+ * Every outcome -- too large to fetch, fetched and stored, fetched and identical, failed --
+ * comes back as a row. One bad document must never abort a batch: that is the rule `land.ts`
+ * follows, and it is what lets the caller turn any failure into a 422 without losing the
+ * documents that did land.
+ */
+async function landOne(
+  lake: LakeStore,
+  input: { source: string; tenantId: string; runId: string; reason?: string },
+  document: DocumentToLand,
+): Promise<LandedDocument> {
+  if (tooLarge(document.declaredBytes)) {
+    return {
+      documentId: document.documentId,
+      status: "skipped",
+      byteLength: document.declaredBytes,
+      reason: `declared ${document.declaredBytes} bytes, over the ${MAX_DOCUMENT_BYTES} ceiling`,
+    };
+  }
+
+  try {
+    const key = documentKeyOf({
       source: input.source,
       tenantId: input.tenantId,
       documentId: document.documentId,
+    });
+    const bytes = await document.fetchBytes();
+    const put = await lake.put(key, bytes, {
+      runId: input.runId,
+      reason: input.reason ?? "",
+      // No `stream`. The record loader decodes every journalled object as JSON text for
+      // `payload jsonb`; a PDF on that path is mojibake in a jsonb column. Documents are
+      // catalogued directly by the caller instead.
+      extra: {
+        ...document.manifest,
+        contentType: document.contentType,
+        sourceUpdatedAt: document.sourceUpdatedAt,
+      },
+    });
+    return {
+      documentId: document.documentId,
+      status: put.status,
+      sha256: put.sha256,
+      lakeKey: key,
+      byteLength: String(bytes.byteLength),
     };
-
-    if (tooLarge(document.declaredBytes)) {
-      skipped += 1;
-      results.push({
-        documentId: document.documentId,
-        status: "skipped",
-        byteLength: document.declaredBytes,
-        reason: `declared ${document.declaredBytes} bytes, over the ${MAX_DOCUMENT_BYTES} ceiling`,
-      });
-      continue;
-    }
-
-    try {
-      const key = documentKeyOf(identity);
-      const bytes = await document.fetchBytes();
-      const put = await lake.put(key, bytes, {
-        runId: input.runId,
-        reason: input.reason ?? "",
-        // No `stream`. The record loader decodes every journalled object as JSON text for
-        // `payload jsonb`; a PDF on that path is mojibake in a jsonb column. Documents are
-        // catalogued directly by the caller instead.
-        extra: {
-          ...document.manifest,
-          contentType: document.contentType,
-          sourceUpdatedAt: document.sourceUpdatedAt,
-        },
-      });
-      if (put.status === "created") {
-        created += 1;
-      } else {
-        unchanged += 1;
-      }
-      results.push({
-        documentId: document.documentId,
-        status: put.status,
-        sha256: put.sha256,
-        lakeKey: key,
-        byteLength: String(bytes.byteLength),
-      });
-    } catch (error) {
-      // One bad document is a reported failure, never an aborted batch -- the same rule
-      // `land.ts` follows, and what lets the caller turn any failure into a 422.
-      failed += 1;
-      results.push({
-        documentId: document.documentId,
-        status: "failed",
-        reason: error instanceof Error ? error.message : String(error),
-      });
-    }
+  } catch (error) {
+    return {
+      documentId: document.documentId,
+      status: "failed",
+      reason: error instanceof Error ? error.message : String(error),
+    };
   }
-
-  return { created, unchanged, skipped, failed, results };
 }
 
 /**
