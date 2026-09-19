@@ -616,6 +616,24 @@
       "linter": { "rules": { "suspicious": { "noLeakedRender": "off" } } }
     },
 
+    // `<div role="group" aria-label={...}>` around the two language buttons. The rule wants
+    // `<fieldset>`, which conveys EXACTLY the same thing to assistive technology as the role
+    // already does -- so the accessibility outcome is identical, and the change would be a
+    // swap of element plus the three UA-style resets (`border`, `margin`, `min-inline-size`)
+    // a fieldset needs before `display: inline-flex` lays out as it does today.
+    {
+      "includes": ["apps/ui/src/components/LanguageSwitcher.tsx"],
+      "linter": { "rules": { "a11y": { "useSemanticElements": "off" } } }
+    },
+
+    // A fixed-length skeleton. The rule guards against reconciliation bugs when a keyed list
+    // is REORDERED, inserted into or filtered; this list is a placeholder of constant length
+    // whose items carry no identity and never move, so the index is the only id there is.
+    {
+      "includes": ["apps/ui/src/components/Skeleton.tsx"],
+      "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
+    },
+
     // The argument parser walks `argv` by index because an option CONSUMES THE NEXT ELEMENT
     // (`--tenant CASE-0042`), so the loop advances by one inside its own body. `for...of` has
     // no cursor to advance.
