@@ -23,7 +23,8 @@ import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { formatCount, MISSING, orMissing } from "@/lib/money.ts";
+import { StepsTable } from "@/components/StepsTable.tsx";
+import { formatCount, orMissing } from "@/lib/money.ts";
 import { triggerLabel } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
@@ -31,11 +32,6 @@ import { trpc } from "@/trpc.ts";
 
 /** How often the leaf re-reads a run still in progress. */
 const RUNNING_POLL_MS = 5000;
-
-/** `model: stg_deals`, `test: not_null_stg_deals_id` -- dbt's own words for its own nodes. */
-function stepName(step: { kind: string; name: string }): string {
-  return `${step.kind}: ${step.name}`;
-}
 
 export function RunDetail({
   tenantId,
@@ -172,43 +168,7 @@ export function RunDetail({
         </table>
       ) : null}
 
-      {detail.steps.length > 0 ? (
-        <table className="table">
-          <caption>{t("journal.stepsHead")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("journal.colStep")}</th>
-              <th scope="col">{t("journal.colStatus")}</th>
-              <th scope="col" className="num">
-                {t("journal.colFailures")}
-              </th>
-              <th scope="col" className="num">
-                {t("journal.colTook")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {detail.steps.map((step) => (
-              <tr key={step.uniqueId}>
-                <td className="datum">{stepName(step)}</td>
-                <td>{step.status}</td>
-                <td className="num">
-                  {step.failures === null ? MISSING : formatCount(step.failures, locale)}
-                </td>
-                <td className="num datum datum--quiet">
-                  {step.executionMs === null
-                    ? MISSING
-                    : formatDuration(
-                        new Date(0).toISOString(),
-                        new Date(step.executionMs).toISOString(),
-                        locale,
-                      )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
+      {detail.steps.length > 0 ? <StepsTable steps={detail.steps} locale={locale} /> : null}
 
       {bare ? <p className="note">{t("journal.nothingRecorded")}</p> : null}
     </div>

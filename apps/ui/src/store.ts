@@ -32,12 +32,16 @@
 
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: The store's initializer is one object literal naming every action the interface has; it grows one entry per verb, and splitting it would put the actions somewhere other than the store that owns them.
 // biome-ignore-all lint/nursery/useExplicitType: Every site whose type the compiler could print is annotated. What is left is parameters of callbacks passed to third-party APIs -- Better Auth's hooks, tRPC's builders -- where the type arrives contextually and writing it out means naming a library-internal type that drifts on the next upgrade.
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 
+import type { TestKind } from "@undercroft/contracts/models";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+
+import type { ModelDraft } from "@/lib/modelDraft.ts";
 
 /** One item an admin picked, as both the picker and the card need to see it. */
 export interface ChosenFile {
@@ -107,6 +111,21 @@ interface UiState {
    */
   scopeFilter: { source: string; query: string };
   setScopeFilter: (source: string, query: string) => void;
+  /**
+   * The model being edited, or null. Seeded from `models.get` when the editor opens a model
+   * it does not hold, and kept -- unsaved edits survive a visit to another division, and the
+   * list says so. Not persisted: a draft restored days later, after a colleague may have
+   * changed the model beneath it, is worse than the saved version.
+   */
+  modelDraft: ModelDraft | null;
+  setModelDraft: (draft: ModelDraft | null) => void;
+  setModelSql: (sql: string) => void;
+  /** Turn one test on or off for one column. */
+  setModelTest: (column: string, kind: TestKind, on: boolean) => void;
+  addModelTestColumn: (column: string) => void;
+  removeModelTestColumn: (column: string) => void;
+  /** The server now holds what the draft holds: nothing is unsaved. */
+  markModelSaved: () => void;
 }
 
 /**
@@ -160,6 +179,49 @@ export const useUiStore = create<UiState>()(
         }),
       scopeFilter: { source: "", query: "" },
       setScopeFilter: (source, query): unknown => set({ scopeFilter: { source, query } }),
+      modelDraft: null,
+      setModelDraft: (modelDraft): unknown => set({ modelDraft }),
+      setModelSql: (sql): unknown =>
+        set((state) =>
+          state.modelDraft === null ? {} : { modelDraft: { ...state.modelDraft, sql } },
+        ),
+      setModelTest: (column, kind, on): unknown =>
+        set((state) => {
+          const draft = state.modelDraft;
+          if (draft === null) {
+            return {};
+          }
+          const held = draft.tests[column] ?? [];
+          const kinds = on ? [...new Set([...held, kind])] : held.filter((k) => k !== kind);
+          return { modelDraft: { ...draft, tests: { ...draft.tests, [column]: kinds } } };
+        }),
+      addModelTestColumn: (column): unknown =>
+        set((state) => {
+          const draft = state.modelDraft;
+          if (draft === null || column in draft.tests) {
+            return {};
+          }
+          return { modelDraft: { ...draft, tests: { ...draft.tests, [column]: [] } } };
+        }),
+      removeModelTestColumn: (column): unknown =>
+        set((state) => {
+          const draft = state.modelDraft;
+          if (draft === null) {
+            return {};
+          }
+          const tests = Object.fromEntries(
+            Object.entries(draft.tests).filter(([held]) => held !== column),
+          );
+          return { modelDraft: { ...draft, tests } };
+        }),
+      markModelSaved: (): unknown =>
+        set((state) => {
+          const draft = state.modelDraft;
+          if (draft === null) {
+            return {};
+          }
+          return { modelDraft: { ...draft, saved: { sql: draft.sql, tests: draft.tests } } };
+        }),
     }),
     {
       name: "undercroft.ui",

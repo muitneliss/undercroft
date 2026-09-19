@@ -78,3 +78,15 @@ export type RunDetail = inferRouterOutputs<AppRouter>["runs"]["get"];
 
 /** What has landed, per stream, as `lake.summary` returns it. */
 export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
+
+/** One model on the list, as `models.list` returns it: its name and its last build. */
+export type ModelItem = inferRouterOutputs<AppRouter>["models"]["list"][number];
+
+/** One model in full, as `models.get` returns it: the item plus its SQL and tests. */
+export type ModelDetail = inferRouterOutputs<AppRouter>["models"]["get"];
+
+/** What a build answered: the run, its steps, and the model's first rows. */
+export type BuildResult = inferRouterOutputs<AppRouter>["models"]["build"];
+
+/** A query result as every tenant-scoped read answers it: columns, rows, and whether cut. */
+export type TableResult = BuildResult["preview"] & object;

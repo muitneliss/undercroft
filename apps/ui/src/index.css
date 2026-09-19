@@ -1974,6 +1974,34 @@
     border-left: 2px solid var(--rule-strong);
   }
 
+  /* -- the model editor ---------------------------------------------------------- */
+
+  /* Monaco draws its own text; the frame is ours: the same die-cut edge as an input, tall
+   enough to hold a model without scrolling the page for it. */
+  .editor {
+    min-height: 26rem;
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+    background: var(--leaf);
+    overflow: hidden;
+  }
+
+  .editor--readonly {
+    opacity: 0.85;
+  }
+
+  /* A result can be wider than the leaf; it scrolls sideways rather than breaking it. */
+  .result {
+    overflow-x: auto;
+  }
+
+  .result__type {
+    display: block;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+  }
+
   code {
     font-family: var(--face-mono);
     font-size: 0.9em;

@@ -49,6 +49,9 @@ const Lake = lazy(() => import("@/routes/Lake.tsx").then((module) => ({ default:
 const Models = lazy(() =>
   import("@/routes/Models.tsx").then((module) => ({ default: module.Models })),
 );
+const ModelEditor = lazy(() =>
+  import("@/routes/ModelEditor.tsx").then((module) => ({ default: module.ModelEditor })),
+);
 const Reports = lazy(() =>
   import("@/routes/Reports.tsx").then((module) => ({ default: module.Reports })),
 );
@@ -165,6 +168,18 @@ export function App(): React.JSX.Element {
             {(tenantId) => (
               <Suspense fallback={<Skeleton rows={4} />}>
                 <Models tenantId={tenantId} />
+              </Suspense>
+            )}
+          </Opened>
+        }
+      />
+      <Route
+        path="/tenants/:tenantId/models/:name"
+        element={
+          <Opened division="models" signedInAs={signedInAs}>
+            {(tenantId) => (
+              <Suspense fallback={<Skeleton rows={6} />}>
+                <ModelEditor tenantId={tenantId} />
               </Suspense>
             )}
           </Opened>
