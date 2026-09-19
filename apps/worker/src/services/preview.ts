@@ -13,7 +13,7 @@ import type { Cell, TableResult } from "@undercroft/contracts";
 import { columnsOf, firstRows } from "../repos/relations.ts";
 import type { SessionTarget, TenantSessions } from "./tenantSession.ts";
 
-function cellOf(value: unknown): Cell {
+export function cellOf(value: unknown): Cell {
   if (value === null || value === undefined) {
     return null;
   }

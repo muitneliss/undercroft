@@ -9,13 +9,17 @@
 import { TRPCError } from "@trpc/server";
 import {
   Cadence,
+  DEFAULT_QUERY_ROWS,
   MAX_MODEL_SQL_BYTES,
   MAX_PREVIEW_ROWS,
+  MAX_QUERY_ROWS,
+  MAX_QUERY_SQL_BYTES,
   ModelName,
   ModelTests,
 } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import * as bi from "../services/bi.ts";
 import * as connections from "../services/connections.ts";
 import * as keys from "../services/keys.ts";
 import * as lake from "../services/lake.ts";
@@ -653,6 +657,64 @@ export const appRouter = router({
 
     /** The sources and macros every project carries, for the editor's reference panel. */
     reference: tenantProcedure.query(() => models.reference()),
+  }),
+
+  bi: router({
+    /**
+     * Run SQL as the tenant's read-only login, through the worker. Members and admins
+     * author; a viewer's reads come through saved questions, not raw SQL. A query that did
+     * not run is BAD_REQUEST carrying Postgres's own sentence, because that sentence is
+     * what lets the author fix it.
+     */
+    run: requireRole("member")
+      .input(
+        z.object({
+          sql: z.string().min(1).max(MAX_QUERY_SQL_BYTES),
+          limit: z.number().int().min(1).max(MAX_QUERY_ROWS).default(DEFAULT_QUERY_ROWS),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.worker === null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.workerUnavailable"),
+          });
+        }
+        const outcome = await bi.run(ctx.worker, { ...input, tenantId: ctx.tenantId });
+        if (!outcome.ok) {
+          if (outcome.reason === "query-failed") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: messages(ctx.locale)("error.queryFailed", {
+                message: outcome.message ?? "",
+              }),
+            });
+          }
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: messages(ctx.locale)("error.queryNotRun"),
+          });
+        }
+        return outcome.value;
+      }),
+
+    /** The tables and columns a question can name. Any member may read the shape. */
+    schema: tenantProcedure.query(async ({ ctx, input }) => {
+      if (ctx.worker === null) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.workerUnavailable"),
+        });
+      }
+      const outcome = await bi.schema(ctx.worker, { tenantId: input.tenantId });
+      if (!outcome.ok) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.queryNotRun"),
+        });
+      }
+      return outcome.value;
+    }),
   }),
 
   dq: router({

@@ -27,6 +27,7 @@ import {
   LandRecordsRequest,
   MAX_BATCH_BYTES,
   RevokeConnectionRequest,
+  RunQueryRequest,
   StoreCredentialRequest,
 } from "@undercroft/contracts";
 import type { Fetcher } from "@undercroft/connector-runtime";
@@ -57,6 +58,7 @@ import {
 } from "../services/jobs.ts";
 import { landRecords } from "../services/land.ts";
 import { claimExternal, findRun, recordExternal } from "../services/ledger.ts";
+import { readSchema, runQuery } from "../services/queryRunner.ts";
 import { listDue } from "../services/schedule.ts";
 import type { TransformDeps } from "../services/transform.ts";
 import { failureOf } from "./errors.ts";
@@ -369,6 +371,54 @@ export function createLakeApi(deps: LakeApiDeps): Hono {
       return c.json({ code: "not_found", message: "no such step", details: [] }, 404);
     }
     return c.json(outcome.value, 200);
+  });
+
+  /**
+   * Run SQL an author wrote, as the tenant's read-only login. The frame around it is in
+   * `repos/queries.ts`; a query that did not run is 400 `query_failed` with Postgres's own
+   * sentence, through the boundary.
+   */
+  app.post("/v1/queries/run", async (c) => {
+    if (deps.dbt === undefined) {
+      return c.json(
+        { code: "invalid_request", message: "queries are not configured", details: [] },
+        400,
+      );
+    }
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
+    }
+    const parsed = RunQueryRequest.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json(
+        { code: "invalid_request", message: "tenantId and sql are required", details: [] },
+        400,
+      );
+    }
+    const result = await runQuery({ exec: deps.exec, sessions: deps.dbt.sessions }, parsed.data);
+    return c.json(result, 200);
+  });
+
+  /** The tenant's analytics schema as its read-only login sees it. */
+  app.post("/v1/queries/schema", async (c) => {
+    if (deps.dbt === undefined) {
+      return c.json(
+        { code: "invalid_request", message: "queries are not configured", details: [] },
+        400,
+      );
+    }
+    if (!serviceTokenOk(c)) {
+      return c.json(unauthenticated, 401);
+    }
+    const body = (await c.req.json().catch(() => ({}))) as { tenantId?: unknown };
+    if (typeof body.tenantId !== "string" || body.tenantId === "") {
+      return c.json({ code: "invalid_request", message: "tenantId is required", details: [] }, 400);
+    }
+    const schema = await readSchema(
+      { exec: deps.exec, sessions: deps.dbt.sessions },
+      { tenantId: body.tenantId },
+    );
+    return c.json(schema, 200);
   });
 
   /**

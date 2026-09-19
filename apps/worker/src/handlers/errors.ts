@@ -20,6 +20,8 @@ import { ConnectorError, HttpError } from "@undercroft/core";
 
 import { ScopeNotChosen } from "../services/google/collect.ts";
 import { ConnectionUnusable, RunInProgress, UnknownTenant } from "../services/ingest.ts";
+import { QueryFailed } from "../services/queryRunner.ts";
+import { TenantNotProvisioned } from "../services/tenantSession.ts";
 
 const INTERNAL: Failure = {
   status: 500,
@@ -29,7 +31,7 @@ const INTERNAL: Failure = {
 };
 
 export interface Failure {
-  readonly status: 404 | 409 | 502 | 500;
+  readonly status: 400 | 404 | 409 | 502 | 500;
   readonly code: ApiError["code"];
   readonly message: string;
   /** Structured detail a caller acts on -- the id of the run in progress -- never a payload. */
@@ -39,6 +41,14 @@ export interface Failure {
 export function failureOf(error: unknown): Failure {
   if (error instanceof ScopeNotChosen) {
     return { status: 409, code: "scope_not_chosen", message: error.message, details: [] };
+  }
+  // The author's SQL, refused by Postgres: the message quotes their own text and is the
+  // one thing that lets them fix it. A 400, because the request was the fault.
+  if (error instanceof QueryFailed) {
+    return { status: 400, code: "query_failed", message: error.message, details: [] };
+  }
+  if (error instanceof TenantNotProvisioned) {
+    return { status: 404, code: "not_found", message: error.message, details: [] };
   }
   // The id of the run in progress rides in `details`, so a caller can watch it without
   // parsing a sentence.

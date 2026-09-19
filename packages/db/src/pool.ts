@@ -20,8 +20,10 @@
 // biome-ignore-all lint/style/noTernary: A ternary selects between two VALUES. The rule wants a statement instead, which means declaring a mutable temporary and separating the condition from the value it chooses. Inside JSX it is additionally the only way to render conditionally inline.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
+// biome-ignore-all lint/style/useNamingConvention: `dataTypeID` is the field name pg and PGlite both report a result column under, and the seam carries it as they spell it; a camelCase respelling would be a second name for the same thing.
+
 import pg from "pg";
-import type { SqlExecutor } from "./executor.ts";
+import type { QueryResult, SqlExecutor } from "./executor.ts";
 
 const NUMERIC_OID = 1700;
 const INT8_OID = 20;
@@ -109,9 +111,12 @@ export function asExecutor(client: pg.PoolClient | pg.Pool): SqlExecutor {
     async query<T = Record<string, unknown>>(
       text: string,
       params?: readonly unknown[],
-    ): Promise<{ rows: T[] }> {
+    ): Promise<QueryResult<T>> {
       const result = await client.query(text, params as unknown[] | undefined);
-      return { rows: result.rows as T[] };
+      return {
+        rows: result.rows as T[],
+        fields: result.fields.map((f) => ({ name: f.name, dataTypeID: f.dataTypeID })),
+      };
     },
     async exec(sql: string): Promise<void> {
       // No parameters, so the simple query protocol runs every statement in the string.

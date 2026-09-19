@@ -105,6 +105,10 @@ export const vi = {
     buildNotStarted:
       "Không dựng được mô hình. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     dqNotRead: "Không đọc được các dòng không đạt kiểm tra của bước này.",
+    /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
+    queryFailed: "Câu truy vấn không chạy được: {{message}}",
+    queryNotRun:
+      "Không chạy được câu truy vấn. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
     /**

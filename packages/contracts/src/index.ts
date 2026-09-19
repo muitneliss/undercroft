@@ -56,9 +56,14 @@ export {
   BuildModelRequest,
   BuildModelResponse,
   Cell,
+  DEFAULT_QUERY_ROWS,
   DqFailuresRequest,
   MAX_PREVIEW_ROWS,
+  MAX_QUERY_ROWS,
+  MAX_QUERY_SQL_BYTES,
+  RunQueryRequest,
   RunStepShape,
+  SchemaResponse,
   TableResult,
 } from "./transformApi.ts";
 export { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";

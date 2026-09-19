@@ -25,13 +25,22 @@ import type {
   CredentialInput,
   DqFailuresRequest,
   RevokeConnectionResponse,
+  RunQueryRequest,
+  SchemaResponse,
   StoreCredentialResponse,
   TableResult,
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import { upsertConnection } from "@undercroft/db/repos";
 
-export type WorkerOutcome<T> = { ok: true; value: T } | { ok: false; reason: WorkerFailure };
+export type WorkerOutcome<T> =
+  | { ok: true; value: T }
+  | {
+      ok: false;
+      reason: WorkerFailure;
+      /** The worker's own sentence, for the one refusal an author can act on: a failed query. */
+      message?: string;
+    };
 
 /**
  * Why a call did not succeed, in the three shapes a caller acts on differently.
@@ -51,7 +60,9 @@ export type WorkerFailure =
   | "scope-insufficient"
   | "credential-rejected"
   /** The worker's 409: the tenant already has a run of this kind going. */
-  | "in-progress";
+  | "in-progress"
+  /** The author's SQL did not run. The outcome carries Postgres's sentence about it. */
+  | "query-failed";
 
 export interface StoreCredentialInput {
   readonly source: string;
@@ -98,6 +109,10 @@ export interface WorkerClient {
   }) => Promise<WorkerOutcome<BuildModelResponse>>;
   /** The rows a failed test stored, as the worker reads them for an admin. */
   dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
+  /** SQL an author wrote, run as the tenant's read-only login. */
+  runQuery: (input: RunQueryRequest) => Promise<WorkerOutcome<TableResult>>;
+  /** The tenant's analytics schema, as that login sees it. */
+  readSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
 }
 
 /**
@@ -122,6 +137,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 /** A synchronous build: the worker's two-minute deadline, and a little for the rows. */
 const BUILD_DEADLINE_MS = 150_000;
 
+/** The worker's answer for SQL that did not run, whose body names why. */
+const BAD_REQUEST = 400;
 /** The worker's answer for a credential Google refused. Every other status is a refusal. */
 const FORBIDDEN = 403;
 /** The worker's answer for a run already in progress, whose body names it. */
@@ -227,7 +244,49 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     // build that is legitimately slow and report it as unreachable.
     buildModel: (input) => post("/v1/models/build", input, BUILD_DEADLINE_MS),
     dqFailures: (input) => post("/v1/dq/failures", input),
+    runQuery: query,
+    readSchema: (input) => post("/v1/queries/schema", input),
   };
+
+  /**
+   * The other call whose refusal body IS read: a 400 `query_failed` carries Postgres's
+   * sentence about the author's SQL, which quotes the author's own text and nothing else,
+   * and is the one thing that lets them fix it. Every other status is handled as `post`
+   * handles it.
+   */
+  async function query(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await doFetch(`${config.baseUrl}/v1/queries/run`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${config.triggerToken}`,
+        },
+        body: JSON.stringify(input),
+        signal: controller.signal,
+      });
+      if (response.status === BAD_REQUEST) {
+        const body = (await response.json().catch(() => null)) as {
+          code?: unknown;
+          message?: unknown;
+        } | null;
+        if (body?.code === "query_failed" && typeof body.message === "string") {
+          return { ok: false, reason: "query-failed", message: body.message };
+        }
+        return { ok: false, reason: "refused" };
+      }
+      if (!response.ok) {
+        return { ok: false, reason: "refused" };
+      }
+      return { ok: true, value: (await response.json()) as TableResult };
+    } catch {
+      return { ok: false, reason: "unreachable" };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }
 
 /**
@@ -367,6 +426,41 @@ export class InMemoryWorkerClient implements WorkerClient {
       return this.#fail();
     }
     return Promise.resolve({ ok: true, value: { columns: [], rows: [], truncated: false } });
+  }
+
+  /** Every query this double was asked to run, in order. */
+  readonly queries: RunQueryRequest[] = [];
+  #answer: TableResult = { columns: [], rows: [], truncated: false };
+  #refusal: string | null = null;
+
+  /** Answer every query with `result`. */
+  answering(result: TableResult): this {
+    this.#answer = result;
+    return this;
+  }
+
+  /** Refuse every query with Postgres's sentence, as the real worker would for bad SQL. */
+  refusingQueries(message: string): this {
+    this.#refusal = message;
+    return this;
+  }
+
+  runQuery(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    this.queries.push(input);
+    if (this.#refusal !== null) {
+      return Promise.resolve({ ok: false, reason: "query-failed", message: this.#refusal });
+    }
+    return Promise.resolve({ ok: true, value: this.#answer });
+  }
+
+  readSchema(): Promise<WorkerOutcome<SchemaResponse>> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    return Promise.resolve({ ok: true, value: { tables: [] } });
   }
 
   #fail<T>(): Promise<WorkerOutcome<T>> {

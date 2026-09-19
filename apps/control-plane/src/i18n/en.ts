@@ -76,6 +76,9 @@ export const en = {
     buildNotStarted:
       "The model could not be built. The processing service did not answer; try again in a few minutes.",
     dqNotRead: "The failing rows for this step could not be read.",
+    queryFailed: "The query did not run: {{message}}",
+    queryNotRun:
+      "The query could not be run. The processing service did not answer; try again in a few minutes.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
     scopeInsufficient:

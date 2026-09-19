@@ -54,9 +54,14 @@ export function createTenantSessions(deps: {
       }
       const password = await rotateTenantPassword(deps.exec, target.tenantId, target.kind);
       const pool = createRolePool(deps.dsn, { user: roleFor(roles, target.kind), password });
+      // One checked-out client, so a BEGIN and the statements after it share a connection;
+      // through the pool each statement could take a different one and a transaction
+      // would frame nothing.
+      const client = await pool.connect();
       try {
-        return await fn(asExecutor(pool));
+        return await fn(asExecutor(client));
       } finally {
+        client.release();
         await pool.end();
       }
     },

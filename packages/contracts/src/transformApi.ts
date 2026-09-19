@@ -9,6 +9,7 @@
  * way to the browser -- while `integer`, `real` and `boolean` arrive as themselves.
  */
 
+// biome-ignore-all lint/style/noMagicNumbers: The size cap is the one number in the file, written as the kilobytes it is rather than as a constant that says the same thing twice.
 // biome-ignore-all lint/style/useExportsLast: Reordering 28 modules so every export sits at the bottom would rewrite files whose current order is deliberate -- the type a module is about first, then what operates on it. The ordering carries meaning here and the rule's preferred one does not.
 
 import { z } from "zod";
@@ -66,3 +67,33 @@ export const DqFailuresRequest = z.object({
   limit: z.number().int().min(1).max(MAX_PREVIEW_ROWS).default(MAX_PREVIEW_ROWS),
 });
 export type DqFailuresRequest = z.infer<typeof DqFailuresRequest>;
+
+/** The most rows one query answers with. A chart or a table, not an export. */
+export const MAX_QUERY_ROWS = 5000;
+/** What a question gets when it does not say. */
+export const DEFAULT_QUERY_ROWS = 1000;
+/** The longest SQL one question may hold. */
+export const MAX_QUERY_SQL_BYTES = 64 * 1024;
+
+/**
+ * Run one SELECT as the tenant's read-only login. The runner wraps it in a sub-select with
+ * its own LIMIT inside a read-only transaction; the SQL is the author's and is executed
+ * verbatim within that frame.
+ */
+export const RunQueryRequest = z.object({
+  tenantId: z.string().min(1),
+  sql: z.string().min(1).max(MAX_QUERY_SQL_BYTES),
+  limit: z.number().int().min(1).max(MAX_QUERY_ROWS).default(DEFAULT_QUERY_ROWS),
+});
+export type RunQueryRequest = z.infer<typeof RunQueryRequest>;
+
+/** The tenant's analytics schema as its read-only login sees it: every table, every column. */
+export const SchemaResponse = z.object({
+  tables: z.array(
+    z.object({
+      name: z.string(),
+      columns: z.array(z.object({ name: z.string(), type: z.string() })),
+    }),
+  ),
+});
+export type SchemaResponse = z.infer<typeof SchemaResponse>;

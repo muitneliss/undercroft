@@ -14,6 +14,8 @@
 
 // biome-ignore-all lint/nursery/noUnsafeTypeAssertion: Every one of these is a boundary where a payload genuinely is unknown -- a third-party API body, a Docker inspect response, a row shape from a hand-written query -- and is Zod-parsed or checked immediately after. Making the assertions safe means modelling each external shape as a type, which is real work with real value and is not a lint migration.
 
+// biome-ignore-all lint/style/useNamingConvention: `dataTypeID` is the field name pg and PGlite both report a result column under, and the seam carries it as they spell it; a camelCase respelling would be a second name for the same thing.
+
 import { PGlite } from "@electric-sql/pglite";
 import type { QueryResult, SqlExecutor } from "./executor.ts";
 
@@ -54,9 +56,12 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     async query<T = Record<string, unknown>>(
       text: string,
       params?: readonly unknown[],
-    ): Promise<{ rows: T[] }> {
+    ): Promise<QueryResult<T>> {
       const result = await db.query<T>(text, params as unknown[] | undefined);
-      return { rows: result.rows } satisfies QueryResult<T>;
+      return {
+        rows: result.rows,
+        fields: result.fields.map((f) => ({ name: f.name, dataTypeID: f.dataTypeID })),
+      };
     },
     async exec(sql: string): Promise<void> {
       await db.exec(sql);

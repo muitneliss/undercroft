@@ -77,6 +77,7 @@ export const ApiError = z.object({
     "source_failed",
     "run_in_progress",
     "credential_rejected",
+    "query_failed",
     "not_found",
     "internal_error",
   ]),
