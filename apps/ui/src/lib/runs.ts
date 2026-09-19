@@ -16,9 +16,15 @@
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
-import { type Connection, isSource, type RunView, SOURCE_LABEL } from "@/api/types.ts";
+import {
+  type Connection,
+  isSource,
+  type RunEventView,
+  type RunView,
+  SOURCE_LABEL,
+} from "@/api/types.ts";
 import type { CardFacts } from "@/lib/connectionState.ts";
-import { MISSING } from "@/lib/money.ts";
+import { formatCount, MISSING } from "@/lib/money.ts";
 import { formatDateTime } from "@/lib/when.ts";
 
 export type LastRun = NonNullable<Connection["lastRun"]>;
@@ -70,6 +76,89 @@ export function triggerLabel(t: TFunction, trigger: RunView["trigger"]): string 
       const exhaustive: never = trigger;
       throw new Error(`unhandled trigger ${String(exhaustive)}`);
     }
+  }
+}
+
+/**
+ * One count out of an event's detail, formatted for the reader.
+ *
+ * Anything that is not a number is MISSING rather than a `0`: a count the worker did not
+ * send is not a count of nothing, and the two must not look the same. Same rule as
+ * `formatMoney`'s, for the same reason.
+ */
+function counted(detail: Record<string, unknown>, key: string, locale: Locale): string {
+  const value = detail[key];
+  return formatCount(typeof value === "number" ? value : null, locale);
+}
+
+/**
+ * One line of a run's feed, as a sentence.
+ *
+ * The worker writes an enumerated verb and a handful of counts; the wording is entirely
+ * here, which is what lets the same feed read in Vietnamese and in English without the
+ * worker knowing either language. An event this does not know renders as itself rather than
+ * disappearing: a feed that silently dropped a line the worker thought worth writing would
+ * be the exact failure this whole division exists to fix.
+ *
+ * Counts arrive pre-formatted through `formatCount`, so an absent one renders as MISSING
+ * rather than as a `0` that would read as a real zero. Same reason `formatMoney` does it.
+ */
+export function eventSentence(
+  t: TFunction,
+  locale: Locale,
+  event: Pick<RunEventView, "event" | "entity" | "detail">,
+): string {
+  const entity = event.entity ?? "";
+  function n(key: string): string {
+    return counted(event.detail, key, locale);
+  }
+
+  switch (event.event) {
+    case "run_opened":
+      return t("journal.event.runOpened");
+    case "entity_started":
+      return t("journal.event.entityStarted", { entity });
+    case "work_listed":
+      return t("journal.event.workListed", { entity, total: n("total") });
+    case "records_read":
+      return event.detail.total === undefined
+        ? t("journal.event.recordsRead", { entity, read: n("read") })
+        : t("journal.event.recordsReadOf", { entity, read: n("read"), total: n("total") });
+    case "entity_done":
+      return t("journal.event.entityDone", {
+        entity,
+        landed: n("landed"),
+        created: n("created"),
+        changed: n("changed"),
+        refused: n("refused"),
+      });
+    case "picks_listed":
+      return t("journal.event.picksListed", { folders: n("folders"), pdfs: n("pdfs") });
+    case "documents_landed":
+      return t("journal.event.documentsLanded", {
+        created: n("created"),
+        unchanged: n("unchanged"),
+        skipped: n("skipped"),
+        failed: n("failed"),
+      });
+    case "no_models":
+      return t("journal.event.noModels");
+    case "dbt_finished":
+      return t("journal.event.dbtFinished", {
+        models: n("models"),
+        tests: n("tests"),
+        testsFailed: n("testsFailed"),
+      });
+    case "run_closed":
+      return event.detail.status === "ok"
+        ? t("journal.event.runClosedOk")
+        : t("journal.event.runClosedFailed");
+    case "run_failed":
+      return t("journal.event.runFailed", { errorType: String(event.detail.errorType ?? "") });
+    case "events_truncated":
+      return t("journal.event.truncated", { at: n("at") });
+    default:
+      return t("journal.event.unknown", { event: event.event });
   }
 }
 

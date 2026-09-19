@@ -23,20 +23,18 @@ import {
   tombstoneMissing,
 } from "../../repos/rawDocuments.ts";
 import { landRecords } from "../land.ts";
-import { type DocumentToLand, landDocuments, type LandedDocument } from "../landDocument.ts";
+import { landDocuments } from "../landDocument.ts";
 import { loadStreamToRaw } from "../loadToRaw.ts";
+import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
-import { type GmailHarvest, harvestGmail } from "./gmail.ts";
+import { harvestGmail } from "./gmail.ts";
 
 export const GOOGLE_SOURCES = ["gmail", "drive"] as const;
 export type GoogleSource = (typeof GOOGLE_SOURCES)[number];
 
-/** Widened once, so the membership test needs neither an assertion nor a linear scan. */
-const GOOGLE_SOURCE_NAMES: ReadonlySet<string> = new Set(GOOGLE_SOURCES);
-
 export function isGoogleSource(source: string): source is GoogleSource {
-  return GOOGLE_SOURCE_NAMES.has(source);
+  return (GOOGLE_SOURCES as readonly string[]).includes(source);
 }
 
 export class ScopeNotChosen extends Error {
@@ -54,6 +52,8 @@ export interface CollectDeps {
   readonly exec: SqlExecutor;
   readonly api: GoogleApi;
   readonly now?: () => Date;
+  /** Where this collection narrates itself. Absent means a caller with no run to narrate. */
+  readonly journal?: RunJournal;
 }
 
 export interface CollectResult {
@@ -80,83 +80,15 @@ export interface CollectResult {
   readonly refusals: RunRefusal[];
 }
 
-/**
- * Catalogue rows for the documents that actually reached the lake.
- *
- * A skipped or failed document has no bytes to point at, and a row claiming otherwise is
- * worse than no row. `metadata`, never `manifest`: this row reaches `raw.documents`, which is
- * granted to `undercroft_dbt`. See `pii.md` and ADR 0015.
- */
-function catalogueRows(
-  landed: readonly LandedDocument[],
-  documents: readonly DocumentToLand[],
-  stamp: { observedAt: string; runId: string },
-): RawDocumentRow[] {
-  const rows: RawDocumentRow[] = [];
-  for (const result of landed) {
-    if (result.status !== "created" && result.status !== "unchanged") {
-      continue;
-    }
-    const source = documents.find((d) => d.documentId === result.documentId);
-    if (source === undefined) {
-      continue;
-    }
-    rows.push({
-      documentId: result.documentId,
-      lakeKey: result.lakeKey ?? "",
-      sha256: result.sha256 ?? "",
-      byteLength: result.byteLength ?? "0",
-      contentType: source.contentType,
-      metadataJson: JSON.stringify({
-        ...source.metadata,
-        sourceUpdatedAt: source.sourceUpdatedAt,
-      }),
-      observedAt: stamp.observedAt,
-      runId: stamp.runId,
-    });
-  }
-  return rows;
-}
-
-/** Every record and document the run refused, in the shape the ledger records them. */
-function refusalsFrom(
-  entity: string,
-  records: readonly { status: string; sourceRecordId: string; reason?: string }[],
-  documents: readonly LandedDocument[],
-): RunRefusal[] {
-  const refusals: RunRefusal[] = [];
-  for (const result of records) {
-    if (result.status === "failed") {
-      refusals.push({
-        entity,
-        sourceRecordId: result.sourceRecordId,
-        reason: result.reason ?? "refused",
-      });
-    }
-  }
-  for (const result of documents) {
-    if (result.status === "skipped" || result.status === "failed") {
-      refusals.push({
-        entity: "documents",
-        sourceRecordId: result.documentId,
-        reason: result.reason ?? result.status,
-      });
-    }
-  }
-  return refusals;
-}
-
-/**
- * The scope an admin recorded, or a refusal.
- *
- * A run never invents one. "Nobody has chosen yet" and "somebody chose everything" are
- * different facts, and collapsing the first into the second reads a whole mailbox on an
- * authority nobody granted.
- */
-async function requireScope(
+export async function runGoogleCollect(
   deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string },
-): Promise<Exclude<NonNullable<ReturnType<typeof parseScope>>, { kind: "xero" }>> {
+  input: { source: GoogleSource; tenantId: string; runId?: string },
+): Promise<CollectResult> {
+  // The caller that opened an `ops.run` row hands its id down; a caller with no ledger
+  // still gets a run id on every object it lands.
+  const runId = input.runId ?? newRunId();
+  const observedAt = (deps.now ?? (() => new Date()))().toISOString();
+
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
   // A Google source parses to a Google scope or to nothing; the third shape belongs to
@@ -165,48 +97,16 @@ async function requireScope(
     throw new ScopeNotChosen(input.source, input.tenantId);
   }
 
-  return scope;
-}
+  const journal = deps.journal ?? SILENT_JOURNAL;
+  journal.info("entity_started", { entity: scope.kind === "gmail" ? "messages" : "files" });
 
-/**
- * Harvest under the chosen scope.
- *
- * `seenIds` is Drive's alone and null for Gmail, deliberately: a message that stops matching
- * a label selection has been relabelled, not deleted, and the tombstone pass must not be
- * handed a set that would report a deletion which never happened.
- */
-async function harvestFor(
-  api: GoogleApi,
-  scope: Exclude<NonNullable<ReturnType<typeof parseScope>>, { kind: "xero" }>,
-): Promise<GmailHarvest & { seenIds: readonly string[] | null }> {
-  return scope.kind === "gmail"
-    ? { ...(await harvestGmail(api, scope)), seenIds: null }
-    : await harvestDrive(api, scope);
-}
+  const harvest =
+    scope.kind === "gmail"
+      ? { ...(await harvestGmail(deps.api, scope, journal)), seenIds: null, skipped: [] }
+      : await harvestDrive(deps.api, scope, journal);
 
-/**
- * Land what was harvested: the records, the stream into `raw`, the documents, and the
- * catalogue row for each document that actually arrived.
- *
- * One function because the ORDER is what matters -- the catalogue is written from what
- * landing reported, never from what harvesting found, so a skipped or failed document
- * cannot leave a row pointing at bytes that are not there.
- */
-async function landHarvest(
-  deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string },
-  run: {
-    harvest: GmailHarvest & { seenIds: readonly string[] | null };
-    entity: string;
-    runId: string;
-    observedAt: string;
-  },
-): Promise<{
-  landedRecords: Awaited<ReturnType<typeof landRecords>>;
-  loaded: Awaited<ReturnType<typeof loadStreamToRaw>>;
-  landedDocuments: Awaited<ReturnType<typeof landDocuments>>;
-}> {
-  const { harvest, entity, runId, observedAt } = run;
+  const entity = scope.kind === "gmail" ? "messages" : "files";
+
   const landedRecords = await landRecords(deps.lake, {
     source: input.source,
     tenantId: input.tenantId,
@@ -228,32 +128,30 @@ async function landHarvest(
 
   // Catalogue only what actually reached the lake. A skipped or failed document has no
   // bytes to point at, and a row claiming otherwise is worse than no row.
-  const rows = catalogueRows(landedDocuments.results, harvest.documents, { observedAt, runId });
+  const rows: RawDocumentRow[] = [];
+  for (const result of landedDocuments.results) {
+    if (result.status !== "created" && result.status !== "unchanged") {
+      continue;
+    }
+    const source = harvest.documents.find((d) => d.documentId === result.documentId);
+    if (source === undefined) {
+      continue;
+    }
+    rows.push({
+      documentId: result.documentId,
+      lakeKey: result.lakeKey ?? "",
+      sha256: result.sha256 ?? "",
+      byteLength: result.byteLength ?? "0",
+      contentType: source.contentType,
+      metadataJson: JSON.stringify({
+        ...source.metadata,
+        sourceUpdatedAt: source.sourceUpdatedAt,
+      }),
+      observedAt,
+      runId,
+    });
+  }
   await upsertDocuments(deps.exec, { source: input.source, tenantId: input.tenantId }, rows);
-  return { landedRecords, loaded, landedDocuments };
-}
-
-export async function runGoogleCollect(
-  deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string; runId?: string },
-): Promise<CollectResult> {
-  // The caller that opened an `ops.run` row hands its id down; a caller with no ledger
-  // still gets a run id on every object it lands.
-  const runId = input.runId ?? newRunId();
-  const observedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
-
-  const scope = await requireScope(deps, input);
-
-  const harvest = await harvestFor(deps.api, scope);
-
-  const entity = scope.kind === "gmail" ? "messages" : "files";
-
-  const { landedRecords, loaded, landedDocuments } = await landHarvest(deps, input, {
-    harvest,
-    entity,
-    runId,
-    observedAt,
-  });
 
   // Drive only. A Gmail message that stops matching a label selection has been relabelled,
   // not deleted, and tombstoning it would report a deletion that never happened.
@@ -266,7 +164,39 @@ export async function runGoogleCollect(
           { keptIds: harvest.seenIds, observedAt },
         );
 
-  const refusals = refusalsFrom(entity, landedRecords.results, landedDocuments.results);
+  const refusals: RunRefusal[] = [];
+  for (const result of landedRecords.results) {
+    if (result.status === "failed") {
+      refusals.push({
+        entity,
+        sourceRecordId: result.sourceRecordId,
+        reason: result.reason ?? "refused",
+      });
+    }
+  }
+  for (const result of landedDocuments.results) {
+    if (result.status === "skipped" || result.status === "failed") {
+      refusals.push({
+        entity: "documents",
+        sourceRecordId: result.documentId,
+        reason: result.reason ?? result.status,
+      });
+    }
+  }
+  // A pick the harvest would not take. Drive's alone today, and the id is Google's opaque
+  // one -- never the filename, which the admin saw and the lake manifest keeps.
+  for (const pick of harvest.skipped) {
+    refusals.push({ entity, sourceRecordId: pick.fileId, reason: pick.reason });
+  }
+
+  journal.info("documents_landed", {
+    entity: "documents",
+    created: landedDocuments.created,
+    unchanged: landedDocuments.unchanged,
+    skipped: landedDocuments.skipped,
+    failed: landedDocuments.failed,
+    tombstoned,
+  });
 
   return {
     runId,

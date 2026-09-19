@@ -74,6 +74,9 @@ export type RunView = inferRouterOutputs<AppRouter>["runs"]["list"]["items"][num
 /** One run in full, as `runs.get` returns it: the line plus what it recorded beneath. */
 export type RunDetail = inferRouterOutputs<AppRouter>["runs"]["get"];
 
+/** One line of what a run said while it ran, as `runs.events` returns it. */
+export type RunEventView = inferRouterOutputs<AppRouter>["runs"]["events"][number];
+
 /** One ingest key as `keys.list` returns it. Never the token itself, which is minted once. */
 export type IngestKey = inferRouterOutputs<AppRouter>["keys"]["list"][number];
 

@@ -429,6 +429,30 @@ export const en = {
     colFailures: "Failing rows",
     colTook: "Took",
     nothingRecorded: "This run recorded nothing further.",
+
+    feedHead: "What happened",
+    colWhen2: "At",
+    colWhat2: "What",
+    event: {
+      runOpened: "Started.",
+      entityStarted: "Reading {{entity}}.",
+      workListed: "{{total}} {{entity}} to read.",
+      recordsRead: "Read {{read}} {{entity}}.",
+      recordsReadOf: "Read {{read}} of {{total}} {{entity}}.",
+      entityDone:
+        "Finished {{entity}}: {{landed}} landed, {{created}} new, {{changed}} changed, {{refused}} refused.",
+      picksListed:
+        "Listed {{folders}} picked folders and found {{pdfs}} PDFs. Sub-folders are not read.",
+      documentsLanded:
+        "Documents: {{created}} new, {{unchanged}} unchanged, {{skipped}} skipped, {{failed}} failed.",
+      noModels: "This customer has no models yet, so there was nothing to build.",
+      dbtFinished: "dbt built {{models}} models and ran {{tests}} tests, {{testsFailed}} failing.",
+      runClosedOk: "Finished successfully.",
+      runClosedFailed: "Finished with a failure.",
+      runFailed: "The run broke ({{errorType}}). The full reason is under Error above.",
+      truncated: "{{at}} lines recorded; from here only warnings and errors are kept.",
+      unknown: "Event {{event}}.",
+    },
   },
 
   models: {

@@ -79,6 +79,15 @@ export interface TransformOutcome {
   readonly testsFailed: number;
   /** Why a build is not ok: the first erroring model's message, else dbt's last lines. */
   readonly error: string | null;
+  /**
+   * How many models the tenant HAS, which is not how many were built.
+   *
+   * Zero is the reason a green build can have no steps at all: dbt was never spawned,
+   * because there was nothing to spawn it for. Reported rather than inferred from an empty
+   * `steps`, because "this customer has no models" and "the `--select` matched nothing" look
+   * identical from outside and want different sentences on the screen.
+   */
+  readonly models: number;
 }
 
 /** A scheduled build of every model. Longer than any honest project needs. */
@@ -202,7 +211,7 @@ export async function runTransform(
   }
   const models = await listModels(deps.exec, input.tenantId);
   if (models.length === 0) {
-    return { ok: true, steps: [], testsFailed: 0, error: null };
+    return { ok: true, steps: [], testsFailed: 0, error: null, models: 0 };
   }
 
   const password = await rotateTenantPassword(deps.exec, input.tenantId, "dbt");
@@ -244,7 +253,7 @@ export async function runTransform(
       .filter((s) => s.kind === "model" && s.status === "success")
       .map((s) => s.name);
     await recordColumns(deps, input.tenantId, roles.analyticsSchema, built);
-    return { ok: error === null, steps, testsFailed, error };
+    return { ok: error === null, steps, testsFailed, error, models: models.length };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

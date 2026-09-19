@@ -29,7 +29,8 @@ import {
 import { RunInProgress, startIngest } from "./ingest.ts";
 import type { RunDeps } from "./runPaths.ts";
 import { readRelation } from "./preview.ts";
-import { runTransform, type TransformDeps } from "./transform.ts";
+import { createRunJournal, type RunJournal } from "./runJournal.ts";
+import { runTransform, type TransformDeps, type TransformOutcome } from "./transform.ts";
 
 export interface JobDeps extends RunDeps {
   /** Absent means no transform is chained after an ingest: this deployment has no dbt. */
@@ -130,34 +131,60 @@ async function startTransform(
     throw new RunInProgress("transform", input.tenantId, opened.runId);
   }
   const log = deps.log?.child({ runId, tenantId: input.tenantId, source: SOURCE_OF_TRANSFORM });
-  log?.info("run_opened", { verb: "transform", trigger: input.trigger });
+  const journal = createRunJournal({
+    exec: deps.exec,
+    runId,
+    ...(log === undefined ? {} : { log }),
+  });
+  journal.info("run_opened", { verb: "transform", trigger: input.trigger });
 
   const done = runTransform(dbt, {
     tenantId: input.tenantId,
     ...selectOf(input),
     ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
   }).then(
-    async (outcome) => {
-      await recordSteps(deps.exec, runId, outcome.steps);
-      await closeRun(deps.exec, runId, {
-        status: outcome.ok ? "ok" : "failed",
-        testsFailed: outcome.testsFailed,
-        ...(outcome.error === null ? {} : { error: outcome.error.slice(0, MAX_ERROR_CHARS) }),
-      });
-      log?.info("run_closed", {
-        status: outcome.ok ? "ok" : "failed",
-        steps: outcome.steps.length,
-        testsFailed: outcome.testsFailed,
-      });
-      return outcome.ok;
-    },
+    (outcome) => settleTransform(deps, runId, journal, outcome),
     async (error: unknown) => {
       await closeRun(deps.exec, runId, { status: "failed", error: messageOf(error) });
-      log?.error("run_failed", describeError(error));
+      journal.error("run_failed", describeError(error));
+      await journal.flush();
       return false;
     },
   );
   return { runId, done };
+}
+
+/** Write what the build did -- its steps, its outcome, and what it says for itself. */
+async function settleTransform(
+  deps: JobDeps,
+  runId: string,
+  journal: RunJournal,
+  outcome: TransformOutcome,
+): Promise<boolean> {
+  await recordSteps(deps.exec, runId, outcome.steps);
+  await closeRun(deps.exec, runId, {
+    status: outcome.ok ? "ok" : "failed",
+    testsFailed: outcome.testsFailed,
+    ...(outcome.error === null ? {} : { error: outcome.error.slice(0, MAX_ERROR_CHARS) }),
+  });
+  // A build with nothing to build is the commonest green run with nothing in it, and the
+  // screen showed it as a success with five zeroes and no explanation at all.
+  if (outcome.models === 0) {
+    journal.warn("no_models");
+  } else {
+    journal.info("dbt_finished", {
+      models: outcome.steps.filter((s) => s.kind === "model").length,
+      tests: outcome.steps.filter((s) => s.kind === "test").length,
+      testsFailed: outcome.testsFailed,
+    });
+  }
+  journal.info("run_closed", {
+    status: outcome.ok ? "ok" : "failed",
+    steps: outcome.steps.length,
+    testsFailed: outcome.testsFailed,
+  });
+  await journal.flush();
+  return outcome.ok;
 }
 
 function selectOf(input: TransformOpening): { select?: string } {

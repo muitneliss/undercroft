@@ -16,10 +16,12 @@ import {
   closeAbandoned,
   closeRun,
   entitiesForRuns,
+  eventsFor,
   getRun,
   listRuns,
   openRun,
   recordEntities,
+  recordEvents,
   recordExternalBatch,
   recordRefusals,
   refusalsFor,
@@ -118,6 +120,72 @@ describe("what a closed run keeps", () => {
   it("a run of another tenant is not found through this tenant", async () => {
     await openRun(db, { id: "r1", ...PAIR });
     expect(await getRun(db, "CASE-0043", "r1")).toBeNull();
+  });
+});
+
+describe("what a run says while it is still running", () => {
+  it("its events come back in the order they happened, with the counts they carried", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await recordEvents(db, "r1", [
+      {
+        at: "2026-09-19T12:42:22.000Z",
+        level: "info",
+        event: "work_listed",
+        entity: "messages",
+        detail: { total: 12_431 },
+      },
+      {
+        at: "2026-09-19T12:44:10.000Z",
+        level: "info",
+        event: "records_read",
+        entity: "messages",
+        detail: { read: 840, total: 12_431 },
+      },
+    ]);
+
+    const events = await eventsFor(db, "r1");
+    expect(events.map((e) => e.event)).toEqual(["work_listed", "records_read"]);
+    expect(events[0]?.at).toBe("2026-09-19T12:42:22.000Z");
+    expect(events[1]?.detail).toEqual({ read: 840, total: 12_431 });
+    expect(events[1]?.entity).toBe("messages");
+  });
+
+  it("past the read limit it answers with the newest, still oldest-first", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await recordEvents(
+      db,
+      "r1",
+      [1, 2, 3, 4].map((n) => ({
+        at: `2026-09-19T12:0${String(n)}:00.000Z`,
+        level: "info" as const,
+        event: "records_read",
+        entity: "messages",
+        detail: { read: n },
+      })),
+    );
+
+    expect((await eventsFor(db, "r1", 2)).map((e) => e.detail.read)).toEqual([3, 4]);
+  });
+
+  it("a run with no events has an empty feed rather than a refusal", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    expect(await eventsFor(db, "r1")).toEqual([]);
+  });
+
+  it("the feed goes when the run goes: it is evidence about a run, not an archive", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await recordEvents(db, "r1", [
+      {
+        at: "2026-09-19T12:00:00.000Z",
+        level: "warn",
+        event: "no_models",
+        entity: null,
+        detail: {},
+      },
+    ]);
+    await db.asSuperuser((tx) => tx.exec("DELETE FROM ops.run WHERE id = 'r1'"));
+
+    expect(await eventsFor(db, "r1")).toEqual([]);
   });
 });
 

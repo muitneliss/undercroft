@@ -15,6 +15,7 @@
 import { useTranslation } from "react-i18next";
 
 import { Errata } from "@/components/Errata.tsx";
+import { RunEvents } from "@/components/RunEvents.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
 import { formatCount, orMissing } from "@/lib/money.ts";
@@ -25,6 +26,15 @@ import { trpc } from "@/trpc.ts";
 
 /** How often the leaf re-reads a run still in progress. */
 const RUNNING_POLL_MS = 5000;
+
+/**
+ * How often the feed re-reads while a run is live.
+ *
+ * Faster than the detail beside it, because this is the part a person is watching. Not
+ * faster than two seconds: the worker coalesces its own progress lines at that interval, so
+ * reading more often than it writes would buy nothing.
+ */
+const LIVE_POLL_MS = 2000;
 
 export function RunDetail({
   tenantId,
@@ -41,6 +51,13 @@ export function RunDetail({
       refetchInterval: (query) =>
         query.state.data?.status === "running" ? RUNNING_POLL_MS : false,
     },
+  );
+  // The feed is read on its own and faster: it is the part that changes while somebody is
+  // watching, where the detail beside it only changes when the run ends.
+  const running = run.data?.status === "running";
+  const feed = trpc.runs.events.useQuery(
+    { tenantId, runId },
+    { refetchInterval: running ? LIVE_POLL_MS : false },
   );
 
   if (run.isPending) {
@@ -61,11 +78,13 @@ export function RunDetail({
   }
 
   const detail = run.data;
+  const events = feed.data ?? [];
   const bare =
     detail.error === null &&
     detail.entityCounts.length === 0 &&
     detail.refusals.length === 0 &&
-    detail.steps.length === 0;
+    detail.steps.length === 0 &&
+    events.length === 0;
 
   return (
     <div className="hinge stack">
@@ -98,6 +117,9 @@ export function RunDetail({
       {detail.error === null ? null : (
         <Errata heading={t("journal.errorHead")}>{detail.error}</Errata>
       )}
+
+      {/* Above the counts, because while the run is going the counts are not there yet. */}
+      {events.length > 0 ? <RunEvents events={events} locale={locale} live={running} /> : null}
 
       {detail.entityCounts.length > 0 ? (
         <table className="table">

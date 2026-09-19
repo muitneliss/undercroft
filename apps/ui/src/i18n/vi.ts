@@ -476,6 +476,40 @@ export const vi = {
     colFailures: "Dòng lỗi",
     colTook: "Mất",
     nothingRecorded: "Lần chạy này chưa ghi nhận gì thêm.",
+
+    feedHead: "Diễn biến",
+    colWhen2: "Lúc",
+    colWhat2: "Việc",
+    /**
+     * Mỗi sự kiện worker ghi lại là MỘT câu trọn vẹn ở đây.
+     *
+     * Worker chỉ gửi một động từ trong danh sách cố định kèm mấy con số; toàn bộ lời văn
+     * nằm ở đây, nên worker không cần biết tiếng nào. Tên loại dữ liệu (`messages`,
+     * `files`) giữ nguyên như nguồn gọi -- người đọc sẽ gặp lại đúng chữ đó ở mục Hồ dữ
+     * liệu. Con số đã được định dạng sẵn trước khi chèn vào, nên số thiếu hiện là MISSING
+     * chứ không phải 0.
+     */
+    event: {
+      runOpened: "Bắt đầu.",
+      entityStarted: "Bắt đầu đọc {{entity}}.",
+      workListed: "Cần đọc {{total}} {{entity}}.",
+      recordsRead: "Đã đọc {{read}} {{entity}}.",
+      recordsReadOf: "Đã đọc {{read}}/{{total}} {{entity}}.",
+      entityDone:
+        "Xong {{entity}}: {{landed}} về, {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối.",
+      picksListed:
+        "Đã xem {{folders}} thư mục được chọn, thấy {{pdfs}} tệp PDF. Thư mục con không được đọc.",
+      documentsLanded:
+        "Tài liệu: {{created}} mới, {{unchanged}} không đổi, {{skipped}} bỏ qua, {{failed}} lỗi.",
+      noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
+      dbtFinished:
+        "dbt dựng {{models}} mô hình, chạy {{tests}} kiểm tra, {{testsFailed}} không đạt.",
+      runClosedOk: "Kết thúc, thành công.",
+      runClosedFailed: "Kết thúc, thất bại.",
+      runFailed: "Lần chạy hỏng ({{errorType}}). Lý do đầy đủ ở phần Lỗi phía trên.",
+      truncated: "Đã ghi {{at}} dòng; từ đây chỉ ghi cảnh báo và lỗi.",
+      unknown: "Sự kiện {{event}}.",
+    },
   },
 
   models: {

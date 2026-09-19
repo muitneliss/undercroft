@@ -69,8 +69,27 @@ export interface RunStep {
   readonly executionMs: number | null;
 }
 
+/**
+ * One line of what a run is doing, as it does it.
+ *
+ * `event` is a verb from a fixed set the interface has a sentence for, never prose, and
+ * `detail` carries counts and opaque provider ids and nothing else -- see the docstring on
+ * `160_run_events.sql` for why that restriction is the whole design and not a style.
+ */
+export interface RunEvent {
+  readonly at: string;
+  readonly level: "info" | "warn" | "error";
+  readonly event: string;
+  /** The entity it concerns; `null` is "the run as a whole". */
+  readonly entity: string | null;
+  readonly detail: Readonly<Record<string, unknown>>;
+}
+
 /** The longest error text a run keeps. Enough to name the fault, too short to hold a row. */
 export const MAX_ERROR_CHARS = 500;
+
+/** How much of a run's feed one read returns. Above the worker's own per-run cap. */
+export const MAX_EVENTS_READ = 300;
 
 const SOURCE_OF_TRANSFORM = "*";
 export { SOURCE_OF_TRANSFORM };
@@ -221,6 +240,70 @@ export async function recordSteps(
        message = EXCLUDED.message, execution_ms = EXCLUDED.execution_ms`,
     [runId, JSON.stringify(steps), MAX_ERROR_CHARS],
   );
+}
+
+/**
+ * Append what a run is doing, while it is still doing it.
+ *
+ * `at` travels with each event rather than defaulting to `now()`, because the worker buffers
+ * a handful of events and flushes them together: stamping them on arrival here would file
+ * three minutes of work under one instant.
+ *
+ * JSON in, rows out, as `recordEntities` and `recordSteps` do -- one statement whatever the
+ * count, and the same parameter shape under `pg` and PGlite.
+ */
+export async function recordEvents(
+  exec: SqlExecutor,
+  runId: string,
+  events: readonly RunEvent[],
+): Promise<void> {
+  if (events.length === 0) {
+    return;
+  }
+  await exec.query(
+    `INSERT INTO ops.run_event (run_id, at, level, event, entity, detail)
+     SELECT $1, (e->>'at')::timestamptz, e->>'level', e->>'event', e->>'entity',
+            coalesce(e->'detail', '{}'::jsonb)
+     FROM jsonb_array_elements($2::jsonb) AS e`,
+    [runId, JSON.stringify(events)],
+  );
+}
+
+/**
+ * One run's feed, oldest first.
+ *
+ * Bounded by the NEWEST `limit` events and then re-ordered, so a run that somehow exceeded
+ * the worker's own cap shows what it is doing now rather than what it was doing first. There
+ * is no cursor, deliberately: the feed is capped, so a reader can have all of it on every
+ * read and never has to hold a second copy that could drift from the run.
+ */
+export async function eventsFor(
+  exec: SqlExecutor,
+  runId: string,
+  limit: number = MAX_EVENTS_READ,
+): Promise<RunEvent[]> {
+  // `detail` arrives parsed: both drivers hand a jsonb column back as a value, which is the
+  // same assumption `models.ts` makes about `app.model.columns`.
+  const { rows } = await exec.query<{
+    at: Date | string;
+    level: RunEvent["level"];
+    event: string;
+    entity: string | null;
+    detail: Record<string, unknown>;
+  }>(
+    `SELECT at, level, event, entity, detail FROM (
+       SELECT id, at, level, event, entity, detail FROM ops.run_event
+       WHERE run_id = $1 ORDER BY id DESC LIMIT $2
+     ) AS recent ORDER BY id`,
+    [runId, limit],
+  );
+  return rows.map((r) => ({
+    at: new Date(r.at).toISOString(),
+    level: r.level,
+    event: r.event,
+    entity: r.entity,
+    detail: r.detail,
+  }));
 }
 
 /**
