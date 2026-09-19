@@ -33,7 +33,9 @@ export function parseSpec(text: string): ConnectorSpec {
   try {
     tree = parseYaml(text);
   } catch (error) {
-    throw new SpecError(`connector spec is not valid YAML: ${(error as Error).message}`);
+    throw new SpecError(
+      `connector spec is not valid YAML: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   const result = ConnectorSpec.safeParse(tree);

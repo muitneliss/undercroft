@@ -505,6 +505,58 @@
       "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
     },
 
+    // `noUnsafeTypeAssertion` is one of the two rules the `types` domain was kept for, and it
+    // stays on everywhere. Ten of its findings were real and are fixed -- `isRecord` guards in
+    // `getPath`, `canonicalJson`, `connectionScope` and the S3 error shape, `instanceof Error`
+    // where `(error as Error).message` was assumed, and `.some()` where a readonly tuple was
+    // widened just to call `.includes`. What is left is three kinds of assertion the language
+    // gives no other spelling for, each listed at the file that needs it.
+
+    // Constructing a BRANDED type. `Amount` is a string with a phantom tag precisely so an
+    // arbitrary string cannot be passed as money (`money.md`), and the assertion at the
+    // constructor is the only way to mint one. Removing it removes the brand.
+    {
+      "includes": ["packages/core/src/money.ts"],
+      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
+    },
+
+    // The driver seam. `pg` types a result row as `any`, and `layering.md` makes these two
+    // files the only place a driver is touched -- so this is exactly where the `any` has to
+    // stop, and the assertion is what stops it. Repos above speak `SqlExecutor` and never
+    // assert.
+    {
+      "includes": ["packages/db/src/pool.ts", "packages/db/src/testing.ts"],
+      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
+    },
+
+    // Untyped parse boundaries: `JSON.parse`, `response.json()` and the YAML reader all return
+    // `any`, so the shape has to be stated somewhere. In every one of these the assertion is
+    // to `unknown`/`Record<string, unknown>` or is followed immediately by field checks --
+    // `typeof body.access_token === "string"`, `Array.isArray`, a Zod `safeParse` -- so the
+    // assertion names a shape rather than trusting one.
+    //
+    // The better answer is a Zod schema at each boundary, which `@undercroft/contracts`
+    // already provides for the lake's own request bodies. Doing that for a provider's token
+    // response and for ghcr's manifest is a change to what the code CHECKS, not to how it is
+    // spelled, so it is not folded into a lint pass. ADR 0018 records it as the follow-up.
+    {
+      "includes": [
+        "apps/control-plane/src/services/googleExchange.ts",
+        "apps/control-plane/src/services/workerClient.ts",
+        "apps/ui/src/lib/drivePicker.ts",
+        "apps/ui/src/test/setup.ts",
+        "apps/ui/vite.config.ts",
+        "apps/worker/src/handlers/lake.ts",
+        "apps/worker/src/services/google/refresh.ts",
+        "apps/worker/src/services/loadToRaw.ts",
+        "packages/db/src/repos/connections.ts",
+        "packages/lake/src/store.ts",
+        "scripts/dokploy.ts",
+        "scripts/wikiCoverage.ts"
+      ],
+      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
+    },
+
     // `import * as connections from "../services/connections.ts"` is what makes the tRPC
     // router readable: `connections.list`, `people.invite`, `tenants.rename` line up with the
     // procedure names they are bound to, and the alternative is importing forty functions by

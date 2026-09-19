@@ -31,7 +31,9 @@ for (const file of files) {
     if (error instanceof SpecError) {
       process.stderr.write(`FAIL  ${file}\n  ${error.issues.join("\n  ") || error.message}\n`);
     } else {
-      process.stderr.write(`FAIL  ${file}\n  ${(error as Error).message}\n`);
+      process.stderr.write(
+        `FAIL  ${file}\n  ${error instanceof Error ? error.message : String(error)}\n`,
+      );
     }
   }
 }

@@ -32,8 +32,11 @@ import { harvestGmail } from "./gmail.ts";
 export const GOOGLE_SOURCES = ["gmail", "drive"] as const;
 export type GoogleSource = (typeof GOOGLE_SOURCES)[number];
 
+/** Widened once, so the membership test needs neither an assertion nor a linear scan. */
+const GOOGLE_SOURCE_NAMES: ReadonlySet<string> = new Set(GOOGLE_SOURCES);
+
 export function isGoogleSource(source: string): source is GoogleSource {
-  return (GOOGLE_SOURCES as readonly string[]).includes(source);
+  return GOOGLE_SOURCE_NAMES.has(source);
 }
 
 export class ScopeNotChosen extends Error {

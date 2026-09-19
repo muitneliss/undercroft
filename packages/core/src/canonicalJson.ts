@@ -100,6 +100,11 @@ function byCodePoint(a: string, b: string): number {
   return left.length - right.length;
 }
 
+/** `typeof x === "object"` still admits null and says nothing about indexing. This does. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function serialise(value: unknown): string {
   if (value === null) {
     return "null";
@@ -132,8 +137,8 @@ function serialise(value: unknown): string {
     return `[${value.map(serialise).join(",")}]`;
   }
 
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
+  if (isRecord(value)) {
+    const entries = Object.entries(value)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => byCodePoint(a, b));
     return `{${entries.map(([k, v]) => `${escapeString(k)}:${serialise(v)}`).join(",")}}`;

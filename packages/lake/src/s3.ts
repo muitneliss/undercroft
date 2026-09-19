@@ -25,12 +25,17 @@ export interface S3StoreConfig {
   readonly forcePathStyle?: boolean;
 }
 
+/** `typeof x === "object"` still admits null and says nothing about indexing. This does. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function isNoSuchKey(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) {
+  if (!isRecord(error)) {
     return false;
   }
-  const { name } = error as { name?: unknown };
-  const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+  const { name, $metadata: metadata } = error;
+  const status = isRecord(metadata) ? metadata.httpStatusCode : undefined;
   return name === "NoSuchKey" || name === "NotFound" || status === 404;
 }
 

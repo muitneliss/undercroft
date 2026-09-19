@@ -25,6 +25,11 @@ const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
 /** A dot-path segment: a name, then any number of `[n]` subscripts. */
 const SEGMENT = /^(?<name>[^[\]]*)(?<indices>(?:\[\d+\])*)$/u;
 
+/** `typeof x === "object"` still admits null and says nothing about indexing. This does. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export function parsePath(path: string): string[] {
   if (path === "") {
     return [];
@@ -64,13 +69,13 @@ export function getPath(root: unknown, path: string): unknown {
       current = current[index];
       continue;
     }
-    if (typeof current !== "object") {
+    if (!isRecord(current)) {
       return undefined;
     }
     if (!Object.hasOwn(current, segment)) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[segment];
+    current = current[segment];
   }
   return current;
 }

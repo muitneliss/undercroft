@@ -27,7 +27,7 @@ import { Tenants } from "@/routes/Tenants.tsx";
 import { trpc } from "@/trpc.ts";
 
 function isSource(value: string | undefined): value is Source {
-  return SOURCES.includes(value as Source);
+  return SOURCES.some((source) => source === value);
 }
 
 /**

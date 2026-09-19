@@ -36,7 +36,7 @@ export const DEFAULT_LOCALE: Locale = "vi";
 const ZERO_WEIGHT = /^0(?:\.0+)?$/u;
 
 function isLocale(value: string): value is Locale {
-  return (LOCALES as readonly string[]).includes(value);
+  return LOCALES.some((locale) => locale === value);
 }
 
 /**

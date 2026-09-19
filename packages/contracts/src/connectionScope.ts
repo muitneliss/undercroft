@@ -20,6 +20,11 @@ const Chosen = z.object({
   name: z.string(),
 });
 
+/** `typeof x === "object"` still admits null and says nothing about indexing. This does. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export const GmailScope = z.object({
   kind: z.literal("gmail"),
   /**
@@ -70,7 +75,7 @@ export function parseScope(source: string, selectionJson: string): ConnectionSco
   // the rest of this file exists to prevent. It also catches a Drive-shaped selection saved
   // under Gmail: the key it carries is not the key that source uses.
   const key = source === "gmail" ? "labels" : source === "drive" ? "files" : null;
-  if (key === null || !Array.isArray((raw as Record<string, unknown>)[key])) {
+  if (key === null || !isRecord(raw) || !Array.isArray(raw[key])) {
     return null;
   }
 
