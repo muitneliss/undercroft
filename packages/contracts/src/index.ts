@@ -81,6 +81,15 @@ export {
 } from "./models.ts";
 export { documentKeyOf, documentPrefixOf, RawDocument } from "./rawDocument.ts";
 export {
+  DEFAULT_SEARCH_HITS,
+  MAX_SEARCH_HITS,
+  MAX_SEARCH_QUERY_CHARS,
+  RawSearchHit,
+  RawSearchRequest,
+  RawSearchResponse,
+  SearchKind,
+} from "./rawSearch.ts";
+export {
   BuildModelRequest,
   BuildModelResponse,
   Cell,

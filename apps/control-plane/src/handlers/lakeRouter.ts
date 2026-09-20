@@ -8,7 +8,15 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { DEFAULT_QUERY_ROWS, MAX_QUERY_ROWS, MAX_QUERY_SQL_BYTES } from "@undercroft/contracts";
+import {
+  DEFAULT_QUERY_ROWS,
+  DEFAULT_SEARCH_HITS,
+  MAX_QUERY_ROWS,
+  MAX_QUERY_SQL_BYTES,
+  MAX_SEARCH_HITS,
+  MAX_SEARCH_QUERY_CHARS,
+  SearchKind,
+} from "@undercroft/contracts";
 import { z } from "zod";
 
 import { messages } from "../i18n/index.ts";
@@ -116,6 +124,50 @@ export const lakeRouter = router({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: messages(ctx.locale)("error.queryNotRun"),
+        });
+      }
+      return outcome.value;
+    }),
+
+  /**
+   * One question over the whole of the tenant's raw lake, in Vietnamese or English.
+   *
+   * ADMIN-ONLY, for the same reason `records` and `documents` are and one sharper: a hit
+   * carries an excerpt of what a source actually said, and for a scanned contract that is
+   * whatever the contract says. It reaches the text through the tenant's dbt login at the
+   * worker, not through this process -- the control plane is still denied that column, and a
+   * reader admitted here could have written the same SELECT in the console beside it.
+   * ADR 0026.
+   */
+  search: requireRole("admin")
+    .input(
+      z.object({
+        q: z.string().trim().min(1).max(MAX_SEARCH_QUERY_CHARS),
+        kinds: z.array(SearchKind).nonempty().optional(),
+        limit: z.number().int().min(1).max(MAX_SEARCH_HITS).default(DEFAULT_SEARCH_HITS),
+        offset: z.number().int().min(0).default(0),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (ctx.worker === null) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.workerUnavailable"),
+        });
+      }
+      const outcome = await lake.search(ctx.worker, ctx.tenantId, {
+        q: input.q,
+        ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+        limit: input.limit,
+        offset: input.offset,
+      });
+      if (!outcome.ok) {
+        // No `query-failed` branch: there is no author's SQL here for Postgres to have an
+        // opinion about. A search that did not run is a precondition, like every other
+        // refusal from a worker that answered.
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: messages(ctx.locale)("error.searchNotRun"),
         });
       }
       return outcome.value;

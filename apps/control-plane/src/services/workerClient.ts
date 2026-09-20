@@ -18,9 +18,12 @@ import type {
   BuildModelResponse,
   CredentialInput,
   DqFailuresRequest,
+  RawSearchRequest,
+  RawSearchResponse,
   RevokeConnectionResponse,
   RunQueryRequest,
   SchemaResponse,
+  SearchKind,
   StoreCredentialResponse,
   TableResult,
 } from "@undercroft/contracts";
@@ -118,7 +121,28 @@ export interface WorkerClient {
   runRawQuery: (input: QueryInput) => Promise<WorkerOutcome<TableResult>>;
   /** The `raw` schema's tables and columns, for the console's sidebar. */
   readRawSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
+  /**
+   * One question over the whole raw lake, as that same dbt login. Admin-only at the caller.
+   *
+   * Here rather than in the control plane's own repos because of which login answers it: the
+   * control plane is deliberately denied the `text` column of `raw.document_text`, and this
+   * feature does not change that by a column. ADR 0026.
+   */
+  searchRaw: (input: SearchInput) => Promise<WorkerOutcome<RawSearchResponse>>;
 }
+
+/**
+ * What a caller sends to search.
+ *
+ * `kinds`, `limit` and `offset` are optional HERE and required on `RawSearchRequest`, for the
+ * reason `QueryInput` gives: the schema's defaults apply when the worker parses the body, and a
+ * caller who wants the whole lake should not have to spell out that it wants both halves.
+ */
+export type SearchInput = Omit<RawSearchRequest, "kinds" | "limit" | "offset"> & {
+  readonly kinds?: readonly SearchKind[];
+  readonly limit?: number;
+  readonly offset?: number;
+};
 
 /**
  * The part of `fetch` this client actually uses.
@@ -255,50 +279,25 @@ function triggerOn(t: WorkerTransport): typeof trigger {
   return trigger;
 }
 
-export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
-  const doFetch = config.fetch ?? globalThis.fetch;
-  const t: WorkerTransport = {
-    doFetch: config.fetch ?? globalThis.fetch,
-    timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    baseUrl: config.baseUrl,
-    triggerToken: config.triggerToken,
-  };
-  const post = postTo(t);
-  const trigger = triggerOn(t);
-
-  return {
-    storeCredential: (input) => post("/v1/connections/credential", input),
-    browseScope: (input) => post("/v1/connections/browse", input),
-    revokeConnection: (input) => post("/v1/connections/revoke", input),
-    triggerIngest: trigger,
-    // The worker's own build deadline plus room for the rows; the default would cut a
-    // build that is legitimately slow and report it as unreachable.
-    buildModel: (input) => post("/v1/models/build", input, BUILD_DEADLINE_MS),
-    dqFailures: (input) => post("/v1/dq/failures", input),
-    runQuery: (input) => query("/v1/queries/run", input),
-    readSchema: (input) => post("/v1/queries/schema", input),
-    // The raw lake's console. Same refusal handling, different login at the far end: the
-    // worker answers this one as the tenant's dbt role, which is the only one that may read
-    // `raw` at all. See `queryRunner.runRawQuery`.
-    runRawQuery: (input) => query("/v1/queries/raw/run", input),
-    readRawSchema: (input) => post("/v1/queries/raw/schema", input),
-  };
-
-  /**
-   * The other call whose refusal body IS read: a 400 `query_failed` carries Postgres's
-   * sentence about the author's SQL, which quotes the author's own text and nothing else,
-   * and is the one thing that lets them fix it. Every other status is handled as `post`
-   * handles it.
-   */
+/**
+ * The other call whose refusal body IS read: a 400 `query_failed` carries Postgres's sentence
+ * about the author's SQL, which quotes the author's own text and nothing else, and is the one
+ * thing that lets them fix it. Every other status is handled as `post` handles it.
+ *
+ * At module scope beside `postTo` and `triggerOn`, for the reason `WorkerTransport`'s own
+ * docstring gives about those two: a request helper that can be read on its own is one a
+ * reviewer can check against the endpoint it calls.
+ */
+function queryOn(t: WorkerTransport): typeof query {
   async function query(path: string, input: QueryInput): Promise<WorkerOutcome<TableResult>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), t.timeoutMs);
     try {
-      const response = await doFetch(`${config.baseUrl}${path}`, {
+      const response = await t.doFetch(`${t.baseUrl}${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${config.triggerToken}`,
+          authorization: `Bearer ${t.triggerToken}`,
         },
         body: JSON.stringify(input),
         signal: controller.signal,
@@ -323,4 +322,38 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
       clearTimeout(timer);
     }
   }
+  return query;
+}
+
+export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
+  const t: WorkerTransport = {
+    doFetch: config.fetch ?? globalThis.fetch,
+    timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    baseUrl: config.baseUrl,
+    triggerToken: config.triggerToken,
+  };
+  const post = postTo(t);
+  const trigger = triggerOn(t);
+  const query = queryOn(t);
+
+  return {
+    storeCredential: (input) => post("/v1/connections/credential", input),
+    browseScope: (input) => post("/v1/connections/browse", input),
+    revokeConnection: (input) => post("/v1/connections/revoke", input),
+    triggerIngest: trigger,
+    // The worker's own build deadline plus room for the rows; the default would cut a
+    // build that is legitimately slow and report it as unreachable.
+    buildModel: (input) => post("/v1/models/build", input, BUILD_DEADLINE_MS),
+    dqFailures: (input) => post("/v1/dq/failures", input),
+    runQuery: (input) => query("/v1/queries/run", input),
+    readSchema: (input) => post("/v1/queries/schema", input),
+    // The raw lake's console. Same refusal handling, different login at the far end: the
+    // worker answers this one as the tenant's dbt role, which is the only one that may read
+    // `raw` at all. See `queryRunner.runRawQuery`.
+    runRawQuery: (input) => query("/v1/queries/raw/run", input),
+    readRawSchema: (input) => post("/v1/queries/raw/schema", input),
+    // Plain `post`, not `query`: there is no author's SQL here to quote back, so there is no
+    // refusal body worth reading. A search that did not run is a refusal like any other.
+    searchRaw: (input) => post("/v1/queries/raw/search", input),
+  };
 }
