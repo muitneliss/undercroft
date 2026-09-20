@@ -113,13 +113,23 @@ BEGIN
     -- `SELECT ... FROM raw.records_default` is a permission error and the row-level policy
     -- on the parent cannot be side-stepped by naming the partition.
     --
-    -- `raw.document_text` joined this list in 180 (ADR 0024). It is edited HERE rather than
-    -- by replacing this function in that file, so the provisioning rules stay in one place;
-    -- 180 carries a catch-up loop for the databases where this file has already run, because
-    -- the migration ledger keys on a file's name and never re-applies it.
+    -- `raw.document_text` joined this list in 180 (ADR 0024), and the search functions in 190
+    -- (ADR 0026). Both are edited HERE rather than by replacing this function in those files,
+    -- so the provisioning rules stay in one place; each carries a catch-up loop for the
+    -- databases where this file has already run, because the migration ledger keys on a file's
+    -- name and never re-applies it.
+    --
+    -- The search functions do not exist yet when this file runs -- 190 creates them. That is
+    -- fine and is why the grant is inside `format()`: the body is dynamic SQL, parsed when a
+    -- tenant is provisioned, which is always after every migration has been applied.
     EXECUTE format('GRANT USAGE ON SCHEMA raw TO %I', v_dbt);
     EXECUTE format('GRANT SELECT ON raw.records, raw.documents, raw.document_text TO %I', v_dbt);
     EXECUTE format('GRANT EXECUTE ON FUNCTION raw.tenant_of(name) TO %I', v_dbt);
+    EXECUTE format(
+        'GRANT EXECUTE ON FUNCTION raw.search_cap(), raw.fold(text), raw.search_tsv(text),
+             raw.record_tsv(jsonb), raw.search_query(text),
+             raw.search_excerpt(text, text, integer) TO %I',
+        v_dbt);
 
     -- bi reads the tenant's analytics: what is there now, and what dbt creates later.
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', v_analytics, v_bi);
