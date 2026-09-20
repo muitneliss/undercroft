@@ -227,6 +227,35 @@ export const vi = {
     consoleNoOrderBy:
       "Câu truy vấn này không có ORDER BY, nên khi lật trang Postgres có thể trả một dòng ở hai trang hoặc bỏ sót. Thêm ORDER BY để thứ tự ổn định.",
     chooseFromIndex: "Chọn một dòng ở bảng trên để xem từng bản ghi của luồng đó.",
+    searchHead: "Tìm trong hồ dữ liệu",
+    /**
+     * Says the one thing a Vietnamese operator most needs to know before typing: that they do
+     * not have to put the tones in. Nothing else about the feature is worth a sentence here --
+     * a search box explains itself.
+     */
+    searchLead:
+      "Tìm trong mọi bản ghi và nội dung tài liệu đã về. Gõ không dấu vẫn ra kết quả có dấu: “hop dong” tìm được “Hợp đồng”.",
+    searchLabel: "Từ khoá",
+    searchPlaceholder: "hop dong",
+    searchSubmit: "Tìm",
+    searching: "Đang tìm…",
+    searchIdle: "Nhập từ khoá rồi nhấn Tìm.",
+    searchNotLoaded: "Không tìm được. Hãy thử lại sau ít phút.",
+    /** Absence, worded as absence. The lake is not broken; this word is not in it. */
+    searchNothing: "Không có bản ghi hay tài liệu nào khớp với “{{q}}”.",
+    searchHits_other: "{{count, number}} kết quả",
+    /** Said only when the page was cut, so a reader knows to narrow rather than to conclude. */
+    searchMore: "Còn kết quả khác. Hãy thêm từ khoá để thu hẹp.",
+    searchColWhere: "Ở đâu",
+    searchColMatch: "Nội dung khớp",
+    searchKindRecord: "Bản ghi",
+    searchKindDocument: "Tài liệu",
+    /** How the text was read. An OCR'd scan is a likelier place for a near-miss than a text layer. */
+    searchMethod: "đọc bằng {{method}}",
+    searchMethodUnknown: "chưa đọc được nội dung",
+    /** The extractor hit its ceiling: what was searched is less than what the document says. */
+    searchTruncated: "Tài liệu bị cắt bớt khi đọc, nên phần sau chưa được tìm.",
+    searchOpenStream: "Mở luồng",
     colSource: "Nguồn",
     colEntity: "Loại",
     colRecords: "Bản ghi",

@@ -1034,6 +1034,21 @@
     font-family: var(--face-mono);
   }
 
+  /*
+ * Where a search term sits inside an excerpt. The chrome ground the plates are
+ * printed in, used here as a highlighter rather than as a control -- it is the
+ * one ink in this system that means "look here".
+ *
+ * A `<mark>`, not a span, so a screen reader announces it as marked text; the
+ * browser default is a flat yellow that belongs to no palette, hence the reset.
+ */
+  .hit {
+    background: var(--leaf-ground);
+    color: var(--ink);
+    padding: 0 0.1em;
+    border-radius: var(--r-plate);
+  }
+
   /* -- controls ---------------------------------------------------------------- */
 
   /*

@@ -31,6 +31,11 @@ const LakeConsole = lazy(() =>
   import("@/components/LakeConsole.tsx").then((module) => ({ default: module.LakeConsole })),
 );
 
+// And its own, for the same reason: the fold table is a hundred characters a member never needs.
+const LakeSearch = lazy(() =>
+  import("@/components/LakeSearch.tsx").then((module) => ({ default: module.LakeSearch })),
+);
+
 export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
@@ -84,6 +89,14 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
           <div className="body stack">
             <Suspense fallback={<Skeleton rows={4} />}>
               <LakeBrowser tenantId={tenantId} />
+            </Suspense>
+          </div>
+
+          <div className="band-rule" />
+          <div className="head">{t("lake.searchHead")}</div>
+          <div className="body stack">
+            <Suspense fallback={<Skeleton rows={3} />}>
+              <LakeSearch tenantId={tenantId} />
             </Suspense>
           </div>
 

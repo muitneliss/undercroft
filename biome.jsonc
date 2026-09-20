@@ -508,7 +508,11 @@
         "apps/worker/src/services/google/drive.ts",
         "packages/connector-runtime/src/reader.ts",
         "packages/crypto/src/seal.ts",
-        "apps/ui/src/components/FileTypeChoice.tsx"
+        "apps/ui/src/components/FileTypeChoice.tsx",
+        // Four findings, all of them a row of the Vietnamese fold table -- `àáảãạăằắẳẵặâầấẩẫậ`
+        // and its three companions. Seventeen accented vowels with no repeat is about as
+        // entropic as a string gets, and there is no way to write the alphabet that is not.
+        "apps/ui/src/lib/fold.ts"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
     },
