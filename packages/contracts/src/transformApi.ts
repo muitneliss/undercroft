@@ -81,6 +81,15 @@ export const RunQueryRequest = z.object({
   tenantId: z.string().min(1),
   sql: z.string().min(1).max(MAX_QUERY_SQL_BYTES),
   limit: z.number().int().min(1).max(MAX_QUERY_ROWS).default(DEFAULT_QUERY_ROWS),
+  /**
+   * Rows to skip, so a console can page without the author writing OFFSET themselves.
+   *
+   * Paging a query that names no ORDER BY is not stable -- Postgres may return a row on two
+   * pages or on neither, because without an order there is nothing for OFFSET to count
+   * against. That is a property of SQL rather than of this field, so it is not forbidden
+   * here; the console says so on screen when the author's SQL has no ORDER BY.
+   */
+  offset: z.number().int().min(0).default(0),
 });
 export type RunQueryRequest = z.infer<typeof RunQueryRequest>;
 

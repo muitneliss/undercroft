@@ -25,6 +25,15 @@ import type {
   TableResult,
 } from "@undercroft/contracts";
 
+/**
+ * What a caller sends to run a query.
+ *
+ * `offset` is optional HERE and required on `RunQueryRequest`, because the schema's default
+ * applies when the worker parses the body -- a caller that does not page should not have to
+ * say `offset: 0` to mean "from the beginning".
+ */
+export type QueryInput = Omit<RunQueryRequest, "offset"> & { readonly offset?: number };
+
 export type WorkerOutcome<T> =
   | { ok: true; value: T }
   | {
@@ -102,9 +111,13 @@ export interface WorkerClient {
   /** The rows a failed test stored, as the worker reads them for an admin. */
   dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
   /** SQL an author wrote, run as the tenant's read-only login. */
-  runQuery: (input: RunQueryRequest) => Promise<WorkerOutcome<TableResult>>;
+  runQuery: (input: QueryInput) => Promise<WorkerOutcome<TableResult>>;
   /** The tenant's analytics schema, as that login sees it. */
   readSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
+  /** One SELECT over the RAW lake, as the tenant's dbt login. Admin-only at the caller. */
+  runRawQuery: (input: QueryInput) => Promise<WorkerOutcome<TableResult>>;
+  /** The `raw` schema's tables and columns, for the console's sidebar. */
+  readRawSchema: (input: { tenantId: string }) => Promise<WorkerOutcome<SchemaResponse>>;
 }
 
 /**
@@ -262,8 +275,13 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     // build that is legitimately slow and report it as unreachable.
     buildModel: (input) => post("/v1/models/build", input, BUILD_DEADLINE_MS),
     dqFailures: (input) => post("/v1/dq/failures", input),
-    runQuery: query,
+    runQuery: (input) => query("/v1/queries/run", input),
     readSchema: (input) => post("/v1/queries/schema", input),
+    // The raw lake's console. Same refusal handling, different login at the far end: the
+    // worker answers this one as the tenant's dbt role, which is the only one that may read
+    // `raw` at all. See `queryRunner.runRawQuery`.
+    runRawQuery: (input) => query("/v1/queries/raw/run", input),
+    readRawSchema: (input) => post("/v1/queries/raw/schema", input),
   };
 
   /**
@@ -272,11 +290,11 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
    * and is the one thing that lets them fix it. Every other status is handled as `post`
    * handles it.
    */
-  async function query(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
+  async function query(path: string, input: QueryInput): Promise<WorkerOutcome<TableResult>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), t.timeoutMs);
     try {
-      const response = await doFetch(`${config.baseUrl}/v1/queries/run`, {
+      const response = await doFetch(`${config.baseUrl}${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",

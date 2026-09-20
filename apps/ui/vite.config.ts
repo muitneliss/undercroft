@@ -43,10 +43,12 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
-    // Monaco's editor core is one chunk of several megabytes raw, loaded only on the Models
-    // route (see `components/SqlEditor.tsx`). Vite's default warns at 500 kB; the warning
-    // exists to catch a heavy module riding in the main bundle, which this one does not.
-    chunkSizeWarningLimit: 4000,
+    // The editor is its own chunk, loaded only on the three leaves that hold one (see
+    // `components/SqlEditor.tsx`). Vite's default warns at 500 kB; the warning exists to
+    // catch a heavy module riding in the main bundle, which this one does not. The waiver
+    // was 4000 while that chunk was Monaco -- CodeMirror is an order of magnitude smaller,
+    // so the ceiling comes back down to where it can still catch something.
+    chunkSizeWarningLimit: 700,
   },
   server: {
     // The control plane serves /trpc and the OAuth redirects; proxy them in dev.

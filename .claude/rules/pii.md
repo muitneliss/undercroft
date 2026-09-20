@@ -25,6 +25,14 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   `metadata` and `manifest` as two separate arguments so the split is visible at every call
   site; see `apps/worker/src/services/landDocument.ts` and ADR 0015.
 
+  **`raw.document_text` is the one named exception, and only for the text itself.** A
+  document's extracted content necessarily holds every name a human wrote in it, and ADR 0024
+  permits that in that table alone, because forbidding it forbids the feature the table
+  exists for. It does not loosen the rule above by a single column: `raw.documents` stays
+  opaque, and a filename still never reaches Postgres. What keeps the text off a dashboard is
+  that `undercroft_bi` is revoked the whole `raw` schema, so it is reachable only through a
+  model the customer wrote — **never grant the BI role anything in `raw`**.
+
 ## Follow
 
 - Fixtures are **invented, not anonymised.** Anonymising preserves shapes, amounts and

@@ -26,15 +26,30 @@
  * continuation slip above or below, in real, focusable text, printed once. It used to be
  * printed twice, as a dashed plate on the canvas and again as a line beneath it.
  *
+ * THE DRAWING HAS A GROUND. The canvas used to be transparent, which left the plates lying
+ * on the reading field with nothing under them -- a row of objects rather than a drawing OF
+ * something, and the reason the figure read flat however well each plate was cut. It is now
+ * the page stock inside one keyline, carrying a registration grid: the marks a press prints
+ * to align a sheet, which is this system's own object for "a surface something is drawn on".
+ * That grid is `index.css`'s, drawn as a background on the scroll container; `@xyflow/react`'s
+ * own `<Background>` is still not used, and neither is its minimap, zoom or pan -- this is a
+ * schedule, not an infinite canvas.
+ *
  * Of `@xyflow/react`'s own look nothing survives but the things it is actually good at: node
- * placement, the edge paths, the markers and the flow animation. No grid, no minimap, no
- * zoom or pan -- this is a schedule, not an infinite canvas. Its attribution is kept and
+ * placement, the edge paths, the markers and the flow animation. Its attribution is kept and
  * linked, set as a colophon in this system's voice rather than floating over the drawing.
  */
 
 import type { Edge, Node, NodeProps, NodeTypes } from "@xyflow/react";
-import { Handle, MarkerType, Position, ReactFlow, ReactFlowProvider } from "@xyflow/react";
-import { useMemo } from "react";
+import {
+  Handle,
+  MarkerType,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useUpdateNodeInternals,
+} from "@xyflow/react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -103,6 +118,79 @@ function Station({ data }: NodeProps<StationNode>): React.JSX.Element {
 }
 
 const NODE_TYPES: NodeTypes = { station: Station };
+
+/**
+ * Where the row sits in its field.
+ *
+ * Centred rather than pinned to the corner: the canvas is 44px taller than a plate, so 22
+ * puts the row on the field's own centre line, and 20 gives the first plate the same margin
+ * from the keyline that the last one gets from the trailing gap `railWidth` already reserves.
+ * Both are pinned against `--station-h` and the canvas height in `index.css`.
+ */
+const DRAWING_ORIGIN = { x: 20, y: 22, zoom: 1 } as const;
+
+/**
+ * Re-measure every plate's connectors once the row has actually finished laying out.
+ *
+ * @xyflow/react measures each handle ONCE, as the node mounts, and places that node's edge
+ * endpoints from the numbers it read then. Anything that changes the plate's box afterwards
+ * leaves those numbers describing a layout that no longer exists, and the edge is drawn to
+ * where the connector used to be -- the skewed line this exists to prevent. Its own docs name
+ * the remedy: "when changing handle positions, call the updateNodeInternals function to
+ * notify React Flow of the layout changes".
+ *
+ * THE LEAF IS TURNING WHILE THIS MOUNTS, and that is the whole bug. `.leaf` plays
+ * `leaf-turn` on every division change -- `perspective(1600px) rotateY(-5deg)` settling to
+ * `none`, about `transform-origin: left center`. A `getBoundingClientRect()` taken during it
+ * is read through that rotation, so every plate's connector reports a position that is wrong
+ * by an amount PROPORTIONAL TO ITS DISTANCE FROM THE SPINE. That is why the row did not shift
+ * uniformly but fanned: measured mid-turn, the connectors drifted 48.8, 49.9, 50.9, 51.9,
+ * 53.0, 54.1 across six plates, and the rightmost even measured its x behind its neighbour's.
+ * The drawing was correct; the numbers it was drawn from were taken through a rotating sheet.
+ *
+ * Two smaller things move the box too. The three faces are self-hosted and subset, and only
+ * the latin ranges are preloaded (see `index.html`), so a Vietnamese datum -- "138 bản ghi ·
+ * 52 bị từ chối", which is most of them -- is laid out in the fallback face first and re-laid
+ * when its subset arrives. And a dev-server stylesheet swap re-styles a plate without ever
+ * remounting its node.
+ *
+ * So: measure once at mount, again when every animation on the leaf has finished, and again
+ * when the faces land. Each pass is one measurement of a handful of nodes.
+ */
+function RemeasurePlates({
+  ids,
+  canvas,
+}: {
+  ids: readonly string[];
+  canvas: React.RefObject<HTMLDivElement | null>;
+}): null {
+  const updateNodeInternals = useUpdateNodeInternals();
+  // The ids themselves, not the array's identity: `toNodes` builds a new array every render
+  // and an effect keyed on it would re-measure forever.
+  const key = ids.join(" ");
+
+  useEffect(() => {
+    function remeasure(): void {
+      for (const id of key.split(" ")) {
+        if (id !== "") {
+          updateNodeInternals(id);
+        }
+      }
+    }
+    remeasure();
+
+    // The turning sheet this sits on. `getAnimations` walks the leaf's own running
+    // animations; `leaf-turn` is finite (`both`, 190ms), so awaiting it always settles.
+    const leaf = canvas.current?.closest(".leaf");
+    const turning = leaf?.getAnimations?.() ?? [];
+    void Promise.allSettled(turning.map((animation) => animation.finished)).then(remeasure);
+
+    // Absent in the test DOM, where a missing one only means nothing measures a third time.
+    void document.fonts?.ready.then(remeasure);
+  }, [key, canvas, updateNodeInternals]);
+
+  return null;
+}
 
 function toNodes(stages: readonly RunStage[]): StationNode[] {
   return railPlan(stages).map((station) => ({
@@ -208,6 +296,10 @@ export function RunFlow({
   const nodes = useMemo(() => toNodes(own), [own]);
   const edges = useMemo(() => toEdges(own), [own]);
   const width = useMemo(() => railWidth(railPlan(own)), [own]);
+  const nodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
+  // A DOM ref, not application state: `RemeasurePlates` needs the leaf this drawing sits
+  // on to know when it has stopped turning. `.claude/rules/state.md` allows exactly this.
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="run-map stack stack--tight">
@@ -215,13 +307,13 @@ export function RunFlow({
 
       <ChainSlip stage={stages.find((stage) => stage.kind === "link-parent")} into="from" />
 
-      <div className="run-map__canvas" aria-hidden="true">
+      <div className="run-map__canvas" aria-hidden="true" ref={canvasRef}>
         <ReactFlowProvider>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             nodeTypes={NODE_TYPES}
-            defaultViewport={{ x: 4, y: 8, zoom: 1 }}
+            defaultViewport={DRAWING_ORIGIN}
             minZoom={1}
             maxZoom={1}
             panOnDrag={false}
@@ -238,6 +330,7 @@ export function RunFlow({
             proOptions={{ hideAttribution: true }}
             style={{ width }}
           />
+          <RemeasurePlates ids={nodeIds} canvas={canvasRef} />
         </ReactFlowProvider>
       </div>
 

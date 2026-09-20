@@ -68,5 +68,6 @@ export function jobDepsFor(deps: LakeApiDeps, source: string, specsDir: string):
     ...(deps.transactor === undefined ? {} : { transactor: deps.transactor }),
     ...(deps.fetcher === undefined ? {} : { fetcher: deps.fetcher }),
     ...(deps.dbt === undefined ? {} : { dbt: { ...deps.dbt, exec: deps.exec } }),
+    ...(deps.extractSpawn === undefined ? {} : { extractSpawn: deps.extractSpawn }),
   };
 }

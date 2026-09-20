@@ -35,6 +35,15 @@ export interface DocumentSummary {
   readonly source: string;
   readonly documents: number;
   readonly bytes: number;
+  /**
+   * How many of them an extract run could actually read into text.
+   *
+   * Reported beside the total rather than instead of it, because the gap between the two IS
+   * the useful figure: 122 documents of which 55 are readable says what a run achieved and
+   * what is still opaque, where either number alone says neither. Zero means the extract
+   * verb has not run over this source yet -- not that nothing in it can be read.
+   */
+  readonly readable: number;
   readonly latestObservedAt: string;
 }
 
@@ -114,22 +123,33 @@ export async function summariseDocuments(
     source: string;
     documents: number;
     bytes: number;
+    readable: number;
     latest_observed_at: Date | string;
   }>(
-    `SELECT source,
+    // `readable` is how many of this source's documents an extract run could actually read.
+    // A LEFT JOIN, so a source nobody has run the extract verb over counts zero rather than
+    // disappearing: "we have not read these yet" and "we read them and got nothing" are
+    // different facts, and the second one is a row with a `reason`.
+    `SELECT d.source,
             count(*)::int AS documents,
-            coalesce(sum(byte_length), 0)::float8 AS bytes,
-            max(observed_at) AS latest_observed_at
-     FROM raw.documents
-     WHERE tenant_id = $1
-     GROUP BY source
-     ORDER BY source`,
+            coalesce(sum(d.byte_length), 0)::float8 AS bytes,
+            count(t.method)::int AS readable,
+            max(d.observed_at) AS latest_observed_at
+     FROM raw.documents d
+     LEFT JOIN raw.document_text t
+       ON t.source = d.source
+      AND t.tenant_id = d.tenant_id
+      AND t.document_id = d.document_id
+     WHERE d.tenant_id = $1
+     GROUP BY d.source
+     ORDER BY d.source`,
     [tenantId],
   );
   return rows.map((r) => ({
     source: r.source,
     documents: r.documents,
     bytes: r.bytes,
+    readable: r.readable,
     latestObservedAt: iso(r.latest_observed_at),
   }));
 }

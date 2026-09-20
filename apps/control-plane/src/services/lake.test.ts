@@ -128,6 +128,7 @@ describe("summary", () => {
         source: "gmail",
         documents: 2,
         bytes: 3500,
+        readable: 0,
         latestObservedAt: "2026-09-18T09:30:00.000Z",
       },
     ]);

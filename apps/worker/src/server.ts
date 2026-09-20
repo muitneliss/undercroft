@@ -17,6 +17,7 @@ import { googleRefresher } from "./services/google/refresh.ts";
 import type { Refresher } from "./services/runTypes.ts";
 import { closeAbandonedRuns } from "./services/ledger.ts";
 import { createTenantSessions } from "./services/tenantSession.ts";
+import { realSpawn } from "./services/transform.ts";
 import { xeroRefresher } from "./services/xero/refresh.ts";
 
 function required(name: string): string {
@@ -106,6 +107,15 @@ const app = createLakeApi({
     sessions: createTenantSessions({ exec: asExecutor(pool), dsn }),
     env: process.env,
   },
+  // The child environment every spawned reader inherits. `PATH` is the load-bearing part:
+  // without it `Bun.spawn` cannot find `pdftotext` even where the image installed it, and
+  // every PDF reports the binary as missing. Read here and nowhere below (`layering.md`).
+  env: process.env,
+  // The extract verb reads landed documents with poppler and tesseract, which the image
+  // installs alongside dbt. Present unconditionally: the binaries are part of the image, and
+  // one that is missing is reported per document as `extractor-missing:<program>` rather than
+  // by the verb quietly not existing. ADR 0024.
+  extractSpawn: realSpawn,
 });
 
 // Whatever the previous process was in the middle of is over; the ledger says so before the

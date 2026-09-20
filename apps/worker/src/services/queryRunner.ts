@@ -80,6 +80,95 @@ export async function runQuery(
   });
 }
 
+/**
+ * The raw lake, queried directly: the SAME frame, as the tenant's dbt login.
+ *
+ * WHY A SECOND ENTRY POINT AND NOT A FLAG ON THE FIRST. The two differ in the only thing
+ * that matters -- which login runs them -- and that is a security boundary rather than a
+ * parameter. `runQuery` answers a dashboard as the BI login, which has no USAGE on `raw` at
+ * all and is the reason a chart can never reach an unreviewed payload. This answers an
+ * admin's own console as the dbt login, which `ops.provision_tenant` grants SELECT on
+ * `raw.records`, `raw.documents` and `raw.document_text`. Naming them separately is what
+ * keeps a later caller from reaching the wider login by passing a string.
+ *
+ * WHAT MAKES IT SAFE is the frame and Postgres, not this function. `SET TRANSACTION READ
+ * ONLY` refuses every write before a grant is consulted -- which matters here in a way it
+ * does not for BI, because the dbt login CAN create in its own two schemas, and read-only is
+ * what takes that away for the length of the query. The dbt login has no USAGE on `app` or
+ * `ops`, so no credential is reachable; the row-level policy on `raw` shows it one tenant's
+ * rows; and the extended protocol with an empty parameter list makes `; DROP TABLE` a syntax
+ * error rather than a second statement.
+ */
+export async function runRawQuery(
+  deps: QueryDeps,
+  input: { tenantId: string; sql: string; limit: number; offset?: number },
+): Promise<TableResult> {
+  const roles = await tenantRolesFor(deps.exec, input.tenantId);
+  if (roles === null) {
+    throw new TenantNotProvisioned(input.tenantId);
+  }
+  return deps.sessions.as({ tenantId: input.tenantId, kind: "dbt" }, async (exec) => {
+    let framed: Awaited<ReturnType<typeof runFramed>>;
+    try {
+      framed = await runFramed(exec, {
+        schema: RAW_SCHEMA,
+        sql: input.sql,
+        limit: input.limit,
+        offset: input.offset ?? 0,
+        timeoutMs: QUERY_TIMEOUT_MS,
+      });
+    } catch (error) {
+      throw new QueryFailed(messageOf(error), { cause: error });
+    }
+    const names = await typeNames(
+      exec,
+      framed.fields.map((f) => f.dataTypeID),
+    );
+    const columns = framed.fields.map((f) => ({
+      name: f.name,
+      type: names.get(f.dataTypeID) ?? String(f.dataTypeID),
+    }));
+    const rows = framed.rows
+      .slice(0, input.limit)
+      .map((row) => columns.map((column) => cellOf(row[column.name])));
+    return { columns, rows, truncated: framed.rows.length > input.limit };
+  });
+}
+
+/**
+ * The lake's own schema, so an unqualified `documents` means `raw.documents`.
+ *
+ * Not the tenant's analytics schema and not both: a console over the raw lake that silently
+ * resolved a name in `analytics_<slug>` would answer a question about transformed data with
+ * a table the author believed was raw. A model is still reachable by writing its schema out.
+ */
+const RAW_SCHEMA = "raw";
+
+/** Every table and column the dbt login can see in `raw`. The console's own sidebar. */
+export function readRawSchema(
+  deps: QueryDeps,
+  input: { tenantId: string },
+): Promise<SchemaResponse> {
+  return rawSchemaOf(deps, input);
+}
+
+async function rawSchemaOf(deps: QueryDeps, input: { tenantId: string }): Promise<SchemaResponse> {
+  const roles = await tenantRolesFor(deps.exec, input.tenantId);
+  if (roles === null) {
+    throw new TenantNotProvisioned(input.tenantId);
+  }
+  const rows = await deps.sessions.as({ tenantId: input.tenantId, kind: "dbt" }, (exec) =>
+    schemaColumns(exec, RAW_SCHEMA),
+  );
+  const tables = new Map<string, { name: string; type: string }[]>();
+  for (const row of rows) {
+    const columns = tables.get(row.table_name) ?? [];
+    columns.push({ name: row.column_name, type: row.data_type });
+    tables.set(row.table_name, columns);
+  }
+  return { tables: [...tables].map(([name, columns]) => ({ name, columns })) };
+}
+
 /** The tenant's analytics schema as its BI login sees it. */
 export async function readSchema(
   deps: QueryDeps,
