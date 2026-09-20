@@ -25,6 +25,7 @@ import {
   ConnectorError,
   createPacer,
   DEFAULT_RETRY,
+  HttpError,
   type Pacer,
   parseLossless,
   raiseForByteStatus,
@@ -38,6 +39,28 @@ import {
  * a backfill that trips it costs more in 429s than the pacing saves. 120ms leaves headroom.
  */
 export const GOOGLE_MIN_INTERVAL_MS = 120;
+
+/** Gmail's rate-limit reasons, which arrive as 403 rather than 429. */
+const RATE_LIMITED = /rateLimitExceeded|userRateLimitExceeded/u;
+const FORBIDDEN = 403;
+
+/**
+ * `DEFAULT_RETRY`, plus the one thing that is true of Google and not of HTTP generally.
+ *
+ * Gmail does not answer a rate limit with 429. It answers **`403 rateLimitExceeded`** (or
+ * `userRateLimitExceeded`), and Google's own error guide says to back off and retry exactly
+ * those. With 403 absent from `on`, a backfill died mid-mailbox the moment the per-user
+ * quota bit -- observed as "gmail/messages failed after 196 records: HTTP 403".
+ *
+ * Deliberately NOT `on: [403]`. The same status is also how Google says "the customer never
+ * granted that scope", which is not transient: retrying it five times with backoff turns a
+ * clear refusal into a slow one and tells the operator nothing new. So the REASON decides,
+ * and both directions are pinned by tests.
+ */
+export const GOOGLE_RETRY: RetryPolicy = {
+  ...DEFAULT_RETRY,
+  retryWhen: (error) => error.status === FORBIDDEN && RATE_LIMITED.test(error.bodyExcerpt),
+};
 
 export interface GoogleApiDeps {
   readonly fetcher: ByteFetcher;
@@ -64,7 +87,7 @@ export interface GoogleApi {
 export function createGoogleApi(source: string, deps: GoogleApiDeps): GoogleApi {
   const clock = deps.clock ?? systemClock;
   const pacer = deps.pacer ?? createPacer({ minIntervalMs: GOOGLE_MIN_INTERVAL_MS }, clock);
-  const retry = deps.retry ?? DEFAULT_RETRY;
+  const retry = deps.retry ?? GOOGLE_RETRY;
 
   /**
    * `seen` is the collector's running count of records landed so far, passed down rather
@@ -116,6 +139,17 @@ export function createGoogleApi(source: string, deps: GoogleApiDeps): GoogleApi 
   };
 }
 
+/**
+ * What the provider actually said, not merely which status it said it with.
+ *
+ * `raiseForByteStatus` captures a body excerpt and `HttpError`'s message drops it -- so the
+ * one word that separates a rate limit from a revoked scope sat unused in memory while the
+ * operator read a bare "HTTP 403". Both are 403 at Google; without the reason there is
+ * nothing to act on. Rule 2: say why.
+ */
 function describe(error: unknown): string {
+  if (error instanceof HttpError && error.bodyExcerpt !== "") {
+    return `${error.message}: ${error.bodyExcerpt}`;
+  }
   return error instanceof Error ? error.message : String(error);
 }

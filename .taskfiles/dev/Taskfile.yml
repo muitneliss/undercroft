@@ -96,6 +96,15 @@ tasks:
     cmds:
       - bun run migrate
 
+  psql:
+    desc: 'Run SQL against the local compose Postgres. Usage: task dev:psql -- "SELECT 1"'
+    cmds:
+      # The local stack's own database, via the container that already has psql. Read-only by
+      # convention -- this is for looking at what a run landed, not for changing it.
+      # No quotes around CLI_ARGS: Task already re-quotes an argument containing spaces, and
+      # adding a second pair makes psql read the whole statement as one string literal.
+      - docker compose -f {{.COMPOSE_FILE}} exec -T postgres psql -U {{.PG_USER}} -d {{.PG_DB}} -c {{.CLI_ARGS}}
+
   invite:
     desc: "Invite a user locally. Usage: task dev:invite -- you@x.test --tenant CASE-0001 --role admin --create-tenant"
     env:
@@ -167,6 +176,11 @@ tasks:
   ui:
     desc: Run the UI dev server (Vite; hot module reload already built in).
     dir: "{{.ROOT_DIR}}/apps/ui"
+    env:
+      # Vite's dev proxy forwards /trpc, /oauth and /api to the control plane, so it has to
+      # be told the SAME port `dev:api` bound. Both read {{.API_PORT}}; leaving Vite to
+      # assume 3000 is how the two drift the moment 3000 is taken by something else.
+      UNDERCROFT_API_PORT: "{{.API_PORT}}"
     cmds:
       - bun run dev
 

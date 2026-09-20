@@ -31,8 +31,19 @@ import type { RecordToLand } from "../land.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 
-/** Why a pick was not taken. The one reason this collector has, and it is a refusal. */
+/** Why a pick was not taken: the file's type is outside the chosen allow-list. */
 export const NOT_ALLOWED_TYPE = "not-an-allowed-type";
+
+/**
+ * Why a picked FOLDER yielded nothing.
+ *
+ * Not an error -- an empty folder is a legitimate answer -- but it must be SAID. Without it,
+ * "the folder is empty", "everything in it is outside the allow-list" and "the pick no longer
+ * resolves" are one green run landing 0 with no refusals, which is the shape of the report
+ * "Drive syncs nothing even though I have data". A directly-picked file already refused with
+ * a reason; this is the folder half of the same rule. CLAUDE.md rule 2.
+ */
+export const NOTHING_MATCHED = "no-matching-files-in-folder";
 
 const DRIVE_BASE = "https://www.googleapis.com/drive/v3/files";
 const ENTITY = "files";
@@ -51,6 +62,10 @@ export interface DriveHarvest {
    * A directly-picked file outside the allow-list used to be dropped where it was found,
    * which made "we were given nothing" and "we refused what we were given" the same green
    * run landing 0. CLAUDE.md rule 2: recorded with its reason, never dropped.
+   *
+   * BOTH kinds of pick report here now. The file half was closed first; a folder that listed
+   * nothing stayed silent for longer, and it is the commoner half, because a folder is what
+   * an admin usually picks and an allow-list is what usually empties it.
    */
   readonly skipped: { fileId: string; reason: string }[];
 }
@@ -169,7 +184,11 @@ async function matchingFilesOf(
 ): Promise<DriveFile[]> {
   const { fileTypes, seen, skipped } = options;
   if (picked.kind === "folder") {
-    return listMatchingIn(api, picked.id, fileTypes, seen);
+    const listed = await listMatchingIn(api, picked.id, fileTypes, seen);
+    if (listed.length === 0) {
+      skipped.push({ fileId: picked.id, reason: NOTHING_MATCHED });
+    }
+    return listed;
   }
   const one = await readOneFile(api, picked.id, fileTypes, seen);
   if (one.file === null) {

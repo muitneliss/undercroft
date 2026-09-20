@@ -96,6 +96,55 @@ describe("createGoogleApi", () => {
     }
   });
 
+  it("a 403 that IS Gmail's rate limit is retried, because it is transient", async () => {
+    // Gmail does not answer a rate limit with 429. It answers `403 rateLimitExceeded`, and
+    // Google's own error guide says to back off and retry it. Treating every 403 as fatal
+    // ends a real backfill mid-mailbox -- observed here as "failed after 196 records".
+    const clock = new TestClock();
+    const fetcher = new InMemoryByteFetcher()
+      .on("GET", URL_A, {
+        status: 403,
+        body: { error: { code: 403, errors: [{ reason: "userRateLimitExceeded" }] } },
+      })
+      .on("GET", URL_A, { body: { labels: [] } });
+
+    const pending = apiWith(fetcher, clock).getJson(URL_A, "labels");
+    for (let i = 0; i < 3; i += 1) {
+      await clock.advance(60_000);
+    }
+
+    expect(await pending).toEqual({ labels: [] });
+    expect(fetcher.calls).toHaveLength(2);
+  });
+
+  it("a 403 that is a PERMISSION refusal is not retried", async () => {
+    // The quiet side, and why this is not `on: [403]`. A scope the customer did not grant
+    // is not transient: retrying it five times with backoff turns a clear refusal into a
+    // slow one and tells the operator nothing new.
+    const fetcher = new InMemoryByteFetcher().on("GET", URL_A, {
+      status: 403,
+      body: { error: { code: 403, errors: [{ reason: "insufficientPermissions" }] } },
+    });
+
+    await expect(apiWith(fetcher, new TestClock()).getJson(URL_A, "labels")).rejects.toThrow();
+    expect(fetcher.calls).toHaveLength(1);
+  });
+
+  it("a failure says what the provider said, not just the status", async () => {
+    // The body excerpt was captured by `raiseForByteStatus` and then dropped on the floor:
+    // `HttpError`'s message is status-and-url only. So "HTTP 403" reached the operator with
+    // the one word that distinguishes a rate limit from a revoked scope sitting unused in
+    // memory. Rule 2 -- say why.
+    const fetcher = new InMemoryByteFetcher().on("GET", URL_A, {
+      status: 403,
+      body: { error: { code: 403, errors: [{ reason: "insufficientPermissions" }] } },
+    });
+
+    await expect(apiWith(fetcher, new TestClock()).getJson(URL_A, "messages", 196)).rejects.toThrow(
+      /insufficientPermissions/u,
+    );
+  });
+
   it("an unrecorded endpoint fails loudly rather than reading as an empty mailbox", async () => {
     const fetcher = new InMemoryByteFetcher().on("GET", URL_A, { body: { labels: [] } });
 
