@@ -62,6 +62,17 @@
     "globals": ["Bun", "__UNDERCROFT_RELEASE__"]
   },
 
+  // `tailwindDirectives` off by default treats `@theme`, `@utility` and `@custom-variant` as
+  // parse errors -- confirmed by running against `apps/ui/src/index.css`'s own `@theme inline`
+  // block (docs/adr/0025), which also made the following `@import` "wrong position" until this
+  // was on: Biome couldn't tell the untagged block was a valid Tailwind at-rule rather than an
+  // arbitrary style rule breaking the leading-imports-only prelude.
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+
   // ESLint's `no-restricted-syntax` has no equivalent rule in Biome, and the money and
   // no-mock bans it carried are the two rules this repo most needs a machine to enforce --
   // `money.md` exists because a wrong amount does not raise, it just arrives in a dashboard
@@ -106,8 +117,8 @@
       "suspicious": "error"
     },
 
-    // Domains are Biome's per-framework rule bundles. Four are on: the four whose framework
-    // is actually in `package.json`. The other eleven are `none`, and that costs NO coverage
+    // Domains are Biome's per-framework rule bundles. Five are on: the five whose framework
+    // is actually in `package.json`. The other ten are `none`, and that costs NO coverage
     // -- a Solid rule only ever fires on Solid code, so switching it off in a repo with no
     // Solid removes findings that were never about this codebase.
     //
@@ -124,7 +135,8 @@
     // `noUnsafeTypeAssertion` across from `typescript-eslint`'s type-checked preset. Losing
     // those was the one real risk in dropping typescript-eslint.
     //
-    // `react` is the UI (react 19.0.0) and `test` is the Bun suite. Turn a domain back on the
+    // `react` is the UI (react 19.0.0) and `test` is the Bun suite. `tailwind` joined once
+    // `tailwindcss` entered `apps/ui/package.json` (docs/adr/0025). Turn a domain back on the
     // day its framework enters `package.json`, not before. ADR 0018.
     "domains": {
       "astro": "none",
@@ -137,7 +149,7 @@
       "reactNative": "none",
       "solid": "none",
       "svelte": "none",
-      "tailwind": "none",
+      "tailwind": "all",
       "test": "all",
       "turborepo": "none",
       "types": "all",

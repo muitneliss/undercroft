@@ -21,6 +21,15 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import {
   type LakeStream,
@@ -79,37 +88,43 @@ function RecordsTable({
 
   return (
     <div className="stack">
-      <table className="table">
-        <caption>{t("lake.rowsCaption", { count: items.length })}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("lake.colRecordId")}</th>
-            <th scope="col">{t("lake.colObserved")}</th>
-            <th scope="col">{t("lake.colLoaded")}</th>
-            <th scope="col">{t("lake.colRun")}</th>
-            <th scope="col">{t("lake.colAtSource")}</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableCaption>{t("lake.rowsCaption", { count: items.length })}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">{t("lake.colRecordId")}</TableHead>
+            <TableHead scope="col">{t("lake.colObserved")}</TableHead>
+            <TableHead scope="col">{t("lake.colLoaded")}</TableHead>
+            <TableHead scope="col">{t("lake.colRun")}</TableHead>
+            <TableHead scope="col">{t("lake.colAtSource")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {items.map((row) => (
-            <tr key={row.sourceRecordId}>
-              <td>
+            <TableRow key={row.sourceRecordId}>
+              <TableCell>
                 <span className="datum">{row.sourceRecordId}</span>
                 <details className="payload">
                   <summary className="plate plate--small">{t("lake.showPayload")}</summary>
                   <pre className="payload__text">{row.payload}</pre>
                 </details>
-              </td>
-              <td className="datum datum--quiet">{formatDateTime(row.observedAt, locale)}</td>
-              <td className="datum datum--quiet">{formatDateTime(row.loadedAt, locale)}</td>
-              <td className="datum datum--quiet">
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {formatDateTime(row.observedAt, locale)}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {formatDateTime(row.loadedAt, locale)}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
                 <Link to={`${journal}/${row.runId}`}>{row.runId}</Link>
-              </td>
-              <td className="datum datum--quiet">{atSource(t, row.deletedAt, locale)}</td>
-            </tr>
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {atSource(t, row.deletedAt, locale)}
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       {rows.hasNextPage ? (
         <div className="row">
           <button
@@ -160,35 +175,39 @@ function DocumentsTable({
 
   return (
     <div className="stack">
-      <table className="table">
-        <caption>{t("lake.docsCaption", { count: items.length })}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("lake.colDocumentId")}</th>
-            <th scope="col">{t("lake.colContentType")}</th>
-            <th scope="col" className="num">
+      <Table>
+        <TableCaption>{t("lake.docsCaption", { count: items.length })}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">{t("lake.colDocumentId")}</TableHead>
+            <TableHead scope="col">{t("lake.colContentType")}</TableHead>
+            <TableHead scope="col" className="num">
               {t("lake.colBytes")}
-            </th>
-            <th scope="col">{t("lake.colObserved")}</th>
-            <th scope="col">{t("lake.colRun")}</th>
-            <th scope="col">{t("lake.colAtSource")}</th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+            <TableHead scope="col">{t("lake.colObserved")}</TableHead>
+            <TableHead scope="col">{t("lake.colRun")}</TableHead>
+            <TableHead scope="col">{t("lake.colAtSource")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {items.map((row) => (
-            <tr key={row.documentId}>
-              <td className="datum">{row.documentId}</td>
-              <td className="datum datum--quiet">{row.contentType}</td>
-              <td className="num datum">{formatBytes(row.bytes, locale)}</td>
-              <td className="datum datum--quiet">{formatDateTime(row.observedAt, locale)}</td>
-              <td className="datum datum--quiet">
+            <TableRow key={row.documentId}>
+              <TableCell className="datum">{row.documentId}</TableCell>
+              <TableCell className="datum datum--quiet">{row.contentType}</TableCell>
+              <TableCell className="num datum">{formatBytes(row.bytes, locale)}</TableCell>
+              <TableCell className="datum datum--quiet">
+                {formatDateTime(row.observedAt, locale)}
+              </TableCell>
+              <TableCell className="datum datum--quiet">
                 <Link to={`${journal}/${row.runId}`}>{row.runId}</Link>
-              </td>
-              <td className="datum datum--quiet">{atSource(t, row.deletedAt, locale)}</td>
-            </tr>
+              </TableCell>
+              <TableCell className="datum datum--quiet">
+                {atSource(t, row.deletedAt, locale)}
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       {rows.hasNextPage ? (
         <div className="row">
           <button

@@ -21,6 +21,7 @@ import { Link } from "react-router-dom";
 import type { QuestionView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { CardContent, CardHeader } from "@/components/ui/card.tsx";
 import { TILE_ACTIONS, type TileAction } from "@/lib/dashboardLayout.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { paramsFromSearch } from "@/lib/params.ts";
@@ -113,7 +114,7 @@ export function QuestionCard({
         gridRow: `${String(tile.y + 1)} / span ${String(tile.h)}`,
       }}
     >
-      <div className="grid__head">
+      <CardHeader className="grid__head">
         {question === null ? (
           <span className="label">{t("dashboard.questionGone")}</span>
         ) : (
@@ -125,8 +126,8 @@ export function QuestionCard({
           </Link>
         )}
         {edit ? <TileControls onAction={onAction} /> : null}
-      </div>
-      <div className="grid__body">
+      </CardHeader>
+      <CardContent className="grid__body">
         {question === null ? null : bound.missing.length > 0 ? (
           <p className="note">
             {t("dashboard.waiting", {
@@ -143,7 +144,7 @@ export function QuestionCard({
             <ChartFrame result={answer.data} chart={question.chart} locale={locale} />
           </Suspense>
         )}
-      </div>
+      </CardContent>
     </section>
   );
 }

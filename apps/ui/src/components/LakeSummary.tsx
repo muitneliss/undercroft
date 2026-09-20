@@ -18,6 +18,15 @@ import { Link } from "react-router-dom";
 
 import type { Connection, LakeSummary as Summary } from "@/api/types.ts";
 import { EmptyState } from "@/components/EmptyState.tsx";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { lakeEmptyBody } from "@/lib/lake.ts";
 import { formatBytes, formatCount } from "@/lib/money.ts";
@@ -57,65 +66,69 @@ export function LakeSummary({
       ) : null}
 
       {summary.records.length > 0 ? (
-        <table className="table">
-          <caption>{t("lake.recordsCaption", { count: summary.records.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("lake.colSource")}</th>
-              <th scope="col">{t("lake.colEntity")}</th>
-              <th scope="col" className="num">
+        <Table>
+          <TableCaption>{t("lake.recordsCaption", { count: summary.records.length })}</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">{t("lake.colSource")}</TableHead>
+              <TableHead scope="col">{t("lake.colEntity")}</TableHead>
+              <TableHead scope="col" className="num">
                 {t("lake.colRecords")}
-              </th>
-              <th scope="col" className="num">
+              </TableHead>
+              <TableHead scope="col" className="num">
                 {t("lake.colTombstoned")}
-              </th>
-              <th scope="col">{t("lake.colLatest")}</th>
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+              <TableHead scope="col">{t("lake.colLatest")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {summary.records.map((stream) => (
-              <tr key={`${stream.source}/${stream.entity}`}>
-                <td className="datum">{sourceLabel(stream.source)}</td>
-                <td className="datum">{stream.entity}</td>
-                <td className="num datum">{formatCount(stream.records, locale)}</td>
-                <td className="num datum datum--quiet">{formatCount(stream.tombstoned, locale)}</td>
-                <td className="datum datum--quiet">
+              <TableRow key={`${stream.source}/${stream.entity}`}>
+                <TableCell className="datum">{sourceLabel(stream.source)}</TableCell>
+                <TableCell className="datum">{stream.entity}</TableCell>
+                <TableCell className="num datum">{formatCount(stream.records, locale)}</TableCell>
+                <TableCell className="num datum datum--quiet">
+                  {formatCount(stream.tombstoned, locale)}
+                </TableCell>
+                <TableCell className="datum datum--quiet">
                   {relativeTime(stream.latestObservedAt, locale)}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       ) : null}
 
       {summary.documents.length > 0 ? (
-        <table className="table">
-          <caption>{t("lake.documentsCaption", { count: summary.documents.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("lake.colSource")}</th>
-              <th scope="col" className="num">
+        <Table>
+          <TableCaption>
+            {t("lake.documentsCaption", { count: summary.documents.length })}
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">{t("lake.colSource")}</TableHead>
+              <TableHead scope="col" className="num">
                 {t("lake.colDocuments")}
-              </th>
-              <th scope="col" className="num">
+              </TableHead>
+              <TableHead scope="col" className="num">
                 {t("lake.colBytes")}
-              </th>
-              <th scope="col">{t("lake.colLatest")}</th>
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+              <TableHead scope="col">{t("lake.colLatest")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {summary.documents.map((source) => (
-              <tr key={source.source}>
-                <td className="datum">{sourceLabel(source.source)}</td>
-                <td className="num datum">{formatCount(source.documents, locale)}</td>
-                <td className="num datum">{formatBytes(source.bytes, locale)}</td>
-                <td className="datum datum--quiet">
+              <TableRow key={source.source}>
+                <TableCell className="datum">{sourceLabel(source.source)}</TableCell>
+                <TableCell className="num datum">{formatCount(source.documents, locale)}</TableCell>
+                <TableCell className="num datum">{formatBytes(source.bytes, locale)}</TableCell>
+                <TableCell className="datum datum--quiet">
                   {relativeTime(source.latestObservedAt, locale)}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       ) : null}
     </>
   );

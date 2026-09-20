@@ -12,6 +12,8 @@
 
 import { useTranslation } from "react-i18next";
 
+import { Skeleton as SkeletonLine } from "@/components/ui/skeleton.tsx";
+
 export function Skeleton({ rows = 3 }: { rows?: number }): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -19,7 +21,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }): React.JSX.Element {
     <div className="stack" aria-busy="true" aria-live="polite">
       <span className="visually-hidden">{t("common.loading")}</span>
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="setting" style={{ width: `${String(94 - ((i * 13) % 38))}%` }} />
+        <SkeletonLine key={i} style={{ width: `${String(94 - ((i * 13) % 38))}%` }} />
       ))}
     </div>
   );

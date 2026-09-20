@@ -99,7 +99,9 @@ Some rules are the exception, because a machine _can_ see them, and each is pinn
 sides — fires, and stays quiet — so it cannot quietly stop matching:
 
 - `no-usestate` and the `layer-*` rules are **ast-grep** rules that fail `task ci:lint-rules`
-  (`bun run lint:rules`). Pinned by `scripts/layering.test.ts`.
+  (`bun run lint:rules`). The `layer-*` rules are pinned by `scripts/layering.test.ts`;
+  `no-usestate` (including its `apps/ui/src/components/ui/**` exemption, docs/adr/0025) is
+  pinned separately by `scripts/state.test.ts`.
 - `no-biome-ignore-all` is the same kind of rule and bans the lint bypass itself: no
   `biome-ignore-all` **anywhere**, test files included, no group-wide `lint:` /
   `lint/plugin:` spelling (both reach the money plugin), no `ast-grep-ignore` at all. Pinned
