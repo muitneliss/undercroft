@@ -19,6 +19,7 @@
  */
 
 import { MarkAbsent, MarkGranted, MarkLapsed, MarkPending } from "@/components/Icon.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
 import type { CardPresentation } from "@/lib/connectionState.ts";
 
 type Mark = CardPresentation["mark"];
@@ -34,9 +35,9 @@ export function StatusMark({ mark, label }: { mark: Mark; label: string }): Reac
   const Glyph = GLYPH[mark];
 
   return (
-    <span className={`mark mark--${mark}`}>
+    <Badge className={`mark mark--${mark}`}>
       <Glyph size={13} />
       {label}
-    </span>
+    </Badge>
   );
 }

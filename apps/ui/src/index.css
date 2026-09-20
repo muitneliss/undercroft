@@ -45,13 +45,53 @@
  * correct and the solver only ever adjusts it.
  */
 
+/* Tailwind v4: utilities + @theme only, no Preflight. Preflight resets margins, buttons, table
+ * borders and more globally, and most of this app's components are hand-tuned against the
+ * browser's own defaults, not Tailwind's -- importing it would regress every one of them on day
+ * one, not just the ones a shadcn/Radix primitive touches. Declaring the full layer order up
+ * front keeps `undercroft` (declared last, unchanged below) outranking both Tailwind layers and
+ * `xyflow`, same precedent as the comment two lines down. https://tailwindcss.com/docs/preflight */
+@layer theme, utilities, xyflow, undercroft;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
 /* `@xyflow/react`'s own base stylesheet: the positioning, panning and clipping rules
  * the run's-shape canvas needs underneath it (`position: absolute` on a node,
  * `overflow: hidden` on the pane) that this file only ever overrides, never supplies
  * from scratch. Named and layered below `undercroft` (declared after it, so it wins
  * the cascade layer order) rather than left unlayered, where an import would beat
- * every rule in this file regardless of specificity. */
+ * every rule in this file regardless of specificity. Kept here, immediately after the
+ * Tailwind imports above: every `@import` in this file must precede every other rule
+ * (CSS spec exempts only `@charset` and `@layer`), so `@theme` below -- a real rule, not
+ * one of those two -- cannot sit between imports. */
 @import "@xyflow/react/dist/style.css" layer(xyflow);
+
+/* Maps shadcn/Radix's semantic tokens onto this file's own tokens (defined in `:root` below), so
+ * a vendored primitive under `@/components/ui` reads the same board/ink/leaf system as everything
+ * else -- never a second palette. No `--chart-*`/`--sidebar-*`: nothing adopted needs them (charts
+ * stay chart.js; there is no Sidebar -- see index.css's own header on why not). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.4);
+}
 /* -- faces ------------------------------------------------------------------
  *
  * Self-hosted, not from a font CDN. This origin holds the session cookie that
@@ -323,6 +363,28 @@
      that drifts onto its own lettering is the defect the rotation replaced. */
     --tab-indent: 2.4rem;
     --tab-punch-x: 1.05rem;
+
+    /* shadcn/Radix semantic aliases -- thin projections of the tokens above, consumed by the
+     `@theme inline` block up top. Never a second palette: a vendored primitive under
+     `@/components/ui` is still reading `--ink`/`--page`/`--errata`, just by their shadcn name. */
+    --background: var(--page);
+    --foreground: var(--ink);
+    --card: var(--leaf);
+    --card-foreground: var(--ink);
+    --popover: var(--leaf);
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);
+    --primary-foreground: var(--bone);
+    --muted: var(--bone);
+    --muted-foreground: var(--ink-3);
+    --accent: var(--bone);
+    --accent-foreground: var(--ink);
+    --destructive: var(--errata);
+    --destructive-foreground: var(--errata-ink);
+    --border: var(--rule);
+    --input: var(--rule);
+    --ring: var(--rule-strong);
+    --radius: var(--r-plate);
   }
 
   /*

@@ -21,6 +21,15 @@ import { useTranslation } from "react-i18next";
 import { type IngestKey, isSource, SOURCE_LABEL, SOURCES } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { formatDate, lastUsedNote } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -112,38 +121,42 @@ function KeyTable({
   const locale = useUiStore((state) => state.locale);
 
   return (
-    <table className="table">
-      <caption>{t("keys.caption", { count: keys.length })}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t("keys.colLabel")}</th>
-          <th scope="col">{t("keys.colSources")}</th>
-          <th scope="col">{t("keys.colCreated")}</th>
-          <th scope="col">{t("keys.colLastUsed")}</th>
-          <th scope="col">{t("keys.colExpires")}</th>
-          <th scope="col">{t("keys.colRevoke")}</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption>{t("keys.caption", { count: keys.length })}</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">{t("keys.colLabel")}</TableHead>
+          <TableHead scope="col">{t("keys.colSources")}</TableHead>
+          <TableHead scope="col">{t("keys.colCreated")}</TableHead>
+          <TableHead scope="col">{t("keys.colLastUsed")}</TableHead>
+          <TableHead scope="col">{t("keys.colExpires")}</TableHead>
+          <TableHead scope="col">{t("keys.colRevoke")}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {keys.map((key) => (
-          <tr key={key.id}>
-            <td>
+          <TableRow key={key.id}>
+            <TableCell>
               <span className="datum">{key.label}</span>
               <span className="datum datum--quiet journal__trigger">{key.id}</span>
-            </td>
-            <td className="datum datum--quiet">
+            </TableCell>
+            <TableCell className="datum datum--quiet">
               {key.allowedSources.length === 0
                 ? t("keys.allSources")
                 : key.allowedSources
                     .map((source) => (isSource(source) ? SOURCE_LABEL[source] : source))
                     .join(", ")}
-            </td>
-            <td className="datum datum--quiet">{formatDate(key.createdAt, locale)}</td>
-            <td className="datum datum--quiet">{lastUsedNote(t, locale, key.lastUsedAt)}</td>
-            <td className="datum datum--quiet">
+            </TableCell>
+            <TableCell className="datum datum--quiet">
+              {formatDate(key.createdAt, locale)}
+            </TableCell>
+            <TableCell className="datum datum--quiet">
+              {lastUsedNote(t, locale, key.lastUsedAt)}
+            </TableCell>
+            <TableCell className="datum datum--quiet">
               {key.expiresAt === null ? t("keys.noExpiry") : formatDate(key.expiresAt, locale)}
-            </td>
-            <td>
+            </TableCell>
+            <TableCell>
               {key.revokedAt === null ? (
                 <button
                   className="plate plate--small"
@@ -158,11 +171,11 @@ function KeyTable({
               ) : (
                 <span className="datum datum--quiet">{t("keys.revoked")}</span>
               )}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -30,7 +31,7 @@ const release: string = ((): string => {
 const apiOrigin = `http://localhost:${process.env.UNDERCROFT_API_PORT ?? "3000"}`;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   define: {
     __UNDERCROFT_RELEASE__: JSON.stringify(release),
   },

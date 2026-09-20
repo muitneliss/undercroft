@@ -18,6 +18,15 @@ import { Link } from "react-router-dom";
 
 import type { Connection, LakeSummary as Summary } from "@/api/types.ts";
 import { EmptyState } from "@/components/EmptyState.tsx";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import {
   inventoryOf,
@@ -75,20 +84,20 @@ export function LakeSummary({
       ) : null}
 
       {entries.length > 0 ? (
-        <table className="table">
-          <caption>{t("lake.indexCaption", { count: entries.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("lake.colSource")}</th>
-              <th scope="col">{t("lake.colHolds")}</th>
-              <th scope="col" className="num">
+        <Table>
+          <TableCaption>{t("lake.indexCaption", { count: entries.length })}</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">{t("lake.colSource")}</TableHead>
+              <TableHead scope="col">{t("lake.colHolds")}</TableHead>
+              <TableHead scope="col" className="num">
                 {t("lake.colHeld")}
-              </th>
-              <th scope="col">{t("lake.colAlso")}</th>
-              <th scope="col">{t("lake.colLatest")}</th>
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+              <TableHead scope="col">{t("lake.colAlso")}</TableHead>
+              <TableHead scope="col">{t("lake.colLatest")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {entries.map((entry) => (
               <IndexRow
                 key={streamKey(entry.stream)}
@@ -98,8 +107,8 @@ export function LakeSummary({
                 {...(hrefFor === undefined ? {} : { href: hrefFor(entry.stream) })}
               />
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       ) : null}
     </>
   );
@@ -135,8 +144,8 @@ function IndexRow({
   const source = sourceLabel(stream.source);
 
   return (
-    <tr className={open ? "lake-index__row lake-index__row--open" : "lake-index__row"}>
-      <td className="datum">
+    <TableRow className={open ? "lake-index__row lake-index__row--open" : "lake-index__row"}>
+      <TableCell className="datum">
         {href === undefined ? (
           source
         ) : (
@@ -145,10 +154,10 @@ function IndexRow({
             {source}
           </Link>
         )}
-      </td>
-      <td className="datum">{holds}</td>
-      <td className="num datum">{formatCount(entry.held, locale)}</td>
-      <td className="datum datum--quiet">
+      </TableCell>
+      <TableCell className="datum">{holds}</TableCell>
+      <TableCell className="num datum">{formatCount(entry.held, locale)}</TableCell>
+      <TableCell className="datum datum--quiet">
         {note.kind === "bytes"
           ? t("lake.alsoBytesReadable", {
               bytes: formatBytes(note.bytes, locale),
@@ -157,8 +166,8 @@ function IndexRow({
             })
           : null}
         {note.kind === "tombstoned" ? t("lake.alsoTombstoned", { count: note.count }) : null}
-      </td>
-      <td className="datum datum--quiet">{relativeTime(entry.latestObservedAt, locale)}</td>
-    </tr>
+      </TableCell>
+      <TableCell className="datum datum--quiet">{relativeTime(entry.latestObservedAt, locale)}</TableCell>
+    </TableRow>
   );
 }

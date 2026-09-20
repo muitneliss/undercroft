@@ -12,6 +12,15 @@ import type { Locale } from "@undercroft/core/locale";
 import { useTranslation } from "react-i18next";
 
 import type { TableResult } from "@/api/types.ts";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { cellText } from "@/lib/cells.ts";
 
 /**
@@ -81,30 +90,32 @@ export function ResultTable({
   return (
     <div className={fill ? "result-pane" : "stack stack--tight"}>
       <div className="result">
-        <table className="table">
-          {fill ? null : <caption>{t("result.caption", { count: result.rows.length })}</caption>}
-          <thead>
-            <tr>
+        <Table>
+          {fill ? null : (
+            <TableCaption>{t("result.caption", { count: result.rows.length })}</TableCaption>
+          )}
+          <TableHeader>
+            <TableRow>
               {result.columns.map((column) => (
-                <th key={column.name} scope="col">
+                <TableHead key={column.name} scope="col">
                   {column.name}
                   <span className="datum datum--quiet result__type">{column.type}</span>
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {result.rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
+              <TableRow key={rowIndex}>
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="datum">
+                  <TableCell key={cellIndex} className="datum">
                     <Cell text={cellText(t, cell, locale)} />
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       {result.truncated && !fill ? (
         <p className="note">{t("result.truncated", { count: result.rows.length })}</p>

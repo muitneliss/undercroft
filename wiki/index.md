@@ -30,6 +30,7 @@
 - [ADR 0022 A Test File Is Not an Exception](sources/adr-0022-a-test-file-is-not-an-exception.md)
 - [ADR 0023 Task Is the Mandatory Command Entrypoint](sources/adr-0023-task-is-the-mandatory-command-entrypoint.md)
 - [ADR 0024: A document's text is readable by dbt](sources/adr-0024-a-document-s-text-is-readable-by-dbt.md)
+- [ADR 0025 shadcn/Radix for Structure, Never for Style](sources/adr-0025-shadcn-radix-for-structure-never-for-style.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
