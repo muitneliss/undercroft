@@ -16,6 +16,15 @@ import type { Locale } from "@undercroft/core/locale";
 import { useTranslation } from "react-i18next";
 
 import type { RunEventView } from "@/api/types.ts";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { eventSentence } from "@/lib/runs.ts";
 import { formatTime } from "@/lib/when.ts";
 
@@ -32,24 +41,24 @@ export function RunEvents({
   const { t } = useTranslation();
 
   return (
-    <table className="table">
-      <caption>{t("journal.feedHead")}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t("journal.colWhen2")}</th>
-          <th scope="col">{t("journal.colWhat2")}</th>
-        </tr>
-      </thead>
+    <Table>
+      <TableCaption>{t("journal.feedHead")}</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">{t("journal.colWhen2")}</TableHead>
+          <TableHead scope="col">{t("journal.colWhat2")}</TableHead>
+        </TableRow>
+      </TableHeader>
       {/* A live region only while the run is live: a closed run's feed is history, and
           announcing it again on every render would talk over the reader. */}
-      <tbody aria-live={live ? "polite" : "off"}>
+      <TableBody aria-live={live ? "polite" : "off"}>
         {events.map((event) => (
-          <tr key={`${event.at}/${event.event}/${event.entity ?? ""}`}>
-            <td className="datum datum--quiet">{formatTime(event.at, locale)}</td>
-            <td>{eventSentence(t, locale, event)}</td>
-          </tr>
+          <TableRow key={`${event.at}/${event.event}/${event.entity ?? ""}`}>
+            <TableCell className="datum datum--quiet">{formatTime(event.at, locale)}</TableCell>
+            <TableCell>{eventSentence(t, locale, event)}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

@@ -20,6 +20,7 @@ import type { SchemaView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { QuestionBuilder } from "@/components/QuestionBuilder.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { Separator } from "@/components/ui/separator.tsx";
 import type { QuestionDraft } from "@/lib/questionDraft.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { withParam } from "@/lib/params.ts";
@@ -118,7 +119,7 @@ export function DefinitionBand({
   if (!canAuthor) {
     return (
       <>
-        <div className="band-rule" />
+        <Separator className="band-rule" />
         <div className="head">{t("bi.compiledHead")}</div>
         <div className="body stack">
           <pre className="payload__text">{sqlText}</pre>
@@ -129,7 +130,7 @@ export function DefinitionBand({
 
   return (
     <>
-      <div className="band-rule" />
+      <Separator className="band-rule" />
       <div className="head">{visual === null ? t("bi.kindSql") : t("bi.builderHead")}</div>
       <div className="body stack">
         {visual === null ? (
@@ -240,7 +241,7 @@ export function ParamsBand({
 
   return (
     <>
-      <div className="band-rule" />
+      <Separator className="band-rule" />
       <div className="head">{t("bi.paramsHead")}</div>
       <div className="body stack">
         <p className="prose">{t("bi.paramsLead")}</p>
@@ -305,7 +306,7 @@ export function DeleteBand({
 
   return (
     <>
-      <div className="band-rule" />
+      <Separator className="band-rule" />
       <div className="head">{t("bi.deleteHead")}</div>
       <div className="body stack">
         <p className="prose">{t("bi.deleteLead", { name: draft.name })}</p>

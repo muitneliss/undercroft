@@ -12,6 +12,7 @@
 import type { DashboardFilter } from "@undercroft/contracts/bi";
 import { useTranslation } from "react-i18next";
 
+import { Separator } from "@/components/ui/separator.tsx";
 import { useUiStore } from "@/store.ts";
 
 /**
@@ -32,7 +33,7 @@ export function FilterEditor({
 
   return (
     <>
-      <div className="band-rule" />
+      <Separator className="band-rule" />
       <div className="head">{t("dashboard.filtersEditHead")}</div>
       <div className="body stack">
         <p className="prose">
