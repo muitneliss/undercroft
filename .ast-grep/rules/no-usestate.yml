@@ -5,6 +5,12 @@
 # Two rules because ast-grep binds one language per rule: `.tsx` parses as `tsx`,
 # `.ts` as `typescript`. Both are scoped to apps/ui -- `useState` is a React concern,
 # and the backend apps have no React. See .claude/rules/state.md and docs/adr/0009.
+#
+# `apps/ui/src/components/ui/**` is exempt in both rules below: shadcn's CLI copies
+# component source there verbatim, and some of that vendored wrapper code calls
+# `useState` internally for its own open/pressed/focus bookkeeping -- not application
+# state, and not ours to rewrite on every `shadcn add`. It never touches the Zustand
+# store. See docs/adr/0025.
 id: no-usestate-tsx
 language: tsx
 severity: error
@@ -14,11 +20,14 @@ message: >-
   (trpc.*.useQuery()). See .claude/rules/state.md.
 files:
   - "apps/ui/**"
+ignores:
+  - "apps/ui/src/components/ui/**"
 rule:
   any:
     - pattern: useState($$$ARGS)
     - pattern: React.useState($$$ARGS)
 ---
+# Same exemption, same reason -- see no-usestate-tsx above.
 id: no-usestate-ts
 language: typescript
 severity: error
@@ -28,6 +37,8 @@ message: >-
   (trpc.*.useQuery()). See .claude/rules/state.md.
 files:
   - "apps/ui/**"
+ignores:
+  - "apps/ui/src/components/ui/**"
 rule:
   any:
     - pattern: useState($$$ARGS)
