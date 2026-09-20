@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/muitneliss/undercroft/compare/v1.11.0...v1.12.0) (2026-09-20)
+
+
+### Features
+
+* **ui:** adopt shadcn/Radix for structure, restyled to the existing design ([#67](https://github.com/muitneliss/undercroft/issues/67)) ([81fc9b7](https://github.com/muitneliss/undercroft/commit/81fc9b702a4eda40e0880cc176ee3c124557e664))
+
 ## [1.11.0](https://github.com/muitneliss/undercroft/compare/v1.10.1...v1.11.0) (2026-09-19)
 
 
