@@ -167,7 +167,9 @@ function IndexRow({
           : null}
         {note.kind === "tombstoned" ? t("lake.alsoTombstoned", { count: note.count }) : null}
       </TableCell>
-      <TableCell className="datum datum--quiet">{relativeTime(entry.latestObservedAt, locale)}</TableCell>
+      <TableCell className="datum datum--quiet">
+        {relativeTime(entry.latestObservedAt, locale)}
+      </TableCell>
     </TableRow>
   );
 }
