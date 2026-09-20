@@ -32,6 +32,65 @@ export function streamsOf(summary: LakeSummary): LakeStream[] {
   ];
 }
 
+/**
+ * What a stream holds beyond its count, as a fact rather than a formatted phrase.
+ *
+ * Records and documents are counted in different things, and the figure beside the count
+ * means something different for each: rows the source has since deleted, against bytes on
+ * disk. Printing both under one column heading would be the kind of quiet lie this codebase
+ * refuses elsewhere, so the VALUE carries its own word and the column heading stays neutral.
+ * The wording is the component's, through `t`; this stays wordless.
+ */
+export type LakeNote =
+  | { kind: "tombstoned"; count: number }
+  | { kind: "bytes"; bytes: number; readable: number; total: number }
+  | { kind: "none" };
+
+/** One line of the index: a stream, how much of it there is, and when it last moved. */
+export interface LakeEntry {
+  readonly stream: LakeStream;
+  /** Rows, or documents. The unit is the stream's kind.  */
+  readonly held: number;
+  readonly note: LakeNote;
+  readonly latestObservedAt: string;
+}
+
+/**
+ * Every stream as ONE list, records first.
+ *
+ * One list rather than the two tables this leaf used to print, because "what have I got"
+ * is one question and a reader answering it from two tables with different columns has to
+ * hold both in their head to answer it. The order is the summary's own.
+ */
+export function inventoryOf(summary: LakeSummary): LakeEntry[] {
+  return [
+    ...summary.records.map(
+      (s): LakeEntry => ({
+        stream: { kind: "records", source: s.source, entity: s.entity },
+        held: s.records,
+        note:
+          s.tombstoned > 0
+            ? { kind: "tombstoned", count: s.tombstoned }
+            : ({ kind: "none" } as const),
+        latestObservedAt: s.latestObservedAt,
+      }),
+    ),
+    ...summary.documents.map(
+      (d): LakeEntry => ({
+        stream: { kind: "documents", source: d.source },
+        held: d.documents,
+        note: { kind: "bytes", bytes: d.bytes, readable: d.readable, total: d.documents },
+        latestObservedAt: d.latestObservedAt,
+      }),
+    ),
+  ];
+}
+
+/** Whether two streams name the same thing. The index marks the open one with it. */
+export function sameStream(a: LakeStream, b: LakeStream | null): boolean {
+  return b !== null && streamKey(a) === streamKey(b);
+}
+
 const KEY_SEP = "|";
 
 export function streamKey(stream: LakeStream): string {

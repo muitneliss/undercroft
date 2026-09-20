@@ -96,6 +96,22 @@ tasks:
     cmds:
       - bun run migrate
 
+  extract:
+    desc: "Read landed documents into raw.document_text. Usage: task dev:extract TENANT=test001 SOURCE=drive"
+    requires:
+      vars: [TENANT]
+    vars:
+      SOURCE: '{{.SOURCE | default "drive"}}'
+    cmds:
+      # The same route Kestra and the control plane call, with the local trigger token. The
+      # verb answers 202 with a run id and reads on; watch it in the Journal, or with
+      # `task dev:psql -- "SELECT method, count(*) FROM raw.document_text GROUP BY 1"`.
+      - >-
+        curl -fsS -X POST "http://localhost:{{.WORKER_PORT}}/v1/runs/extract"
+        -H "content-type: application/json"
+        -H "authorization: Bearer {{.UNDERCROFT_TRIGGER_TOKEN}}"
+        -d '{"tenantId":"{{.TENANT}}","source":"{{.SOURCE}}","trigger":"manual"}'
+
   psql:
     desc: 'Run SQL against the local compose Postgres. Usage: task dev:psql -- "SELECT 1"'
     cmds:

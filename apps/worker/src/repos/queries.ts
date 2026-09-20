@@ -37,7 +37,7 @@ function trimSql(sql: string): string {
  */
 export async function runFramed(
   exec: SqlExecutor,
-  frame: { schema: string; sql: string; limit: number; timeoutMs: number },
+  frame: { schema: string; sql: string; limit: number; offset?: number; timeoutMs: number },
 ): Promise<Framed> {
   await exec.query("BEGIN");
   try {
@@ -48,7 +48,10 @@ export async function runFramed(
     // own `$1`, if any, is not silently satisfied by it. The empty parameter list keeps the
     // extended protocol, which refuses a second statement.
     const result = await exec.query<Record<string, unknown>>(
-      `SELECT * FROM (\n${trimSql(frame.sql)}\n) AS _q LIMIT ${String(frame.limit + 1)}`,
+      // Both numbers are integers this module validated, spliced rather than bound so the
+      // author's own `$1`, if any, is not silently satisfied by one of them. The empty
+      // parameter list keeps the extended protocol, which refuses a second statement.
+      `SELECT * FROM (\n${trimSql(frame.sql)}\n) AS _q LIMIT ${String(frame.limit + 1)} OFFSET ${String(Math.trunc(frame.offset ?? 0))}`,
       [],
     );
     return { rows: result.rows, fields: result.fields ?? [] };

@@ -10,7 +10,6 @@ import type {
   BrowseScopeResponse,
   BuildModelResponse,
   RevokeConnectionResponse,
-  RunQueryRequest,
   SchemaResponse,
   StoreCredentialResponse,
   TableResult,
@@ -18,6 +17,7 @@ import type {
 import type { SqlExecutor } from "@undercroft/db";
 import { upsertConnection } from "@undercroft/db/repos";
 import type {
+  QueryInput,
   StoreCredentialInput,
   TriggerOutcome,
   WorkerClient,
@@ -165,7 +165,7 @@ export class InMemoryWorkerClient implements WorkerClient {
   }
 
   /** Every query this double was asked to run, in order. */
-  readonly queries: RunQueryRequest[] = [];
+  readonly queries: QueryInput[] = [];
   #answer: TableResult = { columns: [], rows: [], truncated: false };
   #refusal: string | null = null;
 
@@ -181,7 +181,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  runQuery(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
+  runQuery(input: QueryInput): Promise<WorkerOutcome<TableResult>> {
     if (this.#failWith !== null) {
       return this.#fail();
     }
@@ -197,6 +197,23 @@ export class InMemoryWorkerClient implements WorkerClient {
       return this.#fail();
     }
     return Promise.resolve({ ok: true, value: { tables: [] } });
+  }
+
+  /**
+   * The raw console answers exactly as the dashboard runner does here.
+   *
+   * Deliberately the same recorded list and the same canned answer: this fake exists to let
+   * a caller's OWN decisions be tested -- who is admitted, what is recorded, what a refusal
+   * becomes on screen -- and which Postgres login the real worker used is not a thing a fake
+   * can honestly model. The login boundary is proven where it lives, against real Postgres
+   * in `privileges.test.ts`.
+   */
+  runRawQuery(input: QueryInput): Promise<WorkerOutcome<TableResult>> {
+    return this.runQuery(input);
+  }
+
+  readRawSchema(): Promise<WorkerOutcome<SchemaResponse>> {
+    return this.readSchema();
   }
 
   #fail<T>(): Promise<WorkerOutcome<T>> {

@@ -112,8 +112,13 @@ BEGIN
     -- dbt reads raw through the PARENT tables only. A partition is not granted, so
     -- `SELECT ... FROM raw.records_default` is a permission error and the row-level policy
     -- on the parent cannot be side-stepped by naming the partition.
+    --
+    -- `raw.document_text` joined this list in 180 (ADR 0024). It is edited HERE rather than
+    -- by replacing this function in that file, so the provisioning rules stay in one place;
+    -- 180 carries a catch-up loop for the databases where this file has already run, because
+    -- the migration ledger keys on a file's name and never re-applies it.
     EXECUTE format('GRANT USAGE ON SCHEMA raw TO %I', v_dbt);
-    EXECUTE format('GRANT SELECT ON raw.records, raw.documents TO %I', v_dbt);
+    EXECUTE format('GRANT SELECT ON raw.records, raw.documents, raw.document_text TO %I', v_dbt);
     EXECUTE format('GRANT EXECUTE ON FUNCTION raw.tenant_of(name) TO %I', v_dbt);
 
     -- bi reads the tenant's analytics: what is there now, and what dbt creates later.

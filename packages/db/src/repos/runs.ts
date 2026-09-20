@@ -18,7 +18,15 @@ import type { SqlExecutor } from "../executor.ts";
 import { decodeCursor, encodeCursor } from "./cursor.ts";
 
 export type RunStatus = "running" | "ok" | "failed";
-export type RunVerb = "ingest" | "transform";
+/**
+ * What a run was doing. The SQL column is free text with no CHECK, deliberately, so a new
+ * verb is a type change here and not a migration -- see `020_control_plane.sql`.
+ *
+ * `extract` reads landed documents into `raw.document_text`. It is separate from `ingest`
+ * rather than its tail because OCR over a real tenant is tens of minutes, and the unique
+ * index on `(tenant_id, source, verb)` lets the two run beside each other. ADR 0024.
+ */
+export type RunVerb = "ingest" | "transform" | "extract";
 export type RunTrigger = "schedule" | "manual" | "build" | "lake-api";
 
 export interface Run {

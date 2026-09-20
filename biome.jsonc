@@ -419,6 +419,7 @@
         // `lazy` and `Suspense` with it. The shell imports nothing from react now, so the
         // rule is back on for it.
         "apps/ui/src/routeTable.tsx",
+        "apps/ui/src/components/LakeConsole.tsx",
         "apps/ui/src/components/QuestionBands.tsx",
         "apps/ui/src/components/QuestionResult.tsx",
         "apps/ui/src/components/QuestionCard.tsx",
@@ -781,6 +782,7 @@
         "apps/control-plane/src/handlers/connectionsRouter.ts",
         "apps/control-plane/src/handlers/answers.ts",
         "apps/control-plane/src/handlers/biRouter.ts",
+        "apps/control-plane/src/handlers/lakeRouter.ts",
         "apps/control-plane/src/handlers/modelsRouter.ts",
         "apps/control-plane/src/handlers/peopleRouter.ts",
         "apps/control-plane/src/handlers/tenantsRouter.ts",

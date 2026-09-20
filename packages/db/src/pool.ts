@@ -70,12 +70,29 @@ export interface RoleLogin {
  * given here override the DSN's own, which is how one connection string serves every role.
  */
 export function createRolePool(connectionString: string, login: RoleLogin): pg.Pool {
-  return new pg.Pool({
-    connectionString,
-    user: login.user,
-    password: login.password,
-    max: login.max ?? 1,
-  });
+  // THE LOGIN IS WRITTEN INTO THE DSN, not passed beside it.
+  //
+  // `new pg.Pool({ connectionString, user, password })` does NOT log in as `user`. `pg`
+  // parses the connection string and merges the result OVER the explicit fields, so the
+  // DSN's own user wins and the pool silently connects as whoever the DSN names -- here,
+  // always `undercroft_worker`. Measured: a pool built that way with a tenant's dbt login
+  // answered `SELECT current_user` with `undercroft_worker`.
+  //
+  // That is not a cosmetic bug. Every per-tenant session goes through here, and the worker
+  // role is a platform role: it holds SELECT on `app.connection_secret` and the `platform_all`
+  // row-level policy grants it `USING (true)` over `raw`. A query that was meant to run as one
+  // customer's login therefore ran with reach over every customer's rows and the sealed
+  // credentials table.
+  //
+  // Rewriting the userinfo keeps every other parameter the DSN carries -- host, port,
+  // database, `sslmode`, anything a deployment adds -- which building discrete fields here
+  // would quietly drop. The URL setters percent-encode, so a password with `@` or `/` in it
+  // survives; `rotateTenantPassword` mints one from random bytes and this is what makes it
+  // safe to do so.
+  const url = new URL(connectionString);
+  url.username = login.user;
+  url.password = login.password;
+  return new pg.Pool({ connectionString: url.toString(), max: login.max ?? 1 });
 }
 
 export interface DatabaseAddress {

@@ -3,9 +3,11 @@
  * payload disclosed on demand exactly as Postgres rendered it.
  *
  * The open stream is the URL (`?source=&entity=` or `?documents=`), never the store: this is
- * a page an admin pastes to a colleague, and a reload lands on the same rows. The picker is
- * a `<select>` whose value IS the URL's, so there is one owner. Pages come from the query
- * cache as an infinite query on the lake's own cursor.
+ * a page an admin pastes to a colleague, and a reload lands on the same rows. What WRITES
+ * that URL is the index above, in `LakeSummary` -- this file no longer carries a picker of
+ * its own, because one that re-listed the streams the index had just printed made the leaf
+ * name every stream twice. Pages come from the query cache as an infinite query on the
+ * lake's own cursor.
  *
  * A payload is printed from the string the server sent, never re-parsed: JSON.parse would
  * turn every number into a float, and a browser that shows `12345678901234567000` where the
@@ -22,19 +24,11 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import {
-  type LakeStream,
-  parseStream,
-  streamFromKey,
-  streamKey,
-  streamLabel,
-  streamParams,
-} from "@/lib/lake.ts";
+import { parseStream, streamKey } from "@/lib/lake.ts";
 import { formatBytes } from "@/lib/money.ts";
 import { formatDate, formatDateTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
-import { useId } from "react";
 
 const PAGE = 50;
 
@@ -207,71 +201,42 @@ function DocumentsTable({
   );
 }
 
-export function LakeBrowser({
-  tenantId,
-  streams,
-}: {
-  tenantId: string;
-  /** Every stream the summary counted; the picker offers exactly these. */
-  streams: readonly LakeStream[];
-}): React.JSX.Element {
+/**
+ * The rows of whichever stream the index opened.
+ *
+ * NO PICKER OF ITS OWN ANY MORE. This used to carry a `<select>` that re-listed every stream
+ * the index above had just printed, so the leaf named each stream twice and a reader who had
+ * read "Drive · 122 documents" still had to go and find that sentence again, inside a closed
+ * control, before they could look at it. The index rows link here instead: one list of what
+ * landed, and each line is the way in.
+ *
+ * The open stream is still the URL (`?source=&entity=`, `?documents=`), unchanged, so a
+ * pasted link still opens on the same rows.
+ */
+export function LakeBrowser({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
-  const lakeStreamId = useId();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const chosen = parseStream(params);
-  const records = streams.filter((s) => s.kind === "records");
-  const documents = streams.filter((s) => s.kind === "documents");
+
+  if (chosen === null) {
+    // Not an error and not empty: the reader has simply not opened a line yet. The index is
+    // directly above, so this says which gesture is missing rather than offering a second way.
+    return <p className="prose prose--quiet">{t("lake.chooseFromIndex")}</p>;
+  }
 
   return (
     <div className="stack">
       <p className="prose">{t("lake.browserLead")}</p>
-
-      <div className="field">
-        <label className="label" htmlFor={lakeStreamId}>
-          {t("lake.streamLabel")}
-        </label>
-        <select
-          className="input input--select"
-          id={lakeStreamId}
-          value={chosen === null ? "" : streamKey(chosen)}
-          onChange={(event): void => {
-            const next = streamFromKey(event.currentTarget.value);
-            setParams(next === null ? {} : streamParams(next));
-          }}
-        >
-          <option value="">{t("lake.chooseStream")}</option>
-          {records.length > 0 ? (
-            <optgroup label={t("lake.streamRecords")}>
-              {records.map((stream) => (
-                <option key={streamKey(stream)} value={streamKey(stream)}>
-                  {streamLabel(t, stream)}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
-          {documents.length > 0 ? (
-            <optgroup label={t("lake.documentsHead")}>
-              {documents.map((stream) => (
-                <option key={streamKey(stream)} value={streamKey(stream)}>
-                  {streamLabel(t, stream)}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
-        </select>
-      </div>
-
-      {chosen?.kind === "records" ? (
+      {chosen.kind === "records" ? (
         <RecordsTable
           key={streamKey(chosen)}
           tenantId={tenantId}
           source={chosen.source}
           entity={chosen.entity}
         />
-      ) : null}
-      {chosen?.kind === "documents" ? (
+      ) : (
         <DocumentsTable key={streamKey(chosen)} tenantId={tenantId} source={chosen.source} />
-      ) : null}
+      )}
     </div>
   );
 }

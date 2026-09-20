@@ -1941,6 +1941,11 @@
    * `--station-h` is the same number `runFlowLayout.ts` gives the nodes;
    * `runFlowLayout.test.ts` reads this block and fails if the two ever disagree.
    *
+   * The canvas carries a GROUND: page stock inside one keyline, printed with a
+   * registration grid. It was transparent, and plates lying on the reading field with
+   * nothing under them read as a row of objects rather than as a drawing. The grid is
+   * this sheet's, not @xyflow/react's `<Background>`, which is still unused.
+   *
    * Of @xyflow/react's own look nothing survives but what it is genuinely good at:
    * node placement, edge paths, markers and the flow animation. The canvas is
    * `aria-hidden` (see RunFlow.tsx).
@@ -1984,16 +1989,34 @@
   /* -- the canvas ---------------------------------------------------------------- */
 
   /* Tall enough for the plate plus the ply shadow beneath it, which would otherwise
-   be clipped by the scroll container and leave the row looking pasted on. */
+   be clipped by the scroll container and leave the row looking pasted on -- plus the
+   margin the drawing needs to sit IN its field rather than butt the keyline. */
   .run-map__canvas {
     width: 100%;
-    height: calc(var(--station-h) + 20px);
+    height: calc(var(--station-h) + 44px);
     overflow-x: auto;
     overflow-y: hidden;
     /* A default scrollbar belongs to no design system. This one is a hairline in the
      sheet's own ink, which is the only chrome the drawing ever shows. */
     scrollbar-width: thin;
     scrollbar-color: var(--rule-strong) transparent;
+
+    /* THE DRAWING HAS A GROUND NOW. It used to be transparent, which left the plates
+     floating on the reading field with nothing under them: a row of objects rather
+     than a drawing OF something, and the reason the whole figure read as flat however
+     well each plate was cut.
+     *
+     * The ground is the page stock inside its own keyline -- the same one ply every
+     * other bounded field in this sheet declares, so nothing gains a shadow -- carrying
+     * a registration grid. Registration marks are what a press prints to align a sheet,
+     * which is this system's own object for "a surface something is drawn on", and the
+     * pitch is read as texture rather than counted. `--rule` at 1px is the faintest dot
+     * that survives a non-retina screen; anything lighter dithered away entirely. */
+    background-color: var(--page);
+    background-image: radial-gradient(circle at 1px 1px, var(--rule) 1px, transparent 0);
+    background-size: 18px 18px;
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
   }
 
   .run-map__canvas .react-flow {
@@ -2026,17 +2049,34 @@
     stroke-dasharray: 3 4;
   }
 
-  /* The live one. @xyflow/react marks an animated edge with `.animated` and animates
-   the dash itself; this restates it so the dash, the pace and the direction are this
-   sheet's decision rather than the library's default. */
+  /* The live one, and the one authored moment in the whole drawing. @xyflow/react marks
+   an animated edge with `.animated` and animates the dash itself; this restates it so
+   the dash, the pace and the direction are this sheet's decision rather than the
+   library's default.
+   *
+   * IT STAYS `linear`, AND THAT EXCEPTION IS ALREADY ARGUED at the top of this block:
+   * a travelling dash stepped at a legible frame count reads as a rendering fault, not
+   * as movement, which is the one place stepping this sheet's motion makes it say
+   * something false. Do not "fix" it to `steps()` to match `DESIGN.md`; that was tried.
+   *
+   * What changed is only its WEIGHT. At 2px in Ink 2 the live edge was the same line as
+   * the settled one wearing a dash, so the single honest live signal in the drawing was
+   * the thing hardest to find in it. Full ink at 2.5px against the settled rule's 2px in
+   * Ink 2 makes "something is happening" legible across a desk, which is the distance an
+   * operator mid-call actually reads this from. `butt` caps so each dash keeps the length
+   * the dasharray gives it -- round caps bled the gaps closed at this weight and the line
+   * stopped reading as travelling at all. */
   .run-map__canvas .react-flow__edge.animated .react-flow__edge-path {
-    stroke-dasharray: 8 6;
+    stroke: var(--ink);
+    stroke-width: 2.5px;
+    stroke-dasharray: 9 7;
+    stroke-linecap: butt;
     animation: run-link-flow 620ms linear infinite;
   }
 
   @keyframes run-link-flow {
     to {
-      stroke-dashoffset: -14;
+      stroke-dashoffset: -16;
     }
   }
 
@@ -2097,6 +2137,16 @@
     border-style: dashed;
   }
 
+  /* THE PLATE HAS A HEAD AND A BODY. The three lines used to be one flat stack of
+   equal weight, so the eye had to read the plate to find out what it was -- across a
+   row of them that is the "grid of equal cards" this system spends its whole vocabulary
+   avoiding, arrived at from the inside.
+   *
+   * A hairline under the name cuts it into a head, which is what every other bounded
+   * block in this sheet does at its top edge, and it gives the figure below something
+   * to sit under instead of floating between two neighbours. The rule is the plate's
+   * own keyline colour at half strength: present enough to divide, quiet enough that
+   * the datum stays the loudest thing on the plate. */
   .run-plate__name {
     font-family: var(--face-display);
     font-size: var(--t-micro);
@@ -2105,9 +2155,23 @@
     letter-spacing: 0.13em;
     text-transform: uppercase;
     color: var(--ink-2);
+    padding-bottom: var(--s-2);
+    border-bottom: var(--hair) solid var(--rule);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* On the inked stamp the paper rule disappears into the ink, so it is restated in the
+   leaf tone it letters with -- at a low alpha, because a full-strength rule on ink reads
+   as a second object rather than a division. */
+  .run-plate--stamp .run-plate__name {
+    border-bottom-color: rgba(251, 248, 240, 0.28);
+  }
+
+  /* The correction keeps its own language down to the division inside it. */
+  .run-plate--errata .run-plate__name {
+    border-bottom-color: color-mix(in srgb, var(--errata) 34%, transparent);
   }
 
   /* The loudest line on the plate. "Did my data come in, and how much" is the
@@ -2170,9 +2234,16 @@
     box-shadow: none;
   }
 
+  /* `visibility: hidden`, NEVER `display: none`. @xyflow/react's own troubleshooting says
+   it outright -- "avoid using display: none to hide handles; use opacity: 0 or
+   visibility: hidden instead" -- because a display:none handle has no box to measure, and
+   the library measures every handle on a node to place that node's edge endpoints. Measured
+   here, the hidden one reported its top as -79.5px against a 96px plate, which is the
+   garbage that was being fed back into the endpoint arithmetic. `visibility` keeps the box
+   and the layout, and draws nothing. */
   .run-plate--last .run-plate__out,
   .run-plate--only .run-plate__out {
-    display: none;
+    visibility: hidden;
   }
 
   /* -- the colophon ----------------------------------------------------------------- */
@@ -2207,7 +2278,265 @@
     }
   }
 
+  /* -- the raw lake's console --------------------------------------------------- */
+
+  /* A WORKSPACE, NOT A BAND.
+   *
+   * Every other band on this leaf is as tall as the sentence it prints. This one holds two
+   * things that both want the screen -- the query being written and the answer being read --
+   * and the first version gave each of them whatever the page had left, which produced an
+   * editor too short to write a join in above a grid too short to read the answer in. So the
+   * band takes a definite height and divides it.
+   *
+   * The height is a screenful, bounded at both ends: never shorter than the eight lines of
+   * SQL and twelve rows that make the thing usable at all, and never taller than a reader can
+   * take in without moving their head, however large the display is.
+   *
+   * The reference column sits beside it because the tables an author may name are what they
+   * reach for most, and a console that hides them behind a trip elsewhere is one where every
+   * query starts with a guess. */
+  .console {
+    display: grid;
+    /* 17rem: the longest name and type this schema has -- `captured_at` and `timestamptz` --
+     * break across two lines at 15, and a column name printed as `captured_a / t` is the one
+     * thing a reference must never do. */
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    gap: var(--s-5);
+    height: clamp(34rem, 78vh, 52rem);
+  }
+
+  /* The work column: bar, editor, answer, foot -- in that order, top to bottom, which is
+   * also the order the reader moves through them. `min-height: 0` on both the column and the
+   * answer, or a flex child refuses to shrink below its content and the grid's own scroll
+   * never engages. */
+  .console__work {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* One bar, three things: the verb, the chord that performs it, and what came back. */
+  .console__bar {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    padding-bottom: var(--s-3);
+  }
+
+  .console__status {
+    margin-left: auto;
+    text-align: right;
+  }
+
+  /* The keyboard chord, drawn as a key: a hairline box in the mono face, the same stock the
+   * editor below it is on. Printed beside the button rather than in a help page, because a
+   * shortcut is learnt from the control it replaces. */
+  .console__chord {
+    padding: 0.1rem var(--s-2);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-plate);
+    font-family: var(--face-mono);
+    font-size: var(--t-micro);
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+
+  /* THE DIVIDER IS THE EDITOR'S OWN HANDLE.
+   *
+   * `resize` rather than a dragged element with a stored ratio: it is the browser's own
+   * affordance for exactly this, it needs no state to own and nothing to persist, and a
+   * reader who has used any other resizable pane already knows where the grip is. The
+   * ceiling is what keeps a drag from closing the answer entirely. */
+  .console__editor {
+    flex: none;
+    height: 18rem;
+    min-height: 7rem;
+    max-height: 70%;
+    overflow: hidden;
+    resize: vertical;
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+    background: var(--leaf);
+  }
+
+  /* The editor fills the pane it was given; `.editor`'s own 26rem belongs to the model
+   * editor, which is a leaf rather than a pane. */
+  .console__editor > .editor {
+    height: 100%;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  /* Where the answer goes -- the result, the refusal, or the sentence saying neither has
+   * happened yet. It takes whatever the editor left. */
+  .console__answer {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-top: var(--s-4);
+    overflow: hidden;
+  }
+
+  /* An empty state that teaches the control rather than announcing a void. */
+  .console__idle {
+    padding-top: var(--s-5);
+  }
+
+  .console__foot {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    flex: none;
+    padding-top: var(--s-3);
+  }
+
+  /* A press keeps its own width. Without this the caution beside them takes the row's slack
+   * and both buttons wrap their label onto two lines, which reads as a broken control. */
+  .console__foot .plate {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* The ORDER BY caution, beside the presses that make it matter. NOT in the data face: a
+   * sentence set in mono reads as a value, and this one is an argument about correctness the
+   * reader has to follow. It wraps rather than truncates -- half a warning is worse than
+   * none -- and takes what the buttons leave. */
+  .console__warn {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--t-micro);
+    line-height: 1.45;
+    color: var(--ink-3);
+  }
+
+  /* The reference: a leaf lying on the page, one ply, no shadow -- the same die the token
+   * box and an unprinted leaf are cut from. It scrolls inside itself, so a schema that grows
+   * a table cannot push the workspace out of shape. */
+  .console__aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    min-height: 0;
+    padding: var(--s-4);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+
+  /* A table is a disclosure, so the list stays scannable at rest and a reader opens the one
+   * they are writing against. Native `<details>`: which one is open is not application state. */
+  .console__table > summary {
+    cursor: pointer;
+    padding: var(--s-1) 0;
+  }
+
+  .console__columns {
+    list-style: none;
+    margin: 0 0 var(--s-2);
+    padding: 0 0 0 var(--s-3);
+    border-left: var(--hair) solid var(--rule);
+  }
+
+  .console__columns li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: 0.1rem 0;
+    font-size: var(--t-micro);
+  }
+
+  /* Narrow: one column, and the workspace gives up its fixed height rather than dividing a
+   * screen that has none to spare. The reference goes under the answer, where it is still
+   * reachable and no longer competing for the width a SQL line needs. */
+  @media (max-width: 60rem) {
+    .console {
+      grid-template-columns: minmax(0, 1fr);
+      height: auto;
+    }
+
+    .console__editor {
+      height: 16rem;
+      max-height: none;
+    }
+
+    .console__answer {
+      max-height: 28rem;
+      overflow: auto;
+    }
+
+    .console__aside {
+      max-height: 20rem;
+    }
+
+    /* Full width, so the type no longer sits half a screen from the name it belongs to.
+     * `space-between` is right in a 17rem column and a leader line in a wide one. */
+    .console__columns li {
+      justify-content: flex-start;
+    }
+  }
+
   /* -- the raw lake ------------------------------------------------------------ */
+
+  /* THE INDEX IS THE WAY IN.
+   *
+   * This leaf used to print every stream twice: once as a table saying what had landed, and
+   * again inside a `<select>` in the band below, because the table said what existed and the
+   * select was the only thing that could open it. A reader who had just read "Drive · 122
+   * documents" had to go and find that same sentence a second time, in a closed control,
+   * before they could look at it -- which is how somebody concludes their documents never
+   * arrived. One list now, and each line is the door.
+   *
+   * A line is a real `<a href>` carrying the same `?source=&entity=` the select used to
+   * write, so a pasted link still opens on the same rows and a middle click still opens a
+   * tab. A reader who may not browse gets the identical line with no link: the counts are
+   * theirs, the payload is not.
+   */
+  .lake-index__link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    color: var(--ink);
+    text-decoration-color: transparent;
+  }
+
+  /* The punched hole this system already marks a selection with, at the size the tab strip
+   * and the hinge use. Drawn on the line rather than in a column of its own: a column that
+   * is empty on every row but one is four fifths blank paper. */
+  .lake-index__link::before {
+    content: "";
+    flex: none;
+    width: 11px;
+    height: 11px;
+    border: var(--hair) solid var(--ink);
+    border-radius: 50%;
+    background: var(--leaf);
+  }
+
+  .lake-index__link:hover {
+    text-decoration-color: var(--ink);
+  }
+
+  /* The open line: the hole is punched through, and the board's own hue washes the row the
+   * way it washes the leaf hinged over a section. One ply, no shadow. */
+  .lake-index__row--open td {
+    background: color-mix(in srgb, var(--board) 14%, transparent);
+  }
+
+  .lake-index__row--open .lake-index__link::before {
+    background: var(--board);
+    box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45);
+  }
+
+  /* A sentence that is a state rather than an instruction to act on: the reader has not
+   * opened a line yet, and the index is directly above. Quieter than a refusal. */
+  .prose--quiet {
+    color: var(--ink-3);
+  }
 
   /* A payload is disclosed, not printed: a plate that is a <summary>, the same die as
    the token form's, and beneath it the source's JSON exactly as Postgres rendered it,
@@ -2241,8 +2570,10 @@
 
   /* -- the model editor ---------------------------------------------------------- */
 
-  /* Monaco draws its own text; the frame is ours: the same die-cut edge as an input, tall
-   enough to hold a model without scrolling the page for it. */
+  /* CodeMirror draws its own text; the frame is ours: the same die-cut edge as an input,
+   tall enough to hold a model without scrolling the page for it. The console overrides both
+   the height and the frame, because there the editor is a pane inside a workspace rather
+   than a leaf on a page. */
   .editor {
     min-height: 26rem;
     border: var(--hair) solid var(--rule-strong);
@@ -2255,9 +2586,93 @@
     opacity: 0.85;
   }
 
-  /* A result can be wider than the leaf; it scrolls sideways rather than breaking it. */
+  /* A result that IS its pane rather than a band on a page: it fills the height it was
+   * given and scrolls inside it, and the frame around it carries the row count. */
+  .result-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .result-pane > .result {
+    flex: 1 1 auto;
+    max-height: none;
+  }
+
+  /* A result can be wider than the leaf; it scrolls sideways rather than breaking it.
+   *
+   * And TALLER than the leaf: a hundred rows of eleven columns is a page of its own, so the
+   * grid keeps its own viewport and its header stays put while the rows move under it. A
+   * table that pushes the page down instead loses the column names on the second row read. */
   .result {
-    overflow-x: auto;
+    overflow: auto;
+    max-height: 32rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+
+  .result thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    /* Opaque, or the rows read through the heading as they scroll under it. */
+    background: var(--page);
+  }
+
+  /* -- one cell ------------------------------------------------------------------ */
+
+  /* ONE LINE, ALWAYS. A grid is read by scanning down a column, and that holds only while
+   * every row is the same height; one six-thousand-character document text made its row two
+   * hundred pixels tall and wrapped every neighbour into four lines. The cap is generous
+   * enough for a filename and firm enough that a hundred rows stay scannable. */
+  .cell {
+    display: block;
+    max-width: 24rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A value with more to it. The marker is the affordance, so it stays visible -- INSIDE,
+   * because the cell clips its own overflow and a marker hung outside was cut off by it,
+   * leaving a truncated cell that looked like plain lost text. The same triangle the schema
+   * sidebar and the raw payload already open with. */
+  .cell--long > summary {
+    cursor: pointer;
+    display: list-item;
+    list-style-position: inside;
+  }
+
+  /* The clipped line itself. `inline-block` so it sits beside the marker rather than under
+   * it, and 22rem rather than 24 so the two together still fit the cell. */
+  .cell__clip {
+    display: inline-block;
+    vertical-align: bottom;
+    max-width: 22rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Opened: the whole value, wrapped, in its own field. Bounded, because a contract read in
+   * a table cell is still being read in a table cell -- the lake browser is where a document
+   * is read at length. */
+  .cell__full {
+    /* The cell's own width, not more: the clipped line above caps the column at 24rem, so a
+     * wider field would simply be cut off by it -- a pane that promised text it then hid. */
+    max-height: 18rem;
+    margin: var(--s-2) 0 0;
+    padding: var(--s-3);
+    overflow: auto;
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-plate);
+    font-family: var(--face-mono);
+    font-size: var(--t-micro);
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .result__type {

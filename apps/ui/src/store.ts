@@ -143,6 +143,26 @@ interface UiState {
    * list says so. Not persisted: a draft restored days later, after a colleague may have
    * changed the model beneath it, is worse than the saved version.
    */
+  /**
+   * The SQL typed into the raw lake's console, per tenant.
+   *
+   * Keyed by tenant because the console is about ONE customer's lake and a query written
+   * against another's tables would be answered with a refusal the author did not earn. Not
+   * persisted, for the same reason `modelDraft` is not: this is a scratch query, and one
+   * restored days later is not one anybody asked for.
+   */
+  lakeSql: Record<string, string>;
+  setLakeSql: (tenantId: string, sql: string) => void;
+  /**
+   * Which page of the console's result the reader is on, per tenant.
+   *
+   * Here rather than in the query cache because it is a thing the reader chose, not a thing
+   * the server knows -- and it resets to the first page whenever the SQL changes, because a
+   * new question answered from page four is nobody's question.
+   */
+  lakeOffset: Record<string, number>;
+  setLakeOffset: (tenantId: string, offset: number) => void;
+
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
   setModelSql: (sql: string) => void;
@@ -271,6 +291,25 @@ function scopeSlice(
 }
 
 /** A dbt model being edited: its SQL and the tests on each column. */
+/** The raw lake console's scratch SQL, one per tenant. Not persisted; see the type above. */
+function lakeSlice(
+  set: Setter,
+): Pick<UiState, "lakeSql" | "setLakeSql" | "lakeOffset" | "setLakeOffset"> {
+  return {
+    lakeSql: {},
+    // Editing the query returns the reader to the first page: the offset belonged to the
+    // previous question, and carrying it over answers the new one from the middle.
+    setLakeSql: (tenantId, sql): unknown =>
+      set((state) => ({
+        lakeSql: { ...state.lakeSql, [tenantId]: sql },
+        lakeOffset: { ...state.lakeOffset, [tenantId]: 0 },
+      })),
+    lakeOffset: {},
+    setLakeOffset: (tenantId, offset): unknown =>
+      set((state) => ({ lakeOffset: { ...state.lakeOffset, [tenantId]: offset } })),
+  };
+}
+
 function modelSlice(
   set: Setter,
 ): Pick<
@@ -443,6 +482,7 @@ export const useUiStore = create<UiState>()(
     (set) => ({
       ...localeSlice(set),
       ...scopeSlice(set),
+      ...lakeSlice(set),
       ...modelSlice(set),
       ...questionSlice(set),
       ...dashboardSlice(set),

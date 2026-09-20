@@ -61,6 +61,7 @@ describe("LakeSummary", () => {
             source: "gmail",
             documents: 2,
             bytes: 3500,
+            readable: 0,
             latestObservedAt: new Date().toISOString(),
           },
         ],

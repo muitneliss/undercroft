@@ -13,11 +13,12 @@
 
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 
 import { Errata } from "@/components/Errata.tsx";
 import { LakeSummary } from "@/components/LakeSummary.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { streamsOf } from "@/lib/lake.ts";
+import { type LakeStream, parseStream, streamParams, streamsOf } from "@/lib/lake.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -25,9 +26,15 @@ const LakeBrowser = lazy(() =>
   import("@/components/LakeBrowser.tsx").then((module) => ({ default: module.LakeBrowser })),
 );
 
+// Its own chunk: the editor and its SQL grammar. A member reading a count never downloads it.
+const LakeConsole = lazy(() =>
+  import("@/components/LakeConsole.tsx").then((module) => ({ default: module.LakeConsole })),
+);
+
 export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
+  const [params] = useSearchParams();
   const summary = trpc.lake.summary.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
   // For the empty leaf only: when the first run comes. Cached from the Sources leaf.
@@ -46,6 +53,7 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
 
   const isAdmin = tenant.data.role === "admin";
   const streams = streamsOf(summary.data);
+  const open = parseStream(params);
 
   return (
     <div className="sheet">
@@ -56,6 +64,16 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
           summary={summary.data}
           connections={connections.data ?? []}
           locale={locale}
+          openStream={open}
+          // The index doubles as the way in, but only for the reader the server would let
+          // through. A member sees the same counts with no links: the facts are theirs, the
+          // payload is not, and a link that answered 403 would be a promise this leaf breaks.
+          {...(isAdmin
+            ? {
+                hrefFor: (stream: LakeStream): string =>
+                  `?${new URLSearchParams(streamParams(stream)).toString()}`,
+              }
+            : {})}
         />
       </div>
 
@@ -65,7 +83,15 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
           <div className="head">{t("lake.browserHead")}</div>
           <div className="body stack">
             <Suspense fallback={<Skeleton rows={4} />}>
-              <LakeBrowser tenantId={tenantId} streams={streams} />
+              <LakeBrowser tenantId={tenantId} />
+            </Suspense>
+          </div>
+
+          <div className="band-rule" />
+          <div className="head">{t("lake.consoleHead")}</div>
+          <div className="body stack">
+            <Suspense fallback={<Skeleton rows={6} />}>
+              <LakeConsole tenantId={tenantId} locale={locale} />
             </Suspense>
           </div>
         </>
