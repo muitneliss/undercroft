@@ -1,7 +1,7 @@
 /**
  * What the printed lake promises: a customer with nothing landed is told when the first
- * run comes rather than shown empty tables, and a customer with rows sees each stream's
- * count in the reader's grouping and each source's bytes in a unit a person reads.
+ * run comes rather than shown empty tables, and a customer with rows gets ONE index --
+ * a line per stream, its count in the reader's grouping, and the one note its kind earns.
  *
  * No mocks: the real component, the real i18next instance, the real catalogues.
  */
@@ -44,7 +44,7 @@ describe("LakeSummary", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
-  it("rows landed: each stream's count grouped the way the reader groups, bytes in a unit", () => {
+  it("rows landed: one line per stream, each with the one note its own kind earns", () => {
     render(
       leaf({
         records: [
@@ -69,9 +69,17 @@ describe("LakeSummary", () => {
     );
 
     expect(screen.getByText("HubSpot")).toBeDefined();
+    expect(screen.getByText("deals")).toBeDefined();
     expect(screen.getByText("1.234")).toBeDefined();
-    expect(screen.getByText("12")).toBeDefined();
-    expect(screen.getByText("3.5 kB")).toBeDefined();
+
+    // Tombstones and bytes are no longer columns of their own. The index gives each stream a
+    // SINGLE note, phrased in that stream's own terms -- how many rows the source has since
+    // deleted for a record stream, how much was held and how much of it could be read for a
+    // document one. Two half-empty numeric columns became one column that always says
+    // something, which is the whole reason the two tables became one.
+    expect(screen.getByText("12 đã xoá ở nguồn")).toBeDefined();
+    expect(screen.getByText("3.5 kB · đọc được 0/2")).toBeDefined();
+
     expect(screen.queryByText("Chưa có gì về")).toBeNull();
   });
 });
