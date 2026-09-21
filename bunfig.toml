@@ -1,4 +1,8 @@
 # happy-dom is registered before any UI test runs, so React has a document to render into.
-# Scoped by the test files that import DOM globals; non-UI tests are unaffected.
+#
+# This is a PROCESS-WIDE preload, not a per-suite one: every constructor happy-dom installs is
+# installed for non-UI suites too. `setup.ts` restores Bun's native stream globals for exactly
+# that reason -- happy-dom's `TransformStream` does not interoperate with a native
+# `ReadableStream`, and the break surfaced in a server suite that renders nothing.
 [test]
 preload = ["./apps/ui/src/test/setup.ts"]

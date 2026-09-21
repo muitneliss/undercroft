@@ -10,6 +10,7 @@
  */
 
 import process from "node:process";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import {
   createHttpEmailSender,
   createLogger,
@@ -20,6 +21,7 @@ import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
 import { runAlerts } from "./services/alerts.ts";
+import { createAssistant } from "./services/assistant/agent.ts";
 import { parseSuperadmins } from "./services/superadmin.ts";
 import { createHttpWorkerClient } from "./services/workerClient.ts";
 
@@ -112,6 +114,34 @@ const worker =
   workerUrl === undefined || triggerToken === undefined
     ? undefined
     : createHttpWorkerClient({ baseUrl: workerUrl, triggerToken });
+
+/**
+ * The assistant, if a model key was given.
+ *
+ * Degrade-and-log rather than crash, like `worker` above and `auth` before it: an install with
+ * no key still signs in, still ingests and still draws reports, and the interleaf says it is
+ * unavailable. Half-wiring it instead -- a panel that opens and then fails at the first
+ * question -- is the "every layer reports success while the feature is invisible" failure
+ * ADR 0028 was written about.
+ *
+ * `claude-opus-5` is a default rather than a required variable: it is the model this was
+ * designed against, and making an operator name a model before the feature works is making
+ * them read the runbook to type a constant.
+ */
+const anthropicKey = optional("UNDERCROFT_ANTHROPIC_API_KEY");
+const assistant =
+  anthropicKey === undefined
+    ? undefined
+    : createAssistant(
+        createAnthropic({ apiKey: anthropicKey })(
+          optional("UNDERCROFT_ASSISTANT_MODEL") ?? "claude-opus-5",
+        ),
+      );
+if (assistant === undefined) {
+  log.info("assistant_unconfigured", { missing: "UNDERCROFT_ANTHROPIC_API_KEY" });
+} else {
+  log.info("assistant_ready", { model: assistant.modelId });
+}
 
 /**
  * The platform administrators, read here and consulted on every request thereafter.
@@ -234,6 +264,7 @@ const app = createServer({
   ...(googleIngest === undefined ? {} : { googleIngest }),
   ...(xero === undefined ? {} : { xero }),
   ...(worker === undefined ? {} : { worker }),
+  ...(assistant === undefined ? {} : { assistant }),
 });
 
 // parseInt, not Number(): a port, not an amount.

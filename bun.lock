@@ -27,6 +27,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@ai-sdk/anthropic": "4.0.58",
+        "@ai-sdk/provider": "4.0.17",
         "@trpc/server": "11.0.0",
         "@typesafe-ai/sdk": "0.6.0",
         "@undercroft/contracts": "workspace:*",
