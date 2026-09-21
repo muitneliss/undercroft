@@ -14,9 +14,9 @@
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
-import type { Connection, LakeSummary } from "@/api/types.ts";
+import type { Connection, LakeSummary, RawSearchHit } from "@/api/types.ts";
 import { firstRun, sourceLabel } from "@/lib/runs.ts";
-import { formatDateTime } from "@/lib/when.ts";
+import { formatDate, formatDateTime } from "@/lib/when.ts";
 
 export type LakeStream =
   | { kind: "records"; source: string; entity: string }
@@ -129,6 +129,52 @@ export function streamParams(stream: LakeStream): Record<string, string> {
   return stream.kind === "records"
     ? { source: stream.source, entity: stream.entity }
     : { documents: stream.source };
+}
+
+/**
+ * Where a search hit is, as a line a reader can act on: `HubSpot · deals · d-1`.
+ *
+ * Wordless, because it is made of the source's own name and the source's own ids and none of
+ * those are ours to translate (`i18n.md`). Which KIND of thing it is is a word, and is said
+ * separately by the component beside this.
+ */
+export function hitWhere(hit: RawSearchHit): string {
+  return hit.kind === "record"
+    ? `${sourceLabel(hit.source)} · ${hit.entity} · ${hit.sourceRecordId}`
+    : `${sourceLabel(hit.source)} · ${hit.documentId}`;
+}
+
+/**
+ * What else a hit needs to say, in order, or nothing.
+ *
+ * A document says HOW it was read, because an OCR'd scan is a likelier place for a near-miss
+ * than an extracted text layer and a reader judging a result deserves to know which of the two
+ * they are looking at; one the extractor could read nothing from says that instead of going
+ * quiet. A document cut short at extraction says so, because the part that was not read is also
+ * the part that was not searched -- a truncated document that does not admit it reads as a
+ * complete one that simply lacks the clause.
+ *
+ * A row the source has since deleted says so in both kinds. Search returns tombstones
+ * deliberately -- "which contract said this" is asked about terminated contracts more often
+ * than live ones -- and a tombstone that read as current would be the quiet lie this codebase
+ * refuses everywhere else.
+ */
+export function hitNotes(t: TFunction, hit: RawSearchHit, locale: Locale): string[] {
+  const notes: string[] = [];
+  if (hit.kind === "document") {
+    notes.push(
+      hit.method === null
+        ? t("lake.searchMethodUnknown")
+        : t("lake.searchMethod", { method: hit.method }),
+    );
+    if (hit.truncated) {
+      notes.push(t("lake.searchTruncated"));
+    }
+  }
+  if (hit.deletedAt !== null) {
+    notes.push(t("lake.deletedOn", { when: formatDate(hit.deletedAt, locale) }));
+  }
+  return notes;
 }
 
 /** `HubSpot · deals`, `Gmail · tài liệu`: the vendor's name, then what the stream holds. */

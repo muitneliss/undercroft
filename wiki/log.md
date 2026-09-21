@@ -57,3 +57,4 @@
 ## [2026-09-19] ingest | ADR 0023 Task Is the Mandatory Command Entrypoint
 ## [2026-09-20] ingest | ADR 0024: A document's text is readable by dbt
 ## [2026-09-20] ingest | ADR 0025 shadcn/Radix for Structure, Never for Style
+## [2026-09-20] ingest | ADR 0026: Full-text search over the raw lake

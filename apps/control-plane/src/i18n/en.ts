@@ -79,6 +79,8 @@ export const en = {
     queryFailed: "The query did not run: {{message}}",
     queryNotRun:
       "The query could not be run. The processing service did not answer; try again in a few minutes.",
+    searchNotRun:
+      "The search could not be run. The processing service did not answer; try again in a few minutes.",
     paramMissing: "The question needs a value for {{name}}. Set that filter and run again.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",

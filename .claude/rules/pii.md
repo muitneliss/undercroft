@@ -33,6 +33,14 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   that `undercroft_bi` is revoked the whole `raw` schema, so it is reachable only through a
   model the customer wrote — **never grant the BI role anything in `raw`**.
 
+  Since ADR 0026 an **excerpt** of that text also crosses to the browser, for an admin who
+  searched the lake. It reaches them the way the Lake Console's rows already do — read by the
+  tenant's own dbt login inside the worker, never by the control plane, which is still denied
+  the `text` column. So it is the exposure that division already carried, not a new one, and
+  **the column grant is the line: never give `undercroft_app` `text`.** Give it that and every
+  control-plane handler becomes a place a customer's contracts can leak from, which is the
+  hazard the column scope in `180_document_text.sql` exists to close.
+
 ## Follow
 
 - Fixtures are **invented, not anonymised.** Anonymising preserves shapes, amounts and

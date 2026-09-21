@@ -6,11 +6,17 @@
  * answers a question about what is already landed, and nothing here lands anything.
  */
 
-import { BuildModelRequest, DqFailuresRequest, RunQueryRequest } from "@undercroft/contracts";
+import {
+  BuildModelRequest,
+  DqFailuresRequest,
+  RawSearchRequest,
+  RunQueryRequest,
+} from "@undercroft/contracts";
 import type { Hono } from "hono";
 import { buildModel, dqFailures } from "../services/jobs.ts";
 import { findRun } from "../services/ledger.ts";
 import { readRawSchema, readSchema, runQuery, runRawQuery } from "../services/queryRunner.ts";
+import { searchRaw } from "../services/rawSearch.ts";
 import { listDue } from "../services/schedule.ts";
 import { UNAUTHENTICATED, jobDepsFor, serviceTokenOk } from "./bearer.ts";
 import type { LakeApiDeps } from "./lake.ts";
@@ -201,6 +207,35 @@ function registerRawQueryRoutes(app: Hono, deps: LakeApiDeps): void {
       { tenantId: body.tenantId },
     );
     return c.json(schema, 200);
+  });
+
+  /**
+   * One question over the whole of a tenant's raw lake, as that tenant's dbt login.
+   *
+   * Beside `raw/run` rather than under `/v1/search`, because the login is what these two
+   * routes have in common and the login is the boundary. A reader who reached this could have
+   * written the equivalent SELECT in the console next to it; what is different is only that
+   * they do not have to.
+   */
+  app.post("/v1/queries/raw/search", async (c) => {
+    if (deps.dbt === undefined) {
+      return c.json(
+        { code: "invalid_request", message: "queries are not configured", details: [] },
+        400,
+      );
+    }
+    if (!serviceTokenOk(deps, c)) {
+      return c.json(UNAUTHENTICATED, 401);
+    }
+    const parsed = RawSearchRequest.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json(
+        { code: "invalid_request", message: "tenantId and q are required", details: [] },
+        400,
+      );
+    }
+    const found = await searchRaw({ exec: deps.exec, sessions: deps.dbt.sessions }, parsed.data);
+    return c.json(found, 200);
   });
 }
 

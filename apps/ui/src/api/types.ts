@@ -83,6 +83,15 @@ export type IngestKey = inferRouterOutputs<AppRouter>["keys"]["list"][number];
 /** What has landed, per stream, as `lake.summary` returns it. */
 export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 
+/**
+ * One search hit, as `lake.search` returns it: a record's or a document's, never both.
+ *
+ * Inferred rather than imported from `@undercroft/contracts` for the reason the docstring at
+ * the top of this file gives about `Connection`: what the SERVER actually answers with is the
+ * thing the interface must agree with, and inferring it makes a drift a compile error here.
+ */
+export type RawSearchHit = inferRouterOutputs<AppRouter>["lake"]["search"]["hits"][number];
+
 /** One model on the list, as `models.list` returns it: its name and its last build. */
 export type ModelItem = inferRouterOutputs<AppRouter>["models"]["list"][number];
 
