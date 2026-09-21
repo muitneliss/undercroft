@@ -154,6 +154,7 @@ describe("what a run says while it is still running", () => {
         event: "work_listed",
         entity: "messages",
         detail: { total: 12_431 },
+        live: false,
       },
       {
         at: "2026-09-19T12:44:10.000Z",
@@ -161,6 +162,7 @@ describe("what a run says while it is still running", () => {
         event: "records_read",
         entity: "messages",
         detail: { read: 840, total: 12_431 },
+        live: true,
       },
     ]);
 
@@ -182,10 +184,106 @@ describe("what a run says while it is still running", () => {
         event: "records_read",
         entity: "messages",
         detail: { read: n },
+        live: false,
       })),
     );
 
     expect((await eventsFor(db, "r1", 2)).map((e) => e.detail.read)).toEqual([3, 4]);
+  });
+
+  it("a second reading of the same dial replaces the first rather than joining it", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    for (const read of [5, 840, 7786]) {
+      await recordEvents(db, "r1", [
+        {
+          at: `2026-09-19T12:4${String(read % 10)}:00.000Z`,
+          level: "info",
+          event: "records_read",
+          entity: "messages",
+          detail: { read, total: 7786 },
+          live: true,
+        },
+      ]);
+    }
+
+    const events = await eventsFor(db, "r1");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.detail).toEqual({ read: 7786, total: 7786 });
+    expect(events[0]?.live).toBe(true);
+  });
+
+  it("a gauge keeps the place it first appeared, so the ledger does not reshuffle under a reader", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    const gauge = {
+      at: "2026-09-19T12:00:00.000Z",
+      level: "info" as const,
+      event: "records_read",
+      entity: "messages",
+      detail: { read: 5 },
+      live: true,
+    };
+    await recordEvents(db, "r1", [gauge]);
+    await recordEvents(db, "r1", [
+      {
+        at: "2026-09-19T12:01:00.000Z",
+        level: "info",
+        event: "entity_done",
+        entity: "messages",
+        detail: { landed: 5 },
+        live: false,
+      },
+    ]);
+    await recordEvents(db, "r1", [
+      { ...gauge, at: "2026-09-19T12:02:00.000Z", detail: { read: 9 } },
+    ]);
+
+    const events = await eventsFor(db, "r1");
+    expect(events.map((e) => e.event)).toEqual(["records_read", "entity_done"]);
+    expect(events[0]?.detail).toEqual({ read: 9 });
+  });
+
+  it("two readings in one flush write the last one, which is the only one still true", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await recordEvents(
+      db,
+      "r1",
+      [11, 22, 33].map((read) => ({
+        at: "2026-09-19T12:00:00.000Z",
+        level: "info" as const,
+        event: "records_read",
+        entity: "messages",
+        detail: { read },
+        live: true,
+      })),
+    );
+
+    const events = await eventsFor(db, "r1");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.detail).toEqual({ read: 33 });
+  });
+
+  it("two entities read at once keep one gauge each", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await recordEvents(db, "r1", [
+      {
+        at: "2026-09-19T12:00:00.000Z",
+        level: "info",
+        event: "records_read",
+        entity: "messages",
+        detail: { read: 4 },
+        live: true,
+      },
+      {
+        at: "2026-09-19T12:00:00.000Z",
+        level: "info",
+        event: "records_read",
+        entity: "files",
+        detail: { read: 7 },
+        live: true,
+      },
+    ]);
+
+    expect((await eventsFor(db, "r1")).map((e) => e.entity)).toEqual(["messages", "files"]);
   });
 
   it("a run with no events has an empty feed rather than a refusal", async () => {
@@ -202,6 +300,7 @@ describe("what a run says while it is still running", () => {
         event: "no_models",
         entity: null,
         detail: {},
+        live: false,
       },
     ]);
     await db.asSuperuser((tx) => tx.exec("DELETE FROM ops.run WHERE id = 'r1'"));

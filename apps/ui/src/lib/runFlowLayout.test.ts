@@ -21,6 +21,7 @@ function stage(over: Partial<RunStage> = {}): RunStage {
     mark: "granted",
     markLabel: "Done",
     detail: "0 records",
+    gathered: null,
     href: null,
     ...over,
   };

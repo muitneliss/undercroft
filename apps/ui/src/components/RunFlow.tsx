@@ -107,6 +107,20 @@ function Station({ data }: NodeProps<StationNode>): React.JSX.Element {
       {stage.detail === null ? null : <span className="run-plate__datum">{stage.detail}</span>}
       <StatusMark mark={stage.mark} label={stage.markLabel} />
 
+      {/* How far this stage has got, inked along its own foot -- the drawing of the figure
+          `RunProgress` states in words below the canvas. Absolutely positioned and SCALED
+          rather than widened, so a reading that changes every second cannot move the plate's
+          box: the handle positions `RemeasurePlates` exists to keep honest are measured from
+          it. `gathered` is null wherever the fraction would be invented (`runFlowTypes.ts`). */}
+      {stage.gathered === null ? null : (
+        <span className="run-plate__gathered">
+          <span
+            className="run-plate__gathered-ink"
+            style={{ transform: `scaleX(${stage.gathered})` }}
+          />
+        </span>
+      )}
+
       <Handle
         type="source"
         position={Position.Right}

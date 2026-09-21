@@ -19,9 +19,11 @@ import type { RunDetail as RunDetailView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { RunEvents } from "@/components/RunEvents.tsx";
 import { RunFlow } from "@/components/RunFlow.tsx";
+import { RunProgress } from "@/components/RunProgress.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
 import { formatCount, orMissing } from "@/lib/money.ts";
+import { feedEntries, runGauges } from "@/lib/runFeed.ts";
 import { triggerLabel } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
@@ -43,11 +45,13 @@ const CHAIN_GRACE_MS = 20_000;
 /**
  * How often the feed re-reads while a run is live.
  *
- * Faster than the detail beside it, because this is the part a person is watching. Not
- * faster than two seconds: the worker coalesces its own progress lines at that interval, so
- * reading more often than it writes would buy nothing.
+ * Faster than the detail beside it, because this is the part a person is watching, and set to
+ * the worker's own `PROGRESS_INTERVAL_MS`: reading more often than it writes would buy
+ * nothing, and reading less often would leave a dial that moves every second reported every
+ * two. Both halves dropped from two seconds to one when a reading stopped costing a row
+ * (ADR 0032).
  */
-const LIVE_POLL_MS = 2000;
+const LIVE_POLL_MS = 1000;
 
 /**
  * How long until the leaf should re-read this run, or never.
@@ -111,6 +115,11 @@ export function RunDetail({
 
   const detail = run.data;
   const events = feed.data ?? [];
+  // Sorted once, here, because both halves of the feed are drawn from it: the dials still
+  // moving go to the band, everything that happened goes to the ledger. `runFeed.ts` argues
+  // why a reading is not a line.
+  const gauges = runGauges(detail, events);
+  const entries = feedEntries(events);
   const bare =
     detail.error === null &&
     detail.entityCounts.length === 0 &&
@@ -154,8 +163,11 @@ export function RunDetail({
 
       <RunFlow tenantId={tenantId} run={detail} events={events} locale={locale} />
 
+      {/* Under the drawing it belongs to: the plates say which stage, these say how far. */}
+      <RunProgress gauges={gauges} locale={locale} />
+
       {/* Above the counts, because while the run is going the counts are not there yet. */}
-      {events.length > 0 ? <RunEvents events={events} locale={locale} live={running} /> : null}
+      {events.length > 0 ? <RunEvents entries={entries} locale={locale} live={running} /> : null}
 
       {detail.entityCounts.length > 0 ? (
         <table className="table">

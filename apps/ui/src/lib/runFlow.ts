@@ -47,6 +47,8 @@ function outcomeStage(t: TFunction, locale: Locale, run: RunDetail): RunStage {
     markLabel: runMarkLabel(t, run.status),
     detail:
       run.counts === null ? null : landedSummary(t, locale, run.counts.landed, run.counts.refused),
+    // The verdict is reached or it is not; there is no part of it to ink in.
+    gathered: null,
     href: null,
   };
 }
@@ -77,6 +79,9 @@ function modelsStage(t: TFunction, run: RunDetail): RunStage {
     mark,
     markLabel: runMarkLabel(t, run.status),
     detail,
+    // dbt reports when it has finished, not how far through it is: there is no fraction here
+    // that would not be invented.
+    gathered: null,
     href: null,
   };
 }
@@ -92,6 +97,8 @@ function lakeStage(t: TFunction, locale: Locale, run: RunDetail): RunStage {
     markLabel: runMarkLabel(t, run.status),
     detail:
       run.counts === null ? null : landedSummary(t, locale, run.counts.landed, run.counts.refused),
+    // An external caller posts batches under a run id; nothing states a total to measure against.
+    gathered: null,
     href: null,
   };
 }
@@ -113,6 +120,8 @@ function linkStage(
     mark: markForStatus(link.status),
     markLabel: runMarkLabel(t, link.status),
     detail: null,
+    // The other run's progress belongs to the other run's leaf.
+    gathered: null,
     href,
   };
 }

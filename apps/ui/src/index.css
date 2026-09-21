@@ -2351,6 +2351,41 @@
     min-width: 0;
   }
 
+  /* HOW FAR, along the plate's own foot.
+   *
+   * The drawing says which stage the run is on and the figure says the count; between the
+   * two there was no way to see how much work was left without reading two numbers and
+   * dividing them. This is that division, drawn -- a rule inked as far as the work has
+   * gone, the same object `.gathering` is below the canvas, cut into the plate's foot so
+   * the plate reads as a thing filling up rather than a thing with a bar stuck on it.
+   *
+   * It sits inside the keyline, takes the plate's own bottom radius, and is absolutely
+   * positioned: a reading arrives every second, and anything in flow would move the handle
+   * positions `RemeasurePlates` measured at mount. 3px, because 2px read as a heavier
+   * keyline and 4px read as a control. */
+  .run-plate__gathered {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    overflow: hidden;
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
+    background: var(--rule);
+  }
+
+  .run-plate__gathered-ink {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: var(--ink);
+    /* Scaled from the left rather than animating width, which would relayout the rule on
+     every reading. Stepped like everything else that moves in this sheet. */
+    transform-origin: left center;
+    transition: transform var(--hinge);
+  }
+
   /* -- the connectors -------------------------------------------------------------- */
 
   /* The punched hole the hinge and the tab strip already use, on the edges where
@@ -2435,6 +2470,201 @@
     .run-map__canvas .react-flow__edge.animated .react-flow__edge-path {
       animation: none;
     }
+  }
+
+  /* -- the dials, while they are still moving -------------------------------------
+   *
+   * A run's counts are withheld until it closes, so for the hours an ingest spends
+   * reading a mailbox the leaf had nothing on it a person could watch. It had two
+   * hundred printings of one sentence instead, which is the same fact told badly
+   * enough to push the counts, the refusals and the dbt steps off the page.
+   *
+   * This is what replaced them: one standing line per entity, rewritten in place. A
+   * schedule of lines, not a stack of cards -- name, figure, share, and beneath them
+   * the rule inked as far as the work has gone, which is what a printed indicator of
+   * progress has always looked like and the reason `.gathering` was in this sheet
+   * before anything used it. ADR 0032. */
+
+  .gauges {
+    margin: 0;
+  }
+
+  /* ONE LINE PER DIAL, and the rule is the LEADER between its two ends.
+   *
+   * Name, rule, figure, share, on one baseline -- a table-of-contents line, where the
+   * leader that carries the eye from the name to the number is the same rule that says
+   * how far along the work is. Stacked (name and figure on one line, the rule beneath)
+   * this left a hand's width of empty board between "MESSAGES" and "928 / 7.786" at any
+   * desk-sized width, and the two ends stopped reading as one fact. */
+  .gauge {
+    display: grid;
+    grid-template-columns: minmax(0, var(--head-col)) minmax(3rem, 1fr) max-content max-content;
+    align-items: baseline;
+    column-gap: var(--s-3);
+    padding: var(--s-2) 0;
+  }
+
+  /* The second dial and every one after it is divided from the one above, the way two
+   lines of any schedule in this interface are. The first needs no rule: the head above
+   it already closed the space. */
+  .gauge + .gauge {
+    border-top: var(--hair) solid var(--rule);
+  }
+
+  .gauge__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The loudest line on the band, and the same size the plate above sets its figure at,
+   so the two read as one object seen twice rather than as two readings. */
+  .gauge__figure {
+    font-size: 0.9375rem;
+    color: var(--ink);
+  }
+
+  .gauge__share {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Both leaders sit on the line's optical centre rather than its baseline: a rule
+   aligned to a baseline hangs under the caps beside it instead of running through them. */
+  .gauge__rule,
+  .gauge__unmeasured {
+    align-self: center;
+  }
+
+  .gauge__rule {
+    /* `.gathering` is cut to 24rem for the narrower block it was written for; here the
+     rule IS the leader, so it takes whatever the line gives it. */
+    max-width: none;
+  }
+
+  /* No total was stated, so there is nothing to ink: a perforation, the same dashed
+   hairline `.grant--pending` uses for a thing that has not happened yet. Drawing a full
+   bar here would be a guess wearing the costume of a measurement. */
+  .gauge__unmeasured {
+    height: 0;
+    border-bottom: var(--hair) dashed var(--rule-strong);
+  }
+
+  /* -- the ledger ------------------------------------------------------------------
+   *
+   * What HAPPENED, in order, at the open end. Bounded, because a leaf is a page and a
+   * ledger that grows without one is the defect this band was cut out of. */
+
+  .feed {
+    margin: 0;
+  }
+
+  /* The count sits beside the head, not pushed to the far edge: across a desk-width leaf
+   `space-between` put "8 MỐC" a hand's width from the words it counts. */
+  .feed__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    margin: 0;
+  }
+
+  /* A WINDOW ON A LONGER SHEET, which is why it is framed the way the drawing above is:
+   page stock inside one keyline. A bounded region with no edge reads as a table that
+   mysteriously stops, and macOS draws no scrollbar until you are already scrolling -- so
+   the frame, and the line half-showing at its foot, are the whole affordance. 19rem is
+   nine lines and a head, which is more than most runs have and a page of any run. */
+  .feed__region {
+    max-height: 19rem;
+    overflow-y: auto;
+    background: var(--page);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    padding: 0 var(--s-4);
+    /* The hairline scrollbar the drawing above already uses: a default scrollbar
+     belongs to no design system. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+
+  /* A ledger's lines are set tighter than a table of results: there are more of them, they
+   are one sentence each, and the point of the region is how many fit in a page. */
+  .feed__region .table td {
+    padding-top: var(--s-2);
+    padding-bottom: var(--s-2);
+  }
+
+  /* An instant is one word. On a phone the auto table layout gave the column 30px and broke
+   `22:29:14` across three lines, one number per line, beside a sentence set on one. */
+  .feed__region .table td:first-child {
+    white-space: nowrap;
+    width: 1%;
+  }
+
+  /* The last cell here is a SENTENCE, not a figure. The sheet right-aligns a last cell
+   because in every other table it is a count, and this one inherited that: on a desk the
+   flex row hid it, and on a phone the first sentence long enough to wrap set itself
+   ragged-LEFT, against a head sitting at the far edge of the column. */
+  .feed__region .table td:last-child,
+  .feed__region .table th:last-child {
+    text-align: start;
+  }
+
+  /* The column heads stay at the head of the region while its lines run under them -- a
+   ledger's heads are printed once at the top of the column, not re-read halfway down. The
+   ground is the region's own stock, which is what the lines would otherwise show through to. */
+  .feed__region thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--page);
+  }
+
+  /* Every line is one of these; only two of the three levels say anything further. An
+   ordinary milestone is declared because it is written -- a class in the markup that
+   resolves to nothing in the sheet is the typo this rule exists to catch. */
+  .feed__line,
+  .feed__line--info {
+    /* No further treatment: an entry that is not a correction is just an entry. */
+    background: none;
+  }
+
+  .feed__what {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-2);
+  }
+
+  .feed__mark {
+    flex: none;
+    /* Optical, not metric: the glyph's box sits a shade above the sentence's baseline
+     and drops into line with it here. */
+    transform: translateY(2px);
+  }
+
+  /* A CORRECTION READS AS ONE, in the order this system always tells a state: geometry
+   first (the half and struck marks the row carries), hue second, and the hue goes on the
+   MARK -- the sentence stays full ink.
+   *
+   * Tinting the sentence was tried and measured. `.mark--pending`'s umber against the
+   * solved hinge ground runs 4.40 (oxide, ultramarine, sienna) to 4.42 (chrome) -- under
+   * the 4.5:1 floor on every hue in the wheel, because the solver spends its budget on the
+   * ink and secondary tones are mixed FROM the ground for exactly this reason. A mark is
+   * non-text and wants 3:1, which it clears everywhere. So the hue lands where it is
+   * legible and the sentence keeps 10:1. */
+  .feed__line--warn .feed__mark {
+    /* `.mark--pending`'s own umber and `.mark--lapsed`'s own vermilion ink. */
+    color: #6b4a00;
+  }
+
+  .feed__line--error .feed__mark {
+    color: var(--errata-ink);
+  }
+
+  /* An error line is tipped in, the way a correction is everywhere else here: a wash
+   of the slip's own vermilion under the line, which is a ground rather than a tone of
+   text and so costs the sentence no contrast at all. */
+  .feed__line--error td {
+    background: color-mix(in srgb, var(--errata) 8%, transparent);
   }
 
   /* -- the raw lake's SQL workbench --------------------------------------------- */
@@ -3699,6 +3929,37 @@
     .runhead__record {
       padding-left: 0;
       margin-right: 0;
+    }
+
+    /* THE DIAL'S LINE FOLDS. `--head-col` is 0 here and the entity's name is not an
+     optional margin head, so the leader cannot stay between the two ends of the line --
+     it would start at the left edge and there would be nothing for it to lead from. Name
+     and figure take the first line, close enough at this width to read as one fact, and
+     the rule runs the whole of the second. */
+    .gauge {
+      grid-template-columns: minmax(0, 1fr) max-content max-content;
+      row-gap: var(--s-2);
+    }
+
+    .gauge__name {
+      grid-area: 1 / 1;
+    }
+
+    .gauge__figure {
+      grid-area: 1 / 2;
+    }
+
+    .gauge__share {
+      grid-area: 1 / 3;
+    }
+
+    .gauge__rule,
+    .gauge__unmeasured {
+      grid-area: 2 / 1 / 3 / -1;
+    }
+
+    .feed__region {
+      padding: 0 var(--s-3);
     }
 
     .sheet {

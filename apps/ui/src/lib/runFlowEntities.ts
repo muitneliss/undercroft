@@ -16,7 +16,14 @@ import type { RunDetail, RunEventView } from "@/api/types.ts";
 import { formatCount } from "@/lib/money.ts";
 import type { RunStage, StageMark } from "@/lib/runFlowTypes.ts";
 
-interface EntityAcc {
+/**
+ * Everything the run has said about one entity so far, folded into one value.
+ *
+ * Exported because the gauge band above the ledger reads it too (`runFeed.ts`): the figure on
+ * a plate and the figure on the gauge beneath the drawing are one derivation read twice,
+ * rather than two readings of the same events that can disagree with each other.
+ */
+export interface EntityReading {
   readonly entity: string;
   started: boolean;
   done: boolean;
@@ -25,6 +32,8 @@ interface EntityAcc {
   landed: number | null;
   refused: number | null;
 }
+
+type EntityAcc = EntityReading;
 
 function numberField(detail: Readonly<Record<string, unknown>>, key: string): number | null {
   const value = detail[key];
@@ -164,6 +173,21 @@ function entityStageMark(acc: EntityAcc, interrupted: boolean): StageMark {
   return acc.done ? "granted" : "pending";
 }
 
+/**
+ * How much of this entity has been read, as a fraction, for the rule along its plate's foot.
+ *
+ * Only while it is still being read and only against a total the run actually stated: a
+ * finished stage has its landed count to say what it did, and an entity with no total has no
+ * denominator that is not invented. Clamped, because `records_read` is written before the
+ * record it is about is fetched and a page boundary can briefly put the two a step apart.
+ */
+function gatheredSoFar(acc: EntityAcc): number | null {
+  if (acc.done || acc.read === null || acc.total === null || acc.total <= 0) {
+    return null;
+  }
+  return Math.min(1, Math.max(0, acc.read / acc.total));
+}
+
 export function entityStages(
   t: TFunction,
   locale: Locale,
@@ -180,6 +204,7 @@ export function entityStages(
       mark,
       markLabel: entityMarkLabel(t, mark),
       detail: entityDetail(t, locale, acc),
+      gathered: mark === "pending" ? gatheredSoFar(acc) : null,
       href: null,
     };
   });

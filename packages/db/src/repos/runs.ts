@@ -91,6 +91,18 @@ export interface RunEvent {
   /** The entity it concerns; `null` is "the run as a whole". */
   readonly entity: string | null;
   readonly detail: Readonly<Record<string, unknown>>;
+  /**
+   * Whether this line is a reading of a dial rather than a thing that happened.
+   *
+   * A live line keeps ONE row per `(run, event, entity)` and is rewritten in place as its
+   * figure moves; a milestone appends and is never touched again. That distinction is the
+   * whole of `210_run_event_live.sql`, and it is what lets a run narrate itself for hours
+   * without the feed becoming the thing it is describing.
+   *
+   * It travels to the browser because the two are read differently there as well: a milestone
+   * is a line of the ledger, a live one is the gauge above it.
+   */
+  readonly live: boolean;
 }
 
 /** The longest error text a run keeps. Enough to name the fault, too short to hold a row. */
@@ -250,8 +262,37 @@ export async function recordSteps(
   );
 }
 
+/** The key a live line is unique on, matching `run_event_live_one`'s own expression. */
+function liveKey(event: RunEvent): string {
+  return `${event.event} ${event.entity ?? ""}`;
+}
+
 /**
- * Append what a run is doing, while it is still doing it.
+ * The batch as the two statements below need it: milestones in the order they happened, and
+ * at most ONE live line per key -- the last, which is the only reading still true.
+ *
+ * The de-duplication is not an optimisation. `ON CONFLICT DO UPDATE` refuses a source that
+ * offers the same key twice ("cannot affect row a second time"), and a flush that spans two
+ * coalescing intervals offers exactly that.
+ */
+function partition(events: readonly RunEvent[]): {
+  appended: RunEvent[];
+  live: RunEvent[];
+} {
+  const appended: RunEvent[] = [];
+  const latest = new Map<string, RunEvent>();
+  for (const event of events) {
+    if (event.live) {
+      latest.set(liveKey(event), event);
+    } else {
+      appended.push(event);
+    }
+  }
+  return { appended, live: [...latest.values()] };
+}
+
+/**
+ * Record what a run is doing, while it is still doing it.
  *
  * `at` travels with each event rather than defaulting to `now()`, because the worker buffers
  * a handful of events and flushes them together: stamping them on arrival here would file
@@ -259,22 +300,46 @@ export async function recordSteps(
  *
  * JSON in, rows out, as `recordEntities` and `recordSteps` do -- one statement whatever the
  * count, and the same parameter shape under `pg` and PGlite.
+ *
+ * TWO STATEMENTS, because the table holds two kinds of line. A milestone is appended and never
+ * touched again. A live line -- a reading of a dial -- keeps one row per `(run, event, entity)`
+ * and is rewritten in place, which is what lets an hours-long run keep a counter moving without
+ * writing a row per reading. `210_run_event_live.sql` argues the distinction; the worker decides
+ * which side a line falls on by calling `progress` rather than `info`.
+ *
+ * The milestones go first, so a run's opening line is filed before the first reading of the
+ * dial it opened.
  */
 export async function recordEvents(
   exec: SqlExecutor,
   runId: string,
   events: readonly RunEvent[],
 ): Promise<void> {
-  if (events.length === 0) {
-    return;
+  const { appended, live } = partition(events);
+
+  if (appended.length > 0) {
+    await exec.query(
+      `INSERT INTO ops.run_event (run_id, at, level, event, entity, detail)
+       SELECT $1, (e->>'at')::timestamptz, e->>'level', e->>'event', e->>'entity',
+              coalesce(e->'detail', '{}'::jsonb)
+       FROM jsonb_array_elements($2::jsonb) AS e`,
+      [runId, JSON.stringify(appended)],
+    );
   }
-  await exec.query(
-    `INSERT INTO ops.run_event (run_id, at, level, event, entity, detail)
-     SELECT $1, (e->>'at')::timestamptz, e->>'level', e->>'event', e->>'entity',
-            coalesce(e->'detail', '{}'::jsonb)
-     FROM jsonb_array_elements($2::jsonb) AS e`,
-    [runId, JSON.stringify(events)],
-  );
+
+  if (live.length > 0) {
+    // The row keeps its id, and therefore its place in the feed: a gauge stays where it first
+    // appeared rather than jumping to the end of the ledger every two seconds.
+    await exec.query(
+      `INSERT INTO ops.run_event (run_id, at, level, event, entity, detail, live)
+       SELECT $1, (e->>'at')::timestamptz, e->>'level', e->>'event', e->>'entity',
+              coalesce(e->'detail', '{}'::jsonb), true
+       FROM jsonb_array_elements($2::jsonb) AS e
+       ON CONFLICT (run_id, event, coalesce(entity, '')) WHERE live
+       DO UPDATE SET at = EXCLUDED.at, detail = EXCLUDED.detail`,
+      [runId, JSON.stringify(live)],
+    );
+  }
 }
 
 /**
@@ -298,9 +363,10 @@ export async function eventsFor(
     event: string;
     entity: string | null;
     detail: Record<string, unknown>;
+    live: boolean;
   }>(
-    `SELECT at, level, event, entity, detail FROM (
-       SELECT id, at, level, event, entity, detail FROM ops.run_event
+    `SELECT at, level, event, entity, detail, live FROM (
+       SELECT id, at, level, event, entity, detail, live FROM ops.run_event
        WHERE run_id = $1 ORDER BY id DESC LIMIT $2
      ) AS recent ORDER BY id`,
     [runId, limit],
@@ -311,6 +377,7 @@ export async function eventsFor(
     event: r.event,
     entity: r.entity,
     detail: r.detail,
+    live: r.live,
   }));
 }
 
