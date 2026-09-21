@@ -35,32 +35,130 @@ import {
 } from "@undercroft/core";
 
 /**
- * Google's documented ceiling is far higher, but per-user quota is what actually bites, and
- * a backfill that trips it costs more in 429s than the pacing saves. 120ms leaves headroom.
+ * One request per 334ms: three a second, inside the 2-4 `messages.get`/second/user that
+ * Gmail actually enforces for this project.
+ *
+ * This was 120ms -- 8.3 a second -- on the reasoning that Google's DOCUMENTED per-user
+ * ceiling (15,000 quota units a minute, 5 units a `messages.get`, so 50 a second) left
+ * ample headroom. The documented ceiling is not the enforced one. A 7,777-message backfill
+ * died 378 messages in, roughly 45 seconds, with `403 Quota exceeded for quota metric
+ * 'Total Query Cost' and limit 'Units per minute per user'` -- at a measured 2,500 units a
+ * minute, a sixth of the published limit. The enforced rate is 2-4 a second, and 3 is the
+ * middle of that rather than a ride along its ceiling.
+ *
+ * It costs a 7,777-message mailbox about 43 minutes. That is the trade, and it is worth
+ * taking: the 16-minute version does not finish. `harvestGmail` buffers the whole mailbox
+ * and `runGoogleCollect` lands it at the end, so a run that trips the quota discards every
+ * record it had read -- a slow run beats one that lands nothing.
+ *
+ * `UNDERCROFT_GOOGLE_MIN_INTERVAL_MS` overrides it, because the enforced number belongs to
+ * the Cloud project rather than to Google, and the next deployment's may differ. See
+ * {@link googleMinIntervalMs}.
  */
-export const GOOGLE_MIN_INTERVAL_MS = 120;
+export const GOOGLE_MIN_INTERVAL_MS = 334;
 
-/** Gmail's rate-limit reasons, which arrive as 403 rather than 429. */
-const RATE_LIMITED = /rateLimitExceeded|userRateLimitExceeded/u;
-const FORBIDDEN = 403;
+/** The env var that overrides the pacing, for a project whose enforced quota differs. */
+export const GOOGLE_INTERVAL_ENV = "UNDERCROFT_GOOGLE_MIN_INTERVAL_MS";
 
 /**
- * `DEFAULT_RETRY`, plus the one thing that is true of Google and not of HTTP generally.
+ * Gmail's rate-limit reasons, which arrive as 403 rather than 429.
  *
- * Gmail does not answer a rate limit with 429. It answers **`403 rateLimitExceeded`** (or
- * `userRateLimitExceeded`), and Google's own error guide says to back off and retry exactly
- * those. With 403 absent from `on`, a backfill died mid-mailbox the moment the per-user
- * quota bit -- observed as "gmail/messages failed after 196 records: HTTP 403".
+ * FOUR SPELLINGS, BECAUSE MATCHING ONLY THE REASON IS A COIN TOSS. `raiseForByteStatus`
+ * keeps the first 500 bytes of the body, and in the quota error Google actually sent for
+ * this project, `"reason": "rateLimitExceeded"` ENDS AT BYTE 499 of a pretty-printed body --
+ * inside the cap by one byte. The message it follows is repeated twice before it, so a
+ * consumer name one character longer moves the token two bytes and truncates it: measured,
+ * `project_number:1823022475567` (one more digit than ours) puts it at 484-501 and the match
+ * is gone. A guard that fires on where a byte cap happened to fall is not a guard.
+ *
+ * So the human-readable half is matched too. `Quota exceeded` and `RESOURCE_EXHAUSTED` are
+ * within the first hundred bytes, and neither can mean anything but a quota: a missing
+ * scope is `insufficientPermissions`, an API nobody enabled is `accessNotConfigured`.
+ * `userRateLimitExceeded` is listed separately because its capital `R` means the
+ * `rateLimitExceeded` alternative does not match it.
+ */
+const RATE_LIMITED = /rateLimitExceeded|userRateLimitExceeded|RESOURCE_EXHAUSTED|Quota exceeded/u;
+
+/**
+ * A cap no run can wait out, which therefore must NOT be retried.
+ *
+ * Google words a daily exhaustion in the same "Quota exceeded for quota metric" sentence as
+ * a per-minute one, so widening {@link RATE_LIMITED} to the message text pulls the daily cap
+ * in with it. Sleeping three minutes on a quota that resets at midnight is the mistake
+ * `pacer.ts` refuses by name with `QuotaExhausted`: a worker parked, appearing to make
+ * progress. This therefore wins over `RATE_LIMITED`.
+ */
+const DAILY_CAP = /dailyLimitExceeded|per day/u;
+const FORBIDDEN = 403;
+const INTEGER_MS = /^\d+$/u;
+
+/**
+ * `DEFAULT_RETRY`, plus the two things that are true of Google and not of HTTP generally.
+ *
+ * **Gmail does not answer a rate limit with 429.** It answers **`403 rateLimitExceeded`**
+ * (or `userRateLimitExceeded`, or a `Quota exceeded` message), and Google's own error guide
+ * says to back off and retry exactly those. With 403 absent from `on`, a backfill died
+ * mid-mailbox the moment the per-user quota bit -- observed as "gmail/messages failed after
+ * 196 records: HTTP 403".
  *
  * Deliberately NOT `on: [403]`. The same status is also how Google says "the customer never
- * granted that scope", which is not transient: retrying it five times with backoff turns a
- * clear refusal into a slow one and tells the operator nothing new. So the REASON decides,
- * and both directions are pinned by tests.
+ * granted that scope", which is not transient: retrying it with backoff turns a clear
+ * refusal into a slow one and tells the operator nothing new. So the REASON decides, and
+ * every direction is pinned by tests.
+ *
+ * **The budget has to outlast the window it waits on.** `DEFAULT_RETRY` spends four sleeps
+ * of at most 500/1000/2000/4000ms -- 7.5 seconds at the very worst, under 4 on average. The
+ * quota that bites here names its own window: `limit 'Units per minute per user'`. Four
+ * seconds of backoff against a minute-long window spends every attempt inside the same
+ * window that refused the first one, so all of them are refused and a 43-minute backfill
+ * ends over a stall it only had to sit out. Seven sleeps from a 2s base, capped at 60s,
+ * spend about 91 seconds of expected backoff and at most 182 -- past the window, and still
+ * bounded rather than a worker parked forever.
+ *
+ * Full jitter is kept rather than traded for a deterministic wait: every tenant's run bills
+ * to the same Cloud project, so two backfills that trip the same quota must not come back in
+ * step.
  */
 export const GOOGLE_RETRY: RetryPolicy = {
   ...DEFAULT_RETRY,
-  retryWhen: (error) => error.status === FORBIDDEN && RATE_LIMITED.test(error.bodyExcerpt),
+  attempts: 8,
+  baseMs: 2000,
+  maxMs: 60_000,
+  retryWhen: (error) =>
+    error.status === FORBIDDEN &&
+    !DAILY_CAP.test(error.bodyExcerpt) &&
+    RATE_LIMITED.test(error.bodyExcerpt),
 };
+
+/**
+ * The pacing this deployment should use: the env override, or {@link GOOGLE_MIN_INTERVAL_MS}.
+ *
+ * An unreadable value RAISES rather than falling back. The default is what caused the outage
+ * this function exists because of, so quietly returning to it on a typo would hide the one
+ * setting an operator reached for to stop that happening again -- and the symptom would be
+ * another dead backfill 45 seconds in, with the variable sitting in the compose file looking
+ * applied. Rule 2: never guess, say why.
+ *
+ * Takes the environment as an argument rather than reading it: `layering.md` keeps
+ * `process.env` above this layer, and `server.ts` already passes `env` down through
+ * `RunDeps`.
+ */
+export function googleMinIntervalMs(env: NodeJS.ProcessEnv = {}): number {
+  const raw = env[GOOGLE_INTERVAL_ENV]?.trim();
+  if (raw === undefined || raw === "") {
+    return GOOGLE_MIN_INTERVAL_MS;
+  }
+  // parseInt, not Number(): a millisecond interval is a count, not an amount. The money rule
+  // bans Number() repo-wide; same reasoning as the port in `server.ts`.
+  if (!INTEGER_MS.test(raw) || Number.parseInt(raw, 10) <= 0) {
+    throw new Error(
+      `${GOOGLE_INTERVAL_ENV} must be a positive whole number of milliseconds; got ` +
+        `${JSON.stringify(env[GOOGLE_INTERVAL_ENV])}. Gmail enforces about 2-4 ` +
+        `messages.get/second/user, which the default ${GOOGLE_MIN_INTERVAL_MS} paces at three.`,
+    );
+  }
+  return Number.parseInt(raw, 10);
+}
 
 export interface GoogleApiDeps {
   readonly fetcher: ByteFetcher;
@@ -72,6 +170,12 @@ export interface GoogleApiDeps {
    */
   readonly token: () => Promise<string>;
   readonly clock?: Clock;
+  /**
+   * Minimum gap between two requests. Defaults to {@link GOOGLE_MIN_INTERVAL_MS}; a caller
+   * that has read the env passes {@link googleMinIntervalMs}. Ignored when `pacer` is given,
+   * which is the seam a test uses to pace on a clock it controls.
+   */
+  readonly minIntervalMs?: number;
   readonly pacer?: Pacer;
   readonly retry?: RetryPolicy;
   readonly random?: () => number;
@@ -86,7 +190,9 @@ export interface GoogleApi {
 
 export function createGoogleApi(source: string, deps: GoogleApiDeps): GoogleApi {
   const clock = deps.clock ?? systemClock;
-  const pacer = deps.pacer ?? createPacer({ minIntervalMs: GOOGLE_MIN_INTERVAL_MS }, clock);
+  const pacer =
+    deps.pacer ??
+    createPacer({ minIntervalMs: deps.minIntervalMs ?? GOOGLE_MIN_INTERVAL_MS }, clock);
   const retry = deps.retry ?? GOOGLE_RETRY;
 
   /**
