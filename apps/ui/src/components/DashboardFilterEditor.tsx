@@ -81,7 +81,7 @@ function FilterRow({
   const i = at;
 
   return (
-    <div key={String(i)} className="row builder__filter">
+    <div key={String(i)} className="builder__filter row row--field">
       <div className="field">
         <label className="label" htmlFor={`d-filter-name-${String(i)}`}>
           {t("dashboard.filterName")}

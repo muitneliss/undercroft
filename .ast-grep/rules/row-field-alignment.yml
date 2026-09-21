@@ -1,0 +1,54 @@
+# A labelled field in a centred row, which is the one layout defect in this sheet that
+# ships looking deliberate.
+#
+# `.row` centres its items. That is right for a row of plates, all one height, and wrong
+# the moment one item is a `.field`, which is a caption stacked on a box: centring hangs
+# the button that submits the field half a caption ABOVE the box it acts on. Nothing
+# raises, nothing logs, the page renders -- it just reads as two objects that missed each
+# other. `.row--field` (apps/ui/src/index.css) aligns the row to the field's bottom edge
+# and strikes the plate to the input's height, so the pair reads as one control.
+#
+# The rule requires that class wherever a `.field` is a LITERAL child in the markup, which
+# is where a reader can see the mistake and a machine can prove it. A field that arrives
+# from a child component or out of a `.map` is past what any linter can follow; the
+# `:has(> .field)` selector beside `.row--field` in the sheet is the net under those, and
+# it is why this rule can stay narrow instead of guessing. See docs/adr/0027 and
+# .claude/rules/layout.md.
+#
+# `tsx` only: JSX is what this is about, and `.ts` files in apps/ui carry no markup.
+id: row-field-alignment
+language: tsx
+severity: error
+message: >-
+  A `.field` in a centred `.row`: the control beside it will sit half a caption above the
+  box it acts on. Write `className="row row--field"` so the row aligns to the field's
+  bottom edge. See .claude/rules/layout.md and docs/adr/0027.
+files:
+  - "apps/ui/**"
+rule:
+  kind: jsx_element
+  all:
+    # The container: a class list containing `row`, and not already `row--field`.
+    - has:
+        kind: jsx_opening_element
+        has:
+          kind: jsx_attribute
+          regex: '^className="(?:[^"]*\s)?row(?:\s[^"]*)?"$'
+          not:
+            regex: "row--field"
+    # A direct child whose class list contains `field` -- `.field__hint` and the rest do
+    # not match, because the regex reads whole classes rather than a substring. Both
+    # spellings of an element: `<div className="field">...</div>` and a childless
+    # `<X className="field" />`.
+    - has:
+        any:
+          - kind: jsx_element
+            has:
+              kind: jsx_opening_element
+              has:
+                kind: jsx_attribute
+                regex: '^className="(?:[^"]*\s)?field(?:\s[^"]*)?"$'
+          - kind: jsx_self_closing_element
+            has:
+              kind: jsx_attribute
+              regex: '^className="(?:[^"]*\s)?field(?:\s[^"]*)?"$'

@@ -246,7 +246,7 @@ export function ParamsBand({
       <div className="body stack">
         <p className="prose">{t("bi.paramsLead")}</p>
         <form
-          className="row"
+          className="row row--field"
           onSubmit={(event): void => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);

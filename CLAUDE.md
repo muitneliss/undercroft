@@ -44,6 +44,7 @@ about to touch.** That is the only reason this index exists.
 | `tests.md`        | `**/*.test.ts`                                                           | real in-memory implementations over mocks, a guard needs two tests                       |
 | `state.md`        | `apps/ui/**`                                                             | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
 | `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`                                | Vietnamese default, English second; no user-facing string written in place               |
+| `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                   | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
 | `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                    | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
 | `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures                                  | no real customer data in any tracked file                                                |
 | `deployment.md`   | `deploy/**`, `flows/**`, deploy workflows                                | the Dokploy API is the only channel, every service declares a memory limit               |
@@ -110,6 +111,13 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
   **Biome GritQL plugins** in `.biome/plugins/`, which fail `task ci:lint` (`bun run lint`).
   Pinned by `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
   `no-restricted-syntax`; see ADR 0012.
+- `row-field-alignment` is an **ast-grep** rule too, and the one layout defect a machine can
+  see: a `.field` written into a centred `.row` hangs the control beside it half a caption
+  above the box it acts on, and renders perfectly while doing it. It requires `row--field`,
+  whose `:has(> .field)` companion in `index.css` catches the field a linter cannot follow —
+  one from a child component or a `.map`. Pinned by `scripts/alignment.test.ts` (the rule,
+  and that the two selectors stay one block) and `apps/ui/src/layout.test.ts` (the computed
+  value, off the real stylesheet). ADR 0027.
 
 Where a rule can be made mechanical it is.
 

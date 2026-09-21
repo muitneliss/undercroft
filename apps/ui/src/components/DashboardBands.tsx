@@ -327,7 +327,7 @@ function AddTileForm({
 
   return (
     <form
-      className="row"
+      className="row row--field"
       onSubmit={(event): void => {
         event.preventDefault();
         const chosen = String(new FormData(event.currentTarget).get("question") ?? "");

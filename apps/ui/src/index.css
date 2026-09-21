@@ -327,6 +327,13 @@
     --r-leaf: 3px;
     --r-plate: 2px;
 
+    /* One height for a control that sits on a field's line, so a box and the plate
+     beside it are one object and not two that nearly line up. It is the input's own
+     height solved once -- 0.8125rem of mono at 1.5, plus 0.5rem of padding either
+     side, plus two hairlines = 37.5px -- rounded UP to the next half-step, so the
+     `min-height` it feeds can only ever match a control, never shorten one. */
+    --control-h: 2.375rem;
+
     /*
      * Motion, and there is no easing curve anywhere in this sheet.
      *
@@ -850,6 +857,40 @@
     align-items: center;
     gap: var(--s-3);
     flex-wrap: wrap;
+  }
+
+  /*
+   * A row that carries a LABELLED FIELD, not only plates.
+   *
+   * `.row` centres its items, which is right for a row of plates and wrong the moment
+   * one of them is a `.field`: a field is a caption stacked on a box, so centring hangs
+   * the button that submits it half a caption ABOVE the box it acts on -- the two read
+   * as two objects that missed each other rather than one control. The field's bottom
+   * edge is the line they share, so the row is aligned to it.
+   *
+   * TWO SELECTORS, ONE DECISION. `.row--field` is what an author writes, and what
+   * `.ast-grep/rules/row-field-alignment.yml` can see and require -- markup that says
+   * what it means. `:has(> .field)` is the net under it, for the field that arrives
+   * from a child component or out of a `.map` where no linter can follow it. The lint
+   * is the gate; the net is what keeps the screen right in the case the gate is blind
+   * to. See docs/adr/0027.
+   */
+  .row--field,
+  .row:has(> .field) {
+    align-items: flex-end;
+  }
+
+  /*
+   * ...and struck to one height. The plate letters in caps micro type, so its line box
+   * is 3px shorter than the input's; sharing a bottom edge, that difference reads as a
+   * near-miss, which is worse than an obvious one. `.plate--small` is deliberately out:
+   * it is small on purpose, and it already sits on the same bottom edge.
+   */
+  .row--field > .plate:not(.plate--small),
+  .row:has(> .field) > .plate:not(.plate--small),
+  .row--field .input,
+  .row:has(> .field) .input {
+    min-height: var(--control-h);
   }
 
   .spread {
