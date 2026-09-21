@@ -37,12 +37,24 @@ tasks:
     headers:
       Authorization: "Bearer {{ envs.trigger_token }}"
     options:
-      connectTimeout: PT30S
-      readIdleTimeout: PT1M
+      # Kestra 2.x nests the two timeouts under `timeout`; they were flat in 1.x and the
+      # server rejects the old spelling outright (422, "Unrecognized field").
+      timeout:
+        connectTimeout: PT30S
+        readIdleTimeout: PT1M
 
   - id: start
-    type: io.kestra.plugin.core.flow.ForEach
-    values: "{{ json(outputs.due.body).due }}"
+    # `Loop`, not `ForEach`: 2.x dropped the ForEach type outright and the server answers
+    # "Invalid type" for it. It is NOT a plain rename -- Loop runs each iteration as its own
+    # SUB-EXECUTION, which is why the body below reads `item.value` -- the spelling in
+    # Kestra's own example -- and not 1.x's `taskrun.value`, which is not in scope in a
+    # sub-execution. That failure is at RENDER time and the flow validator does not see
+    # it: a flow can validate clean and still fail on its first real iteration.
+    type: io.kestra.plugin.core.flow.Loop
+    # `fromJson`, not `json`: 2.x removed the `json` Pebble function and the expression
+    # fails at render time with "Function or Macro [json] does not exist" -- which the
+    # flow validator does NOT catch, because it only type-checks the task graph.
+    values: "{{ fromJson(outputs.due.body).due }}"
     concurrencyLimit: 1
     tasks:
       - id: ingest
@@ -50,17 +62,21 @@ tasks:
         uri: http://undercroft-worker:8081/v1/runs/ingest
         method: POST
         contentType: application/json
-        body: "{{ taskrun.value }}"
+        body: "{{ item.value }}"
         headers:
           Authorization: "Bearer {{ envs.trigger_token }}"
-        allowFailed: true
         options:
-          connectTimeout: PT30S
-          readIdleTimeout: PT1M
+          # A 409 is a pair already running -- the worker's own guard -- and is not a
+          # failure of this flow. In 2.x `allowFailed` is an HTTP option, not a task
+          # property: at task level the server rejects it.
+          allowFailed: true
+          timeout:
+            connectTimeout: PT30S
+            readIdleTimeout: PT1M
 
   - id: report
     type: io.kestra.plugin.core.log.Log
-    message: "asked the worker to start {{ json(outputs.due.body).due | length }} due pair(s)"
+    message: "asked the worker to start {{ fromJson(outputs.due.body).due | length }} due pair(s)"
 
 triggers:
   - id: every_15_minutes
