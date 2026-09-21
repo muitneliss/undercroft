@@ -17,7 +17,7 @@ import { buildModel, dqFailures } from "../services/jobs.ts";
 import { findRun } from "../services/ledger.ts";
 import { readRawSchema, readSchema, runQuery, runRawQuery } from "../services/queryRunner.ts";
 import { searchRaw } from "../services/rawSearch.ts";
-import { listDue } from "../services/schedule.ts";
+import { listDue, listExtractDue } from "../services/schedule.ts";
 import { UNAUTHENTICATED, jobDepsFor, serviceTokenOk } from "./bearer.ts";
 import type { LakeApiDeps } from "./lake.ts";
 
@@ -51,6 +51,7 @@ export function registerAnalyticsRoutes(app: Hono, deps: LakeApiDeps): void {
   registerQueriesSchemaRoute(app, deps);
   registerRawQueryRoutes(app, deps);
   registerRunsDueGetRoute(app, deps);
+  registerRunsExtractDueGetRoute(app, deps);
   registerRunsGetRoute(app, deps);
 }
 
@@ -245,6 +246,23 @@ function registerRunsDueGetRoute(app: Hono, deps: LakeApiDeps): void {
       return c.json(UNAUTHENTICATED, 401);
     }
     return c.json({ due: await listDue(deps.exec) }, 200);
+  });
+}
+
+/**
+ * Which pairs have documents nobody has read yet.
+ *
+ * Its own route rather than a flag on `/v1/runs/due`, because the two lists answer different
+ * questions and a caller wants one of them: the ingest flow must not start extracts, and the
+ * extract flow must not start syncs. Registered before `/v1/runs/:id` for the same reason
+ * `due` is -- otherwise `extract-due` is read as a run id.
+ */
+function registerRunsExtractDueGetRoute(app: Hono, deps: LakeApiDeps): void {
+  app.get("/v1/runs/extract-due", async (c) => {
+    if (!serviceTokenOk(deps, c)) {
+      return c.json(UNAUTHENTICATED, 401);
+    }
+    return c.json({ due: await listExtractDue(deps.exec) }, 200);
   });
 }
 

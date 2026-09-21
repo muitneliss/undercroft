@@ -1,7 +1,7 @@
 /**
  * `raw.document_text`: what each landed document says, and how it came to be read.
  *
- * Two statements, and the first is the one that decides the bill. `pendingDocuments` answers
+ * Three statements, and the first is the one that decides the bill. `pendingDocuments` answers
  * "which documents does this tenant have that nobody has read, or has read from bytes that
  * have since changed" -- the LEFT JOIN on `source_sha256` is the whole mechanism. A document
  * whose sha matches what was extracted from is not returned at all, so a second extract run
@@ -10,6 +10,12 @@
  *
  * A tombstoned document (`deleted_at`) is skipped: its bytes are gone from the source, and
  * re-reading a document the customer deleted is the opposite of what the tombstone records.
+ *
+ * `pendingScopes` asks the SAME question one level up -- which (tenant, source) pairs have
+ * any such document -- because the scheduler needs a list to start runs from and must not
+ * start one that would find nothing to do. The two share `PENDING_JOIN` rather than spelling
+ * the predicate twice: two definitions of "pending" drifting apart would show up as a flow
+ * that ticks forever over a tenant whose documents the run then declines to read.
  *
  * Nothing here decides anything. Which reader a content type gets, and what counts as a
  * readable text layer, are decisions one layer up in `../services/extract/`.
@@ -41,6 +47,20 @@ interface Scope {
 }
 
 /**
+ * "Landed, not tombstoned, and either never read or read from bytes that have since changed."
+ *
+ * One definition, used by both readers below. A constant rather than a parameter because it
+ * is the repo's own SQL and nothing outside this module composes with it.
+ */
+const PENDING_JOIN = `FROM raw.documents d
+       LEFT JOIN raw.document_text t
+         ON t.source = d.source
+        AND t.tenant_id = d.tenant_id
+        AND t.document_id = d.document_id
+      WHERE d.deleted_at IS NULL
+        AND (t.document_id IS NULL OR t.source_sha256 <> d.sha256)`;
+
+/**
  * The documents this run has to read: never read, or read from different bytes.
  *
  * Ordered by `document_id` so a capped run is resumable -- the next run asks the same
@@ -59,15 +79,9 @@ export async function pendingDocuments(
     content_type: string;
   }>(
     `SELECT d.document_id, d.lake_key, d.sha256, d.content_type
-       FROM raw.documents d
-       LEFT JOIN raw.document_text t
-         ON t.source = d.source
-        AND t.tenant_id = d.tenant_id
-        AND t.document_id = d.document_id
-      WHERE d.source = $1
+       ${PENDING_JOIN}
+        AND d.source = $1
         AND d.tenant_id = $2
-        AND d.deleted_at IS NULL
-        AND (t.document_id IS NULL OR t.source_sha256 <> d.sha256)
       ORDER BY d.document_id
       LIMIT $3`,
     [scope.source, scope.tenantId, limit],
@@ -79,6 +93,27 @@ export async function pendingDocuments(
     sha256: row.sha256,
     contentType: row.content_type,
   }));
+}
+
+/**
+ * Every (tenant, source) pair with a document waiting to be read.
+ *
+ * The scheduler's list. `DISTINCT` rather than a count, because the caller starts one run per
+ * pair and how many documents that run will find is the run's own business -- and a count
+ * over the whole catalogue is the scan this question exists to avoid.
+ *
+ * A pair vanishes from this list once its documents are read, which is what makes the tick
+ * idempotent: an unchanged tenant is not returned, so nothing is started for it. That is the
+ * same `source_sha256` mechanism `pendingDocuments` relies on, reached through the same
+ * predicate.
+ */
+export async function pendingScopes(exec: SqlExecutor): Promise<Scope[]> {
+  const { rows } = await exec.query<{ tenantId: string; source: string }>(
+    `SELECT DISTINCT d.tenant_id AS "tenantId", d.source
+       ${PENDING_JOIN}
+      ORDER BY 1, 2`,
+  );
+  return rows.map((row) => ({ tenantId: row.tenantId, source: row.source }));
 }
 
 /**

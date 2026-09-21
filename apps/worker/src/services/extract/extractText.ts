@@ -25,6 +25,7 @@
  */
 
 import type { Spawn, SpawnOptions } from "../transform.ts";
+import { readXlsx } from "./xlsx.ts";
 
 /** How the text was read. A new extractor is a new value; the column is deliberately not an enum. */
 export type ExtractMethod = "pdf_text" | "pdf_ocr" | "docx" | "xlsx" | "image_ocr" | "txt";
@@ -37,6 +38,8 @@ export type ExtractMethod = "pdf_text" | "pdf_ocr" | "docx" | "xlsx" | "image_oc
  * read" makes them look identical.
  */
 export const LEGACY_DOC = "legacy-doc-unsupported";
+export const LEGACY_XLS = "legacy-xls-unsupported";
+export const XLSX_UNREADABLE = "xlsx-unreadable";
 export const UNSUPPORTED_TYPE = "unsupported-content-type";
 export const EMPTY_SOURCE = "document-has-no-bytes";
 export function extractorMissing(program: string): string {
@@ -144,50 +147,91 @@ export async function pdfTextLayer(
   return result.ok ? { ok: true, text: result.output } : result;
 }
 
+/** What every reader below is handed. `bytes` is what the lake holds; `path` is where they are. */
+interface Document {
+  readonly contentType: string;
+  readonly bytes: Uint8Array;
+  readonly path: string;
+}
+
+type Reader = (deps: ExtractDeps, input: Document) => Extracted | Promise<Extracted>;
+
+/**
+ * Decoded non-fatally, so a stray byte in an otherwise readable file costs that byte and not
+ * the document. What cannot be decoded at all lands as the replacement character, which is
+ * visibly wrong rather than invisibly absent.
+ */
+function readPlainText(_deps: ExtractDeps, input: Document): Extracted {
+  return read("txt", new TextDecoder("utf-8", { fatal: false }).decode(input.bytes));
+}
+
+async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
+  const layer = await pdfTextLayer(deps, input.path);
+  if (!layer.ok) {
+    return refused(layer.missing ? extractorMissing("pdftotext") : "pdftotext-failed");
+  }
+  if (normalizeText(layer.text).length >= TEXT_LAYER_MIN_CHARS) {
+    return read("pdf_text", layer.text);
+  }
+  // Below the threshold this is a scan, and reading it needs OCR. Until that lands, the
+  // document is refused BY NAME rather than stored as the handful of stray characters the
+  // layer did return -- which would read downstream as a contract that says almost nothing.
+  return refused("needs-ocr");
+}
+
+/**
+ * Read in process, spawning nothing: a workbook is a zip of XML, and `xlsx.ts` argues there
+ * why that is cheaper here than either a converter binary or a dependency.
+ *
+ * `null` is a workbook we could not open exactly -- never an empty one. The two are different
+ * facts and an empty string would make them one (`CLAUDE.md` rule 2).
+ */
+function readWorkbook(_deps: ExtractDeps, input: Document): Extracted {
+  const text = readXlsx(input.bytes);
+  return text === null ? refused(XLSX_UNREADABLE) : read("xlsx", text);
+}
+
+/**
+ * One reader per content type. A NEW EXTRACTOR IS A NEW ENTRY, which is the shape this table
+ * exists for: the chain of `if (type === ...)` it replaced grew a branch per format until it
+ * was the most complex function in the module, and the cost of the next one was a re-read of
+ * all of them.
+ *
+ * The two `refused` entries are readers too, deliberately. A format we have decided not to
+ * support is a decision with a name attached and belongs in the same list as the ones we do --
+ * an absent entry means "nobody has thought about this type yet", which is what
+ * `UNSUPPORTED_TYPE` says, and the two should not look alike.
+ *
+ * A `Map` rather than an object literal: the key is a content type from a provider, and a
+ * lookup of `constructor` or `__proto__` in a plain object answers with something that is not
+ * a reader.
+ */
+const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
+  ["text/plain", readPlainText],
+  ["application/pdf", readPdf],
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", readWorkbook],
+  // The pre-2007 binary workbook. Reading BIFF needs LibreOffice in the image, which is a
+  // container's worth of dependency for two files. Its own reason rather than `LEGACY_DOC`,
+  // because an operator reading the ledger should not have to know that the Word reason was
+  // meant to cover spreadsheets too.
+  ["application/vnd.ms-excel", (): Extracted => refused(LEGACY_XLS)],
+  // The pre-2007 binary Word format, refused for the same reason and by name, so it is
+  // visible in the ledger rather than absent from it.
+  ["application/msword", (): Extracted => refused(LEGACY_DOC)],
+]);
+
 /**
  * One document, read whichever way its type allows.
  *
- * `bytes` is what the lake holds; `path` is where the caller has already written them for a
- * binary to open. Both are passed because the two halves of this dispatch need different
- * things -- a text file is decoded in process, a PDF is handed to a program by name.
+ * The charset a provider may append is dropped before the lookup: the catalogue stores what
+ * was declared, and `text/plain; charset=utf-8` is the same document as `text/plain`.
  */
-export async function extractDocument(
-  deps: ExtractDeps,
-  input: { contentType: string; bytes: Uint8Array; path: string },
-): Promise<Extracted> {
+export async function extractDocument(deps: ExtractDeps, input: Document): Promise<Extracted> {
   if (input.bytes.byteLength === 0) {
     return refused(EMPTY_SOURCE);
   }
 
   const type = input.contentType.split(";")[0]?.trim().toLowerCase() ?? "";
-
-  if (type === "text/plain") {
-    // Non-fatal, so a stray byte in an otherwise readable file costs that byte and not the
-    // document. What cannot be decoded at all still lands as the replacement character, which
-    // is visibly wrong rather than invisibly absent.
-    return read("txt", new TextDecoder("utf-8", { fatal: false }).decode(input.bytes));
-  }
-
-  if (type === "application/pdf") {
-    const layer = await pdfTextLayer(deps, input.path);
-    if (!layer.ok) {
-      return refused(layer.missing ? extractorMissing("pdftotext") : "pdftotext-failed");
-    }
-    if (normalizeText(layer.text).length >= TEXT_LAYER_MIN_CHARS) {
-      return read("pdf_text", layer.text);
-    }
-    // Below the threshold this is a scan, and reading it needs OCR. Until that lands, the
-    // document is refused BY NAME rather than stored as the handful of stray characters the
-    // layer did return -- which would read downstream as a contract that says almost nothing.
-    return refused("needs-ocr");
-  }
-
-  if (type === "application/msword") {
-    // The pre-2007 binary format. Nothing reads it without pulling LibreOffice into the
-    // image, which is a container's worth of dependency for two files; refused by name so it
-    // is visible in the ledger rather than absent from it.
-    return refused(LEGACY_DOC);
-  }
-
-  return refused(UNSUPPORTED_TYPE);
+  const reader = READERS.get(type);
+  return reader === undefined ? refused(UNSUPPORTED_TYPE) : await reader(deps, input);
 }

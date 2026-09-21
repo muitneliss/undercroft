@@ -234,6 +234,78 @@ describe("GET /v1/runs/due", () => {
   });
 });
 
+describe("GET /v1/runs/extract-due", () => {
+  const SHA_A = "a".repeat(64);
+  const SHA_B = "b".repeat(64);
+
+  /** Catalogue a document the way an ingest leaves one. `sha` is what its bytes hashed to. */
+  async function landed(documentId: string, sha: string): Promise<void> {
+    await db.query(
+      `INSERT INTO raw.documents
+         (source, tenant_id, document_id, lake_key, sha256, byte_length, content_type,
+          observed_at, run_id)
+       VALUES ('drive', 'CASE-1', $1, $2, $3, 10, 'application/pdf', now(), 'run-seed')`,
+      [documentId, `documents/drive/CASE-1/${documentId}`, sha],
+    );
+  }
+
+  /** Record that a document was read, from the bytes `sha` names. */
+  async function readFrom(documentId: string, sha: string): Promise<void> {
+    await db.query(
+      `INSERT INTO raw.document_text
+         (source, tenant_id, document_id, source_sha256, method, text, chars, extracted_at, run_id)
+       VALUES ('drive', 'CASE-1', $1, $2, 'pdf_text', 'a page', 6, now(), 'run-seed')`,
+      [documentId, sha],
+    );
+  }
+
+  async function extractDue(): Promise<Response> {
+    return await api().request("/v1/runs/extract-due", {
+      headers: { authorization: "Bearer svc-token" },
+    });
+  }
+
+  it("lists a pair holding a document nobody has read", async () => {
+    await landed("doc-1", SHA_A);
+
+    const res = await extractDue();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ due: [{ tenantId: "CASE-1", source: "drive" }] });
+  });
+
+  it("stops listing a pair once its documents are read, so the tick does not run forever", async () => {
+    // The half of the guard that makes an hourly schedule cheap rather than wasteful: a
+    // settled tenant must fall off the list, or every tick starts a run that finds nothing.
+    await landed("doc-1", SHA_A);
+    await readFrom("doc-1", SHA_A);
+
+    expect(await (await extractDue()).json()).toEqual({ due: [] });
+  });
+
+  it("lists it again when a document's bytes have changed since it was read", async () => {
+    await landed("doc-1", SHA_A);
+    await readFrom("doc-1", SHA_B);
+
+    expect(await (await extractDue()).json()).toEqual({
+      due: [{ tenantId: "CASE-1", source: "drive" }],
+    });
+  });
+
+  it("does not list a pair whose only document has been tombstoned", async () => {
+    // Its bytes are gone from the source, so re-reading it is the opposite of what the
+    // tombstone records -- and a pair nothing can read that stays due ticks forever.
+    await landed("doc-1", SHA_A);
+    await db.query("UPDATE raw.documents SET deleted_at = now() WHERE document_id = 'doc-1'");
+
+    expect(await (await extractDue()).json()).toEqual({ due: [] });
+  });
+
+  it("needs the trigger token", async () => {
+    expect((await api().request("/v1/runs/extract-due")).status).toBe(401);
+  });
+});
+
 describe("GET /v1/runs/:id", () => {
   it("returns the run for whoever holds the trigger token, and 404 for no such run", async () => {
     await openRun(db, {
