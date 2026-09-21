@@ -39,6 +39,7 @@
 - [ADR 0031 A Picked Drive Folder May Be Read to the Bottom](sources/adr-0031-a-picked-drive-folder-may-be-read-to-the-bottom.md)
 - [ADR 0032 A Progress Line Is a Gauge Not an Entry](sources/adr-0032-a-progress-line-is-a-gauge-not-an-entry.md)
 - [ADR 0034 The Watermark Is a Table Not a Max](sources/adr-0034-the-watermark-is-a-table-not-a-max.md)
+- [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook: Setting the assistant up](sources/runbook-setting-the-assistant-up.md)
