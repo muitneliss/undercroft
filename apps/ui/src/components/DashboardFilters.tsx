@@ -60,7 +60,7 @@ function DateRange({
           </button>
         ))}
       </div>
-      <div className="row">
+      <div className="row row--field">
         <div className="field">
           <label className="label" htmlFor={`f-${from}`}>
             {t("dashboard.from")}

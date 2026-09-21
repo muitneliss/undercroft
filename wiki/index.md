@@ -32,6 +32,7 @@
 - [ADR 0024: A document's text is readable by dbt](sources/adr-0024-a-document-s-text-is-readable-by-dbt.md)
 - [ADR 0025 shadcn/Radix for Structure, Never for Style](sources/adr-0025-shadcn-radix-for-structure-never-for-style.md)
 - [ADR 0026: Full-text search over the raw lake](sources/adr-0026-full-text-search-over-the-raw-lake.md)
+- [ADR 0027 A Control Sits on Its Field's Line](sources/adr-0027-a-control-sits-on-its-field-s-line.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)

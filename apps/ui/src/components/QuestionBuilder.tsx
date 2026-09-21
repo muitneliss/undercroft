@@ -282,7 +282,7 @@ function OrderAndLimit({
   const [order] = definition.orderBy;
 
   return (
-    <div className="row">
+    <div className="row row--field">
       <div className="field">
         <label className="label" htmlFor={qOrderId}>
           {t("bi.orderHead")}

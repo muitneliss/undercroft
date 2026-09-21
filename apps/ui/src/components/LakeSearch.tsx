@@ -169,7 +169,7 @@ export function LakeSearch({ tenantId }: { tenantId: string }): React.JSX.Elemen
     <div className="stack">
       <p className="prose">{t("lake.searchLead")}</p>
       <form
-        className="row"
+        className="row row--field"
         onSubmit={(event): void => {
           event.preventDefault();
           const typed = new FormData(event.currentTarget).get("q");
