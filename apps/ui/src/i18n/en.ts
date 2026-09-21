@@ -511,7 +511,17 @@ export const en = {
     colTook: "Took",
     nothingRecorded: "This run recorded nothing further.",
 
+    gauge: {
+      head: "Reading now",
+      share: "{{share}}%",
+      noTotal: "total not yet known",
+      reading: "{{entity}}: read {{figure}}",
+    },
+
     feedHead: "What happened",
+    feedCount_one: "{{count}} milestone",
+    feedCount_other: "{{count}} milestones",
+    feedEmpty: "This run has recorded no milestone yet.",
     colWhen2: "At",
     colWhat2: "What",
     event: {

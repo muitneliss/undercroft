@@ -14,6 +14,15 @@ export interface RunStage {
   readonly markLabel: string;
   /** One quiet datum line, or nothing when there is no evidence yet to show. */
   readonly detail: string | null;
+  /**
+   * How far along this stage is, 0 to 1, for the rule inked along the foot of its plate.
+   *
+   * `null` wherever there is no measured fraction to draw: a stage that has finished, a models
+   * build that has no per-model signal, an entity read toward a total nobody has stated. A bar
+   * against a guessed denominator is rule 2 broken in pixels, and it is the most convincing
+   * kind of guess, because it looks exactly like a measurement.
+   */
+  readonly gathered: number | null;
   /** Set only for a link stage: where it goes. */
   readonly href: string | null;
   // `@xyflow/react`'s Node<T> requires its data to be indexable; every declared field above

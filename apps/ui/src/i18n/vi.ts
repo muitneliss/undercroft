@@ -577,7 +577,22 @@ export const vi = {
     colTook: "Mất",
     nothingRecorded: "Lần chạy này chưa ghi nhận gì thêm.",
 
+    /**
+     * Dải đồng hồ đo phía trên sổ diễn biến: mỗi loại dữ liệu đang đọc một dòng, cập nhật tại
+     * chỗ. Không dòng nào ở đây là "việc đã xảy ra" — chúng là số đang chạy, nên chúng không
+     * nằm trong sổ. ADR 0032.
+     */
+    gauge: {
+      head: "Đang đọc",
+      share: "{{share}}%",
+      noTotal: "chưa biết tổng số",
+      reading: "{{entity}}: đã đọc {{figure}}",
+    },
+
     feedHead: "Diễn biến",
+    feedCount_one: "{{count}} mốc",
+    feedCount_other: "{{count}} mốc",
+    feedEmpty: "Lần chạy này chưa ghi mốc nào.",
     colWhen2: "Lúc",
     colWhat2: "Việc",
     /**

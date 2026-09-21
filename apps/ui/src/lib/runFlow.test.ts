@@ -26,7 +26,14 @@ function event(
   detail: Record<string, unknown>,
   entity: string | null = null,
 ): RunEventView {
-  return { at: "2026-09-19T12:42:22.000Z", level: "info", event: name, entity, detail };
+  return {
+    at: "2026-09-19T12:42:22.000Z",
+    level: "info",
+    event: name,
+    entity,
+    detail,
+    live: false,
+  };
 }
 
 describe("an ingest run in progress", () => {

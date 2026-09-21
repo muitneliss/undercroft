@@ -37,6 +37,7 @@
 - [ADR 0029: The assistant is an interleaf, and it acts only through the router](sources/adr-0029-the-assistant-is-an-interleaf-and-it-acts-only-through-the-router.md)
 - [ADR 0030: An email is a leaf of the book, posted](sources/adr-0030-an-email-is-a-leaf-of-the-book-posted.md)
 - [ADR 0031 A Picked Drive Folder May Be Read to the Bottom](sources/adr-0031-a-picked-drive-folder-may-be-read-to-the-bottom.md)
+- [ADR 0032 A Progress Line Is a Gauge Not an Entry](sources/adr-0032-a-progress-line-is-a-gauge-not-an-entry.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook: Setting the assistant up](sources/runbook-setting-the-assistant-up.md)

@@ -107,7 +107,14 @@ describe("eventSentence", () => {
     detail: Record<string, unknown>,
     entity: string | null = null,
   ): RunEventView {
-    return { at: "2026-09-19T12:42:22.000Z", level: "info", event: name, entity, detail };
+    return {
+      at: "2026-09-19T12:42:22.000Z",
+      level: "info",
+      event: name,
+      entity,
+      detail,
+      live: false,
+    };
   }
 
   it("words a run's own line in the reader's language, grouping the counts their way", () => {
