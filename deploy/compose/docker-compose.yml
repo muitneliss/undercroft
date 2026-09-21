@@ -88,6 +88,38 @@ services:
         limits:
           memory: 512m
 
+  # Make Kestra's two volumes writable by the user Kestra actually runs as.
+  #
+  # WITHOUT THIS KESTRA CRASH-LOOPS AND THE WHOLE SCHEDULE IS DEAD. A named volume is created
+  # root-owned; `kestra/kestra:v2.0.2` runs as uid 1000 (`docker exec kestra id` ->
+  # `uid=1000(kestra)`), so `PluginManager.createLocalRepositoryIfNotExist` cannot mkdir
+  # `/app/storage/plugins` and the server exits with `AccessDeniedException` before it serves
+  # a request.
+  #
+  # The symptom is why this is a one-shot and not a comment somewhere: nothing goes red.
+  # Kestra restarts forever, `kestra-flows` cannot reach it, zero flows are ever registered,
+  # and every run in the ledger quietly arrives with `trigger: manual` because a human started
+  # it. Measured on the server before this fix: `select count(*) from flows` -> 0,
+  # `select count(*) from executions` -> 0, volumes root-owned since they were created.
+  #
+  # `chown -R` rather than `chown`: the first run has two empty directories, but a re-run
+  # after Kestra has written storage must not leave that content unreachable. Idempotent, so
+  # it costs a second on every deploy and nothing else.
+  kestra-init:
+    # Deliberately NOT `<<: *restart`, for the reason `db-migrate` gives: this is meant to
+    # exit, and `restart: unless-stopped` would turn a completed chown into a crash-loop.
+    image: alpine:3.22
+    command: ["sh", "-c", "chown -R 1000:1000 /app/storage /tmp/kestra-wd && echo done"]
+    # Mounted at Kestra's own paths, so the thing being fixed is named the same way in both
+    # services and a path change here cannot silently miss.
+    volumes:
+      - kestra-storage:/app/storage
+      - kestra-workdir:/tmp/kestra-wd
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
   kestra:
     <<: *restart
     image: kestra/kestra:v2.0.2
@@ -95,6 +127,10 @@ services:
     depends_on:
       kestra-postgres:
         condition: service_healthy
+      # Before the server starts, not eventually: the plugin directory is created during
+      # startup, so a chown that lands afterwards is a chown that lands too late.
+      kestra-init:
+        condition: service_completed_successfully
     environment:
       KESTRA_CONFIGURATION: |
         datasources:
