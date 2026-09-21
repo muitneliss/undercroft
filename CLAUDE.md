@@ -57,13 +57,16 @@ about to touch.** That is the only reason this index exists.
 are procedures that send you back to the files above, because normative text with two owners
 drifts (the same reason `wiki/tracked.yaml` scopes the wiki to `docs/` and not to the rules).
 
-- **`context-lookup`** — read-only. Searches the wiki, then confirms the answer at the ADR,
-  the rule file or the code, and reports with citations plus the gaps it could not close. Use
-  it before contradicting a constraint that looks arbitrary.
-- **`undercroft-coder`** — implements a change under the rules above and under Ousterhout's
-  _A Philosophy of Software Design_: deep modules, information hiding, complexity pulled
-  downward, design it twice. Where the book and this repo collide the repo wins, and the
-  three collisions that actually come up are written out at the end of its file.
+- **`context-lookup`** (Sonnet) — read-only. Searches the wiki, then confirms the answer at
+  the ADR, the rule file or the code, and reports with citations plus the gaps it could not
+  close. Use it before contradicting a constraint that looks arbitrary. Retrieval is search
+  and quotation rather than judgement, and it runs often, so it does not need the larger model.
+- **`undercroft-coder`** (Opus) — implements a change under the rules above and under
+  Ousterhout's _A Philosophy of Software Design_: deep modules, information hiding, complexity
+  pulled downward, design it twice. Where the book and this repo collide the repo wins, and
+  the three collisions that actually come up are written out at the end of its file. It gets
+  the larger model because the judgement it makes is the design, and a design mistake here
+  survives the review that a wrong quotation would not.
 
 ## Language and runtime
 
