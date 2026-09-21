@@ -35,6 +35,7 @@
 - [ADR 0027 A Control Sits on Its Field's Line](sources/adr-0027-a-control-sits-on-its-field-s-line.md)
 - [ADR 0028: A workbook is read in process, and extract is scheduled by backlog](sources/adr-0028-a-workbook-is-read-in-process-and-extract-is-scheduled-by-backlog.md)
 - [ADR 0029: The assistant is an interleaf, and it acts only through the router](sources/adr-0029-the-assistant-is-an-interleaf-and-it-acts-only-through-the-router.md)
+- [ADR 0030: An email is a leaf of the book, posted](sources/adr-0030-an-email-is-a-leaf-of-the-book-posted.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
 - [Runbook: Setting the assistant up](sources/runbook-setting-the-assistant-up.md)

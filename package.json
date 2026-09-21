@@ -36,6 +36,7 @@
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
     "geo:build": "bun run scripts/geo/world.ts && bun run scripts/geo/vnProvinces.ts",
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
+    "email:preview": "bun run apps/control-plane/scripts/emailPreview.ts",
     "build:ui": "bun run --filter '@undercroft/ui' build",
     "test": "bun test",
     "itest": "UNDERCROFT_ITEST=1 bun test integration",

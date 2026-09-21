@@ -60,8 +60,24 @@ describe("the invitation email", () => {
     const english = invitationMessage(...args, "en");
 
     expect(vietnamese.subject).not.toBe(english.subject);
-    expect(vietnamese.text).toContain("Hãy đăng nhập tại");
-    expect(english.text).toContain("Sign in at");
+    expect(vietnamese.text).toContain("Lời mời vào Undercroft");
+    expect(english.text).toContain("An invitation to Undercroft");
+  });
+
+  it("says the same in the markup branch, and declares which language that is", () => {
+    // The branches are rendered from one description, so a sentence cannot exist in one and
+    // not the other -- but only `emailTemplate.test.ts` sees that directly. What this adds
+    // is that the locale reaches the markup at all: `<html lang>` is what tells a screen
+    // reader which language to pronounce, and it is set from a different field than the
+    // words are.
+    for (const locale of ["vi", "en"] as const) {
+      const message = invitationMessage(...args, locale);
+
+      expect(message.html).toContain(`<html lang="${locale}"`);
+      expect(message.html).toContain("CASE-0042");
+      expect(message.html).toContain("https://app.example.test");
+      expect(message.html).not.toContain("{{");
+    }
   });
 
   it("tells the reader all three things they need, in both languages", () => {

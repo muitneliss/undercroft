@@ -17,7 +17,7 @@
  * of a random value is stored so the column keeps its shape and nothing replayable exists.
  */
 
-import type { EmailMessage, Locale } from "@undercroft/core";
+import { type EmailMessage, type Locale, postEmailLeaf } from "@undercroft/core";
 import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { messages } from "../i18n/index.ts";
@@ -63,14 +63,33 @@ export function invitationMessage(
   locale: Locale,
 ): EmailMessage {
   const t = messages(locale);
-  return {
-    to,
+  // One catalogue entry per SENTENCE rather than fragments joined here: Vietnamese and
+  // English do not share word order, and a sentence assembled from pieces can only be right
+  // in the language it was assembled in. The leaf below joins nothing -- it places whole
+  // sentences and whole labels, each of which its catalogue wrote in full.
+  return postEmailLeaf(to, {
+    locale,
     subject: t("invitation.subject"),
-    // One catalogue entry per language rather than three concatenated fragments: Vietnamese
-    // and English do not share word order, and a sentence assembled from pieces can only be
-    // right in the language it was assembled in.
-    text: t("invitation.body", { tenantId, publicUrl, email: to }),
-  };
+    runningHead: tenantId,
+    heading: t("invitation.heading"),
+    lead: t("invitation.lead", { tenantId }),
+    colophon: t("email.colophon"),
+    blocks: [
+      {
+        kind: "schedule",
+        rows: [
+          { label: t("email.customer"), value: tenantId },
+          // The address is a fact in the schedule rather than a clause inside the sentence
+          // beside it, because "use this address exactly" is advice somebody has to be able
+          // to check against something -- and a reader checks a datum, not a parenthesis.
+          { label: t("email.address"), value: to },
+        ],
+      },
+      { kind: "prose", text: t("invitation.howToSignIn") },
+      { kind: "plate", label: t("invitation.action"), href: publicUrl },
+      { kind: "note", text: t("invitation.ignore") },
+    ],
+  });
 }
 
 export function members(exec: SqlExecutor, tenantId: string): Promise<Member[]> {

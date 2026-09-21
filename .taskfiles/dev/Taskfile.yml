@@ -225,3 +225,10 @@ tasks:
       - task: kestra-flows
         ignore_error: true
       - task: serve
+
+  email-preview:
+    desc: >-
+      Render every email (both languages) to data/email-preview/ and print where. An email
+      has no screen to check it on, so this is the only way to see one before it is posted.
+    cmds:
+      - bun run email:preview
