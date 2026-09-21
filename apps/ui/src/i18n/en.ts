@@ -186,7 +186,11 @@ export const en = {
     consoleChord: "Ctrl ↵",
     consoleRunning: "Running…",
     consoleIdle: "Nothing run yet. Write a query and press Run query, or Ctrl ↵.",
-    consoleFromStream: "This query was written for you from {{stream}}. Edit it and run it again.",
+    consoleFromStream: "written from {{stream}}",
+    consoleBack: "Raw lake",
+    consoleOpen: "Open the SQL console",
+    consoleAdminOnly:
+      "Only an administrator of this customer runs queries over the raw lake. The counts of what has landed are still yours to read on the Raw lake page.",
     consoleRows_one: "{{count, number}} row",
     consoleRows_other: "{{count, number}} rows",
     consoleRowsFrom_one: "{{count, number}} row, from row {{from, number}}",

@@ -41,11 +41,25 @@ export function Book({
   tenantId,
   current,
   signedInAs,
+  fill = false,
   children,
 }: {
   tenantId: string | undefined;
   current: DivisionId;
   signedInAs: string;
+  /**
+   * Bind the leaf to the window rather than to its own content.
+   *
+   * Every page in this book is as tall as what is printed on it, and the window scrolls past
+   * it. One is not: a workbench divides a screenful between a query and its answer, and it
+   * can only divide a height it knows. So the book takes the viewport exactly, the leaf stops
+   * scrolling, and the page inside it is handed a definite height to divide.
+   *
+   * The strip, the spine and the running head stay. An operator holding four customers' books
+   * at once must never be one press from running a query against the wrong one, and a
+   * full-screen console with no running head is exactly that.
+   */
+  fill?: boolean;
   children: ReactNode;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -79,7 +93,7 @@ export function Book({
   });
 
   return (
-    <div className="book">
+    <div className={fill ? "book book--fill" : "book"}>
       <TabRail tenantId={tenantId} current={current} />
 
       {/*
@@ -96,7 +110,7 @@ export function Book({
         a leaf that turns to show a panel on the page you were already reading is
         motion lying about what happened.
       */}
-      <div className="leaf" key={`${tenantId ?? ""}/${current}`}>
+      <div className={fill ? "leaf leaf--fill" : "leaf"} key={`${tenantId ?? ""}/${current}`}>
         <div className="leaf__spine" aria-hidden="true">
           <span className="leaf__punch leaf__punch--a" />
           <span className="leaf__punch leaf__punch--b" />

@@ -133,6 +133,20 @@ export function streamParams(stream: LakeStream): Record<string, string> {
 }
 
 /**
+ * Where the console is, optionally opened on one stream.
+ *
+ * Its own page rather than a band on the lake's index, because a console is not as tall as
+ * the sentence it prints: it divides a screenful between a query and its answer, and a band
+ * that took a screenful would push every other band on that leaf below the fold. The stream
+ * rides in the search, exactly as it does on the index, so the page opens on the same rows a
+ * colleague was looking at when they pasted the address.
+ */
+export function consolePath(tenantId: string, stream: LakeStream | null = null): string {
+  const path = `/tenants/${tenantId}/lake/console`;
+  return stream === null ? path : `${path}?${new URLSearchParams(streamParams(stream)).toString()}`;
+}
+
+/**
  * The console's SELECT for one stream: what opening a line of the index asks on the reader's
  * behalf, before they change a word of it.
  *

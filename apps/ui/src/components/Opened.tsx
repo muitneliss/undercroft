@@ -15,10 +15,13 @@ import type { DivisionId } from "@/lib/divisions.ts";
 export function Opened({
   division,
   signedInAs,
+  fill = false,
   children,
 }: {
   division: DivisionId;
   signedInAs: string;
+  /** Bind the leaf to the window, for a page that divides a screenful. See `Book`. */
+  fill?: boolean;
   children: (tenantId: string) => ReactNode;
 }): React.JSX.Element {
   const params = useParams();
@@ -29,7 +32,7 @@ export function Opened({
   }
 
   return (
-    <Book tenantId={tenantId} current={division} signedInAs={signedInAs}>
+    <Book tenantId={tenantId} current={division} signedInAs={signedInAs} fill={fill}>
       {children(tenantId)}
     </Book>
   );

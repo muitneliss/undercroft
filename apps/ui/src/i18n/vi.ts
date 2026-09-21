@@ -222,8 +222,25 @@ export const vi = {
     /**
      * Said only while the editor still holds the query that was generated, so it never
      * claims anything about a query the reader has since edited.
+     *
+     * A phrase rather than the two sentences it used to be: it now sits in the workbench's
+     * own head, beside the run plate, where a sentence telling the reader they may edit the
+     * text would be an instruction about the editor they are already looking at.
      */
-    consoleFromStream: "Câu lệnh này được tạo sẵn từ luồng {{stream}}. Sửa tuỳ ý rồi chạy lại.",
+    consoleFromStream: "tạo sẵn từ luồng {{stream}}",
+    /** The way back to the index, printed on the plate that goes there. */
+    consoleBack: "Hồ dữ liệu",
+    /**
+     * The door on the lake's index. It names the surface rather than the act, because what
+     * the reader is choosing is a place to go and not a query to run.
+     */
+    consoleOpen: "Mở bảng truy vấn",
+    /**
+     * Said to a reader who followed a pasted address they may not open. It names who can do
+     * this rather than only saying that they cannot, so the next step is obvious.
+     */
+    consoleAdminOnly:
+      "Chỉ quản trị viên của khách hàng này mới chạy được truy vấn trên hồ dữ liệu thô. Bạn vẫn xem được số lượng đã về ở trang Hồ dữ liệu.",
     consoleRows_other: "{{count, number}} dòng",
     consoleRowsFrom_other: "{{count, number}} dòng, từ dòng {{from, number}}",
     consoleRefused: "Truy vấn không chạy được",

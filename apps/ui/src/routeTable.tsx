@@ -41,6 +41,9 @@ const Journal = lazy(() =>
   import("@/routes/Journal.tsx").then((module) => ({ default: module.Journal })),
 );
 const Lake = lazy(() => import("@/routes/Lake.tsx").then((module) => ({ default: module.Lake })));
+const LakeQuery = lazy(() =>
+  import("@/routes/LakeQuery.tsx").then((module) => ({ default: module.LakeQuery })),
+);
 const Models = lazy(() =>
   import("@/routes/Models.tsx").then((module) => ({ default: module.Models })),
 );
@@ -83,6 +86,20 @@ function divisionRoutes(signedInAs: string): RouteObject[] {
           {(tenantId): React.JSX.Element => (
             <Suspense fallback={<Skeleton rows={5} />}>
               <Lake tenantId={tenantId} />
+            </Suspense>
+          )}
+        </Opened>
+      ),
+    },
+    {
+      // The one page in the book bound to the window rather than to its own content: a
+      // console divides a screenful, and it can only divide a height it knows. See `Book`.
+      path: "/tenants/:tenantId/lake/console",
+      element: (
+        <Opened division="lake" signedInAs={signedInAs} fill={true}>
+          {(tenantId): React.JSX.Element => (
+            <Suspense fallback={<Skeleton rows={6} />}>
+              <LakeQuery tenantId={tenantId} />
             </Suspense>
           )}
         </Opened>

@@ -621,6 +621,47 @@
     flex: none;
   }
 
+  /* THE LEAF BOUND TO THE WINDOW, for the one page that divides a screenful.
+   *
+   * Every other page in this book is as tall as what is printed on it and the window scrolls
+   * past it, which is right for a schedule and wrong for a workbench: a console splitting its
+   * height between a query and its answer can only split a height it knows. So the binder
+   * takes the viewport exactly, the leaf stops scrolling, and the page inside it is handed a
+   * definite height to divide.
+   *
+   * `dvh` rather than `vh`: on a phone the address bar retracts as the reader scrolls, and
+   * `100vh` is the TALL measurement -- a console sized to it hides its own paging behind the
+   * browser's own chrome until something scrolls, which on a page that does not scroll is
+   * never. Nothing else about the book changes: the strip, the spine, the running head and
+   * the colophon all stay where they are on every other leaf. */
+  .book--fill {
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .leaf--fill {
+    min-height: 0;
+    overflow: hidden;
+    /* The foot's 4.5rem is the white below a printed page; on a leaf with no white to
+     spare it is a fifth of the answer the reader came to read. */
+    padding-bottom: var(--s-4);
+    row-gap: var(--s-4);
+  }
+
+  /* The one child that takes what the running head and the colophon leave. It undoes
+   `.leaf > *` above deliberately: this page is the exception that rule was written for. */
+  .leaf--fill > .workbench {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* The imprint still prints, and it stays the footnote it is on every other leaf. What it
+   may not do here is spend four rows of the answer saying a version number, so it keeps its
+   rule and gives up the white above it. */
+  .leaf--fill > .colophon {
+    padding-top: var(--s-2);
+  }
+
   /* The punch holes and the spine caption: the only purely decorative marks in the
    interface, and therefore the only ones hidden from assistive technology
    rather than narrated. */
@@ -2396,61 +2437,203 @@
     }
   }
 
-  /* -- the raw lake's console --------------------------------------------------- */
+  /* -- the raw lake's SQL workbench --------------------------------------------- */
 
-  /* A WORKSPACE, NOT A BAND.
+  /* A PAGE, NOT A BAND.
    *
-   * Every other band on this leaf is as tall as the sentence it prints. This one holds two
-   * things that both want the screen -- the query being written and the answer being read --
-   * and the first version gave each of them whatever the page had left, which produced an
-   * editor too short to write a join in above a grid too short to read the answer in. So the
-   * band takes a definite height and divides it.
+   * This was the fourth band on the lake's leaf, under a summary, a row browser and a
+   * search, and a band is as tall as the page has left over. That gave a console -- which
+   * holds two things that each want the whole screen -- an editor eight lines deep above a
+   * grid twelve rows deep, with three bands the reader was not using scrolled off above it.
+   * An operator who came to ask a question about a hundred thousand rows was handed a
+   * porthole.
    *
-   * The height is a screenful, bounded at both ends: never shorter than the eight lines of
-   * SQL and twelve rows that make the thing usable at all, and never taller than a reader can
-   * take in without moving their head, however large the display is.
-   *
-   * The reference column sits beside it because the tables an author may name are what they
-   * reach for most, and a console that hides them behind a trip elsewhere is one where every
-   * query starts with a guess. */
-  .console {
+   * So it took the leaf, and the leaf took the window (`.leaf--fill`). What is left here is
+   * only the division of that height: a reference down the left, and a query over its
+   * answer on the right. Three regions, each sized by what it is for rather than by what is
+   * left, and the one boundary a reader moves is the one between writing and reading. */
+  .workbench {
     display: grid;
-    /* 17rem: the longest name and type this schema has -- `captured_at` and `timestamptz` --
-     * break across two lines at 15, and a column name printed as `captured_a / t` is the one
-     * thing a reference must never do. */
-    grid-template-columns: minmax(0, 1fr) 17rem;
+    /* `auto` rather than a figure, because the rail is the thing that changes width: the
+     reference open is 17rem, folded it is its own spine. */
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: var(--s-5);
-    height: clamp(34rem, 78vh, 52rem);
+    height: 100%;
+    min-height: 0;
   }
 
-  /* The work column: bar, editor, answer, foot -- in that order, top to bottom, which is
-   * also the order the reader moves through them. `min-height: 0` on both the column and the
-   * answer, or a flex child refuses to shrink below its content and the grid's own scroll
-   * never engages. */
-  .console__work {
+  /* THE REFERENCE, AND THE REASON IT FOLDS.
+   *
+   * The two things a reader does here want opposite widths. Writing a query, the table
+   * names are what they reach for most, and a console that hides them behind a trip
+   * elsewhere is one where every query starts with a guess. Reading an answer eleven
+   * columns wide, those same 17rem are three columns of the grid they came for. One press
+   * moves between the two.
+   *
+   * A leaf lying on the page: one ply, a hairline, no shadow -- the same die the token box
+   * and an unprinted leaf are cut from. 17rem because the longest name and type this schema
+   * has, `captured_at` and `timestamptz`, break across two lines at 15, and a column name
+   * printed as `captured_a / t` is the one thing a reference must never do. */
+  .rail-ref {
+    display: flex;
+    flex-direction: column;
+    width: 17rem;
+    min-height: 0;
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    /* The fold stays put at the head while the tables move under it. */
+    overflow: hidden;
+  }
+
+  /* Folded: the reference is read down its own edge, the way a book on a shelf is. */
+  .rail-ref--folded {
+    width: 2.75rem;
+  }
+
+  /* The fold itself. A whole-width press rather than a glyph in a corner: the target is the
+   head of the thing it folds, which is where a reader reaches for it, and the arrow says
+   which way it will go rather than naming a state nobody can see. */
+  .rail-ref__fold {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2);
+    flex: none;
+    padding: var(--s-3) var(--s-4);
+    background: transparent;
+    border: none;
+    border-bottom: var(--hair) solid var(--rule);
+    color: var(--ink-2);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background var(--hinge),
+      color var(--hinge);
+  }
+
+  .rail-ref__fold:hover {
+    background: var(--page);
+    color: var(--ink);
+  }
+
+  .rail-ref__fold:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+
+  .rail-ref__fold svg {
+    flex: none;
+  }
+
+  /* Folded, the press becomes the whole rail and the label turns onto its spine. The arrow
+   goes to the head, because that is the end a reader's eye arrives at. */
+  .rail-ref--folded .rail-ref__fold {
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--s-3);
+    padding: var(--s-3) 0;
+    border-bottom: none;
+  }
+
+  .rail-ref--folded .rail-ref__fold svg {
+    order: -1;
+  }
+
+  .rail-ref--folded .rail-ref__fold .label {
+    writing-mode: vertical-rl;
+  }
+
+  /* The tables scroll inside the rail, so a schema that grows one cannot push the workbench
+   out of shape. */
+  .rail-ref__tables {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: var(--s-3) var(--s-4) var(--s-4);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+
+  /* A table is a disclosure, so the list stays scannable at rest and a reader opens the one
+   they are writing against. Native `<details>`: which one is open is not application state. */
+  .rail-ref__table > summary {
+    cursor: pointer;
+    padding: var(--s-1) 0;
+  }
+
+  .rail-ref__columns {
+    list-style: none;
+    margin: 0 0 var(--s-2);
+    padding: 0 0 0 var(--s-3);
+    border-left: var(--hair) solid var(--rule);
+  }
+
+  .rail-ref__columns li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: 0.1rem 0;
+    font-size: var(--t-micro);
+  }
+
+  /* The work column: head, query, answer, foot -- in that order, top to bottom, which is
+   also the order the reader moves through them. `min-height: 0` on the column and on the
+   answer, or a flex child refuses to shrink below its content and nothing ever scrolls. */
+  .workbench__work {
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
   }
 
-  /* One bar, three things: the verb, the chord that performs it, and what came back. */
-  .console__bar {
+  /* One head: where it came from, what it is, where the query came from, and the verb. */
+  .workbench__bar {
     display: flex;
     align-items: center;
     gap: var(--s-3);
+    flex: none;
     padding-bottom: var(--s-3);
   }
 
-  .console__status {
-    margin-left: auto;
-    text-align: right;
+  /* A title, not a display heading: this page's name sits on the line of the controls
+   beside it, so it takes the title step rather than the 2.5rem an `h1` opens a leaf with. */
+  .workbench__title {
+    flex: none;
+    margin: 0;
+    font-size: var(--t-h3);
+    font-variation-settings: "wdth" 88;
+    letter-spacing: -0.005em;
   }
 
-  /* The keyboard chord, drawn as a key: a hairline box in the mono face, the same stock the
-   * editor below it is on. Printed beside the button rather than in a help page, because a
-   * shortcut is learnt from the control it replaces. */
-  .console__chord {
+  /* Where the query came from, said only while it is still the query that was generated.
+   It truncates rather than wrapping: it is a provenance note on a toolbar line, and a note
+   that reflowed the bar would move the run plate under the reader's cursor. */
+  .workbench__from {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--face-mono);
+    font-size: var(--t-micro);
+    color: var(--ink-3);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Everything after this is pushed to the right end of the bar: the status, the chord and
+   the verb, in that reading order, so "it ran" and "this many came back" are one glance. */
+  .workbench__status {
+    margin-left: auto;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* The keyboard chord, drawn as a key: a hairline box in the mono face, on the same stock
+   the editor below it is cut from. Printed beside the button rather than in a help page,
+   because a shortcut is learnt from the control it replaces. */
+  .workbench__chord {
+    flex: none;
     padding: 0.1rem var(--s-2);
     background: var(--leaf);
     border: var(--hair) solid var(--rule);
@@ -2465,13 +2648,17 @@
    *
    * `resize` rather than a dragged element with a stored ratio: it is the browser's own
    * affordance for exactly this, it needs no state to own and nothing to persist, and a
-   * reader who has used any other resizable pane already knows where the grip is. The
-   * ceiling is what keeps a drag from closing the answer entirely. */
-  .console__editor {
+   * reader who has used any other resizable pane already knows where the grip is.
+   *
+   * The height is a share of the window rather than a figure in rem, so the same split
+   * holds on a laptop and on a 27-inch display instead of leaving one of them a strip. The
+   * floor keeps a drag from closing the query; the ceiling keeps one from closing the
+   * answer. */
+  .workbench__editor {
     flex: none;
-    height: 18rem;
-    min-height: 7rem;
-    max-height: 70%;
+    height: 42%;
+    min-height: 9rem;
+    max-height: 72%;
     overflow: hidden;
     resize: vertical;
     border: var(--hair) solid var(--rule-strong);
@@ -2479,30 +2666,50 @@
     background: var(--leaf);
   }
 
-  /* The editor fills the pane it was given; `.editor`'s own 26rem belongs to the model
-   * editor, which is a leaf rather than a pane. */
-  .console__editor > .editor {
+  /* The editor fills the pane it was given; `.editor`'s own minimum belongs to the model
+   editor, which is a band on a leaf rather than a pane in a window. */
+  .workbench__editor > .editor {
     height: 100%;
     min-height: 0;
+    /* The PANE carries the handle here, not the editor inside it. Two nested grips in one
+     corner is one grip a reader can never hit. */
+    resize: none;
     border: none;
     border-radius: 0;
   }
 
-  /* Where the answer goes -- the result, the refusal, or the sentence saying neither has
-   * happened yet. It takes whatever the editor left. */
-  .console__answer {
+  /* Where the answer goes -- the rows, the refusal, or the sentence saying neither has
+   happened yet. It takes everything the query left. */
+  .workbench__answer {
     flex: 1 1 auto;
     min-height: 0;
     padding-top: var(--s-4);
     overflow: hidden;
   }
 
+  /* DENSITY, ON THE ONE SURFACE WHERE SCANNING IS THE WHOLE JOB.
+   *
+   * A row on a schedule is read one at a time, and 0.75rem of padding is what makes it a
+   * line of a ledger rather than a line of a spreadsheet. A row here is one of a hundred
+   * being read down a column for the one that is wrong, and the measure of this pane is how
+   * many of them a reader takes in without moving their head: at the schedule's height a
+   * 13-inch laptop shows four.
+   *
+   * What keeps the rows apart at this height is the hairline under each one, which was
+   * already doing that work -- the whitespace was a second answer to a question the rule had
+   * answered. Scoped to this pane, because every other table in the book IS read a row at a
+   * time and would only be made harder by this. */
+  .workbench__answer .table td {
+    padding-top: var(--s-2);
+    padding-bottom: var(--s-2);
+  }
+
   /* An empty state that teaches the control rather than announcing a void. */
-  .console__idle {
+  .workbench__idle {
     padding-top: var(--s-5);
   }
 
-  .console__foot {
+  .workbench__foot {
     display: flex;
     align-items: center;
     gap: var(--s-3);
@@ -2511,17 +2718,17 @@
   }
 
   /* A press keeps its own width. Without this the caution beside them takes the row's slack
-   * and both buttons wrap their label onto two lines, which reads as a broken control. */
-  .console__foot .plate {
+   and both buttons wrap their label onto two lines, which reads as a broken control. */
+  .workbench__foot .plate {
     flex: none;
     white-space: nowrap;
   }
 
   /* The ORDER BY caution, beside the presses that make it matter. NOT in the data face: a
-   * sentence set in mono reads as a value, and this one is an argument about correctness the
-   * reader has to follow. It wraps rather than truncates -- half a warning is worse than
-   * none -- and takes what the buttons leave. */
-  .console__warn {
+   sentence set in mono reads as a value, and this one is an argument about correctness the
+   reader has to follow. It wraps rather than truncates -- half a warning is worse than
+   none -- and takes what the buttons leave. */
+  .workbench__warn {
     flex: 1 1 auto;
     min-width: 0;
     font-size: var(--t-micro);
@@ -2529,72 +2736,84 @@
     color: var(--ink-3);
   }
 
-  /* The reference: a leaf lying on the page, one ply, no shadow -- the same die the token
-   * box and an unprinted leaf are cut from. It scrolls inside itself, so a schema that grows
-   * a table cannot push the workspace out of shape. */
-  .console__aside {
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-2);
-    min-height: 0;
-    padding: var(--s-4);
-    background: var(--leaf);
-    border: var(--hair) solid var(--rule);
-    border-radius: var(--r-leaf);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--rule-strong) transparent;
-  }
+  /* NARROW: THE WINDOW STOPS BEING THE FRAME.
+   *
+   * Below this width there is no screenful to divide -- a laptop in a split, or a tablet,
+   * has less height than the query and the answer both need, and a page that insisted on
+   * dividing it would give each of them a strip. So the leaf goes back to being as tall as
+   * what is on it and the window scrolls past it, exactly like every other page in the
+   * book, and each region takes the height it needs instead of a share of one there isn't.
+   *
+   * The reference goes UNDER the work rather than over it: it is what a reader consults,
+   * not what they came for, and a column of table names above the editor would be the first
+   * thing on the page. */
+  @media (max-width: 64rem) {
+    .book--fill {
+      height: auto;
+      min-height: 100vh;
+    }
 
-  /* A table is a disclosure, so the list stays scannable at rest and a reader opens the one
-   * they are writing against. Native `<details>`: which one is open is not application state. */
-  .console__table > summary {
-    cursor: pointer;
-    padding: var(--s-1) 0;
-  }
+    .leaf--fill {
+      overflow: visible;
+      padding-bottom: var(--s-7);
+    }
 
-  .console__columns {
-    list-style: none;
-    margin: 0 0 var(--s-2);
-    padding: 0 0 0 var(--s-3);
-    border-left: var(--hair) solid var(--rule);
-  }
-
-  .console__columns li {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--s-3);
-    padding: 0.1rem 0;
-    font-size: var(--t-micro);
-  }
-
-  /* Narrow: one column, and the workspace gives up its fixed height rather than dividing a
-   * screen that has none to spare. The reference goes under the answer, where it is still
-   * reachable and no longer competing for the width a SQL line needs. */
-  @media (max-width: 60rem) {
-    .console {
+    .workbench {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto;
       height: auto;
     }
 
-    .console__editor {
-      height: 16rem;
+    .rail-ref,
+    .rail-ref--folded {
+      width: auto;
+      max-height: 20rem;
+      order: 2;
+    }
+
+    /* Folded is a horizontal head again: a label turned onto its spine is read down the
+     edge of a rail, and there is no rail here to read it down. */
+    .rail-ref--folded .rail-ref__fold {
+      flex: none;
+      flex-direction: row;
+      padding: var(--s-3) var(--s-4);
+      border-bottom: var(--hair) solid var(--rule);
+    }
+
+    .rail-ref--folded .rail-ref__fold svg {
+      order: 0;
+    }
+
+    .rail-ref--folded .rail-ref__fold .label {
+      writing-mode: horizontal-tb;
+    }
+
+    .workbench__editor {
+      height: 18rem;
       max-height: none;
     }
 
-    .console__answer {
-      max-height: 28rem;
+    .workbench__answer {
+      max-height: 30rem;
       overflow: auto;
     }
 
-    .console__aside {
-      max-height: 20rem;
+    /* Full width, so the type no longer sits half a screen from the name it belongs to.
+     `space-between` is right in a 17rem column and a leader line in a wide one. */
+    .rail-ref__columns li {
+      justify-content: flex-start;
+    }
+  }
+
+  /* The bar's four parts stop fitting on one line before the layout does. They wrap rather
+   than crush: a run plate squeezed to two lines of label is a control nobody trusts. */
+  @media (max-width: 48rem) {
+    .workbench__bar {
+      flex-wrap: wrap;
     }
 
-    /* Full width, so the type no longer sits half a screen from the name it belongs to.
-     * `space-between` is right in a 17rem column and a leader line in a wide one. */
-    .console__columns li {
-      justify-content: flex-start;
+    .workbench__status {
+      margin-left: 0;
     }
   }
 
@@ -2688,12 +2907,22 @@
 
   /* -- the model editor ---------------------------------------------------------- */
 
-  /* CodeMirror draws its own text; the frame is ours: the same die-cut edge as an input,
-   tall enough to hold a model without scrolling the page for it. The console overrides both
-   the height and the frame, because there the editor is a pane inside a workspace rather
-   than a leaf on a page. */
+  /* CodeMirror draws its own text; the frame is ours: the same die-cut edge as an input.
+   The workbench overrides both the height and the frame, because there the editor is a pane
+   in a window rather than a band on a leaf.
+   *
+   * A DEFINITE HEIGHT, AND THE READER'S TO CHANGE. This used to be a floor alone, so the box
+   * grew with the document -- which reads fine at twelve lines and turns a two-hundred-line
+   * model into a leaf whose tests form, reference and delete verb are all a long scroll below
+   * the SQL that produced them. Now the document scrolls inside the box, the box opens deep
+   * enough to hold a real query whole, and a reader whose model is longer than that drags it
+   * taller. `resize` rather than a handle of our own: it is the browser's own affordance for
+   * exactly this, it owns no state and needs nothing persisted, and the floor is what keeps a
+   * drag from closing the editor onto one line. */
   .editor {
-    min-height: 26rem;
+    height: 34rem;
+    min-height: 12rem;
+    resize: vertical;
     border: var(--hair) solid var(--rule-strong);
     border-radius: var(--r-plate);
     background: var(--leaf);
