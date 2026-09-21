@@ -1,4 +1,5 @@
-# The worker: ingest, the lake write API, the raw loader, and the dbt transform.
+# The worker: ingest, the lake write API, the raw loader, the extract verb and the dbt
+# transform.
 #
 # Bun runs TypeScript directly, so there is no build step for our code. dbt is installed as
 # a BINARY we invoke -- we author no Python and import nothing from it. It lives here
@@ -7,8 +8,19 @@
 FROM oven/bun:1.4.2-debian
 
 # dbt-core and the Postgres adapter, pinned. A venv keeps them off the system Python.
+#
+# `poppler-utils` is here for the SAME REASON and in the same category: it supplies
+# `pdftotext`, which `services/extract/extractText.ts` invokes by name and never imports.
+# Without it every PDF in the lake is recorded `extractor-missing:pdftotext` -- the
+# extractor refuses by name rather than crashing, so the run stays green and the symptom is
+# a Lake division reading "122 documents, 0 readable" with nothing failing anywhere.
+#
+# No `tesseract-ocr` yet, deliberately: `ExtractMethod` names `pdf_ocr` and `image_ocr` but
+# nothing dispatches to them, and shipping a 200 MB binary nothing calls is weight in the
+# image and an attack surface in the process. It arrives with the reader that needs it.
+# A spreadsheet needs no binary at all -- `services/extract/xlsx.ts` says why.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-venv \
+    && apt-get install -y --no-install-recommends python3 python3-venv poppler-utils \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/dbt \
     && /opt/dbt/bin/pip install --no-cache-dir "dbt-core==1.9.1" "dbt-postgres==1.9.0"
