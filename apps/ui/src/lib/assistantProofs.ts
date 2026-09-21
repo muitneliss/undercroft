@@ -16,6 +16,18 @@
 import type { TFunction } from "i18next";
 
 /**
+ * One argument, or an empty string.
+ *
+ * A function of its own so no case below repeats a `?? ""` -- seven of them pushed
+ * `proofSentence` past the complexity gate, and an absent argument has one right answer
+ * anyway. An empty string leaves a visible gap in the sentence; the word `undefined` in it
+ * would just confuse a reader who is about to strike something.
+ */
+function pick(values: Record<string, string>, name: string): string {
+  return values[name] ?? "";
+}
+
+/**
  * The sentence a proof prints, or `null` for a tool that declares none.
  *
  * A SWITCH on literal keys rather than a lookup table of key strings, and that is not
@@ -34,19 +46,39 @@ export function proofSentence(t: TFunction, tool: string, input: unknown): strin
   switch (tool) {
     case "runIngestNow":
       return t("assistant.proof.runIngestNow", {
-        source: values.source ?? "",
-        tenantId: values.tenantId ?? "",
+        source: pick(values, "source"),
+        tenantId: pick(values, "tenantId"),
       });
     case "setCadence":
       return t("assistant.proof.setCadence", {
-        source: values.source ?? "",
-        cadence: values.cadence ?? "",
+        source: pick(values, "source"),
+        cadence: pick(values, "cadence"),
       });
     case "invitePerson":
       return t("assistant.proof.invitePerson", {
-        email: values.email ?? "",
-        tenantId: values.tenantId ?? "",
-        role: values.role ?? "",
+        email: pick(values, "email"),
+        tenantId: pick(values, "tenantId"),
+        role: pick(values, "role"),
+      });
+    case "revokeGrant":
+      return t("assistant.proof.revokeGrant", {
+        source: pick(values, "source"),
+        tenantId: pick(values, "tenantId"),
+      });
+    case "withdrawIngestKey":
+      return t("assistant.proof.withdrawIngestKey", {
+        id: pick(values, "id"),
+        tenantId: pick(values, "tenantId"),
+      });
+    case "revokeInvitation":
+      return t("assistant.proof.revokeInvitation", {
+        id: pick(values, "id"),
+        tenantId: pick(values, "tenantId"),
+      });
+    case "deleteModel":
+      return t("assistant.proof.deleteModel", {
+        name: pick(values, "name"),
+        tenantId: pick(values, "tenantId"),
       });
     default:
       return null;
@@ -61,13 +93,20 @@ export function proofSentence(t: TFunction, tool: string, input: unknown): strin
  * they read which object rather than that they found a button -- so they retype the argument
  * the action turns on.
  *
- * Empty in this release: the tools that belong here -- revoking a grant, removing a member,
- * withdrawing an ingest key, deleting a model, running write SQL -- are not in the catalogue
- * yet. The mechanism ships with the tier it guards, and it ships first so that adding one of
- * those tools is a catalogue entry plus a line here rather than a new confirmation flow
- * invented under time pressure.
+ * NOT here, and not anywhere: authoring or building a dbt model, and running SQL in the lake
+ * console. Writing SQL that will run as the customer's own database role is not a thing to do
+ * by description -- an author has to see what they wrote before it runs -- so those stay in
+ * their own divisions, and the `navigate` tier is how the assistant takes a reader there.
  */
-export const PRIVILEGED_TOOLS: Readonly<Record<string, string>> = {};
+export const PRIVILEGED_TOOLS: Readonly<Record<string, string>> = {
+  // The argument each one turns on, which is what the reader retypes. `source` rather than
+  // `tenantId` for a grant: the customer is already on screen in the running head, and the
+  // thing a reader could get wrong is WHICH source they are cutting off.
+  revokeGrant: "source",
+  withdrawIngestKey: "id",
+  revokeInvitation: "id",
+  deleteModel: "name",
+};
 
 /**
  * A tool's arguments as i18next interpolation values.

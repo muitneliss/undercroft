@@ -58,11 +58,28 @@ describe("the arguments shown beside it", () => {
   });
 });
 
-describe("the privileged tier", () => {
-  it("is empty until the tools it guards exist, and the mechanism ships first", () => {
-    // Asserted rather than assumed: the type-it-back gate is written and tested before any
-    // tool needs it, so adding one is a catalogue entry plus a line here rather than a
-    // confirmation flow invented under time pressure. If this ever fails, the tier arrived.
-    expect(Object.keys(PRIVILEGED_TOOLS)).toEqual([]);
+describe("the privileged tier makes the reader retype the object", () => {
+  it("every privileged tool names an argument to retype", () => {
+    // The gate is worth nothing if a tool joins the tier without naming what to type back:
+    // `Proof.tsx` would find no argument, conclude nothing needs typing, and hand the reader a
+    // one-click strike on the one action that must not have one.
+    for (const [tool, argument] of Object.entries(PRIVILEGED_TOOLS)) {
+      expect(argument).not.toBe("");
+      // And the argument must be one the proof's own sentence prints, or the reader is asked
+      // to retype something the slip never showed them.
+      const said = proofSentence(t, tool, { [argument]: "THE-OBJECT", tenantId: "CASE-0042" });
+      expect(said).toContain("THE-OBJECT");
+    }
+  });
+
+  it("the tier is not empty, so the assertion above is not vacuous", () => {
+    expect(Object.keys(PRIVILEGED_TOOLS).length).toBeGreaterThan(0);
+  });
+
+  it("a routine write is NOT in it: a one-click strike is right for a reversible action", () => {
+    // The quiet half. If every mutation demanded retyping, "run the ingest now" would cost a
+    // reader more than clicking the button it replaces, and they would stop using the panel.
+    expect(PRIVILEGED_TOOLS.runIngestNow).toBeUndefined();
+    expect(PRIVILEGED_TOOLS.setCadence).toBeUndefined();
   });
 });

@@ -49,11 +49,14 @@ import { appRouter } from "./router.ts";
 /**
  * The tiers this route binds.
  *
- * `read` only, for now: everything the assistant can reach is something the caller could have
- * read by clicking. The write tiers arrive with the proof slip that confirms them, and until
- * that exists an unbound tool is a stronger guarantee than a bound one that asks nicely.
+ * All three that exist. `navigate` is absent because it is not bound here at all: it is
+ * executed in the browser, so nothing reaches the server that the reader did not then click.
+ *
+ * Binding a tier is not the same as permitting it. A `read` runs as soon as the model asks; a
+ * `write` or a `privileged` reaches at most an approval request, which is a question, and the
+ * judge may refuse to let it even be asked.
  */
-const TIERS: readonly Tier[] = ["read", "write"];
+const TIERS: readonly Tier[] = ["read", "write", "privileged"];
 
 /**
  * Which proposed mutations may be offered to the reader this turn, and which are refused.

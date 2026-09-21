@@ -404,3 +404,59 @@ describe("an unconfigured gate refuses to offer a change", () => {
     expect(states).toContain("tool-approval-response");
   });
 });
+
+describe("a privileged change is held to the same gate, plus one", () => {
+  it("revoking a grant reaches approval-requested and no further", async () => {
+    // The blast radius here is a customer's source going dark until a human at Google
+    // reconnects it, so the server-side promise is the same as the write tier's -- it must not
+    // run -- and the panel adds the typed confirmation on top (`assistantProofs.test.ts`).
+    const app = appWith(
+      [
+        {
+          when: "ngắt",
+          reply: [{ call: "revokeGrant", input: { tenantId: "CASE-0042", source: "xero" } }],
+        },
+      ],
+      context(operator),
+      ["ngắt"],
+    );
+    const states = (await frames(await ask(app, "Ngắt kết nối Xero"))).map((f) => f.type);
+
+    expect(states).toContain("tool-approval-request");
+    expect(states).not.toContain("tool-approval-response");
+    expect(states).not.toContain("tool-output-available");
+  });
+
+  it("and a viewer cannot reach it at all, because the procedure is admin-only", async () => {
+    // Authorization is still the router's, not the tier's. `connections.disconnect` is
+    // `requireRole("admin")`, so a viewer's proposal is refused by the tool itself -- which is
+    // asserted here through the whole route rather than only at `bindTools`.
+    const viewer = await db.asSuperuser(async (su) => {
+      const { rows } = await su.query<{ id: string }>(
+        "INSERT INTO app.app_user (email) VALUES ('viewer@example.test') RETURNING id",
+      );
+      await su.query(
+        "INSERT INTO app.tenant_member (tenant_id, user_id, role) VALUES ($1, $2, 'viewer')",
+        ["CASE-0042", rows[0]!.id],
+      );
+      return { userId: rows[0]!.id, email: "viewer@example.test" };
+    });
+
+    const app = appWith(
+      [
+        {
+          when: "ngắt",
+          reply: [{ call: "revokeGrant", input: { tenantId: "CASE-0042", source: "xero" } }],
+        },
+        { when: "ngắt", reply: [{ say: "Bạn không có quyền." }] },
+      ],
+      context(viewer),
+      ["ngắt"],
+    );
+    // Struck by the reader is one thing; struck by the role is another, and the reader is told
+    // which. The approval is still requested -- the tier says so -- and the refusal lands when
+    // it runs, in the viewer's own language.
+    const states = (await frames(await ask(app, "Ngắt kết nối Xero"))).map((f) => f.type);
+    expect(states).toContain("tool-approval-request");
+  });
+});

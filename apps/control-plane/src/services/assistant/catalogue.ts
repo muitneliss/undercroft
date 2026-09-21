@@ -252,6 +252,73 @@ export const WRITE_TOOLS = {
 } as const satisfies Record<string, ToolSpec>;
 
 /**
+ * The privileged tier: none of reversible, cheap, or small in blast radius.
+ *
+ * Each of these takes something away, and what it takes away belongs to a customer. Revoking a
+ * grant stops a source and needs a human at Google to restore. Withdrawing an ingest key breaks
+ * whatever was posting with it, silently, until somebody notices. Deleting a model deletes SQL
+ * the customer wrote.
+ *
+ * So each is a proof AND a typed confirmation of the object's name -- see `PRIVILEGED_TOOLS` in
+ * `apps/ui/src/lib/assistantProofs.ts` for which argument the reader retypes. A one-click
+ * strike is right for an action whose worst case is that it happens twice; it is wrong for one
+ * where the reader must demonstrate they read WHICH object rather than that they found a button.
+ *
+ * WHAT IS DELIBERATELY ABSENT. `models.save` and `models.build` are not here and not anywhere:
+ * authoring SQL that will run as the customer's own database role is not a thing to do by
+ * description, and `lake.query` is the same hazard with a shorter fuse. Both stay in the
+ * Models division and the Lake Console, where an author sees what they wrote before it runs --
+ * and the assistant's `navigate` tier is how it takes them there. `people.revokeInvitation`
+ * appears rather than a "remove member" verb because the router has no such procedure: a
+ * membership is ended in the People division, and inventing a tool for a verb the application
+ * does not have would be the assistant growing a capability nobody reviewed.
+ */
+export const PRIVILEGED_WRITE_TOOLS = {
+  revokeGrant: {
+    description:
+      "Disconnect one source for a customer, revoking the stored credential. Ingestion for " +
+      "that source stops until somebody reconnects it, which requires the account holder.",
+    inputSchema: inTenant.extend({
+      source: z.enum(["hubspot", "xero", "gmail", "drive"]),
+    }),
+    tier: "privileged",
+    plate: "grants",
+    procedure: "connections.disconnect",
+    proofKey: "assistant.proof.revokeGrant",
+  },
+  withdrawIngestKey: {
+    description:
+      "Revoke one ingest key by id. Anything posting to the lake API with that key stops " +
+      "being accepted immediately, and will not be told why.",
+    inputSchema: inTenant.extend({ id: z.string().min(1) }),
+    tier: "privileged",
+    plate: "facts",
+    procedure: "keys.revoke",
+    proofKey: "assistant.proof.withdrawIngestKey",
+  },
+  revokeInvitation: {
+    description:
+      "Withdraw an open invitation by id, so that address can no longer sign in. Use when an " +
+      "invitation went to the wrong person.",
+    inputSchema: inTenant.extend({ id: z.string().uuid() }),
+    tier: "privileged",
+    plate: "facts",
+    procedure: "people.revokeInvitation",
+    proofKey: "assistant.proof.revokeInvitation",
+  },
+  deleteModel: {
+    description:
+      "Delete one dbt model by name. The SQL the customer wrote goes with it, and the tables " +
+      "it built stop being refreshed.",
+    inputSchema: inTenant.extend({ name: z.string().min(1) }),
+    tier: "privileged",
+    plate: "facts",
+    procedure: "models.delete",
+    proofKey: "assistant.proof.deleteModel",
+  },
+} as const satisfies Record<string, ToolSpec>;
+
+/**
  * Every tool the assistant has, by tier.
  *
  * One object rather than a per-tier export, so `handlers/assistantTools.ts` binds one map and
@@ -261,6 +328,7 @@ export const WRITE_TOOLS = {
 export const CATALOGUE = {
   ...READ_TOOLS,
   ...WRITE_TOOLS,
+  ...PRIVILEGED_WRITE_TOOLS,
 } as const satisfies Record<string, ToolSpec>;
 
 export type ToolName = keyof typeof CATALOGUE;

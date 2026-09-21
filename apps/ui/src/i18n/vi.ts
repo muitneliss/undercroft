@@ -978,6 +978,14 @@ export const vi = {
       discard: "Bỏ",
       confirmLabel: "Nhập lại để xác nhận",
       confirmHint: "Hãy nhập “{{expected}}” để bật nút đồng ý.",
+      revokeGrant:
+        "Ngắt kết nối nguồn {{source}} của khách hàng {{tenantId}} và thu hồi quyền truy cập đã lưu. Việc đồng bộ sẽ dừng cho tới khi có người kết nối lại.",
+      withdrawIngestKey:
+        "Thu hồi khoá nạp dữ liệu {{id}} của khách hàng {{tenantId}}. Mọi nơi đang dùng khoá này sẽ bị từ chối ngay.",
+      revokeInvitation:
+        "Thu hồi lời mời {{id}} của khách hàng {{tenantId}}. Địa chỉ đó sẽ không đăng nhập được nữa.",
+      deleteModel:
+        "Xoá mô hình “{{name}}” của khách hàng {{tenantId}}. Câu SQL của mô hình sẽ mất theo.",
       struck: "Đã bỏ",
       runIngestNow: "Chạy đồng bộ nguồn {{source}} cho khách hàng {{tenantId}} ngay bây giờ.",
       setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",

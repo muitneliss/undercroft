@@ -865,6 +865,13 @@ export const en = {
       discard: "Discard",
       confirmLabel: "Type it back to confirm",
       confirmHint: "Type “{{expected}}” to enable the confirm button.",
+      revokeGrant:
+        "Disconnect {{source}} for {{tenantId}} and revoke the stored credential. Ingestion stops until somebody reconnects it.",
+      withdrawIngestKey:
+        "Revoke ingest key {{id}} for {{tenantId}}. Anything posting with it is refused immediately.",
+      revokeInvitation:
+        "Withdraw invitation {{id}} for {{tenantId}}. That address can no longer sign in.",
+      deleteModel: "Delete the model “{{name}}” for {{tenantId}}. Its SQL goes with it.",
       struck: "Discarded",
       runIngestNow: "Run an ingest of {{source}} for {{tenantId}} now.",
       setCadence: "Change {{source}}'s ingest cadence to “{{cadence}}”.",
