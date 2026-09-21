@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.1](https://github.com/muitneliss/undercroft/compare/v1.13.0...v1.13.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **deploy:** give Kestra a writable storage volume, so the schedule runs at all ([#76](https://github.com/muitneliss/undercroft/issues/76)) ([b83c48e](https://github.com/muitneliss/undercroft/commit/b83c48eeceb3a8b4baff705bf803d3d1ee9a7a2e))
+
 ## [1.13.0](https://github.com/muitneliss/undercroft/compare/v1.12.0...v1.13.0) (2026-09-21)
 
 
