@@ -367,7 +367,10 @@ export const en = {
     chooseOrganisation: "Choose an organisation before saving.",
     wholeMailboxHint:
       "Choosing no label means the whole mailbox. That is a deliberate choice, not an empty one.",
-    directChildrenOnly: "Only files directly inside a chosen folder are read. Sub-folders are not.",
+    includeSubFolders: "Read sub-folders too",
+    willReadOneLevel: "Only files directly inside a chosen folder are read. Sub-folders are not.",
+    willReadDeep:
+      "Every file inside a chosen folder is read, including the files in its sub-folders, however deep they go.",
     labelsHead: "Labels",
     labelsMine: "Your labels",
     labelsSystem: "Gmail’s own labels",
@@ -402,6 +405,12 @@ export const en = {
   scope: {
     driveFolders_one: "Matching files in {{count, number}} selected folder",
     driveFolders_other: "Matching files in {{count, number}} selected folders",
+    driveFoldersDeep_one:
+      "Matching files in {{count, number}} selected folder and every sub-folder inside it",
+    driveFoldersDeep_other:
+      "Matching files in {{count, number}} selected folders and every sub-folder inside them",
+    driveFiles_one: "{{count, number}} selected document",
+    driveFiles_other: "{{count, number}} selected documents",
     xeroContacts: "Contacts",
     xeroInvoices: "Invoices",
     xeroPayments: "Payments",
@@ -515,6 +524,8 @@ export const en = {
         "Finished {{entity}}: {{landed}} landed, {{created}} new, {{changed}} changed, {{refused}} refused.",
       picksListed:
         "Listed {{folders}} picked folders and found {{matched}} matching files. Sub-folders are not read.",
+      picksListedDeep:
+        "Listed {{listed}} folders under {{folders}} picked and found {{matched}} matching files.",
       documentsLanded:
         "Documents: {{created}} new, {{unchanged}} unchanged, {{skipped}} skipped, {{failed}} failed.",
       noModels: "This customer has no models yet, so there was nothing to build.",

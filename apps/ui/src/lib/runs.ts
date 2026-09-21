@@ -92,6 +92,33 @@ function counted(detail: Record<string, unknown>, key: string, locale: Locale): 
 }
 
 /**
+ * What a Drive run looked in, and how far down.
+ *
+ * `listed` exceeds `folders` exactly when the walk went below the picked folders, and the
+ * shallow sentence ends "Sub-folders are not read" -- which would be a false statement about
+ * a run that read them. BOTH counts must be numbers for the deep sentence: a run recorded
+ * before `listed` existed carries no such key, and reading its absence as "deeper" would put
+ * a sentence about sub-folders on a run that never read one. Rule 2 -- no evidence is not a
+ * yes, in either direction.
+ */
+function picksSentence(
+  t: TFunction,
+  n: (key: string) => string,
+  detail: Record<string, unknown>,
+): string {
+  const { listed, folders } = detail;
+  const deeper = typeof listed === "number" && typeof folders === "number" && listed > folders;
+
+  return deeper
+    ? t("journal.event.picksListedDeep", {
+        listed: n("listed"),
+        folders: n("folders"),
+        matched: n("matched"),
+      })
+    : t("journal.event.picksListed", { folders: n("folders"), matched: n("matched") });
+}
+
+/**
  * One line of a run's feed, as a sentence.
  *
  * The worker writes an enumerated verb and a handful of counts; the wording is entirely
@@ -133,7 +160,7 @@ export function eventSentence(
         refused: n("refused"),
       });
     case "picks_listed":
-      return t("journal.event.picksListed", { folders: n("folders"), matched: n("matched") });
+      return picksSentence(t, n, event.detail);
     case "documents_landed":
       return t("journal.event.documentsLanded", {
         created: n("created"),

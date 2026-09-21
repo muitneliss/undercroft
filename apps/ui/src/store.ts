@@ -73,6 +73,13 @@ export interface ScopeDraft {
    * recorded-decision idiom as empty labels or entities, not an absent choice.
    */
   readonly fileTypes: string[];
+  /**
+   * Drive: whether a picked folder is read to the bottom, or one level only.
+   *
+   * False is what an unvisited form means, and what every selection saved before this
+   * existed means. ADR 0031.
+   */
+  readonly recurse: boolean;
 }
 
 interface UiState {
@@ -107,6 +114,8 @@ interface UiState {
    * read back beside the control it changed, rather than a loop of individual removals.
    */
   clearScopeFileTypes: (source: string) => void;
+  /** Drive: turn reading sub-folders on or off. ADR 0031. */
+  toggleScopeRecurse: (source: string) => void;
   /**
    * What the admin has typed into the custom-file-type field, and which source they typed it
    * against.
@@ -257,7 +266,15 @@ function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
   if (held !== null && held.source === source) {
     return held;
   }
-  return { source, labels: [], files: [], organisation: null, entities: [], fileTypes: [] };
+  return {
+    source,
+    labels: [],
+    files: [],
+    organisation: null,
+    entities: [],
+    fileTypes: [],
+    recurse: false,
+  };
 }
 
 /** How a slice writes: Zustand's partial setter, narrowed to this store. */
@@ -284,6 +301,7 @@ function scopeSlice(
   | "toggleScopeEntity"
   | "toggleScopeFileType"
   | "clearScopeFileTypes"
+  | "toggleScopeRecurse"
   | "fileTypeInput"
   | "setFileTypeInput"
   | "scopeFilter"
@@ -334,6 +352,11 @@ function scopeSlice(
       }),
     clearScopeFileTypes: (source): unknown =>
       set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), fileTypes: [] } })),
+    toggleScopeRecurse: (source): unknown =>
+      set((state) => {
+        const draft = draftFor(state.scopeDraft, source);
+        return { scopeDraft: { ...draft, recurse: !draft.recurse } };
+      }),
     fileTypeInput: { source: "", value: "" },
     setFileTypeInput: (source, value): unknown => set({ fileTypeInput: { source, value } }),
     scopeFilter: { source: "", query: "" },

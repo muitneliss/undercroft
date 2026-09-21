@@ -146,6 +146,29 @@ export function presentConnection(t: TFunction, connection: Connection): CardPre
 }
 
 /**
+ * What a Drive grant permits, which is a folder count AND how deep the read goes.
+ *
+ * The depth is the difference between "the folder" and "the folder and everything under it",
+ * and one sentence for both would leave an admin to discover which they chose by reading a
+ * run. A selection of loose documents with no folder in it gets its own sentence rather than
+ * "0 selected folders". ADR 0031.
+ */
+function driveScope(t: TFunction, config: Connection["config"]): string | null {
+  const picks = config.files ?? [];
+  const folders = picks.filter((pick) => pick.kind === "folder");
+
+  if (picks.length === 0) {
+    return null;
+  }
+  if (folders.length === 0) {
+    return t("scope.driveFiles", { count: picks.length });
+  }
+  return config.recurse === true
+    ? t("scope.driveFoldersDeep", { count: folders.length })
+    : t("scope.driveFolders", { count: folders.length });
+}
+
+/**
  * What a live grant actually permits, in the customer's words.
  *
  * The schedule answers who granted what, when it expires and when it next runs,
@@ -158,16 +181,12 @@ export function presentConnection(t: TFunction, connection: Connection): CardPre
  * caller renders the absence as MISSING.
  */
 export function scopeSummary(t: TFunction, connection: Connection): string | null {
-  const folders = connection.config.folderIds ?? [];
   const labels = connection.config.labels ?? [];
   const entities = connection.config.entities ?? [];
 
   switch (connection.source) {
     case "drive":
-      if (folders.length === 0) {
-        return null;
-      }
-      return t("scope.driveFolders", { count: folders.length });
+      return driveScope(t, connection.config);
 
     case "gmail":
       // An empty label list is a recorded decision here, not a missing one: the

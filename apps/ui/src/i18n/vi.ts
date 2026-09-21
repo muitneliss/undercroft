@@ -433,8 +433,12 @@ export const vi = {
     chooseOrganisation: "Hãy chọn một tổ chức trước khi lưu.",
     wholeMailboxHint:
       "Không chọn nhãn nào nghĩa là đọc toàn bộ hòm thư. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
-    directChildrenOnly:
+    /** Drive's depth choice, and the consequence said beneath it as the tick changes. */
+    includeSubFolders: "Đọc cả thư mục con",
+    willReadOneLevel:
       "Chỉ đọc tệp nằm trực tiếp trong thư mục đã chọn. Thư mục con không được đọc.",
+    willReadDeep:
+      "Đọc mọi tệp trong thư mục đã chọn, kể cả tệp nằm trong các thư mục con, sâu đến đâu cũng đọc.",
     labelsHead: "Nhãn",
     /** The runs of the index. Gmail reports who owns a label; nothing here infers it. */
     labelsMine: "Nhãn của bạn",
@@ -470,6 +474,10 @@ export const vi = {
 
   scope: {
     driveFolders_other: "Tệp phù hợp trong {{count, number}} thư mục đã chọn",
+    /** The same reading, to the bottom of the tree. The card must tell the two apart. */
+    driveFoldersDeep_other:
+      "Tệp phù hợp trong {{count, number}} thư mục đã chọn và mọi thư mục con",
+    driveFiles_other: "{{count, number}} tài liệu đã chọn",
     gmailWholeMailbox: "Tiêu đề thư và tệp đính kèm phù hợp, toàn bộ hòm thư",
     gmailLabels: "Tiêu đề thư và tệp đính kèm phù hợp trong {{labels}}",
     /** Xero's entities, by the spec's ids. The ids are recorded; these are the words. */
@@ -591,6 +599,8 @@ export const vi = {
         "Xong {{entity}}: {{landed}} về, {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối.",
       picksListed:
         "Đã xem {{folders}} thư mục được chọn, thấy {{matched}} tệp phù hợp. Thư mục con không được đọc.",
+      picksListedDeep:
+        "Đã xem {{listed}} thư mục nằm trong {{folders}} thư mục được chọn, thấy {{matched}} tệp phù hợp.",
       documentsLanded:
         "Tài liệu: {{created}} mới, {{unchanged}} không đổi, {{skipped}} bỏ qua, {{failed}} lỗi.",
       noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",

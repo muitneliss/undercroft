@@ -75,7 +75,19 @@ export interface ConnectionCardView {
   readonly scopes: string[];
   readonly config: {
     labels?: string[];
-    folderIds?: string[];
+    /**
+     * What was picked in Drive: id, name, and WHICH KIND each pick is.
+     *
+     * The kind is load-bearing rather than decorative. This used to be `folderIds: string[]`,
+     * and the scope picker rebuilt its draft from it as `{ id, name: id, kind: "folder" }` --
+     * so a directly-picked FILE was read back as a folder, and an admin who re-saved without
+     * re-picking turned it into a folder pick that lists nothing and refuses. The names are
+     * the ones the picker showed at pick time and stay inside `app`, which no BI role has
+     * USAGE on; `raw` sees none of this.
+     */
+    files?: { id: string; name: string; kind: "folder" | "file" }[];
+    /** Whether a picked Drive folder is read to the bottom. ADR 0031. */
+    recurse?: boolean;
     entities?: string[];
     fileTypes?: string[];
   };
@@ -445,7 +457,7 @@ function configOf(source: string, selectionJson: string): ConnectionCardView["co
     case "gmail":
       return { labels: scope.labels.map((l) => l.name), fileTypes: scope.fileTypes };
     case "drive":
-      return { folderIds: scope.files.map((f) => f.id), fileTypes: scope.fileTypes };
+      return { files: scope.files, recurse: scope.recurse, fileTypes: scope.fileTypes };
     case "xero":
       return { entities: scope.entities };
     default: {
