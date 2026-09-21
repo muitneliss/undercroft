@@ -7,7 +7,7 @@ discuss a direction is welcome before a large PR.
 
 ```sh
 bun install
-task ci:verify    # the gate: typecheck, lint, format, spec validation, the SPA build, tests
+task ci:verify    # the gate: typecheck, lint, rules, format, spec validation, SPA build, tests
 ```
 
 Every operation goes through [Task](https://taskfile.dev) — `task --list-all` enumerates

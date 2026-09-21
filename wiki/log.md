@@ -64,3 +64,14 @@
 ## [2026-09-21] ingest | Runbook: Setting the assistant up
 ## [2026-09-21] ingest | ADR 0029: The assistant is an interleaf, and it acts only through the router
 ## [2026-09-21] ingest | Runbook: Setting the assistant up
+## [2026-09-21] ingest | ADR 0027 A Control Sits on Its Field's Line
+## [2026-09-21] ingest | ADR 0017 Tests Are a Category in the Lint Config
+## [2026-09-21] ingest | ADR 0018 A Lint Decision Lives in the Config
+## [2026-09-21] ingest | ADR 0022 A Test File Is Not an Exception
+## [2026-09-21] ingest | ADR 0023 Task Is the Mandatory Command Entrypoint
+## [2026-09-21] ingest | Runbook Deployment
+## [2026-09-21] ingest | Runbook Sign-In Setup
+## [2026-09-21] ingest | ADR 0029: The assistant is an interleaf, and it acts only through the router
+## [2026-09-21] ingest | Runbook: Setting the assistant up
+## [2026-09-21] ingest | ADR 0026: Full-text search over the raw lake
+## [2026-09-21] ingest | ADR 0028: A workbook is read in process, and extract is scheduled by backlog

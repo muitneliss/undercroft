@@ -2,10 +2,11 @@
 
 A step-by-step for standing up sign-in from nothing, with a way to check each step actually
 worked. Sign-in is **invite-only**: an address gets in only if it has a live invitation or an
-existing account. Two ways in, and you can enable either or both:
+existing account. Two ways in, and they are not symmetric:
 
-- **Google** — needs an OAuth client.
-- **A one-time code by email** — needs a mail API key.
+- **A one-time code by email** — needs a mail API key, and is **required**. With the mail
+  settings absent the control plane comes up with no way in at all, Google included.
+- **Google** — needs an OAuth client, and is added on top of the code-by-email path.
 
 The decisions behind all this are in [ADR 0010](../adr/0010-invite-only-sign-in-with-better-auth.md);
 the production-specific parts are in [deployment.md](./deployment.md). This page is the
@@ -74,8 +75,10 @@ Testing** with your invitees added as test users.
 
 ## 3. Get a mail API key
 
-Skip this if you only want Google — but note that invitation emails will not send either, so
-you will have to tell people to sign in yourself. The page tells you when that happens.
+**Not optional, even if you only want Google.** `UNDERCROFT_EMAIL_API_KEY` and
+`UNDERCROFT_EMAIL_FROM` are both required before sign-in is wired up at all: with either one
+absent the control plane logs `sign_in_unconfigured` and offers no way in, the Google button
+included. They carry the invitation emails too.
 
 With Resend: create an API key, and use `onboarding@resend.dev` as the from-address until you
 have verified a domain of your own.
