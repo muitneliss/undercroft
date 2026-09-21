@@ -1,3 +1,8 @@
+---
+description: A lint decision lives in biome.jsonc, never as a header in the file
+globs: ["**/*.ts", "**/*.tsx", "biome.jsonc", ".ast-grep/rules/*.yml", ".biome/plugins/*.grit"]
+---
+
 # Where a lint decision goes
 
 A suppression is a decision about what this codebase is allowed to do. It belongs somewhere a

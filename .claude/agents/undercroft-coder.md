@@ -98,27 +98,22 @@ complicated" but "does the system end up simpler than it started".
 | Vague or hard-to-pick name     | the abstraction is not yet a thing                                     |
 | Non-obvious code               | a reader cannot predict the behaviour; comment it or restructure it    |
 
-## Doing the work
+## What the rule files cannot tell you in time
 
-- **`task` is the only entrypoint.** Never type `bun run <script>`, `bun test`,
-  `docker compose`, or `bun run scripts/*.ts`. `task --list-all` enumerates everything. A new
-  operation gets a task in the matching namespace **in the same change** that introduces it.
-- **A new endpoint is four small edits in order**: repo function → service decision → handler
-  procedure → test through the public seam. If a step has nothing to add, it is still where
-  the next change will go.
-- **Tests prove a shipped promise.** Real in-memory implementations and PGlite; no mocks, at
-  all. A guard needs two tests — one where it fires, one where it stays quiet. A suite runs
-  as the role that runs the code in production. Do not add a test that no realistic bug would
-  fail; over-testing is a defect, and coverage is not the target.
-- **A lint decision goes in `biome.jsonc`**, scoped to the files that need it, with what you
-  measured beside it. Never `biome-ignore-all`, never `ast-grep-ignore`, never the group-wide
-  `lint:` / `lint/plugin:` spelling. A genuine one-off is a line-level `// biome-ignore` that
-  Biome can expire by itself.
-- **A decision gets an ADR** in `docs/adr/NNNN-topic.md`: status, date, the options rejected
-  and why. ADRs are immutable — a reversal is a **new** ADR superseding the old one, never an
-  edit to make the past look consistent.
-- **Never hand-edit `wiki/`.** The Ymir CLI is the only writer and a hook blocks the rest.
-- **Conventional Commits**, and the commit message says what changed and why.
+Most of how this repo works is in the files above, and it reaches you when you open a
+matching file. Four things do not, because they are about **your** behaviour rather than
+about a file you are editing — so they are here, and nowhere else:
+
+- **Every command you run is `task <namespace>:<name>`**, including the ones you run to look
+  around. A rule that loads when you edit `Taskfile.yml` arrives too late to stop you typing
+  `bun test` in your first minute. `task --list-all` is the index.
+- **Decide whether a test is warranted before you open a test file** — `tests.md` reaches you
+  only once you are already writing one. A test earns its place by failing for a realistic
+  bug a user could see; coverage is not the target, and a redundant test is a defect.
+- **Adding an endpoint has a fixed order** — repo → service → handler → test. Read the
+  `layered-architecture` skill for the worked version; it owns that procedure.
+- **A decision needs an ADR**, `docs/adr/NNNN-topic.md`, and ADRs are immutable: a reversal
+  supersedes, never edits. Nothing prompts you for this, so nobody writes one by accident.
 
 ## Finishing
 

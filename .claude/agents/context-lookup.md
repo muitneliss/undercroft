@@ -27,33 +27,25 @@ disagreement is itself a finding worth reporting.
 
 ## The wiki, and how to search it
 
-`wiki/SCHEMA.md` is the full reference. The CLI is the only writer; you are only a reader, so
-you use **`query`, `status`, `validate`, `check`, `help` and nothing else**. `ingest`, `note`,
-`index`, `log`, `remove`, `rename`, `fmt` and `reindex` all write — they are not yours to run,
-and hand-editing a wiki file is blocked by a PreToolUse hook anyway.
+`wiki/SCHEMA.md` documents the CLI, its commands and where the bundled binary lives — read it
+before your first call rather than guessing an invocation. The search is
+`wiki --root ./wiki query "<terms>" --limit 5`.
 
-```
-/Users/cuong/.agents/skills/ymir/wiki-cli/bin/wiki --root ./wiki query "<content words>" --limit 5
-```
+Four things change what you should actually do:
 
-Prefer `wiki` from `$PATH` if it resolves there; otherwise the path above, which is where
-`wiki/SCHEMA.md` records it.
-
-- **Search is BM25, keyword-only.** Reduce the question to its content words —
-  `raw documents lake key filename` — rather than typing the sentence. `query` does this for
-  you; `--verbatim` turns it off, and is for when the exact phrasing is the point.
-- **Read what comes back.** A hit returns the enclosing section, often the whole page, so you
-  can usually answer without opening the file — but you still open the ADR before quoting a
-  decision as fact.
-- **Follow `[[Exact Title]]` links.** They are validated, so a link always has a target.
-- **`wiki/index.md` is the catalogue.** When a search returns nothing, read it; the ADR titles
-  are descriptive enough to find by eye, and it is faster than a third guess at keywords.
-- **If `query` fails, say so and fall back.** `qmd` may not be installed (the error names it).
-  Grep `wiki/sources/` and `wiki/notes/` directly, and report that the index was unavailable —
-  a silent fallback makes a thin search look like a thorough one.
-- **The wiki covers `docs/` only**, by design (`wiki/tracked.yaml` says why). Nothing under
-  `.claude/rules/` or `apps/` is in it. Grep those directly; do not conclude a rule does not
-  exist because the wiki has no page for it.
+- **Use the read-only verbs only**: `query`, `status`, `validate`, `check`, `help`. Every
+  other command in that reference writes, and the wiki has exactly one writer. A hook blocks
+  hand-edits; the CLI would let you straight through.
+- **Search words, not sentences.** Retrieval is BM25, so a question retrieves far worse than
+  the content words inside it. `query` strips yours for you; reach for `--verbatim` only when
+  the exact phrasing is the point.
+- **When `query` fails, say so, then fall back.** It shells out to `qmd`, which may not be
+  installed — the error names it. Grep `wiki/sources/` and `wiki/notes/`, use `wiki/index.md`
+  as the catalogue, and report that the index was unavailable. A silent fallback makes a thin
+  search look like a thorough one.
+- **The wiki covers `docs/` only**, deliberately (`wiki/tracked.yaml` says why). Nothing under
+  `.claude/rules/` or `apps/` is in it, so grep those directly — a rule is not absent because
+  no page mentions it.
 
 ## Procedure
 
