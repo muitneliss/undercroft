@@ -12,7 +12,7 @@
  * the nine controls that move and size it, one cell at a time.
  */
 
-import { compile, type DashboardTile, paramNames } from "@undercroft/contracts/bi";
+import type { DashboardTile } from "@undercroft/contracts/bi";
 import type { Locale } from "@undercroft/core/locale";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/Skeleton.tsx";
 import { CardContent, CardHeader } from "@/components/ui/card.tsx";
 import { TILE_ACTIONS, type TileAction } from "@/lib/dashboardLayout.ts";
 import { divisionPath } from "@/lib/divisions.ts";
-import { paramsFromSearch } from "@/lib/params.ts";
+import { paramsFromSearch, questionParams } from "@/lib/params.ts";
 import { trpc } from "@/trpc.ts";
 
 // The charting library rides in its own chunk, fetched the first time a tile is drawn.
@@ -98,7 +98,7 @@ export function QuestionCard({
   onAction: (action: TileAction) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const names = question === null ? [] : paramNames(compile(question.definition));
+  const names = question === null ? [] : questionParams(question.definition);
   const bound = paramsFromSearch(search, names);
   const answer = trpc.bi.questions.answer.useQuery(
     { tenantId, id: tile.questionId, params: bound.params },

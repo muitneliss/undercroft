@@ -1,7 +1,7 @@
 /**
  * Money, formatted from the digits the API sent, without ever becoming a number.
  *
- * `.claude/rules/data-integrity.md` forbids `float` for a monetary amount.
+ * `.claude/rules/money.md` forbids `float` for a monetary amount.
  * JavaScript has exactly one numeric type and it is a float, so the only way to
  * honour that rule in a browser is never to parse the value at all.
  *
