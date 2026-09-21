@@ -84,6 +84,28 @@ const FIXTURES: Record<string, string> = {
     import { createCaller } from "@undercroft/control-plane/router";
     export const x = createCaller;
   `,
+
+  // ui-model-provider.grit -- a model provider carries an API key, so the browser may not
+  // import one in ANY position. No type-only carve-out, unlike the router above.
+  "apps/ui/src/bundlesProvider.ts": `
+    import { createAnthropic } from "@ai-sdk/anthropic";
+    export const x = createAnthropic;
+  `,
+  "apps/ui/src/bundlesJudge.ts": `
+    import { noul } from "@typesafe-ai/sdk";
+    export const x = noul;
+  `,
+  // The browser's own half of the AI SDK, which holds no credential and must stay allowed --
+  // without this the rule could be tightened into uselessness and nothing would notice.
+  "apps/ui/src/usesChat.ts": `
+    import { useChat } from "@ai-sdk/react";
+    export const x = useChat;
+  `,
+  // And the provider where it belongs: the control plane's composition root.
+  "apps/control-plane/src/buildsProvider.ts": `
+    import { createAnthropic } from "@ai-sdk/anthropic";
+    export const x = createAnthropic;
+  `,
 };
 
 interface Diagnostic {
@@ -193,5 +215,31 @@ describe("the UI may reach the control-plane router only as a type", () => {
 
   it("leaves the same import alone outside apps/ui, where it is legitimate", () => {
     expect(pluginMessagesOn("packages/db/src/importsServer.ts")).toEqual([]);
+  });
+});
+
+describe("ui-model-provider.grit keeps a model provider out of the browser", () => {
+  it("refuses `@ai-sdk/anthropic` under apps/ui", () => {
+    // The key that provider is constructed with lives in the control plane's process. A
+    // browser bundle importing it is a bundle whose only missing ingredient is the key.
+    expect(pluginMessagesOn("apps/ui/src/bundlesProvider.ts").join(" ")).toContain(
+      "must not import a model provider",
+    );
+  });
+
+  it("refuses `@typesafe-ai/sdk` there too", () => {
+    expect(pluginMessagesOn("apps/ui/src/bundlesJudge.ts").join(" ")).toContain(
+      "must not import a model provider",
+    );
+  });
+
+  it("allows `@ai-sdk/react`, which is the browser's own half and holds no key", () => {
+    // The quiet side, and the one that matters most: a rule that banned the whole SDK would
+    // pass the two tests above while making the feature impossible.
+    expect(pluginMessagesOn("apps/ui/src/usesChat.ts")).toEqual([]);
+  });
+
+  it("allows the provider in the control plane, where the key belongs", () => {
+    expect(pluginMessagesOn("apps/control-plane/src/buildsProvider.ts")).toEqual([]);
   });
 });

@@ -81,6 +81,10 @@
   "plugins": [
     "./.biome/plugins/money.grit",
     "./.biome/plugins/no-mocks.grit",
+    // Keeps a model provider out of the browser bundle. Same `$filename` scoping as the
+    // router rule below, for the same 2.5.14 reason, and no type-only carve-out: the UI needs
+    // nothing at all from `@ai-sdk/anthropic` or `@typesafe-ai/sdk`.
+    "./.biome/plugins/ui-model-provider.grit",
     // Applies to `apps/ui/**` only -- the server packages import each other by value
     // legitimately. That scope is enforced inside the pattern with `$filename`, NOT with
     // this entry's `includes` option: the object form silently stops the plugin running in

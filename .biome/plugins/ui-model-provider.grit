@@ -1,0 +1,35 @@
+// The browser may not import a model provider, at all, in any position.
+//
+// `@ai-sdk/anthropic` and `@typesafe-ai/sdk` are constructed with an API KEY. The key reaches
+// them from `main.ts` and lives in the control plane's process; a browser bundle that imported
+// either would be a bundle whose only missing ingredient was the key, and the obvious next step
+// for whoever hit the "provider needs an apiKey" error at runtime would be to send it one.
+//
+// Unlike `ui-server-import.grit` there is no type-only carve-out here. That rule allows
+// `import type` because a type is erased and the UI legitimately needs the router's SHAPE; the
+// UI needs nothing at all from a provider, so the honest rule is the blunt one. `ai` and
+// `@ai-sdk/react` are deliberately NOT listed: the transport, the message types and `useChat`
+// are the browser's half of this feature and hold no credential.
+//
+// The path scope is INSIDE the pattern, via `$filename`, for the reason `ui-server-import.grit`
+// records at length: Biome 2.5.14 accepts the `{ path, includes }` form in `biome.jsonc` and
+// then never runs the plugin. Re-test on the next upgrade.
+//
+// Pinned from both sides -- fires, and stays quiet -- in `scripts/biomePlugins.test.ts`.
+
+language js
+
+pattern ui_model_provider_import() {
+  `import $clause from $src` as $statement where {
+    $filename <: r".*/apps/ui/.*",
+    // NON-CAPTURING group, and that is not style: GritQL reads a regex capture group as a
+    // variable binding and refuses the whole pattern with "matched 1 variables, but expected
+    // 0". `ui-server-import.grit` records the same trap. The plugin still loads and reports
+    // its own error as a diagnostic, which is why the test that asserts this FIRES is the
+    // only thing that can tell a broken pattern from a clean run.
+    $src <: r".*(?:@ai-sdk/anthropic|@typesafe-ai/sdk).*",
+    register_diagnostic(span=$statement, message="The browser must not import a model provider. `@ai-sdk/anthropic` and `@typesafe-ai/sdk` are constructed with an API key that belongs to the control plane's process; the UI talks to `/api/assistant/chat` instead. See docs/adr/0029.", severity="error")
+  }
+}
+
+ui_model_provider_import()

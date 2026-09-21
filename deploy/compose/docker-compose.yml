@@ -289,6 +289,17 @@ services:
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY}
       UNDERCROFT_SESSION_SECRET: ${UNDERCROFT_SESSION_SECRET:?set in .env}
       UNDERCROFT_WORKER_URL: http://worker:8081
+      # The assistant. All four optional, and the degradation is in two steps rather than
+      # one: with no model key the interleaf says it is unavailable; with a model key but no
+      # TypeSafe key it answers questions and REFUSES to offer any change, because the
+      # injection gate fails closed. The boot log names which state it came up in. ADR 0029.
+      UNDERCROFT_ANTHROPIC_API_KEY: ${UNDERCROFT_ANTHROPIC_API_KEY:-}
+      UNDERCROFT_TYPESAFE_API_KEY: ${UNDERCROFT_TYPESAFE_API_KEY:-}
+      # Signs each approval request, so "the reader said yes" cannot be a claim the browser
+      # makes about itself. Unset means unsigned, which the boot log also names.
+      UNDERCROFT_ASSISTANT_APPROVAL_SECRET: ${UNDERCROFT_ASSISTANT_APPROVAL_SECRET:-}
+      # Defaults to claude-opus-5 in `main.ts`; set only to pin a different one.
+      UNDERCROFT_ASSISTANT_MODEL: ${UNDERCROFT_ASSISTANT_MODEL:-}
       UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN}
       # Sign-in. All optional: with any of them unset the process starts with no way in and
       # says so once at boot, rather than offering a button that fails at the first click.
