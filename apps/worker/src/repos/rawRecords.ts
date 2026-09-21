@@ -1,12 +1,15 @@
 /**
  * `raw.records` and `raw.load_cursor`: the projection of the lake into Postgres.
  *
- * Two guards live in the upsert, not in application code, so a concurrent loader cannot
- * defeat them:
+ * Three guards live in the statements, not in application code, so a concurrent loader cannot
+ * defeat them. Two are in the upsert:
  *
  * - **idempotent:** an unchanged payload writes no new row version (no WAL, no index
  *   churn), so re-running over an unchanged lake is free;
  * - **no time travel:** a late-arriving older observation never overwrites a newer row.
+ *
+ * and the third is in the cursor: **it only ever moves forward**, so a slow loader finishing
+ * after a fast one cannot rewind it past rows that are already projected. See `writeCursor`.
  *
  * The payload is cast to jsonb by Postgres from the lake's own JSON text (`$5::jsonb[]`),
  * never re-serialised in JavaScript, so a number never round-trips through a float.
@@ -55,7 +58,18 @@ export async function readCursor(
   return rows[0]?.last_stamp ?? null;
 }
 
-/** Record where this stream's load reached. */
+/**
+ * Record where this stream's load reached. Forward only.
+ *
+ * A third guard, in SQL for the same reason as the two above: a cursor that can be assigned
+ * can be REWOUND, and a rewind is not a harmless replay. Since the loader writes the cursor
+ * after every batch, two loaders over one stream now overlap by construction -- a scheduled
+ * run and the recovery pass at the start of the next entity is the ordinary case -- and the
+ * slower one finishing second would otherwise drag the cursor back behind rows that are
+ * already projected. `GREATEST` makes the statement itself refuse that, so it holds for every
+ * caller rather than for the one that remembered to check. Stamps are fixed-width and
+ * lexically ordered (`@undercroft/core`'s `stamp.ts`), so text is the right comparison.
+ */
 export async function writeCursor(
   exec: SqlExecutor,
   identity: StreamIdentity,
@@ -64,7 +78,8 @@ export async function writeCursor(
   await exec.query(
     `INSERT INTO raw.load_cursor (source, tenant_id, entity, last_stamp, updated_at)
      VALUES ($1, $2, $3, $4, now())
-     ON CONFLICT (source, tenant_id, entity) DO UPDATE SET last_stamp = EXCLUDED.last_stamp, updated_at = now()`,
+     ON CONFLICT (source, tenant_id, entity) DO UPDATE
+       SET last_stamp = GREATEST(load_cursor.last_stamp, EXCLUDED.last_stamp), updated_at = now()`,
     [identity.source, identity.tenantId, identity.entity, lastStamp],
   );
 }

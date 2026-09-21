@@ -1,7 +1,19 @@
 import { beforeEach, describe, expect, test as it } from "bun:test";
 import { createStampSource, TestClock } from "@undercroft/core";
 import { InMemoryObjectStore } from "./memory.ts";
-import { LakeStore, ObjectExists } from "./store.ts";
+import { type JournalEntry, LakeStore, ObjectExists } from "./store.ts";
+
+/**
+ * The journal is yielded, so a suite that wants to assert on the whole of it says so.
+ * Every expectation below is the one it always was; only the taking is spelled out.
+ */
+async function collect(entries: AsyncIterable<JournalEntry>): Promise<JournalEntry[]> {
+  const all: JournalEntry[] = [];
+  for await (const entry of entries) {
+    all.push(entry);
+  }
+  return all;
+}
 
 const encoder = new TextEncoder();
 function bytes(text: string): Uint8Array<ArrayBuffer> {
@@ -157,7 +169,7 @@ describe("the journal is a per-stream cursor", () => {
     await store.put("records/hubspot/CASE-1/deals/1", bytes("d1"), { runId: "r1", stream });
     await store.put("records/hubspot/CASE-1/deals/2", bytes("d2"), { runId: "r1", stream });
 
-    const entries = await store.journalSince(stream, null);
+    const entries = await collect(store.journalSince(stream, null));
     expect(entries.map((e) => e.sourceKey)).toEqual([
       "records/hubspot/CASE-1/deals/1",
       "records/hubspot/CASE-1/deals/2",
@@ -174,7 +186,7 @@ describe("the journal is a per-stream cursor", () => {
     await store.put("records/hubspot/CASE-1/deals/2", bytes("d2"), { runId: "r1", stream });
 
     const firstStamp = first.versionKey.split("/").at(-1)!;
-    const after = await store.journalSince(stream, firstStamp);
+    const after = await collect(store.journalSince(stream, firstStamp));
     expect(after.map((e) => e.sourceKey)).toEqual(["records/hubspot/CASE-1/deals/2"]);
   });
 
@@ -183,7 +195,7 @@ describe("the journal is a per-stream cursor", () => {
     const stream = "records/hubspot/CASE-1/deals";
     await store.put("records/hubspot/CASE-1/deals/1", bytes("d1"), { runId: "r1", stream });
     await store.put("records/hubspot/CASE-1/deals/1", bytes("d1"), { runId: "r2", stream });
-    expect((await store.journalSince(stream, null)).length).toBe(1);
+    expect((await collect(store.journalSince(stream, null))).length).toBe(1);
   });
 
   it("streams do not see each other's entries", async () => {
@@ -196,7 +208,120 @@ describe("the journal is a per-stream cursor", () => {
       runId: "r1",
       stream: "records/xero/CASE-1/invoices",
     });
-    expect((await store.journalSince("records/hubspot/CASE-1/deals", null)).length).toBe(1);
-    expect((await store.journalSince("records/xero/CASE-1/invoices", null)).length).toBe(1);
+    expect((await collect(store.journalSince("records/hubspot/CASE-1/deals", null))).length).toBe(
+      1,
+    );
+    expect((await collect(store.journalSince("records/xero/CASE-1/invoices", null))).length).toBe(
+      1,
+    );
+  });
+
+  it("from a cursor, every later entry is returned and no earlier one", async () => {
+    // The firing side of the scan starting at the cursor. Built with entries on BOTH sides
+    // of it on purpose: a `startAfter` that narrowed by one key too many would drop the
+    // entry just past the cursor, and a fixture whose cursor sits at the end could not tell.
+    const store = lake();
+    const stream = "records/hubspot/CASE-1/deals";
+    const stamps: string[] = [];
+    for (const n of [1, 2, 3, 4, 5]) {
+      const put = await store.put(`${stream}/${n}`, bytes(`d${n}`), { runId: "r1", stream });
+      stamps.push(put.versionKey.split("/").at(-1)!);
+    }
+
+    const after = await collect(store.journalSince(stream, stamps[1]!));
+
+    expect(after.map((e) => e.sourceKey)).toEqual([`${stream}/3`, `${stream}/4`, `${stream}/5`]);
+  });
+
+  it("from no cursor, the whole journal is returned", async () => {
+    // The quiet side, over the same fixture: narrowing the scan must not narrow the answer
+    // when there is no cursor to narrow it to. A first run reads everything, still.
+    const store = lake();
+    const stream = "records/hubspot/CASE-1/deals";
+    for (const n of [1, 2, 3, 4, 5]) {
+      await store.put(`${stream}/${n}`, bytes(`d${n}`), { runId: "r1", stream });
+    }
+
+    const all = await collect(store.journalSince(stream, null));
+
+    expect(all.map((e) => e.sourceKey)).toEqual([
+      `${stream}/1`,
+      `${stream}/2`,
+      `${stream}/3`,
+      `${stream}/4`,
+      `${stream}/5`,
+    ]);
+  });
+});
+
+describe("a listing resumes from a key", () => {
+  it("startAfter drops the keys at or before it", async () => {
+    // S3's own rule, and the one the journal cursor rests on: strictly greater. A store
+    // that included the boundary key would hand the loader the observation it has already
+    // projected, every pass, for ever.
+    for (const k of ["p/a", "p/b", "p/c"]) {
+      await backing.put(k, bytes(k));
+    }
+    expect(await backing.list("p/", "p/b")).toEqual(["p/c"]);
+  });
+
+  it("without startAfter every key under the prefix is returned", async () => {
+    // The quiet side. `prune` and `versions` list without a position and must keep seeing
+    // the whole of what they are about to walk.
+    for (const k of ["p/a", "p/b", "p/c"]) {
+      await backing.put(k, bytes(k));
+    }
+    expect(await backing.list("p/")).toEqual(["p/a", "p/b", "p/c"]);
+  });
+});
+
+describe("an observation is read in one call", () => {
+  it("names its bytes and its manifest together", async () => {
+    const store = lake();
+    const put = await store.put("hubspot/deals/1", bytes("v1"), { runId: "r1" });
+    const stamp = put.versionKey.split("/").at(-1)!;
+
+    const observation = await store.observation("hubspot/deals/1", stamp);
+
+    expect(new TextDecoder().decode(observation.bytes)).toBe("v1");
+    expect(observation.manifest).toMatchObject({ runId: "r1", sha256: put.sha256 });
+  });
+
+  it("a named observation is read without listing the key", async () => {
+    // The firing side of the round-trip fix. A caller that already knows WHICH observation
+    // it wants -- the loader, holding a journal entry that names the stamp -- used to pay
+    // for a LIST per record anyway, and then discard it. 7,786 records is 7,786 of them.
+    const store = lake();
+    const put = await store.put("hubspot/deals/1", bytes("v1"), { runId: "r1" });
+    const stamp = put.versionKey.split("/").at(-1)!;
+
+    const before = backing.calls.list;
+    await store.observation("hubspot/deals/1", stamp);
+    await store.read("hubspot/deals/1", stamp);
+
+    expect(backing.calls.list - before).toBe(0);
+  });
+
+  it("an unnamed one still lists, because finding the newest is what a listing is for", async () => {
+    // The quiet side: the LIST was not removed, it was made conditional on the caller not
+    // knowing. `read` with no stamp has no other way to learn which observation is newest.
+    const store = lake();
+    await store.put("hubspot/deals/1", bytes("v1"), { runId: "r1" });
+
+    const before = backing.calls.list;
+    await store.read("hubspot/deals/1");
+
+    expect(backing.calls.list - before).toBeGreaterThan(0);
+  });
+
+  it("a corrupted blob raises through observation too", async () => {
+    // The digest check belongs to the read, not to one spelling of it: a second door into
+    // the same bytes that skipped it would be a way to get suspect bytes downstream.
+    const store = lake();
+    const put = await store.put("hubspot/deals/1", bytes("v1"), { runId: "r1" });
+    const stamp = put.versionKey.split("/").at(-1)!;
+    await backing.put(put.blobKey, bytes("tampered"));
+
+    await expect(store.observation("hubspot/deals/1", stamp)).rejects.toBeInstanceOf(ObjectExists);
   });
 });
