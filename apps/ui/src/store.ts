@@ -215,6 +215,26 @@ interface UiState {
   setDashboardFilters: (filters: DashboardFilter[]) => void;
   /** The server now holds what the draft holds, under `id`. */
   markDashboardSaved: (id: string) => void;
+  /**
+   * Whether the interleaf is hinged open.
+   *
+   * Client state with no endpoint behind it, so the store owns it rather than `useState` --
+   * which is banned here and gated by ast-grep (`.claude/rules/state.md`). It is deliberately
+   * NOT per-customer: the assistant follows the reader across divisions and customers the way
+   * a hand in the margin does, and an open panel that closed itself on a tab change would read
+   * as the application losing it.
+   */
+  assistantOpen: boolean;
+  toggleAssistant: () => void;
+  /**
+   * The question being typed, before it is sent.
+   *
+   * In the store rather than in the input, for the reason every other draft here is: the
+   * interleaf is `React.lazy`-loaded and unmounts when it closes, and a reader who closed the
+   * panel mid-sentence should find the sentence still there. Cleared by whoever sends it.
+   */
+  assistantDraft: string;
+  setAssistantDraft: (draft: string) => void;
 }
 
 /**
@@ -516,6 +536,24 @@ function dashboardSlice(
   };
 }
 
+/**
+ * The interleaf: whether it is open, and what is half-typed in it.
+ *
+ * Neither is persisted. `partialize` keeps only the locale, and that is right here too: a
+ * half-typed question restored days later, against a customer the reader may no longer have
+ * open, is a sentence they did not write in a place they did not leave it.
+ */
+function assistantSlice(
+  set: Setter,
+): Pick<UiState, "assistantOpen" | "toggleAssistant" | "assistantDraft" | "setAssistantDraft"> {
+  return {
+    assistantOpen: false,
+    toggleAssistant: (): unknown => set((state) => ({ assistantOpen: !state.assistantOpen })),
+    assistantDraft: "",
+    setAssistantDraft: (assistantDraft): unknown => set({ assistantDraft }),
+  };
+}
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
@@ -525,6 +563,7 @@ export const useUiStore = create<UiState>()(
       ...modelSlice(set),
       ...questionSlice(set),
       ...dashboardSlice(set),
+      ...assistantSlice(set),
     }),
     {
       name: "undercroft.ui",

@@ -836,4 +836,30 @@ export const en = {
     driveReads:
       "The documents inside the folders you select, in the file types you allow. No other folder is read.",
   },
+
+  assistant: {
+    open: "Open the assistant",
+    close: "Close the assistant",
+    title: "Assistant",
+    lead: "Ask about this customer's data, or ask the assistant to do something for you.",
+    emptyTitle: "Nothing asked yet",
+    emptyBody:
+      "Try: “Did this month's invoices land?”, “Why was this row refused?”, or “How are the sources doing?”.",
+    askLabel: "Your question",
+    askPlaceholder: "Ask about this customer…",
+    send: "Send",
+    sending: "Answering…",
+    stop: "Stop",
+    clear: "Clear the conversation",
+    working: "The assistant is answering",
+    figure: "FIG. {{number}}",
+    notKept: "The result is not kept. Ask again if you need to see it.",
+    notKeptFailed: "That call failed. The error text is not kept.",
+    ranTool: "Looked up: {{tool}}",
+    failedTitle: "Not answered",
+    failedBody: "The assistant could not answer that. Nothing was changed.",
+    retry: "Try again",
+    unconfiguredTitle: "The assistant is not ready",
+    unconfiguredBody: "This deployment has no assistant configured. Tell whoever administers it.",
+  },
 };

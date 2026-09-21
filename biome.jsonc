@@ -431,6 +431,10 @@
         // `lazy` and `Suspense` with it. The shell imports nothing from react now, so the
         // rule is back on for it.
         "apps/ui/src/routeTable.tsx",
+        // Joined when the assistant's interleaf arrived: `Book.tsx` now takes `lazy` and
+        // `Suspense` to load it only when a reader opens it, which is measured -- eager, the
+        // AI SDK adds 182 kB to the entry chunk.
+        "apps/ui/src/components/Book.tsx",
         "apps/ui/src/components/LakeConsole.tsx",
         "apps/ui/src/components/QuestionBands.tsx",
         "apps/ui/src/components/QuestionResult.tsx",

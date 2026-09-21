@@ -920,4 +920,52 @@ export const vi = {
     driveReads:
       "Tài liệu trong các thư mục bạn chọn, theo loại tệp bạn cho phép. Không thư mục nào khác được đọc.",
   },
+
+  /**
+   * The interleaf: the assistant bound into the book as the reader's own sheet.
+   *
+   * `trợ lý` rather than a borrowed "assistant": the operators read Vietnamese first, and a
+   * panel whose own name is in English is the screen-half-in-English this catalogue exists to
+   * prevent. The printer's fist has no Vietnamese name and needs none -- it is a mark, and its
+   * accessible name is the sentence below rather than a transliteration of a glyph.
+   */
+  assistant: {
+    open: "Mở trợ lý",
+    close: "Đóng trợ lý",
+    title: "Trợ lý",
+    lead: "Hỏi về dữ liệu của khách hàng này, hoặc nhờ trợ lý làm giúp một việc.",
+    /** The empty state teaches the panel rather than saying it is empty. */
+    emptyTitle: "Chưa có câu hỏi nào",
+    emptyBody:
+      "Hãy thử: “Hoá đơn tháng này về chưa?”, “Vì sao dòng này bị từ chối?”, hoặc “Các nguồn đang chạy thế nào?”.",
+    /** The composer. A label, not a placeholder standing in for one. */
+    askLabel: "Câu hỏi của bạn",
+    askPlaceholder: "Hỏi về khách hàng này…",
+    send: "Gửi",
+    sending: "Đang trả lời…",
+    stop: "Dừng",
+    clear: "Xoá cuộc trò chuyện",
+    /** Read to a screen reader while the answer is still being set. */
+    working: "Trợ lý đang trả lời",
+    /**
+     * A figure the assistant set, numbered as a printed manual numbers one.
+     *
+     * The caption is an honesty device as much as a decoration: the reader can always tell
+     * what the assistant set apart from what the application drew.
+     */
+    figure: "HÌNH {{number}}",
+    /** A result that was shown live but is not kept. See `transcript.ts` on why. */
+    notKept: "Kết quả không được lưu lại. Hãy hỏi lại nếu bạn cần xem.",
+    notKeptFailed: "Lần gọi này đã thất bại. Nội dung lỗi không được lưu lại.",
+    /** The assistant read something; says which tool, never what it returned. */
+    ranTool: "Đã tra: {{tool}}",
+    /** A whole turn failed. Vermilion belongs to the errata slip, and this is one. */
+    failedTitle: "Chưa trả lời được",
+    failedBody: "Trợ lý chưa trả lời được câu hỏi này. Không có gì bị thay đổi.",
+    retry: "Thử lại",
+    /** No model configured. The reader cannot fix it; the sentence points at a person. */
+    unconfiguredTitle: "Trợ lý chưa sẵn sàng",
+    unconfiguredBody:
+      "Bản triển khai này chưa được cấu hình trợ lý. Hãy báo người quản trị hệ thống.",
+  },
 };

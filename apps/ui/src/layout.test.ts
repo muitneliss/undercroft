@@ -85,3 +85,52 @@ describe("a row carrying only plates", () => {
     expect(globalThis.getComputedStyle(row).alignItems).toBe("center");
   });
 });
+
+/**
+ * The interleaf is a grid AREA, not a floating panel.
+ *
+ * Which is the whole reason the page behind it stays in the document and in the tab order: the
+ * leaf narrows, the sheet takes a column beside it, and nothing is absolutely positioned over
+ * anything. A refactor that turned this into an overlay would render almost identically and
+ * lose the property the design rests on, so it is asserted off the real sheet.
+ */
+describe("the interleaf", () => {
+  it("takes a column beside the leaf rather than floating over it", () => {
+    const book = render(`<div class="book book--interleaved"></div>`);
+    const style = globalThis.getComputedStyle(book);
+    expect(style.gridTemplateAreas).toContain("leaf interleaf");
+    // Two columns: the leaf gives way, the sheet is fixed. A conversation read at a changing
+    // width rewraps every time somebody opens a division.
+    expect(style.gridTemplateColumns).toBe("minmax(0, 1fr) 24rem");
+  });
+
+  it("is a closed book's single column until it is opened", () => {
+    const book = render(`<div class="book"></div>`);
+    expect(globalThis.getComputedStyle(book).gridTemplateAreas).not.toContain("interleaf");
+  });
+
+  it("carries a hairline and no shadow, because ply is declared once", () => {
+    const sheet = render(`<aside class="interleaf"></aside>`);
+    const style = globalThis.getComputedStyle(sheet);
+    // DESIGN.md's Ply Rule: a surface with a border does not also carry a shadow. This sheet
+    // is bound in rather than standing off the board.
+    expect(style.borderLeftStyle).toBe("solid");
+    expect(style.boxShadow).toBe("");
+  });
+
+  it("wears no division hue: it belongs to the reader, not to a section", () => {
+    // The Wheel Rule. ADR 0019 records that the seven hues are spoken for and an eighth is a
+    // decision rather than a hex, so the sheet is on leaf stock and names no board.
+    //
+    // Asserted as the RESOLVED value rather than as the token's name, which is the stronger
+    // claim: `--leaf` could be reassigned, and a sheet painted the open division's hue would
+    // still read as `var(--leaf)` in the source.
+    const style = globalThis.getComputedStyle(render(`<aside class="interleaf"></aside>`));
+    const leaf = globalThis
+      .getComputedStyle(document.documentElement)
+      .getPropertyValue("--leaf")
+      .trim();
+    expect(leaf).not.toBe("");
+    expect(style.background).toBe(leaf);
+  });
+});
