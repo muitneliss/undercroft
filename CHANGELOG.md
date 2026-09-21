@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.2](https://github.com/muitneliss/undercroft/compare/v1.14.1...v1.14.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **google:** pace Gmail at the rate it enforces, and wait out a quota window ([#85](https://github.com/muitneliss/undercroft/issues/85)) ([40842ee](https://github.com/muitneliss/undercroft/commit/40842ee6306d23743ce4e70baa308178be2cede8))
+
 ## [1.14.1](https://github.com/muitneliss/undercroft/compare/v1.14.0...v1.14.1) (2026-09-21)
 
 
