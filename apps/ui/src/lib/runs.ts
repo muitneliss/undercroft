@@ -119,6 +119,50 @@ function picksSentence(
 }
 
 /**
+ * What the run has to read, and how much of it it already held.
+ *
+ * Two sentences rather than one with a count appended, and for a mechanical reason as well
+ * as a linguistic one: `counted` renders an absent number as MISSING, so a single sentence
+ * carrying `{{skipped}}` would print MISSING on every run from a source that does not skip.
+ * Same shape as `recordsRead` / `recordsReadOf`.
+ */
+function listedSentence(
+  t: TFunction,
+  n: (key: string) => string,
+  entity: string,
+  detail: Record<string, unknown>,
+): string {
+  return detail.skipped === undefined
+    ? t("journal.event.workListed", { entity, total: n("total") })
+    : t("journal.event.workListedSkipping", { entity, total: n("total"), skipped: n("skipped") });
+}
+
+/**
+ * What one entity's read finished with.
+ *
+ * `skipped` is the count that makes a STEADY-STATE run readable: in steady state an ingest
+ * lands nothing, and `landed: 0` on its own reads the same whether the mailbox is empty,
+ * the credential is broken, or nothing has changed since yesterday.
+ */
+function doneSentence(
+  t: TFunction,
+  n: (key: string) => string,
+  entity: string,
+  detail: Record<string, unknown>,
+): string {
+  const counts = {
+    entity,
+    landed: n("landed"),
+    created: n("created"),
+    changed: n("changed"),
+    refused: n("refused"),
+  };
+  return detail.skipped === undefined
+    ? t("journal.event.entityDone", counts)
+    : t("journal.event.entityDoneSkipping", { ...counts, skipped: n("skipped") });
+}
+
+/**
  * One line of a run's feed, as a sentence.
  *
  * The worker writes an enumerated verb and a handful of counts; the wording is entirely
@@ -146,19 +190,13 @@ export function eventSentence(
     case "entity_started":
       return t("journal.event.entityStarted", { entity });
     case "work_listed":
-      return t("journal.event.workListed", { entity, total: n("total") });
+      return listedSentence(t, n, entity, event.detail);
     case "records_read":
       return event.detail.total === undefined
         ? t("journal.event.recordsRead", { entity, read: n("read") })
         : t("journal.event.recordsReadOf", { entity, read: n("read"), total: n("total") });
     case "entity_done":
-      return t("journal.event.entityDone", {
-        entity,
-        landed: n("landed"),
-        created: n("created"),
-        changed: n("changed"),
-        refused: n("refused"),
-      });
+      return doneSentence(t, n, entity, event.detail);
     case "picks_listed":
       return picksSentence(t, n, event.detail);
     case "documents_landed":

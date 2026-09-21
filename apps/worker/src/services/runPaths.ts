@@ -68,10 +68,11 @@ export async function runGoogleIngest(
 
   const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api, journal }, input);
 
+  const recordsEntity = input.source === "gmail" ? "messages" : "files";
   const records = result.refusals.filter((r) => r.entity !== "documents").length;
   ledger.entities.push(
     {
-      entity: input.source === "gmail" ? "messages" : "files",
+      entity: recordsEntity,
       landed: result.records.landed,
       loadedCreated: result.records.loadedCreated,
       loadedChanged: result.records.loadedChanged,
@@ -96,6 +97,14 @@ export async function runGoogleIngest(
       changed: entity.loadedChanged,
       unchanged: entity.loadedUnchanged,
       refused: entity.refused,
+      // Only on the RECORD entity, and only when there is one, because it answers a
+      // question only the record entity is asked: in steady state a run lands nothing, and
+      // `landed: 0` alone reads the same whether the mailbox is empty or unchanged. A
+      // document's own `skipped` is a size refusal, which is a different fact with the same
+      // name; it is reported in `documents_landed` and deliberately not conflated here.
+      ...(entity.entity === recordsEntity && result.records.skipped > 0
+        ? { skipped: result.records.skipped }
+        : {}),
     });
   }
 }

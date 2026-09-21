@@ -45,8 +45,9 @@ import { canonicalJson, decodeBase64Url, getPath, getStringPath } from "@undercr
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
-import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
+import type { RunJournal } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
+import type { AlreadyHeld, Harvest } from "./harvest.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const ENTITY = "messages";
@@ -54,11 +55,6 @@ const ENTITY = "messages";
 const PAGE_SIZE = "100";
 /** Enough to identify and reconcile a message; deliberately not the body. */
 const HEADERS = ["From", "To", "Cc", "Subject", "Date", "Message-ID"] as const;
-
-export interface GmailHarvest {
-  readonly records: RecordToLand[];
-  readonly documents: DocumentToLand[];
-}
 
 export function gmailBaseUrl(): string {
   return GMAIL_BASE;
@@ -99,34 +95,55 @@ function labelKind(reported: string): "system" | "user" | null {
 }
 
 /**
- * Harvest a mailbox under a chosen scope.
+ * Harvest a mailbox under a chosen scope, one message at a time.
  *
- * Returns what to land rather than landing it, so the decision of what a mailbox contains
- * is testable without a lake or a database.
+ * Yields what to land rather than landing it, so the decision of what a mailbox contains is
+ * testable without a lake or a database -- and yields rather than returns, so the decision
+ * costs one message rather than the whole mailbox. Buffering it was what put 7,786 messages
+ * in a 1 GiB container and got the process oom-killed 76 minutes in.
+ *
+ * **A MESSAGE WE ALREADY HOLD IS NOT FETCHED AT ALL.** Listing ids is one request per
+ * hundred; reading a message is one paced request each, at 334ms, so a 7,786-message
+ * mailbox is 43 minutes of `messages.get` and nothing else. PRESENCE in `raw.records` is
+ * the whole test -- a message whose LABELS changed since is still skipped, which is a
+ * decision the user took with its cost stated: a second run that takes a minute instead of
+ * forty-three, at the price of a relabelling we will not notice until something else makes
+ * us read the message.
+ *
+ * That is only safe because a message's record does not reach `raw.records` until its
+ * attachments have reached the lake; `harvest.ts` records why, and `collect.ts` is what
+ * holds the record back.
+ *
+ * **One consequence, so nobody reads the filter below as unconditional:** the defence-in-
+ * depth label check now runs only on a message this run actually fetched. A message we
+ * already hold is never fetched, so a label removed from it after it landed does not
+ * un-land it. Nothing widens -- what was stored was covered by the selection when it was
+ * stored -- but the check is a check on new reads, not a sweep over the mailbox.
  */
-export async function harvestGmail(
+export async function* harvestGmail(
   api: GoogleApi,
   scope: GmailScope,
-  journal: RunJournal = SILENT_JOURNAL,
-): Promise<GmailHarvest> {
+  journal: RunJournal,
+  held: AlreadyHeld,
+): Harvest {
   const selected = new Set(scope.labels.map((l) => l.id));
   const messageIds = await listMessageIds(api, scope);
-
-  const records: RecordToLand[] = [];
-  const documents: DocumentToLand[] = [];
+  // No timestamp: the listing carries none, and presence is the question. See `RecordProbe`.
+  const known = await held(messageIds.map((id) => ({ sourceRecordId: id, sourceUpdatedAt: null })));
+  const toRead = messageIds.filter((id) => !known.has(id));
 
   // The most useful line this run writes. What follows is one paced request per message --
   // minutes for a real mailbox -- and until now the first sign of how long that would take
-  // was the run ending. A total up front turns a blank screen into a quantity.
-  journal.info("work_listed", { entity: ENTITY, total: messageIds.length });
+  // was the run ending. A total up front turns a blank screen into a quantity, and `skipped`
+  // is what keeps "the mailbox is empty" and "nothing has changed" from being one sentence.
+  journal.info("work_listed", { entity: ENTITY, total: messageIds.length, skipped: known.size });
 
-  for (const messageId of messageIds) {
-    journal.progress("records_read", {
-      entity: ENTITY,
-      read: records.length,
-      total: messageIds.length,
-    });
-    const message = await api.getJson(messageUrl(messageId), ENTITY, records.length);
+  let read = 0;
+  for (const messageId of toRead) {
+    // The denominator is what is left to do, not what the mailbox holds: on a steady-state
+    // mailbox the second is a gauge frozen at zero out of thousands.
+    journal.progress("records_read", { entity: ENTITY, read, total: toRead.length });
+    const message = await api.getJson(messageUrl(messageId), ENTITY, read);
     const labelIds = strings(getPath(message, "labelIds"));
 
     // Defence in depth: the query said what to fetch, this says what may be kept. A label
@@ -138,13 +155,18 @@ export async function harvestGmail(
 
     const headers = headerMap(message);
     const internalDate = str(message, "internalDate");
-    records.push(messageRecord(messageId, message, labelIds, internalDate));
-    for (const part of matchingParts(message, scope.fileTypes)) {
-      documents.push(attachment(api, { messageId, headers, labelIds, internalDate }, part));
-    }
+    read += 1;
+    yield {
+      record: messageRecord(messageId, message, labelIds, internalDate),
+      documents: matchingParts(message, scope.fileTypes).map((part) =>
+        attachment(api, { messageId, headers, labelIds, internalDate }, part),
+      ),
+    };
   }
 
-  return { records, documents };
+  // Never `seenIds`. A message that stopped matching a label selection was relabelled, not
+  // deleted, and a tombstone would report a deletion that never happened.
+  return { seenIds: null, skipped: [], listed: messageIds.length, known: known.size };
 }
 
 /**

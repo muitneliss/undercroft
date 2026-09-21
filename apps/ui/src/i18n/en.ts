@@ -528,10 +528,13 @@ export const en = {
       runOpened: "Started.",
       entityStarted: "Reading {{entity}}.",
       workListed: "{{total}} {{entity}} to read.",
+      workListedSkipping: "{{total}} {{entity}} listed, {{skipped}} already held and not read.",
       recordsRead: "Read {{read}} {{entity}}.",
       recordsReadOf: "Read {{read}} of {{total}} {{entity}}.",
       entityDone:
         "Finished {{entity}}: {{landed}} landed, {{created}} new, {{changed}} changed, {{refused}} refused.",
+      entityDoneSkipping:
+        "Finished {{entity}}: {{landed}} landed, {{created}} new, {{changed}} changed, {{refused}} refused, {{skipped}} already held and not read.",
       picksListed:
         "Listed {{folders}} picked folders and found {{matched}} matching files. Sub-folders are not read.",
       picksListedDeep:

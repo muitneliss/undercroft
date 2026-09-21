@@ -13,8 +13,9 @@ import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
+import { CHUNK } from "../landing.ts";
 import { createGoogleApi } from "./api.ts";
-import { runGoogleCollect, ScopeNotChosen } from "./collect.ts";
+import { DOCUMENT_UNLANDED, runGoogleCollect, ScopeNotChosen } from "./collect.ts";
 import { NOTHING_MATCHED } from "./drive.ts";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -149,6 +150,15 @@ function message(id: string, labelIds: string[], withPdf = true): unknown {
         : [{ mimeType: "text/plain", body: { size: "12" } }],
     },
   };
+}
+
+/** The ids `raw.records` holds for one source, which is what the next run skips on. */
+async function projected(source: string): Promise<string[]> {
+  const { rows } = await db.query<{ id: string }>(
+    "SELECT source_record_id AS id FROM raw.records WHERE source = $1 ORDER BY id",
+    [source],
+  );
+  return rows.map((r) => r.id);
 }
 
 /** A message carrying whichever attachment parts a file-type test asks for, not just a PDF. */
@@ -357,7 +367,14 @@ describe("gmail", () => {
     expect(result.documents.created).toBe(0);
   });
 
-  it("re-running over an unchanged mailbox writes nothing new", async () => {
+  it("re-running over an unchanged mailbox does not READ the mailbox again", async () => {
+    // The whole point of skip-known, and the incident it was written for: 7,786 messages at
+    // one paced request each is 43 minutes, and on an unchanged mailbox every one of those
+    // requests buys nothing. This used to assert `{created: 0, unchanged: 1}` -- the second
+    // run re-fetched the message, re-landed identical bytes, and the lake reported
+    // `unchanged`, which proved idempotence and said nothing about cost. Now the message is
+    // never asked for, so nothing CAN be re-landed, and the assertion moves to the two
+    // things that say so: no `messages/m1` request at all, and one version in the lake.
     await connect("gmail", { labels: [] });
     fetcher
       .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
@@ -367,8 +384,40 @@ describe("gmail", () => {
     await collect("gmail");
     const second = await collect("gmail");
 
-    expect(second.documents).toMatchObject({ created: 0, unchanged: 1 });
+    // Across BOTH runs: one read of the message, and one of its attachment.
+    const reads = fetcher.calls.filter((c) => c.url === messageUrl("m1"));
+    expect(reads).toHaveLength(1);
+    expect(fetcher.calls.filter((c) => c.url.includes("/attachments/"))).toHaveLength(1);
+
+    // Landing nothing is now what a healthy second run looks like, and the count that keeps
+    // it from reading as an empty mailbox is `skipped`.
+    expect(second.records).toMatchObject({ landed: 0, skipped: 1 });
+    expect(second.documents).toMatchObject({ created: 0, unchanged: 0 });
     expect(await lake.versions("documents/gmail/CASE-0042/m1:002")).toHaveLength(1);
+  });
+
+  it("but a message the mailbox has not seen before is read", async () => {
+    // The firing side of the same guard. A skip-known that skipped everything would pass the
+    // test above and ingest nothing forever, which is the failure mode worth pairing against.
+    await connect("gmail", { labels: [] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }, { id: "m2" }] } })
+      .on("GET", messageUrl("m1"), { body: message("m1", ["Label_A"]) })
+      .on("GET", messageUrl("m2"), { body: message("m2", ["Label_A"]) })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, { body: { data: PDF_B64 } })
+      .on("GET", `${GMAIL}/messages/m2/attachments/att-m2-rotates`, { body: { data: PDF_B64 } });
+
+    await collect("gmail");
+    const second = await collect("gmail");
+
+    expect(second.records).toMatchObject({ landed: 1, skipped: 1 });
+    expect(fetcher.calls.filter((c) => c.url === messageUrl("m1"))).toHaveLength(1);
+    expect(fetcher.calls.filter((c) => c.url === messageUrl("m2"))).toHaveLength(1);
+    const { rows } = await db.query<{ source_record_id: string }>(
+      "SELECT source_record_id FROM raw.records WHERE source = 'gmail' ORDER BY source_record_id",
+    );
+    expect(rows.map((r) => r.source_record_id)).toEqual(["m1", "m2"]);
   });
 
   it("an oversized attachment is skipped with a reason rather than dropped", async () => {
@@ -434,6 +483,100 @@ describe("gmail", () => {
       "SELECT content_type FROM raw.documents",
     );
     expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  it("a message whose attachment did NOT land does not land its record either", async () => {
+    // The firing side of the rule that makes skipping safe at all. What the next run skips
+    // is what `raw.records` holds, so "present in raw.records" has to mean "fully
+    // harvested". Land the record while the attachment fetch was still failing and the
+    // message is skipped by every run after it -- the attachment lost for good from the one
+    // layer that cannot be recomputed, which is CLAUDE.md rule 2 broken by the resume
+    // mechanism itself. The record therefore waits, and the wait is SAID rather than
+    // silent.
+    await connect("gmail", { labels: [] });
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), { body: message("m1", ["Label_A"]) })
+      // Two queued responses for the one attachment: the provider refuses the bytes, and
+      // then on the next run serves them.
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, {
+        status: 404,
+        body: { error: { message: "attachment not found" } },
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, { body: { data: PDF_B64 } });
+
+    const first = await collect("gmail");
+
+    expect(first.documents.failed).toBe(1);
+    expect(first.records.landed).toBe(0);
+    expect(first.refusals).toContainEqual({
+      entity: "messages",
+      sourceRecordId: "m1",
+      reason: DOCUMENT_UNLANDED,
+    });
+    // The half that matters: nothing for the next run to mistake for a finished message.
+    expect(await projected("gmail")).toEqual([]);
+
+    const second = await collect("gmail");
+
+    expect(second.records).toMatchObject({ landed: 1, skipped: 0 });
+    expect(second.documents.created).toBe(1);
+    expect(await projected("gmail")).toEqual(["m1"]);
+    expect(fetcher.calls.filter((c) => c.url === messageUrl("m1"))).toHaveLength(2);
+  });
+
+  it("but one whose attachment was refused for its SIZE lands, and is skipped after", async () => {
+    // The quiet side, and data loss in the other direction. A size refusal is deterministic
+    // -- it will refuse identically on every future run -- so a record held back for one
+    // would never land at all, and the message would be unharvestable rather than merely
+    // incomplete. It lands, its refusal is on the record, and the next run skips it.
+    await connect("gmail", { labels: [] });
+    const huge = message("m1", ["Label_A"]) as {
+      payload: { parts: { body: { size?: string } }[] };
+    };
+    huge.payload.parts[1]!.body.size = String(80 * 1024 * 1024);
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), { body: huge });
+
+    const first = await collect("gmail");
+
+    expect(first.documents.skipped).toBe(1);
+    expect(first.records.landed).toBe(1);
+    expect(first.refusals.map((r) => r.reason)).not.toContain(DOCUMENT_UNLANDED);
+    expect(await projected("gmail")).toEqual(["m1"]);
+
+    const second = await collect("gmail");
+
+    expect(second.records).toMatchObject({ landed: 0, skipped: 1 });
+    expect(fetcher.calls.filter((c) => c.url === messageUrl("m1"))).toHaveLength(1);
+  });
+
+  it("a mailbox larger than one chunk lands every message, and holds none of them", async () => {
+    // Streaming, asserted the only way a caller can see it: more messages than one chunk
+    // holds, all of them landed and all of them projected. The shape this replaced read the
+    // whole mailbox into two arrays first, and on 7,786 messages that reached the worker's
+    // 1 GiB cgroup limit and lost 76 minutes of paced reads. It also walks the boundary
+    // where a chunk's documents are flushed and its records released, which a mailbox that
+    // fits in one chunk never reaches.
+    const ids = Array.from({ length: CHUNK + 50 }, (_, i) => `m${i}`);
+    await connect("gmail", { labels: [] });
+    fetcher.on("GET", listUrl(null), { body: { messages: ids.map((id) => ({ id })) } });
+    for (const id of ids) {
+      fetcher
+        .on("GET", messageUrl(id), { body: message(id, ["Label_A"]) })
+        .on("GET", `${GMAIL}/messages/${id}/attachments/att-${id}-rotates`, {
+          body: { data: PDF_B64 },
+        });
+    }
+
+    const result = await collect("gmail");
+
+    expect(result.records.landed).toBe(ids.length);
+    expect(result.documents.created).toBe(ids.length);
+    expect(await projected("gmail")).toHaveLength(ids.length);
+    // The counts came back summed over the chunks, not from the last one.
+    expect(result.records.loadedCreated).toBe(ids.length);
   });
 
   it("an empty allow-list lands attachments of every type in one message", async () => {
@@ -580,6 +723,62 @@ describe("drive", () => {
       "SELECT document_id FROM raw.documents WHERE deleted_at IS NOT NULL",
     );
     expect(rows.map((r) => r.document_id)).toEqual(["f2"]);
+  });
+
+  it("a file skipped because it was unchanged is NOT reported deleted", async () => {
+    // The quiet side, and the one that loses a tenant's whole Drive. `tombstoneMissing`
+    // negates the kept-id set, so a file left out of it because it had not changed is
+    // reported deleted -- and in a steady-state Drive that is EVERY file in it, on the
+    // second run, with the run green and landing 0. A file the listing named was seen;
+    // whether we re-read it is a different question from whether it still exists.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1"), file("f2")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF })
+      .on("GET", `${DRIVE}/f2?alt=media`, { body: PDF });
+
+    await collect("drive");
+    const second = await collect("drive");
+
+    expect(second.records).toMatchObject({ landed: 0, skipped: 2 });
+    expect(second.documents.tombstoned).toBe(0);
+    const { rows } = await db.query<{ document_id: string }>(
+      "SELECT document_id FROM raw.documents WHERE deleted_at IS NULL ORDER BY document_id",
+    );
+    expect(rows.map((r) => r.document_id)).toEqual(["f1", "f2"]);
+    // And nothing was downloaded twice, which is the saving the skip exists for.
+    expect(fetcher.calls.filter((c) => c.url.endsWith("?alt=media"))).toHaveLength(2);
+  });
+
+  it("a file whose modifiedTime moved IS read again", async () => {
+    // The firing side. The comparison is Postgres's: Drive says
+    // `2026-09-17T12:00:00.000Z` and `timestamptz` reads back `2026-09-17 12:00:00+00`, so
+    // a compare in JavaScript is false forever -- which re-fetches everything on every run
+    // while LOOKING exactly like a working skip. `f1` moved and must be re-read; `f2` did
+    // not and must not, or this test would pass on a skip that never skips.
+    const edited = { ...file("f1"), modifiedTime: "2026-09-18T08:30:00.000Z", md5Checksum: "def" };
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1"), file("f2")] } })
+      .on("GET", listUrlFor("folder-1"), { body: { files: [edited, file("f2")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF })
+      .on("GET", `${DRIVE}/f2?alt=media`, { body: PDF });
+
+    await collect("drive");
+    const second = await collect("drive");
+
+    expect(second.records).toMatchObject({ landed: 1, skipped: 1 });
+    expect(fetcher.calls.filter((c) => c.url === `${DRIVE}/f1?alt=media`)).toHaveLength(2);
+    expect(fetcher.calls.filter((c) => c.url === `${DRIVE}/f2?alt=media`)).toHaveLength(1);
+    const { rows } = await db.query<{ id: string; at: Date }>(
+      "SELECT source_record_id AS id, source_updated_at AS at FROM raw.records WHERE source = 'drive' ORDER BY id",
+    );
+    expect(rows[0]?.at.toISOString()).toBe("2026-09-18T08:30:00.000Z");
   });
 
   it("a selection that did not ask for sub-folders never lists one", async () => {

@@ -33,6 +33,14 @@
  * every result -- quadratic in the size of the mailbox. Pairing them inside the chunk that
  * produced them makes the join O(chunk) and removes the need for either whole array.
  *
+ * **A document sink can be told to land NOW.** `flush` is the one thing a caller may ask a
+ * sink to do out of turn, and it exists because one caller has an ordering rule the sink
+ * cannot see: a Gmail message's record must not reach `raw.records` before its attachment
+ * reaches the lake, or the next run reads the record as "fully harvested" and skips the
+ * message forever with its attachment never fetched. `flush` answers with the ids whose
+ * bytes failed -- and deliberately NOT with the ones refused for their declared size, which
+ * would fail identically on every future run and would hold their record back forever.
+ *
  * ## Why a record sink projects into `raw.records`, per chunk
  *
  * Because that is what makes a killed run resumable. What the next run skips is what
@@ -62,7 +70,7 @@ import { recordRefusals, type RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
 import { type RawDocumentRow, upsertDocuments } from "../repos/rawDocuments.ts";
-import { landRecords, type RecordToLand } from "./land.ts";
+import { type LandedRecord, landRecords, type RecordToLand } from "./land.ts";
 import { type DocumentToLand, type LandedDocument, landDocuments } from "./landDocument.ts";
 import { loadStreamToRaw } from "./loadToRaw.ts";
 
@@ -120,6 +128,13 @@ export interface SinkDeps {
   readonly refuse: RefusalWriter;
 }
 
+/** What the per-chunk projections wrote into `raw.records`, summed over every chunk. */
+export interface LoadedCounts {
+  readonly created: number;
+  readonly changed: number;
+  readonly unchanged: number;
+}
+
 /** What a record sink counted. Counters only: the per-record results are gone by now. */
 export interface LandSummary {
   /** Reached the lake, new or unchanged. What the ledger calls `landed`. */
@@ -128,6 +143,16 @@ export interface LandSummary {
   readonly unchanged: number;
   /** Refused with a reason, already written through the {@link RefusalWriter}. */
   readonly refused: number;
+  /**
+   * What the projection did, ACCUMULATED across the chunks rather than taken from the last.
+   *
+   * The counts exist here because the projection now runs inside the sink, so the caller
+   * that used to hold `loadStreamToRaw`'s result no longer sees one -- and a run reporting
+   * `created: 0` because nobody carried the number back is indistinguishable from a run
+   * that genuinely created nothing. A per-chunk number would be worse than none: on a
+   * mailbox of 7,786 it would report whatever the last 200 did.
+   */
+  readonly loaded: LoadedCounts;
 }
 
 /** What a document sink counted. `skipped` and `failed` are both refusals, with two reasons. */
@@ -147,6 +172,26 @@ export interface RecordSink {
 
 export interface DocumentSink {
   add: (document: DocumentToLand) => Promise<void>;
+  /**
+   * Land what is held now, and answer with the ids whose BYTES did not reach the lake.
+   *
+   * For the caller that has to land something else only once a document is safely down.
+   * The Google collectors are that caller: a message's record must not reach `raw.records`
+   * before its attachment reaches the lake, because "present in `raw.records`" is what the
+   * next run reads as "fully harvested" and skips. A record that outran its attachment is
+   * therefore an attachment lost for good -- CLAUDE.md rule 2 broken by the resume
+   * mechanism itself.
+   *
+   * A FETCH THAT FAILED IS HERE; A SIZE REFUSAL IS NOT, and the difference is the whole
+   * value of the answer. A failed fetch can succeed on the next run, so whatever was
+   * waiting on it must wait another run. A document refused for its declared size will be
+   * refused identically forever, so a record held back for one would never land at all --
+   * the message would be unharvestable rather than merely incomplete.
+   *
+   * {@link RecordSink} has no counterpart on purpose: the ordering rule points one way, and
+   * nothing needs a record chunk forced out early.
+   */
+  flush: () => Promise<readonly string[]>;
   close: () => Promise<DocumentSummary>;
 }
 
@@ -158,8 +203,29 @@ class SinkClosed extends Error {
   }
 }
 
+/**
+ * What one landed chunk refused, with why.
+ *
+ * A record that could not be keyed is the ordinary case, and it is a statement about the
+ * data rather than about the run, so it is recorded and the chunk beside it still lands.
+ */
+function refusalsIn(results: readonly LandedRecord[]): RunRefusal[] {
+  return results.flatMap((landed) =>
+    landed.status === "failed"
+      ? [
+          {
+            entity: landed.entity,
+            sourceRecordId: landed.sourceRecordId,
+            reason: landed.reason ?? "refused",
+          },
+        ]
+      : [],
+  );
+}
+
 export function createRecordSink(deps: SinkDeps, at: Landing, chunk: number = CHUNK): RecordSink {
   const buffer: RecordToLand[] = [];
+  const loaded = { created: 0, changed: 0, unchanged: 0 };
   let created = 0;
   let unchanged = 0;
   let refused = 0;
@@ -182,27 +248,20 @@ export function createRecordSink(deps: SinkDeps, at: Landing, chunk: number = CH
     unchanged += result.unchanged;
     refused += result.failed;
 
-    const refusals: RunRefusal[] = [];
-    for (const landed of result.results) {
-      if (landed.status === "failed") {
-        refusals.push({
-          entity: landed.entity,
-          sourceRecordId: landed.sourceRecordId,
-          reason: landed.reason ?? "refused",
-        });
-      }
-    }
-    await deps.refuse(refusals);
+    await deps.refuse(refusalsIn(result.results));
 
     // The evidence is written before the projection, because the projection is the part that
     // can fail on something other than this chunk. A stream per entity present, since an
     // entity is a property of a record rather than of the sink -- ordinarily one.
     for (const entity of new Set(chunkOf.map((record) => record.entity))) {
-      await loadStreamToRaw(deps.exec, deps.lake, {
+      const projected = await loadStreamToRaw(deps.exec, deps.lake, {
         source: at.source,
         tenantId: at.tenantId,
         entity,
       });
+      loaded.created += projected.created;
+      loaded.changed += projected.changed;
+      loaded.unchanged += projected.unchanged;
     }
   }
 
@@ -219,9 +278,53 @@ export function createRecordSink(deps: SinkDeps, at: Landing, chunk: number = CH
     async close(): Promise<LandSummary> {
       await flush();
       closed = true;
-      return { landed: created + unchanged, created, unchanged, refused };
+      return { landed: created + unchanged, created, unchanged, refused, loaded: { ...loaded } };
     },
   };
+}
+
+/** One landed chunk of documents, split three ways. */
+interface SortedChunk {
+  readonly rows: RawDocumentRow[];
+  readonly refusals: RunRefusal[];
+  /** Refused and RETRYABLE, which is not the same set as refused. See {@link DocumentSink}. */
+  readonly unfetched: string[];
+}
+
+/**
+ * Pair each document with what landing it did, and file it under one of three answers.
+ *
+ * This is the join that used to be a `find` over every document in the whole harvest, run
+ * once per result -- quadratic in the size of the mailbox. Here it is over one chunk, which
+ * is what makes it linear. Walking the DOCUMENTS rather than the results is what leaves
+ * nothing unaccounted for: every document asked for is either catalogued or refused with a
+ * reason, and a result that came back for nothing anybody asked about cannot slip past.
+ */
+function sortChunk(
+  chunkOf: readonly DocumentToLand[],
+  result: Awaited<ReturnType<typeof landDocuments>>,
+  at: DocumentLanding,
+): SortedChunk {
+  const resultOf = new Map(result.results.map((landed) => [landed.documentId, landed]));
+  const sorted: SortedChunk = { rows: [], refusals: [], unfetched: [] };
+
+  for (const document of chunkOf) {
+    const landed = resultOf.get(document.documentId);
+    if (landed !== undefined && landed.status !== "skipped" && landed.status !== "failed") {
+      sorted.rows.push(catalogueRow(document, landed, at));
+      continue;
+    }
+    sorted.refusals.push({
+      entity: DOCUMENT_ENTITY,
+      sourceRecordId: document.documentId,
+      reason: landed?.reason ?? landed?.status ?? "landed with no result",
+    });
+    if (landed?.status !== "skipped") {
+      sorted.unfetched.push(document.documentId);
+    }
+  }
+
+  return sorted;
 }
 
 export function createDocumentSink(
@@ -233,9 +336,9 @@ export function createDocumentSink(
   const tally = { created: 0, unchanged: 0, skipped: 0, failed: 0 };
   let closed = false;
 
-  async function flush(): Promise<void> {
+  async function flush(): Promise<string[]> {
     if (buffer.length === 0) {
-      return;
+      return [];
     }
     const chunkOf = buffer.splice(0);
     const result = await landDocuments(deps.lake, {
@@ -249,27 +352,10 @@ export function createDocumentSink(
     tally.skipped += result.skipped;
     tally.failed += result.failed;
 
-    // The join that used to be a `find` over every document in the harvest, run once per
-    // result. Here it is over this chunk alone, which is what makes it linear in the mailbox.
-    // Walking the documents rather than the results is what leaves nothing unaccounted for:
-    // every document asked for is either catalogued or refused with a reason.
-    const resultOf = new Map(result.results.map((landed) => [landed.documentId, landed]));
-    const rows: RawDocumentRow[] = [];
-    const refusals: RunRefusal[] = [];
-    for (const document of chunkOf) {
-      const landed = resultOf.get(document.documentId);
-      if (landed === undefined || landed.status === "skipped" || landed.status === "failed") {
-        refusals.push({
-          entity: DOCUMENT_ENTITY,
-          sourceRecordId: document.documentId,
-          reason: landed?.reason ?? landed?.status ?? "landed with no result",
-        });
-        continue;
-      }
-      rows.push(catalogueRow(document, landed, at));
-    }
-    await upsertDocuments(deps.exec, { source: at.source, tenantId: at.tenantId }, rows);
-    await deps.refuse(refusals);
+    const sorted = sortChunk(chunkOf, result, at);
+    await upsertDocuments(deps.exec, { source: at.source, tenantId: at.tenantId }, sorted.rows);
+    await deps.refuse(sorted.refusals);
+    return sorted.unfetched;
   }
 
   return {
@@ -282,6 +368,7 @@ export function createDocumentSink(
         await flush();
       }
     },
+    flush,
     async close(): Promise<DocumentSummary> {
       await flush();
       closed = true;
