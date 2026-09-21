@@ -108,7 +108,7 @@ services:
   kestra-init:
     # Deliberately NOT `<<: *restart`, for the reason `db-migrate` gives: this is meant to
     # exit, and `restart: unless-stopped` would turn a completed chown into a crash-loop.
-    image: alpine:3.22
+    image: alpine:3.24
     command: ["sh", "-c", "chown -R 1000:1000 /app/storage /tmp/kestra-wd && echo done"]
     # Mounted at Kestra's own paths, so the thing being fixed is named the same way in both
     # services and a path change here cannot silently miss.
