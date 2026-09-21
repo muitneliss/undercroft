@@ -80,6 +80,7 @@ const NOTHING_CHOSEN: Omit<ScopeDraft, "source"> = {
   organisation: null,
   entities: [],
   fileTypes: [],
+  recurse: false,
 };
 
 /**
@@ -99,7 +100,10 @@ function useStoredScope(source: Source, connections: readonly Connection[] | und
     setDraft({
       source,
       labels: current.config.labels ?? [],
-      files: (current.config.folderIds ?? []).map((id) => ({ id, name: id, kind: "folder" })),
+      // Each pick read back as what it IS. This used to rebuild every pick as a folder from a
+      // list of bare ids, so an admin who re-saved without re-picking turned their chosen
+      // documents into folder picks -- which list nothing, and refuse.
+      files: current.config.files ?? [],
       // The organisation already chosen, by the id a run sends and the name the card shows.
       organisation:
         current.externalAccountId === ""
@@ -109,6 +113,9 @@ function useStoredScope(source: Source, connections: readonly Connection[] | und
       // A connection never scoped at all has no `fileTypes` to read back; PDF-only is what
       // every source has always meant until an admin visits this screen and says otherwise.
       fileTypes: current.config.fileTypes ?? ["application/pdf"],
+      // A selection saved before sub-folders could be asked for read one level, and keeps
+      // reading one level until somebody here says otherwise. ADR 0031.
+      recurse: current.config.recurse ?? false,
     });
   }, [current, source, setDraft]);
 }
@@ -136,7 +143,7 @@ function selectionFor(
   if (source === "xero") {
     return { organisation: chosen.organisation, entities: chosen.entities };
   }
-  return { files: chosen.files, fileTypes: chosen.fileTypes };
+  return { files: chosen.files, fileTypes: chosen.fileTypes, recurse: chosen.recurse };
 }
 
 export function ScopePicker({
@@ -239,7 +246,6 @@ function ScopeLead({ source }: { source: Source }): React.JSX.Element {
       <p className="prose prose--lead">{t(LEAD_KEY[source])}</p>
 
       {source === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
-      {source === "drive" ? <p className="note">{t("scopePicker.directChildrenOnly")}</p> : null}
       {source === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
     </div>
   );
@@ -354,11 +360,17 @@ function GmailChoice({
 }
 
 /**
- * Drive's choice: Google's own Picker, running in the browser.
+ * Drive's choice: Google's own Picker, running in the browser, and how deep to read.
  *
  * Under the `drive.file` scope a server-side folder listing is not merely unnecessary, it is
  * impossible -- the credential cannot see anything that has not been picked. That is the
  * point: Google enforces the promise instead of our query filter.
+ *
+ * **How deep the read goes is a choice, and it is said while it is made.** "Sub-folders are
+ * not read" used to be a standing note above the picker, because it was always true. Now that
+ * it is true only until an admin ticks the box, it stands BENEATH the box as a line that
+ * changes with the tick -- the pattern `GmailChoice` uses for "no label means the whole
+ * mailbox", `role="status"` included, so a screen reader is told at the same moment.
  */
 function DriveChoice({
   source,
@@ -369,6 +381,7 @@ function DriveChoice({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const setDraft = useUiStore((s) => s.setScopeDraft);
+  const toggleRecurse = useUiStore((s) => s.toggleScopeRecurse);
   const config = trpc.config.google.useQuery();
 
   return (
@@ -403,6 +416,21 @@ function DriveChoice({
           ))}
         </ul>
       )}
+
+      <label className="punch">
+        <input
+          type="checkbox"
+          checked={chosen.recurse}
+          onChange={(): void => {
+            toggleRecurse(source);
+          }}
+        />
+        <span className="punch__box" />
+        <span>{t("scopePicker.includeSubFolders")}</span>
+      </label>
+      <p className="note" role="status">
+        {chosen.recurse ? t("scopePicker.willReadDeep") : t("scopePicker.willReadOneLevel")}
+      </p>
     </>
   );
 }

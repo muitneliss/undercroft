@@ -27,6 +27,21 @@ describe("parseScope", () => {
     expect(scope).toMatchObject({ fileTypes: [] });
   });
 
+  it("a Drive selection with no recursion recorded reads one level, as it always did", () => {
+    // Every selection saved before `recurse` existed carries no such key. Parsing one as
+    // `true` would widen a recorded consent in the whole estate by deploying. ADR 0031.
+    const scope = parseScope(
+      "drive",
+      JSON.stringify({ files: [{ id: "f1", name: "Statements", kind: "folder" }] }),
+    );
+    expect(scope).toMatchObject({ recurse: false });
+  });
+
+  it("a Drive selection that asked for sub-folders is read back asking for them", () => {
+    const scope = parseScope("drive", JSON.stringify({ files: [], recurse: true }));
+    expect(scope).toMatchObject({ recurse: true });
+  });
+
   it("reads a Xero selection: the organisation, and which entities", () => {
     const scope = parseScope(
       "xero",

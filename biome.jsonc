@@ -513,7 +513,9 @@
     {
       "includes": [
         "scripts/dokploy.ts",
-        "apps/worker/src/services/google/drive.ts",
+        // The Drive `fields` mask and `includeItemsFromAllDrives` moved out of `drive.ts`
+        // with the listing itself when descent became a choice -- ADR 0031.
+        "apps/worker/src/services/google/driveListing.ts",
         "packages/connector-runtime/src/reader.ts",
         "packages/crypto/src/seal.ts",
         "apps/ui/src/components/FileTypeChoice.tsx",

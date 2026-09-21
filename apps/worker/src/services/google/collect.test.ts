@@ -20,6 +20,7 @@ import { NOTHING_MATCHED } from "./drive.ts";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const DRIVE = "https://www.googleapis.com/drive/v3/files";
 const TENANT = "CASE-0042";
+const FOLDER = "application/vnd.google-apps.folder";
 const PDF = new TextEncoder().encode("%PDF-1.7\n1 0 obj\n%%EOF\n");
 /** base64url of PDF, as Gmail returns it in `body.data`. */
 const PDF_B64 = Buffer.from(PDF).toString("base64url");
@@ -465,11 +466,16 @@ describe("drive", () => {
   function listUrlFor(
     folderId: string,
     fileTypes: readonly string[] = ["application/pdf"],
+    recurse = false,
   ): string {
-    const joined = fileTypes.map((type) => `mimeType='${type}'`).join(" or ");
-    const typeClause = fileTypes.length > 1 ? `(${joined})` : joined;
+    // A recursive walk asks for the folder type too, so one request per page yields both the
+    // files to land and the folders to descend into. An EMPTY allow-list stays empty: "every
+    // type" already includes folders, and adding one would narrow it to folders alone.
+    const asked = recurse && fileTypes.length > 0 ? [...fileTypes, FOLDER] : fileTypes;
+    const joined = asked.map((type) => `mimeType='${type}'`).join(" or ");
+    const typeClause = asked.length > 1 ? `(${joined})` : joined;
     const q =
-      fileTypes.length === 0
+      asked.length === 0
         ? `'${folderId}' in parents and trashed=false`
         : `'${folderId}' in parents and ${typeClause} and trashed=false`;
 
@@ -495,6 +501,11 @@ describe("drive", () => {
       md5Checksum: "abc",
       parents: ["folder-1"],
     };
+  }
+
+  /** A sub-folder as Drive hands one back inside a listing. */
+  function folder(id: string) {
+    return { id, name: `${id}-name`, mimeType: FOLDER };
   }
 
   it("PDFs in a picked folder are landed and catalogued", async () => {
@@ -571,29 +582,109 @@ describe("drive", () => {
     expect(rows.map((r) => r.document_id)).toEqual(["f2"]);
   });
 
-  it("descent stops at one level, so an unpicked subfolder is never listed", async () => {
-    // Recursive descent could reach folders the admin never saw in the Picker, which would
-    // make "No other folder is read" false. The refusing fetcher proves it: no route is
-    // recorded for a child folder, so any attempt to list one fails the test.
+  it("a selection that did not ask for sub-folders never lists one", async () => {
+    // The quiet half of the descent guard, and what EVERY selection saved before `recurse`
+    // existed means. The refusing fetcher proves it: no route is recorded for a child folder,
+    // so any attempt to list one fails the test. ADR 0031.
     await connect("drive", {
       files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
     });
     fetcher
       .on("GET", listUrlFor("folder-1"), {
-        body: {
-          files: [
-            file("f1"),
-            { id: "sub", name: "older", mimeType: "application/vnd.google-apps.folder" },
-          ],
-        },
+        body: { files: [file("f1"), folder("sub")] },
       })
-      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF })
-      // A non-PDF listed by the query is still fetched by id, so record it; what must NOT
-      // happen is a listing of `sub` as a parent.
-      .on("GET", `${DRIVE}/sub?alt=media`, { body: PDF });
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
 
     await expect(collect("drive")).resolves.toMatchObject({ source: "drive" });
     expect(fetcher.calls.map((c) => c.url)).not.toContain(listUrlFor("sub"));
+  });
+
+  it("a file two levels down lands when sub-folders were asked for", async () => {
+    // The firing half. An admin picks the year and expects the months inside it, which is the
+    // whole point of the toggle; landing only the loose files at the top would be the silent
+    // subset this feature exists to stop being the only option.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      recurse: true,
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", ["application/pdf"], true), {
+        body: { files: [file("f1"), folder("sub")] },
+      })
+      .on("GET", listUrlFor("sub", ["application/pdf"], true), {
+        body: { files: [file("f2")] },
+      })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF })
+      .on("GET", `${DRIVE}/f2?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(2);
+    const { rows } = await db.query<{ document_id: string }>(
+      "SELECT document_id FROM raw.documents ORDER BY document_id",
+    );
+    expect(rows.map((r) => r.document_id)).toEqual(["f1", "f2"]);
+  });
+
+  it("a sub-folder is never landed as a document", async () => {
+    // With an empty allow-list -- "every file type" -- Drive hands folders back in the
+    // listing like anything else, and one landed as a document is a zero-byte file whose
+    // whole content is its name. The refusing fetcher is the assertion: no bytes route is
+    // recorded for `sub`, so an attempt to fetch it fails here.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      fileTypes: [],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", []), { body: { files: [file("f1"), folder("sub")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(1);
+  });
+
+  it("a folder reachable twice in one tree is listed once", async () => {
+    // A shortcut can make a tree a graph, and Drive will happily describe a cycle. Without
+    // the visited set this walks forever; the fetcher records each listing ONCE, so a second
+    // request for either folder is unmodelled and fails rather than hanging.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      recurse: true,
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", ["application/pdf"], true), {
+        body: { files: [folder("sub")] },
+      })
+      .on("GET", listUrlFor("sub", ["application/pdf"], true), {
+        body: { files: [file("f1"), folder("folder-1")] },
+      })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(1);
+  });
+
+  it("a picked folder whose whole tree is empty refuses once, not once per branch", async () => {
+    // The refusal is recorded against the PICK. An admin picked one folder and is owed one
+    // sentence about it; a deep tree of empty sub-folders reporting each branch would bury
+    // the fact that the thing they chose yielded nothing.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+      recurse: true,
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", ["application/pdf"], true), {
+        body: { files: [folder("sub")] },
+      })
+      .on("GET", listUrlFor("sub", ["application/pdf"], true), { body: { files: [] } });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([
+      { entity: "files", sourceRecordId: "folder-1", reason: NOTHING_MATCHED },
+    ]);
   });
 
   function fileUrlFor(id: string): string {

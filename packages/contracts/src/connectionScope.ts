@@ -55,6 +55,16 @@ export const DriveScope = z.object({
    */
   files: z.array(Chosen.extend({ kind: z.enum(["folder", "file"]) })).default([]),
   fileTypes: FileTypes,
+  /**
+   * Whether a picked folder is read to the bottom, or one level only.
+   *
+   * **False is what a selection saved before this field existed means**, and the default is
+   * what makes that true: such a row carries no `recurse` key, parses to `false`, and keeps
+   * landing exactly what it landed yesterday. The alternative -- recursing by default -- would
+   * widen every recorded consent in the estate by deploying, with nobody having said so. The
+   * same reasoning as `FileTypes` above; ADR 0031.
+   */
+  recurse: z.boolean().default(false),
 });
 
 /**
