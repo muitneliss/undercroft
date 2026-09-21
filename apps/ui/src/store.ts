@@ -162,6 +162,18 @@ interface UiState {
    */
   lakeOffset: Record<string, number>;
   setLakeOffset: (tenantId: string, offset: number) => void;
+  /**
+   * Which stream the console last wrote itself a query for, per tenant, as a `streamKey`.
+   *
+   * This exists to make opening a line of the index happen ONCE. The console seeds itself
+   * from the stream in the URL, and without a record of what it has already seeded it would
+   * re-seed on every render -- throwing away whatever the reader had typed since, which is
+   * the one thing a scratch editor must never do. Compare, seed, record: a reader who edits
+   * the generated query keeps their edit, and a reader who opens a different line gets that
+   * line's query.
+   */
+  lakeOpened: Record<string, string>;
+  setLakeOpened: (tenantId: string, streamKey: string) => void;
 
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
@@ -294,7 +306,10 @@ function scopeSlice(
 /** The raw lake console's scratch SQL, one per tenant. Not persisted; see the type above. */
 function lakeSlice(
   set: Setter,
-): Pick<UiState, "lakeSql" | "setLakeSql" | "lakeOffset" | "setLakeOffset"> {
+): Pick<
+  UiState,
+  "lakeSql" | "setLakeSql" | "lakeOffset" | "setLakeOffset" | "lakeOpened" | "setLakeOpened"
+> {
   return {
     lakeSql: {},
     // Editing the query returns the reader to the first page: the offset belonged to the
@@ -307,6 +322,9 @@ function lakeSlice(
     lakeOffset: {},
     setLakeOffset: (tenantId, offset): unknown =>
       set((state) => ({ lakeOffset: { ...state.lakeOffset, [tenantId]: offset } })),
+    lakeOpened: {},
+    setLakeOpened: (tenantId, streamKey): unknown =>
+      set((state) => ({ lakeOpened: { ...state.lakeOpened, [tenantId]: streamKey } })),
   };
 }
 
