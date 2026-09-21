@@ -26,6 +26,7 @@ import {
   type EmailSender,
   type Locale,
   type Logger,
+  postEmailLeaf,
 } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -113,17 +114,34 @@ export function failedRunMessage(
   const t = messages(to.locale);
   const source =
     input.source === SOURCE_OF_TRANSFORM ? t("runFailed.models") : sourceName(input.source);
-  return {
-    to: to.email,
+  return postEmailLeaf(to.email, {
+    locale: to.locale,
     subject: t("runFailed.subject", { source, tenantId: input.tenantId }),
-    text: t("runFailed.body", {
-      source,
-      tenantId: input.tenantId,
-      when: formatWhen(input.endedAt, to.locale),
-      error: input.error ?? t("runFailed.noReason"),
-      link: `${input.publicUrl}/tenants/${input.tenantId}/journal/${input.runId}`,
-    }),
-  };
+    runningHead: input.tenantId,
+    heading: t("runFailed.heading"),
+    lead: t("runFailed.lead"),
+    colophon: t("email.colophon"),
+    blocks: [
+      {
+        kind: "schedule",
+        rows: [
+          { label: t("email.source"), value: source },
+          { label: t("email.customer"), value: input.tenantId },
+          { label: t("email.when"), value: formatWhen(input.endedAt, to.locale) },
+        ],
+      },
+      // The one errata slip in the family, because this is the one message that IS a
+      // correction. A run with no recorded reason keeps its sentence rather than becoming
+      // an em dash: a blank correction slip reads as a slip somebody forgot to write.
+      { kind: "errata", mark: t("email.errata"), text: input.error ?? t("runFailed.noReason") },
+      {
+        kind: "plate",
+        label: t("runFailed.action"),
+        href: `${input.publicUrl}/tenants/${input.tenantId}/journal/${input.runId}`,
+      },
+      { kind: "note", text: t("runFailed.repeats") },
+    ],
+  });
 }
 
 export function grantExpiringMessage(
@@ -131,19 +149,38 @@ export function grantExpiringMessage(
   input: { tenantId: string; source: string; grantExpiresAt: string; publicUrl: string },
 ): EmailMessage {
   const t = messages(to.locale);
-  return {
-    to: to.email,
+  return postEmailLeaf(to.email, {
+    locale: to.locale,
     subject: t("grantExpiring.subject", {
       source: sourceName(input.source),
       tenantId: input.tenantId,
     }),
-    text: t("grantExpiring.body", {
-      source: sourceName(input.source),
-      tenantId: input.tenantId,
-      when: formatWhen(input.grantExpiresAt, to.locale),
-      link: `${input.publicUrl}/tenants/${input.tenantId}`,
-    }),
-  };
+    runningHead: input.tenantId,
+    heading: t("grantExpiring.heading"),
+    lead: t("grantExpiring.lead"),
+    colophon: t("email.colophon"),
+    blocks: [
+      {
+        kind: "schedule",
+        rows: [
+          { label: t("email.source"), value: sourceName(input.source) },
+          { label: t("email.customer"), value: input.tenantId },
+          // Umber, the pending mark's tone. A thing about to lapse has not lapsed, and
+          // vermilion belongs to the correction slip alone.
+          {
+            label: t("email.expires"),
+            value: formatWhen(input.grantExpiresAt, to.locale),
+            tone: "pending",
+          },
+        ],
+      },
+      {
+        kind: "plate",
+        label: t("grantExpiring.action"),
+        href: `${input.publicUrl}/tenants/${input.tenantId}`,
+      },
+    ],
+  });
 }
 
 export function keyExpiringMessage(
@@ -151,16 +188,35 @@ export function keyExpiringMessage(
   input: { tenantId: string; label: string; expiresAt: string; publicUrl: string },
 ): EmailMessage {
   const t = messages(to.locale);
-  return {
-    to: to.email,
+  return postEmailLeaf(to.email, {
+    locale: to.locale,
     subject: t("keyExpiring.subject", { label: input.label, tenantId: input.tenantId }),
-    text: t("keyExpiring.body", {
-      label: input.label,
-      tenantId: input.tenantId,
-      when: formatWhen(input.expiresAt, to.locale),
-      link: `${input.publicUrl}/tenants/${input.tenantId}`,
-    }),
-  };
+    runningHead: input.tenantId,
+    heading: t("keyExpiring.heading"),
+    lead: t("keyExpiring.lead"),
+    colophon: t("email.colophon"),
+    blocks: [
+      {
+        kind: "schedule",
+        rows: [
+          // The key's label is written by a customer, and this is the value that made the
+          // template's escaping a requirement rather than a courtesy.
+          { label: t("email.key"), value: input.label },
+          { label: t("email.customer"), value: input.tenantId },
+          {
+            label: t("email.expires"),
+            value: formatWhen(input.expiresAt, to.locale),
+            tone: "pending",
+          },
+        ],
+      },
+      {
+        kind: "plate",
+        label: t("keyExpiring.action"),
+        href: `${input.publicUrl}/tenants/${input.tenantId}`,
+      },
+    ],
+  });
 }
 
 /** The tenant's admins, or the platform's when it has none. Never nobody, while anybody exists. */

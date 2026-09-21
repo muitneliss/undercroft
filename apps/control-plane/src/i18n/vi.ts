@@ -15,6 +15,27 @@
  */
 
 export const vi = {
+  /**
+   * The words every posted leaf shares: the colophon, and the vocabulary of the schedule.
+   *
+   * These are LABELS, not sentences, which is why they are shared where a sentence never
+   * would be. Each stands alone in a cell of the schedule and is never joined to anything,
+   * so the word-order argument in `.claude/rules/i18n.md` does not reach them -- and the
+   * alternative, "Nguồn" written out in four places, is four places for it to drift from
+   * the column heading on the screen that shows the same fact.
+   */
+  email: {
+    colophon: "Undercroft gửi thư này tự động. Không cần trả lời.",
+    customer: "Khách hàng",
+    source: "Nguồn",
+    address: "Địa chỉ",
+    when: "Lúc",
+    expires: "Hết hạn",
+    key: "Khoá",
+    /** The mark at the head of the correction slip, as the interface prints it. */
+    errata: "Đính chính",
+  },
+
   invitation: {
     subject: "Bạn đã có quyền truy cập Undercroft",
     /**
@@ -22,61 +43,60 @@ export const vi = {
      * address, so this is a nudge to go and sign in, not a credential -- which is why it is
      * safe to email and why losing it costs nothing but a conversation.
      */
-    body: [
-      "Bạn đã được cấp quyền truy cập {{tenantId}} trong Undercroft.",
-      "",
-      "Hãy đăng nhập tại {{publicUrl}} — dùng đúng địa chỉ này ({{email}}), bằng Google hoặc bằng cách yêu cầu mã dùng một lần.",
-      "",
+    heading: "Lời mời vào Undercroft",
+    lead: "Bạn đã được cấp quyền truy cập {{tenantId}}.",
+    howToSignIn:
+      "Hãy đăng nhập bằng đúng địa chỉ này, bằng Google hoặc bằng cách yêu cầu mã dùng một lần.",
+    action: "Đăng nhập",
+    ignore:
       "Nếu bạn không chờ đợi email này, bạn có thể bỏ qua; sẽ không có gì xảy ra cho đến khi bạn đăng nhập.",
-    ].join("\n"),
   },
 
   signInCode: {
     subject: "Mã đăng nhập Undercroft của bạn",
-    body: [
-      "Mã đăng nhập của bạn là {{otp}}",
-      "",
-      "Mã hết hạn sau {{minutes}} phút. Nếu bạn không yêu cầu đăng nhập, bạn có thể bỏ qua email này.",
-    ].join("\n"),
+    heading: "Mã đăng nhập của bạn",
+    lead: "Dùng mã này để đăng nhập vào Undercroft.",
+    expiry: "Mã hết hạn sau {{minutes}} phút.",
+    ignore: "Nếu bạn không yêu cầu đăng nhập, bạn có thể bỏ qua email này.",
   },
 
   /**
    * A run that failed, to the customer's administrators. Names the source, the time and the
    * run's own reason, links into the journal, and says that repeats are held for a day --
    * so an inbox with one message in it is not read as one failure.
+   *
+   * This is the one message set as an errata slip, because it is the one that IS a
+   * correction: the reason rides on vermilion and nothing else in the family does.
    */
   runFailed: {
     subject: "Đồng bộ {{source}} cho {{tenantId}} không thành công",
     /** What a transform run is called where a source's name would go. */
     models: "dựng mô hình",
     noReason: "không ghi nhận lý do",
-    body: [
-      "Lần chạy {{source}} cho {{tenantId}} lúc {{when}} đã thất bại.",
-      "",
-      "Lý do: {{error}}",
-      "",
-      "Xem chi tiết trong nhật ký: {{link}}",
-      "",
+    /**
+     * Wordless about WHICH source, deliberately: the same message covers a model build,
+     * where "{{source}} không chạy xong" would read as "dựng mô hình không chạy xong". The
+     * schedule below names it, in the cell where a name belongs.
+     */
+    heading: "Lần chạy đã thất bại",
+    lead: "Dữ liệu từ nguồn này chưa được cập nhật cho đến khi có một lần chạy thành công.",
+    action: "Xem nhật ký",
+    repeats:
       "Nếu lỗi tiếp diễn, bạn sẽ không nhận thêm email về nguồn này trong 24 giờ; một lần chạy thành công sẽ đặt lại khoảng thời gian đó.",
-    ].join("\n"),
   },
 
   grantExpiring: {
     subject: "Quyền truy cập {{source}} của {{tenantId}} sắp hết hạn",
-    body: [
-      "Quyền truy cập {{source}} mà {{tenantId}} đã cấp sẽ hết hạn vào {{when}}.",
-      "",
-      "Hãy kết nối lại nguồn này ở mục Nguồn dữ liệu trước lúc đó để việc đồng bộ không bị gián đoạn: {{link}}",
-    ].join("\n"),
+    heading: "Quyền truy cập sắp hết hạn",
+    lead: "Hãy kết nối lại nguồn này trước lúc đó để việc đồng bộ không bị gián đoạn.",
+    action: "Kết nối lại",
   },
 
   keyExpiring: {
     subject: "Khoá ghi dữ liệu “{{label}}” của {{tenantId}} sắp hết hạn",
-    body: [
-      "Khoá ghi dữ liệu “{{label}}” của {{tenantId}} sẽ hết hạn vào {{when}}.",
-      "",
-      "Hãy tạo khoá mới ở mục Nguồn dữ liệu và cập nhật cho bên đang dùng khoá này: {{link}}",
-    ].join("\n"),
+    heading: "Khoá ghi dữ liệu sắp hết hạn",
+    lead: "Hãy tạo khoá mới ở mục Nguồn dữ liệu và cập nhật cho bên đang dùng khoá này.",
+    action: "Đến Nguồn dữ liệu",
   },
 
   error: {

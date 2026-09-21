@@ -520,7 +520,13 @@
         // Four findings, all of them a row of the Vietnamese fold table -- `àáảãạăằắẳẵặâầấẩẫậ`
         // and its three companions. Seventeen accented vowels with no repeat is about as
         // entropic as a string gets, and there is no way to write the alphabet that is not.
-        "apps/ui/src/lib/fold.ts"
+        "apps/ui/src/lib/fold.ts",
+        // Two findings, both halves of the Outlook conditional comment that gives the Word
+        // engine a fixed measure it cannot take from a `max-width` (ADR 0030):
+        // `<!--[if mso]><table role="presentation" width="560" ...` and its closing twin.
+        // Punctuation-dense, no repeated run, and there is no other spelling of it -- the
+        // syntax is Microsoft's, not ours.
+        "packages/core/src/emailTemplate.ts"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
     },

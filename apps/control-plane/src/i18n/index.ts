@@ -1,7 +1,7 @@
 /**
  * The control plane's own catalogue, for the few things it says to a person.
  *
- * Two emails and four refusals. Everything else this server produces is read by a
+ * Five emails and the refusals. Everything else this server produces is read by a
  * TypeScript client, and a code is not a sentence -- `trpc.ts` deliberately strips the
  * message off an INTERNAL_SERVER_ERROR for exactly that reason.
  *
@@ -53,9 +53,12 @@ void instance.init({
   lng: DEFAULT_LOCALE,
   fallbackLng: DEFAULT_LOCALE,
   supportedLngs: LOCALES,
-  // These are plain-text emails and HTTP error messages, never HTML. i18next's escaping is
-  // for interpolating into markup; leaving it on would put `&#39;` in an email body and in
-  // a customer's name inside a refusal.
+  // Off, and it stays off now that the emails carry a markup branch too. i18next's escaping
+  // would run on EVERY value, including the ones bound for the plain-text branch and for an
+  // HTTP refusal, putting `&#39;` in a body nobody renders as markup and in a customer's
+  // name inside an error message. Escaping belongs where markup is written, which is
+  // `emailTemplate.ts` -- it escapes each value as it places it, and is pinned from both
+  // sides by `packages/core/src/emailTemplate.test.ts`.
   interpolation: { escapeValue: false },
 });
 
