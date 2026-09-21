@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.12.0](https://github.com/muitneliss/undercroft/compare/v1.11.0...v1.12.0) (2026-09-21)
+
+
+### Features
+
+* **lake:** a SQL console on CodeMirror, extracted document text, and a role-login fix ([#68](https://github.com/muitneliss/undercroft/issues/68)) ([da07d9f](https://github.com/muitneliss/undercroft/commit/da07d9feff54448feaef30fd0a93e3b5af4e19bb))
+* **ui:** adopt shadcn/Radix for structure, restyled to the existing design ([#67](https://github.com/muitneliss/undercroft/issues/67)) ([81fc9b7](https://github.com/muitneliss/undercroft/commit/81fc9b702a4eda40e0880cc176ee3c124557e664))
+
 ## [1.12.0](https://github.com/muitneliss/undercroft/compare/v1.11.0...v1.12.0) (2026-09-20)
 
 
