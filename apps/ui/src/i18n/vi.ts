@@ -955,6 +955,8 @@ export const vi = {
      */
     figure: "HÌNH {{number}}",
     /** A result that was shown live but is not kept. See `transcript.ts` on why. */
+    foundNothing: "Không tìm thấy gì",
+    figureRows_other: "{{count, number}} dòng",
     notKept: "Kết quả không được lưu lại. Hãy hỏi lại nếu bạn cần xem.",
     notKeptFailed: "Lần gọi này đã thất bại. Nội dung lỗi không được lưu lại.",
     /** The assistant read something; says which tool, never what it returned. */

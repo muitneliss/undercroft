@@ -28,20 +28,10 @@
 
 import { useTranslation } from "react-i18next";
 
-import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { Plate } from "@/components/assistant/PlateCase.tsx";
+import { PLATES } from "@/lib/assistantProofs.ts";
 import { type AssistantPart, outcomeOf, toolNameOf } from "@/lib/assistantTurns.ts";
-
-/**
- * A result whose plate this build has no case for.
- *
- * Named rather than approximated, and NOT rendered as an empty frame: the reader saw the
- * assistant look something up, so the panel owes them either the thing or a sentence. Rule 2.
- */
-function Unset({ tool }: { tool: string }): React.JSX.Element {
-  const { t } = useTranslation();
-  return <p className="figure__absent">{t("assistant.ranTool", { tool })}</p>;
-}
 
 export function Figure({
   part,
@@ -83,24 +73,9 @@ export function Figure({
       {outcome.kind === "not-kept-failed" ? (
         <p className="figure__absent">{t("assistant.notKeptFailed")}</p>
       ) : null}
-      {outcome.kind === "shown" ? <Plate tool={tool} output={outcome.output} /> : null}
+      {outcome.kind === "shown" ? (
+        <Plate plate={PLATES[tool] ?? "facts"} output={outcome.output} />
+      ) : null}
     </div>
   );
-}
-
-/**
- * One plate from the case.
- *
- * Only `facts` is implemented in this release, deliberately. The remaining plates -- the table,
- * the chart, the run row, the grant row, the question tile -- are the next change, and each is
- * an existing component wired to a tool's real output shape rather than to a guess about it.
- * Until then an unset plate SAYS it is unset, which is the honest half of shipping half.
- */
-function Plate({ tool, output }: { tool: string; output: unknown }): React.JSX.Element {
-  const { t } = useTranslation();
-
-  if (Array.isArray(output) && output.length === 0) {
-    return <EmptyState title={t("assistant.emptyTitle")} body={t("common.nothingToShow")} />;
-  }
-  return <Unset tool={tool} />;
 }

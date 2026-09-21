@@ -43,20 +43,20 @@ describe("every tool declares what its tier requires", () => {
   });
 });
 
-describe("the browser's copy of which tools mutate agrees with this one", () => {
-  /**
-   * Read as TEXT rather than imported.
-   *
-   * `apps/control-plane` does not depend on `apps/ui`, and adding that dependency to check a
-   * list would invert the one direction the layering rules exist to keep. Reading the file is
-   * blunt and it is honest about being blunt: what is asserted is that the same tool names
-   * appear, which is the fact that matters.
-   */
-  const proofsModule = readFileSync(
-    join(import.meta.dirname, "../../../../ui/src/lib/assistantProofs.ts"),
-    "utf8",
-  );
+/**
+ * The panel's own module, read as TEXT rather than imported.
+ *
+ * `apps/control-plane` does not depend on `apps/ui`, and adding that dependency to check a list
+ * would invert the one direction the layering rules exist to keep. Reading the file is blunt and
+ * it is honest about being blunt: what is asserted is that the same tool names appear, which is
+ * the fact that matters.
+ */
+const proofsModule = readFileSync(
+  join(import.meta.dirname, "../../../../ui/src/lib/assistantProofs.ts"),
+  "utf8",
+);
 
+describe("the browser's copy of which tools mutate agrees with this one", () => {
   it("the panel has a sentence for every mutating tool", () => {
     const missing = Object.entries(TOOLS)
       .filter(([, spec]) => mutates(spec))
@@ -94,5 +94,27 @@ describe("the navigate tier is not bound to the server at all", () => {
     for (const spec of navigating) {
       expect(spec.proofKey).toBeUndefined();
     }
+  });
+});
+
+describe("the panel has a plate for every tool that draws one", () => {
+  it("no result-bearing tool renders as nothing", () => {
+    // Same duplication as the proof sentences, same gate. `plate: "none"` is excluded because
+    // it is the navigate tier, whose result IS the move -- there is nothing to draw, and
+    // demanding a plate for it would be demanding a picture of a page turn.
+    const missing = Object.entries(TOOLS)
+      .filter(([, spec]) => spec.plate !== "none")
+      .map(([name]) => name)
+      .filter((name) => !proofsModule.includes(`  ${name}: "`));
+    expect(missing).toEqual([]);
+  });
+
+  it("and the navigate tier is the only thing declaring no plate", () => {
+    // The quiet half: if `plate: "none"` spread to a tool that does return something, the
+    // exclusion above would start hiding real omissions.
+    const none = Object.entries(TOOLS)
+      .filter(([, spec]) => spec.plate === "none")
+      .map(([, spec]) => spec.tier);
+    expect(new Set(none)).toEqual(new Set(["navigate"]));
   });
 });

@@ -86,6 +86,35 @@ export function proofSentence(t: TFunction, tool: string, input: unknown): strin
 }
 
 /**
+ * Which plate renders each tool's result.
+ *
+ * Restated here for the same reason the proof sentences are: the browser cannot import the
+ * catalogue. `catalogue.test.ts` asserts the two agree, so a tool added there without a plate
+ * here fails the gate rather than rendering as nothing.
+ *
+ * A name absent from this map falls back to the honest plate -- rows if the output is a list,
+ * fields if it is one object -- rather than drawing nothing.
+ */
+export const PLATES: Readonly<Record<string, string>> = {
+  listCustomers: "table",
+  sourceStatus: "grants",
+  recentRuns: "runs",
+  runDetail: "facts",
+  lakeSummary: "facts",
+  searchLake: "table",
+  listQuestions: "questions",
+  listModels: "table",
+  analyticsSchema: "facts",
+  runIngestNow: "runs",
+  setCadence: "grants",
+  invitePerson: "facts",
+  revokeGrant: "grants",
+  withdrawIngestKey: "facts",
+  revokeInvitation: "facts",
+  deleteModel: "facts",
+};
+
+/**
  * The privileged tier, and WHICH ARGUMENT the reader has to type back.
  *
  * A one-click strike is right for an action whose worst case is that it happens twice. It is

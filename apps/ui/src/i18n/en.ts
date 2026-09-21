@@ -853,6 +853,8 @@ export const en = {
     clear: "Clear the conversation",
     working: "The assistant is answering",
     figure: "FIG. {{number}}",
+    foundNothing: "Nothing found",
+    figureRows_other: "{{count, number}} rows",
     notKept: "The result is not kept. Ask again if you need to see it.",
     notKeptFailed: "That call failed. The error text is not kept.",
     ranTool: "Looked up: {{tool}}",
