@@ -208,6 +208,12 @@ services:
       # "not connected" -- the right state while Google verification is pending.
       UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
       UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET:-}
+      # Milliseconds between two Gmail/Drive requests. Unset paces three a second, inside
+      # the 2-4 messages.get/second/user Google enforces for this project -- a sixth of the
+      # published rate, and the reason a 7,777-message backfill died 378 messages in. Set it
+      # only to match a project whose enforced quota differs; a bad value fails the run
+      # rather than quietly pacing at the rate that caused the outage.
+      UNDERCROFT_GOOGLE_MIN_INTERVAL_MS: ${UNDERCROFT_GOOGLE_MIN_INTERVAL_MS:-}
       # The Xero client, for refreshing and revoking; the control plane runs the consent.
       UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
       UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}

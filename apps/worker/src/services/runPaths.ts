@@ -18,7 +18,7 @@ import { type ConnectorSpec, parseScope, parseSpec } from "@undercroft/contracts
 import { createByteFetcher } from "@undercroft/core";
 import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
-import { createGoogleApi } from "./google/api.ts";
+import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type GoogleSource, runGoogleCollect } from "./google/collect.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken } from "./runTypes.ts";
@@ -59,6 +59,11 @@ export async function runGoogleIngest(
   const api = createGoogleApi(input.source, {
     fetcher: deps.byteFetcher ?? createByteFetcher(),
     token: () => resolveToken(deps, input),
+    // Read from the injected environment, never from `process.env` at this layer. A
+    // deployment whose Cloud project enforces a different rate than the 2-4
+    // messages.get/second this default paces for sets the env var; a bad value raises here
+    // rather than silently pacing at the rate that killed a backfill. See `google/api.ts`.
+    minIntervalMs: googleMinIntervalMs(deps.env),
   });
 
   const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api, journal }, input);
