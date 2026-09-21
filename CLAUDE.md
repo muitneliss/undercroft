@@ -51,6 +51,20 @@ about to touch.** That is the only reason this index exists.
 | `suppressions.md` | everywhere                                                               | where a lint decision goes; `biome-ignore-all` is banned outside a test file             |
 | `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
 
+## Agents
+
+`.claude/agents/*.md` are two project-local subagents. They own no rules of their own — both
+are procedures that send you back to the files above, because normative text with two owners
+drifts (the same reason `wiki/tracked.yaml` scopes the wiki to `docs/` and not to the rules).
+
+- **`context-lookup`** — read-only. Searches the wiki, then confirms the answer at the ADR,
+  the rule file or the code, and reports with citations plus the gaps it could not close. Use
+  it before contradicting a constraint that looks arbitrary.
+- **`undercroft-coder`** — implements a change under the rules above and under Ousterhout's
+  _A Philosophy of Software Design_: deep modules, information hiding, complexity pulled
+  downward, design it twice. Where the book and this repo collide the repo wins, and the
+  three collisions that actually come up are written out at the end of its file.
+
 ## Language and runtime
 
 **TypeScript only.** There is deliberately no Python in this repo's source. dbt is a
