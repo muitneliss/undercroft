@@ -745,6 +745,7 @@ export const vi = {
       "Đường biên quốc gia: Natural Earth (thuộc phạm vi công cộng), qua gói world-atlas.",
     total: "Tổng",
     pivotNeeds: "Bảng xoay cần một cột nhãn và một cột giá trị; cột Tách theo là các cột của bảng.",
+    totalsPartial: "Còn nhiều dòng hơn; các tổng này chỉ tính trên {{count, number}} dòng đầu.",
   },
 
   reports: {

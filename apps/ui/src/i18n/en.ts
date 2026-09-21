@@ -669,6 +669,7 @@ export const en = {
     total: "Total",
     pivotNeeds:
       "A pivot needs a label column and a value column; Split by gives the table its columns.",
+    totalsPartial: "More rows exist; these totals cover only the first {{count, number}} shown.",
   },
 
   reports: {
