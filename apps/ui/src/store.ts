@@ -174,6 +174,16 @@ interface UiState {
    */
   lakeOpened: Record<string, string>;
   setLakeOpened: (tenantId: string, streamKey: string) => void;
+  /**
+   * Whether the workbench's table reference is folded away to its spine.
+   *
+   * Not per tenant: it is a fact about how this reader is working right now -- writing a
+   * query, when the names are what they reach for, or reading a wide answer, when every
+   * column of the grid is worth more than the reference. Not persisted either, like every
+   * draft here: a fold restored days later is a rail somebody has to go and find.
+   */
+  lakeRailFolded: boolean;
+  toggleLakeRail: () => void;
 
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
@@ -308,7 +318,14 @@ function lakeSlice(
   set: Setter,
 ): Pick<
   UiState,
-  "lakeSql" | "setLakeSql" | "lakeOffset" | "setLakeOffset" | "lakeOpened" | "setLakeOpened"
+  | "lakeSql"
+  | "setLakeSql"
+  | "lakeOffset"
+  | "setLakeOffset"
+  | "lakeOpened"
+  | "setLakeOpened"
+  | "lakeRailFolded"
+  | "toggleLakeRail"
 > {
   return {
     lakeSql: {},
@@ -325,6 +342,10 @@ function lakeSlice(
     lakeOpened: {},
     setLakeOpened: (tenantId, streamKey): unknown =>
       set((state) => ({ lakeOpened: { ...state.lakeOpened, [tenantId]: streamKey } })),
+    // Open by default: an author who has just arrived does not know what they may name, and
+    // a reference they have to discover a control to see is one most of them never see.
+    lakeRailFolded: false,
+    toggleLakeRail: (): unknown => set((state) => ({ lakeRailFolded: !state.lakeRailFolded })),
   };
 }
 

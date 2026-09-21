@@ -16,6 +16,7 @@ import { describe, expect, test as it } from "bun:test";
 import { createMemoryRouter } from "react-router-dom";
 
 import { DIVISIONS, divisionPath } from "@/lib/divisions.ts";
+import { consolePath } from "@/lib/lake.ts";
 import { appRoutes } from "@/routeTable.tsx";
 
 const routes = appRoutes("ops@example.test");
@@ -63,6 +64,31 @@ describe("a link that carries an id", () => {
       "/tenants/:tenantId/reports/questions/:id",
       "/tenants/:tenantId/reports/dashboards/:id",
     ]);
+  });
+});
+
+describe("the lake's console", () => {
+  /**
+   * The console is a page UNDER a division's own index, which is the one shape in this table
+   * where a wrong answer is silent: `/lake/console` also matches nothing else, so a table
+   * that failed to rank it would fall to the catch-all and redirect to the customer list --
+   * a door on the lake's leaf that quietly went somewhere else entirely.
+   */
+  it("opens at its own route rather than at the lake's index or the catch-all", () => {
+    expect(opens(consolePath("CASE-0042"))).toBe("/tenants/:tenantId/lake/console");
+  });
+
+  /** A stream rides in the search, so the page opens on the rows the index was showing. */
+  it("carries the stream the index had open, and still opens the console", () => {
+    const opened = consolePath("CASE-0042", { kind: "documents", source: "drive" });
+
+    expect(opened).toBe("/tenants/CASE-0042/lake/console?documents=drive");
+    expect(opens(opened)).toBe("/tenants/:tenantId/lake/console");
+  });
+
+  /** And the index itself is untouched: the console did not swallow the division it sits in. */
+  it("leaves the lake's own index where it was", () => {
+    expect(opens("/tenants/CASE-0042/lake")).toBe("/tenants/:tenantId/lake");
   });
 });
 
