@@ -47,6 +47,16 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   UI where someone connects their own accounts.
 - **Anything can ingest.** A REST lake API means a shell script or an orchestrator can
   land data too — through the same create-only, content-addressed path.
+- **Documents, not only records.** Gmail and Drive are first-party collectors, because a
+  PDF is bytes and a YAML spec cannot describe bytes. Their text is extracted and lands
+  beside the records.
+- **Search the whole lake.** One box over both payloads and document text, folded so that
+  Vietnamese matches with or without tone marks, and stemmed for English.
+- **The BI is first-party.** Questions and dashboards live in the Reports division, and
+  every one runs as the tenant's own read-only login — not as the web process.
+- **An assistant with exactly your permissions.** It reaches the platform's own procedures
+  through the real role gates, so it can refuse you; a change is proposed as a proof you
+  strike, and a separate model checks you asked for it before one is ever offered.
 
 ## Design rules
 
@@ -61,8 +71,9 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 ## Stack
 
 TypeScript on [Bun](https://bun.sh), end to end. Postgres, S3/MinIO,
-[Kestra](https://kestra.io) for scheduling, [dbt](https://getdbt.com) for transforms,
-and any BI tool that speaks Postgres.
+[Kestra](https://kestra.io) for scheduling, [dbt](https://getdbt.com) for transforms, and
+charts in the control plane itself — plus a read-only Postgres role for any BI tool you
+would rather point at it.
 
 ## Development
 

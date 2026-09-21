@@ -112,8 +112,9 @@ added. See `.claude/rules/tooling.md` and ADR 0023.
 
 ## The gate
 
-`task ci:verify` — typecheck, lint, format check, the SPA build, then the test suite (it
-wraps `bun run verify`: one definition of the gate, Task is just how you invoke it). It must
+`task ci:verify` — typecheck, lint, the ast-grep rules, format check, spec validation, the
+SPA build, then the test suite (it wraps `bun run verify`: one definition of the gate, Task
+is just how you invoke it). It must
 pass with **no Docker, no network and no credentials**. `task ci:itest` is the Docker-backed
 tier and is deliberately separate.
 
@@ -156,8 +157,9 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
 Where a rule can be made mechanical it is.
 
 **Biome is the linter and the formatter**, at `preset: "all"` — every rule it ships, at error
-severity. `domains` names the four frameworks actually in `package.json`; the other eleven are
-`none`, which costs no coverage because a Solid rule only ever fires on Solid code.
+severity. `domains` names the five that apply here — `react` and `tailwind`, both in
+`package.json`, plus `project`, `test` and `types`; the other ten are `none`, which costs no
+coverage because a Solid rule only ever fires on Solid code.
 
 Where a rule cannot apply here it is answered in `biome.jsonc`, with the reason beside it —
 repo-wide when it can never hold, and as a path entry naming the files when it is an
