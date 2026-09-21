@@ -4,6 +4,12 @@
  * success, not a dead container) and calling a stale stack shipped (a container running last
  * release's digest, or a migration that never ran).
  *
+ * `preflight` is the step before it, and it lies in one way that matters: passing a panel
+ * whose compose file is no longer the one this repo publishes. Three releases in a row were
+ * queued against such a panel and every one of them failed on the host, with `preflight` ok
+ * each time -- so the drift check gets the two tests a guard needs, and the third pins what
+ * it deliberately forgives.
+ *
  * The fetcher below REFUSES a URL nobody recorded rather than answering a default. A fake
  * that always answers would make `verify` pass against requests it never should have sent --
  * which is exactly the bug in "compare `latest` to `latest`" that the release-tag argument
@@ -12,7 +18,7 @@
 
 import { expect, test as it } from "bun:test";
 
-import { type Config, type Deps, oneShotServices, verify } from "./dokploy.ts";
+import { type Config, type Deps, oneShotServices, preflight, verify } from "./dokploy.ts";
 
 const ENDPOINT = "https://panel.example.test/api";
 const CFG: Config = { endpoint: ENDPOINT, apiKey: "test-key", composeId: "compose-1" };
@@ -194,6 +200,34 @@ it("the release tag, not the panel's moving pointer, is what ghcr is asked for",
 
   expect(asked).toContain("https://ghcr.io/v2/muitneliss/undercroft-worker/manifests/v1.3.0");
   expect(asked).not.toContain("https://ghcr.io/v2/muitneliss/undercroft-worker/manifests/latest");
+});
+
+it("preflight passes when the panel holds the compose file this repo publishes", async () => {
+  const { deps, lines } = recorder(routes());
+
+  await preflight(CFG, deps, COMPOSE);
+
+  expect(lines).toContain("preflight ok");
+});
+
+it("preflight refuses a panel whose compose drifted from the published file", async () => {
+  // The panel kept a service the file no longer has -- the shape of the real drift, which
+  // deployed a deleted Metabase and lost the `depends_on` that lets `kestra-flows` exit.
+  const published = `${COMPOSE}\n  kestra-flows:\n    image: ghcr.io/muitneliss/undercroft-control-plane:latest`;
+  const { deps } = recorder(routes());
+
+  await expect(preflight(CFG, deps, published)).rejects.toThrow(
+    /the panel's compose file is not deploy\/compose\/docker-compose\.server\.yml \(first difference at line 10/u,
+  );
+});
+
+it("preflight forgives line endings and trailing blank lines, which YAML does not read", async () => {
+  const pasted = `${COMPOSE.replaceAll("\n", "\r\n")}\n\n`;
+  const { deps, lines } = recorder(routes());
+
+  await preflight(CFG, deps, pasted);
+
+  expect(lines).toContain("preflight ok");
 });
 
 it("oneShotServices names what the compose file declares runs to completion", () => {

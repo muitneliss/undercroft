@@ -78,3 +78,4 @@
 ## [2026-09-21] ingest | ADR 0030: An email is a leaf of the book, posted
 ## [2026-09-21] remove | ADR 0030 A Picked Drive Folder May Be Read to the Bottom
 ## [2026-09-21] ingest | ADR 0031 A Picked Drive Folder May Be Read to the Bottom
+## [2026-09-21] ingest | Runbook Deployment

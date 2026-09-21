@@ -62,7 +62,7 @@ export DOKPLOY_API_ENDPOINT=https://lowbit.link/api
 export DOKPLOY_API_KEY=...           # from Dokploy → Settings → API
 export DOKPLOY_COMPOSE_ID=...        # the undercroft compose
 
-task cd:preflight              # panel points at published images and pulls them
+task cd:preflight              # panel holds this repo's compose, points at published images
 task cd:deploy TAG=v1.2.3      # trigger, then wait for the record THIS run created
 task cd:verify TAG=v1.2.3      # every released container runs that tag's digest
 task cd:smoke                  # defaults to https://undercroft.lowbit.link/api/health
@@ -72,6 +72,26 @@ Or all four in sequence, the same way `deploy.yml` does: `task cd:release TAG=v1
 
 The API is the only channel for a change. SSH is for reading state, never making one: a
 direct edit on the host is drift the next deploy silently reverts.
+
+### What `preflight` proves
+
+That the panel holds **this repo's** `deploy/compose/docker-compose.server.yml`, compared
+line for line, and that its stored command still carries `--pull always`, `--wait`,
+`--wait-timeout` and `--remove-orphans`.
+
+The file here is the source of truth and Dokploy holds a copy; this comparison is what makes
+that a fact rather than an intention. Without it the copy drifted until it ran a service this
+repo had deleted (Metabase, ADR 0020) and lacked the `depends_on` that declares
+`kestra-flows` a job allowed to exit — so three releases in a row failed on the host at
+`--wait`, each after a `preflight` that passed.
+
+Line endings and trailing blank lines are forgiven; nothing else is, comments included. A
+refusal names the first line that differs. **Repair it by pushing the file to the panel,
+never by editing the file to match the panel** — CI does not write the panel's configuration,
+so a drift is meant to be seen and repaired by a human. A variable the newer file needs must
+be in the panel's environment _before_ that push, or the deploy stops at `set in .env`;
+`compose.update` carries `env` too, but it replaces the blob whole, so build the new value
+from the current one rather than retyping it.
 
 ### What `verify` proves
 
