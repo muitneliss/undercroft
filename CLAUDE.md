@@ -38,17 +38,17 @@ about to touch.** That is the only reason this index exists.
 | Rule file         | Applies to                                                               | Governs                                                                                  |
 | ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | `money.md`        | everywhere                                                               | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
-| `raw-lake.md`     | `packages/lake/**`                                                       | create-only writes, idempotent by content, retention bounded and reported                |
+| `raw-lake.md`     | `packages/lake/**`, the worker's `land*.ts` / `loadToRaw.ts`             | create-only writes, idempotent by content, retention bounded and reported                |
 | `connectors.md`   | `packages/connector-runtime/**`, `specs/**`                              | the spec contract; a failure raises, never an empty stream                               |
 | `privileges.md`   | `packages/db/sql/**`                                                     | the role and grant model; why the BI role cannot read `raw`                              |
-| `tests.md`        | `**/*.test.ts`                                                           | real in-memory implementations over mocks, a guard needs two tests                       |
+| `tests.md`        | `**/*.test.ts(x)`, `**/testing.ts`                                       | real in-memory implementations over mocks, a guard needs two tests                       |
 | `state.md`        | `apps/ui/**`                                                             | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
 | `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`                                | Vietnamese default, English second; no user-facing string written in place               |
 | `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                   | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
 | `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                    | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
 | `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures                                  | no real customer data in any tracked file                                                |
 | `deployment.md`   | `deploy/**`, `flows/**`, deploy workflows                                | the Dokploy API is the only channel, every service declares a memory limit               |
-| `suppressions.md` | everywhere                                                               | where a lint decision goes; `biome-ignore-all` is banned outside a test file             |
+| `suppressions.md` | every source and test file, `biome.jsonc`, the rule files                | where a lint decision goes; `biome-ignore-all` is banned everywhere, tests included      |
 | `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
 
 ## Agents

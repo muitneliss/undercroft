@@ -7,11 +7,13 @@ discuss a direction is welcome before a large PR.
 
 ```sh
 bun install
-bun run verify    # the gate: typecheck, lint, format, spec validation, tests — all offline
+task ci:verify    # the gate: typecheck, lint, format, spec validation, the SPA build, tests
 ```
 
-`bun run verify` must pass with no Docker, no network and no credentials. `bun run itest`
-(coming) adds the Docker-backed integration tier.
+Every operation goes through [Task](https://taskfile.dev) — `task --list-all` enumerates
+them, and `.claude/rules/tooling.md` says why a bare `bun run` is not the way in. `ci:verify`
+must pass with no Docker, no network and no credentials; `task ci:itest` adds the
+Docker-backed integration tier, which needs `deploy/compose/.env` and Postgres.
 
 ## Ground rules
 

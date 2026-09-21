@@ -1,3 +1,15 @@
+---
+description: Task is the only entrypoint; bun and the scripts are what it calls into
+globs:
+  [
+    "Taskfile.yml",
+    ".taskfiles/**/*.yml",
+    "package.json",
+    "scripts/**/*.ts",
+    ".github/workflows/*.yml",
+  ]
+---
+
 # Task is the only entrypoint
 
 Every operation in this repo — dev, build, the gate, deploy, a migration — is invoked as
