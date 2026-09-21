@@ -59,3 +59,4 @@
 ## [2026-09-20] ingest | ADR 0025 shadcn/Radix for Structure, Never for Style
 ## [2026-09-20] ingest | ADR 0026: Full-text search over the raw lake
 ## [2026-09-21] ingest | ADR 0027 A Control Sits on Its Field's Line
+## [2026-09-21] ingest | ADR 0028: A workbook is read in process, and extract is scheduled by backlog
