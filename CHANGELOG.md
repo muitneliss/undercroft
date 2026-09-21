@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/muitneliss/undercroft/compare/v1.13.1...v1.14.0) (2026-09-21)
+
+
+### Features
+
+* **ui:** give the lake's SQL console its own page, sized for the work ([#78](https://github.com/muitneliss/undercroft/issues/78)) ([fb76aae](https://github.com/muitneliss/undercroft/commit/fb76aaeace14f51fa7c972ca1be7fc5bc855320d))
+
 ## [1.13.1](https://github.com/muitneliss/undercroft/compare/v1.13.0...v1.13.1) (2026-09-21)
 
 
