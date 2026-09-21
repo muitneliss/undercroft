@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/muitneliss/undercroft/compare/v1.14.0...v1.14.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **flows:** write both flows in the Kestra 2.x spellings the server accepts ([#80](https://github.com/muitneliss/undercroft/issues/80)) ([2db8214](https://github.com/muitneliss/undercroft/commit/2db821480e4c261b369ca9e6a6184a3f5a9e65a7))
+
 ## [1.14.0](https://github.com/muitneliss/undercroft/compare/v1.13.1...v1.14.0) (2026-09-21)
 
 
