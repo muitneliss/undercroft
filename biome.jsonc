@@ -516,7 +516,11 @@
         // The Drive `fields` mask and `includeItemsFromAllDrives` moved out of `drive.ts`
         // with the listing itself when descent became a choice -- ADR 0031.
         "apps/worker/src/services/google/driveListing.ts",
-        "packages/connector-runtime/src/reader.ts",
+        // Was `reader.ts`: the one finding there was `failOnEmpty`'s own message, and it moved
+        // with `checkGuards` when the end-of-entity guards became their own module. Re-checked
+        // by removing this line -- `reader.ts` is clean now, so it is not listed, because an
+        // exception that names a file it no longer needs is the dead header ADR 0018 measured.
+        "packages/connector-runtime/src/guards.ts",
         "packages/crypto/src/seal.ts",
         "apps/ui/src/components/FileTypeChoice.tsx",
         // Four findings, all of them a row of the Vietnamese fold table -- `àáảãạăằắẳẵặâầấẩẫậ`

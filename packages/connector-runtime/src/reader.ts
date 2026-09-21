@@ -10,6 +10,11 @@
  * `maxRecords` must NOT then run the end-of-entity guards -- `failOnExactCount` fires on a
  * truncated read, and truncating is exactly what `maxRecords` just did. `yield*` carries
  * that value out, so the caller cannot forget to ask.
+ *
+ * Two concerns that are about a read but not part of one live beside this file rather than in
+ * it: `guards.ts` holds what can only be asked once a read is OVER, and `incremental.ts` holds
+ * everything about reading only what has changed. A reader carries the watermark it was given
+ * and asks that module where to put it.
  */
 
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
@@ -26,6 +31,7 @@ import {
   withRetry,
 } from "@undercroft/core";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
+import { alreadyRead, checkIncremental, incrementalAt, sinceCarriedIn } from "./incremental.ts";
 import { nextPageUrl, renderBatchBody } from "./paging.ts";
 
 export interface RawRecordOut {
@@ -34,6 +40,18 @@ export interface RawRecordOut {
   readonly sourceRecordId: string;
   readonly sourceUpdatedAt: string | null;
   readonly payloadText: string;
+  /**
+   * The value at the entity's `incremental.sourcePath`, verbatim, or `null` when the entity
+   * declares no incremental read or this record carries nothing there.
+   *
+   * Reported rather than accumulated, because the runtime knows how to READ incrementally and
+   * the caller knows where a cursor LIVES. It is deliberately not `sourceUpdatedAt`: a
+   * shipped spec already proves the two are different fields -- `hubspot.yaml` reads contacts
+   * with `updatedAtPath: updatedAt` and `incremental.sourcePath:
+   * properties.lastmodifieddate` -- so a watermark derived from one and sent against the
+   * other would be a guess about a fact already written down.
+   */
+  readonly incrementalAt: string | null;
 }
 
 export interface RunContext {
@@ -51,6 +69,16 @@ export interface RunContext {
    * means the relation has nothing to read.
    */
   readonly sourceIds?: readonly string[];
+  /**
+   * How far this entity was read last time, in the source's own rendering, to be sent back
+   * as the entity's `incremental` block says.
+   *
+   * Absent means a full read, and that is not the same as "incremental is declared": the
+   * first run of an entity has no cursor, and it is exactly there that `failOnEmpty` matters
+   * most, because a zero from a credential problem and a zero from nothing-new look alike.
+   * `guards.ts` keys the relaxation on this value being present, never on the spec.
+   */
+  readonly since?: string;
 }
 
 type Guards = ConnectorSpec["defaults"]["guards"];
@@ -69,6 +97,8 @@ export interface Reader {
   readonly entity: ConnectorEntity;
   readonly guards: Guards;
   readonly headers: Record<string, string>;
+  /** The watermark this read is actually carrying, or `null` for a full read. */
+  readonly since: string | null;
   seen: number;
   /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
   readonly fetchJson: (request: HttpRequest) => Promise<unknown>;
@@ -171,12 +201,18 @@ export async function createReader(
     clock,
   );
   const policy = retryPolicy(spec);
+  checkIncremental(spec, entity);
+
+  const since = ctx.since ?? null;
 
   const reader: Reader = {
     spec,
     entity,
     guards: entity.guards ?? spec.defaults.guards,
-    headers: await authHeaders(spec, ctx),
+    // Xero's `If-Modified-Since` rides beside the auth headers, because from every request's
+    // point of view it is just one more header the spec said to send.
+    headers: { ...(await authHeaders(spec, ctx)), ...sinceCarriedIn("header", entity, since) },
+    since,
     seen: 0,
     fetchJson: async (request: HttpRequest): Promise<unknown> =>
       await withRetry(
@@ -199,7 +235,7 @@ export async function createReader(
 
 /** Turn one decoded page into records, refusing any that cannot be keyed. */
 function* emit(reader: Reader, parsed: unknown): Generator<RawRecordOut> {
-  const { spec, entity } = reader;
+  const { spec, entity, since } = reader;
   for (const record of extractRecords(entity, spec, parsed)) {
     const id = getStringPath(record, entity.idPath);
     if (id === null) {
@@ -211,15 +247,24 @@ function* emit(reader: Reader, parsed: unknown): Generator<RawRecordOut> {
         `a record has no value at idPath ${JSON.stringify(entity.idPath)}`,
       );
     }
-    const updatedAt =
-      entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath);
-    yield {
-      source: spec.id,
-      entity: entity.name,
-      sourceRecordId: id,
-      sourceUpdatedAt: updatedAt,
-      payloadText: canonicalJson(record),
-    };
+    const at = incrementalAt(entity, record);
+    if (!alreadyRead(entity, since, at)) {
+      const updatedAt =
+        entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath);
+      yield {
+        source: spec.id,
+        entity: entity.name,
+        sourceRecordId: id,
+        sourceUpdatedAt: updatedAt,
+        payloadText: canonicalJson(record),
+        incrementalAt: at,
+      };
+    }
+    // Counted whether it was yielded or filtered, because `seen` is how far through the
+    // SOURCE this read got: it is the number `failed after N` reports, and the number
+    // `failOnExactCount` measures a page cap against. A client filter changes what is landed,
+    // never what the source handed over, so it must not be able to talk a truncated read out
+    // of being reported as one.
     reader.seen += 1;
   }
 }
@@ -267,7 +312,10 @@ export async function* readPages(
   request: PagedRequest,
 ): AsyncGenerator<RawRecordOut, boolean> {
   const { spec, entity } = reader;
-  let url = buildUrl(spec.baseUrl, request.path, request.query);
+  let url = buildUrl(spec.baseUrl, request.path, {
+    ...request.query,
+    ...sinceCarriedIn("query-param", entity, reader.since),
+  });
   let pageIndex = 0;
 
   for (;;) {
@@ -296,23 +344,5 @@ export async function* readPages(
       return false;
     }
     url = next;
-  }
-}
-
-/** The guards that can only be decided once the whole entity has been read. */
-export function checkGuards(reader: Reader): void {
-  const { spec, entity, guards, seen } = reader;
-  if (guards.failOnEmpty && seen === 0) {
-    throw new ConnectorError(spec.id, entity.name, 0, "source returned no records (failOnEmpty)");
-  }
-  if (guards.failOnExactCount !== undefined && seen === guards.failOnExactCount) {
-    // The HubSpot 10,000 cap: landing exactly on it is almost certainly truncation, and
-    // the source does not say so.
-    throw new ConnectorError(
-      spec.id,
-      entity.name,
-      seen,
-      `read exactly ${seen} records, the configured truncation ceiling -- this is probably silent data loss`,
-    );
   }
 }
