@@ -13,6 +13,15 @@
  * consulted, because the worker frames every query in a read-only transaction -- which
  * matters here because the dbt login CAN create in its own two schemas.
  *
+ * HOW IT OPENS. Nobody's first gesture on this leaf is to write SQL. It is to click the line
+ * of the index that says a stream exists -- and when they do, the console writes that
+ * stream's SELECT for them and answers it, so the rows are on screen before they have typed
+ * anything. What they then have is not a picture of a table but a query, one clause away
+ * from the question they actually came with. The generated text is theirs to edit from that
+ * moment: the seeding happens once per stream opened, never again on a redraw, because an
+ * editor that overwrote what a reader had typed would be the one thing a scratch surface
+ * must never do.
+ *
  * WHY IT IS A WORKSPACE AND NOT A BAND. Every other band on this leaf is as tall as the
  * sentence it prints. A console is not: it holds two things that both want the screen, and
  * the first version gave each of them whatever the page had left over -- an editor too short
@@ -27,13 +36,15 @@
 
 import type { SchemaResponse } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core/locale";
-import { lazy, Suspense } from "react";
+import type { TFunction } from "i18next";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { TableResult } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { type LakeStream, streamKey, streamLabel, streamQuery } from "@/lib/lake.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -225,12 +236,114 @@ function RunBar({
   );
 }
 
+/**
+ * What the run bar says right now, or nothing at all before the first press.
+ *
+ * The two facts a reader cannot get from the grid itself: how many rows came back, and
+ * which page they are. A hundred rows look the same on page one and on page four.
+ */
+function runStatus(
+  t: TFunction,
+  state: { running: boolean; result: TableResult | undefined; offset: number },
+): string | null {
+  if (state.running) {
+    return t("lake.consoleRunning");
+  }
+  if (state.result === undefined) {
+    return null;
+  }
+  const count = state.result.rows.length;
+  return state.offset === 0
+    ? t("lake.consoleRows", { count })
+    : t("lake.consoleRowsFrom", { count, from: state.offset + 1 });
+}
+
+/** What opening a line of the index leaves the console holding. */
+interface Opened {
+  /** The band itself, so the press that opened it can bring it into view. */
+  readonly bandRef: React.RefObject<HTMLDivElement | null>;
+  /** Part of the editor's remount key: a new stream replaces the editor's document. */
+  readonly key: string;
+  /** The query this stream was opened with, or null when no stream is open. */
+  readonly query: string | null;
+}
+
+/**
+ * Open the console on the stream the index linked to: write that stream's query, answer it,
+ * and bring the answer into view. Once.
+ *
+ * ONCE IS THE WHOLE DIFFICULTY. The stream lives in the URL, so it is present on every
+ * redraw, not just the one after the press -- and a console that re-seeded on each of them
+ * would throw away whatever the reader had typed since. So what has already been opened is
+ * recorded, per tenant, and compared before anything is written.
+ *
+ * The comparison reads the store directly rather than through a selector, because
+ * StrictMode invokes an effect twice with the same captured value; a subscribed copy would
+ * still be the pre-seed one on the second pass and would ask Postgres the same question
+ * again for nothing.
+ */
+function useOpenedStream(
+  tenantId: string,
+  stream: LakeStream | null,
+  ask: (input: { tenantId: string; sql: string; limit: number; offset: number }) => void,
+): Opened {
+  const bandRef = useRef<HTMLDivElement>(null);
+  const setLakeSql = useUiStore((state) => state.setLakeSql);
+  const setLakeOpened = useUiStore((state) => state.setLakeOpened);
+  const key = stream === null ? "" : streamKey(stream);
+  const query = stream === null ? null : streamQuery(stream);
+
+  useEffect(() => {
+    if (query === null || useUiStore.getState().lakeOpened[tenantId] === key) {
+      return;
+    }
+    setLakeOpened(tenantId, key);
+    setLakeSql(tenantId, query);
+    ask({ tenantId, sql: query, limit: PAGE_ROWS, offset: 0 });
+    // The index is three bands up this leaf. A press whose entire effect happens below the
+    // fold reads as a press that did nothing, and the reader presses it again.
+    bandRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [tenantId, key, query, ask, setLakeSql, setLakeOpened]);
+
+  return { bandRef, key, query };
+}
+
+/**
+ * Where the query came from, while it is still the one that was written.
+ *
+ * DERIVED FROM THE TEXT, not remembered: the moment the reader edits a character this stops
+ * being true, and so it stops being said. A note kept in state instead would go on claiming
+ * the query was generated long after it had been rewritten.
+ */
+function FromStream({
+  stream,
+  generated,
+  sql,
+}: {
+  stream: LakeStream | null;
+  generated: string | null;
+  sql: string;
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+
+  if (stream === null || generated !== sql) {
+    return null;
+  }
+  return <p className="note">{t("lake.consoleFromStream", { stream: streamLabel(t, stream) })}</p>;
+}
+
 export function LakeConsole({
   tenantId,
   locale,
+  stream,
 }: {
   tenantId: string;
   locale: Locale;
+  /**
+   * The stream the index has opened, from the URL, or null when the reader has opened none.
+   * The console writes this stream's query for itself and answers it; see `useOpenedStream`.
+   */
+  stream?: LakeStream | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const sql = useUiStore((state) => state.lakeSql[tenantId]) ?? STARTER_SQL;
@@ -239,6 +352,7 @@ export function LakeConsole({
   const setLakeOffset = useUiStore((state) => state.setLakeOffset);
   const schema = trpc.lake.querySchema.useQuery({ tenantId });
   const run = trpc.lake.query.useMutation();
+  const opened = useOpenedStream(tenantId, stream ?? null, run.mutate);
 
   /** Run from a given row. Every press goes through here, so the page and the rows agree. */
   function runFrom(from: number): void {
@@ -247,28 +361,15 @@ export function LakeConsole({
   }
 
   const more = run.data?.truncated === true;
-  const rows = run.data?.rows.length ?? 0;
-
-  /** What the bar says right now, or nothing at all before the first press. */
-  function status(): string | null {
-    if (run.isPending) {
-      return t("lake.consoleRunning");
-    }
-    if (run.data === undefined) {
-      return null;
-    }
-    if (offset === 0) {
-      return t("lake.consoleRows", { count: rows });
-    }
-    return t("lake.consoleRowsFrom", { count: rows, from: offset + 1 });
-  }
 
   return (
-    <div className="stack">
+    <div className="stack" ref={opened.bandRef}>
+      <FromStream stream={stream ?? null} generated={opened.query} sql={sql} />
+
       <div className="console">
         <div className="console__work">
           <RunBar
-            status={status()}
+            status={runStatus(t, { running: run.isPending, result: run.data, offset })}
             busy={run.isPending}
             empty={sql.trim() === ""}
             run={(): void => {
@@ -279,9 +380,13 @@ export function LakeConsole({
           <div className="console__editor">
             <Suspense fallback={<Skeleton rows={4} />}>
               <SqlEditor
-                // Remounted per tenant, never per keystroke: CodeMirror owns the text and a
-                // value pushed back on every change would fight the cursor and the history.
-                key={tenantId}
+                // Remounted per tenant AND per stream opened, never per keystroke:
+                // CodeMirror owns the text and a value pushed back on every change would
+                // fight the cursor and the history. The stream is in the key because
+                // remounting is the only way a new document reaches an uncontrolled editor
+                // -- opening a line of the index writes the draft, and this is what makes
+                // the editor show it.
+                key={`${tenantId}|${opened.key}`}
                 value={sql}
                 onChange={(next): void => {
                   setLakeSql(tenantId, next);

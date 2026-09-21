@@ -18,6 +18,7 @@ import {
   streamKey,
   streamLabel,
   streamParams,
+  streamQuery,
   streamsOf,
 } from "./lake.ts";
 
@@ -57,6 +58,40 @@ describe("a stream's address", () => {
       documents: [{ source: "gmail", documents: 1, bytes: 1, readable: 0, latestObservedAt: "" }],
     });
     expect(streams).toEqual([DEALS, MAIL]);
+  });
+});
+
+describe("the query a line of the index opens with", () => {
+  it("asks for the stream it was opened from, ordered so the console can page it", () => {
+    const deals = streamQuery(DEALS);
+    expect(deals).toContain("FROM records");
+    expect(deals).toContain("WHERE source = 'hubspot'");
+    expect(deals).toContain("AND entity = 'deals'");
+    expect(deals).toContain("ORDER BY observed_at DESC");
+
+    const mail = streamQuery(MAIL);
+    expect(mail).toContain("FROM documents");
+    expect(mail).toContain("WHERE source = 'gmail'");
+    expect(mail).not.toContain("entity");
+  });
+
+  /**
+   * The regression this guards is invisible, which is why it is worth a test of its own: a
+   * `jsonb` column reaches the driver as a parsed object and is re-serialised on its way to
+   * the browser, and every number in it comes out a float. Nothing fails; the digits are
+   * just wrong. Postgres has to be the one that renders it.
+   */
+  it("renders a payload as Postgres text, so a number too big for a float survives", () => {
+    expect(streamQuery(DEALS)).toContain("payload::text AS payload");
+  });
+
+  it("cannot be broken out of by a source's own naming", () => {
+    const hostile = streamQuery({
+      kind: "records",
+      source: "hubspot",
+      entity: "deals'; DROP TABLE records; --",
+    });
+    expect(hostile).toContain("AND entity = 'deals''; DROP TABLE records; --'");
   });
 });
 

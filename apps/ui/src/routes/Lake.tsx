@@ -104,7 +104,10 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
           <div className="head">{t("lake.consoleHead")}</div>
           <div className="body stack">
             <Suspense fallback={<Skeleton rows={6} />}>
-              <LakeConsole tenantId={tenantId} locale={locale} />
+              {/* The same stream the index opened above: the console writes its query and
+                  answers it, so a press on a line of the index ends in rows rather than in
+                  an empty editor. */}
+              <LakeConsole tenantId={tenantId} locale={locale} stream={open} />
             </Suspense>
           </div>
         </>

@@ -219,6 +219,11 @@ export const vi = {
     consoleChord: "Ctrl ↵",
     consoleRunning: "Đang chạy…",
     consoleIdle: "Chưa chạy. Viết câu lệnh rồi nhấn Chạy truy vấn, hoặc Ctrl ↵.",
+    /**
+     * Said only while the editor still holds the query that was generated, so it never
+     * claims anything about a query the reader has since edited.
+     */
+    consoleFromStream: "Câu lệnh này được tạo sẵn từ luồng {{stream}}. Sửa tuỳ ý rồi chạy lại.",
     consoleRows_other: "{{count, number}} dòng",
     consoleRowsFrom_other: "{{count, number}} dòng, từ dòng {{from, number}}",
     consoleRefused: "Truy vấn không chạy được",

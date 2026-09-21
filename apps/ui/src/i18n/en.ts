@@ -186,6 +186,7 @@ export const en = {
     consoleChord: "Ctrl ↵",
     consoleRunning: "Running…",
     consoleIdle: "Nothing run yet. Write a query and press Run query, or Ctrl ↵.",
+    consoleFromStream: "This query was written for you from {{stream}}. Edit it and run it again.",
     consoleRows_one: "{{count, number}} row",
     consoleRows_other: "{{count, number}} rows",
     consoleRowsFrom_one: "{{count, number}} row, from row {{from, number}}",

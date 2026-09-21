@@ -11,6 +11,7 @@
  * Words come from `t`; every decision that needs none is its own wordless function.
  */
 
+import { quoteLiteral } from "@undercroft/contracts/bi";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
@@ -129,6 +130,55 @@ export function streamParams(stream: LakeStream): Record<string, string> {
   return stream.kind === "records"
     ? { source: stream.source, entity: stream.entity }
     : { documents: stream.source };
+}
+
+/**
+ * The console's SELECT for one stream: what opening a line of the index asks on the reader's
+ * behalf, before they change a word of it.
+ *
+ * WHY A QUERY AND NOT A SECOND PAGER. The browser band already pages a stream in a fixed
+ * shape. What it cannot do is be edited, and every real question an operator has about a
+ * stream is one clause away from this one -- a `WHERE payload->>'stage' = 'won'`, a
+ * `count(*) GROUP BY`. Handing them the statement rather than the rows is what turns the
+ * index from a list of tables into the start of a query, and it teaches the two table names
+ * this lake has by showing them in use.
+ *
+ * `raw` is the login's search path, so the names are bare, exactly as the console's own
+ * starter query writes them.
+ *
+ * THE PAYLOAD IS CAST TO TEXT, and that is not cosmetic. A `jsonb` column arrives at the
+ * driver as a parsed object and would be re-serialised on its way to the browser, which
+ * turns every number in it into a float -- `12345678901234567890` printed as
+ * `...67000`. Postgres renders it here instead, so every digit the source sent survives.
+ * `repos/rawLake.ts` casts for the same reason and says so at greater length.
+ *
+ * ORDERED, always: the console pages with OFFSET, and Postgres may return a row on two
+ * pages or on neither when nothing orders the result. A generated query that paged
+ * unstably would be this leaf's own warning, earned by its own SQL.
+ *
+ * NO LIMIT: paging belongs to the console, which adds one per page. An author who writes
+ * their own is answered by theirs.
+ */
+export function streamQuery(stream: LakeStream): string {
+  const source = quoteLiteral(stream.source);
+  if (stream.kind === "documents") {
+    return `SELECT document_id,
+       content_type,
+       byte_length,
+       observed_at,
+       deleted_at
+FROM documents
+WHERE source = ${source}
+ORDER BY observed_at DESC`;
+  }
+  return `SELECT source_record_id,
+       observed_at,
+       deleted_at,
+       payload::text AS payload
+FROM records
+WHERE source = ${source}
+  AND entity = ${quoteLiteral(stream.entity)}
+ORDER BY observed_at DESC`;
 }
 
 /**
