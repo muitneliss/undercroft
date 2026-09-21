@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.13.0](https://github.com/muitneliss/undercroft/compare/v1.12.0...v1.13.0) (2026-09-21)
+
+
+### Features
+
+* **extract:** read spreadsheets, and give the extract verb a caller ([#73](https://github.com/muitneliss/undercroft/issues/73)) ([b740762](https://github.com/muitneliss/undercroft/commit/b74076292f7a6c5850d819725263302ff908949e))
+* **lake:** open a line of the index as a query, answered ([#71](https://github.com/muitneliss/undercroft/issues/71)) ([14cfb51](https://github.com/muitneliss/undercroft/commit/14cfb51e2da4c67f7c392cccfd443ffa589373b1))
+
+
+### Bug Fixes
+
+* **ui:** a control sits on its field's line, and a linter says so ([#74](https://github.com/muitneliss/undercroft/issues/74)) ([d28fd40](https://github.com/muitneliss/undercroft/commit/d28fd40596c9ce209f9b8c5e6ddc2a7effd1b3b8))
+
 ## [1.12.0](https://github.com/muitneliss/undercroft/compare/v1.11.0...v1.12.0) (2026-09-21)
 
 
