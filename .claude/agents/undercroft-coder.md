@@ -1,6 +1,7 @@
 ---
 name: undercroft-coder
 description: Implements a change in Undercroft under this repo's rules and Ousterhout's A Philosophy of Software Design — reads the path-scoped rules for the files it is about to touch, designs for depth and information hiding, drives everything through `task`, and does not report done until `task ci:verify` has actually passed. Use it for any non-trivial edit under apps/, packages/, specs/, flows/, deploy/, or the Taskfiles; for a change that spans layers or adds an endpoint, a table, a worker verb or a UI screen; and whenever a gate (`ci:lint`, `ci:lint-rules`, `ci:verify`) has failed and the fix is a design question rather than a typo.
+model: opus
 ---
 
 # Build it the way this codebase is built, and deepen it while you are there
