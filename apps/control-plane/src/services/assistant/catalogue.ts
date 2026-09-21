@@ -66,8 +66,12 @@ export interface ToolSpec {
    * what keeps it a service. `handlers/assistantTools.ts` resolves it, and
    * `assistantTools.test.ts` asserts every path here resolves to a real procedure -- so a
    * renamed procedure fails the gate rather than failing at the first question.
+   *
+   * ABSENT for the `navigate` tier, and that absence is the tier: a navigate tool has no
+   * server-side `execute` at all, so the SDK hands it to the browser. Nothing reaches the
+   * server that the reader did not then click.
    */
-  readonly procedure: string;
+  readonly procedure?: string;
   /**
    * The i18n key for the sentence a proof prints, interpolated with the arguments.
    *
@@ -194,6 +198,44 @@ export const READ_TOOLS = {
     tier: "read",
     plate: "facts",
     procedure: "bi.schema",
+  },
+} as const satisfies Record<string, ToolSpec>;
+
+/**
+ * The navigate tier: the assistant moves the reader, or fills a draft, and stops.
+ *
+ * These are the only tools with no `procedure` and no server-side `execute`, which is what
+ * makes them safe by construction rather than by policy: they are handled in the browser, so
+ * the server sees nothing until the reader presses something themselves. No proof is pulled,
+ * because there is nothing to confirm -- opening a page is not an action on anybody's data.
+ *
+ * `draftLakeQuery` is the one that earns this tier. The assistant is good at writing SQL and
+ * must not run it: `lake.query` executes as the customer's own read-only role against their
+ * data, and an author has to SEE what they are about to run. So the model writes the query
+ * into the console's draft, takes the reader there, and stops -- they read it and press Run.
+ * That is also why no `runQuery` tool exists at any tier.
+ */
+export const NAVIGATE_TOOLS = {
+  openDivision: {
+    description:
+      "Take the reader to one division of a customer's book: sources, journal, lake, models, " +
+      "reports or people. Use when the answer is a screen rather than a sentence.",
+    inputSchema: inTenant.extend({
+      division: z.enum(["sources", "journal", "lake", "models", "reports", "people"]),
+    }),
+    tier: "navigate",
+    plate: "none",
+  },
+  draftLakeQuery: {
+    description:
+      "Write a SQL query into the lake console's editor and take the reader there. It is NOT " +
+      "run: they read it and press Run themselves. Use this whenever a question needs SQL. " +
+      "Call analyticsSchema first so the columns you name exist.",
+    inputSchema: inTenant.extend({
+      sql: z.string().min(1).describe("A single read-only SELECT. It will not be executed."),
+    }),
+    tier: "navigate",
+    plate: "none",
   },
 } as const satisfies Record<string, ToolSpec>;
 
@@ -327,6 +369,7 @@ export const PRIVILEGED_WRITE_TOOLS = {
  */
 export const CATALOGUE = {
   ...READ_TOOLS,
+  ...NAVIGATE_TOOLS,
   ...WRITE_TOOLS,
   ...PRIVILEGED_WRITE_TOOLS,
 } as const satisfies Record<string, ToolSpec>;
@@ -359,6 +402,19 @@ export function mutates(spec: ToolSpec): boolean {
 export function misdeclared(): readonly string[] {
   return Object.entries(TOOLS)
     .filter(([, spec]) => mutates(spec) !== (spec.proofKey !== undefined))
+    .map(([name]) => name);
+}
+
+/**
+ * Tools whose tier and `procedure` disagree.
+ *
+ * A navigate tool WITH a procedure would be given a server-side `execute` and would stop being
+ * a navigation; anything else WITHOUT one would be offered to the model and then handled by
+ * nobody. Both are silent: the first acts without a proof, the second hangs.
+ */
+export function misrouted(): readonly string[] {
+  return Object.entries(TOOLS)
+    .filter(([, spec]) => (spec.tier === "navigate") === (spec.procedure !== undefined))
     .map(([name]) => name);
 }
 

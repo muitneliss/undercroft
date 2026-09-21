@@ -19,7 +19,7 @@ import { describe, expect, test as it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { CATALOGUE, misdeclared, mutates, TOOLS } from "./catalogue.ts";
+import { CATALOGUE, misdeclared, misrouted, mutates, TOOLS } from "./catalogue.ts";
 
 describe("every tool declares what its tier requires", () => {
   it("a mutation has a proof sentence and a read does not", () => {
@@ -73,5 +73,26 @@ describe("the browser's copy of which tools mutate agrees with this one", () => 
       .map(([name]) => name)
       .filter((name) => proofsModule.includes(`case "${name}":`));
     expect(stale).toEqual([]);
+  });
+});
+
+describe("the navigate tier is not bound to the server at all", () => {
+  it("a navigate tool declares no procedure, and everything else declares one", () => {
+    // The tier IS that absence: with no server-side `execute`, the SDK hands the call to the
+    // browser, so nothing reaches the server that the reader did not then press. A navigate
+    // tool WITH a procedure would quietly stop being a navigation; anything else WITHOUT one
+    // would be offered to the model and handled by nobody.
+    expect(misrouted()).toEqual([]);
+  });
+
+  it("there is a navigate tool, so the assertion above is not vacuous", () => {
+    expect(Object.values(TOOLS).map((spec) => spec.tier)).toContain("navigate");
+  });
+
+  it("a navigate tool needs no proof, because opening a page changes nothing", () => {
+    const navigating = Object.values(TOOLS).filter((spec) => spec.tier === "navigate");
+    for (const spec of navigating) {
+      expect(spec.proofKey).toBeUndefined();
+    }
   });
 });

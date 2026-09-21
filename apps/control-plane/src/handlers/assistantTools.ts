@@ -80,6 +80,7 @@ function resolveProcedure(caller: Caller, path: string): Procedure | null {
 export function unresolvedProcedures(): readonly string[] {
   return Object.values(TOOLS)
     .map((spec) => spec.procedure)
+    .filter((path): path is string => path !== undefined)
     .filter((path) => !PROCEDURE_PATHS.has(path));
 }
 
@@ -123,6 +124,15 @@ export function bindTools(ctx: Context, options: BindOptions): ToolSet {
     if (!options.tiers.includes(spec.tier)) {
       continue;
     }
+    // A navigate tool is declared with NO `execute`, which is how the SDK knows to hand it to
+    // the browser. Declaring it here rather than omitting it is the point: the model can only
+    // call a tool it was told about, and this is the tier that reaches the reader's screen
+    // without reaching their data.
+    if (spec.procedure === undefined) {
+      tools[name] = tool({ description: spec.description, inputSchema: spec.inputSchema });
+      continue;
+    }
+
     const procedure = PROCEDURE_PATHS.has(spec.procedure)
       ? resolveProcedure(caller, spec.procedure)
       : null;
