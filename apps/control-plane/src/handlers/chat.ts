@@ -20,6 +20,7 @@
  * would be a cycle (and `noImportCycles` is on).
  */
 
+import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   createUIMessageStreamResponse,
@@ -31,8 +32,16 @@ import {
 import type { Context as HonoContext, Hono } from "hono";
 import { messages as catalogue } from "../i18n/index.ts";
 import type { Assistant, Responded } from "../services/assistant/agent.ts";
-import { inputSchemas, summarizeFor, type Tier } from "../services/assistant/catalogue.ts";
+import {
+  inputSchemas,
+  mutates,
+  summarizeFor,
+  type Tier,
+  TOOLS,
+} from "../services/assistant/catalogue.ts";
 import { history, remember, resume } from "../services/assistant/conversation.ts";
+import type { ApprovalDecision, ApprovalPolicy } from "../services/assistant/agent.ts";
+import type { Judge } from "../services/assistant/judge.ts";
 import { bindTools } from "./assistantTools.ts";
 import type { Context } from "./trpc.ts";
 import { appRouter } from "./router.ts";
@@ -44,7 +53,64 @@ import { appRouter } from "./router.ts";
  * read by clicking. The write tiers arrive with the proof slip that confirms them, and until
  * that exists an unbound tool is a stronger guarantee than a bound one that asks nicely.
  */
-const TIERS: readonly Tier[] = ["read"];
+const TIERS: readonly Tier[] = ["read", "write"];
+
+/**
+ * Which proposed mutations may be offered to the reader this turn, and which are refused.
+ *
+ * Two independent things must both hold before a proof is ever pulled:
+ *
+ * 1. The reader strikes it. Every mutating tool is `user-approval`, so nothing runs on the
+ *    model's say-so.
+ * 2. The reader's OWN WORDS asked for it. Each proposal goes to the judge, with tool results
+ *    excluded from what it reads -- see `services/assistant/judge.ts` for why that exclusion
+ *    is the whole mechanism. A proposal the judge will not vouch for is `denied`, so the model
+ *    is told no and explains itself, rather than a proof appearing for something nobody asked.
+ *
+ * Asked per TOOL, with the arguments, because "did they ask for this" is a question about a
+ * specific action. Asked about the turn as a whole it would be a vibe.
+ *
+ * An UNAVAILABLE judge denies too. A gate that fails open is not a gate, and an install with
+ * no classifier can still answer questions -- it just cannot offer to change anything.
+ */
+function approvalPolicy(judge: Judge, said: readonly string[], locale: Locale): ApprovalPolicy {
+  const policy: ApprovalPolicy = {};
+  for (const [name, spec] of Object.entries(TOOLS)) {
+    if (!mutates(spec)) {
+      continue;
+    }
+    policy[name] = async (input: unknown): Promise<ApprovalDecision> => {
+      const verdict = await judge.asksFor({ saidByReader: said, tool: name, input, locale });
+      if (verdict.kind === "asked-for") {
+        return "user-approval";
+      }
+      // The reason reaches the MODEL, not the reader: it is what lets the assistant say "you
+      // have not asked me to do that" in its own words and in the reader's language, instead
+      // of a tool call vanishing with no explanation.
+      return {
+        type: "denied",
+        reason:
+          verdict.kind === "unavailable"
+            ? "The approval gate is unavailable, so no change can be proposed right now."
+            : "The reader has not asked for this action in their own words. Ask them plainly.",
+      };
+    };
+  }
+  return policy;
+}
+
+/** Only what the READER said, which is what the judge is allowed to read. */
+function saidByReader(messages: readonly UIMessage[]): readonly string[] {
+  return messages
+    .filter((message) => message.role === "user")
+    .map((message) =>
+      message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => ("text" in part ? part.text : ""))
+        .join(" "),
+    )
+    .filter((said) => said.trim() !== "");
+}
 
 export interface AssistantRouteDeps {
   readonly exec: SqlExecutor;
@@ -52,6 +118,12 @@ export interface AssistantRouteDeps {
   readonly createContext: (headers: Headers) => Promise<Context>;
   /** Absent means no model is configured; the routes then refuse in the caller's language. */
   readonly assistant?: Assistant;
+  /**
+   * The injection gate. Absent is expressed as `unavailableJudge` rather than `undefined`, so a
+   * caller handles a verdict rather than a null -- and an unconfigured gate denies the write
+   * tier instead of disappearing.
+   */
+  readonly judge: Judge;
 }
 
 interface ChatBody {
@@ -219,6 +291,7 @@ export function registerAssistantRoutes(app: Hono, deps: AssistantRouteDeps): vo
     const result = await assistant.respond({
       messages,
       tools,
+      approval: approvalPolicy(deps.judge, saidByReader(messages), ctx.locale),
       facts: {
         locale: ctx.locale,
         tenantId: body.tenantId,

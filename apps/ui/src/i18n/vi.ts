@@ -964,6 +964,25 @@ export const vi = {
     failedBody: "Trợ lý chưa trả lời được câu hỏi này. Không có gì bị thay đổi.",
     retry: "Thử lại",
     /** No model configured. The reader cannot fix it; the sentence points at a person. */
+    /**
+     * A PROOF: the printer's trial impression, pulled before the press run.
+     *
+     * One sentence per action, interpolated with the real arguments, and it comes from HERE
+     * rather than from the model -- asking the thing that proposed an action to also word the
+     * confirmation of it is how a reader ends up striking a sentence that does not describe
+     * what will happen.
+     */
+    proof: {
+      head: "Xác nhận",
+      strike: "Đồng ý",
+      discard: "Bỏ",
+      confirmLabel: "Nhập lại để xác nhận",
+      confirmHint: "Hãy nhập “{{expected}}” để bật nút đồng ý.",
+      struck: "Đã bỏ",
+      runIngestNow: "Chạy đồng bộ nguồn {{source}} cho khách hàng {{tenantId}} ngay bây giờ.",
+      setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",
+      invitePerson: "Mời {{email}} vào khách hàng {{tenantId}} với vai trò {{role}}.",
+    },
     unconfiguredTitle: "Trợ lý chưa sẵn sàng",
     unconfiguredBody:
       "Bản triển khai này chưa được cấu hình trợ lý. Hãy báo người quản trị hệ thống.",

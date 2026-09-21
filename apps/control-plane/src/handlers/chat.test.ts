@@ -24,6 +24,7 @@ import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { Hono } from "hono";
 import { findThread, listTurns } from "../repos/assistantThread.ts";
 import { createAssistant } from "../services/assistant/agent.ts";
+import { inMemoryJudge, unavailableJudge } from "../services/assistant/judge.ts";
 import { inMemoryLanguageModel, type Turn } from "../services/assistant/model.ts";
 import { registerAssistantRoutes } from "./chat.ts";
 import { createServer } from "./server.ts";
@@ -68,13 +69,24 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
   };
 }
 
-/** Just the assistant routes, with the caller and the model both injected. */
-function appWith(turns: readonly Turn[], ctx: Context = context(operator)): Hono {
+/**
+ * Just the assistant routes, with the caller, the model and the gate all injected.
+ *
+ * `asksFor` lists the phrases that count as the reader asking for something. A judge that said
+ * yes to everything would make the injection test below pass while the gate was open, so the
+ * scripted one refuses anything it has no modelled answer for.
+ */
+function appWith(
+  turns: readonly Turn[],
+  ctx: Context = context(operator),
+  asksFor: readonly string[] = [],
+): Hono {
   const app = new Hono();
   registerAssistantRoutes(app, {
     exec: db,
     createContext: () => Promise.resolve(ctx),
     assistant: createAssistant(inMemoryLanguageModel(turns)),
+    judge: inMemoryJudge(asksFor),
   });
   return app;
 }
@@ -82,7 +94,11 @@ function appWith(turns: readonly Turn[], ctx: Context = context(operator)): Hono
 /** The same, with no model configured. */
 function appWithoutAssistant(ctx: Context = context(operator)): Hono {
   const app = new Hono();
-  registerAssistantRoutes(app, { exec: db, createContext: () => Promise.resolve(ctx) });
+  registerAssistantRoutes(app, {
+    exec: db,
+    createContext: () => Promise.resolve(ctx),
+    judge: unavailableJudge,
+  });
   return app;
 }
 
@@ -108,6 +124,16 @@ async function ask(app: Hono, question: string, tenantId = "CASE-0042"): Promise
 interface Frame {
   readonly type: string;
   readonly delta?: string;
+  /**
+   * Present on an approval frame.
+   *
+   * `isAutomatic` is the field that matters and it cost a round to learn: the SDK models an
+   * AUTOMATIC denial as a `tool-approval-request` followed at once by a
+   * `tool-approval-response`, so the presence of a request frame says nothing about whether a
+   * reader was ever asked. What distinguishes "waiting for the reader" from "refused without
+   * them" is that the first has no response frame. The interleaf has to read it the same way.
+   */
+  readonly approval?: { readonly isAutomatic?: boolean };
 }
 
 /** Every SSE frame the route streamed, in order. */
@@ -261,5 +287,120 @@ describe("the route is registered ahead of the SPA catch-all", () => {
       }),
     );
     expect(response.status).toBe(401);
+  });
+});
+
+describe("a change is proposed, never performed", () => {
+  /** A script that goes straight for a mutation, as a model asked to act would. */
+  const WANTS_TO_RUN: readonly Turn[] = [
+    {
+      when: "chạy",
+      reply: [{ call: "runIngestNow", input: { tenantId: "CASE-0042", source: "xero" } }],
+    },
+  ];
+
+  it("reaches approval-requested rather than running", async () => {
+    // The whole promise of the write tier. `runs.trigger` would have refused anyway in this
+    // suite (no worker), and that is the point: the call must not get far enough to find out.
+    const app = appWith(WANTS_TO_RUN, context(operator), ["chạy"]);
+    const streamed = await frames(await ask(app, "Chạy đồng bộ Xero ngay"));
+
+    const states = streamed.map((frame) => frame.type);
+    expect(states).toContain("tool-approval-request");
+    // WAITING for the reader, which is the absence of a response frame -- see `Frame.approval`.
+    expect(states).not.toContain("tool-approval-response");
+    // And nothing ran: no output, no error. The reader has not struck anything yet.
+    expect(states).not.toContain("tool-output-available");
+    expect(states).not.toContain("tool-output-error");
+  });
+
+  it("a read in the same catalogue still runs without one", async () => {
+    // The quiet half. If everything needed approval, the test above would pass while the
+    // assistant had stopped being able to answer a question.
+    const app = appWith(
+      [
+        { when: "nguồn", reply: [{ call: "sourceStatus", input: { tenantId: "CASE-0042" } }] },
+        { when: "nguồn", reply: [{ say: "Xong." }] },
+      ],
+      context(operator),
+      ["nguồn"],
+    );
+    const streamed = await frames(await ask(app, "Các nguồn thế nào?"));
+    expect(streamed.map((frame) => frame.type)).toContain("tool-output-available");
+  });
+});
+
+describe("data cannot command the assistant", () => {
+  /**
+   * THE INJECTION TEST, and the reason a classifier is in this codebase at all.
+   *
+   * The reader asks a question. The model -- having read a landed document that says so --
+   * proposes a mutation. The gate is asked whether the READER's own words requested it, sees
+   * that they asked about invoices, and denies it. No proof is pulled.
+   */
+  it("a mutation the reader never asked for is denied, not offered", async () => {
+    const app = appWith(
+      [
+        {
+          when: "hoá đơn",
+          reply: [{ call: "runIngestNow", input: { tenantId: "CASE-0042", source: "xero" } }],
+        },
+        { when: "hoá đơn", reply: [{ say: "Bạn chưa yêu cầu việc đó." }] },
+      ],
+      context(operator),
+      // The judge is scripted to recognise only "chạy" (run). The reader said no such thing.
+      ["chạy"],
+    );
+    const streamed = await frames(await ask(app, "Hoá đơn tháng này về chưa?"));
+
+    const states = streamed.map((frame) => frame.type);
+    // Denied outright, and the reader is never asked. The SDK still emits a request frame for
+    // an automatic decision, so what is asserted is that a RESPONSE came with it -- nobody
+    // was waited for -- and that the call ended denied.
+    expect(states).toContain("tool-approval-response");
+    expect(states).toContain("tool-output-denied");
+    // Deliberately not asserting the request frame's own `isAutomatic` flag: the presence of
+    // a response alongside it is the signal that nobody was waited for, and it is the one
+    // verified here rather than a field shape guessed at.
+  });
+
+  it("the same proposal IS offered when the reader did ask for it", async () => {
+    // The firing half's counterpart. Without it, a gate that denied everything would satisfy
+    // the test above while the write tier was dead.
+    const app = appWith(WANTS_TO_RUN_FOR_INJECTION, context(operator), ["chạy"]);
+    const streamed = await frames(await ask(app, "Chạy đồng bộ Xero ngay"));
+    const states = streamed.map((frame) => frame.type);
+    expect(states).toContain("tool-approval-request");
+    // The difference from the test above: no response frame, because a person is being waited
+    // for. That difference IS the gate.
+    expect(states).not.toContain("tool-approval-response");
+  });
+});
+
+const WANTS_TO_RUN_FOR_INJECTION: readonly Turn[] = [
+  {
+    when: "chạy",
+    reply: [{ call: "runIngestNow", input: { tenantId: "CASE-0042", source: "xero" } }],
+  },
+];
+
+describe("an unconfigured gate refuses to offer a change", () => {
+  it("denies the write tier rather than waving it through", async () => {
+    // A gate that fails open is not a gate. An install with a model key but no classifier can
+    // answer questions and cannot offer to change anything -- and the model is told why, so it
+    // can say so rather than falling silent.
+    const app = new Hono();
+    registerAssistantRoutes(app, {
+      exec: db,
+      createContext: () => Promise.resolve(context(operator)),
+      assistant: createAssistant(inMemoryLanguageModel(WANTS_TO_RUN_FOR_INJECTION)),
+      judge: unavailableJudge,
+    });
+    const streamed = await frames(await ask(app, "Chạy đồng bộ Xero ngay"));
+
+    const states = streamed.map((frame) => frame.type);
+    expect(states).toContain("tool-output-denied");
+    // Refused without asking anybody, which is the shape of an automatic decision.
+    expect(states).toContain("tool-approval-response");
   });
 });

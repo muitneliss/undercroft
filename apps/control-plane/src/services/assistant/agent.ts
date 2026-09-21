@@ -31,7 +31,24 @@ export interface RespondInput {
   readonly messages: UIMessage[];
   readonly tools: ToolSet;
   readonly facts: PromptFacts;
+  /**
+   * Which tools may not run until the reader strikes a proof of them.
+   *
+   * A function per tool rather than a flat status, because the SDK calls it with the REAL
+   * ARGUMENTS at the moment the model proposes the call -- which is the only moment they
+   * exist, and therefore the only moment the judge can be asked whether the reader's own words
+   * asked for THIS action rather than for actions in general.
+   */
+  readonly approval: ApprovalPolicy;
 }
+
+/** `undefined` means no approval metadata: the tool runs, which is the read tier's answer. */
+export type ApprovalDecision =
+  | "user-approval"
+  | { readonly type: "denied"; readonly reason: string }
+  | undefined;
+
+export type ApprovalPolicy = Record<string, (input: unknown) => Promise<ApprovalDecision>>;
 
 /** What a stream of an answer looks like to the handler, without naming the SDK's result type. */
 export type Responded = ReturnType<typeof streamText>;
@@ -49,15 +66,24 @@ export interface Assistant {
  * a message referenced. The transcript handed in here has already been through
  * `validateUIMessages`, which is what makes it safe to convert a shape that arrived as jsonb.
  */
-export function createAssistant(model: LanguageModel): Assistant {
+export function createAssistant(model: LanguageModel, approvalSecret?: string): Assistant {
   return {
     modelId: typeof model === "string" ? model : model.modelId,
-    respond: async ({ messages, tools, facts }) =>
+    respond: async ({ messages, tools, facts, approval }) =>
       streamText({
         model,
         system: systemPrompt(facts),
         messages: await convertToModelMessages(messages),
         tools,
+        toolApproval: approval,
+        // HMAC-SIGNS each approval request against the tool name, call id and arguments, and
+        // verifies the signature when the browser replays it. Without this, "the reader said
+        // yes" is a claim the client makes about itself: a tampered body could approve a call
+        // that was never offered, or approve a different one than was shown. Absent when no
+        // secret is configured, which `main.ts` reports rather than hides.
+        ...(approvalSecret === undefined
+          ? {}
+          : { experimental_toolApprovalSecret: approvalSecret }),
         stopWhen: stepCountIs(MAX_STEPS),
       }),
   };

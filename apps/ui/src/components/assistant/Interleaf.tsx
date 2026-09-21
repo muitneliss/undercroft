@@ -20,7 +20,11 @@
  */
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+  type UIMessage,
+} from "ai";
 import { useTranslation } from "react-i18next";
 
 import { Composer } from "@/components/assistant/Composer.tsx";
@@ -33,7 +37,14 @@ export function Interleaf({ tenantId }: { tenantId: string }): React.JSX.Element
   const { t } = useTranslation();
   const toggleAssistant = useUiStore((state) => state.toggleAssistant);
 
-  const { messages, sendMessage, status, stop } = useChat({
+  const { messages, sendMessage, status, stop, addToolApprovalResponse } = useChat({
+    /**
+     * Once the reader has answered every proof, go on without them.
+     *
+     * Striking a proof is the reader saying "yes, do it"; asking them to then press send as
+     * well would be asking twice for one decision.
+     */
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     transport: new DefaultChatTransport({
       api: "/api/assistant/chat",
       /**
@@ -83,6 +94,9 @@ export function Interleaf({ tenantId }: { tenantId: string }): React.JSX.Element
             // put a caret on every paragraph the assistant has ever written.
             streaming={answering && index === turns.length - 1 && turn.role === "assistant"}
             firstFigureNumber={firsts[index] ?? 1}
+            onAnswer={(id, approved): void => {
+              void addToolApprovalResponse({ id, approved });
+            }}
           />
         ))}
       </div>

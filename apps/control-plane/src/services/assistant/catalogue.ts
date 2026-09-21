@@ -25,6 +25,7 @@
  * offers to open the picker rather than inventing a selection.
  */
 
+import { Cadence } from "@undercroft/contracts";
 import { z } from "zod";
 
 /**
@@ -197,13 +198,70 @@ export const READ_TOOLS = {
 } as const satisfies Record<string, ToolSpec>;
 
 /**
+ * The write tier: reversible, cheap, and pulled as a proof the reader must strike.
+ *
+ * Every one of these is something an admin could already do in two clicks, and every one is
+ * reversible in the same two -- a cadence can be set back, a run can be triggered again, an
+ * invitation can be revoked. That is what makes them the routine tier: the cost of a wrong one
+ * is a minute, not a customer's data.
+ *
+ * Each carries a `proofKey`. The sentence the reader strikes comes from the i18n catalogue
+ * under that key, interpolated with the real arguments -- never from the model, which would be
+ * asking the thing proposing the action to also word the confirmation of it.
+ */
+export const WRITE_TOOLS = {
+  runIngestNow: {
+    description:
+      "Start an ingest run for one source of one customer, now, instead of waiting for its " +
+      "cadence. Use when the reader wants fresh data immediately.",
+    inputSchema: inTenant.extend({
+      source: z.enum(["hubspot", "xero", "gmail", "drive"]),
+    }),
+    tier: "write",
+    plate: "runs",
+    procedure: "runs.trigger",
+    proofKey: "assistant.proof.runIngestNow",
+  },
+  setCadence: {
+    description:
+      "Change how often one source is ingested. Paused means it only runs when asked. This is " +
+      "reversible; the previous cadence is not remembered, so name the new one plainly.",
+    inputSchema: inTenant.extend({
+      source: z.enum(["hubspot", "xero", "gmail", "drive"]),
+      cadence: Cadence,
+    }),
+    tier: "write",
+    plate: "grants",
+    procedure: "connections.setCadence",
+    proofKey: "assistant.proof.setCadence",
+  },
+  invitePerson: {
+    description:
+      "Invite somebody to this customer by email address, at a role. viewer reads, member also " +
+      "authors questions, admin also connects accounts. Sign-in is invitation-only, so this is " +
+      "the only way somebody gains access.",
+    inputSchema: inTenant.extend({
+      email: z.string().email(),
+      role: z.enum(["viewer", "member", "admin"]),
+    }),
+    tier: "write",
+    plate: "facts",
+    procedure: "people.invite",
+    proofKey: "assistant.proof.invitePerson",
+  },
+} as const satisfies Record<string, ToolSpec>;
+
+/**
  * Every tool the assistant has, by tier.
  *
  * One object rather than a per-tier export, so `handlers/assistantTools.ts` binds one map and
  * the tier decides the approval -- rather than a caller having to remember to include a tier.
  * The write and privileged tiers join here as they land.
  */
-export const CATALOGUE = { ...READ_TOOLS } as const satisfies Record<string, ToolSpec>;
+export const CATALOGUE = {
+  ...READ_TOOLS,
+  ...WRITE_TOOLS,
+} as const satisfies Record<string, ToolSpec>;
 
 export type ToolName = keyof typeof CATALOGUE;
 
@@ -216,6 +274,25 @@ export type ToolName = keyof typeof CATALOGUE;
  * is declared once here instead of asserted at each of them.
  */
 export const TOOLS: Readonly<Record<string, ToolSpec>> = CATALOGUE;
+
+/** The tiers that change something, and therefore must be confirmed before they run. */
+export const MUTATING_TIERS: readonly Tier[] = ["write", "privileged"];
+
+export function mutates(spec: ToolSpec): boolean {
+  return MUTATING_TIERS.includes(spec.tier);
+}
+
+/**
+ * Tools whose declaration does not match their tier.
+ *
+ * A mutation with no `proofKey` would render a proof the reader cannot read; a read with one
+ * is dead prose. Both are caught by a test rather than by review, because both look fine.
+ */
+export function misdeclared(): readonly string[] {
+  return Object.entries(TOOLS)
+    .filter(([, spec]) => mutates(spec) !== (spec.proofKey !== undefined))
+    .map(([name]) => name);
+}
 
 /** The summariser `transcript.ts` takes, assembled from what each tool declared about itself. */
 export function summarizeFor(toolName: string, output: unknown): string | null {

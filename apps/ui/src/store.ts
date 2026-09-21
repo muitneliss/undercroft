@@ -235,6 +235,15 @@ interface UiState {
    */
   assistantDraft: string;
   setAssistantDraft: (draft: string) => void;
+  /**
+   * What the reader has typed into a privileged proof's confirmation field.
+   *
+   * One value rather than one per proof, because only one proof is ever awaiting an answer: the
+   * model stops at an approval request and asks nothing else until it has one. Keying it by
+   * approval id would be a map that never holds two entries.
+   */
+  assistantConfirm: string;
+  setAssistantConfirm: (typed: string) => void;
 }
 
 /**
@@ -545,12 +554,22 @@ function dashboardSlice(
  */
 function assistantSlice(
   set: Setter,
-): Pick<UiState, "assistantOpen" | "toggleAssistant" | "assistantDraft" | "setAssistantDraft"> {
+): Pick<
+  UiState,
+  | "assistantOpen"
+  | "toggleAssistant"
+  | "assistantDraft"
+  | "setAssistantDraft"
+  | "assistantConfirm"
+  | "setAssistantConfirm"
+> {
   return {
     assistantOpen: false,
     toggleAssistant: (): unknown => set((state) => ({ assistantOpen: !state.assistantOpen })),
     assistantDraft: "",
     setAssistantDraft: (assistantDraft): unknown => set({ assistantDraft }),
+    assistantConfirm: "",
+    setAssistantConfirm: (assistantConfirm): unknown => set({ assistantConfirm }),
   };
 }
 

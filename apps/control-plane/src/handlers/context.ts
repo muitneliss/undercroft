@@ -23,6 +23,7 @@ import { invitationMessage } from "../services/people.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
+import type { Judge } from "../services/assistant/judge.ts";
 import type { Auth } from "./auth.ts";
 import type { Context, SessionUser } from "./trpc.ts";
 
@@ -74,6 +75,11 @@ export interface ServerDeps {
    * opens and then fails at the first question. The same degrade-and-log shape as `worker`.
    */
   readonly assistant?: Assistant;
+  /**
+   * The assistant's injection gate. Absent means the write tier refuses -- see
+   * `services/assistant/judge.ts`; a gate that fails open is not a gate.
+   */
+  readonly judge?: Judge;
 }
 
 /**

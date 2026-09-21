@@ -14,8 +14,9 @@
 import { useTranslation } from "react-i18next";
 
 import { Figure } from "@/components/assistant/Figure.tsx";
+import { Proof, StruckProof } from "@/components/assistant/Proof.tsx";
 import type { AssistantPart, AssistantTurn } from "@/lib/assistantTurns.ts";
-import { figureKey, figuresIn, textOf } from "@/lib/assistantTurns.ts";
+import { figureKey, figuresIn, outcomeOf, textOf } from "@/lib/assistantTurns.ts";
 
 /** The manual's index mark. A glyph, so it carries no accessible name of its own. */
 const FIST = "☞";
@@ -31,16 +32,44 @@ function Asked({ said }: { said: string }): React.JSX.Element {
   );
 }
 
+/**
+ * One tool part: a proof awaiting the reader, a struck one, or a figure.
+ *
+ * The three are the same object at different moments, which is why they are chosen here rather
+ * than in three places -- the state comes from `outcomeOf`, so the panel cannot disagree with
+ * itself about whether something is still a question.
+ */
+function ToolPart({
+  part,
+  number,
+  onAnswer,
+}: {
+  part: AssistantPart;
+  number: number;
+  onAnswer: (approvalId: string, approved: boolean) => void;
+}): React.JSX.Element | null {
+  const outcome = outcomeOf(part);
+  if (outcome.kind === "awaiting") {
+    return <Proof part={part} approvalId={outcome.approvalId} onAnswer={onAnswer} />;
+  }
+  if (outcome.kind === "denied") {
+    return <StruckProof part={part} />;
+  }
+  return <Figure part={part} number={number} />;
+}
+
 function Answered({
   said,
   streaming,
   figures,
   firstFigureNumber,
+  onAnswer,
 }: {
   said: string;
   streaming: boolean;
   figures: readonly AssistantPart[];
   firstFigureNumber: number;
+  onAnswer: (approvalId: string, approved: boolean) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -54,7 +83,12 @@ function Answered({
       )}
 
       {figures.map((part, index) => (
-        <Figure key={figureKey(part, index)} part={part} number={firstFigureNumber + index} />
+        <ToolPart
+          key={figureKey(part, index)}
+          part={part}
+          number={firstFigureNumber + index}
+          onAnswer={onAnswer}
+        />
       ))}
 
       {/* Announced, not drawn: the caret in the stylesheet says more is coming to a reader who
@@ -72,12 +106,15 @@ export function Turn({
   turn,
   streaming,
   firstFigureNumber,
+  onAnswer,
 }: {
   turn: AssistantTurn;
   /** This is the last turn and the answer is still arriving. */
   streaming: boolean;
   /** Figures are numbered across the whole conversation, as a manual numbers them. */
   firstFigureNumber: number;
+  /** The reader's answer to a proof, keyed by the approval it belongs to. */
+  onAnswer: (approvalId: string, approved: boolean) => void;
 }): React.JSX.Element {
   const said = textOf(turn);
 
@@ -90,6 +127,7 @@ export function Turn({
       streaming={streaming}
       figures={figuresIn(turn)}
       firstFigureNumber={firstFigureNumber}
+      onAnswer={onAnswer}
     />
   );
 }

@@ -11,6 +11,7 @@
 
 import process from "node:process";
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { noul, TypeSafeClient } from "@typesafe-ai/sdk";
 import {
   createHttpEmailSender,
   createLogger,
@@ -22,6 +23,7 @@ import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
 import { runAlerts } from "./services/alerts.ts";
 import { createAssistant } from "./services/assistant/agent.ts";
+import { createJudge } from "./services/assistant/judge.ts";
 import { parseSuperadmins } from "./services/superadmin.ts";
 import { createHttpWorkerClient } from "./services/workerClient.ts";
 
@@ -129,6 +131,7 @@ const worker =
  * them read the runbook to type a constant.
  */
 const anthropicKey = optional("UNDERCROFT_ANTHROPIC_API_KEY");
+const approvalSecret = optional("UNDERCROFT_ASSISTANT_APPROVAL_SECRET");
 const assistant =
   anthropicKey === undefined
     ? undefined
@@ -136,11 +139,46 @@ const assistant =
         createAnthropic({ apiKey: anthropicKey })(
           optional("UNDERCROFT_ASSISTANT_MODEL") ?? "claude-opus-5",
         ),
+        approvalSecret,
       );
+
+/**
+ * The injection gate: TypeSafe's System One, asked whether the reader's own words requested an
+ * action before one is ever offered. `services/assistant/judge.ts` records why a classifier
+ * earns its place here rather than being decoration.
+ *
+ * Absent is NOT absent: an unconfigured gate becomes `unavailableJudge`, which denies the write
+ * tier. So an install with only a model key can answer questions and cannot offer to change
+ * anything -- which is the honest degradation, and the one a reader is told about.
+ */
+const typesafeKey = optional("UNDERCROFT_TYPESAFE_API_KEY");
+const judge =
+  typesafeKey === undefined
+    ? undefined
+    : ((): ReturnType<typeof createJudge> => {
+        // The vendor's surface lives here, with every other vendor's, and `judge.ts` sees only
+        // "state and a question in, a probability or nothing out".
+        const client = new TypeSafeClient({ apiKey: typesafeKey });
+        return createJudge(async (state, instructions) => {
+          const { answers } = await client.systemOne({
+            state,
+            questions: { asksFor: noul(instructions) },
+          });
+          return answers.asksFor.noul ?? null;
+        });
+      })();
+
 if (assistant === undefined) {
   log.info("assistant_unconfigured", { missing: "UNDERCROFT_ANTHROPIC_API_KEY" });
 } else {
-  log.info("assistant_ready", { model: assistant.modelId });
+  log.info("assistant_ready", {
+    model: assistant.modelId,
+    // Named rather than silent: an operator reading a log after a deploy needs to know the
+    // assistant came up read-only, because nothing on the screen will say so until somebody
+    // asks it to change something.
+    writes: judge === undefined ? "refused: no UNDERCROFT_TYPESAFE_API_KEY" : "gated",
+    approvals: approvalSecret === undefined ? "unsigned" : "signed",
+  });
 }
 
 /**
@@ -265,6 +303,7 @@ const app = createServer({
   ...(xero === undefined ? {} : { xero }),
   ...(worker === undefined ? {} : { worker }),
   ...(assistant === undefined ? {} : { assistant }),
+  ...(judge === undefined ? {} : { judge }),
 });
 
 // parseInt, not Number(): a port, not an amount.

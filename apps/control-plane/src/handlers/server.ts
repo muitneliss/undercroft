@@ -18,6 +18,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { isAdminIn } from "../services/authz.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
+import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
 import { createContext, resolveCaller, type ServerDeps } from "./context.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
@@ -94,25 +95,14 @@ function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
   }
 }
 
-export function createServer(deps: ServerDeps): Hono {
-  const app = new Hono();
-
-  app.get("/api/health", (c) => c.json({ ok: true }));
-
-  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
-  // matter: the catch-all answers any GET with index.html, so an auth route registered
-  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
-  // the app shell -- a sign-in that silently never completes.
-  if (deps.auth !== undefined) {
-    const { auth } = deps;
-    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
-  }
-
-  // The per-tenant consent callback, and the same hazard: registered here so it wins over
-  // the catch-all at the foot of this function. Unconditional, because a callback that 404s
-  // is a diagnosable misconfiguration whereas one that serves the app shell is a consent
-  // that appears to work and never completes. With no client or worker configured the
-  // service refuses it, which is the honest answer.
+/**
+ * The per-tenant consent callback.
+ *
+ * Unconditional, because a callback that 404s is a diagnosable misconfiguration whereas one
+ * that serves the app shell is a consent that appears to work and never completes. With no
+ * client or worker configured the service refuses it, which is the honest answer.
+ */
+function registerConsentRoute(app: Hono, deps: ServerDeps): void {
   registerOAuthRoutes(app, {
     exec: deps.exec,
     ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
@@ -127,6 +117,24 @@ export function createServer(deps: ServerDeps): Hono {
       isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
     resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
   });
+}
+
+export function createServer(deps: ServerDeps): Hono {
+  const app = new Hono();
+
+  app.get("/api/health", (c) => c.json({ ok: true }));
+
+  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
+  // matter: the catch-all answers any GET with index.html, so an auth route registered
+  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
+  // the app shell -- a sign-in that silently never completes.
+  if (deps.auth !== undefined) {
+    const { auth } = deps;
+    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+  }
+
+  // Registered here so it wins over the catch-all at the foot of this function.
+  registerConsentRoute(app, deps);
 
   registerTrpcRoute(app, deps);
 
@@ -137,6 +145,9 @@ export function createServer(deps: ServerDeps): Hono {
   registerAssistantRoutes(app, {
     exec: deps.exec,
     createContext: (headers) => createContext(deps, headers),
+    // Not spread conditionally: an absent gate is `unavailableJudge`, which DENIES the write
+    // tier, so the route handles a verdict rather than a null. That is the honest default.
+    judge: deps.judge ?? unavailableJudge,
     ...(deps.assistant === undefined ? {} : { assistant: deps.assistant }),
   });
 

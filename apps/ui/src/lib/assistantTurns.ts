@@ -18,6 +18,22 @@ const ERROR_NOT_KEPT = "undercroft:error-not-kept";
 
 export interface AssistantPart {
   readonly type: string;
+  /** The arguments a proof was pulled on. Shown to the reader as mono rows. */
+  readonly input?: unknown;
+  /**
+   * Present on an approval part.
+   *
+   * `isAutomatic` is the field that matters, and it is easy to miss: the SDK models an
+   * AUTOMATIC decision -- one the injection gate made without asking anybody -- as an approval
+   * request too. A panel that drew a proof for every request would ask the reader to confirm
+   * things that were already refused on their behalf.
+   */
+  readonly approval?: {
+    readonly id?: string;
+    readonly approved?: boolean;
+    readonly isAutomatic?: boolean;
+    readonly reason?: string;
+  };
   /** Present on a tool part. Used as the figure's React key -- see `figureKey`. */
   readonly toolCallId?: string;
   readonly text?: string;
@@ -36,6 +52,10 @@ export interface AssistantTurn {
 /** What a result came back as, once the not-kept cases are separated from the real ones. */
 export type FigureOutcome =
   | { readonly kind: "pending" }
+  /** Waiting for the reader to strike a proof. Carries the id their answer is keyed by. */
+  | { readonly kind: "awaiting"; readonly approvalId: string }
+  /** The reader discarded it, or the gate refused it. Struck, and it stays on the page. */
+  | { readonly kind: "denied"; readonly reason?: string }
   | { readonly kind: "shown"; readonly output: unknown }
   /** Shown live, not kept. The panel says so rather than showing an empty frame. */
   | { readonly kind: "not-kept"; readonly summary?: string }
@@ -76,31 +96,58 @@ export function toolNameOf(part: AssistantPart): string {
 }
 
 /**
- * Was the payload kept, and if not, why not.
+ * The approval half: is this still a question for the reader, or was it already settled?
  *
- * A digest arrives as the output rather than beside it (`transcript.ts` restores it there), so
+ * `isAutomatic` is checked FIRST and it is the subtle one. The SDK models a decision the
+ * injection gate made -- without asking anybody -- as an approval request too, so a panel that
+ * drew a proof for every request would ask the reader to confirm things already refused on
+ * their behalf. See `services/assistant/judge.ts`.
+ */
+function approvalOutcome(part: AssistantPart): FigureOutcome | null {
+  if (part.state === "approval-requested" && part.approval?.isAutomatic !== true) {
+    const id = part.approval?.id;
+    return id === undefined ? { kind: "pending" } : { kind: "awaiting", approvalId: id };
+  }
+  if (part.state === "output-denied" || part.state === "approval-responded") {
+    const { reason } = part.approval ?? {};
+    return reason === undefined ? { kind: "denied" } : { kind: "denied", reason };
+  }
+  return null;
+}
+
+/**
+ * The digest half: did the payload survive, and if not, why not.
+ *
+ * A digest arrives AS the output rather than beside it (`transcript.ts` restores it there), so
  * "not kept" is read off the output's shape. That is the one place this module knows something
  * about the server, and it is a shape the server's own tests pin.
  */
+function keptOutcome(output: unknown): FigureOutcome {
+  if (output === null || typeof output !== "object" || !("kept" in output)) {
+    return { kind: "shown", output };
+  }
+  if (output.kept !== false) {
+    return { kind: "shown", output };
+  }
+  if ("failed" in output && output.failed === true) {
+    return { kind: "not-kept-failed" };
+  }
+  const summary = "summary" in output ? output.summary : undefined;
+  return typeof summary === "string" ? { kind: "not-kept", summary } : { kind: "not-kept" };
+}
+
+/** What this tool call came back as, if anything. */
 export function outcomeOf(part: AssistantPart): FigureOutcome {
+  const settled = approvalOutcome(part);
+  if (settled !== null) {
+    return settled;
+  }
   if (part.state === "output-error") {
     return part.errorText === ERROR_NOT_KEPT
       ? { kind: "not-kept-failed" }
       : { kind: "failed", why: part.errorText ?? "" };
   }
-  if (part.state !== "output-available") {
-    return { kind: "pending" };
-  }
-
-  const { output } = part;
-  if (output !== null && typeof output === "object" && "kept" in output && output.kept === false) {
-    const summary = "summary" in output ? output.summary : undefined;
-    if ("failed" in output && output.failed === true) {
-      return { kind: "not-kept-failed" };
-    }
-    return typeof summary === "string" ? { kind: "not-kept", summary } : { kind: "not-kept" };
-  }
-  return { kind: "shown", output };
+  return part.state === "output-available" ? keptOutcome(part.output) : { kind: "pending" };
 }
 
 /**

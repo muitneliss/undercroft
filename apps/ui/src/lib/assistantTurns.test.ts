@@ -145,3 +145,39 @@ describe("whether the result survived", () => {
     expect(outcomeOf({ type: "tool-x", state: "input-streaming" }).kind).toBe("pending");
   });
 });
+
+describe("a proof awaiting the reader", () => {
+  it("is a question, carrying the id their answer is keyed by", () => {
+    const outcome = outcomeOf({
+      type: "tool-runIngestNow",
+      state: "approval-requested",
+      input: { tenantId: "CASE-0042", source: "xero" },
+      approval: { id: "a1" },
+    });
+    expect(outcome).toEqual({ kind: "awaiting", approvalId: "a1" });
+  });
+
+  it("is NOT a question when the gate already decided for them", () => {
+    // The subtle one, and the reason `isAutomatic` is checked first. The SDK models a decision
+    // the injection gate made -- without asking anybody -- as an approval request too, so a
+    // panel that drew a proof for every request would ask the reader to confirm things that
+    // were already refused on their behalf.
+    const outcome = outcomeOf({
+      type: "tool-runIngestNow",
+      state: "approval-requested",
+      input: { tenantId: "CASE-0042", source: "xero" },
+      approval: { id: "a1", isAutomatic: true },
+    });
+    expect(outcome.kind).not.toBe("awaiting");
+  });
+
+  it("a discarded proof is struck, and carries why when there is a why", () => {
+    expect(
+      outcomeOf({
+        type: "tool-runIngestNow",
+        state: "output-denied",
+        approval: { id: "a1", approved: false, reason: "not asked for" },
+      }),
+    ).toEqual({ kind: "denied", reason: "not asked for" });
+  });
+});

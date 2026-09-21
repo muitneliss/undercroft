@@ -3496,6 +3496,76 @@
     margin-left: 0.15em;
   }
 
+  /* -- A PROOF -------------------------------------------------------------------------
+   *
+   * The printer's trial impression, pulled before the press run. The focal moment of the
+   * interleaf, and the one object in it a reader must act on.
+   *
+   * ITS BINDING EDGE IS PERFORATED -- the same dashed hairline a *pending* grant wears, because
+   * it is exactly that state: something awaiting a decision. Reusing that mark means a reader
+   * who has seen a half-hinged source already knows what this is, where a new mark would have
+   * to be learned.
+   *
+   * IT IS NOT VERMILION, and that holds hardest here. The Vermilion Rule: a destructive plate
+   * is an ordinary plate, because the safety is the confirmation step and not the colour, and
+   * vermilion belongs to the errata slip alone. A proof is a question, not a correction.
+   */
+  .proof {
+    border-left: var(--hair) dashed var(--rule-strong);
+    padding: var(--s-3) 0 var(--s-3) var(--s-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+    /* Three frames: a slip being tipped in. `--tip` is the token for exactly this object size,
+     and it is what an errata slip already arrives on. */
+    animation: slip-tip var(--tip) both;
+  }
+
+  .proof__head {
+    color: var(--ink-2);
+  }
+
+  /* Garamond, because this is the one sentence in the panel a reader must read to DECIDE
+   something -- which is what the Two Voices Rule reserves it for. */
+  .proof__says {
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.53;
+    max-width: 62ch;
+  }
+
+  /* The arguments, as a caption-over-datum pair each. A figure is a figure even inside a
+   confirmation, so they are mono with tabular numerals like every other datum here. */
+  .proof__args {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+  }
+
+  .proof__arg {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+  }
+
+  .proof__arg dt {
+    color: var(--ink-2);
+    min-width: 6rem;
+  }
+
+  /* STRUCK, AND STILL ON THE PAGE. `PRODUCT.md`'s third principle: refusal is a first-class
+   outcome. A proof that vanished when declined would leave the reader unsure whether they
+   declined it or it ran -- so it stays, ruled through, in the quiet ink. */
+  .proof--struck {
+    border-left-color: var(--rule);
+    color: var(--ink-3);
+  }
+
+  .proof--struck .proof__says {
+    text-decoration: line-through;
+    text-decoration-color: var(--rule-strong);
+  }
+
   /* -- A FIGURE ------------------------------------------------------------------------
    *
    * What the assistant set, rather than what the application drew, and captioned so the reader
