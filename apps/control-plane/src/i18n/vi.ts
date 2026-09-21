@@ -151,5 +151,24 @@ export const vi = {
     tokenRejected:
       "{{source}} không chấp nhận mã này. Hãy kiểm tra lại mã đã dán và các quyền của ứng dụng riêng, rồi thử lại.",
     tokenNotStored: "Chưa lưu được mã cho nguồn {{source}}. Dịch vụ xử lý đã từ chối.",
+    /**
+     * No model key in the environment. Like `ingestNotConfigured`, it points at a person
+     * rather than at a setting: the reader cannot fix this from any screen, and naming the
+     * environment key would describe our deployment to a customer.
+     */
+    assistantUnconfigured:
+      "Trợ lý chưa được cấu hình cho bản triển khai này. Hãy báo người quản trị hệ thống.",
+    /**
+     * The browser sent a body this route cannot read. Worded for the reader rather than for a
+     * developer, because it is the reader who sees it, and it says the question was not
+     * delivered -- which is the part that matters to them.
+     */
+    assistantBadRequest: "Chưa gửi được câu hỏi. Hãy tải lại trang rồi thử lại.",
+    /**
+     * The per-conversation ceiling. Names the way out -- clear the conversation -- because a
+     * limit with no next action reads as a fault.
+     */
+    assistantThreadFull:
+      "Cuộc trò chuyện này đã quá dài. Hãy xoá nội dung trò chuyện để bắt đầu lại.",
   },
 };

@@ -25,17 +25,58 @@
  * than narrated.
  */
 
-import { type ReactNode, useEffect } from "react";
+import { lazy, type ReactNode, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { Colophon } from "@/components/Colophon.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
 import { TabRail } from "@/components/TabRail.tsx";
 import { applyBoard } from "@/lib/acetate.ts";
 import { type DivisionId, division } from "@/lib/divisions.ts";
+import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
+
+/**
+ * The interleaf, fetched only when a reader opens it.
+ *
+ * `React.lazy` for a measured reason rather than a tidy one: `@ai-sdk/react` takes the entry
+ * chunk from 528 kB to 710 kB, which is a third more bytes on first paint for a panel most page
+ * loads never open. The six divisions in `routeTable.tsx` are split for the same reason.
+ */
+/** The manual's index mark, pointing the reader at the assistant. */
+const FIST = "\u261e";
+
+const Interleaf = lazy(async () => ({
+  default: (await import("@/components/assistant/Interleaf.tsx")).Interleaf,
+}));
+
+/**
+ * The printer's fist: the mark a printed manual uses to point the reader at something.
+ *
+ * It sits in the running head because that is the one band present on every division -- the
+ * assistant follows the reader rather than being somewhere they go. It is a mark and carries no
+ * words, so the button's accessible name comes from the catalogue.
+ */
+function FistPlate(): React.JSX.Element {
+  const { t } = useTranslation();
+  const open = useUiStore((state) => state.assistantOpen);
+  const toggleAssistant = useUiStore((state) => state.toggleAssistant);
+
+  return (
+    <button
+      className="plate plate--small"
+      type="button"
+      onClick={toggleAssistant}
+      aria-expanded={open}
+      aria-label={open ? t("assistant.close") : t("assistant.open")}
+    >
+      <span aria-hidden="true">{FIST}</span>
+    </button>
+  );
+}
 
 export function Book({
   tenantId,
@@ -92,8 +133,23 @@ export function Book({
     },
   });
 
+  const assistantOpen = useUiStore((state) => state.assistantOpen);
+  /**
+   * The interleaf needs a customer, so the fist only appears once a book is open.
+   *
+   * Not disabled-but-present: a control that is there and refuses is a question the reader has
+   * to answer ("why can I not?"), where its absence on the one division outside any book --
+   * Customers -- is simply the truth. `TabRail` draws a division that cannot open face-down for
+   * the same reason.
+   */
+  const interleaved = assistantOpen && tenantId !== undefined;
+
   return (
-    <div className={fill ? "book book--fill" : "book"}>
+    <div
+      className={["book", fill ? "book--fill" : "", interleaved ? "book--interleaved" : ""]
+        .filter((name) => name !== "")
+        .join(" ")}
+    >
       <TabRail tenantId={tenantId} current={current} />
 
       {/*
@@ -138,6 +194,7 @@ export function Book({
                 is something a reader does in their first seconds, before they know where
                 anything else is. */}
             <LanguageSwitcher />
+            {tenantId === undefined ? null : <FistPlate />}
             <button
               className="plate plate--small"
               type="button"
@@ -155,6 +212,27 @@ export function Book({
             and the printing it came from is the footnote to it. */}
         <Colophon />
       </div>
+
+      {/* A SIBLING of the leaf, not a child, and that is load-bearing twice over: the leaf is
+          keyed to the open book and remounts when the division changes, so a conversation
+          inside it would be lost on every tab; and the grid places the two side by side rather
+          than one inside the other.
+
+          The fallback is the skeleton the divisions use -- lines of type being set -- rather
+          than a spinner, which this system does not have. */}
+      {interleaved && tenantId !== undefined ? (
+        <Suspense
+          fallback={
+            <div className="interleaf">
+              <div className="interleaf__turns">
+                <Skeleton rows={3} />
+              </div>
+            </div>
+          }
+        >
+          <Interleaf tenantId={tenantId} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

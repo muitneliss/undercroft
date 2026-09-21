@@ -51,6 +51,20 @@ about to touch.** That is the only reason this index exists.
 | `suppressions.md` | every source and test file, `biome.jsonc`, the rule files                | where a lint decision goes; `biome-ignore-all` is banned everywhere, tests included      |
 | `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
 
+## The assistant
+
+The interleaf (ADR 0029) is a chat panel that reaches the platform's own tRPC procedures. Two
+things about it are load-bearing enough to state here rather than only in the ADR:
+
+- **It acts only through `appRouter.createCaller(ctx)`**, so every role gate, the 404-not-403
+  boundary and the locale-worded refusals apply unchanged and cannot be re-implemented into
+  drift. A tool refuses itself.
+- **A mutation needs the reader's struck proof AND the injection gate's agreement.** The
+  assistant reads the raw lake, so a tool result carries text written by people outside this
+  system; the gate asks a separate model, about the reader's own words with tool results
+  excluded, whether they asked for this action. An unconfigured gate DENIES -- one that failed
+  open would not be a gate. `docs/runbook/assistant-setup.md` covers turning it on.
+
 ## Agents
 
 `.claude/agents/*.md` are two project-local subagents. They own no rules of their own — both
@@ -124,10 +138,13 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
   `biome-ignore-all` **anywhere**, test files included, no group-wide `lint:` /
   `lint/plugin:` spelling (both reach the money plugin), no `ast-grep-ignore` at all. Pinned
   by `scripts/suppressions.test.ts`, whose last two tests run Biome to prove the hole is real.
-- The money bans, the no-mock bans and the UI's type-only import of the server router are
-  **Biome GritQL plugins** in `.biome/plugins/`, which fail `task ci:lint` (`bun run lint`).
-  Pinned by `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
-  `no-restricted-syntax`; see ADR 0012.
+- The money bans, the no-mock bans, the UI's type-only import of the server router and the
+  UI's outright ban on a **model provider** are **Biome GritQL plugins** in `.biome/plugins/`,
+  which fail `task ci:lint` (`bun run lint`). Pinned by `scripts/biomePlugins.test.ts`. They
+  are plugins because Biome ships no `no-restricted-syntax`; see ADR 0012. The provider ban has
+  no type-only carve-out, unlike the router's: the browser needs the router's _shape_ and needs
+  nothing at all from `@ai-sdk/anthropic` or `@typesafe-ai/sdk`, which are constructed with an
+  API key (ADR 0029).
 - `row-field-alignment` is an **ast-grep** rule too, and the one layout defect a machine can
   see: a `.field` written into a centred `.row` hangs the control beside it half a caption
   above the box it acts on, and renders perfectly while doing it. It requires `row--field`,

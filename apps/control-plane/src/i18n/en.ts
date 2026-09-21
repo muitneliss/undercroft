@@ -99,5 +99,9 @@ export const en = {
       "{{source}} did not accept this token. Check the pasted token and the private app's scopes, then try again.",
     tokenNotStored:
       "The token for {{source}} could not be stored. The processing service refused it.",
+    assistantUnconfigured:
+      "The assistant is not set up for this deployment. Tell whoever administers it.",
+    assistantBadRequest: "The question could not be sent. Reload the page and try again.",
+    assistantThreadFull: "This conversation has grown too long. Clear it to start a new one.",
   },
 };

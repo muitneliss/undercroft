@@ -921,4 +921,81 @@ export const vi = {
     driveReads:
       "Tài liệu trong các thư mục bạn chọn, theo loại tệp bạn cho phép. Không thư mục nào khác được đọc.",
   },
+
+  /**
+   * The interleaf: the assistant bound into the book as the reader's own sheet.
+   *
+   * `trợ lý` rather than a borrowed "assistant": the operators read Vietnamese first, and a
+   * panel whose own name is in English is the screen-half-in-English this catalogue exists to
+   * prevent. The printer's fist has no Vietnamese name and needs none -- it is a mark, and its
+   * accessible name is the sentence below rather than a transliteration of a glyph.
+   */
+  assistant: {
+    open: "Mở trợ lý",
+    close: "Đóng trợ lý",
+    title: "Trợ lý",
+    lead: "Hỏi về dữ liệu của khách hàng này, hoặc nhờ trợ lý làm giúp một việc.",
+    /** The empty state teaches the panel rather than saying it is empty. */
+    emptyTitle: "Chưa có câu hỏi nào",
+    emptyBody:
+      "Hãy thử: “Hoá đơn tháng này về chưa?”, “Vì sao dòng này bị từ chối?”, hoặc “Các nguồn đang chạy thế nào?”.",
+    /** The composer. A label, not a placeholder standing in for one. */
+    askLabel: "Câu hỏi của bạn",
+    askPlaceholder: "Hỏi về khách hàng này…",
+    send: "Gửi",
+    sending: "Đang trả lời…",
+    stop: "Dừng",
+    clear: "Xoá cuộc trò chuyện",
+    /** Read to a screen reader while the answer is still being set. */
+    working: "Trợ lý đang trả lời",
+    /**
+     * A figure the assistant set, numbered as a printed manual numbers one.
+     *
+     * The caption is an honesty device as much as a decoration: the reader can always tell
+     * what the assistant set apart from what the application drew.
+     */
+    figure: "HÌNH {{number}}",
+    /** A result that was shown live but is not kept. See `transcript.ts` on why. */
+    foundNothing: "Không tìm thấy gì",
+    figureRows_other: "{{count, number}} dòng",
+    notKept: "Kết quả không được lưu lại. Hãy hỏi lại nếu bạn cần xem.",
+    notKeptFailed: "Lần gọi này đã thất bại. Nội dung lỗi không được lưu lại.",
+    /** The assistant read something; says which tool, never what it returned. */
+    ranTool: "Đã tra: {{tool}}",
+    /** A whole turn failed. Vermilion belongs to the errata slip, and this is one. */
+    failedTitle: "Chưa trả lời được",
+    failedBody: "Trợ lý chưa trả lời được câu hỏi này. Không có gì bị thay đổi.",
+    retry: "Thử lại",
+    /** No model configured. The reader cannot fix it; the sentence points at a person. */
+    /**
+     * A PROOF: the printer's trial impression, pulled before the press run.
+     *
+     * One sentence per action, interpolated with the real arguments, and it comes from HERE
+     * rather than from the model -- asking the thing that proposed an action to also word the
+     * confirmation of it is how a reader ends up striking a sentence that does not describe
+     * what will happen.
+     */
+    proof: {
+      head: "Xác nhận",
+      strike: "Đồng ý",
+      discard: "Bỏ",
+      confirmLabel: "Nhập lại để xác nhận",
+      confirmHint: "Hãy nhập “{{expected}}” để bật nút đồng ý.",
+      revokeGrant:
+        "Ngắt kết nối nguồn {{source}} của khách hàng {{tenantId}} và thu hồi quyền truy cập đã lưu. Việc đồng bộ sẽ dừng cho tới khi có người kết nối lại.",
+      withdrawIngestKey:
+        "Thu hồi khoá nạp dữ liệu {{id}} của khách hàng {{tenantId}}. Mọi nơi đang dùng khoá này sẽ bị từ chối ngay.",
+      revokeInvitation:
+        "Thu hồi lời mời {{id}} của khách hàng {{tenantId}}. Địa chỉ đó sẽ không đăng nhập được nữa.",
+      deleteModel:
+        "Xoá mô hình “{{name}}” của khách hàng {{tenantId}}. Câu SQL của mô hình sẽ mất theo.",
+      struck: "Đã bỏ",
+      runIngestNow: "Chạy đồng bộ nguồn {{source}} cho khách hàng {{tenantId}} ngay bây giờ.",
+      setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",
+      invitePerson: "Mời {{email}} vào khách hàng {{tenantId}} với vai trò {{role}}.",
+    },
+    unconfiguredTitle: "Trợ lý chưa sẵn sàng",
+    unconfiguredBody:
+      "Bản triển khai này chưa được cấu hình trợ lý. Hãy báo người quản trị hệ thống.",
+  },
 };

@@ -87,15 +87,30 @@ function ingestClientFor(publicUrl: string): IngestClient {
  * registrator replaces the global `Response` class and `fetch`. `Bun.serve` refuses a
  * happy-dom `Response` ("Expected a Response object"), and happy-dom's `fetch` cannot parse
  * a real HTTP response ("Duplicate Content-Length") -- so a real server cannot be spoken to
- * while it is installed. Unregistered here and put back afterwards, so no other file is
- * affected.
+ * while it is installed.
+ *
+ * PUTTING IT BACK IS NOT FREE, and this comment used to claim no other file was affected.
+ * `register()` reinstalls happy-dom's `TransformStream`, which does not interoperate with a
+ * native `ReadableStream` -- so every suite that ran after this one and piped a stream failed
+ * with "The transform's 'readable' property must be a ReadableStream". `setup.ts` restores the
+ * native stream globals for exactly that reason at preload; re-registering here undoes it, so
+ * this file restores them too. One invariant: after any `register()`, the streams are Bun's.
  */
+const nativeStreams = {
+  ReadableStream: globalThis.ReadableStream,
+  WritableStream: globalThis.WritableStream,
+  TransformStream: globalThis.TransformStream,
+  ByteLengthQueuingStrategy: globalThis.ByteLengthQueuingStrategy,
+  CountQueuingStrategy: globalThis.CountQueuingStrategy,
+};
+
 beforeAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
 afterAll(() => {
   GlobalRegistrator.register();
+  Object.assign(globalThis, nativeStreams);
 });
 
 let db: TestDatabase;

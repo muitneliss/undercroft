@@ -3347,6 +3347,264 @@
  * It no longer does: the head and the foot are now the same object.
  */
 
+  /* -- THE INTERLEAF -------------------------------------------------------------------
+   *
+   * A binder's interleaf: a blank sheet bound in between pages for the reader's own notes.
+   * That is what the assistant is here, and the metaphor settles the three questions a panel
+   * like this usually gets wrong.
+   *
+   * IT IS NOT A DIVISION, so it wears NO WHEEL HUE. ADR 0019 records that the seven-hue wheel
+   * is full and an eighth needs a decision rather than a hex; this sheet is on `--leaf` stock
+   * because it belongs to the reader and not to a section. The Wheel Rule holds: a hue means
+   * which division is open, and nothing else.
+   *
+   * IT IS NOT A MODAL AND NOT A PORTAL. `.book` is already a grid with named areas, so the
+   * interleaf becomes a third one beside the leaf: the leaf narrows, and `.sheet`'s existing
+   * 1100px two-column rule absorbs the narrowing without being told. The page behind stays in
+   * the document, in the tab order, and on screen -- the same decision `.hinge` records for a
+   * scope panel, taken at the scale of the whole book.
+   *
+   * IT CARRIES A HAIRLINE AND NO SHADOW. The Ply Rule: elevation is declared once. This sheet
+   * is bound in rather than standing off the board, so it gets the rule and the punches and
+   * not `--ply-shadow`.
+   */
+  .book--interleaved {
+    grid-template-areas: "rail rail" "leaf interleaf";
+    /* The leaf keeps `minmax(0, 1fr)` so it is what gives way; the interleaf is the fixed
+     column, because a conversation read at a changing width is a conversation whose lines
+     rewrap every time somebody opens a division. */
+    grid-template-columns: minmax(0, 1fr) 24rem;
+  }
+
+  .interleaf {
+    grid-area: interleaf;
+    /* Above the strip for the reason `.leaf` is: a retracted tab must tuck under the sheet
+     rather than draw over it. */
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--leaf);
+    /* Only the binding edge, which is the edge that meets the leaf. A box drawn on all four
+     sides would read as a card lying on the page rather than as a sheet bound into it. */
+    border-left: var(--hair) solid var(--rule-strong);
+    /* Four frames, because a leaf is what just moved. `--turn` is the leaf token; a panel that
+     arrived in two would be claiming to be a part rather than a sheet. */
+    animation: leaf-turn var(--turn) both;
+  }
+
+  /* The punches down the binding edge -- the one recurring silhouette in the system, and the
+   mark that says this sheet is bound rather than laid on. Decorative, so hidden from
+   assistive technology at the element. */
+  .interleaf__punch {
+    position: absolute;
+    left: calc(var(--tab-punch-x) * -1);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--page);
+    box-shadow: inset 0 1px 1px rgb(22 21 15 / 40%);
+  }
+
+  /* Two of them, down the binding edge, at the same proportions the leaf's own punches sit
+   at -- the sheet is bound into the same binder. */
+  .interleaf__punch--a {
+    top: 2.25rem;
+  }
+
+  .interleaf__punch--b {
+    top: 4rem;
+  }
+
+  .interleaf__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: var(--s-4) var(--s-4) var(--s-3);
+    border-bottom: var(--hair) solid var(--rule);
+  }
+
+  /* The turns, scrolling; the composer below does not. */
+  .interleaf__turns {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--s-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-5);
+  }
+
+  .interleaf__foot {
+    border-top: var(--hair) solid var(--rule);
+    padding: var(--s-3) var(--s-4) var(--s-4);
+  }
+
+  /* -- A TURN --------------------------------------------------------------------------
+   *
+   * ONE VOICE, TWO INKS. Both halves of the conversation are set in Garamond, because both are
+   * sentences a person must read to decide something -- which is exactly what the Two Voices
+   * Rule reserves Garamond for. What separates them is ink and a mark, not a second typeface:
+   * the reader's own turns sit in Ink 2 behind a printer's fist, the assistant's answer in Ink.
+   *
+   * A third voice was the obvious move and would have been wrong. Setting the question in caps
+   * would make a long one unreadable and a pasted one absurd; setting it in mono would make a
+   * sentence look like a datum. Ink is the cheapest distinction that survives any length.
+   */
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    /* Ink going down: two frames, opacity only. A turn is not a leaf and does not travel. */
+    animation: ink-set var(--pass) both;
+  }
+
+  .turn--asked {
+    color: var(--ink-2);
+    /* The fist hangs in the sheet's own narrow margin, so the question reads as a head over
+     the answer rather than as a bubble beside it. */
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    gap: var(--s-2);
+  }
+
+  /* The printer's fist: the mark a printed manual uses to point the reader at something. Set
+   in Ink 3 so it marks without competing with the sentence it introduces. */
+  .turn__fist {
+    color: var(--ink-3);
+    line-height: 1.5;
+  }
+
+  .turn__said {
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.53;
+    /* Prose measure, not the panel's width: a 62ch limit is what makes a long answer readable,
+     and at 24rem the panel is already inside it. Stated anyway, because the interleaf widens
+     on a phone. */
+    max-width: 62ch;
+  }
+
+  /* A run of text still being set. NOT a per-token animation: motion conveys state, and text
+   arriving is already visible. What is not visible is that MORE is coming, so the mark is a
+   caret at the end of the line and nothing moves. */
+  .turn__said--streaming::after {
+    content: "\2588";
+    color: var(--ink-3);
+    margin-left: 0.15em;
+  }
+
+  /* -- A PROOF -------------------------------------------------------------------------
+   *
+   * The printer's trial impression, pulled before the press run. The focal moment of the
+   * interleaf, and the one object in it a reader must act on.
+   *
+   * ITS BINDING EDGE IS PERFORATED -- the same dashed hairline a *pending* grant wears, because
+   * it is exactly that state: something awaiting a decision. Reusing that mark means a reader
+   * who has seen a half-hinged source already knows what this is, where a new mark would have
+   * to be learned.
+   *
+   * IT IS NOT VERMILION, and that holds hardest here. The Vermilion Rule: a destructive plate
+   * is an ordinary plate, because the safety is the confirmation step and not the colour, and
+   * vermilion belongs to the errata slip alone. A proof is a question, not a correction.
+   */
+  .proof {
+    border-left: var(--hair) dashed var(--rule-strong);
+    padding: var(--s-3) 0 var(--s-3) var(--s-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+    /* Three frames: a slip being tipped in. `--tip` is the token for exactly this object size,
+     and it is what an errata slip already arrives on. */
+    animation: slip-tip var(--tip) both;
+  }
+
+  .proof__head {
+    color: var(--ink-2);
+  }
+
+  /* Garamond, because this is the one sentence in the panel a reader must read to DECIDE
+   something -- which is what the Two Voices Rule reserves it for. */
+  .proof__says {
+    font-family: var(--face-prose);
+    font-size: var(--t-prose);
+    line-height: 1.53;
+    max-width: 62ch;
+  }
+
+  /* The arguments, as a caption-over-datum pair each. A figure is a figure even inside a
+   confirmation, so they are mono with tabular numerals like every other datum here. */
+  .proof__args {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+  }
+
+  .proof__arg {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+  }
+
+  .proof__arg dt {
+    color: var(--ink-2);
+    min-width: 6rem;
+  }
+
+  /* STRUCK, AND STILL ON THE PAGE. `PRODUCT.md`'s third principle: refusal is a first-class
+   outcome. A proof that vanished when declined would leave the reader unsure whether they
+   declined it or it ran -- so it stays, ruled through, in the quiet ink. */
+  .proof--struck {
+    border-left-color: var(--rule);
+    color: var(--ink-3);
+  }
+
+  .proof--struck .proof__says {
+    text-decoration: line-through;
+    text-decoration-color: var(--rule-strong);
+  }
+
+  /* -- A FIGURE ------------------------------------------------------------------------
+   *
+   * What the assistant set, rather than what the application drew, and captioned so the reader
+   * can always tell which. A printed manual numbers its figures; so does this.
+   */
+  .figure {
+    border-top: var(--hair) solid var(--rule);
+    border-bottom: var(--hair) solid var(--rule);
+    padding: var(--s-3) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+  }
+
+  .figure__caption {
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    font-variation-settings: "wdth" 82;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  /* A result the transcript did not keep. An em dash would be the Absence Rule's answer for a
+   VALUE; this is a whole result, so it gets the sentence instead -- and the sentence says what
+   is missing rather than showing an empty frame. */
+  .figure__absent {
+    font-family: var(--face-prose);
+    font-size: var(--t-body);
+    color: var(--ink-3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .interleaf,
+    .turn {
+      animation-duration: 1ms;
+    }
+  }
   @media (max-width: 1100px) {
     .sheet {
       grid-template-columns: var(--head-col) repeat(2, minmax(0, 1fr));
@@ -3371,6 +3629,25 @@
   }
 
   @media (max-width: 760px) {
+    /* The interleaf takes the whole leaf area, and the leaf steps aside rather than being
+     squeezed into a column nobody can read. The strip is already at the foot at this width,
+     so navigation stays where the reader's thumb is. */
+    .book--interleaved {
+      grid-template-areas: "interleaf" "rail";
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .book--interleaved > .leaf {
+      display: none;
+    }
+
+    .interleaf {
+      border-left: none;
+    }
+
+    .interleaf__punch {
+      display: none;
+    }
     :root {
       --head-col: 0rem;
       --t-h1: 1.9rem;

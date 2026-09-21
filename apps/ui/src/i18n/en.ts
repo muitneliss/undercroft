@@ -837,4 +837,50 @@ export const en = {
     driveReads:
       "The documents inside the folders you select, in the file types you allow. No other folder is read.",
   },
+
+  assistant: {
+    open: "Open the assistant",
+    close: "Close the assistant",
+    title: "Assistant",
+    lead: "Ask about this customer's data, or ask the assistant to do something for you.",
+    emptyTitle: "Nothing asked yet",
+    emptyBody:
+      "Try: “Did this month's invoices land?”, “Why was this row refused?”, or “How are the sources doing?”.",
+    askLabel: "Your question",
+    askPlaceholder: "Ask about this customer…",
+    send: "Send",
+    sending: "Answering…",
+    stop: "Stop",
+    clear: "Clear the conversation",
+    working: "The assistant is answering",
+    figure: "FIG. {{number}}",
+    foundNothing: "Nothing found",
+    figureRows_other: "{{count, number}} rows",
+    notKept: "The result is not kept. Ask again if you need to see it.",
+    notKeptFailed: "That call failed. The error text is not kept.",
+    ranTool: "Looked up: {{tool}}",
+    failedTitle: "Not answered",
+    failedBody: "The assistant could not answer that. Nothing was changed.",
+    retry: "Try again",
+    proof: {
+      head: "Confirm",
+      strike: "Go ahead",
+      discard: "Discard",
+      confirmLabel: "Type it back to confirm",
+      confirmHint: "Type “{{expected}}” to enable the confirm button.",
+      revokeGrant:
+        "Disconnect {{source}} for {{tenantId}} and revoke the stored credential. Ingestion stops until somebody reconnects it.",
+      withdrawIngestKey:
+        "Revoke ingest key {{id}} for {{tenantId}}. Anything posting with it is refused immediately.",
+      revokeInvitation:
+        "Withdraw invitation {{id}} for {{tenantId}}. That address can no longer sign in.",
+      deleteModel: "Delete the model “{{name}}” for {{tenantId}}. Its SQL goes with it.",
+      struck: "Discarded",
+      runIngestNow: "Run an ingest of {{source}} for {{tenantId}} now.",
+      setCadence: "Change {{source}}'s ingest cadence to “{{cadence}}”.",
+      invitePerson: "Invite {{email}} to {{tenantId}} as {{role}}.",
+    },
+    unconfiguredTitle: "The assistant is not ready",
+    unconfiguredBody: "This deployment has no assistant configured. Tell whoever administers it.",
+  },
 };
