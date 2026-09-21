@@ -3,7 +3,7 @@
  *
  * Small, and it should stay small. Almost nothing this server produces is read by a human:
  * the API answers a TypeScript client in codes and shapes. What is here is the exception --
- * two emails, and the handful of refusals whose message reaches a browser verbatim.
+ * five emails, and the handful of refusals whose message reaches a browser verbatim.
  *
  * Mirrors `apps/ui/src/i18n/vi.ts` in shape and rules but not in content, deliberately. A
  * shared catalogue would put the UI's several hundred keys into the server bundle so that
@@ -79,7 +79,7 @@ export const vi = {
      * schedule below names it, in the cell where a name belongs.
      */
     heading: "Lần chạy đã thất bại",
-    lead: "Dữ liệu từ nguồn này chưa được cập nhật cho đến khi có một lần chạy thành công.",
+    lead: "Những gì lần chạy này lẽ ra cập nhật sẽ không thay đổi cho đến khi có một lần chạy thành công.",
     action: "Xem nhật ký",
     repeats:
       "Nếu lỗi tiếp diễn, bạn sẽ không nhận thêm email về nguồn này trong 24 giờ; một lần chạy thành công sẽ đặt lại khoảng thời gian đó.",

@@ -40,7 +40,7 @@ export const en = {
     models: "the model build",
     noReason: "no reason recorded",
     heading: "A run failed",
-    lead: "Data from this source is not up to date until a run succeeds.",
+    lead: "What this run would have updated is unchanged until a later one succeeds.",
     action: "See the journal",
     repeats:
       "If it keeps failing you will not receive another email about this source for 24 hours; a successful run resets that window.",

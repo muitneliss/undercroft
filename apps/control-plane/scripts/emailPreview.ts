@@ -20,6 +20,7 @@ import path from "node:path";
 import process from "node:process";
 
 import type { EmailMessage, Locale } from "@undercroft/core";
+import { SOURCE_OF_TRANSFORM } from "@undercroft/db/repos";
 import { signInCodeMessage } from "../src/handlers/auth.ts";
 import {
   failedRunMessage,
@@ -56,7 +57,7 @@ function samples(locale: Locale): { name: string; message: EmailMessage }[] {
       name: "run-failed-no-reason",
       message: failedRunMessage(to, {
         tenantId: TENANT,
-        source: "transform",
+        source: SOURCE_OF_TRANSFORM,
         verb: "build",
         runId: "01J8Z4Q2X8",
         // The absence case, which is the one worth looking at: a slip with nothing on it
