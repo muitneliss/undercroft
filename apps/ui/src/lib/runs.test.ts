@@ -123,6 +123,30 @@ describe("eventSentence", () => {
     expect(eventSentence(en, "en", listed)).toBe("12,431 messages to read.");
   });
 
+  it("says how much a run did not have to read, so a steady run is not a blank one", () => {
+    // In steady state an ingest lands nothing, and `landed: 0` alone reads the same whether
+    // the mailbox is empty, the credential is broken, or nothing has changed since
+    // yesterday. It is a second sentence rather than a count appended to the first, because
+    // a source that skips nothing sends no `skipped` and would otherwise print MISSING --
+    // the quiet side, which the MISSING test below already holds.
+    const held = event("work_listed", { total: 7786, skipped: 7786 }, "messages");
+    expect(eventSentence(en, "en", held)).toBe(
+      "7,786 messages listed, 7,786 already held and not read.",
+    );
+    expect(eventSentence(vi, "vi", held)).toBe(
+      "Có 7.786 messages, 7.786 đã có sẵn nên không đọc lại.",
+    );
+
+    const done = event(
+      "entity_done",
+      { landed: 0, created: 0, changed: 0, refused: 0, skipped: 7786 },
+      "messages",
+    );
+    expect(eventSentence(en, "en", done)).toBe(
+      "Finished messages: 0 landed, 0 new, 0 changed, 0 refused, 7,786 already held and not read.",
+    );
+  });
+
   it("says why a green run built nothing, which the counts alone could not", () => {
     expect(eventSentence(vi, "vi", event("no_models", {}))).toBe(
       "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",

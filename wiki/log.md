@@ -80,3 +80,5 @@
 ## [2026-09-21] ingest | ADR 0031 A Picked Drive Folder May Be Read to the Bottom
 ## [2026-09-21] ingest | Runbook Deployment
 ## [2026-09-21] ingest | ADR 0032 A Progress Line Is a Gauge Not an Entry
+## [2026-09-21] ingest | ADR 0034 The Watermark Is a Table Not a Max
+## [2026-09-21] ingest | An ingest streams, and does not re-read what it already holds

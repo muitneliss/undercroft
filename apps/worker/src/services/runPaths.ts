@@ -13,17 +13,22 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createFetcher, readEntity, type RunContext } from "@undercroft/connector-runtime";
+import {
+  createFetcher,
+  laterStamp,
+  readEntity,
+  type RunContext,
+} from "@undercroft/connector-runtime";
 import { type ConnectorSpec, parseScope, parseSpec } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
+import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type GoogleSource, runGoogleCollect } from "./google/collect.ts";
+import { createRecordSink, type LandSummary, type RefusalWriter } from "./landing.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken } from "./runTypes.ts";
-import { landRecords, type RecordToLand } from "./land.ts";
-import { loadStreamToRaw } from "./loadToRaw.ts";
 import type { RunJournal } from "./runJournal.ts";
 
 /**
@@ -68,10 +73,11 @@ export async function runGoogleIngest(
 
   const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api, journal }, input);
 
+  const recordsEntity = input.source === "gmail" ? "messages" : "files";
   const records = result.refusals.filter((r) => r.entity !== "documents").length;
   ledger.entities.push(
     {
-      entity: input.source === "gmail" ? "messages" : "files",
+      entity: recordsEntity,
       landed: result.records.landed,
       loadedCreated: result.records.loadedCreated,
       loadedChanged: result.records.loadedChanged,
@@ -96,6 +102,14 @@ export async function runGoogleIngest(
       changed: entity.loadedChanged,
       unchanged: entity.loadedUnchanged,
       refused: entity.refused,
+      // Only on the RECORD entity, and only when there is one, because it answers a
+      // question only the record entity is asked: in steady state a run lands nothing, and
+      // `landed: 0` alone reads the same whether the mailbox is empty or unchanged. A
+      // document's own `skipped` is a size refusal, which is a different fact with the same
+      // name; it is reported in `documents_landed` and deliberately not conflated here.
+      ...(entity.entity === recordsEntity && result.records.skipped > 0
+        ? { skipped: result.records.skipped }
+        : {}),
     });
   }
 }
@@ -150,84 +164,128 @@ interface EntityRun {
   readonly journal: RunJournal;
 }
 
-/** What one entity's land and load did, before it is written into the ledger. */
-interface EntityOutcome {
-  readonly landed: Awaited<ReturnType<typeof landRecords>>;
-  readonly loaded: Awaited<ReturnType<typeof loadStreamToRaw>>;
-}
-
 /** Write one entity's outcome into the ledger, and narrate it. */
-function recordEntity(run: EntityRun, entity: string, outcome: EntityOutcome): void {
-  const { landed, loaded } = outcome;
-  for (const result of landed.results) {
-    if (result.status === "failed") {
-      run.ledger.refusals.push({
-        entity: result.entity,
-        sourceRecordId: result.sourceRecordId,
-        reason: result.reason ?? "refused",
-      });
-    }
-  }
+function recordEntity(run: EntityRun, entity: string, landed: LandSummary): void {
   run.ledger.entities.push({
     entity,
-    landed: landed.created + landed.unchanged,
-    loadedCreated: loaded.created,
-    loadedChanged: loaded.changed,
-    loadedUnchanged: loaded.unchanged,
-    refused: landed.failed,
+    landed: landed.landed,
+    loadedCreated: landed.loaded.created,
+    loadedChanged: landed.loaded.changed,
+    loadedUnchanged: landed.loaded.unchanged,
+    refused: landed.refused,
   });
   run.journal.info("entity_done", {
     entity,
-    landed: landed.created + landed.unchanged,
-    created: loaded.created,
-    changed: loaded.changed,
-    unchanged: loaded.unchanged,
-    refused: landed.failed,
+    landed: landed.landed,
+    created: landed.loaded.created,
+    changed: landed.loaded.changed,
+    unchanged: landed.loaded.unchanged,
+    refused: landed.refused,
   });
 }
 
 /**
- * Read one entity, land it, load it, and record what it did. Returns the ids it saw.
+ * Refusals into the run's ledger, which `settle` writes when the run closes.
  *
- * The ids come back so a `batch-from` relation declared after this entity can read against
- * them. The whole entity is buffered before landing because the lake write is one create-only
- * call per record and the ids are needed as a set; a source large enough for that to matter
- * would want a different shape, and none is.
+ * The same binding the Google path uses, and for the same reason: `ops.run_refusal`
+ * references `ops.run(id)`, so where a refusal goes is a fact about the caller rather than
+ * about landing. One writer for a run's refusals keeps the count `run_closed` reports and
+ * the rows in the table from being two answers.
+ */
+function intoLedger(ledger: Ledger): RefusalWriter {
+  return (refusals): Promise<void> => {
+    ledger.refusals.push(...refusals);
+    return Promise.resolve();
+  };
+}
+
+/**
+ * Read one entity, land it as it arrives, and record what it did.
+ *
+ * `readEntity` has always been an async generator; this used to gather everything it streamed
+ * into one array and land it at the end, which is the shape that reached the worker's 1 GiB
+ * limit and lost a 76-minute run. The records now go straight into a {@link createRecordSink},
+ * which holds one chunk and projects each one, so a crash costs a chunk rather than a run.
+ * `read` is counted explicitly because there is no longer an array whose length to report.
+ *
+ * `ids` is somewhere to put this entity's ids, or `null` when no `batch-from` relation reads
+ * against this entity -- see {@link referencedEntities}.
+ *
+ * ## The watermark advances here, and only by getting to the end
+ *
+ * There is no flag saying the read completed: the cursor write sits after the `for await` and
+ * after `close()`, so a throw anywhere in between skips it by control flow. That matters more
+ * than it looks. A watermark advanced past a read that died halfway would ask the next run for
+ * records after a mark that records below it never reached -- and on a source that does not
+ * order its pages by the incremental field, which is most of them, those records are gone from
+ * the raw lake permanently. Not advancing costs a re-read, which is `unchanged` twice over.
  */
 async function ingestEntity(
   run: EntityRun,
   entity: ConnectorSpec["entities"][number],
   ctx: RunContext,
-): Promise<string[]> {
+  ids: string[] | null,
+): Promise<void> {
   const { deps, input, spec, journal } = run;
   journal.info("entity_started", { entity: entity.name });
 
-  const batch: RecordToLand[] = [];
-  for await (const record of readEntity(spec, entity, ctx)) {
-    batch.push({
+  const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
+  const { incremental } = entity;
+  const since =
+    incremental === undefined ? null : await readSyncCursor(deps.exec, stream, incremental.format);
+
+  const sink = createRecordSink(
+    { lake: deps.lake, exec: deps.exec, refuse: intoLedger(run.ledger) },
+    { source: input.source, tenantId: input.tenantId, runId: input.runId },
+  );
+  const entityCtx: RunContext = { ...ctx, ...(since === null ? {} : { since }) };
+
+  let read = 0;
+  let mark: string | null = null;
+  for await (const record of readEntity(spec, entity, entityCtx)) {
+    await sink.add({
       entity: record.entity,
       sourceRecordId: record.sourceRecordId,
       sourceUpdatedAt: record.sourceUpdatedAt,
       payloadText: record.payloadText,
     });
+    ids?.push(record.sourceRecordId);
+    read += 1;
+    if (incremental !== undefined) {
+      mark = laterStamp(incremental.format, mark, record.incrementalAt);
+    }
     // Coalesced by the journal: a line per record would be the run written twice.
-    journal.progress("records_read", { entity: entity.name, read: batch.length });
+    journal.progress("records_read", { entity: entity.name, read });
   }
+  const landed = await sink.close();
 
-  const landed = await landRecords(deps.lake, {
-    source: input.source,
-    tenantId: input.tenantId,
-    runId: input.runId,
-    records: batch,
-  });
-  const loaded = await loadStreamToRaw(deps.exec, deps.lake, {
-    source: input.source,
-    tenantId: input.tenantId,
-    entity: entity.name,
-  });
+  // The ledger entry first, the cursor second. What landed is EVIDENCE, and a cursor write that
+  // failed would otherwise take an entity's whole record of itself down with it -- the run would
+  // settle saying nothing about records that are in the lake and in `raw.records`. The same
+  // ordering, and the same reason, as `landing.ts` writing a chunk's refusals before projecting
+  // it. A cursor left behind costs one re-read; evidence never written cannot be recovered.
+  recordEntity(run, entity.name, landed);
 
-  recordEntity(run, entity.name, { landed, loaded });
-  return batch.map((r) => r.sourceRecordId);
+  if (incremental !== undefined && mark !== null) {
+    await writeSyncCursor(deps.exec, stream, { watermark: mark, format: incremental.format });
+  }
+}
+
+/**
+ * The entities some `batch-from` relation actually reads against.
+ *
+ * Computed from the spec before the first request, so an entity nobody references never
+ * builds an id list at all. Keeping every entity's ids to the end of the run was a second
+ * copy of the source held for the benefit of a relation that, in both shipped specs,
+ * references one entity out of four -- and it grew with the source, which is the shape this
+ * whole change exists to remove.
+ */
+function referencedEntities(entities: ConnectorSpec["entities"]): ReadonlySet<string> {
+  return new Set(
+    entities.flatMap((entity) =>
+      entity.request.kind === "batch-from" ? [entity.request.entity] : [],
+    ),
+  );
 }
 
 export async function runSpecIngest(
@@ -239,7 +297,9 @@ export async function runSpecIngest(
   const { spec, ctx, entities } = await openSpecRun(deps, input);
   const run: EntityRun = { deps, input, spec, ledger, journal };
 
-  // Ids per entity, so a `batch-from` relation can read against the entity it references.
+  const referenced = referencedEntities(entities);
+  // Ids per entity, so a `batch-from` relation can read against the entity it references --
+  // and ONLY for the entities one does.
   const idsByEntity = new Map<string, string[]>();
 
   for (const entity of entities) {
@@ -247,6 +307,10 @@ export async function runSpecIngest(
       entity.request.kind === "batch-from"
         ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }
         : ctx;
-    idsByEntity.set(entity.name, await ingestEntity(run, entity, entityCtx));
+    const ids = referenced.has(entity.name) ? [] : null;
+    if (ids !== null) {
+      idsByEntity.set(entity.name, ids);
+    }
+    await ingestEntity(run, entity, entityCtx, ids);
   }
 }

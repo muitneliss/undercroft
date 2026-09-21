@@ -1,5 +1,5 @@
 import { createStampSource, TestClock } from "@undercroft/core";
-import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
+import { InMemoryObjectStore, type JournalEntry, LakeStore } from "@undercroft/lake";
 import { beforeEach, describe, expect, test as it } from "bun:test";
 
 import { type DocumentToLand, landDocuments, MAX_DOCUMENT_BYTES } from "./landDocument.ts";
@@ -127,6 +127,10 @@ describe("landDocuments", () => {
     // and are catalogued directly instead.
     await land([document()]);
 
-    expect(await lake.journalSince("documents/gmail/CASE-0042", null)).toEqual([]);
+    const journalled: JournalEntry[] = [];
+    for await (const entry of lake.journalSince("documents/gmail/CASE-0042", null)) {
+      journalled.push(entry);
+    }
+    expect(journalled).toEqual([]);
   });
 });

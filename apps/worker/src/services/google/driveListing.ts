@@ -46,42 +46,41 @@ export interface DriveFile {
   readonly parents: string[];
 }
 
-/** What a folder yielded, and how many folders had to be listed to yield it. */
-export interface FolderListing {
-  readonly files: DriveFile[];
-  readonly listed: number;
-}
-
 /**
  * Every matching file under a picked folder, to the depth the admin chose.
+ *
+ * A GENERATOR, so a tree of ten thousand files costs one page held rather than ten thousand
+ * `DriveFile`s and every closure hanging off them. How many folders had to be listed to
+ * produce them is the generator's RETURN value -- the `AsyncGenerator<T, R>` idiom
+ * `connector-runtime` already carries `maxRecords`' verdict out on. A second output
+ * parameter would be a second place for one number to live.
  *
  * `visited` is what keeps the walk finite: a shortcut, or the same folder reachable down two
  * branches, would otherwise be listed forever. It holds folder ids rather than file ids --
  * duplicate FILES are a caller concern, and `harvestDrive` already de-duplicates them.
  */
-export async function listMatchingIn(
+export async function* listMatchingIn(
   api: GoogleApi,
   rootId: string,
   options: { fileTypes: readonly string[]; recurse: boolean; seen: number },
-): Promise<FolderListing> {
+): AsyncGenerator<DriveFile, number> {
   const { fileTypes, recurse, seen } = options;
-  const files: DriveFile[] = [];
   const visited = new Set<string>([rootId]);
   const queue: string[] = [rootId];
   const typeClause = mimeTypeClause(listingTypes(fileTypes, recurse));
   let listed = 0;
 
   // A sub-folder pushed below is walked by this same loop: `for...of` reads the array live,
-  // so the queue grows under the iterator rather than needing a second pass over it.
+  // so the queue grows under the iterator rather than needing a second pass over it. It
+  // still does inside a generator -- the loop is suspended at a yield, not restarted.
   for (const folderId of queue) {
     listed += 1;
-    const found = await listOneFolder(api, queryFor(folderId, typeClause), seen);
-    files.push(...found.files);
+    const folders = yield* listOneFolder(api, queryFor(folderId, typeClause), seen);
 
     if (!recurse) {
       continue;
     }
-    for (const childId of found.folders) {
+    for (const childId of folders) {
       if (!visited.has(childId)) {
         visited.add(childId);
         queue.push(childId);
@@ -89,7 +88,7 @@ export async function listMatchingIn(
     }
   }
 
-  return { files, listed };
+  return listed;
 }
 
 /**
@@ -116,13 +115,19 @@ export async function readOneFile(
     : { file: null, reason: NOT_ALLOWED_TYPE };
 }
 
-/** One folder's contents, every page of them, split into what to land and where to look next. */
-async function listOneFolder(
+/**
+ * One folder's contents, every page of them, split into what to land and where to look next.
+ *
+ * Files are YIELDED as each page arrives; the sub-folders to descend into are the return
+ * value, because descent cannot start until the folder has been read to its last page.
+ * Holding the folders is bounded by the tree's shape rather than by its contents, which is
+ * the same reason `visited` is affordable one level up.
+ */
+async function* listOneFolder(
   api: GoogleApi,
   q: string,
   seen: number,
-): Promise<{ files: DriveFile[]; folders: string[] }> {
-  const files: DriveFile[] = [];
+): AsyncGenerator<DriveFile, string[]> {
   const folders: string[] = [];
   let pageToken: string | null = null;
 
@@ -145,14 +150,14 @@ async function listOneFolder(
       if (file.mimeType === FOLDER_MIME) {
         folders.push(file.id);
       } else {
-        files.push(file);
+        yield file;
       }
     }
     const next = str(page, "nextPageToken");
     pageToken = next === "" ? null : next;
   } while (pageToken !== null);
 
-  return { files, folders };
+  return folders;
 }
 
 /** One folder's `q=`, with the type clause the whole walk shares. */

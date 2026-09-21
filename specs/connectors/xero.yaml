@@ -45,24 +45,45 @@ defaults:
   guards:
     failOnEmpty: true
 
+# Xero filters server-side on a HEADER, not a query parameter: `If-Modified-Since` carries
+# the last watermark and the endpoint returns only what changed after it. Client filtering
+# would page the whole ledger to throw most of it away, and at 1100ms a request that is the
+# expensive half of the run.
+#
+# The watermark is stored and sent back exactly as `UpdatedDateUTC` arrived -- never
+# re-rendered -- so what Xero is asked for is a string Xero itself wrote. A rendering the
+# runtime cannot order simply never advances the cursor, and the run stays the full read it is
+# today; see `packages/connector-runtime/src/incremental.ts`.
 entities:
   - name: contacts
     request: { kind: list, path: /Contacts, query: { pageSize: "100" } }
     envelopePath: Contacts
     idPath: ContactID
     updatedAtPath: UpdatedDateUTC
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
 
   - name: invoices
     request: { kind: list, path: /Invoices, query: { pageSize: "100" } }
     envelopePath: Invoices
     idPath: InvoiceID
     updatedAtPath: UpdatedDateUTC
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
 
   - name: payments
     request: { kind: list, path: /Payments, query: { pageSize: "100" } }
     envelopePath: Payments
     idPath: PaymentID
     updatedAtPath: UpdatedDateUTC
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
 
   # Each entity names its own id field. A single hardcoded "InvoiceID" would silently key
   # credit notes on nothing.
@@ -71,3 +92,7 @@ entities:
     envelopePath: CreditNotes
     idPath: CreditNoteID
     updatedAtPath: UpdatedDateUTC
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC

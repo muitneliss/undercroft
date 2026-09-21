@@ -46,10 +46,19 @@ import {
  * minute, a sixth of the published limit. The enforced rate is 2-4 a second, and 3 is the
  * middle of that rather than a ride along its ceiling.
  *
- * It costs a 7,777-message mailbox about 43 minutes. That is the trade, and it is worth
- * taking: the 16-minute version does not finish. `harvestGmail` buffers the whole mailbox
- * and `runGoogleCollect` lands it at the end, so a run that trips the quota discards every
- * record it had read -- a slow run beats one that lands nothing.
+ * It costs a 7,777-message mailbox about 43 minutes on a FIRST read. That is the trade, and
+ * it is worth taking: the 16-minute version does not finish.
+ *
+ * The reason it was worth taking was once sharper than it is now, and the sharper version is
+ * worth keeping because it is what this number was chosen against. `harvestGmail` used to
+ * buffer the whole mailbox and `runGoogleCollect` landed it at the end, so a run that
+ * tripped the quota discarded every record it had read -- forty-three minutes for nothing,
+ * and no faster rate could ever be tried because there was nothing to resume from. Both
+ * halves are now streamed: a chunk of 200 is in the lake and in `raw.records` as it is read,
+ * a killed run costs one chunk, and a second run skips what the first landed. So the cost of
+ * being wrong about the rate is a chunk rather than a run. Three a second is still the
+ * middle of the enforced 2-4 and still what this deployment paces at -- pacing that trips
+ * the quota is a run that fails, not a run that goes slightly slower.
  *
  * `UNDERCROFT_GOOGLE_MIN_INTERVAL_MS` overrides it, because the enforced number belongs to
  * the Cloud project rather than to Google, and the next deployment's may differ. See

@@ -94,7 +94,7 @@ export class S3ObjectStore implements ObjectStore {
     }
   }
 
-  async list(prefix: string): Promise<string[]> {
+  async list(prefix: string, startAfter?: string): Promise<string[]> {
     const keys: string[] = [];
     let token: string | undefined;
     do {
@@ -102,7 +102,14 @@ export class S3ObjectStore implements ObjectStore {
         new ListObjectsV2Command({
           Bucket: this.#bucket,
           Prefix: prefix,
-          ...(token === undefined ? {} : { ContinuationToken: token }),
+          // `StartAfter` applies to the first page only -- S3 ignores it once a
+          // `ContinuationToken` is given, because the token already carries the position.
+          // Sending both would read as two answers to one question.
+          ...(token === undefined
+            ? startAfter === undefined
+              ? {}
+              : { StartAfter: startAfter }
+            : { ContinuationToken: token }),
         }),
       );
       for (const item of response.Contents ?? []) {

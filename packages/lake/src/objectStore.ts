@@ -9,8 +9,20 @@ export interface ObjectStore {
   get: (key: string) => Promise<Uint8Array>;
   put: (key: string, data: Uint8Array) => Promise<void>;
   exists: (key: string) => Promise<boolean>;
-  /** Keys under `prefix`, sorted. Materialised, so a caller may delete while iterating. */
-  list: (prefix: string) => Promise<string[]>;
+  /**
+   * Keys under `prefix`, sorted. Materialised, so a caller may delete while iterating.
+   *
+   * `startAfter` resumes the listing at the first key strictly greater than it -- S3's own
+   * `StartAfter`, which is why it is on the seam at all rather than emulated above it. A
+   * caller holding a position in the sorted order then pays for what is after that position
+   * instead of for the whole prefix, which is the difference between a journal scan that
+   * costs the new observations and one that costs the stream's entire history.
+   *
+   * It narrows the SCAN and decides nothing. The key a caller holds need not be a key that
+   * exists, and one that is a prefix of other keys still lists them, so a caller wanting a
+   * subset filters the result exactly as it did before.
+   */
+  list: (prefix: string, startAfter?: string) => Promise<string[]>;
   delete: (key: string) => Promise<void>;
 }
 

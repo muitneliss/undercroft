@@ -608,10 +608,13 @@ export const vi = {
       runOpened: "Bắt đầu.",
       entityStarted: "Bắt đầu đọc {{entity}}.",
       workListed: "Cần đọc {{total}} {{entity}}.",
+      workListedSkipping: "Có {{total}} {{entity}}, {{skipped}} đã có sẵn nên không đọc lại.",
       recordsRead: "Đã đọc {{read}} {{entity}}.",
       recordsReadOf: "Đã đọc {{read}}/{{total}} {{entity}}.",
       entityDone:
         "Xong {{entity}}: {{landed}} về, {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối.",
+      entityDoneSkipping:
+        "Xong {{entity}}: {{landed}} về, {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối, {{skipped}} đã có sẵn nên không đọc lại.",
       picksListed:
         "Đã xem {{folders}} thư mục được chọn, thấy {{matched}} tệp phù hợp. Thư mục con không được đọc.",
       picksListedDeep:
