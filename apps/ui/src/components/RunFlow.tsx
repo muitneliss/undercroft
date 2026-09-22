@@ -36,8 +36,8 @@
  * schedule, not an infinite canvas.
  *
  * Of `@xyflow/react`'s own look nothing survives but the things it is actually good at: node
- * placement, the edge paths, the markers and the flow animation. Its attribution is kept and
- * linked, set as a colophon in this system's voice rather than floating over the drawing.
+ * placement, the edge paths, the markers and the flow animation. Its attribution is not drawn:
+ * neither the library's floating pill nor the colophon line that used to stand in for it.
  */
 
 import type { Edge, Node, NodeProps, NodeTypes } from "@xyflow/react";
@@ -339,8 +339,9 @@ export function RunFlow({
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable={false}
-            // Set as the colophon line below instead, in this system's own voice: the credit
-            // ships either way, and a floating pill is a thing this system has none of.
+            // A floating pill over the drawing is a thing this system has none of, and the
+            // colophon line that used to carry the credit instead is gone too: no attribution
+            // is drawn at all. `@xyflow/react` is MIT, which asks for it, not requires it.
             proOptions={{ hideAttribution: true }}
             style={{ width }}
           />
@@ -349,12 +350,6 @@ export function RunFlow({
       </div>
 
       <ChainSlip stage={stages.find((stage) => stage.kind === "link-child")} into="onto" />
-
-      <p className="run-map__colophon">
-        <a href="https://reactflow.dev" target="_blank" rel="noreferrer">
-          {t("journal.flow.drawnWith", { name: "React Flow" })}
-        </a>
-      </p>
     </div>
   );
 }
