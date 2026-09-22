@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.16.0](https://github.com/muitneliss/undercroft/compare/v1.15.5...v1.16.0) (2026-09-22)
+
+
+### Features
+
+* **extract:** read the document types the lake already holds and cannot open ([#116](https://github.com/muitneliss/undercroft/issues/116)) ([da0d297](https://github.com/muitneliss/undercroft/commit/da0d297554941099641cf450a31fc943d61f4dcb))
+* **ui:** the lake console runs a script, and a selection is what a press means ([#118](https://github.com/muitneliss/undercroft/issues/118)) ([9af497c](https://github.com/muitneliss/undercroft/commit/9af497cb309fb68ba65983c04098111e965b6749))
+
+
+### Bug Fixes
+
+* **journal:** a build counts no records, and "no models" needs the worker's word ([#117](https://github.com/muitneliss/undercroft/issues/117)) ([89321d7](https://github.com/muitneliss/undercroft/commit/89321d7cee09bd43974e5cf843ffe17e7fb92310))
+* **ui:** a query's grid reads from the left, and its columns are draggable ([#114](https://github.com/muitneliss/undercroft/issues/114)) ([eae838f](https://github.com/muitneliss/undercroft/commit/eae838f68896acfaf3de4dd085eb62b8f3f2e069))
+
 ## [1.15.5](https://github.com/muitneliss/undercroft/compare/v1.15.4...v1.15.5) (2026-09-22)
 
 
