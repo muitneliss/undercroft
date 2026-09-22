@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.2](https://github.com/muitneliss/undercroft/compare/v1.15.1...v1.15.2) (2026-09-22)
+
+
+### Bug Fixes
+
+* **journal:** the ledger's instant and its sentence are two words again ([#101](https://github.com/muitneliss/undercroft/issues/101)) ([c52b379](https://github.com/muitneliss/undercroft/commit/c52b379032abc0251ad7e2bce6109091639c15d9))
+
 ## [1.15.1](https://github.com/muitneliss/undercroft/compare/v1.15.0...v1.15.1) (2026-09-22)
 
 
