@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/muitneliss/undercroft/compare/v1.15.0...v1.15.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **ingest:** a harvest records what it settled instead of asserting it ([#99](https://github.com/muitneliss/undercroft/issues/99)) ([1c83644](https://github.com/muitneliss/undercroft/commit/1c83644b82a887e823b231de77053a5de1d07ca7))
+
 ## [1.15.0](https://github.com/muitneliss/undercroft/compare/v1.14.2...v1.15.0) (2026-09-21)
 
 
