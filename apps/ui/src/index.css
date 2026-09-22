@@ -420,8 +420,6 @@
 
   html {
     font-size: 16px;
-    /* The scrollbar is part of the board, not a browser artefact. */
-    scrollbar-color: var(--rule-strong) var(--bone);
   }
 
   body {
@@ -441,6 +439,25 @@
     color: var(--ink);
   }
 
+  /* THE SCROLLBAR IS PART OF THE BOARD, and it is drawn ONE way, here.
+   *
+   * Sizing the pseudo-element is not decoration: a scroller a browser is left to draw itself
+   * gets macOS's OVERLAY bar, which is painted only while the reader is already scrolling.
+   * A grid wider than its pane then reads as a table that was simply cut off -- there is no
+   * mark on the screen saying anything continues to the right, and the one gesture that would
+   * reveal it is the one nobody makes at something that looks finished. Giving `::-webkit-
+   * scrollbar` a size switches Blink and WebKit to a classic bar instead: always painted,
+   * taking the 12px it needs, and only when the content actually overflows.
+   *
+   * WHICH IS WHY `scrollbar-width` AND `scrollbar-color` APPEAR NOWHERE IN THIS SHEET except
+   * the @supports below. Since Chrome 121 either standard property makes the engine ignore
+   * `::-webkit-scrollbar` for that element entirely and hand it back to the platform. The four
+   * surfaces that used to carry `scrollbar-width: thin` -- the result grid, the ledger's
+   * region, the workbench's schema rail and the run map's canvas -- were therefore the four
+   * that had NO visible scrollbar at all, each under a comment saying it was wearing the
+   * sheet's own. Measured in Chrome 152 at this sheet's own rules: a box carrying only the
+   * pseudo reserves 12px for a horizontal bar, the same box with `scrollbar-width: thin`
+   * beside it reserves none. `scripts/scrollbars.test.ts` keeps them out. */
   ::-webkit-scrollbar {
     width: 12px;
     height: 12px;
@@ -454,6 +471,17 @@
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--ink-2);
+  }
+
+  /* Gecko has no pseudo to size, so it gets the standard properties -- and only it, because
+   * declaring them where the pseudo exists is what silently switched it off. The query asks
+   * about the selector rather than about a browser: an engine that grows `::-webkit-scrollbar`
+   * stops matching here the day it does, without this sheet being edited. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--rule-strong) var(--bone);
+    }
   }
 
   h1,
@@ -2155,10 +2183,6 @@
     height: calc(var(--station-h) + 44px);
     overflow-x: auto;
     overflow-y: hidden;
-    /* A default scrollbar belongs to no design system. This one is a hairline in the
-     sheet's own ink, which is the only chrome the drawing ever shows. */
-    scrollbar-width: thin;
-    scrollbar-color: var(--rule-strong) transparent;
 
     /* THE DRAWING HAS A GROUND NOW. It used to be transparent, which left the plates
      floating on the reading field with nothing under them: a row of objects rather
@@ -2547,8 +2571,8 @@
 
   /* A WINDOW ON A LONGER SHEET, which is why it is framed the way the drawing above is:
    page stock inside one keyline. A bounded region with no edge reads as a table that
-   mysteriously stops, and macOS draws no scrollbar until you are already scrolling -- so
-   the frame, and the line half-showing at its foot, are the whole affordance. 19rem is
+   mysteriously stops, so the frame and the line half-showing at its foot say a sheet
+   continues; the sheet's own scrollbar (see `::-webkit-scrollbar`) says how far. 19rem is
    nine lines and a head, which is more than most runs have and a page of any run. */
   .feed__region {
     max-height: 19rem;
@@ -2557,10 +2581,6 @@
     border: var(--hair) solid var(--rule);
     border-radius: var(--r-leaf);
     padding: 0 var(--s-4);
-    /* The hairline scrollbar the drawing above already uses: a default scrollbar
-     belongs to no design system. */
-    scrollbar-width: thin;
-    scrollbar-color: var(--rule-strong) transparent;
   }
 
   /* A ledger's lines are set tighter than a table of results: there are more of them, they
@@ -2779,8 +2799,6 @@
     min-height: 0;
     padding: var(--s-3) var(--s-4) var(--s-4);
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--rule-strong) transparent;
   }
 
   /* A table is a disclosure, so the list stays scannable at rest and a reader opens the one
@@ -3173,7 +3191,10 @@
     max-height: none;
   }
 
-  /* A result can be wider than the leaf; it scrolls sideways rather than breaking it.
+  /* A result can be wider than the leaf; it scrolls sideways rather than breaking it -- and
+   * SAYS SO, with the sheet's own bar along its foot the moment the columns stop fitting.
+   * Eight columns of a lake query are wider than any pane this book has, and a grid that
+   * scrolled in silence read as one that had simply run out of columns.
    *
    * And TALLER than the leaf: a hundred rows of eleven columns is a page of its own, so the
    * grid keeps its own viewport and its header stays put while the rows move under it. A
@@ -3181,8 +3202,6 @@
   .result {
     overflow: auto;
     max-height: 32rem;
-    scrollbar-width: thin;
-    scrollbar-color: var(--rule-strong) transparent;
   }
 
   .result thead th {
