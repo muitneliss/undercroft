@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.15.0](https://github.com/muitneliss/undercroft/compare/v1.14.2...v1.15.0) (2026-09-21)
+
+
+### Features
+
+* an ingest streams, lands as it goes, and does not re-read what it holds ([#95](https://github.com/muitneliss/undercroft/issues/95)) ([911e133](https://github.com/muitneliss/undercroft/commit/911e13310941c86b6068430d402826bc71b73413))
+* **assistant:** an in-app assistant that answers and acts, as the reader ([#87](https://github.com/muitneliss/undercroft/issues/87)) ([98e5c97](https://github.com/muitneliss/undercroft/commit/98e5c972735ed55ed38a412415733d4f40704c68))
+* **drive:** let an admin sync a picked folder to the bottom ([#93](https://github.com/muitneliss/undercroft/issues/93)) ([94dfde9](https://github.com/muitneliss/undercroft/commit/94dfde91a387e02565d98cbef54372ffab395fb6))
+* **email:** the five emails are set as leaves of the book (ADR 0030) ([#91](https://github.com/muitneliss/undercroft/issues/91)) ([2b6d2f6](https://github.com/muitneliss/undercroft/commit/2b6d2f61bb9df56bda2ed809d9bdd5dd33f796a9))
+* **journal:** a progress line is a gauge, not an entry ([#94](https://github.com/muitneliss/undercroft/issues/94)) ([8ac5917](https://github.com/muitneliss/undercroft/commit/8ac5917261bf3b97c6ecff331e63fdbb6615f169))
+
+
+### Bug Fixes
+
+* **deploy:** preflight compares the panel's compose with the file this repo publishes ([#92](https://github.com/muitneliss/undercroft/issues/92)) ([657ef7f](https://github.com/muitneliss/undercroft/commit/657ef7f97ec2b12c2b1837d24a169ecc12c23534))
+
 ## [1.14.2](https://github.com/muitneliss/undercroft/compare/v1.14.1...v1.14.2) (2026-09-21)
 
 
