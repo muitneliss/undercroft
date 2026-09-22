@@ -2440,29 +2440,6 @@
     visibility: hidden;
   }
 
-  /* -- the colophon ----------------------------------------------------------------- */
-
-  /* @xyflow/react's credit, kept and linked, set in this sheet's own voice instead of
-   floating over the drawing as a pill -- which is a thing this system has none of.
-   Machine face and lowercase: in caps with the label's tracking it read as a section
-   head competing with SƠ ĐỒ above it, which is a lot of authority for a credit. */
-  .run-map__colophon {
-    margin: 0;
-    text-align: end;
-  }
-
-  .run-map__colophon a {
-    font-family: var(--face-mono);
-    font-size: var(--t-micro);
-    color: var(--ink-3);
-    text-decoration-color: transparent;
-  }
-
-  .run-map__colophon a:hover {
-    color: var(--ink-2);
-    text-decoration-color: var(--ink-2);
-  }
-
   /* The flow is the only thing moving here, and it is the thing a reader who asked
    not to have motion most wants stilled. The dash stays, so a live edge still reads
    as different from a settled one without anything travelling. */

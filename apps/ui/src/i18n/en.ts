@@ -565,7 +565,6 @@ export const en = {
       entityLandedRefused: "{{landed}} records · {{refused}} refused",
       chainedFrom: "Chained from the {{source}} ingest",
       chainedTo: "Chained into a model build",
-      drawnWith: "Drawn with {{name}}",
     },
   },
 

@@ -650,7 +650,6 @@ export const vi = {
       entityLandedRefused: "{{landed}} bản ghi · {{refused}} bị từ chối",
       chainedFrom: "Nối từ lần đồng bộ {{source}}",
       chainedTo: "Nối sang việc dựng mô hình",
-      drawnWith: "Sơ đồ vẽ bằng {{name}}",
     },
   },
 
