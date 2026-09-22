@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.5](https://github.com/muitneliss/undercroft/compare/v1.15.4...v1.15.5) (2026-09-22)
+
+
+### Bug Fixes
+
+* **db:** restate the provisioning function on every migrate, not once ([#108](https://github.com/muitneliss/undercroft/issues/108)) ([0f779bd](https://github.com/muitneliss/undercroft/commit/0f779bd797d4d2ed2f9c6cf6bae34d3c5121fc0d))
+
 ## [1.15.4](https://github.com/muitneliss/undercroft/compare/v1.15.3...v1.15.4) (2026-09-22)
 
 
