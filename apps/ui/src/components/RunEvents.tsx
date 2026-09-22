@@ -144,9 +144,17 @@ export function RunEvents({
                   <TableCell className="datum datum--quiet">
                     {formatTime(event.at, locale)}
                   </TableCell>
-                  <TableCell className="feed__what">
-                    <Level level={event.level} />
-                    {eventSentence(t, locale, event)}
+                  {/* The flex row is a span INSIDE the cell, never the cell itself. A `<td>`
+                      given `display: flex` stops being a table cell: the browser wraps it in
+                      an anonymous one, and the border-bottom this sheet draws on every cell is
+                      then drawn on the flex box's own height instead of the row's -- so the
+                      rule between two entries came out as two hairlines a few pixels apart,
+                      one over each column. It renders, and it reads as a misprint. */}
+                  <TableCell>
+                    <span className="feed__what">
+                      <Level level={event.level} />
+                      {eventSentence(t, locale, event)}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}
