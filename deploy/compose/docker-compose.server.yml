@@ -271,7 +271,26 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          # 3g, and it is `landDocument.ts`'s 25 MiB ceiling that sets it -- the two numbers
+          # are one decision and were contradictory at 1g. Gmail ships an attachment
+          # base64-encoded INSIDE a JSON body, so one file at the ceiling costs roughly:
+          #
+          #   33 MiB  base64 as it arrives      67 MiB  held as a UTF-16 JS string
+          #   67 MiB  the parsed copy           25 MiB  decoded bytes, + 25 MiB to hash and put
+          #   ~220 MiB peak, for ONE attachment
+          #
+          # Transient, not retained -- but several uncollected at once, on a baseline of
+          # ~85 MiB, reaches a gigabyte. It did, three times: 2026-09-21 (whole mailbox
+          # buffered, fixed by ADR 0033), then twice more after that was fixed, the last at
+          # message 197 of 4,809 with one message taking 29 seconds. That last one is the
+          # shape of the truth: memory spikes on a big attachment, it does not creep.
+          #
+          # `--smol` (deploy/Dockerfile.worker) was tried at 1g first and was not enough; it
+          # stays, because collecting more often is still right for this process. Lowering
+          # the 25 MiB ceiling was the alternative and was rejected: a scanned contract is
+          # routinely larger than what a smaller ceiling would admit, and refusing it is
+          # losing it. If that ceiling moves, this number moves with it.
+          memory: 3g
 
   # The schema, applied before anything reads it. Same image as the control plane, which
   # carries the migrations and the `migrate` script; it runs once and exits.
