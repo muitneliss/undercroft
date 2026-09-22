@@ -24,7 +24,7 @@ import {
 import { cellText } from "@/lib/cells.ts";
 
 /**
- * How much of a value a row shows before it has to be opened.
+ * How long a value has to be before it is worth a disclosure.
  *
  * A grid is read by scanning DOWN a column, and that only works while every row is the same
  * height. One extracted document's text is six thousand characters; left whole it made its
@@ -32,10 +32,24 @@ import { cellText } from "@/lib/cells.ts";
  * and cost the reader the one thing a table is for. Ninety characters is a long filename or
  * a sentence -- enough to recognise a value, short enough that a hundred rows stay scannable.
  */
-const CLIP_CHARS = 90;
+const OPENABLE_CHARS = 90;
 
 /**
- * One cell: clipped to a line, and openable when there is more.
+ * How much of that value the clipped line carries into the DOM.
+ *
+ * NOT what the reader sees: the COLUMN decides that, by clipping the line to its own width,
+ * and the column is theirs to drag wider. This figure only bounds what is shipped -- a
+ * hundred rows of a six-thousand-character document text is half a megabyte of DOM for a
+ * line nobody can read to the end of. Four hundred is past the widest a column gets on a
+ * 27-inch display, so dragging reveals text rather than running out of it; the whole value
+ * is one press away regardless. Slicing at `OPENABLE_CHARS` instead -- which is what this
+ * did while the width was fixed -- made a dragged column reveal nothing past its 90th
+ * character.
+ */
+const LINE_CHARS = 400;
+
+/**
+ * One cell: a line, clipped by its column, and openable when there is more.
  *
  * A native `<details>`, the same disclosure the raw browser already uses for a payload: it
  * needs no state (`state.md` bans `useState`, and which cell is open is not application
@@ -44,7 +58,7 @@ const CLIP_CHARS = 90;
  * ninety pieces of furniture for nothing.
  */
 function Cell({ text }: { text: string }): React.JSX.Element {
-  if (text.length <= CLIP_CHARS) {
+  if (text.length <= OPENABLE_CHARS) {
     return <span className="cell">{text}</span>;
   }
   return (
@@ -53,7 +67,7 @@ function Cell({ text }: { text: string }): React.JSX.Element {
           off its own disclosure triangle, and a cell with no marker is one a reader never
           learns can be opened. */}
       <summary>
-        <span className="cell__clip">{text.slice(0, CLIP_CHARS)}</span>
+        <span className="cell__clip">{text.slice(0, LINE_CHARS)}</span>
       </summary>
       {/* The value verbatim, wrapped, never re-parsed -- the same treatment a raw payload
           gets one band above. */}
@@ -89,7 +103,12 @@ export function ResultTable({
 
   return (
     <div className={fill ? "result-pane" : "stack stack--tight"}>
-      <div className="result">
+      {/* `result--grid` is what separates a QUERY's answer from the pivot in `ChartFrame`,
+          which is drawn into a bare `.result` and is a schedule: its last column is a total
+          and means to be right-aligned, and its columns are figures that want to be as wide
+          as the figure. Everything this grid does -- reading left, dividing its pane into
+          equal columns, handing each of them to the reader to drag -- is wrong there. */}
+      <div className="result result--grid">
         <Table>
           {fill ? null : (
             <TableCaption>{t("result.caption", { count: result.rows.length })}</TableCaption>

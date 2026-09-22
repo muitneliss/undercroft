@@ -85,3 +85,4 @@
 ## [2026-09-22] ingest | ADR 0035: A harvest records what it settled, rather than asserting it
 ## [2026-09-22] ingest | ADR 0035: A harvest records what it settled, rather than asserting it
 ## [2026-09-22] ingest | ADR 0036 — A definition is restated, not migrated
+## [2026-09-22] ingest | ADR 0037 A Query Grid Divides Its Pane

@@ -20,11 +20,24 @@
  * structurally instead, by requiring it in the same block as the class.
  */
 
-import { beforeAll, describe, expect, test as it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const SHEET = join(import.meta.dirname, "index.css");
+
+/** The width happy-dom opens its window at, and what a block that changes it puts back. */
+const WINDOW = 1024;
+
+/**
+ * The reader's window, for the one promise below that a media query answers differently at
+ * two widths. A layout rule read at one width is half a rule.
+ */
+function viewport(width: number): void {
+  (
+    globalThis as unknown as { happyDOM: { setViewport: (size: { width: number }) => void } }
+  ).happyDOM.setViewport({ width });
+}
 
 /** The `@layer <name> { ... }` body, by brace depth. */
 function layerBody(css: string, name: string): string {
@@ -108,6 +121,121 @@ describe("the ledger's instant column", () => {
     const sentence = globalThis.getComputedStyle(region.querySelector("td:last-child") as Element);
     expect(instant.paddingRight).toBe("0px");
     expect(sentence.paddingLeft).not.toBe("0px");
+  });
+});
+
+/**
+ * A query's answer is not a schedule, and the sheet has to know which it is drawing.
+ *
+ * Both are `.table` inside `.result`, and the two facts that separate them are invisible to
+ * every other check in the gate: a schedule's last column holds a figure and is set to the
+ * right, and its columns are sized by the browser from their content. Applied to an answer,
+ * the first put a ONE-column result -- name, type and every cell -- against the right edge
+ * of the pane, which typechecks, lints and renders perfectly; the second is what leaves a
+ * column of extracted document text at whatever width the first hundred rows happened to
+ * want, with no grip on it.
+ *
+ * So `result--grid` is the distinction, and it is asserted from both sides: it must hold for
+ * an answer, and a bare `.table` must keep the schedule's behaviour, or the fix has simply
+ * been applied to every table in the book.
+ */
+describe("a query's answer", () => {
+  const GRID = `<div class="result result--grid"><table class="table">
+    <thead><tr><th scope="col">text</th></tr></thead>
+    <tbody><tr><td class="datum"><span class="cell">VIETCHAM SINGAPORE COM</span></td></tr></tbody>
+  </table></div>`;
+
+  /** The same markup a journal or a tenant list draws: a schedule, no `result--grid`. */
+  const SCHEDULE = `<table class="table">
+    <thead><tr><th scope="col">Bytes</th></tr></thead>
+    <tbody><tr><td class="datum">122</td></tr></tbody>
+  </table>`;
+
+  it("reads from the left even when its only column is also its last", () => {
+    const grid = render(GRID);
+    const head = globalThis.getComputedStyle(grid.querySelector("th:last-child") as Element);
+    const cell = globalThis.getComputedStyle(grid.querySelector("td:last-child") as Element);
+    expect(head.textAlign).toBe("left");
+    expect(cell.textAlign).toBe("left");
+  });
+
+  it("leaves a schedule's last column set to the right, where a figure belongs", () => {
+    const schedule = render(SCHEDULE);
+    const cell = globalThis.getComputedStyle(schedule.querySelector("td:last-child") as Element);
+    expect(cell.textAlign).toBe("right");
+  });
+
+  it("leaves a figure right-aligned, because a figure says so for itself", () => {
+    // The `:not(.num)` half. `ChartFrame`'s pivot is a schedule drawn into a bare `.result`,
+    // and a grid that ever carries a total must not straighten it out.
+    const grid = render(GRID.replaceAll(`class="datum"`, `class="datum num"`));
+    expect(
+      globalThis.getComputedStyle(grid.querySelector("td:last-child") as Element).textAlign,
+    ).toBe("right");
+  });
+
+  it("divides its pane into columns, each with a width the reader can drag", () => {
+    const grid = render(GRID);
+    const table = globalThis.getComputedStyle(grid.querySelector(".table") as Element);
+    const head = globalThis.getComputedStyle(grid.querySelector("th") as Element);
+    // Fixed layout is what puts the width on the header cell -- which is the cell the grip
+    // is on. Without the declared width a drag takes the neighbouring columns to nothing.
+    expect(table.tableLayout).toBe("fixed");
+    expect(head.width).not.toBe("");
+    expect(head.resize).toBe("horizontal");
+  });
+
+  it("leaves a schedule's columns to the browser, which sizes them from their content", () => {
+    const table = globalThis.getComputedStyle(render(SCHEDULE));
+    expect(table.tableLayout).not.toBe("fixed");
+  });
+});
+
+/**
+ * The reference rail's edge is the workbench's left-right handle.
+ *
+ * The editor's own grip moves the boundary between writing and reading; this one moves what
+ * the editor and the answer share. What is worth pinning is the fold, which is a drag's
+ * natural enemy: `resize` writes an INLINE width that no class outranks, so the folded rule
+ * has to CLAMP rather than set, or a rail dragged wide stays wide when it is folded and the
+ * spine's label sits in a third of the page.
+ */
+describe("the reference rail", () => {
+  // happy-dom opens a 1024px window, which is exactly the workbench's narrow breakpoint --
+  // where there is no column beside the rail to trade width with and the drag is off by
+  // design. So a desk is asked for explicitly, and given back.
+  beforeAll(() => {
+    viewport(1440);
+  });
+  afterAll(() => {
+    viewport(WINDOW);
+  });
+
+  it("hands its edge to the reader", () => {
+    expect(globalThis.getComputedStyle(render(`<aside class="rail-ref"></aside>`)).resize).toBe(
+      "horizontal",
+    );
+  });
+
+  it("folds to its spine however wide it was dragged", () => {
+    const style = globalThis.getComputedStyle(
+      render(`<aside class="rail-ref rail-ref--folded"></aside>`),
+    );
+    expect(style.maxWidth).toBe(style.width);
+    expect(style.resize).toBe("none");
+  });
+
+  it("stops being a rail where there is no column beside it", () => {
+    viewport(720);
+    const style = globalThis.getComputedStyle(render(`<aside class="rail-ref"></aside>`));
+    // Read before the window goes back: the declaration is live, so a value read after it
+    // is the desk's answer again.
+    const narrow = { resize: style.resize, maxWidth: style.maxWidth };
+    viewport(1440);
+    // Under the work rather than beside it: nothing to trade width with, and the inline
+    // width a drag at a desk left behind is clamped rather than obeyed.
+    expect(narrow.resize).toBe("none");
+    expect(narrow.maxWidth).toBe("100%");
   });
 });
 

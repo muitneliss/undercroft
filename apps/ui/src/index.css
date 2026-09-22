@@ -2720,22 +2720,42 @@
    * A leaf lying on the page: one ply, a hairline, no shadow -- the same die the token box
    * and an unprinted leaf are cut from. 17rem because the longest name and type this schema
    * has, `captured_at` and `timestamptz`, break across two lines at 15, and a column name
-   * printed as `captured_a / t` is the one thing a reference must never do. */
+   * printed as `captured_a / t` is the one thing a reference must never do.
+   *
+   * AND ITS EDGE IS THE WORKBENCH'S OTHER HANDLE. The editor's own grip moves the boundary
+   * between writing and reading; this one moves the boundary between the reference and both
+   * of them at once, because the work column is what the rail does not take. The fold is
+   * still the two-state answer -- 17rem or a spine -- and this is the one in between, for a
+   * schema whose names are longer than 17rem or a query whose answer wants the screen. The
+   * floor keeps a drag from leaving a column of `captured_a / t`; the ceiling keeps one from
+   * pushing the editor off the leaf. */
   .rail-ref {
     display: flex;
     flex-direction: column;
     width: 17rem;
+    min-width: 11rem;
+    max-width: 34rem;
     min-height: 0;
     background: var(--leaf);
     border: var(--hair) solid var(--rule);
     border-radius: var(--r-leaf);
     /* The fold stays put at the head while the tables move under it. */
     overflow: hidden;
+    resize: horizontal;
   }
 
-  /* Folded: the reference is read down its own edge, the way a book on a shelf is. */
+  /* Folded: the reference is read down its own edge, the way a book on a shelf is.
+   *
+   * A `max-width`, not a `width` alone, and that is the whole reason this rule has three
+   * declarations. A drag writes an INLINE width, which no class can outrank -- so a rail
+   * dragged to 30rem and then folded stayed 30rem wide, a spine's label in a third of the
+   * page. Clamped, the fold always folds, and unfolding returns the reader to the width
+   * they chose rather than to ours. */
   .rail-ref--folded {
     width: 2.75rem;
+    min-width: 0;
+    max-width: 2.75rem;
+    resize: none;
   }
 
   /* The fold itself. A whole-width press rather than a glyph in a corner: the target is the
@@ -3008,11 +3028,18 @@
       height: auto;
     }
 
+    /* `max-width` again, for the same reason the fold needs it: a width dragged at a desk
+     * is an inline style that travels with the reader to a split screen, where it would
+     * hold a rail at 34rem inside a pane narrower than that. There is no column to sit
+     * beside here, so there is nothing for a horizontal drag to trade against either. */
     .rail-ref,
     .rail-ref--folded {
       width: auto;
+      min-width: 0;
+      max-width: 100%;
       max-height: 20rem;
       order: 2;
+      resize: none;
     }
 
     /* Folded is a horizontal head again: a label turned onto its spine is read down the
@@ -3212,15 +3239,77 @@
     background: var(--page);
   }
 
+  /* -- a query's answer, as opposed to a schedule -------------------------------- */
+
+  /* THE LAST COLUMN OF AN ANSWER IS JUST A COLUMN.
+   *
+   * `.table td:last-child` sets the final column to the right, which is correct on a
+   * schedule -- there it holds a figure or the verb that acts on the row. A query answers
+   * with whatever columns the author wrote, and the last of them is as likely to be a
+   * filename as a count. Worse, a ONE-column result's only column is also its last, so the
+   * whole grid -- the name, the type under it and every cell -- was set against the right
+   * edge of the pane, which is how a lake query reading `SELECT text` came to look like a
+   * column of text that had fallen off the page.
+   *
+   * `.num` keeps its alignment: `ChartFrame`'s pivot IS a schedule, its last column is a
+   * total, and it draws into a bare `.result` for exactly that reason. */
+  .result--grid .table th:last-child:not(.num),
+  .result--grid .table td:last-child:not(.num) {
+    padding-right: var(--s-3);
+    text-align: left;
+  }
+
+  /* THE PANE, DIVIDED -- AND EVERY DIVISION THE READER'S TO MOVE.
+   *
+   * `table-layout: fixed` is the load-bearing line, and it is what the other three follow
+   * from. Left to itself the browser sizes a column to its content, so a `text` column of
+   * extracted documents takes everything and a `count` column takes nothing, and no width a
+   * reader asks for survives the next query. Fixed layout takes the width off the header
+   * cell instead -- which is the cell `resize` puts a grip on.
+   *
+   * 6rem is not the resting width; it is the width a column HOLDS when its neighbour is
+   * dragged wide, and above it the pane's spare width divides equally. So four columns are
+   * four quarters and eleven are eleven elevenths, and dragging one of them out makes the
+   * grid scroll sideways -- which it already does, and already says so -- rather than
+   * crushing the other ten to nothing. Measured: without a declared width here, a drag
+   * takes the neighbours to 29px and the grid never scrolls. `min-width` cannot do this
+   * job; fixed layout ignores it on a cell.
+   *
+   * `resize` rather than a handle of our own, for the reason the editor's pane gives one
+   * screen up: it is the browser's affordance, it owns no state and persists nothing, and a
+   * width is not a fact the platform needs to remember. Where a browser does not support it
+   * on a cell the grid simply keeps its equal columns. */
+  .result--grid .table {
+    table-layout: fixed;
+  }
+
+  .result--grid .table th {
+    width: 6rem;
+    overflow: hidden;
+    /* A name too long for its column says so, rather than being cut mid-word. */
+    text-overflow: ellipsis;
+    resize: horizontal;
+  }
+
+  /* The column clips, so the cell does not have to guess a measure. */
+  .result--grid .table td {
+    overflow: hidden;
+  }
+
   /* -- one cell ------------------------------------------------------------------ */
 
   /* ONE LINE, ALWAYS. A grid is read by scanning down a column, and that holds only while
    * every row is the same height; one six-thousand-character document text made its row two
-   * hundred pixels tall and wrapped every neighbour into four lines. The cap is generous
-   * enough for a filename and firm enough that a hundred rows stay scannable. */
+   * hundred pixels tall and wrapped every neighbour into four lines.
+   *
+   * THE COLUMN IS THE CAP. This was a flat 24rem, which was the only measure available
+   * while the browser sized the columns -- and it meant a reader who widened the pane, or
+   * had one column to a whole screen, still read 24rem of a value and no more. Under fixed
+   * layout the cell's width is definite, so the line takes the width it is given and the
+   * cap moves with the grip on the header. */
   .cell {
     display: block;
-    max-width: 24rem;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3237,11 +3326,12 @@
   }
 
   /* The clipped line itself. `inline-block` so it sits beside the marker rather than under
-   * it, and 22rem rather than 24 so the two together still fit the cell. */
+   * it, and short of the full width by the marker's own measure so the two together still
+   * fit the cell -- the pair used to be 22rem inside 24. */
   .cell__clip {
     display: inline-block;
     vertical-align: bottom;
-    max-width: 22rem;
+    max-width: calc(100% - 1.25em);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3251,8 +3341,9 @@
    * a table cell is still being read in a table cell -- the lake browser is where a document
    * is read at length. */
   .cell__full {
-    /* The cell's own width, not more: the clipped line above caps the column at 24rem, so a
-     * wider field would simply be cut off by it -- a pane that promised text it then hid. */
+    /* The cell's own width, not more: the column clips what overflows it, so a wider field
+     * would simply be cut off -- a pane that promised text it then hid. A reader who wants
+     * more of it widens the column, and this field widens with it. */
     max-height: 18rem;
     margin: var(--s-2) 0 0;
     padding: var(--s-3);
