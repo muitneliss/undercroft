@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.4](https://github.com/muitneliss/undercroft/compare/v1.15.3...v1.15.4) (2026-09-22)
+
+
+### Bug Fixes
+
+* **deploy:** give the worker 3g, because 25 MiB attachments cost ~220 MiB ([#106](https://github.com/muitneliss/undercroft/issues/106)) ([ad57ee6](https://github.com/muitneliss/undercroft/commit/ad57ee6d49852d33173ce634c6d5f896fec52496))
+
 ## [1.15.3](https://github.com/muitneliss/undercroft/compare/v1.15.2...v1.15.3) (2026-09-22)
 
 
