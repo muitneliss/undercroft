@@ -50,107 +50,17 @@ LANGUAGE sql IMMUTABLE STRICT AS $$
 $$;
 
 -- -- provisioning --------------------------------------------------------------
--- Idempotent: running it again for a tenant that already has its roles changes nothing, so
--- the worker can call it before a build as belt and braces for tenants created before this
--- migration existed.
-CREATE OR REPLACE FUNCTION ops.provision_tenant(p_tenant_id text) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, ops AS $fn$
-DECLARE
-    v_slug      text;
-    v_dbt       name;
-    v_bi        name;
-    v_analytics name;
-    v_dq        name;
-BEGIN
-    IF p_tenant_id !~ '^[A-Za-z0-9_-]{1,64}$' THEN
-        RAISE EXCEPTION 'undercroft: tenant id % is not a valid reference', p_tenant_id
-            USING ERRCODE = 'invalid_parameter_value';
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM ops.tenant WHERE id = p_tenant_id) THEN
-        RAISE EXCEPTION 'undercroft: tenant % does not exist', p_tenant_id
-            USING ERRCODE = 'no_data_found';
-    END IF;
-
-    v_slug := ops.tenant_slug(p_tenant_id);
-    -- NAMEDATALEN is 63; `undercroft_dbt_` is 15. Forty leaves the prefix room and keeps
-    -- the two role names, the two schema names and the slug from ever being truncated.
-    IF v_slug = '' OR length(v_slug) > 40 THEN
-        RAISE EXCEPTION 'undercroft: tenant id % makes no usable role name', p_tenant_id
-            USING ERRCODE = 'invalid_parameter_value';
-    END IF;
-
-    v_dbt       := 'undercroft_dbt_' || v_slug;
-    v_bi        := 'undercroft_bi_'  || v_slug;
-    v_analytics := 'analytics_'      || v_slug;
-    v_dq        := 'dq_'             || v_slug;
-
-    -- Two tenants whose ids fold to one slug would share a login. Refused before any role
-    -- exists, with an error the control plane can name to the operator.
-    IF EXISTS (SELECT 1 FROM ops.tenant_role
-               WHERE role_name IN (v_dbt, v_bi) AND tenant_id <> p_tenant_id) THEN
-        RAISE EXCEPTION 'undercroft: the role name for % already belongs to another tenant', p_tenant_id
-            USING ERRCODE = 'unique_violation';
-    END IF;
-
-    INSERT INTO ops.tenant_role (tenant_id, kind, role_name, slug)
-    VALUES (p_tenant_id, 'dbt', v_dbt, v_slug), (p_tenant_id, 'bi', v_bi, v_slug)
-    ON CONFLICT (tenant_id, kind) DO NOTHING;
-
-    -- No password: a role nobody has rotated cannot log in. NOINHERIT so a membership
-    -- granted by mistake later confers nothing by itself.
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_dbt) THEN
-        EXECUTE format('CREATE ROLE %I LOGIN NOINHERIT CONNECTION LIMIT 4', v_dbt);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_bi) THEN
-        EXECUTE format('CREATE ROLE %I LOGIN NOINHERIT CONNECTION LIMIT 4', v_bi);
-    END IF;
-
-    -- dbt owns the two schemas it writes, and may create in nothing else.
-    EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', v_analytics, v_dbt);
-    EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', v_dq, v_dbt);
-
-    -- dbt reads raw through the PARENT tables only. A partition is not granted, so
-    -- `SELECT ... FROM raw.records_default` is a permission error and the row-level policy
-    -- on the parent cannot be side-stepped by naming the partition.
-    --
-    -- `raw.document_text` joined this list in 180 (ADR 0024), and the search functions in 190
-    -- (ADR 0026). Both are edited HERE rather than by replacing this function in those files,
-    -- so the provisioning rules stay in one place; each carries a catch-up loop for the
-    -- databases where this file has already run, because the migration ledger keys on a file's
-    -- name and never re-applies it.
-    --
-    -- The search functions do not exist yet when this file runs -- 190 creates them. That is
-    -- fine and is why the grant is inside `format()`: the body is dynamic SQL, parsed when a
-    -- tenant is provisioned, which is always after every migration has been applied.
-    EXECUTE format('GRANT USAGE ON SCHEMA raw TO %I', v_dbt);
-    EXECUTE format('GRANT SELECT ON raw.records, raw.documents, raw.document_text TO %I', v_dbt);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION raw.tenant_of(name) TO %I', v_dbt);
-    EXECUTE format(
-        'GRANT EXECUTE ON FUNCTION raw.search_cap(), raw.fold(text), raw.search_tsv(text),
-             raw.record_tsv(jsonb), raw.search_query(text),
-             raw.search_excerpt(text, text, integer) TO %I',
-        v_dbt);
-
-    -- bi reads the tenant's analytics: what is there now, and what dbt creates later.
-    EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', v_analytics, v_bi);
-    EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO %I', v_analytics, v_bi);
-    EXECUTE format(
-        'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT ON TABLES TO %I',
-        v_dbt, v_analytics, v_bi);
-
-    -- Explicit refusals, so a later broad grant is a visible contradiction.
-    EXECUTE format('REVOKE ALL ON SCHEMA app, ops FROM %I, %I', v_dbt, v_bi);
-    EXECUTE format('REVOKE ALL ON SCHEMA %I FROM %I', v_dq, v_bi);
-
-    -- Belt and braces for the read-only login. The query runner sets both per statement;
-    -- these hold for any other client that logs in as the role.
-    EXECUTE format('ALTER ROLE %I SET statement_timeout = %L', v_bi, '15s');
-    EXECUTE format('ALTER ROLE %I SET default_transaction_read_only = on', v_bi);
-END
-$fn$;
-
-REVOKE ALL ON FUNCTION ops.provision_tenant(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION ops.provision_tenant(text) TO undercroft_app, undercroft_worker;
+-- `ops.provision_tenant` LIVES IN `sql/repeatable/010_provision_tenant.sql`, not here.
+--
+-- It was here until ADR 0036, and being here is what broke it. Its grant list grew twice, in
+-- 180 and in 190, by editing this file in place -- and the ledger keys on a file's NAME, so
+-- an edit to an applied migration reaches new databases only. Production kept running the
+-- old body and provisioned a tenant with it, which could then read neither the extracted
+-- document text nor its own search index. A function whose body is a policy has to be
+-- restated on every deploy, so it moved to the directory whose files are.
+--
+-- Nothing else moved. The mapping table, the slug function, the rotation function, the
+-- row-level policies and the DDL guard are changes applied once, and they stay changes.
 
 -- -- rotation -------------------------------------------------------------------
 -- The worker mints a password right before it needs one -- a dbt build, a pooled query
@@ -264,12 +174,6 @@ BEGIN
 END
 $guard$;
 
--- -- tenants that already exist ----------------------------------------------------
-DO $$
-DECLARE t record;
-BEGIN
-    FOR t IN SELECT id FROM ops.tenant ORDER BY id LOOP
-        PERFORM ops.provision_tenant(t.id);
-    END LOOP;
-END
-$$;
+-- Tenants that already exist are provisioned at the tail of
+-- `sql/repeatable/010_provision_tenant.sql`, which runs after every numbered file and on
+-- every deploy -- so it catches up the ones created since, not only the ones standing here.

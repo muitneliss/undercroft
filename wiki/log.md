@@ -84,3 +84,4 @@
 ## [2026-09-21] ingest | An ingest streams, and does not re-read what it already holds
 ## [2026-09-22] ingest | ADR 0035: A harvest records what it settled, rather than asserting it
 ## [2026-09-22] ingest | ADR 0035: A harvest records what it settled, rather than asserting it
+## [2026-09-22] ingest | ADR 0036 — A definition is restated, not migrated
