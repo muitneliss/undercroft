@@ -7,8 +7,11 @@
  * this row only marks itself `aria-current` so a reader with a screen reader, or without
  * colour, knows which line the leaf belongs to.
  *
- * A run still in progress prints MISSING in every count. A number still changing is not a
- * number, and printing what has landed so far would be read as the total.
+ * A run with no counts to give prints MISSING in every one of them: one still in progress,
+ * because a number still changing is not a number and what has landed so far would be read
+ * as the total, and a build, which lands no records at all. Which of them has counts is the
+ * ledger's decision (`countsOf`, control-plane `services/runs.ts`), not this row's -- the row
+ * prints the four figures or the four dashes.
  */
 
 import type { Locale } from "@undercroft/core/locale";
