@@ -517,6 +517,32 @@ describe("the grant on a column added later", () => {
 describe("the extraction sample", () => {
   const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+  /**
+   * A digest of this document's own, so these are DISTINCT documents rather than one
+   * document catalogued many times.
+   *
+   * The suite above shares `SHA` between two documents ON PURPOSE -- that is how it says
+   * "the same bytes", which is the whole subject of its tests. These are the opposite case,
+   * and taking the shared constant made every seeded row a duplicate of every other. A write
+   * answers every document holding a digest at once, so one row was proposed twice in a
+   * single statement and Postgres refused the lot: "ON CONFLICT DO UPDATE command cannot
+   * affect row a second time". Loud, which is what that invariant is for.
+   */
+  function digestOf(documentId: string): string {
+    return documentId.padEnd(64, "0").slice(0, 64);
+  }
+
+  /**
+   * A text row whose `source_sha256` is the digest of the document it names.
+   *
+   * The two have to agree or the write reaches nothing: a text row says which bytes it was
+   * read from, and the write answers the documents holding exactly those bytes. Deriving
+   * both from the id is what keeps a fixture from claiming one and cataloguing another.
+   */
+  function typed(documentId: string, over: Partial<DocumentTextRow>): DocumentTextRow {
+    return row(documentId, { sourceSha256: digestOf(documentId), ...over });
+  }
+
   /** Catalogue a document with a content type and a weight the measurement can read back. */
   async function landTyped(
     documentId: string,
@@ -533,7 +559,7 @@ describe("the extraction sample", () => {
         TENANT,
         documentId,
         `documents/${SOURCE}/${TENANT}/${documentId}`,
-        SHA,
+        documentId.padEnd(64, "0").slice(0, 64),
         byteLength,
         contentType,
       ],
@@ -543,7 +569,7 @@ describe("the extraction sample", () => {
   it("returns what was read, with the source's weight as a number", async () => {
     await landTyped("f1", "application/pdf", "250000");
     await extractedAt(NOW, [
-      row("f1", { method: "pdf_text", reason: null, text: "a contract", truncated: true }),
+      typed("f1", { method: "pdf_text", reason: null, text: "a contract", truncated: true }),
     ]);
 
     expect(await scanExtractions(db, { limit: 10, contentTypes: [] })).toEqual([
@@ -567,8 +593,8 @@ describe("the extraction sample", () => {
     await landTyped("f1", "application/pdf", "2048");
     await landTyped("f2", XLSX, "2048");
     await extractedAt(NOW, [
-      row("f1", { method: "pdf_text", reason: null, text: "pdf" }),
-      row("f2", { method: "xlsx", reason: null, text: "workbook" }),
+      typed("f1", { method: "pdf_text", reason: null, text: "pdf" }),
+      typed("f2", { method: "xlsx", reason: null, text: "workbook" }),
     ]);
 
     const only = await scanExtractions(db, { limit: 10, contentTypes: [XLSX] });
@@ -580,8 +606,8 @@ describe("the extraction sample", () => {
     await landTyped("f1", "application/pdf", "2048");
     await landTyped("f2", XLSX, "2048");
     await extractedAt(NOW, [
-      row("f1", { method: "pdf_text", reason: null, text: "pdf" }),
-      row("f2", { method: "xlsx", reason: null, text: "workbook" }),
+      typed("f1", { method: "pdf_text", reason: null, text: "pdf" }),
+      typed("f2", { method: "xlsx", reason: null, text: "workbook" }),
     ]);
 
     const all = await scanExtractions(db, { limit: 10, contentTypes: [] });
@@ -591,7 +617,7 @@ describe("the extraction sample", () => {
 
   it("leaves out a document the customer has deleted", async () => {
     await landTyped("gone", "application/pdf", "2048");
-    await extractedAt(NOW, [row("gone", { method: "pdf_text", reason: null, text: "old" })]);
+    await extractedAt(NOW, [typed("gone", { method: "pdf_text", reason: null, text: "old" })]);
     await db.query("UPDATE raw.documents SET deleted_at = now() WHERE document_id = 'gone'");
 
     expect(await scanExtractions(db, { limit: 10, contentTypes: [] })).toEqual([]);
@@ -607,7 +633,7 @@ describe("the extraction sample", () => {
     }
     await extractedAt(
       NOW,
-      ids.map((id) => row(id, { method: "pdf_text", reason: null, text: id })),
+      ids.map((id) => typed(id, { method: "pdf_text", reason: null, text: id })),
     );
 
     const first = await scanExtractions(db, { limit: 4, contentTypes: [] });
