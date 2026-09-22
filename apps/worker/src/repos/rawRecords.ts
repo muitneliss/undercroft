@@ -23,6 +23,15 @@
  * allowed to SKIP, and the comparison it turns on is a `timestamptz` one -- which only
  * Postgres can get right, because the text Drive sends and the text the column reads back
  * as are the same instant spelled two ways. See its own docstring.
+ *
+ * `markHarvested` is the one statement here that does NOT project the lake, and the exception
+ * is deliberate rather than an erosion. `documents_landed` records what a harvest settled
+ * beside a record, which is a fact about the READING and not about the object -- so it has no
+ * way in through a content-addressed store, where an unchanged record writes no new version
+ * and therefore nothing for the projection to carry. `230_documents_landed.sql` argues it in
+ * full. It is here rather than in a module of its own because this is the repo for this table
+ * group (`layering.md`), and a second module writing `raw.records` would be the second writer
+ * that argument is trying to avoid.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -137,6 +146,19 @@ const PROBE_CHUNK = 1000;
  *
  * A tombstoned row does not count as held. `deleted_at` says the source dropped it, so an
  * id that came back is something to read again rather than something to skip.
+ *
+ * **AND NEITHER DOES A ROW WHOSE LANDING NEVER SAID WHAT IT SETTLED.** Presence was the whole
+ * test until ADR 0035, on the strength of the ordering rule that lands a record's documents
+ * first -- which binds the rows that rule wrote and says nothing about the rows already in the
+ * table. The run oom-killed on 2026-09-21 left 7,786 Gmail records with no documents at all,
+ * and every run after it skipped every one of them: the invariant was asserted, never
+ * recorded, and so could not be checked. `documents_landed IS NULL` is a landing that did not
+ * say, which is read again rather than trusted. `230_documents_landed.sql`.
+ *
+ * A caller that lands records with no documents at all -- the spec path, the lake REST API --
+ * writes no mark, so its rows are not held by this. Nothing probes them today (the spec path
+ * resumes from `raw.sync_cursor` instead, ADR 0034); if one ever does, the answer it gets is
+ * "read it again", which is the safe direction to be wrong in and the visible one.
  */
 export async function knownRecords(
   exec: SqlExecutor,
@@ -154,6 +176,7 @@ export async function knownRecords(
            ON v.srid = r.source_record_id
         WHERE r.source = $1 AND r.tenant_id = $2 AND r.entity = $3
           AND r.deleted_at IS NULL
+          AND r.documents_landed IS NOT NULL
           AND (v.sua IS NULL OR r.source_updated_at = v.sua)`,
       [
         identity.source,
@@ -169,6 +192,63 @@ export async function knownRecords(
   }
 
   return held;
+}
+
+/** One record, and how many documents its harvest got down beside it. */
+export interface HarvestMark {
+  readonly sourceRecordId: string;
+  /** Reached the lake AND the catalogue. Never what was matched -- see {@link markHarvested}. */
+  readonly documentsLanded: number;
+}
+
+/**
+ * Record what each of these records' harvest settled. Answers how many rows it reached.
+ *
+ * The counterpart to `knownRecords`' `IS NOT NULL`: this is the only thing that writes the
+ * column, so a row is held on the next run exactly when some run said what it settled.
+ *
+ * **THE COUNT IS WHAT LANDED, NOT WHAT WAS MATCHED,** and the difference is a second bug in
+ * the shape of a fix. An attachment refused for its declared size never becomes a
+ * `raw.documents` row and never will -- the refusal is deterministic. Counting matched parts
+ * would leave such a message short of its own target on every future run, so it would be
+ * re-fetched forever: unharvestable rather than merely incomplete, which is the failure ADR
+ * 0033 already refused on the landing side. A message whose only attachment was too large
+ * settles ZERO documents, honestly, and is held.
+ *
+ * Called AFTER the chunk has been projected, because until then there is no row to update;
+ * a mark that finds nothing is a record the projection has not reached, and the next run
+ * reads it again. Dying between the two costs a re-read and never a skip, which is the
+ * direction this whole area is built to fail in.
+ *
+ * Scoped by the full primary key. A mark is a claim that THIS tenant's copy of this record is
+ * complete, and a statement that matched on `source_record_id` alone would answer it for every
+ * other tenant holding the same provider id -- marking records complete whose documents nobody
+ * has fetched, which is the outage this column exists to end, re-created by its repair.
+ */
+export async function markHarvested(
+  exec: SqlExecutor,
+  identity: StreamIdentity,
+  marks: readonly HarvestMark[],
+): Promise<number> {
+  if (marks.length === 0) {
+    return 0;
+  }
+
+  const { rows } = await exec.query<{ id: string }>(
+    `UPDATE raw.records r SET documents_landed = v.n
+       FROM unnest($4::text[], $5::integer[]) AS v(srid, n)
+      WHERE r.source = $1 AND r.tenant_id = $2 AND r.entity = $3
+        AND r.source_record_id = v.srid
+     RETURNING r.source_record_id AS id`,
+    [
+      identity.source,
+      identity.tenantId,
+      identity.entity,
+      marks.map((mark) => mark.sourceRecordId),
+      marks.map((mark) => mark.documentsLanded),
+    ],
+  );
+  return rows.length;
 }
 
 /**

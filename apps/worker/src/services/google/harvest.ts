@@ -20,18 +20,25 @@
  * `maxRecords` stop this read" back out of `readPages`; a side channel would be a second
  * place for the same answer to live.
  *
- * ## A record's documents are landed BEFORE the record, and that is why skipping is safe
+ * ## A record's documents are landed BEFORE the record, and the record then says how many
  *
- * {@link HarvestItem} pairs them for exactly that reason. What the next run skips is what
- * `raw.records` holds, so "present in `raw.records`" has to mean "fully harvested": a
- * message whose record landed while its attachment fetch was still failing would be skipped
- * on every future run, and the attachment would be lost from the one layer that cannot be
- * recomputed. `collect.ts` holds a record back until its documents are down, and a crash
- * between the two merely re-does the message, which is idempotent by content.
+ * {@link HarvestItem} pairs them for exactly that reason: a message whose record landed while
+ * its attachment fetch was still failing would be skipped on every future run, and the
+ * attachment would be lost from the one layer that cannot be recomputed. `collect.ts` holds a
+ * record back until its documents are down, and a crash between the two merely re-does the
+ * message, which is idempotent by content.
+ *
+ * That ordering made "present in `raw.records`" mean "fully harvested" for every row it wrote
+ * -- and for no other row. ADR 0035 is what happened next: the rows written by the OLD order,
+ * records first and documents last, were skipped on presence by every run after the fix, so a
+ * mailbox of 7,786 messages kept zero attachments and could not recover on its own. The claim
+ * is now carried rather than assumed. `collect.ts` counts what the sink got down and the
+ * record is marked with it; {@link AlreadyHeld} answers on the mark, not on the row.
  *
  * The other half of the same rule is that a document refused for its declared SIZE does not
- * hold its record back. That refusal is deterministic -- it will refuse identically forever
- * -- so waiting on it would make the message unharvestable rather than incomplete.
+ * hold its record back and is not counted in the mark. That refusal is deterministic -- it
+ * will refuse identically forever -- so waiting on it would make the message unharvestable,
+ * and counting it would make the message perpetually incomplete. Both lose the same mailbox.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -90,7 +97,10 @@ export type Harvest = AsyncGenerator<HarvestItem, HarvestSummary>;
  */
 export type AlreadyHeld = (probes: readonly RecordProbe[]) => Promise<ReadonlySet<string>>;
 
-/** The binding every real run uses: what this stream already has in `raw.records`. */
+/**
+ * The binding every real run uses: what this stream has in `raw.records` AND has marked
+ * harvest-complete. A row whose landing never said what it settled is not held. ADR 0035.
+ */
 export function heldBy(exec: SqlExecutor, identity: StreamIdentity): AlreadyHeld {
   return (probes): Promise<ReadonlySet<string>> => knownRecords(exec, identity, probes);
 }

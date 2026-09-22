@@ -73,6 +73,15 @@ export function driveBaseUrl(): string {
  * spellings of one instant are not equal as strings and a JavaScript compare would re-read
  * the whole of a customer's Drive on every run while looking like it was skipping.
  *
+ * Unchanged is necessary and was briefly mistaken for sufficient. A file whose record landed
+ * under the old order -- record first, bytes last -- has an unmoved `modifiedTime` and no
+ * document, so it matched the probe and was skipped forever with nothing in the lake. Drive
+ * carried the same exposure as Gmail here and for the same reason; the probe now also requires
+ * the row to be marked harvest-complete. ADR 0035. Note the asymmetry with Gmail: every Drive
+ * file IS a document, so a mark of zero means an oversized file whose record is legitimately
+ * alone -- which is why the mark is a count of what LANDED and not a comparison against what
+ * the pick matched, or such a file would be downloaded again every run for ever.
+ *
  * **A SKIPPED FILE STILL ENTERS `seenIds`**, which is the quiet half and the dangerous one.
  * `tombstoneMissing` negates the kept-id set, so a file left out of it because it had not
  * changed is reported DELETED -- and in a steady-state Drive that is every file in it, on

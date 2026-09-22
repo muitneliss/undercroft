@@ -17,19 +17,30 @@
  * the mailbox, on top of holding the mailbox. It is now one walk of a {@link Harvest}
  * feeding two sinks, which hold a chunk each and nothing else.
  *
- * **A RECORD IS HELD BACK UNTIL ITS DOCUMENTS ARE DOWN.** That is the ordering the next run
- * depends on: what it skips is what `raw.records` holds, so "present in `raw.records`" has
- * to mean "fully harvested". A message whose record landed while its attachment fetch was
- * still failing would be skipped by every run after it, and the attachment would be lost
- * from the one layer that cannot be recomputed -- rule 2 broken by the resume mechanism
- * itself. So a batch's documents are flushed first, and only the records whose documents
- * all reached the lake are added. A crash between the two re-does the message, which is
- * idempotent by content, and that is the cheap direction to fail in.
+ * **A RECORD IS HELD BACK UNTIL ITS DOCUMENTS ARE DOWN, AND THEN IT SAYS HOW MANY.** A
+ * message whose record landed while its attachment fetch was still failing would be skipped
+ * by every run after it, and the attachment would be lost from the one layer that cannot be
+ * recomputed -- rule 2 broken by the resume mechanism itself. So a batch's documents are
+ * flushed first, and only the records whose documents all reached the lake are added. A crash
+ * between the two re-does the message, which is idempotent by content, and that is the cheap
+ * direction to fail in.
  *
- * A document refused for its declared SIZE does not hold its record back. That refusal is
- * deterministic; waiting on it would make the message unharvestable rather than incomplete.
- * A record held back for a retryable failure is itself refused with a reason, because a
- * record quietly not landed would be the silent drop this is here to prevent.
+ * Presence in `raw.records` was the whole of the next run's test until ADR 0035, on the
+ * strength of that ordering alone. It was not enough, and the way it was not enough is the
+ * shape of every invariant a codebase asserts and does not record: it bound the rows written
+ * after it and said nothing about the rows already there. The rows already there were written
+ * records first and documents last, and the ingest oom-killed on 2026-09-21 stopped in
+ * between -- 7,786 messages present, zero attachments, and every run since skipped all 7,786
+ * on presence. So a released record now carries `documentsLanded` into the sink and the sink
+ * records it, and what the next run reads is what some run actually settled rather than what
+ * this file promises about itself.
+ *
+ * A document refused for its declared SIZE does not hold its record back, and is not counted
+ * either. That refusal is deterministic: waiting on it would make the message unharvestable
+ * rather than incomplete, and counting it would leave the message one document short of its
+ * own target on every run forever -- the same loss through the other door. A record held back
+ * for a retryable failure is itself refused with a reason, because a record quietly not landed
+ * would be the silent drop this is here to prevent.
  *
  * ## Refusals arrive in the order they happened
  *
@@ -47,15 +58,15 @@ import { readConnectionDetail, type RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
 import { tombstoneMissing } from "../../repos/rawDocuments.ts";
+import { createDocumentSink } from "../documentSink.ts";
 import {
   CHUNK,
-  createDocumentSink,
-  createRecordSink,
   type DocumentSink,
   type RecordSink,
   type RefusalWriter,
   type SinkDeps,
 } from "../landing.ts";
+import { createRecordSink } from "../recordSink.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
@@ -166,6 +177,15 @@ interface Landing {
  * is what makes a row in `raw.records` mean the message behind it is complete, and therefore
  * what makes skipping it on the next run safe.
  *
+ * **AND THE RECORD CARRIES THE COUNT OUT WITH IT.** The ordering above is what MAKES a landed
+ * record complete; `documentsLanded` is what SAYS SO, and the difference cost a customer every
+ * attachment in a 7,786-message mailbox. Ordering binds the rows the ordering wrote, and the
+ * next run reads rows it did not write -- rows from a release where documents came last, and
+ * from a run that died between the two. This is the only layer that knows both halves, so it
+ * is where the count is computed: what the harvest offered, intersected with what the sink got
+ * down. A size-refused attachment is in neither set and so is counted as what it is, zero,
+ * rather than as a message forever one document short of itself. ADR 0035.
+ *
  * A manual `next()` loop rather than `for await`, because `for await` discards a generator's
  * return value and the summary IS the return value. Consumed to exhaustion, never broken out
  * of: an abandoned harvest leaves a paged listing half-read, and the symptom is an unrelated
@@ -175,9 +195,9 @@ async function drain(harvest: Harvest, at: Landing): Promise<HarvestSummary> {
   const pending: HarvestItem[] = [];
 
   async function release(): Promise<void> {
-    const unfetched = new Set(await at.documents.flush());
+    const settled = await at.documents.flush();
     for (const item of pending.splice(0)) {
-      if (item.documents.some((document) => unfetched.has(document.documentId))) {
+      if (item.documents.some((document) => settled.unfetched.has(document.documentId))) {
         await at.refuse([
           {
             entity: at.entity,
@@ -187,7 +207,12 @@ async function drain(harvest: Harvest, at: Landing): Promise<HarvestSummary> {
         ]);
         continue;
       }
-      await at.records.add(item.record);
+      await at.records.add({
+        ...item.record,
+        documentsLanded: item.documents.filter((document) =>
+          settled.landed.has(document.documentId),
+        ).length,
+      });
     }
   }
 

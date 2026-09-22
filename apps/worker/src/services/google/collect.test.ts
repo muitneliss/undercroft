@@ -161,6 +161,42 @@ async function projected(source: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
+/**
+ * What each record says its harvest settled. `::text` so the count arrives verbatim.
+ *
+ * This is what the next run actually skips on, and reading it back is the only way to tell a
+ * mark of 0 -- "one attachment, refused for its size, and there will never be one" -- from a
+ * mark of 1 the code guessed from what it MATCHED. Nothing downstream compares the two today,
+ * so a wrong count is inert and invisible; that is exactly why it is asserted here.
+ */
+async function marks(source: string): Promise<{ id: string; landed: string | null }[]> {
+  const { rows } = await db.query<{ id: string; landed: string | null }>(
+    `SELECT source_record_id AS id, documents_landed::text AS landed
+       FROM raw.records WHERE source = $1 ORDER BY id`,
+    [source],
+  );
+  return rows;
+}
+
+/**
+ * Put this source's rows back into the state the code before ADR 0035 left them in.
+ *
+ * A record landed and projected, no catalogue row, and NOTHING SAID about what its harvest
+ * settled -- which is every row written by the old order (records, projection, documents) and
+ * so every row on a tenant that had already run when the ingest was oom-killed on 2026-09-21.
+ * The operator's report was precisely this: rows in `raw.records`, nothing in `raw.documents`.
+ *
+ * As the superuser because it is not a thing the current code does: the worker holds no DELETE
+ * on `raw.documents` (`040_grants.sql`), which is also why the repair cannot be "delete the
+ * bad rows" and has to be something a run can see and act on.
+ */
+async function asLegacy(source: string): Promise<void> {
+  await db.asSuperuser(async (tx) => {
+    await tx.query("UPDATE raw.records SET documents_landed = NULL WHERE source = $1", [source]);
+    await tx.query("DELETE FROM raw.documents WHERE source = $1", [source]);
+  });
+}
+
 /** A message carrying whichever attachment parts a file-type test asks for, not just a PDF. */
 function messageWithAttachments(
   id: string,
@@ -552,6 +588,133 @@ describe("gmail", () => {
     expect(fetcher.calls.filter((c) => c.url === messageUrl("m1"))).toHaveLength(1);
   });
 
+  /**
+   * A mailbox in the state the outage left: m1 read once with no attachment part, so a record
+   * landed and no document did, and then stripped of its mark.
+   *
+   * The first read carries no parts DELIBERATELY. `messageRecord` builds its payload from the
+   * id, thread, labels, headers and internalDate -- never from `payload.parts` -- so the
+   * record this lands is BYTE-IDENTICAL to the one a later read of the same message with an
+   * attachment produces. That is the hard half of the repair and the reason the mark could not
+   * ride in the lake manifest: re-landing those identical bytes writes no new lake version, so
+   * there is no journal entry, so the projection has nothing to carry a fact on.
+   */
+  function mailboxAsTheOutageLeftIt(): void {
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), { body: message("m1", ["Label_A"], false) })
+      .on("GET", messageUrl("m1"), { body: message("m1", ["Label_A"]) })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, { body: { data: PDF_B64 } });
+  }
+
+  it("a record landed under the OLD contract is read again, and its attachment lands", async () => {
+    // THE TEST THAT WOULD HAVE CAUGHT THE OUTAGE. ADR 0033 asserted that a row in
+    // `raw.records` meant a finished harvest, on the strength of an ordering rule that binds
+    // only the rows written after it. 7,786 Gmail records written by the old order were
+    // skipped on presence by every run after the fix, their attachments never fetched, and
+    // nothing about that self-corrects. A landing that did not say what it settled is now not
+    // held, so the message is read exactly once more and the attachment lands.
+    await connect("gmail", { labels: [] });
+    mailboxAsTheOutageLeftIt();
+
+    await collect("gmail");
+    await asLegacy("gmail");
+
+    const healing = await collect("gmail");
+
+    expect(healing.records).toMatchObject({ landed: 1, skipped: 0 });
+    expect(healing.documents.created).toBe(1);
+    const { rows } = await db.query<{ document_id: string }>(
+      "SELECT document_id FROM raw.documents",
+    );
+    expect(rows.map((r) => r.document_id)).toEqual(["m1:002"]);
+    // The mark reached the row although NOTHING was projected: the record's bytes had not
+    // moved, so the lake wrote no new version and the loader had no entry to read. A fact
+    // carried in the manifest would have died right here, and the mailbox would have been
+    // re-read on every run for ever.
+    expect(healing.records).toMatchObject({ loadedCreated: 0, loadedChanged: 0 });
+    expect(await marks("gmail")).toEqual([{ id: "m1", landed: "1" }]);
+  });
+
+  it("and it is read once more, not on every run for ever", async () => {
+    // The quiet side, and the one that fails for the tempting wrong fix. Dropping skip-known
+    // altogether, or marking on anything weaker than what actually landed, repairs the mailbox
+    // above and then re-reads it every hour -- 43 minutes of paced requests buying nothing,
+    // which is the cost ADR 0033 exists to have removed. Three runs: the outage, the repair,
+    // and the steady state.
+    await connect("gmail", { labels: [] });
+    mailboxAsTheOutageLeftIt();
+
+    await collect("gmail");
+    await asLegacy("gmail");
+    await collect("gmail");
+    const settled = await collect("gmail");
+
+    expect(settled.records).toMatchObject({ landed: 0, skipped: 1 });
+    // Twice across all three runs: the original read, and the one that repaired it.
+    expect(fetcher.calls.filter((c) => c.url === messageUrl("m1"))).toHaveLength(2);
+  });
+
+  it("the mark counts what LANDED, so an over-large attachment is zero and never one", async () => {
+    // The second bug in the shape of a fix, refused. A part refused for its declared size
+    // never becomes a `raw.documents` row and never will -- the refusal is deterministic. A
+    // mark taken from what the message MATCHED would leave m2 permanently one document short
+    // of its own claim, and any reader of the count would re-fetch it for ever; the existing
+    // size test cannot see the difference, because both numbers are equally not-null. So the
+    // value is asserted: m2 settled nothing, honestly, and that is a complete harvest.
+    await connect("gmail", { labels: [] });
+    const huge = message("m2", ["Label_A"]) as {
+      payload: { parts: { body: { size?: string } }[] };
+    };
+    huge.payload.parts[1]!.body.size = String(80 * 1024 * 1024);
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }, { id: "m2" }] } })
+      .on("GET", messageUrl("m1"), { body: message("m1", ["Label_A"]) })
+      .on("GET", messageUrl("m2"), { body: huge })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, { body: { data: PDF_B64 } });
+
+    await collect("gmail");
+
+    expect(await marks("gmail")).toEqual([
+      { id: "m1", landed: "1" },
+      { id: "m2", landed: "0" },
+    ]);
+  });
+
+  it("an attachment that failed while a full buffer was landing still holds its record", async () => {
+    // A mailbox big enough that the DOCUMENT buffer fills on its own, inside `add`, before the
+    // caller ever asks it to flush. The sink used to answer only for the chunk that `flush`
+    // itself landed, so a failure settled by that self-triggered landing was reported to
+    // nobody -- and on one attachment per message the two boundaries coincide, which is to say
+    // it was reported to nobody on every real mailbox. The record went in regardless, was
+    // skipped by every later run, and the attachment was lost from the only durable layer.
+    // Under one chunk this cannot happen at all, which is why the test is over one.
+    const ids = Array.from({ length: CHUNK + 50 }, (_, i) => `m${i}`);
+    await connect("gmail", { labels: [] });
+    fetcher.on("GET", listUrl(null), { body: { messages: ids.map((id) => ({ id })) } });
+    for (const id of ids) {
+      fetcher.on("GET", messageUrl(id), { body: message(id, ["Label_A"]) });
+      fetcher.on("GET", `${GMAIL}/messages/${id}/attachments/att-${id}-rotates`, {
+        // One message in the first chunk is refused its bytes, retryably.
+        ...(id === "m7"
+          ? { status: 404, body: { error: { message: "attachment not found" } } }
+          : { body: { data: PDF_B64 } }),
+      });
+    }
+
+    const result = await collect("gmail");
+
+    expect(result.documents.failed).toBe(1);
+    expect(result.records.landed).toBe(ids.length - 1);
+    expect(result.refusals).toContainEqual({
+      entity: "messages",
+      sourceRecordId: "m7",
+      reason: DOCUMENT_UNLANDED,
+    });
+    // The half that matters: nothing for the next run to mistake for a finished message.
+    expect(await projected("gmail")).not.toContain("m7");
+  });
+
   it("a mailbox larger than one chunk lands every message, and holds none of them", async () => {
     // Streaming, asserted the only way a caller can see it: more messages than one chunk
     // holds, all of them landed and all of them projected. The shape this replaced read the
@@ -779,6 +942,79 @@ describe("drive", () => {
       "SELECT source_record_id AS id, source_updated_at AS at FROM raw.records WHERE source = 'drive' ORDER BY id",
     );
     expect(rows[0]?.at.toISOString()).toBe("2026-09-18T08:30:00.000Z");
+  });
+
+  it("a file landed under the OLD contract is downloaded again and catalogued", async () => {
+    // Drive carried the same exposure as Gmail and by the same route: its old path also landed
+    // the record first and the bytes last, so a run that died between them left a row whose
+    // `modifiedTime` matched and whose document did not exist. That row satisfied the
+    // unchanged test on every later run, so the file was never downloaded again -- a PDF
+    // missing from the one layer that cannot be recomputed, on a source that reports green.
+    //
+    // The fixture differs from Gmail's because every Drive file IS a document: there is no
+    // first read that lands a record and no document, so the catalogue row is removed instead.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    await collect("drive");
+    await asLegacy("drive");
+
+    const healing = await collect("drive");
+
+    expect(healing.records).toMatchObject({ landed: 1, skipped: 0 });
+    // Downloaded a second time -- which is the repair, and what a skip on the stale row
+    // prevented for ever.
+    expect(fetcher.calls.filter((c) => c.url === `${DRIVE}/f1?alt=media`)).toHaveLength(2);
+    const { rows } = await db.query<{ document_id: string }>(
+      "SELECT document_id FROM raw.documents",
+    );
+    expect(rows.map((r) => r.document_id)).toEqual(["f1"]);
+    expect(await marks("drive")).toEqual([{ id: "f1", landed: "1" }]);
+  });
+
+  it("and it is downloaded once more, not on every run for ever", async () => {
+    // The quiet side. A Drive tenant's files are the expensive half of a run -- bytes, not
+    // headers -- so a repair that never terminates is a bill as well as a regression.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    await collect("drive");
+    await asLegacy("drive");
+    await collect("drive");
+    const settled = await collect("drive");
+
+    expect(settled.records).toMatchObject({ landed: 0, skipped: 1 });
+    expect(fetcher.calls.filter((c) => c.url === `${DRIVE}/f1?alt=media`)).toHaveLength(2);
+  });
+
+  it("an over-large file lands a record marked zero, and is not offered again", async () => {
+    // Drive's half of "count what landed, not what was matched", and the sharper half: here
+    // the file IS the document, so a mark taken from what the pick matched would say 1 against
+    // a catalogue that holds 0 and can never hold more. The refusing fetcher is the second
+    // assertion -- no bytes route is recorded, so any attempt to download this file fails the
+    // test on either run.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher.on("GET", listUrlFor("folder-1"), {
+      body: { files: [{ ...file("f1"), size: String(80 * 1024 * 1024) }] },
+    });
+
+    const first = await collect("drive");
+    const second = await collect("drive");
+
+    expect(first.documents.skipped).toBe(1);
+    expect(first.records.landed).toBe(1);
+    expect(await marks("drive")).toEqual([{ id: "f1", landed: "0" }]);
+    expect(second.records).toMatchObject({ landed: 0, skipped: 1 });
   });
 
   it("a selection that did not ask for sub-folders never lists one", async () => {
