@@ -393,3 +393,107 @@ describe("who may read the text", () => {
     expect(seen.rows[0]?.n).toBe("0");
   });
 });
+
+/**
+ * The half that made a 245-refusal run unexplainable.
+ *
+ * Before this, a refused document's reason reached `raw.document_text` and nothing else, so
+ * `ops.run.refused` carried a number with nothing behind it and the journal's refusals table
+ * was not drawn at all. ADR 0039.
+ */
+describe("what a pass hands the ledger", () => {
+  it("hands back every refusal with its reason, not only the count", async () => {
+    await landDocument({
+      documentId: "f-legacy",
+      bytes: new TextEncoder().encode("\xd0\xcf\x11\xe0legacy"),
+      contentType: "application/msword",
+    });
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result.refusals).toEqual([
+      { entity: "documents", sourceRecordId: "f-legacy", reason: "legacy-doc-unsupported" },
+    ]);
+  });
+
+  it("counts the refusals by reason, biggest first", async () => {
+    // The rollup is what survives the 7-day prune, so it is the thing that must be right
+    // even when every per-record row beneath it is gone.
+    // Distinct bytes, so these are two reads rather than one read answering two documents.
+    // The weighting is covered on its own below.
+    for (const id of ["a1", "a2"]) {
+      await landDocument({
+        documentId: id,
+        bytes: new TextEncoder().encode(`\xd0\xcf\x11\xe0legacy ${id}`),
+        contentType: "application/msword",
+      });
+    }
+    await landDocument({
+      documentId: "b1",
+      bytes: new TextEncoder().encode("plain"),
+      contentType: "application/x-nobody-reads-this",
+    });
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result.reasonCounts).toEqual([
+      { entity: "documents", reason: "legacy-doc-unsupported", count: 2 },
+      { entity: "documents", reason: "unsupported-content-type", count: 1 },
+    ]);
+  });
+
+  it("reports the whole queue behind it, not the batch it took", async () => {
+    // `pending.length` is capped at the batch, so on a tenant with a backlog it reads 500
+    // every time and says nothing about whether the backlog is draining. That difference is
+    // what tells a healthy drain from a fault.
+    // Distinct bytes per document, so each is its own read: this test is about the QUEUE, and
+    // identical bytes would collapse to one read and measure the fan-out instead.
+    for (const id of ["q1", "q2", "q3"]) {
+      await landDocument({
+        documentId: id,
+        bytes: new TextEncoder().encode(`%PDF-1.7\n% ${id}\n%%EOF\n`),
+        contentType: "application/pdf",
+      });
+    }
+
+    const result = await runExtract(
+      { exec: db, lake, spawn: spawnAnswering(A_PAGE), batch: 1 },
+      { tenantId: TENANT, source: SOURCE, runId: "run-extract-batch" },
+    );
+
+    expect(result.read).toBe(1);
+    expect(result.pendingBefore).toBe(3);
+  });
+
+  it("counts a reason in DOCUMENTS, so the rollup adds up to what the run refused", async () => {
+    // One read answers every document holding those bytes (`upsertDocumentText` fans out), and
+    // the rollup is what a reader presses into after reading "3 refused". Counting reads would
+    // print 1 under a heading that says 3, with nothing to explain the difference.
+    for (const id of ["dup1", "dup2", "dup3"]) {
+      await landDocument({
+        documentId: id,
+        bytes: new TextEncoder().encode("\xd0\xcf\x11\xe0the same legacy bytes"),
+        contentType: "application/msword",
+      });
+    }
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result.refused).toBe(3);
+    expect(result.reasonCounts).toEqual([
+      { entity: "documents", reason: "legacy-doc-unsupported", count: 3 },
+    ]);
+    // And the ledger's own list is the distinct FILES, which is why the interface captions it
+    // that way rather than claiming a row per document.
+    expect(result.refusals).toHaveLength(1);
+  });
+
+  it("reports an empty queue as 0 rather than as no answer", async () => {
+    // The quiet half of the guard above: 0 here is a real measurement of an empty queue, and
+    // it must not be confused with "this verb has no queue", which is the NULL column.
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result.pendingBefore).toBe(0);
+    expect(result.reasonCounts).toEqual([]);
+  });
+});

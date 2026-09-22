@@ -37,10 +37,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { SqlExecutor } from "@undercroft/db";
+import type { RunReasonCount, RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
 import {
   type AnsweredDocuments,
+  countPendingDocuments,
   type DocumentTextRow,
   type PendingDocument,
   pendingDocuments,
@@ -81,6 +83,81 @@ export interface ExtractResult {
   readonly refused: number;
   /** Documents whose bytes could not be fetched from the lake at all. */
   readonly unreadable: number;
+  /**
+   * Every document this run would not read, with its reason, for `ops.run_refusal`.
+   *
+   * WHY THE LEDGER TOO, when `raw.document_text.reason` already holds each one: that table
+   * answers "what does this document say", the ledger answers "what did this run do", and a
+   * reader looking at a run cannot reach the first without already knowing it exists. This
+   * verb sent somebody to an SSH session for precisely that reason -- its refusals were
+   * recorded somewhere true and nowhere findable.
+   *
+   * `pii.md`: the id here is the provider's own opaque document id. Never a filename -- that
+   * lives in the lake manifest and does not come back out.
+   */
+  readonly refusals: readonly RunRefusal[];
+  /**
+   * The refusals counted by reason, IN DOCUMENTS -- the half that outlives the 7-day prune.
+   *
+   * Weighted by the fan-out exactly as `tally` is, so these sum to `refused` and the rollup a
+   * reader presses is an account of the number printed above it. Counting reads instead would
+   * put two figures on one leaf that disagree by the duplication with nothing to explain it,
+   * which is a smaller version of the defect the rollup exists to close.
+   */
+  readonly reasonCounts: readonly RunReasonCount[];
+  /** How many documents were waiting in total when this run drew its batch. */
+  readonly pendingBefore: number;
+}
+
+/** The entity every extract refusal is recorded against; this verb reads exactly one kind. */
+const DOCUMENTS = "documents";
+
+/**
+ * Every read that produced no text, as a ledger row -- one per DISTINCT DIGEST.
+ *
+ * The fan-out is deliberately not expanded here. `upsertDocumentText` answers every document
+ * holding those bytes and reports how many, but it does not hand back their ids, and inventing
+ * a row per document would mean writing 245 ledger entries that say one thing about one file.
+ * So the list is the distinct files and the COUNT beside it is the documents; the interface
+ * captions it as files for that reason.
+ */
+function refusalsOf(rows: readonly DocumentTextRow[]): RunRefusal[] {
+  return rows
+    .filter((row) => row.method === null && row.reason !== null)
+    .map((row) => ({
+      entity: DOCUMENTS,
+      sourceRecordId: row.documentId,
+      // Narrowed by the filter; `reason` is non-null exactly when `method` is null, which the
+      // `document_text_said_why` CHECK guarantees on the way into Postgres too.
+      reason: row.reason ?? "",
+    }));
+}
+
+/**
+ * Count the reasons, biggest first -- the order a reader wants them in.
+ *
+ * WEIGHTED BY THE FAN-OUT, like `tally` and for the same reason: these counts are what a reader
+ * presses into after reading "245 refused", so they have to add up to 245 rather than to the
+ * number of distinct files behind it.
+ *
+ * A `Map` rather than an object literal for the reason the `READERS` table is one: the key is
+ * a reason string, and a lookup of `constructor` in a plain object answers with something that
+ * is not a count.
+ */
+function tallyReasons(
+  rows: readonly DocumentTextRow[],
+  answered: AnsweredDocuments,
+): RunReasonCount[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.method === null && row.reason !== null) {
+      const documents = answered.get(row.documentId) ?? 0;
+      counts.set(row.reason, (counts.get(row.reason) ?? 0) + documents);
+    }
+  }
+  return [...counts]
+    .map(([reason, count]) => ({ entity: DOCUMENTS, reason, count }))
+    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
 }
 
 /**
@@ -175,6 +252,34 @@ function tally(
   return { read, refused, unreadable };
 }
 
+/**
+ * The batch, one read per distinct digest, answered for either way.
+ *
+ * Sequential on purpose: each read spawns a child process over bytes held in memory, and the
+ * `--smol` heap this worker runs under (`deploy/Dockerfile.worker`) is sized for one of those
+ * at a time, not for the batch at once.
+ */
+async function readEach(
+  deps: ExtractRunDeps,
+  scratch: string,
+  pending: readonly PendingDocument[],
+  journal: RunJournal,
+): Promise<DocumentTextRow[]> {
+  const rows: DocumentTextRow[] = [];
+
+  for (const document of pending) {
+    journal.progress("documents_read", {
+      entity: DOCUMENTS,
+      read: rows.length,
+      total: pending.length,
+    });
+
+    rows.push(await readOne(deps, scratch, document));
+  }
+
+  return rows;
+}
+
 export async function runExtract(
   deps: ExtractRunDeps,
   input: { tenantId: string; source: string; runId: string },
@@ -192,22 +297,21 @@ export async function runExtract(
     readerVersion: CURRENT_READER_VERSION,
   });
 
+  // How deep the queue is, as against how much of it this run will take. `pending.length` is
+  // capped at the batch AND collapsed to one row per digest, so it says "the work this run will
+  // do" twice over and never "how much is left" -- which is the question a high refusal count
+  // actually raises. Counted in documents, the unit `tally` reports below. Asked with the same
+  // generation the batch was drawn with.
+  const pendingBefore = await countPendingDocuments(deps.exec, scope, {
+    readerVersion: CURRENT_READER_VERSION,
+  });
+
   // The most useful line this run writes. What follows is one read per distinct digest --
   // minutes for a real tenant -- and a total up front turns a blank screen into a quantity.
   // It is the work, not the outcome: the documents answered is the larger number below.
-  journal.info("work_listed", { entity: "documents", total: pending.length });
+  journal.info("work_listed", { entity: DOCUMENTS, total: pending.length });
 
-  const rows: DocumentTextRow[] = [];
-
-  for (const document of pending) {
-    journal.progress("documents_read", {
-      entity: "documents",
-      read: rows.length,
-      total: pending.length,
-    });
-
-    rows.push(await readOne(deps, scratch, document));
-  }
+  const rows = await readEach(deps, scratch, pending, journal);
 
   const answered = await upsertDocumentText(deps.exec, scope, rows, {
     extractedAt,
@@ -217,11 +321,20 @@ export async function runExtract(
   const { read, refused, unreadable } = tally(rows, answered);
 
   journal.info("documents_extracted", {
-    entity: "documents",
+    entity: DOCUMENTS,
     read,
     refused,
     unreadable,
   });
 
-  return { runId: input.runId, source: input.source, read, refused, unreadable };
+  return {
+    runId: input.runId,
+    source: input.source,
+    read,
+    refused,
+    unreadable,
+    refusals: refusalsOf(rows),
+    reasonCounts: tallyReasons(rows, answered),
+    pendingBefore,
+  };
 }

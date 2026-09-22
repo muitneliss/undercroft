@@ -16,13 +16,24 @@
  * catalogue or the lake at all -- a different fact, wanting a different screen.
  */
 
+import { REFUSAL_RETENTION_DAYS } from "@undercroft/contracts/runs";
 import { describeError, newRunId } from "@undercroft/core";
-import { closeRun, MAX_ERROR_CHARS, openRun, type RunTrigger } from "@undercroft/db/repos";
+import {
+  closeRun,
+  MAX_ERROR_CHARS,
+  openRun,
+  pruneRefusals,
+  recordEntities,
+  recordPendingBefore,
+  recordRefusalReasons,
+  recordRefusals,
+  type RunTrigger,
+} from "@undercroft/db/repos";
 
 import { RunInProgress } from "../ingest.ts";
 import { type JobDeps, track } from "../jobs.ts";
 import { createRunJournal } from "../runJournal.ts";
-import { runExtract } from "./runExtract.ts";
+import { type ExtractResult, runExtract } from "./runExtract.ts";
 
 /** `NodeJS.ProcessEnv` holds `string | undefined`; a child's environment holds strings. */
 function definedOnly(parent: NodeJS.ProcessEnv): Record<string, string> {
@@ -37,6 +48,56 @@ function definedOnly(parent: NodeJS.ProcessEnv): Record<string, string> {
 
 function messageOf(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_CHARS);
+}
+
+/**
+ * Everything the run has to say about itself, then the row that says it is over.
+ *
+ * ORDER IS THE POINT. A reader who sees `status: ok` and then watches the counts arrive a
+ * moment later is watching the ledger contradict itself, so the counts, the refusals and the
+ * rollup all land before `closeRun`.
+ *
+ * The prune goes last, after the run is closed, so a prune that fails cannot cost this run
+ * its counts. It is opportunistic and done by the verb that writes the rows -- one DELETE does
+ * not earn a scheduler -- and it is NAMED, because a store that prunes without saying so
+ * cannot be told from one that is losing data (`raw-lake.md`). What it removes is the
+ * per-document detail; the rollup is a different table and is never pruned, which is what
+ * keeps "what were the 245" answerable a year later. ADR 0039.
+ */
+async function settle(
+  exec: JobDeps["exec"],
+  runId: string,
+  journal: ReturnType<typeof createRunJournal>,
+  result: ExtractResult,
+): Promise<void> {
+  const refused = result.refused + result.unreadable;
+
+  await recordPendingBefore(exec, runId, result.pendingBefore);
+  await recordEntities(exec, runId, [
+    {
+      entity: "documents",
+      landed: result.read + refused,
+      created: result.read,
+      changed: 0,
+      unchanged: 0,
+      refused,
+    },
+  ]);
+  await recordRefusals(exec, runId, result.refusals);
+  await recordRefusalReasons(exec, runId, result.reasonCounts);
+  await closeRun(exec, runId, {
+    status: "ok",
+    // `created` is documents that gained text; `refused` is those that left with a reason
+    // instead. The ledger's own words for "read" and "would not read".
+    created: result.read,
+    refused,
+  });
+  journal.info("run_closed", { status: "ok", created: result.read });
+
+  const removed = await pruneRefusals(exec, REFUSAL_RETENTION_DAYS);
+  if (removed > 0) {
+    journal.info("refusals_pruned", { removed, keptDays: REFUSAL_RETENTION_DAYS });
+  }
 }
 
 export async function startExtractJob(
@@ -56,6 +117,7 @@ export async function startExtractJob(
     trigger: input.trigger,
     triggeredBy: input.triggeredBy,
     parentRunId: null,
+    releaseTag: deps.releaseTag ?? "",
   });
   if (!opened.ok) {
     throw new RunInProgress("extract", input.tenantId, opened.runId);
@@ -81,14 +143,7 @@ export async function startExtractJob(
       { tenantId: input.tenantId, source: input.source, runId },
     ).then(
       async (result) => {
-        await closeRun(deps.exec, runId, {
-          status: "ok",
-          // `created` is documents that gained text; `refused` is those that left with a
-          // reason instead. The ledger's own words for "read" and "would not read".
-          created: result.read,
-          refused: result.refused + result.unreadable,
-        });
-        journal.info("run_closed", { status: "ok", created: result.read });
+        await settle(deps.exec, runId, journal, result);
         await journal.flush();
       },
       async (error: unknown) => {

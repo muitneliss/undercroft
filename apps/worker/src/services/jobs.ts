@@ -137,6 +137,7 @@ async function startTransform(
     trigger: input.trigger,
     triggeredBy: input.triggeredBy ?? "",
     parentRunId: input.parentRunId ?? null,
+    releaseTag: deps.releaseTag ?? "",
   });
   if (!opened.ok) {
     throw new RunInProgress("transform", input.tenantId, opened.runId);

@@ -17,10 +17,12 @@ import {
   findChildRun,
   getRun,
   listRuns,
+  reasonsFor,
   refusalsFor,
   type Run,
   type RunEntity,
   type RunEvent,
+  type RunReasonCount,
   type RunRefusal,
   type RunStep,
   SOURCE_OF_TRANSFORM,
@@ -52,6 +54,10 @@ export interface RunView {
   readonly testsFailed: number | null;
   readonly error: string | null;
   readonly parentRunId: string | null;
+  /** Which build produced this run; `""` when the image did not say. */
+  readonly releaseTag: string;
+  /** How much work was waiting when it drew its batch; `null` for a verb with no queue. */
+  readonly pendingBefore: number | null;
 }
 
 /**
@@ -71,6 +77,20 @@ export interface RunLink {
 export interface RunDetail extends RunView {
   readonly entityCounts: RunEntity[];
   readonly refusals: (RunRefusal & { at: string })[];
+  /**
+   * What this run refused, counted by reason. The half that outlives the 7-day prune, so it
+   * answers "what were the 245" for a run whose per-record rows are long gone.
+   */
+  readonly reasonCounts: RunReasonCount[];
+  /**
+   * The rollup remembers refusals whose individual rows have been pruned.
+   *
+   * Decided here rather than left to the interface, because "no rows" has two meanings that
+   * must not render alike: a run that refused nothing, and a run whose detail aged out. The
+   * second showing an empty table is the exact defect this whole feature exists to fix --
+   * a count with nothing behind it -- so the difference is computed once, named, and sent.
+   */
+  readonly refusalsPruned: boolean;
   readonly steps: RunStep[];
   /** The run this one was chained from, if `parentRunId` names one that still exists. */
   readonly parentRun: RunLink | null;
@@ -134,6 +154,8 @@ function present(run: Run, entities: RunEntity[]): RunView {
     testsFailed: run.testsFailed,
     error: run.error,
     parentRunId: run.parentRunId,
+    releaseTag: run.releaseTag,
+    pendingBefore: run.pendingBefore,
   };
 }
 
@@ -189,8 +211,9 @@ export async function get(
     return null;
   }
   const entities = (await entitiesForRuns(exec, [run.id])).get(run.id) ?? [];
-  const [refusals, steps, childRun, parentRun] = await Promise.all([
+  const [refusals, reasonCounts, steps, childRun, parentRun] = await Promise.all([
     refusalsFor(exec, run.id),
+    reasonsFor(exec, run.id),
     stepsFor(exec, run.id),
     findChildRun(exec, tenantId, run.id),
     run.parentRunId === null ? Promise.resolve(null) : getRun(exec, tenantId, run.parentRunId),
@@ -199,6 +222,11 @@ export async function get(
     ...present(run, entities),
     entityCounts: entities,
     refusals,
+    reasonCounts,
+    // The rollup remembers what the per-record rows no longer hold. Not `run.refused > 0`:
+    // a run from before the rollup existed has neither, and claiming its detail was pruned
+    // would be inventing a history for it.
+    refusalsPruned: reasonCounts.length > 0 && refusals.length === 0,
     steps,
     parentRun: parentRun === null ? null : toLink(parentRun),
     childRun: childRun === null ? null : toLink(childRun),

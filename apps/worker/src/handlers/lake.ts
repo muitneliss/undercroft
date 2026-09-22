@@ -38,6 +38,8 @@ export interface LakeApiDeps {
   /** Directory of connector specs, for the ingest verb. Absent disables /v1/runs/ingest. */
   readonly specsDir?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /** Which build opens the runs this API starts. See `RunDeps.releaseTag`. */
+  readonly releaseTag?: string;
   /**
    * Per-source token refreshers. A source with no entry cannot refresh -- correct for a
    * HubSpot private app, which has nothing to refresh with.

@@ -122,3 +122,52 @@ describe("a run's feed", () => {
     expect(await events(db, TENANT, "run-quiet")).toEqual([]);
   });
 });
+
+/**
+ * Three states that must not render alike: refused nothing, refused with the records still
+ * here, and refused with the records aged out.
+ *
+ * The third showing an empty table is ADR 0039's defect wearing a hat -- a count with nothing
+ * behind it -- so the difference is decided here, once, rather than left to the interface.
+ */
+describe("what a run says about the rows it refused", () => {
+  async function refusedWithRollup(): Promise<void> {
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO ops.run_refusal_reason (run_id, entity, reason, count)
+         VALUES ('run-mine', 'documents', 'image-too-small-to-read', 230)`,
+      ),
+    );
+  }
+
+  it("a run that refused nothing claims no pruning", async () => {
+    expect(await get(db, TENANT, "run-mine")).toMatchObject({
+      reasonCounts: [],
+      refusalsPruned: false,
+    });
+  });
+
+  it("a run whose records are still here claims no pruning either", async () => {
+    await refusedWithRollup();
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO ops.run_refusal (run_id, entity, source_record_id, reason)
+         VALUES ('run-mine', 'documents', 'd1', 'image-too-small-to-read')`,
+      ),
+    );
+
+    expect(await get(db, TENANT, "run-mine")).toMatchObject({ refusalsPruned: false });
+  });
+
+  it("a run the rollup remembers but the records have left says the detail went", async () => {
+    await refusedWithRollup();
+
+    const detail = await get(db, TENANT, "run-mine");
+
+    expect(detail?.refusalsPruned).toBe(true);
+    // And the count still has its answer, which is the whole reason the rollup is kept.
+    expect(detail?.reasonCounts).toEqual([
+      { entity: "documents", reason: "image-too-small-to-read", count: 230 },
+    ]);
+  });
+});

@@ -593,6 +593,75 @@ export const vi = {
     colRecordId: "Mã bản ghi",
     colReason: "Lý do",
     colAt: "Lúc",
+
+    /**
+     * Bảng tổng hợp lý do — thứ trả lời câu "245 bị từ chối là những gì".
+     *
+     * Con số vẫn nằm trên sơ đồ như trước, nhưng lý do thì trước đây không hiện ở đâu cả, nên
+     * muốn biết phải SSH vào máy chủ. Bảng này giữ mãi, kể cả sau khi chi tiết từng tài liệu
+     * đã bị dọn. Xem ADR 0039.
+     */
+    rollupHead: "Vì sao bị từ chối",
+    rollupCaption_other: "{{count, number}} lý do",
+    colCount: "Số lượng",
+    reasonRecords: "Xem các tệp bị từ chối",
+    refusalsPrunedNote:
+      "Chi tiết từng tài liệu đã được dọn sau {{days}} ngày. Bảng tổng hợp theo lý do vẫn còn nguyên.",
+    reasonActs: "Cần xử lý",
+    reasonBenign: "Không cần xử lý",
+
+    /** Hàng đợi tại lúc lần chạy này lấy phần việc của nó — không phải hàng đợi hôm nay. */
+    backlogHead: "Hàng đợi",
+    backlogNote_other:
+      "Còn {{count, number}} tài liệu chờ đọc khi lần chạy này bắt đầu. Mỗi lần chạy đọc tối đa 500 tài liệu.",
+    backlogEmpty: "Không còn tài liệu nào chờ đọc khi lần chạy này bắt đầu.",
+    release: "Bản dựng",
+
+    /**
+     * Lời cho từng mã lý do mà worker ghi lại.
+     *
+     * Mã gốc vẫn được in bằng phông mono bên cạnh câu chữ: người đọc cần hiểu trang này mà
+     * không phải học thuộc bộ mã, còn người báo lỗi cho lập trình viên thì cần đúng mã.
+     */
+    reason: {
+      imageTooSmall: "Ảnh quá nhỏ để là một tài liệu",
+      imageTooSmallNote:
+        "Hầu hết là logo, ảnh chữ ký hoặc biểu tượng ở chân thư. Không cần làm gì.",
+      ocrFoundNothing: "Đã đọc hết trang nhưng không thấy chữ nào",
+      ocrFoundNothingNote: "Thường là trang trắng hoặc ảnh không chứa chữ. Không cần làm gì.",
+      noBytes: "Tài liệu không có nội dung",
+      noBytesNote: "Nguồn trả về một tệp rỗng. Không cần làm gì.",
+      legacyDoc: "Định dạng .doc cũ, không đọc",
+      legacyDocNote:
+        "Đọc .doc cần thêm LibreOffice vào image — một quyết định đã cân nhắc, không phải lỗi.",
+      legacyXls: "Định dạng .xls cũ, không đọc",
+      legacyXlsNote: "Cùng lý do với .doc: phải thêm LibreOffice vào image mới đọc được.",
+      unsupportedType: "Chưa có trình đọc cho loại tệp này",
+      unsupportedTypeNote:
+        "Tài liệu sẽ tự được đọc lại khi có trình đọc phù hợp. Không cần làm gì.",
+      pdftotextFailed: "pdftotext chạy lỗi trên tệp này",
+      pdftotextFailedNote: "Tệp PDF có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
+      pdftoppmFailed: "Không dựng được trang PDF thành ảnh để OCR",
+      pdftoppmFailedNote: "Tệp PDF có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
+      tesseractFailed: "tesseract chạy lỗi trên tệp này",
+      tesseractFailedNote: "Ảnh có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
+      ocrOutOfTime: "Hết thời gian trước khi đọc xong trang đầu",
+      ocrOutOfTimeNote:
+        "Tài liệu quá nặng, hoặc worker đang quá tải. Tài liệu sẽ được đọc lại ở lần chạy sau.",
+      xlsxUnreadable: "Không mở được bảng tính",
+      xlsxUnreadableNote: "Tệp .xlsx có thể hỏng.",
+      docxUnreadable: "Không mở được tài liệu Word",
+      docxUnreadableNote: "Tệp .docx có thể hỏng.",
+      lakeUnreadable: "Hồ dữ liệu không trả về nội dung tệp",
+      lakeUnreadableNote:
+        "Danh mục nói tệp có, hồ dữ liệu nói không. Đây là sai lệch cần kiểm tra ngay.",
+      extractorMissing: "Thiếu chương trình {{program}} trong worker",
+      extractorMissingNote:
+        "Mọi tệp cần {{program}} sẽ còn bị từ chối cho tới khi image có lại chương trình này.",
+      unknown: "Mã lý do chưa có diễn giải",
+      unknownNote: "Giao diện chưa đặt lời cho mã này. Mã gốc ở ngay bên cạnh.",
+    },
+
     stepsHead: "Các bước dbt",
     colStep: "Bước",
     colStatus: "Trạng thái",

@@ -55,21 +55,35 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Expand "v1.2.3,latest" into the fully-qualified refs buildx wants, one per line.
+      #
+      # `release` falls out of the same loop: the first tag that is not `latest` is this
+      # build's version, and a build with no such tag (the dispatch that seeds the very first
+      # images) reports the commit instead. It is baked into the image below, because the
+      # deploy pointer is `latest` by policy and therefore names no version at all -- see
+      # `deploy/Dockerfile.worker`. Never blank and never guessed: a run records what the
+      # image said about itself, and an image that could not say gets the commit, which
+      # always can.
       - name: Assemble image refs
         id: refs
         run: |
           image="${REGISTRY}/${OWNER}/undercroft-${{ matrix.service }}"
           refs=""
+          release=""
           IFS=',' read -ra tags <<< "${{ inputs.tags }}"
           for tag in "${tags[@]}"; do
             tag="$(echo "$tag" | xargs)"   # trim
             [ -z "$tag" ] && continue
             refs="${refs}${image}:${tag}"$'\n'
+            if [ -z "$release" ] && [ "$tag" != "latest" ]; then
+              release="$tag"
+            fi
           done
+          [ -z "$release" ] && release="main@$(echo "${GITHUB_SHA}" | cut -c1-7)"
           {
             echo "tags<<EOF"
             echo "$refs"
             echo "EOF"
+            echo "release=${release}"
           } >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v7
@@ -82,5 +96,7 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ steps.refs.outputs.tags }}
+          build-args: |
+            UNDERCROFT_RELEASE=${{ steps.refs.outputs.release }}
           cache-from: type=gha,scope=undercroft-${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=undercroft-${{ matrix.service }}

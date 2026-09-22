@@ -21,6 +21,9 @@ import {
   recordEntities,
   recordEvents,
   recordExternalBatch,
+  pruneRefusals,
+  reasonsFor,
+  recordRefusalReasons,
   recordRefusals,
   refusalsFor,
 } from "./runs.ts";
@@ -427,5 +430,89 @@ describe("a failure is claimed for notice once", () => {
       tx.exec("UPDATE ops.run SET ended_at = now() - interval '2 days' WHERE id = 'old'"),
     );
     expect(await claimFailedRuns(db)).toEqual([]);
+  });
+});
+
+/**
+ * The split that keeps retention from reintroducing the defect it lives inside a fix for.
+ *
+ * Prune the per-record rows alone and a month-old run prints `refused: 245` over an empty
+ * table -- which is indistinguishable from the bug where the verb recorded nothing at all.
+ * The rollup is what stops that, so "it survives" is the promise, not an implementation
+ * detail. ADR 0039.
+ */
+describe("refusal retention", () => {
+  async function runThatRefused(id: string): Promise<void> {
+    await openRun(db, { id, ...PAIR });
+    await recordRefusals(db, id, [
+      { entity: "documents", sourceRecordId: "d1", reason: "image-too-small-to-read" },
+      { entity: "documents", sourceRecordId: "d2", reason: "image-too-small-to-read" },
+    ]);
+    await recordRefusalReasons(db, id, [
+      { entity: "documents", reason: "image-too-small-to-read", count: 2 },
+    ]);
+    await closeRun(db, id, { status: "ok", refused: 2 });
+  }
+
+  it("drops the per-record rows once they are older than the window", async () => {
+    await runThatRefused("r-old");
+    await db.asSuperuser((tx) =>
+      tx.exec("UPDATE ops.run_refusal SET at = now() - interval '30 days'"),
+    );
+
+    expect(await pruneRefusals(db, 7)).toBe(2);
+    expect(await refusalsFor(db, "r-old")).toEqual([]);
+  });
+
+  it("keeps the rollup that explains them, so the count still has an answer", async () => {
+    await runThatRefused("r-old");
+    await db.asSuperuser((tx) =>
+      tx.exec("UPDATE ops.run_refusal SET at = now() - interval '30 days'"),
+    );
+
+    await pruneRefusals(db, 7);
+
+    expect(await reasonsFor(db, "r-old")).toEqual([
+      { entity: "documents", reason: "image-too-small-to-read", count: 2 },
+    ]);
+  });
+
+  it("leaves a refusal inside the window alone", async () => {
+    // The quiet half of the guard: a prune that removed everything would pass the test above
+    // and lose a week of detail in production.
+    await runThatRefused("r-fresh");
+
+    expect(await pruneRefusals(db, 7)).toBe(0);
+    expect(await refusalsFor(db, "r-fresh")).toHaveLength(2);
+  });
+
+  it("counts a reason once per run, however many batches recorded it", async () => {
+    // Summed on conflict, like `recordEntities`: a verb that records in batches adds to its
+    // own tally rather than overwriting the half already counted.
+    await openRun(db, { id: "r-batched", ...PAIR });
+    await recordRefusalReasons(db, "r-batched", [
+      { entity: "documents", reason: "ocr-found-nothing", count: 3 },
+    ]);
+    await recordRefusalReasons(db, "r-batched", [
+      { entity: "documents", reason: "ocr-found-nothing", count: 4 },
+    ]);
+
+    expect(await reasonsFor(db, "r-batched")).toEqual([
+      { entity: "documents", reason: "ocr-found-nothing", count: 7 },
+    ]);
+  });
+});
+
+describe("a run says which build produced it", () => {
+  it("keeps the stamp it was opened with", async () => {
+    // Stamped at open rather than at close, so it is true even of a run that failed -- which
+    // is the run whose build a reader most wants to know. ADR 0039.
+    await openRun(db, { id: "r-stamped", ...PAIR, releaseTag: "v1.16.0" });
+    expect((await getRun(db, PAIR.tenantId, "r-stamped"))?.releaseTag).toBe("v1.16.0");
+  });
+
+  it("records a blank when the image did not say, rather than a guess", async () => {
+    await openRun(db, { id: "r-blank", ...PAIR });
+    expect((await getRun(db, PAIR.tenantId, "r-blank"))?.releaseTag).toBe("");
   });
 });

@@ -202,6 +202,23 @@ interface UiState {
   lakeRailFolded: boolean;
   toggleLakeRail: () => void;
 
+  /**
+   * Which refusal reason is unfolded on a run's leaf, per run id; absent is none.
+   *
+   * Per run rather than one value, because the journal can hold more than one run's leaf open
+   * at a time -- a single field would close a reason on the run above the moment a reader
+   * opened one on the run below, which reads as the page fighting them.
+   *
+   * Not in the URL, unlike the open RUN. A run's detail is a thing an operator pastes to a
+   * colleague mid-call; which of its reasons they had unfolded while reading is not, and
+   * putting it in the address bar would make every fold a history entry to press Back
+   * through. Client-only, so the store owns it and no component keeps a second copy
+   * (`state.md`).
+   */
+  openReason: Record<string, string>;
+  /** Unfold this reason, or fold it if it is the one already open on that run. */
+  toggleReason: (runId: string, reason: string) => void;
+
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
   setModelSql: (sql: string) => void;
@@ -386,6 +403,8 @@ function lakeSlice(
   | "setLakeOpened"
   | "lakeRailFolded"
   | "toggleLakeRail"
+  | "openReason"
+  | "toggleReason"
 > {
   return {
     lakeSql: {},
@@ -408,6 +427,17 @@ function lakeSlice(
     // a reference they have to discover a control to see is one most of them never see.
     lakeRailFolded: false,
     toggleLakeRail: (): unknown => set((state) => ({ lakeRailFolded: !state.lakeRailFolded })),
+    openReason: {},
+    // Pressing the open reason again closes it, which is what a reader expects of a thing
+    // that opened when they pressed it. The key is dropped rather than set to `""`, so
+    // "closed" and "opened on a reason with no name" cannot be the same stored value.
+    toggleReason: (runId, reason): unknown =>
+      set((state) => {
+        const { [runId]: open, ...rest } = state.openReason;
+        return open === reason
+          ? { openReason: rest }
+          : { openReason: { ...rest, [runId]: reason } };
+      }),
   };
 }
 
