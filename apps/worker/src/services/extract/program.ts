@@ -32,9 +32,22 @@ export interface ExtractDeps {
   readonly spawn: Spawn;
   /** Where a document's bytes are written for a binary to open. One directory per document. */
   readonly workDir: string;
-  /** Per-program wall clock. A 200-page scan is slow; a hung child must still end. */
+  /**
+   * How long ONE child may run, and -- for a reader that spends it across several -- how long
+   * the whole document may take. A 200-page scan is slow; a hung child must still end.
+   */
   readonly timeoutMs?: number;
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Milliseconds since the epoch, injected so a deadline can be tested without waiting.
+   *
+   * It exists because one reader spends the budget above across SEVERAL children: a scanned
+   * PDF is one `pdftoppm` and up to thirty `tesseract` runs, and passing `timeoutMs` to each
+   * of them would hand that one document thirty times the deadline every other reader gets.
+   * `ocr.ts` divides it instead, which it can only do by asking what time it is between
+   * children. Nothing else here needs a clock, so it stays optional.
+   */
+  readonly now?: () => number;
 }
 
 /** Long enough for a large scan, short enough that a hung child does not hold the run open. */

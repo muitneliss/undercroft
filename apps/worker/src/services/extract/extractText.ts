@@ -14,7 +14,7 @@
  */
 
 import { readDocx } from "./docx.ts";
-import { ocrImage } from "./ocr.ts";
+import { ocrImage, ocrScan } from "./ocr.ts";
 import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
 import { readXlsx } from "./xlsx.ts";
 
@@ -76,9 +76,15 @@ function capped(text: string): { text: string; truncated: boolean } {
     : { text, truncated: false };
 }
 
-function read(method: ExtractMethod, raw: string): Extracted {
+/**
+ * `cutShort` is a reader saying the text it hands over is not the whole document -- a scan
+ * stopped at the page cap, say. It joins the ceiling below into one flag because downstream
+ * the question is the same one: is this all of it? WHY it is short is the reader's business;
+ * THAT it is short is the document's.
+ */
+function read(method: ExtractMethod, raw: string, cutShort = false): Extracted {
   const { text, truncated } = capped(raw);
-  return { method, reason: null, text, truncated };
+  return { method, reason: null, text, truncated: truncated || cutShort };
 }
 
 function refused(reason: string): Extracted {
@@ -120,20 +126,16 @@ async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
   if (normalizeText(layer.text).length >= TEXT_LAYER_MIN_CHARS) {
     return read("pdf_text", layer.text);
   }
-  // Below the threshold this is a scan, and reading it needs OCR. The document is refused BY
-  // NAME rather than stored as the handful of stray characters the layer did return -- which
-  // would read downstream as a contract that says almost nothing.
+  // Below the threshold this is a scan: the handful of stray characters a stamp left in the
+  // text layer is not what the document says, and storing it would read downstream as a
+  // contract that says almost nothing. So the pages are rasterised and OCR'd instead.
   //
-  // IT DOES NOT FALL THROUGH TO `ocr.ts`, and the reason is measured rather than assumed:
+  // THE RASTERISATION IS NOT OPTIONAL and is why this is two programs rather than one:
   // tesseract's input is an image, so `tesseract scan.pdf stdout` answers "Pdf reading is not
-  // supported" and exits 1. Wiring it here would record `tesseract-failed` on every scan --
-  // which tells an operator this PDF is broken when the truth is that nobody rasterised it,
-  // and a reason that misleads is worse than one that defers. A `pdf_ocr` reader needs a page
-  // image first (poppler's `pdftoppm`, already in the worker image), and with it a page cap, a
-  // resolution and a deadline spanning N pages instead of one -- its own change, with its own
-  // measurement, for the 53 documents this branch covers. `needs-ocr` is what re-queues them
-  // when it lands.
-  return refused("needs-ocr");
+  // supported" and exits 1. `ocr.ts` owns the sequence, `pdfPages.ts` owns poppler; what this
+  // layer decides is only that a scan is what we are looking at.
+  const scan = await ocrScan(deps, input.path);
+  return scan.ok ? read("pdf_ocr", scan.text, scan.truncated) : refused(scan.reason);
 }
 
 /**
@@ -170,7 +172,7 @@ function readWordDocument(_deps: ExtractDeps, input: Document): Extracted {
  */
 async function readImage(deps: ExtractDeps, input: Document): Promise<Extracted> {
   const ocr = await ocrImage(deps, input);
-  return ocr.ok ? read("image_ocr", ocr.text) : refused(ocr.reason);
+  return ocr.ok ? read("image_ocr", ocr.text, ocr.truncated) : refused(ocr.reason);
 }
 
 /**
@@ -229,9 +231,14 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * for -- 1,190 of them on production, recorded `unsupported-content-type` for types this table
  * now answers.
  *
- * 1, not 0, because THIS change is the first generation: `0` is what every row written before
- * the column existed carries, and it must sort below anything we bump to so those rows re-enter
- * the queue exactly once.
+ * Generation 1 was the docx, csv and image readers arriving: `0` is what every row written
+ * before the column existed carries, and it sorts below anything we bump to, so those rows
+ * re-entered the queue exactly once.
+ *
+ * GENERATION 2 IS THE SCANNED-PDF READER. It is what re-offers the 53 documents recorded
+ * `needs-ocr` -- a refusal whose whole point was that it would stop being true, and this is the
+ * release where it stops. Without the bump `pdf_ocr` would ship reaching nothing at all: every
+ * document it was written for already has a row, with bytes that have not moved.
  *
  * BY HAND, AND DELIBERATELY SO. The honest alternative is deriving it -- hashing the binaries
  * and language packs behind these readers into the stamp, which is what the sibling project
@@ -244,7 +251,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 1;
+export const CURRENT_READER_VERSION = 2;
 
 /**
  * One document, read whichever way its type allows.

@@ -75,17 +75,21 @@ describe("a PDF's text layer", () => {
     expect(calls[0]?.[0]).toBe("pdftotext");
   });
 
-  it("is refused by name when it is only a scan's stray characters", async () => {
-    // The firing side. A scanned contract still returns a few characters from a stamp, so
-    // "the layer returned something" is not "the layer worked" -- and storing that handful
-    // would read downstream as a contract that says almost nothing.
-    const { spawn } = spawnAnswering(SCAN_NOISE);
+  it("is not believed when it is only a scan's stray characters", async () => {
+    // The firing side, unchanged in substance: a scanned contract still returns a few
+    // characters from a stamp, so "the layer returned something" is not "the layer worked",
+    // and storing that handful would read downstream as a contract that says almost nothing.
+    //
+    // What changed is what happens NEXT. This branch used to refuse `needs-ocr`; it now
+    // rasterises the page and OCRs it, so the assertion is that the stray characters are not
+    // the answer rather than that there is no answer. `ocr.test.ts` pins what comes back.
+    const { spawn, calls } = spawnAnswering(SCAN_NOISE);
 
     const result = await extract(spawn);
 
-    expect(result.method).toBeNull();
-    expect(result.reason).toBe("needs-ocr");
-    expect(result.text).toBe("");
+    expect(result.method).not.toBe("pdf_text");
+    expect(result.text).not.toContain("page 1");
+    expect(calls.map((cmd) => cmd[0])).toContain("pdftoppm");
   });
 
   it("measures the threshold in characters a reader would see, not raw bytes", async () => {

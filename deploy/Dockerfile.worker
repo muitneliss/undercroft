@@ -14,6 +14,8 @@ FROM oven/bun:1.4.2-debian
 # Without it every PDF in the lake is recorded `extractor-missing:pdftotext` -- the
 # extractor refuses by name rather than crashing, so the run stays green and the symptom is
 # a Lake division reading "122 documents, 0 readable" with nothing failing anywhere.
+# It also supplies `pdftoppm`, which `services/extract/pdfPages.ts` uses to turn a scanned
+# page into an image -- so the scanned-PDF reader below costs no new package at all.
 #
 # `tesseract-ocr` was deferred on the condition this file stated in as many words -- shipping
 # a binary nothing calls is weight in the image and an attack surface in the process, so "it
@@ -29,10 +31,12 @@ FROM oven/bun:1.4.2-debian
 # cannot answer "can read Vietnamese"; this line is the only place that question is settled.
 # Trimming it to save half a megabyte quietly turns a sixth of the corpus into fiction.
 #
-# Still no `pdf_ocr`: tesseract's input is an image, so `tesseract scan.pdf` answers "Pdf
-# reading is not supported" and exits 1. A scanned PDF needs a page image from `pdftoppm`
-# (already here, in poppler-utils) before tesseract sees it, and that reader is its own change
-# -- those documents stay refused by name as `needs-ocr` until it lands.
+# `pdf_ocr` is the second caller, and it is why the two packages sit beside each other rather
+# than in one line: tesseract's input is an IMAGE, so `tesseract scan.pdf` answers "Pdf reading
+# is not supported" and exits 1. A scan is `pdftoppm` first and `tesseract` after, at 150 DPI
+# -- measured on a rendered Vietnamese invoice, where 150 kept all 38 accented letters and read
+# the page exactly, and 300 and 400 DPI each scored slightly worse for 1.6x and 2.6x the bytes.
+# Neither program may be trimmed without the other losing its purpose.
 #
 # A spreadsheet or a Word document needs no binary at all -- `services/extract/xlsx.ts` and
 # `docx.ts` say why.
