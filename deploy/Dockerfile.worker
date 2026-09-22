@@ -44,4 +44,21 @@ EXPOSE 8081
 
 # Idle until called. Kestra invokes the HTTP verbs on a schedule; the worker starts no work
 # on its own, so a restart never re-runs a sync.
-CMD ["bun", "run", "apps/worker/src/server.ts"]
+#
+# `--smol` -- "use less memory, but run garbage collection more often" -- because THIS process
+# cannot see the budget it is held to. `deploy/compose/docker-compose.server.yml` gives the
+# worker a 1 GiB cgroup limit, and the host it shares has 23 GB; JSC sizes its heap against
+# what it can see, so it feels no pressure at 900 MB while the kernel is about to SIGKILL it.
+#
+# The path that makes this bite is Gmail attachments, and it bites because of how Gmail ships
+# bytes: an attachment arrives base64-encoded INSIDE a JSON body, so a 10 MB file is ~13 MB of
+# base64 text, ~26 MB once held as UTF-16, plus the parsed object graph holding that string
+# again, before `decodeBase64Url` produces the 10 MB we wanted. Each one is a transient several
+# times the size of the file, and they are collectable -- the run dies holding garbage, not
+# data. Nothing here is buffered: on 2026-09-22 the worker was killed at message 3,199 of 7,786
+# with `records_read` still advancing, which is what a transient problem looks like and is not
+# what the streaming rewrite in ADR 0033 was for.
+#
+# It is a GC policy, not a fix for a leak. If a run still reaches the limit with this set, the
+# next question is the attachment path itself, not another flag.
+CMD ["bun", "--smol", "run", "apps/worker/src/server.ts"]
