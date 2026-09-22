@@ -2571,19 +2571,38 @@
   }
 
   /* An instant is one word. On a phone the auto table layout gave the column 30px and broke
-   `22:29:14` across three lines, one number per line, beside a sentence set on one. */
-  .feed__region .table td:first-child {
+   `22:29:14` across three lines, one number per line, beside a sentence set on one.
+   *
+   * ITS OWN RIGHT PADDING IS NOT THE GUTTER, which is why that padding is zeroed here and the
+   * gutter is set on the column beside it instead. `width: 1%` is a request for the narrowest
+   * column the content allows, and under this sheet's `box-sizing: border-box` the width being
+   * minimised is a BORDER box -- so the 12px is inside the figure's own width rather than
+   * after it, and whether a reader sees it is left to the engine's shrink-to-fit. Chromium and
+   * WebKit do pay it out (measured off this sheet: the instant ends at 99.6 and the sentence
+   * opens at 111.6, at every viewport from 200px to 1280px). A reader reported
+   * `11:33:38Bắt đầu.` set as one word, which is the same rule paying out nothing, and neither
+   * engine here reproduces it. That is the whole argument for moving it: a gutter whose
+   * existence is an engine's opinion is not a gutter, and the sheet reads as correct either
+   * way. The column beside this one is free to stretch, so padding there is space, full stop. */
+  .feed__region .table td:first-child,
+  .feed__region .table th:first-child {
     white-space: nowrap;
     width: 1%;
+    padding-right: 0;
   }
 
   /* The last cell here is a SENTENCE, not a figure. The sheet right-aligns a last cell
    because in every other table it is a count, and this one inherited that: on a desk the
    flex row hid it, and on a phone the first sentence long enough to wrap set itself
-   ragged-LEFT, against a head sitting at the far edge of the column. */
+   ragged-LEFT, against a head sitting at the far edge of the column.
+   *
+   * It carries the gutter, for the reason above. `--s-3` and not a wider measure because that
+   * is the gutter every other column in `.table` is set to; this table having its own would
+   * need a reason, and "it used to render as nothing" is not one. */
   .feed__region .table td:last-child,
   .feed__region .table th:last-child {
     text-align: start;
+    padding-left: var(--s-3);
   }
 
   /* The column heads stay at the head of the region while its lines run under them -- a

@@ -87,6 +87,31 @@ describe("a row carrying only plates", () => {
 });
 
 /**
+ * The ledger's two columns are two things, and a reader has to be able to see that they are.
+ *
+ * The gutter between them used to be the instant column's own `padding-right` -- on the one
+ * cell this sheet deliberately shrinks to its content (`width: 1%`). Under the sheet's
+ * `box-sizing: border-box` that is a padding INSIDE the width being minimised, so whether a
+ * reader is ever given it is the engine's shrink-to-fit talking, and one reported the line set
+ * as `11:33:38Bắt đầu.`, one word. It now belongs to the column the table is free to stretch,
+ * where nothing can squeeze it. That is a fact about this sheet and about no markup, so it is
+ * invisible to every other check in the gate.
+ */
+describe("the ledger's instant column", () => {
+  const LINE = `<div class="feed__region"><table class="table"><tbody><tr>
+    <td class="datum datum--quiet">11:33:38</td><td><span class="feed__what">Bắt đầu.</span></td>
+  </tr></tbody></table></div>`;
+
+  it("leaves the gutter to the sentence beside it, not to its own squeezable padding", () => {
+    const region = render(LINE);
+    const instant = globalThis.getComputedStyle(region.querySelector("td:first-child") as Element);
+    const sentence = globalThis.getComputedStyle(region.querySelector("td:last-child") as Element);
+    expect(instant.paddingRight).toBe("0px");
+    expect(sentence.paddingLeft).not.toBe("0px");
+  });
+});
+
+/**
  * The interleaf is a grid AREA, not a floating panel.
  *
  * Which is the whole reason the page behind it stays in the document and in the tab order: the
