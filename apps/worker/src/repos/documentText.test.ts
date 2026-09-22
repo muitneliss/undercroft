@@ -20,6 +20,7 @@ import {
   type DocumentTextRow,
   pendingDocuments,
   pendingScopes,
+  scanExtractions,
   upsertDocumentText,
 } from "./documentText.ts";
 
@@ -501,5 +502,118 @@ describe("the grant on a column added later", () => {
       tx.query<{ reason: string | null }>("SELECT reason FROM raw.document_text"),
     );
     expect(granted.rows).toHaveLength(1);
+  });
+});
+
+/**
+ * The accuracy measurement's read path, against real Postgres as the role that runs it.
+ *
+ * It is the half of `services/extract/accuracy.ts` a fixture cannot prove: the statement joins
+ * two tables, selects the one column `undercroft_app` is deliberately denied, and orders by a
+ * digest so that a capped sample is a SAMPLE rather than whichever tenant sorts first. Every
+ * test below runs as `undercroft_worker` -- if `text` were ever revoked from it, the suite
+ * fails here instead of the measurement failing at the first run.
+ */
+describe("the extraction sample", () => {
+  const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  /** Catalogue a document with a content type and a weight the measurement can read back. */
+  async function landTyped(
+    documentId: string,
+    contentType: string,
+    byteLength: string,
+  ): Promise<void> {
+    await db.query(
+      `INSERT INTO raw.documents
+         (source, tenant_id, document_id, lake_key, sha256, byte_length, content_type,
+          observed_at, run_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), 'run-seed')`,
+      [
+        SOURCE,
+        TENANT,
+        documentId,
+        `documents/${SOURCE}/${TENANT}/${documentId}`,
+        SHA,
+        byteLength,
+        contentType,
+      ],
+    );
+  }
+
+  it("returns what was read, with the source's weight as a number", async () => {
+    await landTyped("f1", "application/pdf", "250000");
+    await extractedAt(NOW, [
+      row("f1", { method: "pdf_text", reason: null, text: "a contract", truncated: true }),
+    ]);
+
+    expect(await scanExtractions(db, { limit: 10, contentTypes: [] })).toEqual([
+      {
+        method: "pdf_text",
+        reason: null,
+        truncated: true,
+        // `bigint` arrives from `pg` as a string by the pool's pinned parsers, so an untouched
+        // value would make every "terse for its size" comparison compare against a string.
+        sourceBytes: 250_000,
+        contentType: "application/pdf",
+        lakeKey: `documents/${SOURCE}/${TENANT}/f1`,
+        text: "a contract",
+      },
+    ]);
+  });
+
+  it("narrows to the content types asked for", async () => {
+    // The targeted half: the OOXML oracle can only score two types, and a uniform sample of a
+    // mostly-PDF catalogue would answer the strongest question with a handful of documents.
+    await landTyped("f1", "application/pdf", "2048");
+    await landTyped("f2", XLSX, "2048");
+    await extractedAt(NOW, [
+      row("f1", { method: "pdf_text", reason: null, text: "pdf" }),
+      row("f2", { method: "xlsx", reason: null, text: "workbook" }),
+    ]);
+
+    const only = await scanExtractions(db, { limit: 10, contentTypes: [XLSX] });
+    expect(only.map((scan) => scan.text)).toEqual(["workbook"]);
+  });
+
+  it("returns every type when no type is named", async () => {
+    // The quiet side. A filter that always narrowed would silently measure one format.
+    await landTyped("f1", "application/pdf", "2048");
+    await landTyped("f2", XLSX, "2048");
+    await extractedAt(NOW, [
+      row("f1", { method: "pdf_text", reason: null, text: "pdf" }),
+      row("f2", { method: "xlsx", reason: null, text: "workbook" }),
+    ]);
+
+    const all = await scanExtractions(db, { limit: 10, contentTypes: [] });
+    const texts = all.map((scan) => scan.text).sort((a, b) => a.localeCompare(b));
+    expect(texts).toEqual(["pdf", "workbook"]);
+  });
+
+  it("leaves out a document the customer has deleted", async () => {
+    await landTyped("gone", "application/pdf", "2048");
+    await extractedAt(NOW, [row("gone", { method: "pdf_text", reason: null, text: "old" })]);
+    await db.query("UPDATE raw.documents SET deleted_at = now() WHERE document_id = 'gone'");
+
+    expect(await scanExtractions(db, { limit: 10, contentTypes: [] })).toEqual([]);
+  });
+
+  it("takes the same sample twice, and not the first rows by key", async () => {
+    // Both halves of "this is a sample". Reproducible, so a figure can be re-checked after a
+    // change rather than merely re-rolled -- and uncorrelated with the primary key, so a cap
+    // does not quietly turn "the corpus" into whichever tenant sorts first.
+    const ids = ["d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8"];
+    for (const id of ids) {
+      await landTyped(id, "application/pdf", "2048");
+    }
+    await extractedAt(
+      NOW,
+      ids.map((id) => row(id, { method: "pdf_text", reason: null, text: id })),
+    );
+
+    const first = await scanExtractions(db, { limit: 4, contentTypes: [] });
+    const again = await scanExtractions(db, { limit: 4, contentTypes: [] });
+
+    expect(again.map((scan) => scan.text)).toEqual(first.map((scan) => scan.text));
+    expect(first.map((scan) => scan.text)).not.toEqual(["d1", "d2", "d3", "d4"]);
   });
 });

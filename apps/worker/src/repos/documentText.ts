@@ -218,6 +218,83 @@ export async function pendingScopes(
   return rows.map((row) => ({ tenantId: row.tenantId, source: row.source }));
 }
 
+/** One extracted document as the accuracy measurement needs it. Text included; see below. */
+export interface ExtractionScan {
+  readonly method: string | null;
+  readonly reason: string | null;
+  readonly truncated: boolean;
+  /** `raw.documents.byte_length`: how big the thing the text was read FROM is. */
+  readonly sourceBytes: number;
+  readonly contentType: string;
+  readonly lakeKey: string;
+  readonly text: string;
+}
+
+/**
+ * A reproducible sample of what has been extracted, for measuring whether it is right.
+ *
+ * READ-ONLY, AND THE ONLY STATEMENT HERE THAT SELECTS `text`. The column is granted to this
+ * role and to a tenant's own dbt login and to nobody else -- `undercroft_app` is column-scoped
+ * out of it precisely so a control-plane handler can never become a place a customer's
+ * contracts leak from (`pii.md`). This runs in the worker, as the worker, and what it hands
+ * back is counted rather than shown: `services/extract/accuracy.ts` has no field that could
+ * carry a character of it into a report.
+ *
+ * ORDERED BY A DIGEST OF THE KEY, WHICH IS THE SAMPLING. A `LIMIT` over the natural order
+ * takes every row from whichever tenant sorts first, so the "corpus" measured would be one
+ * customer's mailbox -- the numbers would be real and about the wrong population. `md5` of the
+ * primary key is uncorrelated with source, tenant, time and size, and unlike `random()` it
+ * gives the same sample twice, so a figure can be re-checked after a change rather than merely
+ * re-rolled.
+ *
+ * `contentTypes` empty means every type. It is how the OOXML oracle gets a sample of the two
+ * types it can actually score -- a rare case needs targeted sampling, or a uniform sample of a
+ * mostly-PDF corpus answers it with a handful of documents.
+ *
+ * An INNER join, deliberately: `sourceBytes` is the catalogue's, and a text row whose document
+ * has been purged has no source to be measured against. There should be none; if there are,
+ * they are a different defect from the one this is looking for.
+ */
+export async function scanExtractions(
+  exec: SqlExecutor,
+  { limit, contentTypes }: { readonly limit: number; readonly contentTypes: readonly string[] },
+): Promise<ExtractionScan[]> {
+  const { rows } = await exec.query<{
+    method: string | null;
+    reason: string | null;
+    truncated: boolean;
+    byte_length: string;
+    content_type: string;
+    lake_key: string;
+    text: string;
+  }>(
+    `SELECT t.method, t.reason, t.truncated,
+            d.byte_length, d.content_type, d.lake_key, t.text
+       FROM raw.document_text t
+       JOIN raw.documents d
+         ON d.source = t.source
+        AND d.tenant_id = t.tenant_id
+        AND d.document_id = t.document_id
+      WHERE d.deleted_at IS NULL
+        AND (cardinality($1::text[]) = 0 OR d.content_type = ANY($1::text[]))
+      ORDER BY md5(t.source || t.tenant_id || t.document_id)
+      LIMIT $2`,
+    [contentTypes, limit],
+  );
+
+  return rows.map((row) => ({
+    method: row.method,
+    reason: row.reason,
+    truncated: row.truncated,
+    // `int8` comes back as a string by the pool's pinned parsers. A byte count is an integer
+    // index and not an amount, which is the one spelling `money.md` leaves alone.
+    sourceBytes: Number.parseInt(row.byte_length, 10),
+    contentType: row.content_type,
+    lakeKey: row.lake_key,
+    text: row.text,
+  }));
+}
+
 /**
  * How many DOCUMENTS are waiting, in full -- not the reads a run is about to do.
  *

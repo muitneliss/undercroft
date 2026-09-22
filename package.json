@@ -31,6 +31,7 @@
     "migrate": "bun run packages/db/src/migrateCli.ts",
     "kestra:flows": "bun run scripts/kestraFlows.ts",
     "invite": "bun run apps/control-plane/src/inviteCli.ts",
+    "extract:accuracy": "bun run apps/worker/src/extractionAccuracyCli.ts",
     "format": "biome format --write . && prettier --write .",
     "format:check": "biome format . && prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",

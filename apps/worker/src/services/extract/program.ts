@@ -54,12 +54,22 @@ export interface ExtractDeps {
 export const DEFAULT_EXTRACT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
+ * What every "the program is not here" reason starts with.
+ *
+ * Its own constant because two callers now need the same string for opposite purposes: the
+ * function below WRITES one, and `accuracy.ts` READS one back, to tell a machine that lacks
+ * poppler apart from a reader that got the document wrong. Those are different facts and a
+ * measurement that confused them would report a clean score for a document nothing opened.
+ */
+export const EXTRACTOR_MISSING = "extractor-missing:";
+
+/**
  * `extractor-missing:<program>` carries the program's name because that IS the fix: "install
  * poppler-utils" is a different afternoon from "the PDF is corrupt", and a bare "could not
  * read" makes them look identical.
  */
 export function extractorMissing(program: string): string {
-  return `extractor-missing:${program}`;
+  return `${EXTRACTOR_MISSING}${program}`;
 }
 
 /**
