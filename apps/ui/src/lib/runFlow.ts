@@ -54,13 +54,19 @@ function outcomeStage(t: TFunction, locale: Locale, run: RunDetail): RunStage {
 }
 
 /** The one stage of a transform/build run: there is no per-model live signal, only an outcome. */
-function modelsStage(t: TFunction, run: RunDetail): RunStage {
+function modelsStage(t: TFunction, run: RunDetail, events: readonly RunEventView[]): RunStage {
   const mark = markForStatus(run.status);
   let detail: string | null = null;
   if (run.status !== "running") {
     const models = run.steps.filter((step) => step.kind === "model").length;
     const tests = run.steps.filter((step) => step.kind === "test").length;
-    if (run.steps.length === 0) {
+    // "No models" is a claim about the CUSTOMER, not about this run, and no step of the run
+    // says it: a build whose `--select` matched nothing has an empty step list too. Only the
+    // worker can tell those apart -- it lists the tenant's models before it spawns dbt -- and
+    // it says so with `no_models`, a warning, which is the level the feed keeps when it
+    // truncates. Without that word the summary below answers instead, with the narrower truth
+    // that this run built nothing, rather than contradicting the sentence beside it.
+    if (run.steps.length === 0 && events.some((event) => event.event === "no_models")) {
       detail = t("journal.flow.modelsNone");
     } else if (run.testsFailed !== null && run.testsFailed > 0) {
       detail = t("journal.flow.modelsSummaryFailed", {
@@ -156,7 +162,7 @@ export function deriveRunFlow(
   } else if (run.kind === "lake-api") {
     stages.push(lakeStage(t, locale, run));
   } else {
-    stages.push(modelsStage(t, run));
+    stages.push(modelsStage(t, run, events));
   }
 
   if (run.childRun !== null) {

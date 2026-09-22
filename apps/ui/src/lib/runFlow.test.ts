@@ -160,12 +160,29 @@ describe("a transform run", () => {
       source: null,
       entities: [],
       status: "ok",
-      counts: { landed: 0, created: 0, changed: 0, unchanged: 0, refused: 0 },
+      counts: null,
       steps: [],
     });
     const stages = flow(detail, [event("no_models", {})]);
 
     expect(stages[0]).toMatchObject({ mark: "granted", detail: "No models" });
+  });
+
+  it("says only that it built nothing when the worker never said there were no models", () => {
+    // The same empty step list, a different fact: a build whose `--select` matched nothing
+    // ran dbt and built none of the models the customer has. Calling that "No models" would
+    // contradict the sentence in the feed beside it.
+    const detail = runDetail({
+      kind: "build",
+      source: null,
+      entities: [],
+      status: "ok",
+      counts: null,
+      steps: [],
+    });
+    const stages = flow(detail, [event("run_opened", {})]);
+
+    expect(stages[0]).toMatchObject({ mark: "granted", detail: "0 models · 0 tests" });
   });
 
   it("summarises what it built, and calls out a failing test separately from a passing one", () => {
