@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.3](https://github.com/muitneliss/undercroft/compare/v1.15.2...v1.15.3) (2026-09-22)
+
+
+### Bug Fixes
+
+* **ui:** a grid wider than its pane shows the bar that says so ([#104](https://github.com/muitneliss/undercroft/issues/104)) ([a48ae1d](https://github.com/muitneliss/undercroft/commit/a48ae1d9a5c95deb365d4e8c0e02a59111998af7))
+* **worker:** run bun --smol, because the process cannot see its budget ([#103](https://github.com/muitneliss/undercroft/issues/103)) ([e6c9d67](https://github.com/muitneliss/undercroft/commit/e6c9d67416908a4056243fdda0ff0431b321b911))
+
 ## [1.15.2](https://github.com/muitneliss/undercroft/compare/v1.15.1...v1.15.2) (2026-09-22)
 
 
