@@ -1,0 +1,44 @@
+-- "Which of this tenant's documents hold these bytes?" -- the question the catalogue could not
+-- answer without reading all of it.
+--
+-- `raw.documents` is PROVENANCE-ADDRESSED. Gmail's only stable identity for an attachment is
+-- `(messageId, partIndex)`, which is correct -- `attachmentId` changes between fetches -- and it
+-- means one attachment quoted down a reply chain is one row per message. Production holds 4,476
+-- documents over 2,030 distinct `sha256`: 55% of the catalogue names bytes it already names.
+-- The lake underneath solved exactly this by content-addressing (`packages/lake/src/store.ts`,
+-- whose docstring records the 10.42 GB the provenance-addressed store before it cost); the
+-- catalogue above it reintroduced the duplication, and since the OCR readers landed each
+-- redundant row is a blob GET, a re-hash, and up to thirty-one child processes producing text
+-- we already hold verbatim.
+--
+-- `apps/worker/src/repos/documentText.ts` now reads one document per distinct digest and copies
+-- the answer to its siblings. BOTH halves of that ask this question, and there was no index on
+-- `sha256` ANYWHERE: `030_raw.sql` creates two indexes and both are on `raw.records`, so every
+-- form of "rows sharing a digest" was a sequential scan over the whole catalogue.
+--
+-- COLUMN ORDER IS THE TWO EQUALITY COLUMNS FIRST, then the digest. Every statement that asks is
+-- scoped to one tenant and one source -- deliberately, because the copy crosses no customer
+-- (`pii.md`, and the argument in full in `documentText.ts`) -- so the scope is what narrows the
+-- scan and the digest is what it is then ordered and matched by. `(sha256, ...)` would index the
+-- same rows and serve none of the three callers without a filter afterwards.
+--
+-- NOT a UNIQUE index, and not a constraint of any kind: duplicate digests within a tenant are
+-- the normal, correct state of this table. This index exists to make them cheap, never to
+-- forbid them.
+CREATE INDEX IF NOT EXISTS documents_digest
+    ON raw.documents (source, tenant_id, sha256);
+
+-- NO GRANT, and -- like `240_reader_version.sql` -- that is a FINDING rather than an omission,
+-- recorded so the next reader of `privileges.md` does not "fix" it with a line that cannot work.
+--
+-- `privileges.md` requires a migration that creates a TABLE to grant it in the same file,
+-- because `040_grants.sql` says `ON ALL TABLES IN SCHEMA`, which Postgres expanded to the tables
+-- that existed when it ran, and the ledger keys on filename so it never runs again. An INDEX is
+-- neither that case nor 240's column case: it is not a grantable object at all. An index holds
+-- no ACL of its own, it is never named in a query, and `GRANT ... ON raw.documents_digest` is
+-- REFUSED by Postgres -- `"documents_digest" is an index`. What decides who may use it is the
+-- ACL on `raw.documents`, which `040_grants.sql` already gave the worker.
+--
+-- Pinned rather than argued: `apps/worker/src/repos/documentText.test.ts` asserts the index
+-- exists with these columns, that it carries no ACL where its table carries one, and that the
+-- GRANT above is the error quoted here. That suite runs every statement as `undercroft_worker`.

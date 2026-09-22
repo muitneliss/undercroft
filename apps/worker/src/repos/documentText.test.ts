@@ -16,6 +16,7 @@ import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import {
+  type AnsweredDocuments,
   type DocumentTextRow,
   pendingDocuments,
   pendingScopes,
@@ -23,6 +24,8 @@ import {
 } from "./documentText.ts";
 
 const TENANT = "CASE-0042";
+/** A second customer, whose documents this module must never answer. */
+const OTHER_TENANT = "CASE-0043";
 const SOURCE = "drive";
 const SCOPE = { tenantId: TENANT, source: SOURCE } as const;
 const SHA = "a".repeat(64);
@@ -51,14 +54,25 @@ afterEach(async () => {
   await db.close();
 });
 
-/** Catalogue a document the way an ingest run leaves it. The bytes themselves are not needed. */
-async function land(documentId: string, sha256 = SHA): Promise<void> {
+/**
+ * Catalogue a document the way an ingest run leaves it. The bytes themselves are not needed.
+ *
+ * `where` defaults to the one scope every other test uses; the tests about the boundary name a
+ * different customer or a different source, which is what the write must not cross.
+ */
+async function land(
+  documentId: string,
+  sha256 = SHA,
+  where: { tenantId?: string; source?: string } = {},
+): Promise<void> {
+  const tenantId = where.tenantId ?? TENANT;
+  const source = where.source ?? SOURCE;
   await db.query(
     `INSERT INTO raw.documents
        (source, tenant_id, document_id, lake_key, sha256, byte_length, content_type,
         observed_at, run_id)
      VALUES ($1, $2, $3, $4, $5, '2048', 'application/pdf', now(), 'run-seed')`,
-    [SOURCE, TENANT, documentId, `documents/${SOURCE}/${TENANT}/${documentId}`, sha256],
+    [source, tenantId, documentId, `documents/${source}/${tenantId}/${documentId}`, sha256],
   );
 }
 
@@ -78,7 +92,7 @@ function row(documentId: string, over: Partial<DocumentTextRow> = {}): DocumentT
 async function extractedAt(
   readerVersion: number,
   rows: readonly DocumentTextRow[],
-): Promise<number> {
+): Promise<AnsweredDocuments> {
   return upsertDocumentText(db, SCOPE, rows, {
     extractedAt: "2026-09-20T09:00:00.000Z",
     runId: `run-extract-${readerVersion}`,
@@ -210,6 +224,237 @@ describe("the guard a generation bump is safe because of", () => {
     ]);
 
     expect(await backlog(NOW)).toEqual({ documentIds: [], scopes: [] });
+  });
+});
+
+/** Every row of text in the table, whoever it belongs to -- the fan-out's whole output. */
+async function textRows(): Promise<
+  {
+    tenant_id: string;
+    document_id: string;
+    method: string | null;
+    text: string;
+    source_sha256: string;
+    reader_version: number;
+  }[]
+> {
+  const { rows } = await db.query<{
+    tenant_id: string;
+    document_id: string;
+    method: string | null;
+    text: string;
+    source_sha256: string;
+    reader_version: number;
+  }>(
+    `SELECT tenant_id, document_id, method, text, source_sha256, reader_version
+       FROM raw.document_text ORDER BY tenant_id, document_id`,
+  );
+  return rows;
+}
+
+describe("documents that hold the same bytes", () => {
+  it("offers ONE of them, because the read is about the bytes", async () => {
+    // 4,476 rows over 2,030 digests on production: an attachment quoted down a reply chain is
+    // one catalogue row per message, and reading it twice is a `pdftoppm` and thirty
+    // `tesseract` children spent reproducing text we already hold verbatim.
+    await land("f1");
+    await land("f2");
+
+    expect(await backlog(NOW)).toEqual({ documentIds: ["f1"], scopes: [`${TENANT}/${SOURCE}`] });
+  });
+
+  it("offers both when the digests differ", async () => {
+    // The quiet side, and the one that says the collapse is keyed on CONTENT. A predicate that
+    // offered one row per tenant would pass the test above by reading 1 of 2,030.
+    await land("f1");
+    await land("f2", OTHER_SHA);
+
+    expect(await backlog(NOW)).toEqual({
+      documentIds: ["f1", "f2"],
+      scopes: [`${TENANT}/${SOURCE}`],
+    });
+  });
+
+  it("writes the read to every one of them, at the generation that produced it", async () => {
+    // The other half of the collapse. The sibling is not skipped, it is ANSWERED -- otherwise
+    // `pendingDocuments` would simply hide documents from the run that has to read them.
+    await land("f1");
+    await land("f2");
+
+    const answered = await extractedAt(NOW, [
+      row("f1", { method: "pdf_text", reason: null, text: "hợp đồng dịch vụ" }),
+    ]);
+
+    // One read, two documents answered -- the number a run reports as `created`.
+    expect(answered.get("f1")).toBe(2);
+    expect(await textRows()).toEqual([
+      {
+        tenant_id: TENANT,
+        document_id: "f1",
+        method: "pdf_text",
+        text: "hợp đồng dịch vụ",
+        source_sha256: SHA,
+        reader_version: NOW,
+      },
+      {
+        tenant_id: TENANT,
+        document_id: "f2",
+        method: "pdf_text",
+        text: "hợp đồng dịch vụ",
+        source_sha256: SHA,
+        reader_version: NOW,
+      },
+    ]);
+    expect(await backlog(NOW)).toEqual({ documentIds: [], scopes: [] });
+  });
+
+  it("copies a refusal too, because identical bytes are refused identically", async () => {
+    // Correct, and worth stating because it reads like the 2,602-document hazard and is not
+    // one: that was a DIFFERENT toolchain blanking good text. These are the same bytes through
+    // the same generation, and the row below carries that generation, so the next reader
+    // re-queues them exactly as it re-queues the read one.
+    await land("f1");
+    await land("f2");
+
+    await extractedAt(NOW, [row("f1")]);
+
+    const rows = await textRows();
+    expect(rows.map((r) => r.document_id)).toEqual(["f1", "f2"]);
+    expect(rows.every((r) => r.method === null)).toBe(true);
+    expect(await backlog(NOW + 1)).toEqual({
+      documentIds: ["f1"],
+      scopes: [`${TENANT}/${SOURCE}`],
+    });
+  });
+
+  it("does NOT overwrite a sibling that was already read", async () => {
+    // The 2,602-document guard, reached through the write rather than the backlog. The fan-out
+    // is eligible for exactly the documents `PENDING_JOIN` would have offered a later run, so a
+    // document carrying a method is untouched however cheap the pass beside it was.
+    const kept = "read once, expensively";
+    await land("f1");
+    await land("f2");
+    await db.query(
+      `INSERT INTO raw.document_text
+         (source, tenant_id, document_id, source_sha256, method, text, chars, extracted_at,
+          run_id, reader_version)
+       VALUES ($1, $2, 'f2', $3, 'pdf_ocr', $4, char_length($4), now(), 'run-old', $5)`,
+      [SOURCE, TENANT, SHA, kept, NOW],
+    );
+
+    const answered = await extractedAt(NOW, [
+      row("f1", { method: "pdf_text", reason: null, text: "a thinner reading" }),
+    ]);
+
+    expect(answered.get("f1")).toBe(1);
+    const rows = await textRows();
+    expect(rows.find((r) => r.document_id === "f2")?.text).toBe(kept);
+    expect(rows.find((r) => r.document_id === "f1")?.text).toBe("a thinner reading");
+  });
+});
+
+describe("a second customer holding byte-identical bytes", () => {
+  it("is given NOTHING, and is still waiting to be read", async () => {
+    // THE test this slice exists to be trusted on. The worker holds `platform_all ... USING
+    // (true)` on both tables, so row-level security protects READERS and not this writer: a
+    // copy across tenants would stamp one customer's contract with another's id, and the policy
+    // would then serve it faithfully as theirs. Nothing raises. Nothing goes red. So the scope
+    // is a bind parameter taken from the caller and never from the data, and this asserts the
+    // consequence -- the other customer's document is untouched AND still pending, which is the
+    // difference between "not copied" and "quietly retired".
+    await land("f1");
+    await land("f1", SHA, { tenantId: OTHER_TENANT });
+
+    await extractedAt(NOW, [
+      row("f1", { method: "pdf_text", reason: null, text: "another customer's contract" }),
+    ]);
+
+    expect(await textRows()).toEqual([
+      {
+        tenant_id: TENANT,
+        document_id: "f1",
+        method: "pdf_text",
+        text: "another customer's contract",
+        source_sha256: SHA,
+        reader_version: NOW,
+      },
+    ]);
+    const scopes = await pendingScopes(db, { readerVersion: NOW });
+    expect(scopes).toEqual([{ tenantId: OTHER_TENANT, source: SOURCE }]);
+  });
+
+  it("IS answered by a pass of its own", async () => {
+    // The quiet side. A write scoped so tightly that it reached nobody would pass the test
+    // above and leave every tenant's backlog undrainable.
+    await land("f1", SHA, { tenantId: OTHER_TENANT });
+
+    await upsertDocumentText(
+      db,
+      { tenantId: OTHER_TENANT, source: SOURCE },
+      [row("f1", { method: "pdf_text", reason: null, text: "their own contract" })],
+      { extractedAt: "2026-09-20T09:00:00.000Z", runId: "run-extract-other", readerVersion: NOW },
+    );
+
+    expect((await textRows()).map((r) => r.tenant_id)).toEqual([OTHER_TENANT]);
+    expect(await pendingScopes(db, { readerVersion: NOW })).toEqual([]);
+  });
+});
+
+describe("the same customer's copy of the same bytes in another source", () => {
+  it("is not answered either, because `source` is in the primary key", async () => {
+    // The tenant tests would not catch this: dropping `source` from the write's scope writes a
+    // row for a document id that exists under `gmail` but stamps it `drive`, inventing a
+    // document nobody catalogued. Reusing a Gmail attachment's text for the same customer's
+    // Drive copy may well be right; it is a SEPARATE argument, and until it is made the scope
+    // stays the pair the primary key already uses.
+    await land("f1");
+    await land("f1", SHA, { source: "gmail" });
+
+    await extractedAt(NOW, [row("f1", { method: "pdf_text", reason: null, text: "a contract" })]);
+
+    const { rows } = await db.query<{ source: string }>(
+      "SELECT source FROM raw.document_text ORDER BY 1",
+    );
+    expect(rows).toEqual([{ source: SOURCE }]);
+  });
+});
+
+describe("the index the digest questions need", () => {
+  it("indexes the scope first and the digest last", async () => {
+    // `030_raw.sql` creates two indexes and both are on `raw.records`, so "rows sharing a
+    // digest" was a sequential scan over the whole catalogue -- once per collapse and once per
+    // fan-out. The column ORDER is the assertion: every statement pins source and tenant to one
+    // value each, so they narrow the scan and the digest is what it is then matched by.
+    const { rows } = await db.query<{ indexdef: string }>(
+      "SELECT indexdef FROM pg_indexes WHERE schemaname = 'raw' AND indexname = 'documents_digest'",
+    );
+
+    expect(rows[0]?.indexdef).toContain("(source, tenant_id, sha256)");
+  });
+
+  it("carries no privileges of its own, and cannot be given any", async () => {
+    // `250_documents_sha_idx.sql` records "no grant" as a FINDING. This is the evidence:
+    // `privileges.md`'s rule is about tables, 240's was about a column, and an index is neither
+    // -- it holds no ACL, it is never named in a query, and Postgres refuses the GRANT outright.
+    const acls = await db.query<{ index_acl: string | null; table_acl: string | null }>(
+      `SELECT (SELECT relacl::text FROM pg_class WHERE relname = 'documents_digest') AS index_acl,
+              (SELECT relacl::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'raw' AND c.relname = 'documents') AS table_acl`,
+    );
+    expect(acls.rows[0]?.index_acl).toBeNull();
+    // ...and the table it indexes DOES carry one, so the null above is about indexes and not
+    // about this database having no grants at all.
+    expect(acls.rows[0]?.table_acl).toContain("undercroft_worker");
+
+    const refused = await db.asSuperuser(async (tx) => {
+      try {
+        await tx.query("GRANT SELECT ON raw.documents_digest TO undercroft_worker");
+        return "";
+      } catch (error) {
+        return String(error);
+      }
+    });
+    expect(refused).toContain("is an index");
   });
 });
 

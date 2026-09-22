@@ -52,8 +52,11 @@ async function landDocument(input: {
   documentId: string;
   bytes: Uint8Array;
   contentType: string;
+  /** Whose catalogue it goes in. Defaults to the tenant every other test uses. */
+  tenantId?: string;
 }): Promise<string> {
-  const lakeKey = `documents/${SOURCE}/${TENANT}/${input.documentId}`;
+  const tenantId = input.tenantId ?? TENANT;
+  const lakeKey = `documents/${SOURCE}/${tenantId}/${input.documentId}`;
   const put = await lake.put(lakeKey, input.bytes, { runId: "run-seed" });
   await db.query(
     `INSERT INTO raw.documents
@@ -62,7 +65,7 @@ async function landDocument(input: {
      VALUES ($1, $2, $3, $4, $5, $6, $7, now(), 'run-seed')`,
     [
       SOURCE,
-      TENANT,
+      tenantId,
       input.documentId,
       lakeKey,
       put.sha256,
@@ -234,6 +237,70 @@ describe("a pass after the readers changed", () => {
     const rows = await textRows();
     expect(rows[0]?.method).toBe("pdf_text");
     expect(rows[0]?.chars).toBeGreaterThan(80);
+  });
+});
+
+describe("the same bytes catalogued several times", () => {
+  /** The same attachment quoted down a reply chain: one row per message, one set of bytes. */
+  async function landTwice(tenantId?: string): Promise<void> {
+    const bytes = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+    for (const documentId of ["msg-1:2", "msg-2:2"]) {
+      await landDocument({
+        documentId,
+        bytes,
+        contentType: "application/pdf",
+        ...(tenantId === undefined ? {} : { tenantId }),
+      });
+    }
+  }
+
+  it("spawns ONE reader and answers both documents", async () => {
+    // The whole slice, end to end. Production holds 4,476 documents over 2,030 digests, and
+    // since the OCR readers landed a thirty-page duplicate scan is thirty-one child processes
+    // spent reproducing text we hold verbatim. `read` stays a count of DOCUMENTS -- it is what
+    // `job.ts` records as the run's `created` -- so the saving shows as the spawn count, not as
+    // a number that halved.
+    await landTwice();
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(spawned).toHaveLength(1);
+    expect(result).toMatchObject({ read: 2, refused: 0, unreadable: 0 });
+    const rows = await textRows();
+    expect(rows.map((r) => r.document_id)).toEqual(["msg-1:2", "msg-2:2"]);
+    expect(rows.every((r) => r.method === "pdf_text")).toBe(true);
+  });
+
+  it("leaves nothing for the next pass to find", async () => {
+    // The sibling was answered, not hidden. A collapse without the fan-out would drop the
+    // second document out of every batch it was offered in and never write its row -- a
+    // backlog that ticks forever, which is the failure `PENDING_JOIN`'s one definition exists
+    // to make impossible.
+    await landTwice();
+    await extract(spawnAnswering(A_PAGE));
+    const afterFirst = spawned.length;
+
+    const second = await extract(spawnAnswering(A_PAGE), "run-extract-2");
+
+    expect(second).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
+    expect(spawned).toHaveLength(afterFirst);
+  });
+
+  it("does not reach another customer holding the very same bytes", async () => {
+    // The boundary, through the verb. The worker's policy on both tables is `USING (true)`, so
+    // a cross-tenant copy would be written without complaint and then served to the wrong
+    // customer as their own -- RLS enforcing a lie the writer told it. The lake DOES share a
+    // blob across tenants, and that is safe for a reason which does not transfer: a blob needs
+    // its digest, and only a tenant-scoped manifest hands one out. Text has no second gate.
+    await landTwice();
+    await landTwice("CASE-0043");
+
+    await extract(spawnAnswering(A_PAGE));
+
+    const { rows } = await db.query<{ tenant_id: string; n: string }>(
+      "SELECT tenant_id, count(*)::text AS n FROM raw.document_text GROUP BY 1 ORDER BY 1",
+    );
+    expect(rows).toEqual([{ tenant_id: TENANT, n: "2" }]);
   });
 });
 
