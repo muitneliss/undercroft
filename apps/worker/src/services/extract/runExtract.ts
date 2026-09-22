@@ -19,6 +19,14 @@
  * row means "not read yet" and would put the document straight back in the next run's queue,
  * forever, at full cost.
  *
+ * IT READS ONCE PER DISTINCT DIGEST, AND ANSWERS EVERY DOCUMENT HOLDING IT. `raw.documents` is
+ * provenance-addressed, so a quoted attachment is one row per message -- 4,476 rows over 2,030
+ * digests on production -- and a thirty-page duplicate scan is thirty-one child processes spent
+ * reproducing text we hold verbatim. The repo collapses the backlog and fans the answer back
+ * out, within one tenant and one source; this file just has to count what came of it. So the
+ * numbers below are DOCUMENTS, taken from what the write reports, while the pacing and the
+ * journal's total are READS. The two used to be one number and now differ by the duplication.
+ *
  * THE JOURNAL NAMES NOTHING. `runJournal` caps an event at 60 characters and `pii.md` keeps
  * filenames out of Postgres entirely; what is narrated here is counts and opaque document
  * ids, which is what the rest of the ledger carries too.
@@ -32,6 +40,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
 
 import {
+  type AnsweredDocuments,
   type DocumentTextRow,
   type PendingDocument,
   pendingDocuments,
@@ -138,6 +147,34 @@ async function readOne(
   };
 }
 
+/**
+ * What the pass did, in documents rather than in reads.
+ *
+ * Each read is weighted by how many catalogue rows it answered, so `read` keeps meaning
+ * "documents that left with a method" -- the thing `job.ts` records as the run's `created` and a
+ * customer sees on the run. Counting reads instead would quietly halve that number the day the
+ * fan-out landed, for a pass that did strictly more.
+ */
+function tally(
+  rows: readonly DocumentTextRow[],
+  answered: AnsweredDocuments,
+): { read: number; refused: number; unreadable: number } {
+  let read = 0;
+  let refused = 0;
+  let unreadable = 0;
+  for (const row of rows) {
+    const documents = answered.get(row.documentId) ?? 0;
+    if (row.reason === LAKE_UNREADABLE) {
+      unreadable += documents;
+    } else if (row.method === null) {
+      refused += documents;
+    } else {
+      read += documents;
+    }
+  }
+  return { read, refused, unreadable };
+}
+
 export async function runExtract(
   deps: ExtractRunDeps,
   input: { tenantId: string; source: string; runId: string },
@@ -155,14 +192,12 @@ export async function runExtract(
     readerVersion: CURRENT_READER_VERSION,
   });
 
-  // The most useful line this run writes. What follows is one paced read per document --
+  // The most useful line this run writes. What follows is one read per distinct digest --
   // minutes for a real tenant -- and a total up front turns a blank screen into a quantity.
+  // It is the work, not the outcome: the documents answered is the larger number below.
   journal.info("work_listed", { entity: "documents", total: pending.length });
 
   const rows: DocumentTextRow[] = [];
-  let read = 0;
-  let refused = 0;
-  let unreadable = 0;
 
   for (const document of pending) {
     journal.progress("documents_read", {
@@ -171,22 +206,15 @@ export async function runExtract(
       total: pending.length,
     });
 
-    const row = await readOne(deps, scratch, document);
-    if (row.reason === LAKE_UNREADABLE) {
-      unreadable += 1;
-    } else if (row.method === null) {
-      refused += 1;
-    } else {
-      read += 1;
-    }
-    rows.push(row);
+    rows.push(await readOne(deps, scratch, document));
   }
 
-  await upsertDocumentText(deps.exec, scope, rows, {
+  const answered = await upsertDocumentText(deps.exec, scope, rows, {
     extractedAt,
     runId: input.runId,
     readerVersion: CURRENT_READER_VERSION,
   });
+  const { read, refused, unreadable } = tally(rows, answered);
 
   journal.info("documents_extracted", {
     entity: "documents",
