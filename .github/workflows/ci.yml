@@ -16,7 +16,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: go-task/setup-task@v1
+      - uses: go-task/setup-task@v2
       - run: bun install --frozen-lockfile
       # One definition of the gate: the same `task ci:verify` a developer runs locally --
       # itself a thin wrapper over `bun run verify`. See .claude/rules/tooling.md.
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v1
+      - uses: go-task/setup-task@v2
       # Every service must declare a memory limit. A service with no ceiling can starve
       # the others on a small host. This reads compose's own resolved JSON, so a missing
       # parser cannot look like a passing check.
@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v1
+      - uses: go-task/setup-task@v2
       # The floor of the PII rule: secret-bearing paths stay untracked. Catches the two
       # ways it breaks by accident; the rule itself covers the ways it breaks by reasoning.
       - name: secret-bearing paths are not tracked
