@@ -223,7 +223,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          # 3g, kept in step with docker-compose.server.yml, where the reasoning is written
+          # out: a 25 MiB Gmail attachment costs ~220 MiB in transit because it arrives
+          # base64-encoded inside a JSON body. A change only in the server file would not
+          # survive a deploy, and a dev stack that OOMs where production does not is a bug
+          # nobody can reproduce locally -- `.claude/rules/deployment.md`.
+          memory: 3g
 
   # The schema, applied before anything reads it. Same image as the control plane, which
   # carries the migrations and the `migrate` script; it runs once and exits.
