@@ -25,6 +25,10 @@ export function run(over: Partial<RunView> = {}): RunView {
     testsFailed: null,
     error: null,
     parentRunId: null,
+    // A run from before the stamp existed carries the same blank a build that did not say
+    // does, which is the state the interface has to render either way.
+    releaseTag: "",
+    pendingBefore: null,
     ...over,
   };
 }
@@ -35,6 +39,8 @@ export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
     ...run(),
     entityCounts: [],
     refusals: [],
+    reasonCounts: [],
+    refusalsPruned: false,
     steps: [],
     parentRun: null,
     childRun: null,

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./models": "./src/models.ts",
-    "./bi": "./src/bi.ts"
+    "./bi": "./src/bi.ts",
+    "./runs": "./src/runs.ts"
   },
   "dependencies": {
     "yaml": "2.6.1",

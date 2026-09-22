@@ -111,6 +111,11 @@ const app = createLakeApi({
   // without it `Bun.spawn` cannot find `pdftotext` even where the image installed it, and
   // every PDF reports the binary as missing. Read here and nowhere below (`layering.md`).
   env: process.env,
+  // Which build every run this process opens was produced by. Baked into the image by
+  // `deploy/Dockerfile.worker` from a build arg CI fills, because the deploy pointer is
+  // `latest` on purpose and therefore names no version. `""` when the image did not say --
+  // a blank the journal renders as "this build did not say", never a guessed version.
+  releaseTag: process.env.UNDERCROFT_RELEASE ?? "",
   // The extract verb reads landed documents with poppler and tesseract, which the image
   // installs alongside dbt. Present unconditionally: the binaries are part of the image, and
   // one that is missing is reported per document as `extractor-missing:<program>` rather than

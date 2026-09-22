@@ -509,6 +509,63 @@ export const en = {
     colRecordId: "Record id",
     colReason: "Reason",
     colAt: "At",
+
+    rollupHead: "Why they were refused",
+    rollupCaption_one: "{{count, number}} reason",
+    rollupCaption_other: "{{count, number}} reasons",
+    colCount: "Count",
+    reasonRecords: "The files refused",
+    refusalsPrunedNote:
+      "The per-document detail was cleared after {{days}} days. The breakdown by reason is kept.",
+    reasonActs: "Needs attention",
+    reasonBenign: "Nothing to do",
+
+    backlogHead: "Queue",
+    backlogNote_one:
+      "{{count, number}} document was waiting when this run started. A run reads at most 500.",
+    backlogNote_other:
+      "{{count, number}} documents were waiting when this run started. A run reads at most 500.",
+    backlogEmpty: "Nothing was waiting to be read when this run started.",
+    release: "Build",
+
+    reason: {
+      imageTooSmall: "Image too small to be a document",
+      imageTooSmallNote: "Almost always a logo, a signature image or a footer icon. Nothing to do.",
+      ocrFoundNothing: "Read the whole page and found no text",
+      ocrFoundNothingNote: "Usually a blank page or an image with no writing on it. Nothing to do.",
+      noBytes: "The document has no content",
+      noBytesNote: "The source returned an empty file. Nothing to do.",
+      legacyDoc: "Legacy .doc format, not read",
+      legacyDocNote:
+        "Reading .doc needs LibreOffice in the image — a considered decision, not a fault.",
+      legacyXls: "Legacy .xls format, not read",
+      legacyXlsNote: "Same as .doc: it would take LibreOffice in the image to read one.",
+      unsupportedType: "No reader for this file type yet",
+      unsupportedTypeNote:
+        "The document is offered again by itself once a reader can open it. Nothing to do.",
+      pdftotextFailed: "pdftotext failed on this file",
+      pdftotextFailedNote: "The PDF may be corrupt. Worth a look if it keeps happening.",
+      pdftoppmFailed: "Could not render the PDF page to an image for OCR",
+      pdftoppmFailedNote: "The PDF may be corrupt. Worth a look if it keeps happening.",
+      tesseractFailed: "tesseract failed on this file",
+      tesseractFailedNote: "The image may be corrupt. Worth a look if it keeps happening.",
+      ocrOutOfTime: "Ran out of time before the first page was read",
+      ocrOutOfTimeNote:
+        "The document is very heavy, or the worker is loaded. It is read again on a later run.",
+      xlsxUnreadable: "Could not open the workbook",
+      xlsxUnreadableNote: "The .xlsx file may be corrupt.",
+      docxUnreadable: "Could not open the Word document",
+      docxUnreadableNote: "The .docx file may be corrupt.",
+      lakeUnreadable: "The lake did not return the file's bytes",
+      lakeUnreadableNote:
+        "The catalogue says the bytes are there and the lake disagrees. Check this now.",
+      extractorMissing: "The {{program}} program is missing from the worker",
+      extractorMissingNote:
+        "Every file that needs {{program}} stays refused until the image has it back.",
+      unknown: "No explanation for this reason code",
+      unknownNote: "The interface has no words for this code yet. The raw code is beside it.",
+    },
+
     stepsHead: "dbt steps",
     colStep: "Step",
     colStatus: "Status",

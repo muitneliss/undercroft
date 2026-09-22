@@ -62,6 +62,23 @@ RUN bun install --frozen-lockfile --production
 COPY specs ./specs
 
 ENV UNDERCROFT_SPECS_DIR=/app/specs/connectors
+
+# WHICH BUILD THIS IS, baked in rather than deduced at run time.
+#
+# The deploy pointer cannot answer this. CI pushes `v1.16.0` AND `latest`, and Dokploy tracks
+# `latest` deliberately -- so there is no version to set by hand in the panel, and no mismatch
+# between what CI built and what the panel points at to chase. The price of that choice is that
+# a running container has no way to name its own version, and that is exactly the gap which
+# made a 245-refusal run unexplainable: the run an hour earlier behaved differently, and
+# nothing recorded that a deploy had landed between the two.
+#
+# So the version travels INSIDE the artifact. `build-images.yml` passes the release tag it is
+# already given; a build cut from no release passes the commit instead. The default is empty,
+# and empty means "this build did not say" -- `ops.run.release_tag` stores that blank rather
+# than a guess, which is rule 2 applied to our own provenance.
+ARG UNDERCROFT_RELEASE=""
+ENV UNDERCROFT_RELEASE=${UNDERCROFT_RELEASE}
+
 EXPOSE 8081
 
 # Idle until called. Kestra invokes the HTTP verbs on a schedule; the worker starts no work

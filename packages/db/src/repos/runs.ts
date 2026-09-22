@@ -49,6 +49,30 @@ export interface Run {
   readonly error: string | null;
   readonly startedAt: string;
   readonly endedAt: string | null;
+  /**
+   * Which build produced this run -- `v1.16.0`, or `main@a1b2c3d` for a build cut from no
+   * release. `""` is "this build did not say", never a guess: the deploy pointer is `latest`
+   * by policy, so a version that is not baked into the image cannot be recovered from it.
+   */
+  readonly releaseTag: string;
+  /**
+   * How much work was outstanding when this run drew its batch, or `null` for a verb with no
+   * backlog to report. Never 0 for "unknown" -- 0 claims the queue was empty, which is the
+   * opposite fact and the one that makes a healthy drain look like a fault.
+   */
+  readonly pendingBefore: number | null;
+}
+
+/**
+ * How many records one run refused for one reason -- the rollup that outlives the records.
+ *
+ * `ops.run_refusal` is pruned at 7 days and this is not, so a year-old run still answers "what
+ * were the 245" with "230 of them were images too small to read". See `250_run_trace.sql`.
+ */
+export interface RunReasonCount {
+  readonly entity: string;
+  readonly reason: string;
+  readonly count: number;
 }
 
 export interface RunEntity {
@@ -135,12 +159,15 @@ export async function openRun(
     trigger: RunTrigger;
     triggeredBy?: string;
     parentRunId?: string | null;
+    /** Which build is opening this run. Stamped here so it is true even of a run that fails. */
+    releaseTag?: string;
   },
 ): Promise<OpenOutcome> {
   try {
     await exec.query(
-      `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, triggered_by, parent_run_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, triggered_by, parent_run_id,
+                            release_tag)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         input.id,
         input.tenantId,
@@ -149,6 +176,7 @@ export async function openRun(
         input.trigger,
         input.triggeredBy ?? "",
         input.parentRunId ?? null,
+        input.releaseTag ?? "",
       ],
     );
     return { ok: true };
@@ -239,6 +267,72 @@ export async function recordRefusals(
      FROM jsonb_array_elements($2::jsonb) AS r`,
     [runId, JSON.stringify(refusals), MAX_ERROR_CHARS],
   );
+}
+
+/**
+ * Record how many records one run refused for each reason.
+ *
+ * Summed on conflict rather than replaced, matching `recordEntities`: a verb that records in
+ * batches adds to its own tally, and a resumed entity must not overwrite the half already
+ * counted. Reasons are the fixed vocabulary in `extract/extractText.ts` and `extract/ocr.ts`,
+ * so this table stays a handful of rows per run however many records were refused.
+ */
+export async function recordRefusalReasons(
+  exec: SqlExecutor,
+  runId: string,
+  counts: readonly RunReasonCount[],
+): Promise<void> {
+  if (counts.length === 0) {
+    return;
+  }
+  await exec.query(
+    `INSERT INTO ops.run_refusal_reason (run_id, entity, reason, count)
+     SELECT $1, c->>'entity', left(c->>'reason', $3), (c->>'count')::int
+     FROM jsonb_array_elements($2::jsonb) AS c
+     ON CONFLICT (run_id, entity, reason) DO UPDATE SET
+       count = ops.run_refusal_reason.count + EXCLUDED.count`,
+    [runId, JSON.stringify(counts), MAX_ERROR_CHARS],
+  );
+}
+
+/** The rollup for one run, biggest reason first -- the order a reader wants to read it in. */
+export async function reasonsFor(exec: SqlExecutor, runId: string): Promise<RunReasonCount[]> {
+  const { rows } = await exec.query<{ entity: string; reason: string; count: number }>(
+    `SELECT entity, reason, count FROM ops.run_refusal_reason
+      WHERE run_id = $1 ORDER BY count DESC, reason`,
+    [runId],
+  );
+  return rows.map((row) => ({ entity: row.entity, reason: row.reason, count: row.count }));
+}
+
+/**
+ * How much was outstanding when this run drew its batch.
+ *
+ * Written when it is learned rather than folded into `closeRun`, so a run that FAILS still
+ * records the queue it was looking at -- which is the run whose depth a reader most wants.
+ */
+export async function recordPendingBefore(
+  exec: SqlExecutor,
+  runId: string,
+  pending: number,
+): Promise<void> {
+  await exec.query("UPDATE ops.run SET pending_before = $2 WHERE id = $1", [runId, pending]);
+}
+
+/**
+ * Drop per-record refusals older than `keepDays`, and answer how many went.
+ *
+ * The rollup is untouched -- it is a different table, and that is why it is a different table.
+ * Called by the verb that writes refusals rather than by a scheduler: one DELETE does not earn
+ * a cron, and the count comes back so the caller can say what it removed instead of pruning
+ * silently (`raw-lake.md`).
+ */
+export async function pruneRefusals(exec: SqlExecutor, keepDays: number): Promise<number> {
+  const { rows } = await exec.query<{ removed: number }>(
+    "SELECT ops.prune_run_refusals($1) AS removed",
+    [keepDays],
+  );
+  return rows[0]?.removed ?? 0;
 }
 
 export async function recordSteps(
@@ -516,10 +610,13 @@ interface RunRow {
   error: string | null;
   started_at: Date | string;
   ended_at: Date | string | null;
+  release_tag: string;
+  pending_before: number | null;
 }
 
 const RUN_COLUMNS = `id, tenant_id, source, verb, trigger, triggered_by, parent_run_id, status,
-  created, changed, unchanged, refused, tests_failed, error, started_at, ended_at`;
+  created, changed, unchanged, refused, tests_failed, error, started_at, ended_at,
+  release_tag, pending_before`;
 
 function toRun(row: RunRow): Run {
   return {
@@ -539,6 +636,8 @@ function toRun(row: RunRow): Run {
     error: row.error,
     startedAt: new Date(row.started_at).toISOString(),
     endedAt: row.ended_at === null ? null : new Date(row.ended_at).toISOString(),
+    releaseTag: row.release_tag,
+    pendingBefore: row.pending_before,
   };
 }
 

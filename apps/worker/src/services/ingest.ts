@@ -113,6 +113,7 @@ export async function startIngest(
     verb: "ingest",
     trigger,
     triggeredBy: input.triggeredBy ?? "",
+    releaseTag: deps.releaseTag ?? "",
   });
   if (!opened.ok) {
     throw new RunInProgress(input.source, input.tenantId, opened.runId);

@@ -219,6 +219,40 @@ export async function pendingScopes(
 }
 
 /**
+ * How many DOCUMENTS are waiting, in full -- not the reads a run is about to do.
+ *
+ * `pendingDocuments` answers with at most `limit` rows AND one row per distinct digest, so its
+ * length says "how much work this run will do" twice over and never "how much is left". This
+ * counts catalogue rows, matching the unit `tally` reports and the unit the sentence beside it
+ * uses. The difference is the whole diagnosis: a run refusing 245 while 2,337 wait behind it is
+ * draining a backlog, and the identical run with nothing behind it is a fault. Reported once per
+ * run and stored on it (`250_run_trace.sql`), because recomputing it tomorrow answers about
+ * tomorrow.
+ *
+ * The same `PENDING_JOIN` as everything else here, for the reason they all share it: another
+ * definition of "pending" would drift, and this one drifting would put a confident wrong number
+ * beside a run rather than no number at all.
+ */
+export async function countPendingDocuments(
+  exec: SqlExecutor,
+  scope: Scope,
+  { readerVersion }: Generation,
+): Promise<number> {
+  const { rows } = await exec.query<{ pending: string | number }>(
+    `SELECT count(*) AS pending
+       ${PENDING_JOIN}
+        AND d.source = $2
+        AND d.tenant_id = $3`,
+    [readerVersion, scope.source, scope.tenantId],
+  );
+  // `count(*)` is int8, and the pool pins int8 to a string so an amount can never lose digits
+  // (`money.md`). A queue depth is an index, not an amount, so `parseInt` is the right spelling
+  // here and the one the money plugin deliberately leaves alone.
+  const pending = rows[0]?.pending ?? 0;
+  return typeof pending === "number" ? pending : Number.parseInt(pending, 10);
+}
+
+/**
  * Write what was read to EVERY document of this scope holding those bytes and still awaiting an
  * answer -- the read itself among them.
  *
