@@ -220,6 +220,29 @@ export const vi = {
     consoleRunning: "Đang chạy…",
     consoleIdle: "Chưa chạy. Viết câu lệnh rồi nhấn Chạy truy vấn, hoặc Ctrl ↵.",
     /**
+     * Said on the head of a pane whose statement has not had its turn yet.
+     *
+     * The statements of one press run one at a time -- two queries at once collide at the
+     * login the worker mints for them -- and a pane that simply sat empty in the meantime
+     * would read as one that had answered nothing.
+     */
+    consoleQueued: "Đang chờ…",
+    /** The body of that same pane, where its rows will be. */
+    consoleWaiting: "Chưa có kết quả cho câu lệnh này.",
+    /**
+     * Which statement a pane answers, printed only when there is more than one. A lone pane
+     * needs no number, and "Câu lệnh 1" over the only answer on screen is furniture.
+     */
+    consoleStatement: "Câu lệnh {{n, number}}",
+    /** Said while what is on screen answers a selection rather than the whole buffer. */
+    consoleFromSelection: "chạy phần đang chọn",
+    /**
+     * What was NOT run, when the buffer held more statements than one press may run. Said
+     * rather than dropped in silence: a reader who does not know a statement was skipped
+     * reads its absence as an answer with nothing in it.
+     */
+    consoleCapped: "Chỉ chạy {{ran, number}} câu lệnh đầu; còn {{skipped, number}} câu chưa chạy.",
+    /**
      * Said only while the editor still holds the query that was generated, so it never
      * claims anything about a query the reader has since edited.
      *

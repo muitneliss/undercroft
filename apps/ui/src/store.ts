@@ -44,6 +44,7 @@ import { persist } from "zustand/middleware";
 import type { DashboardDraft } from "@/lib/dashboardDraft.ts";
 import type { ModelDraft } from "@/lib/modelDraft.ts";
 import { patchVisual, type QuestionDraft, switchToSql } from "@/lib/questionDraft.ts";
+import { type LakeRun, planRun } from "@/lib/statements.ts";
 
 /** One item an admin picked, as both the picker and the card need to see it. */
 export interface ChosenFile {
@@ -163,14 +164,21 @@ interface UiState {
   lakeSql: Record<string, string>;
   setLakeSql: (tenantId: string, sql: string) => void;
   /**
-   * Which page of the console's result the reader is on, per tenant.
+   * What the console's last press committed, per tenant: the statements it is running.
    *
-   * Here rather than in the query cache because it is a thing the reader chose, not a thing
-   * the server knows -- and it resets to the first page whenever the SQL changes, because a
-   * new question answered from page four is nobody's question.
+   * THE PRESS IS THE COMMIT, and this is the record of it. The editor's text changes under
+   * every keystroke; what is on screen underneath must not, or a reader who starts typing
+   * their next question watches the answer to the last one rearrange itself. So the text is
+   * split at the press and the statements are kept here, and the panes below read this
+   * rather than `lakeSql`.
+   *
+   * Which PAGE each of those panes is on is deliberately not here: every pane runs its own
+   * mutation, so the offset it last asked for is already a fact of that mutation, and a
+   * second copy in this store would be two answers to one question. See `state.md`.
    */
-  lakeOffset: Record<string, number>;
-  setLakeOffset: (tenantId: string, offset: number) => void;
+  lakeRun: Record<string, LakeRun>;
+  /** Commit a run over `text` -- the whole buffer, or what the author had selected. */
+  startLakeRun: (tenantId: string, text: string, fromSelection: boolean) => void;
   /**
    * Which stream the console last wrote itself a query for, per tenant, as a `streamKey`.
    *
@@ -372,8 +380,8 @@ function lakeSlice(
   UiState,
   | "lakeSql"
   | "setLakeSql"
-  | "lakeOffset"
-  | "setLakeOffset"
+  | "lakeRun"
+  | "startLakeRun"
   | "lakeOpened"
   | "setLakeOpened"
   | "lakeRailFolded"
@@ -381,16 +389,18 @@ function lakeSlice(
 > {
   return {
     lakeSql: {},
-    // Editing the query returns the reader to the first page: the offset belonged to the
-    // previous question, and carrying it over answers the new one from the middle.
+    // Typing does not disturb what is already on screen: the panes below answer the run that
+    // was pressed, and a keystroke is not a press.
     setLakeSql: (tenantId, sql): unknown =>
+      set((state) => ({ lakeSql: { ...state.lakeSql, [tenantId]: sql } })),
+    lakeRun: {},
+    startLakeRun: (tenantId, text, fromSelection): unknown =>
       set((state) => ({
-        lakeSql: { ...state.lakeSql, [tenantId]: sql },
-        lakeOffset: { ...state.lakeOffset, [tenantId]: 0 },
+        lakeRun: {
+          ...state.lakeRun,
+          [tenantId]: planRun(state.lakeRun[tenantId], text, fromSelection),
+        },
       })),
-    lakeOffset: {},
-    setLakeOffset: (tenantId, offset): unknown =>
-      set((state) => ({ lakeOffset: { ...state.lakeOffset, [tenantId]: offset } })),
     lakeOpened: {},
     setLakeOpened: (tenantId, streamKey): unknown =>
       set((state) => ({ lakeOpened: { ...state.lakeOpened, [tenantId]: streamKey } })),

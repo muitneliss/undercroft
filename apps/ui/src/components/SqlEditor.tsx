@@ -9,8 +9,9 @@
  * a hand-written provider, a module-level map keyed by model URI, and a separately imported
  * `suggestController` before a single suggestion could appear on screen -- three pieces of
  * machinery that `@codemirror/lang-sql` answers with one `schema` option. The whole of it is
- * `sql({ dialect: PostgreSQL, schema })`, and what is left in this file is this project's
- * own typography rather than a second editor's.
+ * `sql({ dialect: PostgreSQL, schema })`, and what the editor is SET in is this project's own
+ * typography rather than a second editor's -- in `@/lib/sqlPaper`, which is where the ink
+ * lives so that this file is only what the editor does.
  *
  * Uncontrolled, on purpose. CodeMirror owns its document the way a `<textarea>` owns its
  * value; the parent gives an initial value, hears every change, and remounts by `key` when a
@@ -23,108 +24,14 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { PostgreSQL, type SQLNamespace, sql } from "@codemirror/lang-sql";
-import {
-  bracketMatching,
-  HighlightStyle,
-  indentOnInput,
-  syntaxHighlighting,
-} from "@codemirror/language";
+import { bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, highlightActiveLine, keymap, lineNumbers } from "@codemirror/view";
 import type { SchemaResponse } from "@undercroft/contracts";
-import { tags } from "@lezer/highlight";
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef } from "react";
 
-/**
- * Syntax in ONE ink, plus two.
- *
- * A printed code listing distinguishes a keyword by weight, not by colour, and this
- * interface is printed matter end to end -- an editor lit up in an IDE's blue and purple
- * would be the one surface in the book that came from somewhere else. So: keywords take
- * weight, a comment takes the faintest ink, and exactly two hues from the section wheel mark
- * the two things a reader genuinely scans a query for -- the literal values it contains.
- */
-const listing = HighlightStyle.define([
-  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier], fontWeight: "700" },
-  { tag: [tags.comment], color: "var(--ink-3)", fontStyle: "italic" },
-  { tag: [tags.string, tags.special(tags.string)], color: "var(--hue-grass)" },
-  { tag: [tags.number, tags.bool, tags.null], color: "var(--hue-sienna)" },
-  { tag: [tags.typeName, tags.standard(tags.name)], color: "var(--hue-teal)" },
-  { tag: [tags.operator, tags.punctuation, tags.separator], color: "var(--ink-2)" },
-  { tag: [tags.invalid], color: "var(--errata-ink)" },
-]);
-
-/**
- * The editor's own typography, taken from the page's tokens rather than restated.
- *
- * `&` is CodeMirror's own root. `height: 100%` is what lets a caller size the editor by
- * sizing its host -- the console gives its editor a pane it can drag, the model editor gives
- * it a fixed leaf, and neither has to know anything about CodeMirror to do it.
- */
-const paper = EditorView.theme({
-  "&": {
-    height: "100%",
-    color: "var(--ink)",
-    backgroundColor: "var(--leaf)",
-    fontSize: "var(--t-small)",
-  },
-  "&.cm-focused": { outline: "none" },
-  ".cm-scroller": {
-    fontFamily: "var(--face-mono)",
-    lineHeight: "1.7",
-    overflow: "auto",
-    scrollbarWidth: "thin",
-    scrollbarColor: "var(--rule-strong) transparent",
-  },
-  ".cm-content": { padding: "var(--s-3) 0", caretColor: "var(--ink)" },
-  ".cm-line": { padding: "0 var(--s-4)" },
-  ".cm-gutters": {
-    backgroundColor: "transparent",
-    color: "var(--ink-3)",
-    border: "none",
-    borderRight: "var(--hair) solid var(--rule)",
-    paddingRight: "var(--s-1)",
-  },
-  ".cm-lineNumbers .cm-gutterElement": { padding: "0 var(--s-2) 0 var(--s-3)" },
-  ".cm-activeLine": { backgroundColor: "rgba(22, 21, 15, 0.035)" },
-  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--ink)", borderLeftWidth: "2px" },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-    backgroundColor: "rgba(35, 76, 158, 0.18)",
-  },
-  ".cm-selectionMatch": { backgroundColor: "rgba(237, 166, 0, 0.28)" },
-  ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
-    backgroundColor: "rgba(237, 166, 0, 0.32)",
-    outline: "none",
-  },
-  // The completion list is a leaf lying over the page: a hairline and the board stock, the
-  // same die every other panel in the interface is cut from.
-  ".cm-tooltip": {
-    backgroundColor: "var(--leaf)",
-    border: "var(--hair) solid var(--rule-strong)",
-    borderRadius: "var(--r-plate)",
-  },
-  ".cm-tooltip.cm-tooltip-autocomplete > ul": {
-    fontFamily: "var(--face-mono)",
-    fontSize: "var(--t-small)",
-    maxHeight: "16rem",
-  },
-  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { padding: "var(--s-1) var(--s-3)" },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-    backgroundColor: "var(--ink)",
-    color: "var(--leaf)",
-  },
-  ".cm-completionLabel": { fontFamily: "var(--face-mono)" },
-  ".cm-completionDetail": {
-    marginLeft: "var(--s-3)",
-    color: "var(--ink-3)",
-    fontStyle: "normal",
-    fontSize: "var(--t-micro)",
-  },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail": {
-    color: "var(--bone)",
-  },
-});
+import { listing, paper } from "@/lib/sqlPaper.ts";
 
 /**
  * The tables and columns, in the shape `@codemirror/lang-sql` completes from.
@@ -194,16 +101,37 @@ function editing(
 }
 
 /**
+ * What the author has selected, or null when they have selected nothing.
+ *
+ * ONE RULE, TWO ENTRY POINTS: the chord, which CodeMirror hands the view, and a run button
+ * elsewhere on the page, which reaches the view through the handle below. Both ask this, so
+ * "run the selection" cannot come to mean two slightly different things. The PRIMARY range --
+ * a multi-cursor selection has several, and their concatenation is text nobody wrote.
+ */
+function selectionOf(view: EditorView | null): string | null {
+  if (view === null) {
+    return null;
+  }
+  const range = view.state.selection.main;
+  return range.empty ? null : view.state.sliceDoc(range.from, range.to);
+}
+
+/**
  * The two things the caller owns: the run chord, and hearing every edit.
  *
  * One `keymap.of`, in one array, because precedence here is the array's order and splitting
  * it would put the chord's priority in two places. `Mod-Enter` goes first so Enter's own
  * binding cannot claim it.
  */
-function wiring(submit: () => boolean, changed: (sql: string) => void): Extension[] {
+function wiring(
+  submit: (selected: string | null) => boolean,
+  changed: (sql: string) => void,
+): Extension[] {
   return [
     keymap.of([
-      { key: "Mod-Enter", run: submit },
+      // The view is the argument CodeMirror already passes, so the chord reads the selection
+      // from the state that produced it rather than through a ref that may not be filled yet.
+      { key: "Mod-Enter", run: (view): boolean => submit(selectionOf(view)) },
       ...closeBracketsKeymap,
       ...defaultKeymap,
       ...historyKeymap,
@@ -227,7 +155,7 @@ function wiring(submit: () => boolean, changed: (sql: string) => void): Extensio
 function mount(
   element: HTMLElement,
   config: { doc: string; readOnly: boolean; label: string; schema: SchemaResponse | undefined },
-  submit: () => boolean,
+  submit: (selected: string | null) => boolean,
   changed: (sql: string) => void,
 ): EditorView {
   return new EditorView({
@@ -250,13 +178,26 @@ function mount(
  * Returns false when there is nothing to run, which is CodeMirror's word for "not handled":
  * the chord falls through rather than being swallowed by a caller that has no run verb.
  */
-function submitVia(latch: { current: (() => void) | undefined }): boolean {
+function submitVia(
+  latch: { current: ((selected: string | null) => void) | undefined },
+  selected: string | null,
+): boolean {
   const submit = latch.current;
   if (submit === undefined) {
     return false;
   }
-  submit();
+  submit(selected);
   return true;
+}
+
+/**
+ * What a caller with a run button outside the editor can ask it. The button is on the
+ * workbench's bar, which has no view to read; without this it would run the whole buffer
+ * while the chord ran the selection, and one verb would mean two things.
+ */
+export interface SqlEditorHandle {
+  /** The selected text, or null when the selection is empty. */
+  selectedText: () => string | null;
 }
 
 interface SqlEditorProps {
@@ -270,8 +211,13 @@ interface SqlEditorProps {
    * is already on the keyboard and reaching for a button is the slowest part of the loop. A
    * caller with no run verb passes nothing and the chord stays unbound rather than bound to
    * a silence.
+   *
+   * It is handed the selected text, or null when nothing is selected. A caller that runs the
+   * whole document either way ignores the argument.
    */
-  onSubmit?: () => void;
+  onSubmit?: (selected: string | null) => void;
+  /** Filled with the handle above, for a caller whose run verb is not the chord. */
+  ref?: React.Ref<SqlEditorHandle>;
   readOnly?: boolean;
   label: string;
   /** Extra classes on the editor's frame, for a caller that needs a different height. */
@@ -284,6 +230,7 @@ export function SqlEditor({
   value,
   onChange,
   onSubmit,
+  ref,
   readOnly = false,
   label,
   className,
@@ -299,6 +246,12 @@ export function SqlEditor({
     submitRef.current = onSubmit;
   }, [onChange, onSubmit]);
 
+  useImperativeHandle(
+    ref,
+    (): SqlEditorHandle => ({ selectedText: (): string | null => selectionOf(viewRef.current) }),
+    [],
+  );
+
   useEffect(() => {
     const element = hostRef.current;
     if (element === null) {
@@ -308,7 +261,7 @@ export function SqlEditor({
     const view = mount(
       element,
       { doc: value, readOnly, label, schema },
-      (): boolean => submitVia(submitRef),
+      (selected): boolean => submitVia(submitRef, selected),
       (next): void => {
         changeRef.current(next);
       },

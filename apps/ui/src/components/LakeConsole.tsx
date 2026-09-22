@@ -33,24 +33,33 @@
  * an operator holding four customers' books at once must never be one press from running a
  * query against the wrong one.
  *
+ * WHAT A PRESS MEANS. The buffer is a script rather than a query: a reader keeps their
+ * working set in it, and two statements are two questions asked to be read beside each other.
+ * So Run splits the text at its top-level semicolons and commits the statements as one run,
+ * which `ResultPanels` answers a pane at a time. With a SELECTION, the press means the
+ * selection and nothing else -- the gesture that makes a scratch buffer usable at all,
+ * because it is how a reader re-asks one of five questions without deleting the other four.
+ *
  * The draft lives in the store, keyed by tenant (`state.md`); CodeMirror owns its own
  * document and is uncontrolled, exactly as the model editor drives it.
  */
 
+import { useIsMutating } from "@tanstack/react-query";
+import { getMutationKey } from "@trpc/react-query";
 import type { SchemaResponse } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import type { TableResult } from "@/api/types.ts";
-import { Errata } from "@/components/Errata.tsx";
 import { ArrowLeft, ArrowRight } from "@/components/Icon.tsx";
-import { ResultTable } from "@/components/ResultTable.tsx";
+import { ResultPanels } from "@/components/LakeAnswers.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import type { SqlEditorHandle } from "@/components/SqlEditor.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { type LakeStream, streamKey, streamLabel, streamQuery } from "@/lib/lake.ts";
+import type { LakeRun } from "@/lib/statements.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -75,12 +84,6 @@ LEFT JOIN document_text t
 WHERE d.deleted_at IS NULL
 GROUP BY 1
 ORDER BY 2 DESC`;
-
-/** How many rows one page holds. The console pages; the author need not write LIMIT. */
-const PAGE_ROWS = 100;
-
-/** An `ORDER BY` anywhere in the author's SQL. Paging without one is not stable -- see below. */
-const HAS_ORDER_BY = /\border\s+by\b/iu;
 
 /**
  * Every table the login can see, with its columns, down the left of the workbench.
@@ -138,126 +141,28 @@ function SchemaTables({ schema }: { schema: SchemaResponse }): React.JSX.Element
 }
 
 /**
- * Which page the reader is on, and the two presses that move it.
- *
- * The ORDER BY note lives here rather than beside the editor because it is only ever about
- * paging: a query read on one page is answered correctly whether or not it is ordered, and a
- * warning printed before the reader has asked for a second page is a warning about nothing.
- */
-function Paging({
-  sql,
-  offset,
-  more,
-  busy,
-  goTo,
-}: {
-  sql: string;
-  offset: number;
-  more: boolean;
-  busy: boolean;
-  goTo: (from: number) => void;
-}): React.JSX.Element | null {
-  const { t } = useTranslation();
-
-  if (!more && offset === 0) {
-    return null;
-  }
-
-  return (
-    <div className="workbench__foot">
-      <button
-        className="plate plate--small"
-        type="button"
-        disabled={offset === 0 || busy}
-        onClick={(): void => {
-          goTo(Math.max(0, offset - PAGE_ROWS));
-        }}
-      >
-        {t("lake.consoleNewer")}
-      </button>
-      <button
-        className="plate plate--small"
-        type="button"
-        disabled={!more || busy}
-        onClick={(): void => {
-          goTo(offset + PAGE_ROWS);
-        }}
-      >
-        {t("lake.consoleOlder")}
-      </button>
-
-      {/* PAGING A QUERY WITH NO ORDER BY IS NOT STABLE, and the reader is the only one who
-          can fix it. Postgres may return a row on two pages or on neither when nothing
-          orders the result, so a console that paged in silence would hand over a page that
-          quietly is not the next one. */}
-      {HAS_ORDER_BY.test(sql) ? null : (
-        <span className="workbench__warn">{t("lake.consoleNoOrderBy")}</span>
-      )}
-    </div>
-  );
-}
-
-/**
- * Where the answer goes: the rows, the refusal, or the sentence saying neither has happened.
- *
- * ONE PANE FOR ALL THREE, because to the reader they are the same slot -- the place they are
- * already looking after a press. A refusal printed above the editor instead sends them back
- * up the page to find out why nothing changed below it, and Postgres's sentence about their
- * SQL is the one thing that lets them fix it.
- */
-function Answer({
-  refusal,
-  result,
-  locale,
-}: {
-  refusal: string | null;
-  result: TableResult | undefined;
-  locale: Locale;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-
-  function shown(): React.JSX.Element {
-    if (refusal !== null) {
-      return (
-        <Errata heading={t("lake.consoleRefused")} live={true}>
-          {refusal}
-        </Errata>
-      );
-    }
-    if (result === undefined) {
-      return <p className="note workbench__idle">{t("lake.consoleIdle")}</p>;
-    }
-    return <ResultTable result={result} locale={locale} fill={true} />;
-  }
-
-  return <div className="workbench__answer">{shown()}</div>;
-}
-
-/**
  * The head of the workbench: the way back, what this is, and the verb.
  *
  * THE VERB SITS AT THE RIGHT END, over the editor's own right edge, which is where every SQL
- * tool this reader already uses keeps it -- and beside the status it produces, so "it ran" and
- * "this many came back" are one glance rather than two. The chord is printed next to it rather
- * than in a help page, because a shortcut is learnt from the control it replaces.
+ * tool this reader already uses keeps it. The chord is printed next to it rather than in a
+ * help page, because a shortcut is learnt from the control it replaces.
  *
- * The status says how many rows and which page, because those are the two things a reader
- * cannot work out from the grid itself -- a hundred rows look the same on page one and page
- * four. Nothing else: a bar that also carried the tenant, the login, the row cap and the
- * elapsed time would be four facts nobody reads to find the one they wanted.
+ * THE ROW COUNT IS NOT HERE ANY MORE, and that is the one thing that moved: a press can put
+ * several answers on screen, and a bar cannot say "a hundred rows" about three of them. Each
+ * pane carries its own count, on the line above the grid it counts -- which is beside the
+ * thing it describes rather than at the far end of a toolbar. What the bar still says is
+ * whether anything is running, because that is a fact about the press and not about a pane.
  */
 function WorkbenchBar({
   tenantId,
   provenance,
-  status,
   busy,
   empty,
   run,
 }: {
   tenantId: string;
-  /** Which stream wrote this query, while it is still the query that was written. */
+  /** Which stream wrote this query, or that a selection was run, while either is still true. */
   provenance: string | null;
-  status: string | null;
   busy: boolean;
   empty: boolean;
   run: () => void;
@@ -273,35 +178,15 @@ function WorkbenchBar({
       <h1 className="workbench__title">{t("lake.consoleHead")}</h1>
       {provenance === null ? null : <span className="workbench__from">{provenance}</span>}
 
-      <span className="workbench__status datum datum--quiet">{status}</span>
+      <span className="workbench__status datum datum--quiet">
+        {busy ? t("lake.consoleRunning") : null}
+      </span>
       <kbd className="workbench__chord">{t("lake.consoleChord")}</kbd>
       <button className="plate plate--primary" type="button" disabled={busy || empty} onClick={run}>
         {t("lake.consoleRun")}
       </button>
     </header>
   );
-}
-
-/**
- * What the bar says right now, or nothing at all before the first press.
- *
- * The two facts a reader cannot get from the grid itself: how many rows came back, and
- * which page they are. A hundred rows look the same on page one and on page four.
- */
-function runStatus(
-  t: TFunction,
-  state: { running: boolean; result: TableResult | undefined; offset: number },
-): string | null {
-  if (state.running) {
-    return t("lake.consoleRunning");
-  }
-  if (state.result === undefined) {
-    return null;
-  }
-  const count = state.result.rows.length;
-  return state.offset === 0
-    ? t("lake.consoleRows", { count })
-    : t("lake.consoleRowsFrom", { count, from: state.offset + 1 });
 }
 
 /**
@@ -323,10 +208,10 @@ function runStatus(
 function useOpenedStream(
   tenantId: string,
   stream: LakeStream | null,
-  ask: (input: { tenantId: string; sql: string; limit: number; offset: number }) => void,
 ): { key: string; query: string | null } {
   const setLakeSql = useUiStore((state) => state.setLakeSql);
   const setLakeOpened = useUiStore((state) => state.setLakeOpened);
+  const startLakeRun = useUiStore((state) => state.startLakeRun);
   const key = stream === null ? "" : streamKey(stream);
   const query = stream === null ? null : streamQuery(stream);
 
@@ -336,29 +221,42 @@ function useOpenedStream(
     }
     setLakeOpened(tenantId, key);
     setLakeSql(tenantId, query);
-    ask({ tenantId, sql: query, limit: PAGE_ROWS, offset: 0 });
-  }, [tenantId, key, query, ask, setLakeSql, setLakeOpened]);
+    // The run is committed INSIDE the guard, with the seeding: a second run minted on the
+    // second pass of a StrictMode effect would carry new pane ids, and every pane would ask
+    // Postgres its question again.
+    startLakeRun(tenantId, query, false);
+  }, [tenantId, key, query, setLakeSql, setLakeOpened, startLakeRun]);
 
   return { key, query };
 }
 
 /**
- * Where this query came from, while it is still the one that was generated.
+ * Where what is on screen came from: a selection, or a stream's generated query.
  *
- * DERIVED FROM THE TEXT, not remembered: the moment the reader edits a character this stops
- * being true, and so it stops being said. A note kept in state instead would go on claiming
- * the query was generated long after it had been rewritten.
+ * ONE SLOT, ONE FACT. The bar has room for one note, and the two answers cannot both be the
+ * most useful: a reader who ran a selection is looking at an answer to part of their buffer,
+ * which is the thing they most need said back to them, so it wins.
+ *
+ * The stream half is DERIVED FROM THE TEXT rather than remembered -- the moment the reader
+ * edits a character it stops being true, and so it stops being said. A note kept in state
+ * would go on claiming the query was generated long after it had been rewritten.
  */
 function provenanceOf(
   t: TFunction,
-  stream: LakeStream | null,
-  generated: string | null,
-  sql: string,
+  state: {
+    stream: LakeStream | null;
+    generated: string | null;
+    sql: string;
+    run: LakeRun | undefined;
+  },
 ): string | null {
-  if (stream === null || generated !== sql) {
+  if (state.run?.fromSelection === true) {
+    return t("lake.consoleFromSelection");
+  }
+  if (state.stream === null || state.generated !== state.sql) {
     return null;
   }
-  return t("lake.consoleFromStream", { stream: streamLabel(t, stream) });
+  return t("lake.consoleFromStream", { stream: streamLabel(t, state.stream) });
 }
 
 export function LakeConsole({
@@ -377,17 +275,23 @@ export function LakeConsole({
   const { t } = useTranslation();
   const sql = useUiStore((state) => state.lakeSql[tenantId]) ?? STARTER_SQL;
   const setLakeSql = useUiStore((state) => state.setLakeSql);
-  const offset = useUiStore((state) => state.lakeOffset[tenantId]) ?? 0;
-  const setLakeOffset = useUiStore((state) => state.setLakeOffset);
+  const run = useUiStore((state) => state.lakeRun[tenantId]);
+  const startLakeRun = useUiStore((state) => state.startLakeRun);
   const folded = useUiStore((state) => state.lakeRailFolded);
   const schema = trpc.lake.querySchema.useQuery({ tenantId });
-  const run = trpc.lake.query.useMutation();
-  const opened = useOpenedStream(tenantId, stream ?? null, run.mutate);
+  const editorRef = useRef<SqlEditorHandle>(null);
+  const opened = useOpenedStream(tenantId, stream ?? null);
+  // Every pane's query carries the same mutation key, so this is the one place that knows a
+  // press is still being answered -- without it a second press would start a second run
+  // alongside the first, and two queries for one tenant collide at the worker's login.
+  const busy = useIsMutating({ mutationKey: getMutationKey(trpc.lake.query) }) > 0;
 
-  /** Run from a given row. Every press goes through here, so the page and the rows agree. */
-  function runFrom(from: number): void {
-    setLakeOffset(tenantId, from);
-    run.mutate({ tenantId, sql, limit: PAGE_ROWS, offset: from });
+  /**
+   * Commit a run. The selection is what the press MEANT when there is one; the whole buffer
+   * is what it meant when there is not.
+   */
+  function press(selected: string | null): void {
+    startLakeRun(tenantId, selected ?? sql, selected !== null);
   }
 
   return (
@@ -397,12 +301,18 @@ export function LakeConsole({
       <div className="workbench__work">
         <WorkbenchBar
           tenantId={tenantId}
-          provenance={provenanceOf(t, stream ?? null, opened.query, sql)}
-          status={runStatus(t, { running: run.isPending, result: run.data, offset })}
-          busy={run.isPending}
+          provenance={provenanceOf(t, {
+            stream: stream ?? null,
+            generated: opened.query,
+            sql,
+            run,
+          })}
+          busy={busy}
           empty={sql.trim() === ""}
           run={(): void => {
-            runFrom(0);
+            // The button is not inside CodeMirror, so it asks the editor what is selected --
+            // the same question the chord answers for itself from the view it is given.
+            press(editorRef.current?.selectedText() ?? null);
           }}
         />
 
@@ -415,32 +325,19 @@ export function LakeConsole({
               // a new document reaches an uncontrolled editor -- opening a line of the index
               // writes the draft, and this is what makes the editor show it.
               key={`${tenantId}|${opened.key}`}
+              ref={editorRef}
               value={sql}
               onChange={(next): void => {
                 setLakeSql(tenantId, next);
               }}
-              onSubmit={(): void => {
-                runFrom(0);
-              }}
+              onSubmit={press}
               label={t("lake.consoleSqlLabel")}
               {...(schema.data === undefined ? {} : { schema: schema.data })}
             />
           </Suspense>
         </div>
 
-        <Answer
-          refusal={run.isError ? run.error.message : null}
-          result={run.isError ? undefined : run.data}
-          locale={locale}
-        />
-
-        <Paging
-          sql={sql}
-          offset={offset}
-          more={run.data?.truncated === true}
-          busy={run.isPending}
-          goTo={runFrom}
-        />
+        <ResultPanels tenantId={tenantId} locale={locale} run={run} />
       </div>
     </div>
   );
