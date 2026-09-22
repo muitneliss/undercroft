@@ -24,6 +24,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { type DueCandidate, listDueCandidates } from "@undercroft/db/repos";
 
 import { pendingScopes } from "../repos/documentText.ts";
+import { CURRENT_READER_VERSION } from "./extract/extractText.ts";
 
 export interface DuePair {
   readonly tenantId: string;
@@ -47,7 +48,13 @@ export async function listDue(exec: SqlExecutor, now: Date = new Date()): Promis
  * No `now` and no cadence: see the module docstring. The decision this layer makes is that
  * "due" for an extract MEANS "has outstanding work", which is why a caller gets this rather
  * than the catalogue and a rule to apply to it.
+ *
+ * Outstanding work includes a document REFUSED by an older generation of readers, so the tick
+ * that follows a release with a new reader finds the tenants that release can now help. The
+ * generation is supplied here rather than by the caller because it is the same decision:
+ * a scheduler asking an older question than `runExtract` answers would start runs that find
+ * nothing, which is the one thing this function exists not to do.
  */
 export function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
-  return pendingScopes(exec);
+  return pendingScopes(exec, { readerVersion: CURRENT_READER_VERSION });
 }

@@ -186,6 +186,57 @@ describe("a second pass", () => {
   });
 });
 
+describe("a pass after the readers changed", () => {
+  /**
+   * Land a document, read it once, then age its row to the generation before this one --
+   * which is what a release that bumps `CURRENT_READER_VERSION` does to every existing row.
+   */
+  async function aged(input: { documentId: string; contentType: string }): Promise<void> {
+    await landDocument({
+      documentId: input.documentId,
+      bytes: new TextEncoder().encode("%PDF-1.7\n%%EOF\n"),
+      contentType: input.contentType,
+    });
+    await extract(spawnAnswering(A_PAGE));
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE raw.document_text SET reader_version = reader_version - 1"),
+    );
+  }
+
+  it("re-reads a refusal, and stamps it so the pass after that does not", async () => {
+    // The whole point of the slice, end to end: 1,190 documents on production are recorded
+    // `unsupported-content-type` for types this platform can now read, and a refusal with
+    // unchanged bytes is otherwise permanent. `runExtract` must ask and stamp with ONE
+    // generation -- asking with an older number than it writes would loop this document for
+    // ever, and the reverse would retire it before any reader looked at it.
+    await aged({ documentId: "f2", contentType: "application/msword" });
+
+    const second = await extract(spawnAnswering(A_PAGE), "run-extract-2");
+    const third = await extract(spawnAnswering(A_PAGE), "run-extract-3");
+
+    expect(second).toMatchObject({ read: 0, refused: 1 });
+    expect(third).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
+    expect((await textRows())[0]?.reason).toBe("legacy-doc-unsupported");
+  });
+
+  it("leaves a document it already read alone", async () => {
+    // The 2,602-document guard, reached through the verb rather than the predicate: a sibling
+    // project overwrote that many OCR'd documents with empty text on a re-parse run, and every
+    // gate stayed green because the row count did not change. A generation bump costs the
+    // refusals and nothing else -- so this pass must spawn nothing at all.
+    await aged({ documentId: "f1", contentType: "application/pdf" });
+    const afterFirst = spawned.length;
+
+    const second = await extract(spawnAnswering(""), "run-extract-2");
+
+    expect(second).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
+    expect(spawned).toHaveLength(afterFirst);
+    const rows = await textRows();
+    expect(rows[0]?.method).toBe("pdf_text");
+    expect(rows[0]?.chars).toBeGreaterThan(80);
+  });
+});
+
 describe("a document the lake cannot hand back", () => {
   it("is recorded against the document rather than ending the pass", async () => {
     // One unreadable object must not cost the other 499 their run.

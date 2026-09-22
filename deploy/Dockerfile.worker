@@ -14,13 +14,35 @@ FROM oven/bun:1.4.2-debian
 # Without it every PDF in the lake is recorded `extractor-missing:pdftotext` -- the
 # extractor refuses by name rather than crashing, so the run stays green and the symptom is
 # a Lake division reading "122 documents, 0 readable" with nothing failing anywhere.
+# It also supplies `pdftoppm`, which `services/extract/pdfPages.ts` uses to turn a scanned
+# page into an image -- so the scanned-PDF reader below costs no new package at all.
 #
-# No `tesseract-ocr` yet, deliberately: `ExtractMethod` names `pdf_ocr` and `image_ocr` but
-# nothing dispatches to them, and shipping a 200 MB binary nothing calls is weight in the
-# image and an attack surface in the process. It arrives with the reader that needs it.
-# A spreadsheet needs no binary at all -- `services/extract/xlsx.ts` says why.
+# `tesseract-ocr` was deferred on the condition this file stated in as many words -- shipping
+# a binary nothing calls is weight in the image and an attack surface in the process, so "it
+# arrives with the reader that needs it". THE CONDITION IS NOW MET: `services/extract/ocr.ts`
+# invokes `tesseract` for `image/png` and `image/jpeg`, which is 1,557 files in the lake that
+# no reader could open before. The "200 MB" in that note was an estimate; measured on amd64 on
+# top of the three packages above, `tesseract-ocr` is 24 packages and 75.5 MB.
+#
+# `tesseract-ocr-vie` IS NOT OPTIONAL, and it is 547 kB of that. Of the 409 documents read on
+# production, 69 (17%) carry Vietnamese diacritics, and tesseract without the pack does not
+# fail on them -- it returns confident English-looking words that were never on the page, which
+# reaches a search index looking exactly like data. `which tesseract` answers "installed" and
+# cannot answer "can read Vietnamese"; this line is the only place that question is settled.
+# Trimming it to save half a megabyte quietly turns a sixth of the corpus into fiction.
+#
+# `pdf_ocr` is the second caller, and it is why the two packages sit beside each other rather
+# than in one line: tesseract's input is an IMAGE, so `tesseract scan.pdf` answers "Pdf reading
+# is not supported" and exits 1. A scan is `pdftoppm` first and `tesseract` after, at 150 DPI
+# -- measured on a rendered Vietnamese invoice, where 150 kept all 38 accented letters and read
+# the page exactly, and 300 and 400 DPI each scored slightly worse for 1.6x and 2.6x the bytes.
+# Neither program may be trimmed without the other losing its purpose.
+#
+# A spreadsheet or a Word document needs no binary at all -- `services/extract/xlsx.ts` and
+# `docx.ts` say why.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-venv poppler-utils \
+        tesseract-ocr tesseract-ocr-vie \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/dbt \
     && /opt/dbt/bin/pip install --no-cache-dir "dbt-core==1.9.1" "dbt-postgres==1.9.0"
@@ -47,8 +69,11 @@ EXPOSE 8081
 #
 # `--smol` -- "use less memory, but run garbage collection more often" -- because THIS process
 # cannot see the budget it is held to. `deploy/compose/docker-compose.server.yml` gives the
-# worker a 1 GiB cgroup limit, and the host it shares has 23 GB; JSC sizes its heap against
-# what it can see, so it feels no pressure at 900 MB while the kernel is about to SIGKILL it.
+# worker a 3 GiB cgroup limit, and the host it shares has 23 GB; JSC sizes its heap against
+# what it can see, so it feels no pressure while the kernel is about to SIGKILL it. The limit
+# was 1 GiB when this flag was added and `--smol` alone did not hold it -- the number moved in
+# the same investigation, and the flag stayed because collecting more often is still right for
+# a process paced at three requests a second.
 #
 # The path that makes this bite is Gmail attachments, and it bites because of how Gmail ships
 # bytes: an attachment arrives base64-encoded INSIDE a JSON body, so a 10 MB file is ~13 MB of

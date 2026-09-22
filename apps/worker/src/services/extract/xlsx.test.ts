@@ -9,89 +9,18 @@
  * object that skipped the container would make a broken zip parser look fine.
  *
  * Both compression methods appear below because both appear in the wild: Excel deflates, and
- * plenty of writers store small parts.
+ * plenty of writers store small parts. `zipOf` is in `testing.ts`, shared with the `.docx`
+ * suite, which needs the same real container around different parts.
  */
 
 import { describe, expect, test as it } from "bun:test";
-import { crc32, deflateRawSync } from "node:zlib";
 import type { Spawn } from "../transform.ts";
 import { type Extracted, extractDocument, LEGACY_XLS, XLSX_UNREADABLE } from "./extractText.ts";
+import { type ZipMember, zipOf } from "./testing.ts";
 import { readXlsx } from "./xlsx.ts";
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const utf8 = new TextEncoder();
-
-const LOCAL_SIGNATURE = 0x04_03_4b_50;
-const CENTRAL_SIGNATURE = 0x02_01_4b_50;
-const EOCD_SIGNATURE = 0x06_05_4b_50;
-const DEFLATED = 8;
-const STORED = 0;
-
-interface Member {
-  readonly name: string;
-  readonly body: string;
-  /** Written uncompressed. Deflated when absent, which is what Excel itself emits. */
-  readonly stored?: boolean;
-}
-
-/** A real zip, written the way a writer writes one. The fixture this whole suite stands on. */
-function zipOf(members: readonly Member[]): Uint8Array {
-  const parts: Uint8Array[] = [];
-  const directory: Uint8Array[] = [];
-  let offset = 0;
-
-  for (const member of members) {
-    const name = utf8.encode(member.name);
-    const plain = utf8.encode(member.body);
-    const method = member.stored === true ? STORED : DEFLATED;
-    const data = method === STORED ? plain : deflateRawSync(plain);
-
-    const local = new Uint8Array(30 + name.length + data.length);
-    const lv = new DataView(local.buffer);
-    lv.setUint32(0, LOCAL_SIGNATURE, true);
-    lv.setUint16(4, 20, true);
-    lv.setUint16(8, method, true);
-    lv.setUint32(14, crc32(plain), true);
-    lv.setUint32(18, data.length, true);
-    lv.setUint32(22, plain.length, true);
-    lv.setUint16(26, name.length, true);
-    local.set(name, 30);
-    local.set(data, 30 + name.length);
-    parts.push(local);
-
-    const entry = new Uint8Array(46 + name.length);
-    const ev = new DataView(entry.buffer);
-    ev.setUint32(0, CENTRAL_SIGNATURE, true);
-    ev.setUint16(10, method, true);
-    ev.setUint32(16, crc32(plain), true);
-    ev.setUint32(20, data.length, true);
-    ev.setUint32(24, plain.length, true);
-    ev.setUint16(28, name.length, true);
-    ev.setUint32(42, offset, true);
-    entry.set(name, 46);
-    directory.push(entry);
-
-    offset += local.length;
-  }
-
-  const directoryBytes = directory.reduce((n, entry) => n + entry.length, 0);
-  const end = new Uint8Array(22);
-  const endView = new DataView(end.buffer);
-  endView.setUint32(0, EOCD_SIGNATURE, true);
-  endView.setUint16(8, members.length, true);
-  endView.setUint16(10, members.length, true);
-  endView.setUint32(12, directoryBytes, true);
-  endView.setUint32(16, offset, true);
-
-  const all = [...parts, ...directory, end];
-  const bytes = new Uint8Array(all.reduce((n, part) => n + part.length, 0));
-  let at = 0;
-  for (const part of all) {
-    bytes.set(part, at);
-    at += part.length;
-  }
-  return bytes;
-}
 
 function sheet(rows: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?><worksheet><sheetData>${rows}</sheetData></worksheet>`;
@@ -111,7 +40,7 @@ const ONE_SHEET = sheet(
 );
 
 function workbook(
-  sheets: readonly Member[] = [{ name: "xl/worksheets/sheet1.xml", body: ONE_SHEET }],
+  sheets: readonly ZipMember[] = [{ name: "xl/worksheets/sheet1.xml", body: ONE_SHEET }],
 ) {
   return zipOf([
     { name: "[Content_Types].xml", body: "<Types/>", stored: true },

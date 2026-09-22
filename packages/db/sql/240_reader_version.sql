@@ -1,0 +1,55 @@
+-- Which GENERATION of readers produced a row of text -- the thing that makes a refusal
+-- retryable once its reason stops being true.
+--
+-- The extract backlog (`apps/worker/src/repos/documentText.ts`) asked one question: "never
+-- read, or read from bytes that have since changed". A REFUSED document has a row, and its
+-- bytes have not moved, so it was never offered again. That was right while the set of readers
+-- was fixed and became a trap the moment one was added: on production 1,190 documents are
+-- recorded `unsupported-content-type` for types the platform can now read, and with no
+-- generation they would stay unreadable for ever -- a new reader shipping as a no-op over the
+-- files it was written for.
+--
+-- So every extraction stamps the generation of the reader table that produced it, and the
+-- backlog also offers a row stamped OLDER than the current one. Adding a reader and bumping
+-- `CURRENT_READER_VERSION` (beside the `READERS` map in `services/extract/extractText.ts`)
+-- re-queues exactly what that reader might now be able to open -- no migration to hand-write
+-- per change, and no operator remembering an UPDATE at 02:00.
+--
+-- DEFAULT 0, so every row written before this column existed sorts below every generation and
+-- re-enters the queue exactly once rather than never. NOT NULL for the same reason: `reader_version
+-- < 1` is false for a NULL, so a nullable column would quietly mean "never retry this row"
+-- for precisely the legacy rows this exists to reach.
+--
+-- WHAT A BUMP DOES NOT TOUCH is the half that makes bumping safe: a row that was READ stays out
+-- of the backlog whatever its generation. The predicate in `documentText.ts` carries that
+-- argument in full; the short version is that a sibling project's worst extraction bug was a
+-- cheap re-run overwriting 2,602 expensively-OCR'd documents with empty text, and every gate
+-- stayed green because the row count did not change.
+
+ALTER TABLE raw.document_text
+    ADD COLUMN IF NOT EXISTS reader_version integer NOT NULL DEFAULT 0;
+
+-- NO GRANT, and that is a FINDING rather than an omission -- record it here so the next reader
+-- of `privileges.md` does not "fix" it with a redundant line.
+--
+-- `privileges.md`'s rule is about new TABLES: `040_grants.sql` says `ON ALL TABLES IN SCHEMA`,
+-- which Postgres expands to the tables that existed when it ran, and the ledger keys on
+-- filename so it never runs again. A new COLUMN is the opposite case. A table-level privilege
+-- is held on the relation (`pg_class.relacl`); a column added later gets a `pg_attribute` row
+-- with no ACL of its own and therefore falls back to the relation's. So the grants in
+-- `180_document_text.sql` already cover this column the day it appears:
+--
+--   * `undercroft_worker` -- SELECT, INSERT, UPDATE, DELETE at table level. It writes this
+--     column on every extraction; the repo suite runs as this role, so a wrong answer here
+--     fails the gate rather than production.
+--   * `undercroft_dbt` and every `undercroft_dbt_<slug>` -- SELECT at table level, so a
+--     customer's model can see which generation read a document.
+--
+-- `undercroft_app` is the deliberate exception and stays one. Its grant in 180 is COLUMN-SCOPED
+-- (`GRANT SELECT (source, tenant_id, document_id, method, reason, chars, truncated,
+-- extracted_at)`), and a column scope does NOT extend to columns added later -- so the control
+-- plane cannot read `reader_version`, which is correct: it has no question to put to it, and
+-- `apps/control-plane/src/repos/rawLake.ts` names the columns it reads rather than `SELECT *`.
+-- That scope is a PII boundary before it is anything else. It exists to keep `text` away from
+-- the control plane (`pii.md`: "never give `undercroft_app` `text`"), so adding a name to that
+-- list is a decision about that boundary and never a reflex to silence a permission error.

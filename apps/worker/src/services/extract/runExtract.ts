@@ -7,10 +7,12 @@
  * two different facts wearing one status. It opens its own `ops.run`, and the unique index on
  * `(tenant_id, source, verb)` lets it run beside an ingest rather than against it. ADR 0024.
  *
- * WHAT IT READS is whatever `pendingDocuments` returns: never read, or read from bytes that
- * have since changed. A second pass over an unchanged tenant therefore does nothing at all --
- * that is the `source_sha256` mechanism doing its job, and it is the difference between this
- * being schedulable and being a thing you run once by hand.
+ * WHAT IT READS is whatever `pendingDocuments` returns: never read, read from bytes that have
+ * since changed, or REFUSED BY AN OLDER GENERATION OF READERS. A second pass over an unchanged
+ * tenant therefore does nothing at all -- that is the `source_sha256` mechanism doing its job,
+ * and it is the difference between this being schedulable and being a thing you run once by
+ * hand. The generation is `CURRENT_READER_VERSION`, asked for and stamped from one constant in
+ * one pass, so adding a reader is what re-queues the documents it was added for.
  *
  * EVERY DOCUMENT LEAVES WITH AN ANSWER. A reader that failed, a type nobody reads, a binary
  * that is not installed -- each is a row carrying its reason, never an absent row. An absent
@@ -37,7 +39,7 @@ import {
 } from "../../repos/documentText.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { Spawn } from "../transform.ts";
-import { extractDocument } from "./extractText.ts";
+import { CURRENT_READER_VERSION, extractDocument } from "./extractText.ts";
 
 /** Documents read in one pass. A cap, so one run cannot hold the verb open for hours. */
 export const DEFAULT_BATCH = 500;
@@ -145,7 +147,13 @@ export async function runExtract(
   const extractedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
   const scope = { tenantId: input.tenantId, source: input.source };
 
-  const pending = await pendingDocuments(deps.exec, scope, deps.batch ?? DEFAULT_BATCH);
+  // One generation asked for and one generation written, in the same pass and from the same
+  // constant. Asking with an older number than it stamps would leave a re-read row still
+  // pending; the reverse would take a document out of the backlog no reader had looked at.
+  const pending = await pendingDocuments(deps.exec, scope, {
+    limit: deps.batch ?? DEFAULT_BATCH,
+    readerVersion: CURRENT_READER_VERSION,
+  });
 
   // The most useful line this run writes. What follows is one paced read per document --
   // minutes for a real tenant -- and a total up front turns a blank screen into a quantity.
@@ -174,7 +182,11 @@ export async function runExtract(
     rows.push(row);
   }
 
-  await upsertDocumentText(deps.exec, scope, rows, { extractedAt, runId: input.runId });
+  await upsertDocumentText(deps.exec, scope, rows, {
+    extractedAt,
+    runId: input.runId,
+    readerVersion: CURRENT_READER_VERSION,
+  });
 
   journal.info("documents_extracted", {
     entity: "documents",
