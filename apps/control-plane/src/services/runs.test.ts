@@ -64,6 +64,33 @@ describe("a run's place in its chain", () => {
   });
 });
 
+describe("what a run counted", () => {
+  it("a closed ingest reports the records it saw", async () => {
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `UPDATE ops.run SET status = 'ok', ended_at = now(), created = 4, changed = 1
+         WHERE id = 'run-mine'`,
+      ),
+    );
+
+    expect((await get(db, TENANT, "run-mine"))?.counts).toMatchObject({ created: 4, changed: 1 });
+  });
+
+  it("a closed build reports none, because a build lands no record to count", async () => {
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, status, ended_at)
+         VALUES ('run-built', $1, '*', 'transform', 'schedule', 'ok', now())`,
+        [TENANT],
+      ),
+    );
+
+    // Four zeroes on the row would say the build read nothing, of a run that was never going
+    // to read anything. Nothing to count reads as MISSING, the same as not counted yet.
+    expect((await get(db, TENANT, "run-built"))?.counts).toBeNull();
+  });
+});
+
 describe("a run's feed", () => {
   it("comes back oldest first, with what each line counted", async () => {
     const feed = await events(db, TENANT, "run-mine");

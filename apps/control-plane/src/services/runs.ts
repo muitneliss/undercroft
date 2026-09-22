@@ -41,7 +41,7 @@ export interface RunView {
   readonly trigger: Run["trigger"];
   readonly startedAt: string;
   readonly endedAt: string | null;
-  /** Null while running: a count that is still changing is not a count. */
+  /** Null when there is no count to give -- see {@link countsOf} for the two reasons. */
   readonly counts: {
     landed: number;
     created: number;
@@ -95,6 +95,30 @@ function toLink(run: Run): RunLink {
   };
 }
 
+/**
+ * What the run counted, or `null` when it counted nothing it could report.
+ *
+ * Two reasons, one answer, and in both of them the answer is "there is no number here"
+ * rather than zero. A run still going has counts that are still changing, and a count still
+ * changing is not a count. A transform has none at all: it builds tables out of what an
+ * ingest already landed, and lands no record of its own, so the four zeroes its row used to
+ * print said "it read nothing" about a run that was never going to read anything -- a
+ * sentence a reader spends a minute disproving. The column that IS a transform's own figure,
+ * `testsFailed`, is beside this and unaffected.
+ */
+function countsOf(run: Run, landed: number): RunView["counts"] {
+  if (run.status === "running" || run.verb === "transform") {
+    return null;
+  }
+  return {
+    landed,
+    created: run.created,
+    changed: run.changed,
+    unchanged: run.unchanged,
+    refused: run.refused,
+  };
+}
+
 function present(run: Run, entities: RunEntity[]): RunView {
   const landed = entities.reduce((sum, e) => sum + e.landed, 0);
   return {
@@ -106,16 +130,7 @@ function present(run: Run, entities: RunEntity[]): RunView {
     trigger: run.trigger,
     startedAt: run.startedAt,
     endedAt: run.endedAt,
-    counts:
-      run.status === "running"
-        ? null
-        : {
-            landed,
-            created: run.created,
-            changed: run.changed,
-            unchanged: run.unchanged,
-            refused: run.refused,
-          },
+    counts: countsOf(run, landed),
     testsFailed: run.testsFailed,
     error: run.error,
     parentRunId: run.parentRunId,
