@@ -2875,7 +2875,12 @@
   /* Where the query came from, said only while it is still the query that was generated.
    It truncates rather than wrapping: it is a provenance note on a toolbar line, and a note
    that reflowed the bar would move the run plate under the reader's cursor. */
-  .workbench__from {
+  /* `.workbench__excerpt` is the same object one level down: the first line of the statement
+   a pane answers, which is how a reader tells two panes apart at a glance. Same treatment for
+   the same reason -- it is a note about a query, on a line of controls, and one that reflowed
+   would move what is under the reader's cursor. */
+  .workbench__from,
+  .workbench__excerpt {
     min-width: 0;
     overflow: hidden;
     font-family: var(--face-mono);
@@ -2942,13 +2947,63 @@
     border-radius: 0;
   }
 
-  /* Where the answer goes -- the rows, the refusal, or the sentence saying neither has
-   happened yet. It takes everything the query left. */
+  /* WHERE THE ANSWERS GO -- one pane per statement the press ran, stacked in the order they
+   * were written, taking everything the query left.
+   *
+   * A COLUMN RATHER THAN ONE SLOT, because a press can ask more than one question and the
+   * second is asked to be read beside the first. What the column must not do is divide its
+   * height by however many statements were run: five equal shares of a half-window is five
+   * portholes, which is the failure the workbench's own head comment describes. So each pane
+   * takes an equal share ABOVE A FLOOR, and past the floor this column scrolls -- two answers
+   * are both on screen, and eight are a column the reader moves through. */
   .workbench__answer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-4);
     flex: 1 1 auto;
     min-height: 0;
     padding-top: var(--s-4);
-    overflow: hidden;
+    overflow-y: auto;
+  }
+
+  /* One statement's answer: its head, its rows, its paging. The floor is what turns a fifth
+   pane into a scroll rather than into a strip too short to read a row in. */
+  .workbench__pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 14rem;
+  }
+
+  /* The rows take what the head and the foot leave. `min-height: 0` is what makes the grid
+   inside its own scroller rather than a table that pushes this column down -- and a grid that
+   is its own scroller is the one whose column headings stay put while the rows move under
+   them. Without it every pane's heading would stick to the COLUMN instead, and they would
+   pile up on one another at its top edge. */
+  .workbench__rows {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* The head of one pane: which statement it answers, the line it starts with, and what came
+   back. Baselines rather than centres -- these are three pieces of type on one line, and the
+   status sits at the right end, where the bar above keeps the same fact. */
+  .workbench__paneline {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    flex: none;
+    padding-bottom: var(--s-2);
+  }
+
+  /* The statement's number, printed only when there is more than one to tell apart. */
+  .workbench__which {
+    flex: none;
+    font-size: var(--t-micro);
+    font-variation-settings: "wdth" 88;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    color: var(--ink-2);
   }
 
   /* DENSITY, ON THE ONE SURFACE WHERE SCANNING IS THE WHOLE JOB.
@@ -3064,9 +3119,17 @@
       max-height: none;
     }
 
+    /* The page scrolls here, so the column does not: capping it would give every pane of a
+     three-statement run a third of 30rem. Each pane takes a definite height of its own
+     instead, and its grid keeps its own scroller inside that. */
     .workbench__answer {
-      max-height: 30rem;
-      overflow: auto;
+      max-height: none;
+      overflow: visible;
+    }
+
+    .workbench__pane {
+      flex: none;
+      height: 26rem;
     }
 
     /* Full width, so the type no longer sits half a screen from the name it belongs to.

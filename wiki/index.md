@@ -42,6 +42,7 @@
 - [ADR 0035: A harvest records what it settled, rather than asserting it](sources/adr-0035-a-harvest-records-what-it-settled-rather-than-asserting-it.md)
 - [ADR 0036 — A definition is restated, not migrated](sources/adr-0036-a-definition-is-restated-not-migrated.md)
 - [ADR 0037 A Query Grid Divides Its Pane](sources/adr-0037-a-query-grid-divides-its-pane.md)
+- [ADR 0038 The Console Buffer Is a Script](sources/adr-0038-the-console-buffer-is-a-script.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
