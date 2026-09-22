@@ -11,17 +11,18 @@ import { describe, expect, test as it } from "bun:test";
 
 import type { Spawn } from "../transform.ts";
 import {
-  DEFAULT_EXTRACT_TIMEOUT_MS,
   EMPTY_SOURCE,
   extractDocument,
   type Extracted,
-  extractorMissing,
   LEGACY_DOC,
   MAX_TEXT_CHARS,
   normalizeText,
   TEXT_LAYER_MIN_CHARS,
   UNSUPPORTED_TYPE,
 } from "./extractText.ts";
+// Running a child program, and what an absent one is called, moved to their own module when
+// the OCR reader came to need them too -- the assertions below are unchanged.
+import { DEFAULT_EXTRACT_TIMEOUT_MS, extractorMissing } from "./program.ts";
 
 const BYTES = new TextEncoder().encode("%PDF-1.7\n1 0 obj\n%%EOF\n");
 
@@ -148,6 +149,52 @@ describe("the types that are not PDFs", () => {
     const result = await extract(spawn, { contentType: "text/plain; charset=utf-8", bytes });
 
     expect(result.method).toBe("txt");
+  });
+});
+
+describe("a delimited file", () => {
+  it("is read as the text it is, spawning nothing", async () => {
+    // A CSV needs no parser here. Splitting it into rows would mean choosing a delimiter, a
+    // quoting style and an encoding the file does not state, for an index that wants the
+    // words either way -- three guesses bought with nothing.
+    const { spawn, calls } = spawnAnswering("");
+    const bytes = new TextEncoder().encode("Khách hàng,Tiền thanh toán\nAcme Holdings,1234.10\n");
+
+    const result = await extract(spawn, { contentType: "text/csv", bytes });
+
+    expect(result.method).toBe("txt");
+    expect(result.text).toContain("Acme Holdings,1234.10");
+    // The amount is the digits the file wrote, because nothing on this path parses a value.
+    expect(result.text).not.toContain("1234.0999");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("keeps the rest of itself when one byte is not text at all", async () => {
+    // The non-fatal decode, which is the whole reason this type reuses the text reader: a
+    // stray byte from a mis-encoded export costs that byte and not the document, and lands as
+    // a replacement character, which is visibly wrong rather than invisibly absent.
+    const { spawn } = spawnAnswering("");
+    const bytes = new Uint8Array([
+      ...new TextEncoder().encode("Acme Holdings,"),
+      0xff,
+      ...new TextEncoder().encode(",1234.10"),
+    ]);
+
+    const result = await extract(spawn, { contentType: "text/csv", bytes });
+
+    expect(result.method).toBe("txt");
+    expect(result.text).toContain("Acme Holdings,");
+    expect(result.text).toContain(",1234.10");
+  });
+
+  it("includes the tab-separated spelling, which is the same file with another delimiter", async () => {
+    const { spawn } = spawnAnswering("");
+    const bytes = new TextEncoder().encode("Khách hàng\tTiền thanh toán");
+
+    const result = await extract(spawn, { contentType: "text/tab-separated-values", bytes });
+
+    expect(result.method).toBe("txt");
+    expect(result.text).toBe("Khách hàng\tTiền thanh toán");
   });
 });
 

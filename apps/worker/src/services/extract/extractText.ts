@@ -7,24 +7,15 @@
  * nothing and a document nobody could open are different facts, and collapsing them is the
  * silent zero this codebase refuses everywhere else (`CLAUDE.md` rule 2, ADR 0024).
  *
- * THE BINARIES ARE INVOKED, NOT IMPORTED. `pdftotext` is poppler and `tesseract` is tesseract;
- * both are native programs that ship in the worker image, in exactly the category `CLAUDE.md`
- * already grants dbt -- "an invoked dependency in its own container". No Python enters this
- * repo's source to read a PDF, and none needs to.
- *
- * SPAWN IS INJECTED, for the reason `transform.ts` injects it: the offline gate runs with no
- * Docker, no network and no credentials, and therefore with no poppler either. A test passes
- * a spawn that answers as the binary would; the process passes one that runs it. The shape is
- * deliberately `transform.ts`'s, not a second one -- a second way to spawn a child is a second
- * place for a timeout to be forgotten.
- *
- * A MISSING BINARY IS A REFUSAL, NOT A CRASH. An image with no `tesseract` behind it is
- * recorded as `extractor-missing:tesseract` and the run stays green. The alternative -- failing
- * the run -- turns one absent package into "your documents did not extract", which is both
- * less true and less actionable than the name of the program to install.
+ * HOW A NATIVE PROGRAM IS RUN is `program.ts`'s business, not this module's: that a binary is
+ * invoked rather than imported, that the spawn is injected so the offline gate needs neither
+ * poppler nor tesseract installed, and that an absent binary is a refusal naming the program
+ * instead of a crashed run. The readers below ask for text and get text or a reason.
  */
 
-import type { Spawn, SpawnOptions } from "../transform.ts";
+import { readDocx } from "./docx.ts";
+import { ocrImage } from "./ocr.ts";
+import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
 import { readXlsx } from "./xlsx.ts";
 
 /** How the text was read. A new extractor is a new value; the column is deliberately not an enum. */
@@ -33,18 +24,14 @@ export type ExtractMethod = "pdf_text" | "pdf_ocr" | "docx" | "xlsx" | "image_oc
 /**
  * Why nothing could be read. Each names something an operator can act on.
  *
- * `extractor-missing:<program>` carries the program's name because that IS the fix: "install
- * poppler-utils" is a different afternoon from "the PDF is corrupt", and a bare "could not
- * read" makes them look identical.
+ * The OCR refusals are `ocr.ts`'s, named there beside the decisions that produce them.
  */
 export const LEGACY_DOC = "legacy-doc-unsupported";
 export const LEGACY_XLS = "legacy-xls-unsupported";
 export const XLSX_UNREADABLE = "xlsx-unreadable";
+export const DOCX_UNREADABLE = "docx-unreadable";
 export const UNSUPPORTED_TYPE = "unsupported-content-type";
 export const EMPTY_SOURCE = "document-has-no-bytes";
-export function extractorMissing(program: string): string {
-  return `extractor-missing:${program}`;
-}
 
 /**
  * The ceiling on stored text.
@@ -73,19 +60,6 @@ export interface Extracted {
   readonly truncated: boolean;
 }
 
-export interface ExtractDeps {
-  /** Injected in tests; the process passes one that runs the real program. */
-  readonly spawn: Spawn;
-  /** Where a document's bytes are written for a binary to open. One directory per document. */
-  readonly workDir: string;
-  /** Per-program wall clock. A 200-page scan is slow; a hung child must still end. */
-  readonly timeoutMs?: number;
-  readonly env?: Readonly<Record<string, string>>;
-}
-
-/** Long enough for a large scan, short enough that a hung child does not hold the run open. */
-export const DEFAULT_EXTRACT_TIMEOUT_MS = 5 * 60 * 1000;
-
 /**
  * Whitespace collapsed, so a count means characters a reader would see.
  *
@@ -109,33 +83,6 @@ function read(method: ExtractMethod, raw: string): Extracted {
 
 function refused(reason: string): Extracted {
   return { method: null, reason, text: "", truncated: false };
-}
-
-/**
- * Run one program and hand back its stdout, or say it is not installed.
- *
- * `Bun.spawn` raises rather than exiting non-zero when the executable does not exist, so the
- * "not installed" case arrives as a thrown error and not as a status code. Both end here, and
- * both are told apart from "the program ran and failed" by the caller, which is why this
- * returns a tagged result instead of a string.
- */
-async function runProgram(
-  deps: ExtractDeps,
-  cmd: readonly string[],
-): Promise<{ ok: true; output: string } | { ok: false; missing: boolean }> {
-  const options: SpawnOptions = {
-    cwd: deps.workDir,
-    env: deps.env ?? {},
-    timeoutMs: deps.timeoutMs ?? DEFAULT_EXTRACT_TIMEOUT_MS,
-  };
-  try {
-    const { exitCode, output } = await deps.spawn(cmd, options);
-    return exitCode === 0 ? { ok: true, output } : { ok: false, missing: false };
-  } catch {
-    // A spawn that could not start at all. Treated as "the program is not here", which is
-    // what it means in practice and what the operator can fix.
-    return { ok: false, missing: true };
-  }
 }
 
 /** Poppler's text layer, straight to stdout. `-layout` keeps columns in reading order. */
@@ -173,9 +120,19 @@ async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
   if (normalizeText(layer.text).length >= TEXT_LAYER_MIN_CHARS) {
     return read("pdf_text", layer.text);
   }
-  // Below the threshold this is a scan, and reading it needs OCR. Until that lands, the
-  // document is refused BY NAME rather than stored as the handful of stray characters the
-  // layer did return -- which would read downstream as a contract that says almost nothing.
+  // Below the threshold this is a scan, and reading it needs OCR. The document is refused BY
+  // NAME rather than stored as the handful of stray characters the layer did return -- which
+  // would read downstream as a contract that says almost nothing.
+  //
+  // IT DOES NOT FALL THROUGH TO `ocr.ts`, and the reason is measured rather than assumed:
+  // tesseract's input is an image, so `tesseract scan.pdf stdout` answers "Pdf reading is not
+  // supported" and exits 1. Wiring it here would record `tesseract-failed` on every scan --
+  // which tells an operator this PDF is broken when the truth is that nobody rasterised it,
+  // and a reason that misleads is worse than one that defers. A `pdf_ocr` reader needs a page
+  // image first (poppler's `pdftoppm`, already in the worker image), and with it a page cap, a
+  // resolution and a deadline spanning N pages instead of one -- its own change, with its own
+  // measurement, for the 53 documents this branch covers. `needs-ocr` is what re-queues them
+  // when it lands.
   return refused("needs-ocr");
 }
 
@@ -189,6 +146,31 @@ async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
 function readWorkbook(_deps: ExtractDeps, input: Document): Extracted {
   const text = readXlsx(input.bytes);
   return text === null ? refused(XLSX_UNREADABLE) : read("xlsx", text);
+}
+
+/**
+ * Read in process for the same reason a workbook is: a `.docx` is the same zip of XML, and
+ * `docx.ts` argues there why reading it lexically is what makes a nested table and a text box
+ * arrive rather than silently not.
+ *
+ * `null` is a document we could not open exactly -- never an empty one.
+ */
+function readWordDocument(_deps: ExtractDeps, input: Document): Extracted {
+  const text = readDocx(input.bytes);
+  return text === null ? refused(DOCX_UNREADABLE) : read("docx", text);
+}
+
+/**
+ * A picture of a document, read by OCR -- or one of `ocr.ts`'s four named refusals.
+ *
+ * Everything that makes this hard is one module down: whether the bytes are big enough to be a
+ * document at all, which languages tesseract is told to expect, and the difference between an
+ * engine that could not run and one that ran and found nothing. This layer only decides what
+ * an answer is called, which is the same job it does for every other reader.
+ */
+async function readImage(deps: ExtractDeps, input: Document): Promise<Extracted> {
+  const ocr = await ocrImage(deps, input);
+  return ocr.ok ? read("image_ocr", ocr.text) : refused(ocr.reason);
 }
 
 /**
@@ -208,8 +190,25 @@ function readWorkbook(_deps: ExtractDeps, input: Document): Extracted {
  */
 const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   ["text/plain", readPlainText],
+  // A delimited file IS text, and the reader above already decodes it non-fatally. Parsing it
+  // into rows instead would mean choosing a delimiter, a quoting style and an encoding that
+  // the file does not state -- three guesses for an index that wants the words either way.
+  ["text/csv", readPlainText],
+  ["text/tab-separated-values", readPlainText],
   ["application/pdf", readPdf],
   ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", readWorkbook],
+  ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", readWordDocument],
+  // The two image types the connection picker offers and the only two the lake holds: 1,274
+  // PNGs and 283 JPEGs, none of them readable until now. `ocr.ts` decides which of them are
+  // documents rather than email furniture.
+  ["image/png", readImage],
+  ["image/jpeg", readImage],
+  // The same JPEG under a spelling IANA does not register. Mail clients write it and the
+  // catalogue records whatever the provider declared, so without this line a file we can read
+  // perfectly well is recorded `unsupported-content-type` over a missing `e`. Nothing
+  // downstream keys off the type -- tesseract sniffs the content -- so it is an alias, not a
+  // second reader.
+  ["image/jpg", readImage],
   // The pre-2007 binary workbook. Reading BIFF needs LibreOffice in the image, which is a
   // container's worth of dependency for two files. Its own reason rather than `LEGACY_DOC`,
   // because an operator reading the ledger should not have to know that the Word reason was
@@ -219,6 +218,33 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   // visible in the ledger rather than absent from it.
   ["application/msword", (): Extracted => refused(LEGACY_DOC)],
 ]);
+
+/**
+ * WHICH GENERATION OF THE TABLE ABOVE THIS IS. BUMP IT WHEN THE READERS CHANGE.
+ *
+ * Every extraction stamps this on its row, and the backlog offers a REFUSED row back whenever
+ * its stamp is older than this number (`repos/documentText.ts`). Without it a refusal is
+ * permanent: the document has a row and its bytes have not moved, so nothing would ever ask it
+ * again, and a reader added here would ship as a no-op over precisely the files it was written
+ * for -- 1,190 of them on production, recorded `unsupported-content-type` for types this table
+ * now answers.
+ *
+ * 1, not 0, because THIS change is the first generation: `0` is what every row written before
+ * the column existed carries, and it must sort below anything we bump to so those rows re-enter
+ * the queue exactly once.
+ *
+ * BY HAND, AND DELIBERATELY SO. The honest alternative is deriving it -- hashing the binaries
+ * and language packs behind these readers into the stamp, which is what the sibling project
+ * does, because installing `tesseract-ocr-vie` changes what OCR can read without changing a
+ * line of this file. That is a real gap and this constant does not close it: forget to bump it
+ * and the new reader silently reaches nothing already refused. It is the cheap form on purpose,
+ * and the trade is worth naming rather than discovering.
+ *
+ * Bumping is safe because it re-queues only refusals -- a document that was READ is never
+ * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
+ * argument and the 2,602-document incident behind it.
+ */
+export const CURRENT_READER_VERSION = 1;
 
 /**
  * One document, read whichever way its type allows.
