@@ -49,6 +49,7 @@
 - [Runbook: Setting the assistant up](sources/runbook-setting-the-assistant-up.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
 - [Runbook Xero Setup](sources/runbook-xero-setup.md)
+- [The readers ADR 0028 deferred, and a refusal that can be retried](sources/the-readers-adr-0028-deferred-and-a-refusal-that-can-be-retried.md)
 
 ## Notes
 
