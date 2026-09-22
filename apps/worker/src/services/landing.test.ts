@@ -17,13 +17,9 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { landRecords, type RecordToLand } from "./land.ts";
 import type { DocumentToLand } from "./landDocument.ts";
-import {
-  CHUNK,
-  createDocumentSink,
-  createRecordSink,
-  type DocumentLanding,
-  refusalsToRun,
-} from "./landing.ts";
+import { createDocumentSink } from "./documentSink.ts";
+import { CHUNK, type DocumentLanding, refusalsToRun } from "./landing.ts";
+import { createRecordSink } from "./recordSink.ts";
 
 const TENANT = "CASE-0042";
 const SOURCE = "demo";

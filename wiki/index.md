@@ -39,6 +39,7 @@
 - [ADR 0031 A Picked Drive Folder May Be Read to the Bottom](sources/adr-0031-a-picked-drive-folder-may-be-read-to-the-bottom.md)
 - [ADR 0032 A Progress Line Is a Gauge Not an Entry](sources/adr-0032-a-progress-line-is-a-gauge-not-an-entry.md)
 - [ADR 0034 The Watermark Is a Table Not a Max](sources/adr-0034-the-watermark-is-a-table-not-a-max.md)
+- [ADR 0035: A harvest records what it settled, rather than asserting it](sources/adr-0035-a-harvest-records-what-it-settled-rather-than-asserting-it.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)

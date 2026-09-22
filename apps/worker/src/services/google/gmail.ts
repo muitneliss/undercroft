@@ -102,17 +102,21 @@ function labelKind(reported: string): "system" | "user" | null {
  * costs one message rather than the whole mailbox. Buffering it was what put 7,786 messages
  * in a 1 GiB container and got the process oom-killed 76 minutes in.
  *
- * **A MESSAGE WE ALREADY HOLD IS NOT FETCHED AT ALL.** Listing ids is one request per
- * hundred; reading a message is one paced request each, at 334ms, so a 7,786-message
- * mailbox is 43 minutes of `messages.get` and nothing else. PRESENCE in `raw.records` is
- * the whole test -- a message whose LABELS changed since is still skipped, which is a
- * decision the user took with its cost stated: a second run that takes a minute instead of
- * forty-three, at the price of a relabelling we will not notice until something else makes
- * us read the message.
+ * **A MESSAGE WE ALREADY HOLD, COMPLETE, IS NOT FETCHED AT ALL.** Listing ids is one request
+ * per hundred; reading a message is one paced request each, at 334ms, so a 7,786-message
+ * mailbox is 43 minutes of `messages.get` and nothing else. The test is a row in
+ * `raw.records` that is MARKED harvest-complete -- a message whose LABELS changed since is
+ * still skipped, which is a decision the user took with its cost stated: a second run that
+ * takes a minute instead of forty-three, at the price of a relabelling we will not notice
+ * until something else makes us read the message.
  *
- * That is only safe because a message's record does not reach `raw.records` until its
- * attachments have reached the lake; `harvest.ts` records why, and `collect.ts` is what
- * holds the record back.
+ * PRESENCE ALONE WAS THE TEST FOR ONE RELEASE, AND IT LOST A MAILBOX. It rested on a message's
+ * record not reaching `raw.records` until its attachments had reached the lake -- true of
+ * every row that rule wrote, and untrue of every row written before it, which is all of them
+ * on a tenant that had already run. The 7,786 above is not an example: it is the mailbox, with
+ * 7,786 records and zero documents, skipped whole on every run until ADR 0035 made the mark
+ * something a landing states rather than something this file asserts. `harvest.ts` records the
+ * contract, `collect.ts` counts what got down, and `knownRecords` reads the count.
  *
  * **One consequence, so nobody reads the filter below as unconditional:** the defence-in-
  * depth label check now runs only on a message this run actually fetched. A message we
@@ -128,7 +132,8 @@ export async function* harvestGmail(
 ): Harvest {
   const selected = new Set(scope.labels.map((l) => l.id));
   const messageIds = await listMessageIds(api, scope);
-  // No timestamp: the listing carries none, and presence is the question. See `RecordProbe`.
+  // No timestamp: the listing carries none, so the only question this probe can put is
+  // whether we hold the message, complete. See `RecordProbe` and `knownRecords`.
   const known = await held(messageIds.map((id) => ({ sourceRecordId: id, sourceUpdatedAt: null })));
   const toRead = messageIds.filter((id) => !known.has(id));
 

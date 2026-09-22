@@ -12,7 +12,16 @@
  * the source's size. `close` answers with the counters alone -- there is deliberately no
  * array of results to return, because that array is the other half of what blew the heap.
  *
- * ## Three things this file is responsible for
+ * ## What this file is, and what is beside it
+ *
+ * This file is the CONTRACT: what a sink promises, what it counts, and the ordering rule the
+ * two sinks hold between them. The two implementations are `recordSink.ts` and
+ * `documentSink.ts`, which mirror the pair one layer below them (`land.ts` and
+ * `landDocument.ts`) so a reader can guess where a thing lives. The argument stays here rather
+ * than being halved between them, because most of it is about the relationship: a document
+ * sink's `flush` exists for a record sink's caller, and neither half is a reason on its own.
+ *
+ * ## Four things this contract is responsible for
  *
  * **The chunk is the only thing held.** `landRecords` and `landDocuments` already land one
  * record at a time and already isolate a per-record failure, so a chunk is not a transaction
@@ -33,13 +42,25 @@
  * every result -- quadratic in the size of the mailbox. Pairing them inside the chunk that
  * produced them makes the join O(chunk) and removes the need for either whole array.
  *
- * **A document sink can be told to land NOW.** `flush` is the one thing a caller may ask a
- * sink to do out of turn, and it exists because one caller has an ordering rule the sink
- * cannot see: a Gmail message's record must not reach `raw.records` before its attachment
- * reaches the lake, or the next run reads the record as "fully harvested" and skips the
- * message forever with its attachment never fetched. `flush` answers with the ids whose
- * bytes failed -- and deliberately NOT with the ones refused for their declared size, which
- * would fail identically on every future run and would hold their record back forever.
+ * **A document sink can be told to land NOW, and answers for everything since the last time.**
+ * `flush` is the one thing a caller may ask a sink to do out of turn, and it exists because
+ * one caller has an ordering rule the sink cannot see: a Gmail message's record must not reach
+ * `raw.records` before its attachment reaches the lake, or the next run reads the record as
+ * "fully harvested" and skips the message forever with its attachment never fetched.
+ *
+ * What it answers for is every document added since the previous `flush`, INCLUDING the ones a
+ * full buffer landed on its own in between. That is not a nicety. A sink that reported only
+ * the chunk `flush` itself landed reported nothing at all whenever `add` had just tripped the
+ * chunk boundary -- which on a mailbox of one attachment per message is precisely when the
+ * caller asks -- and every record in that batch landed however its attachment had fared. The
+ * outcome is accumulated by the sink instead, because only the sink knows what it landed when
+ * nobody was asking.
+ *
+ * A FETCH THAT FAILED IS `unfetched`; A SIZE REFUSAL IS NEITHER `landed` NOR `unfetched`. A
+ * failed fetch can succeed next run, so whatever waited on it must wait another run. A
+ * document refused for its declared size will be refused identically forever, so a record held
+ * back for one would never land at all -- and a record that COUNTED it would be re-fetched
+ * forever instead. It settles as zero landed documents, which is the truth.
  *
  * ## Why a record sink projects into `raw.records`, per chunk
  *
@@ -69,10 +90,8 @@ import type { SqlExecutor } from "@undercroft/db";
 import { recordRefusals, type RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
-import { type RawDocumentRow, upsertDocuments } from "../repos/rawDocuments.ts";
-import { type LandedRecord, landRecords, type RecordToLand } from "./land.ts";
-import { type DocumentToLand, type LandedDocument, landDocuments } from "./landDocument.ts";
-import { loadStreamToRaw } from "./loadToRaw.ts";
+import type { RecordToLand } from "./land.ts";
+import type { DocumentToLand } from "./landDocument.ts";
 
 /**
  * How many records a sink holds before it lands them.
@@ -84,9 +103,6 @@ import { loadStreamToRaw } from "./loadToRaw.ts";
  * at the peak, which is flat whether the mailbox has 200 messages or 200,000.
  */
 export const CHUNK = 200;
-
-/** The entity a refused document is filed under. Documents are their own entity in the ledger. */
-const DOCUMENT_ENTITY = "documents";
 
 /**
  * Where a sink's refusals go.
@@ -165,243 +181,72 @@ export interface DocumentSummary {
   readonly failed: number;
 }
 
+/**
+ * A record to land, with what its harvest settled beside it.
+ *
+ * `documentsLanded` is how many of this record's documents reached the lake AND the catalogue
+ * -- which is what the NEXT run reads as "this message is finished, skip it". It is recorded
+ * rather than inferred because inferring it is what failed: ADR 0033 asserted that a row in
+ * `raw.records` meant a finished harvest, and the assertion bound only the rows written after
+ * it. ADR 0035, and `230_documents_landed.sql` for the column.
+ *
+ * ABSENT MEANS THE CALLER HAS NO DOCUMENTS TO SETTLE -- the spec path and the lake REST API,
+ * neither of which has a document channel at all. Nothing is marked for them, so nothing
+ * claims their rows are complete. It is optional rather than a required `0` so that the two
+ * callers with nothing to say are not made to say it: a required field they would fill with a
+ * constant is a field the next caller fills with a constant too, and this column exists
+ * because a constant claim of completeness went unchecked once already.
+ */
+export interface HarvestedRecord extends RecordToLand {
+  readonly documentsLanded?: number;
+}
+
 export interface RecordSink {
-  add: (record: RecordToLand) => Promise<void>;
+  add: (record: HarvestedRecord) => Promise<void>;
   close: () => Promise<LandSummary>;
+}
+
+/**
+ * What became of the documents a sink has been given since it was last asked.
+ *
+ * Two sets rather than one list because three answers are possible and only two of them are
+ * these: landed, failed-and-retryable, and refused for a declared size -- which is in neither,
+ * deliberately. See {@link DocumentSink.flush}.
+ */
+export interface DocumentOutcome {
+  /** Bytes in the lake and a row in `raw.documents`. */
+  readonly landed: ReadonlySet<string>;
+  /** Refused and RETRYABLE: the fetch may succeed on a later run. */
+  readonly unfetched: ReadonlySet<string>;
 }
 
 export interface DocumentSink {
   add: (document: DocumentToLand) => Promise<void>;
   /**
-   * Land what is held now, and answer with the ids whose BYTES did not reach the lake.
+   * Land what is held now, and answer for every document added since the last `flush`.
    *
-   * For the caller that has to land something else only once a document is safely down.
-   * The Google collectors are that caller: a message's record must not reach `raw.records`
-   * before its attachment reaches the lake, because "present in `raw.records`" is what the
-   * next run reads as "fully harvested" and skips. A record that outran its attachment is
-   * therefore an attachment lost for good -- CLAUDE.md rule 2 broken by the resume
-   * mechanism itself.
+   * For the caller that has to land something else only once a document is safely down, and
+   * has to say how many got down. The Google collectors are that caller: a message's record
+   * must not reach `raw.records` before its attachment reaches the lake, because that row is
+   * what the next run reads as "fully harvested" and skips. A record that outran its
+   * attachment is therefore an attachment lost for good -- CLAUDE.md rule 2 broken by the
+   * resume mechanism itself.
    *
-   * A FETCH THAT FAILED IS HERE; A SIZE REFUSAL IS NOT, and the difference is the whole
-   * value of the answer. A failed fetch can succeed on the next run, so whatever was
-   * waiting on it must wait another run. A document refused for its declared size will be
-   * refused identically forever, so a record held back for one would never land at all --
-   * the message would be unharvestable rather than merely incomplete.
+   * SINCE THE LAST FLUSH, not since this call, and the module docstring says why: a full
+   * buffer lands on its own inside `add`, and an answer scoped to this call's chunk is silent
+   * about exactly those documents.
    *
    * {@link RecordSink} has no counterpart on purpose: the ordering rule points one way, and
    * nothing needs a record chunk forced out early.
    */
-  flush: () => Promise<readonly string[]>;
+  flush: () => Promise<DocumentOutcome>;
   close: () => Promise<DocumentSummary>;
 }
 
 /** Refused after a sink was closed: a record added now would never be landed by anyone. */
-class SinkClosed extends Error {
+export class SinkClosed extends Error {
   constructor() {
     super("this sink is closed; everything added before close() was landed");
     this.name = "SinkClosed";
   }
-}
-
-/**
- * What one landed chunk refused, with why.
- *
- * A record that could not be keyed is the ordinary case, and it is a statement about the
- * data rather than about the run, so it is recorded and the chunk beside it still lands.
- */
-function refusalsIn(results: readonly LandedRecord[]): RunRefusal[] {
-  return results.flatMap((landed) =>
-    landed.status === "failed"
-      ? [
-          {
-            entity: landed.entity,
-            sourceRecordId: landed.sourceRecordId,
-            reason: landed.reason ?? "refused",
-          },
-        ]
-      : [],
-  );
-}
-
-export function createRecordSink(deps: SinkDeps, at: Landing, chunk: number = CHUNK): RecordSink {
-  const buffer: RecordToLand[] = [];
-  const loaded = { created: 0, changed: 0, unchanged: 0 };
-  let created = 0;
-  let unchanged = 0;
-  let refused = 0;
-  let closed = false;
-
-  async function flush(): Promise<void> {
-    if (buffer.length === 0) {
-      return;
-    }
-    // `splice` empties the buffer as it hands the chunk over, so the sink is already back to
-    // holding nothing while this chunk is being landed.
-    const chunkOf = buffer.splice(0);
-    const result = await landRecords(deps.lake, {
-      source: at.source,
-      tenantId: at.tenantId,
-      runId: at.runId,
-      records: chunkOf,
-    });
-    created += result.created;
-    unchanged += result.unchanged;
-    refused += result.failed;
-
-    await deps.refuse(refusalsIn(result.results));
-
-    // The evidence is written before the projection, because the projection is the part that
-    // can fail on something other than this chunk. A stream per entity present, since an
-    // entity is a property of a record rather than of the sink -- ordinarily one.
-    for (const entity of new Set(chunkOf.map((record) => record.entity))) {
-      const projected = await loadStreamToRaw(deps.exec, deps.lake, {
-        source: at.source,
-        tenantId: at.tenantId,
-        entity,
-      });
-      loaded.created += projected.created;
-      loaded.changed += projected.changed;
-      loaded.unchanged += projected.unchanged;
-    }
-  }
-
-  return {
-    async add(record): Promise<void> {
-      if (closed) {
-        throw new SinkClosed();
-      }
-      buffer.push(record);
-      if (buffer.length >= chunk) {
-        await flush();
-      }
-    },
-    async close(): Promise<LandSummary> {
-      await flush();
-      closed = true;
-      return { landed: created + unchanged, created, unchanged, refused, loaded: { ...loaded } };
-    },
-  };
-}
-
-/** One landed chunk of documents, split three ways. */
-interface SortedChunk {
-  readonly rows: RawDocumentRow[];
-  readonly refusals: RunRefusal[];
-  /** Refused and RETRYABLE, which is not the same set as refused. See {@link DocumentSink}. */
-  readonly unfetched: string[];
-}
-
-/**
- * Pair each document with what landing it did, and file it under one of three answers.
- *
- * This is the join that used to be a `find` over every document in the whole harvest, run
- * once per result -- quadratic in the size of the mailbox. Here it is over one chunk, which
- * is what makes it linear. Walking the DOCUMENTS rather than the results is what leaves
- * nothing unaccounted for: every document asked for is either catalogued or refused with a
- * reason, and a result that came back for nothing anybody asked about cannot slip past.
- */
-function sortChunk(
-  chunkOf: readonly DocumentToLand[],
-  result: Awaited<ReturnType<typeof landDocuments>>,
-  at: DocumentLanding,
-): SortedChunk {
-  const resultOf = new Map(result.results.map((landed) => [landed.documentId, landed]));
-  const sorted: SortedChunk = { rows: [], refusals: [], unfetched: [] };
-
-  for (const document of chunkOf) {
-    const landed = resultOf.get(document.documentId);
-    if (landed !== undefined && landed.status !== "skipped" && landed.status !== "failed") {
-      sorted.rows.push(catalogueRow(document, landed, at));
-      continue;
-    }
-    sorted.refusals.push({
-      entity: DOCUMENT_ENTITY,
-      sourceRecordId: document.documentId,
-      reason: landed?.reason ?? landed?.status ?? "landed with no result",
-    });
-    if (landed?.status !== "skipped") {
-      sorted.unfetched.push(document.documentId);
-    }
-  }
-
-  return sorted;
-}
-
-export function createDocumentSink(
-  deps: SinkDeps,
-  at: DocumentLanding,
-  chunk: number = CHUNK,
-): DocumentSink {
-  const buffer: DocumentToLand[] = [];
-  const tally = { created: 0, unchanged: 0, skipped: 0, failed: 0 };
-  let closed = false;
-
-  async function flush(): Promise<string[]> {
-    if (buffer.length === 0) {
-      return [];
-    }
-    const chunkOf = buffer.splice(0);
-    const result = await landDocuments(deps.lake, {
-      source: at.source,
-      tenantId: at.tenantId,
-      runId: at.runId,
-      documents: chunkOf,
-    });
-    tally.created += result.created;
-    tally.unchanged += result.unchanged;
-    tally.skipped += result.skipped;
-    tally.failed += result.failed;
-
-    const sorted = sortChunk(chunkOf, result, at);
-    await upsertDocuments(deps.exec, { source: at.source, tenantId: at.tenantId }, sorted.rows);
-    await deps.refuse(sorted.refusals);
-    return sorted.unfetched;
-  }
-
-  return {
-    async add(document): Promise<void> {
-      if (closed) {
-        throw new SinkClosed();
-      }
-      buffer.push(document);
-      if (buffer.length >= chunk) {
-        await flush();
-      }
-    },
-    flush,
-    async close(): Promise<DocumentSummary> {
-      await flush();
-      closed = true;
-      return { landed: tally.created + tally.unchanged, ...tally };
-    },
-  };
-}
-
-/**
- * The catalogue row for a document whose bytes reached the lake.
- *
- * Only `metadata` crosses into Postgres. `raw.documents` is granted to `undercroft_dbt`, so
- * every column here is one `dbt run` from a dashboard; a filename, a subject or a folder name
- * stays in the lake manifest, which dbt and BI cannot reach at all. `.claude/rules/pii.md`,
- * ADR 0015. A skipped or failed document gets no row: it has no bytes to point at, and a row
- * claiming otherwise is worse than no row.
- */
-function catalogueRow(
-  document: DocumentToLand,
-  landed: LandedDocument,
-  at: DocumentLanding,
-): RawDocumentRow {
-  return {
-    documentId: landed.documentId,
-    lakeKey: landed.lakeKey ?? "",
-    sha256: landed.sha256 ?? "",
-    byteLength: landed.byteLength ?? "0",
-    contentType: document.contentType,
-    metadataJson: JSON.stringify({
-      ...document.metadata,
-      sourceUpdatedAt: document.sourceUpdatedAt,
-    }),
-    observedAt: at.observedAt,
-    runId: at.runId,
-  };
 }
