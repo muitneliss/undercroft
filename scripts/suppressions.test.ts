@@ -86,6 +86,12 @@ const FIXTURES: Record<string, string> = {
     // ast-grep-ignore
     export const x = 1;
   `,
+  // The escape's exact text, as data rather than as a comment: a tool that writes or reports
+  // the directive has to be able to spell it. The rule matches comment nodes, so this stays
+  // quiet; a rule loosened to a text search would not.
+  "packages/demo/src/quoted.ts": `
+    export const DIRECTIVE = "// ast-grep-ignore";
+  `,
 };
 
 interface Finding {
@@ -211,8 +217,8 @@ describe("the ast-grep-ignore ban", () => {
     expect(rulesOn("packages/demo/src/escape.ts")).toContain("no-ast-grep-ignore-ts");
   });
 
-  it("stays quiet where there is none", () => {
-    expect(rulesOn("packages/demo/src/clean.ts")).not.toContain("no-ast-grep-ignore-ts");
+  it("stays quiet on the directive's text in a string, which is not a directive", () => {
+    expect(rulesOn("packages/demo/src/quoted.ts")).toEqual([]);
   });
 });
 

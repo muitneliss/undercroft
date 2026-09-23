@@ -9,8 +9,7 @@
 
 import { streamOf } from "@undercroft/contracts";
 import { createStampSource, TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
@@ -30,8 +29,7 @@ let db: TestDatabase;
 beforeEach(async () => {
   backing = new InMemoryObjectStore();
   lake = new LakeStore(backing, { stamps: createStampSource(new TestClock()) });
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
   // Seeded as the superuser; from here on every statement runs as the worker does.
   await db.become("undercroft_worker");
@@ -110,7 +108,9 @@ describe("loadStreamToRaw", () => {
     const after = backing.calls;
 
     expect(after.list - before.list).toBe(1);
-    expect(after.get - before.get).toBe(3 * n);
+    // A ceiling, not an exact count: the old path was four GETs a record, and a pass that
+    // needs fewer than three is an improvement nobody should have to edit this test to make.
+    expect(after.get - before.get).toBeLessThanOrEqual(3 * n);
   });
 
   it("a pass that completes leaves the cursor at the last observation it read", async () => {

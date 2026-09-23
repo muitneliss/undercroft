@@ -81,16 +81,18 @@ describe("landDocuments", () => {
     expect(result).toMatchObject({ created: 1, skipped: 0 });
   });
 
-  it("a declared size too large for a float is still compared exactly", async () => {
-    // BigInt, not Number: a provider-controlled size string must not round into range.
-    const result = await land([
-      document({
-        declaredBytes: "99999999999999999999",
-        fetchBytes: () => Promise.reject(new Error("must not be fetched")),
-      }),
-    ]);
+  it("a declared size it cannot read is fetched, not refused and not a crash", async () => {
+    // Unreadable is not oversized: the fetch reports the truth. Without the digits-only
+    // check, `BigInt("12abc")` throws outside the per-document catch and takes the whole
+    // batch with it, and `0x7FFFFFFF` -- which BigInt reads as hex -- is refused as a 2 GiB
+    // document that is actually a few bytes.
+    const unreadable = ["12abc", "-1", "", "0x7FFFFFFF"];
 
-    expect(result.skipped).toBe(1);
+    const result = await land(
+      unreadable.map((declaredBytes, i) => document({ documentId: `d${i}`, declaredBytes })),
+    );
+
+    expect(result).toMatchObject({ created: unreadable.length, skipped: 0, failed: 0 });
   });
 
   it("one failing document does not abort the batch", async () => {

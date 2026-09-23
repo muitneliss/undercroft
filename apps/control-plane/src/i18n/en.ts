@@ -38,7 +38,8 @@ export const en = {
 
   runFailed: {
     subject: "The {{source}} sync for {{tenantId}} failed",
-    models: "the model build",
+    modelsSubject: "The model build for {{tenantId}} failed",
+    models: "Model build",
     noReason: "no reason recorded",
     heading: "A run failed",
     lead: "What this run would have updated is unchanged until a later one succeeds.",

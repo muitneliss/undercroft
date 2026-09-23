@@ -9,8 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import {
   answerQuestion,
@@ -30,8 +29,7 @@ const ACTOR = { actor: "ada@example.test", actorId: "u-ada" };
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ($2)", [TENANT, OTHER]);
   await db.become("undercroft_app");
 });

@@ -7,37 +7,20 @@
  * what does not -- because a digest that dropped everything would pass a leak test while making
  * the feature useless.
  *
- * The last two tests go through PGlite rather than asserting on the function's return value,
+ * Two tests go through PGlite rather than asserting on the function's return value,
  * because the real guarantee is the table's CHECK constraint: `transcript.ts` deciding correctly
  * is a habit, the constraint refusing is an invariant, and it is the constraint that still holds
  * when someone writes a second caller.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import type { UIMessage } from "ai";
 import { openThread, saveTurn } from "../../repos/assistantThread.ts";
 import { ERROR_NOT_KEPT, forStorage, restore, type Summarize } from "./transcript.ts";
 
 let db: TestDatabase;
 let threadId: string;
-
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
-  const { rows } = await db.query<{ id: string }>(
-    "INSERT INTO app.app_user (email) VALUES ('ops@example.test') RETURNING id",
-  );
-  // Seeded as the superuser; from here on every statement runs as the control plane does.
-  await db.become("undercroft_app");
-  threadId = await openThread(db, "CASE-0042", rows[0]!.id);
-});
-
-afterEach(async () => {
-  await db.close();
-});
 
 /** A summariser that answers for one tool and declines for every other, as a real one does. */
 const summarize: Summarize = (tool, output) =>
@@ -176,6 +159,23 @@ describe("a transcript refuses to keep a payload", () => {
 });
 
 describe("the database refuses a payload even when the caller forgets to digest it", () => {
+  // The only describe here that opens a database: everything else is `forStorage` and
+  // `restore`, pure functions that pay nothing for a fixture they never read.
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
+    const { rows } = await db.query<{ id: string }>(
+      "INSERT INTO app.app_user (email) VALUES ('ops@example.test') RETURNING id",
+    );
+    // Seeded as the superuser; from here on every statement runs as the control plane does.
+    await db.become("undercroft_app");
+    threadId = await openThread(db, "CASE-0042", rows[0]!.id);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
   it("an undigested result is rejected at rest, at any depth", async () => {
     await expect(
       saveTurn(db, threadId, {

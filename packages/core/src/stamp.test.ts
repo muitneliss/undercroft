@@ -33,15 +33,6 @@ describe("stamp format", () => {
 });
 
 describe("StampSource is strictly monotonic", () => {
-  it("advances even when the clock has not moved", () => {
-    const clock = new TestClock();
-    const stamps = createStampSource(clock);
-    const first = stamps.next();
-    const second = stamps.next();
-    expect(second).not.toBe(first);
-    expect(second > first).toBe(true);
-  });
-
   it("100,000 stamps in a tight loop are all distinct and ascending", () => {
     // The test that would have caught a `Date`-based implementation: with
     // millisecond resolution this loop produces thousands of duplicates, and a

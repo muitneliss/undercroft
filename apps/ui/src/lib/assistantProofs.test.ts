@@ -25,12 +25,20 @@ describe("the proof sentence", () => {
   });
 
   it("interpolates every argument it promises, leaving no blanks", () => {
+    // Each input is exactly the arguments that tool's sentence promises (the setCadence
+    // sentence names no customer, so its input carries none), which is what lets the loop
+    // below demand every one of them back.
     for (const [tool, input] of [
       ["runIngestNow", { tenantId: "CASE-0042", source: "xero" }],
-      ["setCadence", { tenantId: "CASE-0042", source: "gmail", cadence: "daily" }],
+      ["setCadence", { source: "gmail", cadence: "daily" }],
       ["invitePerson", { tenantId: "CASE-0042", email: "a@example.test", role: "member" }],
     ] as const) {
       const said = proofSentence(t, tool, input);
+      // Every value, in the sentence. A misspelt `pick` name answers "" rather than a
+      // `{{...}}`, so the blank it leaves is invisible to any check for a placeholder.
+      for (const value of Object.values(input)) {
+        expect(said).toContain(value);
+      }
       // No `{{...}}` left unresolved, and not the key itself: both render as a sentence a
       // reader would strike without understanding it.
       expect(said).not.toContain("{{");

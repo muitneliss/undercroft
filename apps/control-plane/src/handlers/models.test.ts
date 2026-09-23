@@ -8,8 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
@@ -70,8 +69,7 @@ async function refusal(fn: () => Promise<unknown>): Promise<{ code: string; mess
 const DRAFT = { tenantId: TENANT, name: "stg_deals", sql: "select 1", tests: { columns: {} } };
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   await db.become("undercroft_app");
 });

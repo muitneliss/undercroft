@@ -8,21 +8,33 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import type { SqlExecutor } from "@undercroft/db";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { appUserForEmail, isAdmissible, resolveInvitedUser } from "./invite.ts";
 
 let db: TestDatabase;
 
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.become("undercroft_app");
-});
+/**
+ * A database per test, for the describes whose decision reads one. Called inside each rather
+ * than at the top of the file, so the one decision made from the environment alone pays
+ * nothing for a fixture it never reads.
+ */
+function useDatabase(): void {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.become("undercroft_app");
+  });
 
-afterEach(async () => {
-  await db.close();
-});
+  afterEach(async () => {
+    await db.close();
+  });
+}
+
+/** For the decision made before any statement runs: a query here fails loudly. */
+const noDatabase: SqlExecutor = {
+  query: () => Promise.reject(new Error("the superadmin list must not need the database")),
+  exec: () => Promise.reject(new Error("the superadmin list must not need the database")),
+};
 
 /** An invitation to `tenantId`, live unless `expiresAt` says otherwise. */
 async function seedInvitation(
@@ -50,6 +62,8 @@ async function membershipsOf(email: string): Promise<{ tenant_id: string; role: 
 }
 
 describe("only an invited address may become a user", () => {
+  useDatabase();
+
   it("an address with no invitation and no account is refused", async () => {
     // The firing case, and the one that matters: without it, anyone with a Google account
     // reaches the control plane's shell.
@@ -127,6 +141,8 @@ describe("only an invited address may become a user", () => {
 });
 
 describe("resolving a session's address to its authorization identity", () => {
+  useDatabase();
+
   it("a provisioned address resolves to its app_user id", async () => {
     await seedInvitation("CASE-0042", "operator@example.test", "member");
     const provisioned = await resolveInvitedUser(db, "operator@example.test");
@@ -156,9 +172,17 @@ describe("resolving a session's address to its authorization identity", () => {
 describe("a superadmin needs no invitation", () => {
   const roots = new Set(["root@example.test"]);
 
-  it("is admissible with no invitation and no account", async () => {
-    expect(await isAdmissible(db, "root@example.test", roots)).toBe(true);
+  it("is admissible with no invitation and no account, on the list alone", async () => {
+    // Decided from the environment before any statement runs. Its pair -- the same address
+    // off the list, refused -- is the first test of the describe below.
+    expect(await isAdmissible(noDatabase, "root@example.test", roots)).toBe(true);
   });
+});
+
+describe("a superadmin needs no invitation, where the decision reads the database", () => {
+  useDatabase();
+
+  const roots = new Set(["root@example.test"]);
 
   it("the same address is refused when it is not on the list", async () => {
     expect(await isAdmissible(db, "root@example.test")).toBe(false);

@@ -9,10 +9,10 @@
  */
 
 import { seal } from "@undercroft/crypto";
-import { migrate, type SqlExecutor } from "@undercroft/db";
+import type { SqlExecutor } from "@undercroft/db";
 import type { Credential } from "@undercroft/db/repos";
 import { readCredential } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { resolveToken } from "./runTypes.ts";
@@ -25,8 +25,7 @@ const LONG_EXPIRED = "2020-01-01T00:00:00.000Z";
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [INPUT.tenantId]);
   await db.query(
     "INSERT INTO ops.connection (tenant_id, source, status) VALUES ($1, $2, 'connected')",
@@ -144,7 +143,7 @@ describe("resolveToken", () => {
     expect(stored.accessToken).toBe("fresh-after-r0");
   });
 
-  it("a failed refresh rolls back and leaves the stored credential untouched", async () => {
+  it("a transient refresh failure rolls back, and does not mark the connection expired", async () => {
     // Google's token endpoint being briefly down must cost nothing. A half-written
     // credential here costs the connection outright, and the customer has to re-consent.
     await storeCredential({ accessToken: "stale", refreshToken: "r0", expiresAt: LONG_EXPIRED });
@@ -164,25 +163,8 @@ describe("resolveToken", () => {
     const stored = await readCredential(db, INPUT.tenantId, INPUT.source, { env: ENV });
     expect(stored.refreshToken).toBe("r0");
     expect(stored.accessToken).toBe("stale");
-  });
-
-  it("a transient refresh failure does not mark the connection expired", async () => {
     // The other side of the same judgement. Marking expired here would send a customer to
     // re-consent over a provider hiccup that fixes itself in a minute.
-    await storeCredential({ accessToken: "stale", refreshToken: "r0", expiresAt: LONG_EXPIRED });
-
-    await expect(
-      resolveToken(
-        {
-          exec: db,
-          env: ENV,
-          transactor,
-          refresher: () => Promise.reject(new Error("503 from the token endpoint")),
-        },
-        INPUT,
-      ),
-    ).rejects.toThrow();
-
     expect(await statusOf()).toBe("connected");
   });
 

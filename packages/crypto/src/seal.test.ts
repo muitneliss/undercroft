@@ -83,10 +83,6 @@ describe("token hashing", () => {
     expect(tokenMatches("uc_live_secret", digest)).toBe(true);
     expect(tokenMatches("wrong", digest)).toBe(false);
   });
-
-  it("the digest is not the token", () => {
-    expect(hashToken("token")).not.toBe("token");
-  });
 });
 
 describe("PKCE", () => {

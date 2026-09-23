@@ -5,8 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { hashToken } from "@undercroft/crypto";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { authenticate, resetKeyUseThrottle } from "./auth.ts";
 
@@ -16,8 +15,7 @@ const T0 = new Date("2026-09-19T10:00:00.000Z");
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
   await db.query(
     `INSERT INTO app.ingest_key (id, token_sha256, tenant_id, label, allowed_sources)

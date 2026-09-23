@@ -8,9 +8,8 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { DEFAULT_LOCALE, InMemoryEmailSender } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
 import { closeRun, openRun, upsertConnection, writeCredential } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { appRouter } from "../handlers/router.ts";
 import type { Context } from "../handlers/trpc.ts";
@@ -66,8 +65,7 @@ function caller(userId: string, address: string) {
 }
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
   await db.become("undercroft_app");
   email = new InMemoryEmailSender();
@@ -140,6 +138,7 @@ describe("a failed run", () => {
   });
 
   it("a model build that failed is named as such, in the reader's language", async () => {
+    await seedAdmin("ada@example.test", "vi");
     await seedAdmin("bob@example.test", "en");
     await openRun(db, {
       id: "t-1",
@@ -152,7 +151,10 @@ describe("a failed run", () => {
 
     await runAlerts(deps());
 
-    expect(email.last?.subject).toBe("The the model build sync for CASE-0042 failed");
+    // Its own sentence in each language, not the build's name spliced into the sync's.
+    const [vi, en] = email.sent;
+    expect(vi?.subject).toBe("Dựng mô hình cho CASE-0042 không thành công");
+    expect(en?.subject).toBe("The model build for CASE-0042 failed");
   });
 
   it("the language an admin chose on screen is the one their email arrives in", async () => {

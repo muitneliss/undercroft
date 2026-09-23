@@ -54,6 +54,7 @@ describe("presentConnection", () => {
 
     expect(card.state).toBe("needs_scope");
     expect(card.action?.kind).toBe("scope");
+    expect(card.complete).toBe(false);
   });
 
   it("a revoked grant asks for a reconnect, not a decision", () => {
@@ -61,6 +62,7 @@ describe("presentConnection", () => {
 
     expect(card.state).toBe("needs_reconnect");
     expect(card.action?.kind).toBe("reconnect");
+    expect(card.complete).toBe(false);
   });
 
   it("a past expiry does not demand a reconnect the status has not asked for", () => {
@@ -77,19 +79,6 @@ describe("presentConnection", () => {
     expect(card.state).toBe("connected");
     expect(card.action).toBeNull();
     expect(card.complete).toBe(true);
-  });
-
-  it("every state offers exactly one next action, or none when complete", () => {
-    const states = ["disconnected", "connected", "needs_scope", "needs_reconnect"] as const;
-
-    for (const status of states) {
-      const card = presentConnection(t, connection("xero", { status }));
-      if (card.complete) {
-        expect(card.action).toBeNull();
-      } else {
-        expect(card.action).not.toBeNull();
-      }
-    }
   });
 });
 

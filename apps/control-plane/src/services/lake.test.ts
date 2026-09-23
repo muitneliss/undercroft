@@ -8,8 +8,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate, type SqlExecutor } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import type { SqlExecutor } from "@undercroft/db";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { documents, records, summary } from "./lake.ts";
 
@@ -65,8 +65,7 @@ async function seedDocument(exec: SqlExecutor, d: SeedDocument): Promise<void> {
 }
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ($2)", [TENANT, OTHER]);
 
   const deals = { tenantId: TENANT, entity: "deals" };

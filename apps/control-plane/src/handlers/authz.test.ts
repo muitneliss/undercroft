@@ -9,8 +9,7 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { appRouter } from "./router.ts";
 import type { Context, Role, SessionUser } from "./trpc.ts";
 
@@ -69,8 +68,7 @@ async function errorCode(fn: () => Promise<unknown>): Promise<string> {
 }
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   // Every statement runs as the control plane does, fixtures included: `undercroft_app`
   // holds DML on every table in `app` and `ops`, which is what the seeding helpers need.
   await db.become("undercroft_app");
@@ -234,17 +232,8 @@ describe("a superadmin holds admin in every tenant", () => {
     });
 
     expect(tenant.role).toBe("admin");
-  });
-
-  it("the same caller without platform authority is told the tenant does not exist", async () => {
-    const user = await seedUser("root@example.test");
-    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
-
-    expect(
-      await errorCode(() =>
-        caller({ userId: user, email: "root@example.test" }).tenants.get({ tenantId: "CASE-1" }),
-      ),
-    ).toBe("NOT_FOUND");
+    // Its pair: the same call by a non-member WITHOUT platform authority is NOT_FOUND, which
+    // is the first test in this file.
   });
 
   it("a tenant that does not exist is still NOT_FOUND for a superadmin", async () => {

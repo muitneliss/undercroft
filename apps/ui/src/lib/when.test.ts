@@ -26,12 +26,16 @@ const NINETY_MINUTES = /^1\.5 hrs?$/u;
 
 describe("formatDate", () => {
   it("changes language without changing timezone", () => {
-    // 17:30 UTC on the 17th is 01:30 on the 18th in Singapore. Vietnam is UTC+7, so a
-    // formatter that quietly followed the locale's own region would say the 17th here.
-    const late = "2026-09-17T17:30:00Z";
+    // 16:30 UTC on the 17th is 00:30 on the 18th in Singapore (UTC+8), but still 23:30 on
+    // the 17th in Vietnam (UTC+7) and 16:30 on the 17th in UTC. The instant has to sit in
+    // that one hour: an hour later it is the 18th in Vietnam too, and a formatter that
+    // followed the locale's region or the host's zone would pass on a Hanoi laptop.
+    const late = "2026-09-17T16:30:00Z";
 
     expect(formatDate(late, "en")).toContain("18");
     expect(formatDate(late, "vi")).toContain("18");
+    expect(formatDate(late, "en")).not.toContain("17");
+    expect(formatDate(late, "vi")).not.toContain("17");
     // Same instant, same day, different words for the month.
     expect(formatDate(late, "vi")).not.toBe(formatDate(late, "en"));
   });
@@ -68,11 +72,13 @@ describe("relativeTime", () => {
   });
 
   it("past a month it is the date, in the fixed zone, not a count of days", () => {
-    // 17:30 UTC on 1 August is 01:30 on the 2nd in Singapore, whichever language reads it.
+    // 17:30 UTC on 1 August is 01:30 on the 2nd in Singapore, whichever language reads it --
+    // and 00:30 in Vietnam, 17:30 in UTC. The clock reading is what tells the zones apart; a
+    // bare "02" would match the year 2026 whatever zone the date was rendered in.
     const long = "2026-08-01T17:30:00Z";
 
-    expect(relativeTime(long, "en", NOW)).toContain("02");
-    expect(relativeTime(long, "vi", NOW)).toContain("02");
+    expect(relativeTime(long, "en", NOW)).toContain("01:30");
+    expect(relativeTime(long, "vi", NOW)).toContain("01:30");
     expect(relativeTime(long, "en", NOW)).not.toContain("ago");
   });
 

@@ -72,8 +72,18 @@ export const vi = {
    */
   runFailed: {
     subject: "Đồng bộ {{source}} cho {{tenantId}} không thành công",
-    /** What a transform run is called where a source's name would go. */
-    models: "dựng mô hình",
+    /**
+     * A model build is not a sync, so it gets its own whole sentence rather than being
+     * spliced into `subject` where a source's name goes. Spliced, it read "Đồng bộ dựng mô
+     * hình cho …" here and "The the model build sync for …" in English: a fragment only fits
+     * the sentence of the language it was written for. `.claude/rules/i18n.md`.
+     */
+    modelsSubject: "Dựng mô hình cho {{tenantId}} không thành công",
+    /**
+     * What a transform run is called in the schedule's source cell: a label standing alone,
+     * never joined into a sentence -- the subject has `modelsSubject` for that.
+     */
+    models: "Dựng mô hình",
     noReason: "không ghi nhận lý do",
     /**
      * Wordless about WHICH source, deliberately: the same message covers a model build,

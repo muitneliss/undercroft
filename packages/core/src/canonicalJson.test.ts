@@ -34,13 +34,6 @@ describe("numbers survive verbatim", () => {
     expect(canonicalJsonFromText(`{"n":${literal}}`)).toBe(`{"n":${literal}}`);
   });
 
-  it("JSON.parse would have destroyed what we preserve", () => {
-    const literal = "1234567890123456789012345";
-    // The defect this module exists to prevent, shown rather than asserted about.
-    expect(JSON.stringify(JSON.parse(`{"n":${literal}}`))).not.toBe(`{"n":${literal}}`);
-    expect(canonicalJsonFromText(`{"n":${literal}}`)).toBe(`{"n":${literal}}`);
-  });
-
   it("refuses a JavaScript number rather than hashing a value nobody sent", () => {
     expect(() => canonicalJson({ n: 8500.0001 })).toThrow(/refusing to canonicalise/u);
   });

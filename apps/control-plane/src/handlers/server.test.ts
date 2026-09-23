@@ -70,6 +70,19 @@ describe("the SPA is served without shadowing the API", () => {
     expect(await response.text()).toContain("Undercroft");
   });
 
+  it("the assistant's history is not swallowed by the SPA fallback", async () => {
+    // The assistant's one GET, and so the one of its routes the catch-all could take: behind
+    // it, a reload would restore the conversation from a body of HTML. An anonymous 401 is the
+    // assistant route answering; the shell would be a 200. (Its POST cannot lose to a GET.)
+    const app = createServer({ exec: noDatabase, uiDist: dist });
+
+    const response = await app.fetch(
+      new Request("http://c/api/assistant/history?tenantId=CASE-0042"),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
   it("Google's consent callback is not swallowed by the SPA fallback", async () => {
     // The exact hazard `/api/auth/*` carries a comment about, now for a second OAuth route.
     // Registered after the catch-all this would answer 200 with index.html: a consent that
@@ -80,5 +93,19 @@ describe("the SPA is served without shadowing the API", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toContain("connect=failed");
+  });
+});
+
+describe("the consent callback, before it asks anything of the database", () => {
+  it("an admin who declined at Google is not shown an error", async () => {
+    // Pressing Cancel is answered before the state is read, so `noDatabase` doubles as the
+    // proof that no handshake was spent on it. The consent itself is `oauth.test.ts`'s.
+    const app = createServer({ exec: noDatabase });
+
+    const response = await app.fetch(
+      new Request("http://c/oauth/google/callback?error=access_denied&state=x"),
+    );
+
+    expect(response.headers.get("location")).toContain("reason=declined");
   });
 });

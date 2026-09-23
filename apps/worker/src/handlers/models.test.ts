@@ -13,14 +13,15 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createStampSource, TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
+import type { SqlExecutor } from "@undercroft/db";
 import { getModel, saveModel } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { drainJobs } from "../services/jobs.ts";
 import { sessionsBySetRole } from "../services/tenantSession.ts";
 import type { Spawn } from "../services/transform.ts";
+import { noDatabase } from "../testing.ts";
 import { createLakeApi } from "./lake.ts";
 
 const TENANT = "CASE-1";
@@ -65,14 +66,15 @@ const fakeDbt: Spawn = async (_cmd, options) => {
   return { exitCode: 1, output: "Done. PASS=1 FAIL=1" };
 };
 
-function api(spawn: Spawn = fakeDbt) {
+/** The API with dbt wired. `exec` is `noDatabase` only for requests refused before any SQL. */
+function api(spawn: Spawn = fakeDbt, exec: SqlExecutor = db) {
   return createLakeApi({
     lake: new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) }),
-    exec: db,
+    exec,
     serviceToken: "svc-token",
     dbt: {
       database: { host: "db.internal", port: 5432, dbname: "undercroft" },
-      sessions: sessionsBySetRole(db, (role, fn) => db.asRole(role, fn)),
+      sessions: sessionsBySetRole(exec, (role, fn) => db.asRole(role, fn)),
       spawn,
       workDir,
     },
@@ -87,26 +89,36 @@ function post(app: ReturnType<typeof api>, path: string, body: unknown, token = 
   });
 }
 
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ('CASE-2')", [TENANT]);
-  await saveModel(db, TENANT, {
-    name: "stg_deals",
-    sql: "select 1 as deal_id",
-    tests: { columns: { deal_name: ["not_null"] } },
-    updatedBy: "u-1",
-  });
+beforeEach(() => {
   workDir = mkdtempSync(join(tmpdir(), "undercroft-build-test-"));
-  await db.become("undercroft_worker");
 });
 
-afterEach(async () => {
-  await drainJobs();
-  await db.close();
-});
+/**
+ * A migrated database holding one tenant's saved model, entered as the worker. Per describe,
+ * so the refusals at the end of the file do not open a database they never reach.
+ */
+function withDatabase(): void {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ('CASE-2')", [TENANT]);
+    await saveModel(db, TENANT, {
+      name: "stg_deals",
+      sql: "select 1 as deal_id",
+      tests: { columns: { deal_name: ["not_null"] } },
+      updatedBy: "u-1",
+    });
+    await db.become("undercroft_worker");
+  });
+
+  afterEach(async () => {
+    await drainJobs();
+    await db.close();
+  });
+}
 
 describe("POST /v1/models/build", () => {
+  withDatabase();
+
   it("builds the model as the tenant and answers with the run, its steps and the first rows", async () => {
     const res = await post(api(), "/v1/models/build", {
       tenantId: TENANT,
@@ -178,17 +190,11 @@ describe("POST /v1/models/build", () => {
     expect(body.error).toBe('column "nope" does not exist');
     expect(body.preview).toBeNull();
   });
-
-  it("refuses a caller without the service token, and a body with no model", async () => {
-    expect(
-      (await post(api(), "/v1/models/build", { tenantId: TENANT, model: "stg_deals" }, "nope"))
-        .status,
-    ).toBe(401);
-    expect((await post(api(), "/v1/models/build", { tenantId: TENANT })).status).toBe(400);
-  });
 });
 
 describe("POST /v1/dq/failures", () => {
+  withDatabase();
+
   it("reads the rows a failed test stored, as the tenant's dbt login", async () => {
     const app = api();
     const built = (await (
@@ -229,5 +235,16 @@ describe("POST /v1/dq/failures", () => {
       uniqueId: "model.undercroft.stg_deals",
     });
     expect(model.status).toBe(404);
+  });
+});
+
+describe("a build refused before anything runs", () => {
+  it("refuses a caller without the service token, and a body with no model", async () => {
+    // `noDatabase` refuses every statement, so both refusals are also proven to come first.
+    const app = api(fakeDbt, noDatabase);
+    const body = { tenantId: TENANT, model: "stg_deals" };
+
+    expect((await post(app, "/v1/models/build", body, "nope")).status).toBe(401);
+    expect((await post(app, "/v1/models/build", { tenantId: TENANT })).status).toBe(400);
   });
 });

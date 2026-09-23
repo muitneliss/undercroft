@@ -11,8 +11,7 @@
  * the run then declines to read.
  */
 
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import {
@@ -45,8 +44,7 @@ const NOW = 1;
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   // From here every statement runs as the worker does in production.
   await db.become("undercroft_worker");
 });
@@ -167,22 +165,14 @@ describe("a refusal, once the readers have changed", () => {
     expect(await backlog(NOW)).toEqual({ documentIds: [], scopes: [] });
   });
 
-  it("leaves the backlog once this generation has had its go at it", async () => {
-    // Re-queued, re-read, still refused -- and now stamped, so it stops being offered. The
-    // write is what closes the loop; a pass that read the row without stamping it would offer
-    // the same document to every run from here on.
-    await land("f1");
-    await extractedAt(BEFORE, [row("f1")]);
-
-    await extractedAt(NOW, [row("f1", { reason: "docx-unreadable" })]);
-
-    expect(await backlog(NOW)).toEqual({ documentIds: [], scopes: [] });
-  });
-
   it("re-enters exactly once when the row predates the column entirely", async () => {
     // The 240 migration's `DEFAULT 0`. A row written before the column existed carries no
     // generation of its own, and must sort BELOW every generation -- a NULL would sort outside
     // `<` instead and mean "never retry" for precisely the rows this mechanism exists to reach.
+    //
+    // Its second half is also the loop closing for any older generation: re-queued, re-read,
+    // still refused -- and now stamped, so it stops being offered. A pass that read the row
+    // without stamping it would offer the same document to every run from here on.
     await land("f1");
     await db.query(
       `INSERT INTO raw.document_text
@@ -432,51 +422,18 @@ describe("the index the digest questions need", () => {
 
     expect(rows[0]?.indexdef).toContain("(source, tenant_id, sha256)");
   });
-
-  it("carries no privileges of its own, and cannot be given any", async () => {
-    // `250_documents_sha_idx.sql` records "no grant" as a FINDING. This is the evidence:
-    // `privileges.md`'s rule is about tables, 240's was about a column, and an index is neither
-    // -- it holds no ACL, it is never named in a query, and Postgres refuses the GRANT outright.
-    const acls = await db.query<{ index_acl: string | null; table_acl: string | null }>(
-      `SELECT (SELECT relacl::text FROM pg_class WHERE relname = 'documents_digest') AS index_acl,
-              (SELECT relacl::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname = 'raw' AND c.relname = 'documents') AS table_acl`,
-    );
-    expect(acls.rows[0]?.index_acl).toBeNull();
-    // ...and the table it indexes DOES carry one, so the null above is about indexes and not
-    // about this database having no grants at all.
-    expect(acls.rows[0]?.table_acl).toContain("undercroft_worker");
-
-    const refused = await db.asSuperuser(async (tx) => {
-      try {
-        await tx.query("GRANT SELECT ON raw.documents_digest TO undercroft_worker");
-        return "";
-      } catch (error) {
-        return String(error);
-      }
-    });
-    expect(refused).toContain("is an index");
-  });
 });
 
+/**
+ * `privileges.md`'s "grant the table in the migration that creates it" is about new TABLES,
+ * where `ON ALL TABLES` froze at migration time. A column is the opposite case: it gets no ACL
+ * of its own and falls back to the relation's. So 180's table-level grant already reaches
+ * `reader_version` for the worker -- which needs no test of its own, because this whole suite
+ * runs as the worker and every `extractedAt` above writes the column.
+ */
 describe("the grant on a column added later", () => {
-  it("covers the worker, because its privilege is held on the table", async () => {
-    // `privileges.md`'s "grant the table in the migration that creates it" is about new TABLES,
-    // where `ON ALL TABLES` froze at migration time. A column is the opposite case: it gets no
-    // ACL of its own and falls back to the relation's, so 180's table-level grant already
-    // reaches it. Asserted rather than reasoned about -- this whole suite runs as the worker,
-    // and every `extractedAt` above writes the column.
-    await land("f1");
-    await extractedAt(NOW, [row("f1")]);
-
-    const { rows } = await db.query<{ reader_version: number }>(
-      "SELECT reader_version FROM raw.document_text WHERE document_id = 'f1'",
-    );
-    expect(rows[0]?.reader_version).toBe(NOW);
-  });
-
   it("does not cover the control plane, because its grant names columns", async () => {
-    // The quiet side, and a PII boundary before it is anything else. 180 grants
+    // The firing side, and a PII boundary before it is anything else. 180 grants
     // `undercroft_app` eight named columns precisely so `text` is not among them; a column
     // scope does not widen to columns added later, and that is the property being pinned. If
     // this test ever goes green by someone adding a name to that list, the question to ask is

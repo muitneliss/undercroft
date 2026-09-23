@@ -9,8 +9,7 @@
  * of a record a mark answers for.
  */
 
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { knownRecords, markHarvested, readCursor, writeCursor } from "./rawRecords.ts";
@@ -25,8 +24,7 @@ const LATER = "20260921T120000.000000Z";
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   // Every statement runs as the worker does, so a missing grant fails here and not at 02:00.
   await db.become("undercroft_worker");
 });

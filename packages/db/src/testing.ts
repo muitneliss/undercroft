@@ -10,10 +10,18 @@
  * connection cannot escalate), and one connection (so `FOR UPDATE` concurrency is an
  * integration-tier test against real Postgres). This file is exported from a `testing`
  * entry so production code cannot import PGlite by accident.
+ *
+ * WHY A SNAPSHOT. Booting PGlite runs `initdb` inside WASM, about a fifth of a second, and a
+ * suite that booted one per test spent 99% of the unit gate's 174s doing exactly that --
+ * the tests themselves took half a second between them. {@link createMigratedTestDatabase}
+ * pays for one boot and one `migrate()` per process, dumps the data directory, and starts
+ * every later database from that copy in about 60ms. Each test still owns a private
+ * database, so isolation, `become` and the grant model are exactly what they were.
  */
 
 import { PGlite } from "@electric-sql/pglite";
 import type { QueryResult, SqlExecutor } from "./executor.ts";
+import { migrate } from "./migrate.ts";
 
 export interface TestDatabase extends SqlExecutor {
   /** Run a block as another role, returning to the role in force afterwards even on failure. */
@@ -43,8 +51,37 @@ export interface TestDatabase extends SqlExecutor {
   close: () => Promise<void>;
 }
 
+/** A fresh, empty database: no roles, no schema. For the suite that tests `migrate` itself. */
 export async function createTestDatabase(): Promise<TestDatabase> {
-  const db = new PGlite();
+  return await open(new PGlite());
+}
+
+let migrated: Promise<File | Blob> | undefined;
+
+async function migratedDataDir(): Promise<File | Blob> {
+  const seed = new PGlite();
+  const db = await open(seed);
+  await migrate(db);
+  const dataDir = await seed.dumpDataDir("none");
+  await db.close();
+  return dataDir;
+}
+
+/**
+ * A database with every migration applied, as `createTestDatabase()` + `migrate()` would
+ * leave it, restored from a per-process snapshot rather than rebuilt. A suite that needs the
+ * migrations run in front of it -- because it is testing them -- uses `createTestDatabase`.
+ */
+export async function createMigratedTestDatabase(): Promise<TestDatabase> {
+  // A failed build is not cached: the next caller retries rather than inheriting the error.
+  migrated ??= migratedDataDir().catch((error: unknown) => {
+    migrated = undefined;
+    throw error;
+  });
+  return await open(new PGlite({ loadDataDir: await migrated }));
+}
+
+async function open(db: PGlite): Promise<TestDatabase> {
   await db.waitReady;
   let current: string | null = null;
 

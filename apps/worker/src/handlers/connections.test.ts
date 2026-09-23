@@ -8,12 +8,13 @@
 
 import { createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { hashToken, randomToken } from "@undercroft/crypto";
-import { migrate } from "@undercroft/db";
+import type { SqlExecutor } from "@undercroft/db";
 import { readCredential } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
+import { noDatabase } from "../testing.ts";
 import { createLakeApi } from "./lake.ts";
 
 const KEY = Buffer.alloc(32, 9).toString("base64");
@@ -24,32 +25,41 @@ let db: TestDatabase;
 let lake: LakeStore;
 let fetcher: InMemoryByteFetcher;
 
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+beforeEach(() => {
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
   fetcher = new InMemoryByteFetcher();
-  // Seeded as the superuser; from here on every statement runs as the worker does.
-  await db.become("undercroft_worker");
 });
 
-afterEach(async () => {
-  await db.close();
-});
+/**
+ * A migrated database with one tenant, entered as the worker. Per describe, so the requests
+ * refused before any statement (the last describe) do not open a database they never reach.
+ */
+function withDatabase(): void {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+    // Seeded as the superuser; from here on every statement runs as the worker does.
+    await db.become("undercroft_worker");
+  });
 
-function api() {
+  afterEach(async () => {
+    await db.close();
+  });
+}
+
+/** The API. `exec` is `noDatabase` only for requests refused before any SQL. */
+function api(exec: SqlExecutor = db) {
   return createLakeApi({
     lake,
-    exec: db,
+    exec,
     serviceToken: "svc-token",
     env: ENV,
     byteFetcher: fetcher,
   });
 }
 
-function post(path: string, body: unknown, token = "svc-token") {
-  return api().request(path, {
+function post(path: string, body: unknown, token = "svc-token", exec: SqlExecutor = db) {
+  return api(exec).request(path, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
@@ -86,36 +96,36 @@ async function issueIngestKey(): Promise<string> {
 }
 
 describe("who may manage a credential", () => {
+  withDatabase();
+
   it("the trigger token is accepted", async () => {
-    // The quiet side: a guard that refused everything would satisfy the two below.
+    // The quiet side: a guard that refused everything would satisfy the test below.
     expect((await post("/v1/connections/credential", VALID)).status).toBe(200);
   });
 
-  it("an ingest key is refused, even though it is valid for the lake API", async () => {
+  it("an ingest key is refused, even though it is valid for the lake API, and so is none", async () => {
     // The firing side, and the point of the verb being service-token only. An ingest key is
     // a grant to LAND data; accepting one here would widen every key ever issued into a
     // credential-management capability.
     const ingestKey = await issueIngestKey();
 
     const response = await post("/v1/connections/credential", VALID, ingestKey);
-
-    expect(response.status).toBe(401);
-    const { rows } = await db.query("SELECT 1 FROM app.connection_secret");
-    expect(rows).toHaveLength(0);
-  });
-
-  it("no token at all is refused", async () => {
-    const response = await api().request("/v1/connections/credential", {
+    const anonymous = await api().request("/v1/connections/credential", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(VALID),
     });
 
     expect(response.status).toBe(401);
+    expect(anonymous.status).toBe(401);
+    const { rows } = await db.query("SELECT 1 FROM app.connection_secret");
+    expect(rows).toHaveLength(0);
   });
 });
 
 describe("storing a credential", () => {
+  withDatabase();
+
   it("the connection and its sealed secret are both written", async () => {
     await post("/v1/connections/credential", VALID);
 
@@ -137,18 +147,6 @@ describe("storing a credential", () => {
     expect(response.status).toBe(404);
     const { rows } = await db.query("SELECT 1 FROM app.connection_secret");
     expect(rows).toHaveLength(0);
-  });
-
-  it("a malformed body is refused and its details name paths, not values", async () => {
-    // The body carries a live refresh token; an error that echoed it would put a
-    // credential in a log.
-    const response = await post("/v1/connections/credential", {
-      ...VALID,
-      credential: { accessToken: "", refreshToken: "super-secret-token", expiresAt: null },
-    });
-
-    expect(response.status).toBe(400);
-    expect(JSON.stringify(await response.json())).not.toContain("super-secret-token");
   });
 
   it("consenting twice replaces the credential rather than failing", async () => {
@@ -201,6 +199,8 @@ describe("storing a credential", () => {
 });
 
 describe("browsing what may be shared", () => {
+  withDatabase();
+
   it("gmail labels come back for the picker", async () => {
     await post("/v1/connections/credential", VALID);
     fetcher.on("GET", "https://gmail.googleapis.com/gmail/v1/users/me/labels", {
@@ -243,19 +243,11 @@ describe("browsing what may be shared", () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ code: "scope_insufficient" });
   });
-
-  it("drive cannot be browsed, because its choosing happens in the Picker", async () => {
-    const response = await post("/v1/connections/browse", {
-      source: "drive",
-      tenantId: TENANT,
-      kind: "labels",
-    });
-
-    expect(response.status).toBe(400);
-  });
 });
 
 describe("revoking a connection", () => {
+  withDatabase();
+
   it("the stored credential is deleted and Google is told", async () => {
     await post("/v1/connections/credential", VALID);
     fetcher.on("POST", "https://oauth2.googleapis.com/revoke", { status: 200, body: "" });
@@ -283,5 +275,36 @@ describe("revoking a connection", () => {
     expect(await response.json()).toEqual({ revokedUpstream: false });
     const { rows } = await db.query("SELECT 1 FROM app.connection_secret");
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("a request refused before the database is asked", () => {
+  // `noDatabase` refuses every statement, so each of these also proves that none ran.
+  it("a malformed body is refused and its details name paths, not values", async () => {
+    // The body carries a live refresh token; an error that echoed it would put a
+    // credential in a log.
+    const response = await post(
+      "/v1/connections/credential",
+      {
+        ...VALID,
+        credential: { accessToken: "", refreshToken: "super-secret-token", expiresAt: null },
+      },
+      "svc-token",
+      noDatabase,
+    );
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).not.toContain("super-secret-token");
+  });
+
+  it("drive cannot be browsed, because its choosing happens in the Picker", async () => {
+    const response = await post(
+      "/v1/connections/browse",
+      { source: "drive", tenantId: TENANT, kind: "labels" },
+      "svc-token",
+      noDatabase,
+    );
+
+    expect(response.status).toBe(400);
   });
 });

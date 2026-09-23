@@ -5,9 +5,8 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
 import { closeRun, openRun, recordEntities, recordRefusals } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { messages } from "../i18n/index.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
@@ -69,8 +68,7 @@ async function errorCode(fn: () => Promise<unknown>): Promise<string> {
 }
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
   await db.become("undercroft_app");
 
@@ -113,6 +111,7 @@ describe("runs.list", () => {
     const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
     const page = await caller(viewer, "v@example.test").runs.list({ tenantId: "CASE-0042" });
 
+    // Exact, so it also proves CASE-0043's `r-other` is not in it.
     expect(page.items.map((r) => r.id)).toEqual(["r-running", "r-ok"]);
     const [, ok] = page.items;
     expect(ok?.kind).toBe("ingest");
@@ -122,12 +121,6 @@ describe("runs.list", () => {
     // A run still in progress reports no counts: a number still changing is not a number.
     expect(page.items[0]?.counts).toBeNull();
     expect(page.nextCursor).toBeNull();
-  });
-
-  it("another tenant's runs are not in it", async () => {
-    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
-    const page = await caller(viewer, "v@example.test").runs.list({ tenantId: "CASE-0042" });
-    expect(page.items.map((r) => r.id)).not.toContain("r-other");
   });
 });
 

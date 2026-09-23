@@ -8,8 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { clearThread, findThread, listTurns, openThread, saveTurn } from "./assistantThread.ts";
 
 let db: TestDatabase;
@@ -17,8 +16,7 @@ let operator: string;
 let colleague: string;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.app_user (email) VALUES ('ops@example.test'), ('audit@example.test')

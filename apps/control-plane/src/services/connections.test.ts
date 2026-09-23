@@ -7,14 +7,14 @@
  * back, and what it must leave behind -- is a property of the query.
  */
 
-import { migrate } from "@undercroft/db";
 import {
   openRun,
   upsertConnection,
   writeConnectionDetail,
   writeCredential,
 } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import type { SqlExecutor } from "@undercroft/db";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import {
@@ -37,16 +37,28 @@ const GMAIL_GRANT =
 
 let db: TestDatabase;
 
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
-  await db.become("undercroft_app");
-});
+/**
+ * A database per test, called inside each describe that reads one rather than at the top of
+ * the file: `presentStatus` and the refusals decided before any statement runs pay nothing
+ * for a fixture they never touch.
+ */
+function useDatabase(): void {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+    await db.become("undercroft_app");
+  });
 
-afterEach(async () => {
-  await db.close();
-});
+  afterEach(async () => {
+    await db.close();
+  });
+}
+
+/** For a refusal decided before any statement runs: a query here fails loudly. */
+const noDatabase: SqlExecutor = {
+  query: () => Promise.reject(new Error("this refusal must not touch the database")),
+  exec: () => Promise.reject(new Error("this refusal must not touch the database")),
+};
 
 describe("presentStatus", () => {
   it("a connected, scoped source is connected", () => {
@@ -152,6 +164,8 @@ describe("presentStatus", () => {
 });
 
 describe("the schedule", () => {
+  useDatabase();
+
   it("a tenant with nothing connected still sees every source", async () => {
     // The schedule IS the product: the screen a new customer lands on is the one an
     // established one uses, and an empty list gave it nothing to show.
@@ -295,6 +309,8 @@ describe("the schedule", () => {
 });
 
 describe("choosing a cadence", () => {
+  useDatabase();
+
   it("is recorded on the connection and in the trail", async () => {
     await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
     const result = await setCadence(db, {
@@ -323,6 +339,8 @@ describe("choosing a cadence", () => {
 });
 
 describe("choosing a scope", () => {
+  useDatabase();
+
   beforeEach(async () => {
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
   });
@@ -431,6 +449,8 @@ describe("choosing a scope", () => {
 });
 
 describe("connecting with a pasted token", () => {
+  useDatabase();
+
   it("hands the token to the worker to be proven and sealed, and audits the source alone", async () => {
     const worker = new InMemoryWorkerClient().backedBy(db);
 
@@ -470,23 +490,11 @@ describe("connecting with a pasted token", () => {
     const { rows } = await db.query("SELECT 1 FROM ops.audit_log");
     expect(rows).toHaveLength(0);
   });
-
-  it("a source that consents rather than pastes is refused before the worker is asked", async () => {
-    const worker = new InMemoryWorkerClient();
-
-    const result = await setToken(db, worker, {
-      tenantId: TENANT,
-      source: "gmail",
-      token: "t",
-      actor: "ada@example.test",
-    });
-
-    expect(result).toEqual({ ok: false, reason: "unsupported-source" });
-    expect(worker.stored).toHaveLength(0);
-  });
 });
 
 describe("disconnecting", () => {
+  useDatabase();
+
   beforeEach(async () => {
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
     await writeConnectionDetail(db, {
@@ -530,5 +538,22 @@ describe("disconnecting", () => {
     expect(result.revokedUpstream).toBe(false);
     const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
     expect(gmail?.status).toBe("disconnected");
+  });
+});
+
+describe("connecting with a pasted token, refused before anything is asked", () => {
+  // The quiet half is "hands the token to the worker..." above, which does reach the worker.
+  it("a source that consents rather than pastes is refused before the worker is asked", async () => {
+    const worker = new InMemoryWorkerClient();
+
+    const result = await setToken(noDatabase, worker, {
+      tenantId: TENANT,
+      source: "gmail",
+      token: "t",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "unsupported-source" });
+    expect(worker.stored).toHaveLength(0);
   });
 });

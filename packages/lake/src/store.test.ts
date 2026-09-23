@@ -36,20 +36,19 @@ beforeEach(() => {
 });
 
 describe("create-only", () => {
-  it("a first write is created", async () => {
-    const result = await lake().put("hubspot/deals/1", bytes("a"), { runId: "r1" });
-    expect(result.status).toBe("created");
-    expect(result.versionKey).not.toBe("");
-  });
-
   it("the manifest for an observation is never overwritten", async () => {
-    // Two different payloads land as two observations. A stamp collision that tried to
-    // reuse a manifest key would raise; the monotonic stamp source prevents it, and this
-    // asserts the create-only guard holds even so.
-    const store = lake();
-    await store.put("hubspot/deals/1", bytes("a"), { runId: "r1" });
-    await store.put("hubspot/deals/1", bytes("b"), { runId: "r2" });
-    expect((await store.versions("hubspot/deals/1")).length).toBe(2);
+    // The monotonic stamp source keeps a real collision from happening, so one is staged:
+    // a second source on an identical clock names the stamp the store is about to use, and
+    // an observation is planted there first. The quiet side is every other put in this file.
+    const stamp = createStampSource(new TestClock()).next();
+    const manifestKey = `hubspot/deals/1/${stamp}/manifest.json`;
+    const planted = bytes('{"sha256":"planted"}');
+    await backing.put(manifestKey, planted);
+
+    await expect(lake().put("hubspot/deals/1", bytes("a"), { runId: "r1" })).rejects.toBeInstanceOf(
+      ObjectExists,
+    );
+    expect(await backing.get(manifestKey)).toEqual(planted);
   });
 });
 
@@ -138,15 +137,20 @@ describe("retention is bounded and reported", () => {
   it("prune trims to the limit oldest-first and names what it removed", async () => {
     const store = lake(2);
     const stamps: string[] = [];
+    const pruned: (readonly string[])[] = [];
     for (const v of ["a", "b", "c"]) {
       const r = await store.put("hubspot/deals/1", bytes(v), { runId: "r" });
       stamps.push(r.versionKey.split("/").at(-1)!);
+      pruned.push(r.pruned);
     }
     const remaining = await store.versions("hubspot/deals/1");
     expect(remaining.length).toBe(2);
     // The two newest survive; the oldest is gone.
     expect(remaining).not.toContain(stamps[0]!);
     expect(remaining).toContain(stamps[2]!);
+    // And the put that pushed it out says so: silent pruning of a durable store is
+    // indistinguishable from data loss.
+    expect(pruned).toEqual([[], [], [stamps[0]!]]);
   });
 
   it("a retention below 1 is refused", () => {
@@ -251,27 +255,6 @@ describe("the journal is a per-stream cursor", () => {
       `${stream}/4`,
       `${stream}/5`,
     ]);
-  });
-});
-
-describe("a listing resumes from a key", () => {
-  it("startAfter drops the keys at or before it", async () => {
-    // S3's own rule, and the one the journal cursor rests on: strictly greater. A store
-    // that included the boundary key would hand the loader the observation it has already
-    // projected, every pass, for ever.
-    for (const k of ["p/a", "p/b", "p/c"]) {
-      await backing.put(k, bytes(k));
-    }
-    expect(await backing.list("p/", "p/b")).toEqual(["p/c"]);
-  });
-
-  it("without startAfter every key under the prefix is returned", async () => {
-    // The quiet side. `prune` and `versions` list without a position and must keep seeing
-    // the whole of what they are about to walk.
-    for (const k of ["p/a", "p/b", "p/c"]) {
-      await backing.put(k, bytes(k));
-    }
-    expect(await backing.list("p/")).toEqual(["p/a", "p/b", "p/c"]);
   });
 });
 

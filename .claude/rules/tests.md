@@ -28,6 +28,17 @@ paths: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
   "permission denied for table". Every suite ran as the superuser until release 1.8, and so
   did every service.
 - **Assert observable behaviour**, not internals — public values, states, errors.
+- **A suite that needs the schema opens `createMigratedTestDatabase()`**, not
+  `createTestDatabase()` followed by `migrate()`. Booting PGlite is `initdb` in WASM, about
+  0.2s, and one boot per test was 99% of the unit gate's runtime; the migrated fixture boots
+  once per process and restores every later database from a snapshot in about 60ms. Each test
+  still gets its own database. Only a suite testing `migrate` itself wants the empty one.
+- **A test that never touches the database does not sit under a `beforeEach` that opens
+  one.** Put it in its own `describe` or file; a pure function pays nothing for a fixture it
+  does not use.
+- **Files run in parallel** (`bun test --parallel`, one process per core, each file in a
+  fresh global). A suite owns its own temp directory, port and database; it may not depend on
+  another file having run first.
 - **PGlite proves the grants are correct**, not that a hostile connection cannot escalate
   past `SET ROLE`; that, and `FOR UPDATE` concurrency, are integration-tier against real
   Postgres.

@@ -20,10 +20,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { migrate } from "@undercroft/db";
 import { getModel, saveModel } from "@undercroft/db/repos";
 import { PASSWORD_VAR } from "@undercroft/db/services";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { sessionsBySetRole } from "./tenantSession.ts";
 import { runTransform, type Spawn, type SpawnOptions, type TransformDeps } from "./transform.ts";
@@ -81,8 +80,7 @@ function deps(spawn: Spawn): TransformDeps {
 }
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   await saveModel(db, TENANT, {
     name: "stg_deals",

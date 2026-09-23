@@ -46,15 +46,12 @@ const COMPOSE = [
 interface Recorder {
   readonly deps: Deps;
   readonly lines: string[];
-  readonly asked: string[];
 }
 
 function recorder(recorded: Record<string, unknown>): Recorder {
   const lines: string[] = [];
-  const asked: string[] = [];
   const deps: Deps = {
     fetch: (input: string) => {
-      asked.push(input);
       const body = recorded[input];
       if (body === undefined) {
         const known = Object.keys(recorded).join("\n  ");
@@ -68,7 +65,7 @@ function recorder(recorded: Record<string, unknown>): Recorder {
     log: (line: string) => lines.push(line),
     now: () => 0,
   };
-  return { deps, lines, asked };
+  return { deps, lines };
 }
 
 function ghcr(repo: string, tag: string, digest: string): Record<string, unknown> {
@@ -134,6 +131,10 @@ function routes(scenario: Scenario = {}): Record<string, unknown> {
 }
 
 it("a one-shot service that exited 0 is a success, not a dead container", async () => {
+  // Also the proof that the release tag, not the panel's moving pointer, is what ghcr is
+  // asked for: the recorded routes answer only `v1.3.0`, so reaching for `latest` would be a
+  // refusal that fails this test rather than a pass -- the whole point of the fetcher
+  // refusing unmodelled requests.
   const { deps, lines } = recorder(routes({ tag: "v1.3.0" }));
 
   await verify(CFG, deps, "", "v1.3.0");
@@ -189,17 +190,6 @@ it("a long-running service on a stale digest fails the release", async () => {
   await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
     new RegExp(`worker: running ${STALE_DIGEST}`, "u"),
   );
-});
-
-it("the release tag, not the panel's moving pointer, is what ghcr is asked for", async () => {
-  // The recorded routes answer only `v1.3.0`, so reaching for `latest` is a refusal rather
-  // than a pass -- which is the whole point of the fetcher refusing unmodelled requests.
-  const { deps, asked } = recorder(routes({ tag: "v1.3.0" }));
-
-  await verify(CFG, deps, "", "v1.3.0");
-
-  expect(asked).toContain("https://ghcr.io/v2/muitneliss/undercroft-worker/manifests/v1.3.0");
-  expect(asked).not.toContain("https://ghcr.io/v2/muitneliss/undercroft-worker/manifests/latest");
 });
 
 it("preflight passes when the panel holds the compose file this repo publishes", async () => {

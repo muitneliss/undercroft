@@ -10,12 +10,12 @@ import { join } from "node:path";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
-import { migrate } from "@undercroft/db";
 import { openRun } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { drainJobs } from "../services/jobs.ts";
+import { noDatabase } from "../testing.ts";
 import { createLakeApi } from "./lake.ts";
 
 const BASE = "https://demo.test";
@@ -47,29 +47,38 @@ function sealDemoToken(): Buffer {
   return Buffer.from(sealed.blob);
 }
 
-beforeEach(async () => {
+beforeEach(() => {
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
-  await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
-  await db.query(
-    "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-1','demo','connected'), ('CASE-1','stale','expired')",
-  );
-  await db.query(
-    "INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version) VALUES ('CASE-1','demo',$1,1)",
-    [sealDemoToken()],
-  );
-  specsDir = mkdtempSync(join(tmpdir(), "undercroft-specs-"));
-  writeFileSync(join(specsDir, "demo.yaml"), SPEC);
-  writeFileSync(join(specsDir, "stale.yaml"), SPEC.replace("id: demo", "id: stale"));
-  await db.become("undercroft_worker");
 });
 
-afterEach(async () => {
-  await drainJobs();
-  await db.close();
-});
+/**
+ * A migrated database with one connected and one expired connection, and their specs on disk,
+ * entered as the worker. Per describe, so the token refusals at the end of the file do not
+ * open a database they never reach.
+ */
+function withDatabase(): void {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
+    await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
+    await db.query(
+      "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-1','demo','connected'), ('CASE-1','stale','expired')",
+    );
+    await db.query(
+      "INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version) VALUES ('CASE-1','demo',$1,1)",
+      [sealDemoToken()],
+    );
+    specsDir = mkdtempSync(join(tmpdir(), "undercroft-specs-"));
+    writeFileSync(join(specsDir, "demo.yaml"), SPEC);
+    writeFileSync(join(specsDir, "stale.yaml"), SPEC.replace("id: demo", "id: stale"));
+    await db.become("undercroft_worker");
+  });
+
+  afterEach(async () => {
+    await drainJobs();
+    await db.close();
+  });
+}
 
 function api(fetcher = new InMemoryFetcher()) {
   return createLakeApi({
@@ -98,6 +107,8 @@ async function statusOf(runId: string): Promise<string | undefined> {
 }
 
 describe("POST /v1/runs/ingest", () => {
+  withDatabase();
+
   it("answers 202 with the run's id, and the run finishes without the caller", async () => {
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
       body: { results: [{ id: "1" }, { id: "2" }], paging: {} },
@@ -237,6 +248,8 @@ describe("POST /v1/runs/ingest", () => {
 });
 
 describe("GET /v1/runs/due", () => {
+  withDatabase();
+
   const GMAIL_SCOPE = JSON.stringify({ labels: [{ id: "Label_8", name: "Invoices" }] });
 
   async function seed(sql: string, params: unknown[] = []): Promise<void> {
@@ -299,15 +312,12 @@ describe("GET /v1/runs/due", () => {
     });
     expect(await fresh.json()).toEqual({ due: [] });
   });
-
-  it("needs the trigger token", async () => {
-    expect((await api().request("/v1/runs/due")).status).toBe(401);
-  });
 });
 
 describe("GET /v1/runs/extract-due", () => {
+  withDatabase();
+
   const SHA_A = "a".repeat(64);
-  const SHA_B = "b".repeat(64);
 
   /** Catalogue a document the way an ingest leaves one. `sha` is what its bytes hashed to. */
   async function landed(documentId: string, sha: string): Promise<void> {
@@ -354,30 +364,13 @@ describe("GET /v1/runs/extract-due", () => {
     expect(await (await extractDue()).json()).toEqual({ due: [] });
   });
 
-  it("lists it again when a document's bytes have changed since it was read", async () => {
-    await landed("doc-1", SHA_A);
-    await readFrom("doc-1", SHA_B);
-
-    expect(await (await extractDue()).json()).toEqual({
-      due: [{ tenantId: "CASE-1", source: "drive" }],
-    });
-  });
-
-  it("does not list a pair whose only document has been tombstoned", async () => {
-    // Its bytes are gone from the source, so re-reading it is the opposite of what the
-    // tombstone records -- and a pair nothing can read that stays due ticks forever.
-    await landed("doc-1", SHA_A);
-    await db.query("UPDATE raw.documents SET deleted_at = now() WHERE document_id = 'doc-1'");
-
-    expect(await (await extractDue()).json()).toEqual({ due: [] });
-  });
-
-  it("needs the trigger token", async () => {
-    expect((await api().request("/v1/runs/extract-due")).status).toBe(401);
-  });
+  // Which documents count as pending -- changed bytes, a tombstone -- is the repo predicate's,
+  // proven in `repos/documentText.test.ts`. These two are that the route answers with it.
 });
 
 describe("GET /v1/runs/:id", () => {
+  withDatabase();
+
   it("returns the run for whoever holds the trigger token, and 404 for no such run", async () => {
     await openRun(db, {
       id: "r1",
@@ -400,5 +393,20 @@ describe("GET /v1/runs/:id", () => {
 
     const anonymous = await app.request("/v1/runs/r1");
     expect(anonymous.status).toBe(401);
+  });
+});
+
+describe("a tick without the trigger token", () => {
+  // `noDatabase` refuses every statement, so the 401 is also proven to come before any SQL.
+  function app() {
+    return createLakeApi({ lake, exec: noDatabase, serviceToken: "svc-token" });
+  }
+
+  it("is refused by the due list", async () => {
+    expect((await app().request("/v1/runs/due")).status).toBe(401);
+  });
+
+  it("is refused by the extract-due list", async () => {
+    expect((await app().request("/v1/runs/extract-due")).status).toBe(401);
   });
 });

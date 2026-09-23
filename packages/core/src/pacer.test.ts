@@ -67,19 +67,13 @@ describe("requests per minute", () => {
 });
 
 describe("the daily cap is not waited out", () => {
-  it("throws rather than sleeping until tomorrow", async () => {
-    // Sleeping would park a worker for hours while appearing to make progress.
-    const clock = new TestClock();
-    const pacer = createPacer({ requestsPerDay: 2 }, clock);
-    await pacer.acquire();
-    await pacer.acquire();
-    expect(pacer.acquire()).rejects.toBeInstanceOf(QuotaExhausted);
-  });
-
-  it("lets requests through again once a day has passed", async () => {
+  it("throws rather than sleeping, and lets requests through again once a day has passed", async () => {
     const clock = new TestClock();
     const pacer = createPacer({ requestsPerDay: 1 }, clock);
     await pacer.acquire();
+    // Awaited with the clock standing still: a pacer that slept until tomorrow would hang
+    // here rather than reject. Sleeping would park a worker for hours while appearing to
+    // make progress.
     await expect(pacer.acquire()).rejects.toBeInstanceOf(QuotaExhausted);
 
     await clock.advance(86_400_000);

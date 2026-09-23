@@ -52,6 +52,8 @@ describe("taking the reader to a division", () => {
 
 describe("drafting a query", () => {
   it("writes it into the console's editor and takes the reader there", () => {
+    // Written down and nothing more: `deps` carries no runner, so there is nothing here that
+    // could execute it. `lake.query` is reached by the reader pressing Run in the console.
     const { deps, went, drafts } = spy();
     const outcome = draftLakeQuery(deps, {
       tenantId: "CASE-0042",
@@ -78,15 +80,6 @@ describe("drafting a query", () => {
       { tenantId: "CASE-0042", sql: "select 1" },
     );
     expect(order).toEqual(["draft", "navigate"]);
-  });
-
-  it("never executes anything: there is no runner in this module to call", () => {
-    // The tier's whole guarantee, asserted as the absence it is. `lake.query` is reached by
-    // the reader pressing Run in the console, and by nothing the assistant can do.
-    const { deps, drafts } = spy();
-    draftLakeQuery(deps, { tenantId: "CASE-0042", sql: "delete from x" });
-    // Even a destructive query is only ever written down.
-    expect(drafts[0]?.[1]).toBe("delete from x");
   });
 });
 

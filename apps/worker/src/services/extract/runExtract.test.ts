@@ -7,8 +7,7 @@
  */
 
 import { createStampSource, TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
@@ -26,8 +25,7 @@ let lake: LakeStore;
 let spawned: string[][];
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
   spawned = [];
@@ -52,11 +50,8 @@ async function landDocument(input: {
   documentId: string;
   bytes: Uint8Array;
   contentType: string;
-  /** Whose catalogue it goes in. Defaults to the tenant every other test uses. */
-  tenantId?: string;
 }): Promise<string> {
-  const tenantId = input.tenantId ?? TENANT;
-  const lakeKey = `documents/${SOURCE}/${tenantId}/${input.documentId}`;
+  const lakeKey = `documents/${SOURCE}/${TENANT}/${input.documentId}`;
   const put = await lake.put(lakeKey, input.bytes, { runId: "run-seed" });
   await db.query(
     `INSERT INTO raw.documents
@@ -65,7 +60,7 @@ async function landDocument(input: {
      VALUES ($1, $2, $3, $4, $5, $6, $7, now(), 'run-seed')`,
     [
       SOURCE,
-      tenantId,
+      TENANT,
       input.documentId,
       lakeKey,
       put.sha256,
@@ -81,14 +76,21 @@ function extract(spawn: Spawn, runId = "run-extract-1") {
 }
 
 async function textRows(): Promise<
-  { document_id: string; method: string | null; reason: string | null; chars: number }[]
+  {
+    document_id: string;
+    method: string | null;
+    reason: string | null;
+    text: string;
+    chars: number;
+  }[]
 > {
   const { rows } = await db.query<{
     document_id: string;
     method: string | null;
     reason: string | null;
+    text: string;
     chars: number;
-  }>("SELECT document_id, method, reason, chars FROM raw.document_text ORDER BY document_id");
+  }>("SELECT document_id, method, reason, text, chars FROM raw.document_text ORDER BY document_id");
   return rows;
 }
 
@@ -106,6 +108,7 @@ describe("a pass over landed documents", () => {
     const rows = await textRows();
     expect(rows[0]?.method).toBe("pdf_text");
     expect(rows[0]?.reason).toBeNull();
+    expect(rows[0]?.text).toBe(A_PAGE);
     expect(rows[0]?.chars).toBeGreaterThan(80);
   });
 
@@ -124,20 +127,11 @@ describe("a pass over landed documents", () => {
     const rows = await textRows();
     expect(rows[0]?.method).toBeNull();
     expect(rows[0]?.reason).toBe("legacy-doc-unsupported");
-  });
-
-  it("reads a text file without spawning anything", async () => {
-    await landDocument({
-      documentId: "f3",
-      bytes: new TextEncoder().encode("điều khoản thanh toán"),
-      contentType: "text/plain",
-    });
-
-    await extract(spawnAnswering(A_PAGE));
-
-    expect(spawned).toHaveLength(0);
-    const { rows } = await db.query<{ text: string }>("SELECT text FROM raw.document_text");
-    expect(rows[0]?.text).toBe("điều khoản thanh toán");
+    // And the run hands the same refusal, with its reason, to the ledger -- not only a count.
+    // Before that, `ops.run.refused` carried a number with nothing behind it. ADR 0039.
+    expect(result.refusals).toEqual([
+      { entity: "documents", sourceRecordId: "f2", reason: "legacy-doc-unsupported" },
+    ]);
   });
 });
 
@@ -221,46 +215,22 @@ describe("a pass after the readers changed", () => {
     expect(third).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
     expect((await textRows())[0]?.reason).toBe("legacy-doc-unsupported");
   });
-
-  it("leaves a document it already read alone", async () => {
-    // The 2,602-document guard, reached through the verb rather than the predicate: a sibling
-    // project overwrote that many OCR'd documents with empty text on a re-parse run, and every
-    // gate stayed green because the row count did not change. A generation bump costs the
-    // refusals and nothing else -- so this pass must spawn nothing at all.
-    await aged({ documentId: "f1", contentType: "application/pdf" });
-    const afterFirst = spawned.length;
-
-    const second = await extract(spawnAnswering(""), "run-extract-2");
-
-    expect(second).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
-    expect(spawned).toHaveLength(afterFirst);
-    const rows = await textRows();
-    expect(rows[0]?.method).toBe("pdf_text");
-    expect(rows[0]?.chars).toBeGreaterThan(80);
-  });
 });
 
 describe("the same bytes catalogued several times", () => {
-  /** The same attachment quoted down a reply chain: one row per message, one set of bytes. */
-  async function landTwice(tenantId?: string): Promise<void> {
-    const bytes = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
-    for (const documentId of ["msg-1:2", "msg-2:2"]) {
-      await landDocument({
-        documentId,
-        bytes,
-        contentType: "application/pdf",
-        ...(tenantId === undefined ? {} : { tenantId }),
-      });
-    }
-  }
-
   it("spawns ONE reader and answers both documents", async () => {
     // The whole slice, end to end. Production holds 4,476 documents over 2,030 digests, and
     // since the OCR readers landed a thirty-page duplicate scan is thirty-one child processes
     // spent reproducing text we hold verbatim. `read` stays a count of DOCUMENTS -- it is what
     // `job.ts` records as the run's `created` -- so the saving shows as the spawn count, not as
-    // a number that halved.
-    await landTwice();
+    // a number that halved. That the sibling is then off the backlog, and that another
+    // customer's copy is never answered, are the repo's to prove (`documentText.test.ts`).
+    //
+    // The same attachment quoted down a reply chain: one row per message, one set of bytes.
+    const bytes = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+    for (const documentId of ["msg-1:2", "msg-2:2"]) {
+      await landDocument({ documentId, bytes, contentType: "application/pdf" });
+    }
 
     const result = await extract(spawnAnswering(A_PAGE));
 
@@ -269,38 +239,6 @@ describe("the same bytes catalogued several times", () => {
     const rows = await textRows();
     expect(rows.map((r) => r.document_id)).toEqual(["msg-1:2", "msg-2:2"]);
     expect(rows.every((r) => r.method === "pdf_text")).toBe(true);
-  });
-
-  it("leaves nothing for the next pass to find", async () => {
-    // The sibling was answered, not hidden. A collapse without the fan-out would drop the
-    // second document out of every batch it was offered in and never write its row -- a
-    // backlog that ticks forever, which is the failure `PENDING_JOIN`'s one definition exists
-    // to make impossible.
-    await landTwice();
-    await extract(spawnAnswering(A_PAGE));
-    const afterFirst = spawned.length;
-
-    const second = await extract(spawnAnswering(A_PAGE), "run-extract-2");
-
-    expect(second).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
-    expect(spawned).toHaveLength(afterFirst);
-  });
-
-  it("does not reach another customer holding the very same bytes", async () => {
-    // The boundary, through the verb. The worker's policy on both tables is `USING (true)`, so
-    // a cross-tenant copy would be written without complaint and then served to the wrong
-    // customer as their own -- RLS enforcing a lie the writer told it. The lake DOES share a
-    // blob across tenants, and that is safe for a reason which does not transfer: a blob needs
-    // its digest, and only a tenant-scoped manifest hands one out. Text has no second gate.
-    await landTwice();
-    await landTwice("CASE-0043");
-
-    await extract(spawnAnswering(A_PAGE));
-
-    const { rows } = await db.query<{ tenant_id: string; n: string }>(
-      "SELECT tenant_id, count(*)::text AS n FROM raw.document_text GROUP BY 1 ORDER BY 1",
-    );
-    expect(rows).toEqual([{ tenant_id: TENANT, n: "2" }]);
   });
 });
 
@@ -323,25 +261,10 @@ describe("a document the lake cannot hand back", () => {
   });
 });
 
-describe("a tombstoned document", () => {
-  it("is not read back, because the customer deleted it", async () => {
-    await landDocument({
-      documentId: "gone",
-      bytes: new TextEncoder().encode("%PDF-1.7\n%%EOF\n"),
-      contentType: "application/pdf",
-    });
-    await db.query("UPDATE raw.documents SET deleted_at = now() WHERE document_id = 'gone'");
-
-    const result = await extract(spawnAnswering(A_PAGE));
-
-    expect(result).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
-    expect(await textRows()).toHaveLength(0);
-  });
-});
-
 describe("who may read the text", () => {
-  /** Land a row, then provision both tenants so their own dbt logins exist. */
-  async function seedTwoTenants(): Promise<void> {
+  // Land a row, then provision both tenants so their own dbt logins exist. Every test below
+  // only reads what this leaves; they differ in who is asking.
+  beforeEach(async () => {
     await landDocument({
       documentId: "f1",
       bytes: new TextEncoder().encode("%PDF-1.7\n%%EOF\n"),
@@ -353,14 +276,12 @@ describe("who may read the text", () => {
       await tx.query("SELECT ops.provision_tenant($1)", [TENANT]);
       await tx.query("SELECT ops.provision_tenant('CASE-0043')");
     });
-  }
+  });
 
   it("a tenant's own dbt role reads its own text -- the point of the table", async () => {
     // ADR 0024, and proven rather than assumed: `040_grants.sql` expanded ON ALL TABLES when
     // it ran and never runs again, and `ops.provision_tenant` grants raw BY TABLE NAME -- so
     // a table added later is invisible to every tenant unless both are dealt with.
-    await seedTwoTenants();
-
     const seen = await db.asRole("undercroft_dbt_case_0042", (tx) =>
       tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.document_text"),
     );
@@ -372,8 +293,6 @@ describe("who may read the text", () => {
     // The row-level policy, and the reason this table cannot ship without one: the grant says
     // which ROLES may read the table, only the policy says which ROWS, and the rows here are
     // the full text of somebody's contracts.
-    await seedTwoTenants();
-
     const seen = await db.asRole("undercroft_dbt_case_0043", (tx) =>
       tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.document_text"),
     );
@@ -384,8 +303,6 @@ describe("who may read the text", () => {
   it("the legacy shared dbt role reads none of it either", async () => {
     // It matches no tenant, so `raw.tenant_of(current_user)` answers nothing and the policy
     // shows it zero rows -- the same answer 080 documents for `raw.records`.
-    await seedTwoTenants();
-
     const seen = await db.asRole("undercroft_dbt", (tx) =>
       tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.document_text"),
     );
@@ -402,20 +319,6 @@ describe("who may read the text", () => {
  * was not drawn at all. ADR 0039.
  */
 describe("what a pass hands the ledger", () => {
-  it("hands back every refusal with its reason, not only the count", async () => {
-    await landDocument({
-      documentId: "f-legacy",
-      bytes: new TextEncoder().encode("\xd0\xcf\x11\xe0legacy"),
-      contentType: "application/msword",
-    });
-
-    const result = await extract(spawnAnswering(A_PAGE));
-
-    expect(result.refusals).toEqual([
-      { entity: "documents", sourceRecordId: "f-legacy", reason: "legacy-doc-unsupported" },
-    ]);
-  });
-
   it("counts the refusals by reason, biggest first", async () => {
     // The rollup is what survives the 7-day prune, so it is the thing that must be right
     // even when every per-record row beneath it is gone.

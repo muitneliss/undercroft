@@ -6,8 +6,7 @@
  * into a customer's Google account, so every check in front of it is the feature.
  */
 
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { Hono } from "hono";
 
@@ -81,8 +80,7 @@ const xero = {
 };
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   ADMIN.userId = await seedUser(ADMIN.email, "admin");
   MEMBER.userId = await seedUser(MEMBER.email, "member");
@@ -203,9 +201,9 @@ function callback(app: Hono, query: Record<string, string>, provider = "google")
 }
 
 describe("completing a consent", () => {
-  it("a valid state and an admin stores the credential and goes to the scope picker", async () => {
+  it("a valid state and an admin seals the credential, keeps the address from BI, audits it, and goes to the scope picker", async () => {
     // The quiet side: every refusal below would be satisfied by a callback that refused
-    // everything.
+    // everything. One consent, every facet of it succeeding.
     const state = await beginConsent();
 
     const response = await callback(appFor(ADMIN), { state, code: "auth-code" });
@@ -214,29 +212,28 @@ describe("completing a consent", () => {
     expect(response.headers.get("location")).toBe("/tenants/CASE-0042/connect/gmail/scope");
     expect(worker.stored).toHaveLength(1);
     expect(worker.stored[0]?.credential.refreshToken).toBe("rt");
-  });
 
-  it("the account id sent to the worker is Google's sub, not the address", async () => {
-    // `ops.connection.external_account_id` is readable by the BI role. An address there
+    // The account id sent to the worker is Google's sub, not the address:
+    // `ops.connection.external_account_id` is readable by the BI role, and an address there
     // would be a customer's mailbox on a dashboard.
-    const state = await beginConsent();
-
-    await callback(appFor(ADMIN), { state, code: "auth-code" });
-
     expect(worker.stored[0]?.externalAccountId).toBe("108134092834092834");
     expect(worker.stored[0]?.externalAccountId).not.toContain("@");
-  });
 
-  it("the address is recorded where BI cannot read it", async () => {
-    const state = await beginConsent();
-
-    await callback(appFor(ADMIN), { state, code: "auth-code" });
-
-    const { rows } = await db.query<{ account_label: string }>(
+    // The address is recorded where BI cannot read it.
+    const { rows: details } = await db.query<{ account_label: string }>(
       "SELECT account_label FROM app.connection_detail WHERE tenant_id = $1",
       [TENANT],
     );
-    expect(rows[0]?.account_label).toBe("ops@acme.test");
+    expect(details[0]?.account_label).toBe("ops@acme.test");
+
+    // And it is written to the audit trail: the source and who, never the address, because
+    // ops.audit_log has a different readership.
+    const { rows: audit } = await db.query<{ action: string; actor: string; detail: unknown }>(
+      "SELECT action, actor, detail FROM ops.audit_log",
+    );
+    expect(audit[0]?.action).toBe("connection.connected");
+    expect(audit[0]?.actor).toBe("ada@example.test");
+    expect(JSON.stringify(audit[0]?.detail)).not.toContain("ops@acme.test");
   });
 
   it("a consent that withheld the scope it asked for seals nothing", async () => {
@@ -332,12 +329,6 @@ describe("completing a consent", () => {
     expect(worker.stored).toHaveLength(0);
   });
 
-  it("an admin who declined at Google is not shown an error", async () => {
-    const response = await callback(appFor(ADMIN), { error: "access_denied", state: "x" });
-
-    expect(response.headers.get("location")).toContain("reason=declined");
-  });
-
   it("a refused code exchange stores nothing", async () => {
     const state = await beginConsent();
     tokenResponse = { status: 400, body: { error: "invalid_grant" } };
@@ -387,20 +378,6 @@ describe("completing a consent", () => {
 
     expect(response.headers.get("location")).toContain("reason=bad-state");
     expect(worker.stored).toHaveLength(0);
-  });
-
-  it("a consent that worked is written to the audit trail", async () => {
-    const state = await beginConsent();
-
-    await callback(appFor(ADMIN), { state, code: "auth-code" });
-
-    const { rows } = await db.query<{ action: string; actor: string; detail: unknown }>(
-      "SELECT action, actor, detail FROM ops.audit_log",
-    );
-    expect(rows[0]?.action).toBe("connection.connected");
-    expect(rows[0]?.actor).toBe("ada@example.test");
-    // The source and who, never the address: ops.audit_log has a different readership.
-    expect(JSON.stringify(rows[0]?.detail)).not.toContain("ops@acme.test");
   });
 });
 

@@ -110,14 +110,14 @@ describe("the catalogues", () => {
 });
 
 describe("choosing a language", () => {
-  it("Vietnamese is what a reader who has chosen nothing gets", () => {
-    render(
-      <MemoryRouter>
-        <LakeSummary {...EMPTY_LAKE} />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("heading", { name: "Hồ dữ liệu thô" })).toBeDefined();
+  it("Vietnamese is what a reader who has chosen nothing gets, in the document too", () => {
+    // Vietnamese TEXT by default is pinned by every component suite that asserts a
+    // Vietnamese string (`LakeSummary.test.tsx` first among them). What none of them sees is
+    // the one part of the page React does not own: `@/i18n` has to project the default onto
+    // `<html lang>` at load, not only when the language later changes, or a screen reader
+    // reads a Vietnamese page in whatever voice the browser guessed. The quiet twin of the
+    // `"en"` assertion below.
+    expect(document.documentElement.lang).toBe("vi");
   });
 
   it("pressing English rewrites the page and the document's language", async () => {

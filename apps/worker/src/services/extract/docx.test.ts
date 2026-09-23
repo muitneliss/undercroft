@@ -228,11 +228,8 @@ describe("bytes that are not a document we can open", () => {
       readDocx(zipOf([{ name: "xl/worksheets/sheet1.xml", body: "<worksheet/>" }])),
     ).toBeNull();
   });
-
-  it("stay quiet for a document that IS readable", () => {
-    // A rule with only its firing case is satisfied by code that always refuses (`tests.md`).
-    expect(readDocx(docx(paragraph("Điều 1.")))).not.toBeNull();
-  });
+  // The quiet side is "are optional: a document with none of them reads its body", which
+  // reads this same one-paragraph document to its exact text.
 });
 
 describe("the extract dispatch", () => {

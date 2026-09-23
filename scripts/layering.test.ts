@@ -90,6 +90,15 @@ const FIXTURES: Record<string, string> = {
   "apps/demo/src/services/prose.ts": `
     export const EMPTY = "Select a source from the list to begin.";
   `,
+  // The quiet twin of withSql.ts: the same body, byte for byte, moved into a repo. The one
+  // thing that differs is the directory, so the directory is what the pair proves.
+  "apps/demo/src/repos/appUser.ts": `
+    import type { SqlExecutor } from "@undercroft/db";
+    export async function find(exec: SqlExecutor, email: string): Promise<unknown> {
+      const { rows } = await exec.query("SELECT id FROM app.app_user WHERE email = $1", [email]);
+      return rows[0];
+    }
+  `,
 
   // layer-injected-deps
   "apps/demo/src/services/readsEnv.ts": `
@@ -105,6 +114,11 @@ const FIXTURES: Record<string, string> = {
 
   // layer-no-driver-import
   "apps/demo/src/repos/usesDriver.ts": `
+    import { Pool } from "pg";
+    export const x = Pool;
+  `,
+  // The same import in the one file the rule exempts: the seam itself.
+  "packages/db/src/pool.ts": `
     import { Pool } from "pg";
     export const x = Pool;
   `,
@@ -200,7 +214,7 @@ describe("SQL is confined to the repo layer", () => {
   });
 
   it("the same statement inside a repo is not", () => {
-    expect(rulesOn("apps/demo/src/repos/tenant.ts")).toEqual([]);
+    expect(rulesOn("apps/demo/src/repos/appUser.ts")).toEqual([]);
   });
 
   it("a tRPC procedure's .query is not a database call", () => {
@@ -225,5 +239,9 @@ describe("dependencies arrive as arguments", () => {
 
   it("importing the pg driver outside its seam is refused", () => {
     expect(rulesOn("apps/demo/src/repos/usesDriver.ts")).toContain("layer-no-driver-import");
+  });
+
+  it("importing it inside the seam is not", () => {
+    expect(rulesOn("packages/db/src/pool.ts")).toEqual([]);
   });
 });

@@ -48,9 +48,6 @@ describe("getPath", () => {
     expect(getPath(payload, "constructor")).toBeUndefined();
     expect(getPath(payload, "__proto__")).toBeUndefined();
     expect(getPath({}, "constructor.prototype")).toBeUndefined();
-  });
-
-  it("does not find inherited properties", () => {
     expect(getPath({}, "toString")).toBeUndefined();
   });
 });

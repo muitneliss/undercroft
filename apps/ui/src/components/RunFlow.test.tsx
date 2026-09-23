@@ -25,13 +25,19 @@ afterEach(() => {
 
 describe("a run with nothing chained either side", () => {
   it("draws its own shape and names no chain link", () => {
+    // English, so the absence of "Chained" below is the absence of the words and not of a
+    // language: without this the page would be Vietnamese and the check vacuous.
+    useUiStore.setState({ locale: "en" });
     const { container } = render(
       <MemoryRouter>
         <RunFlow tenantId="CASE-0042" run={runDetail()} events={[]} locale="en" />
       </MemoryRouter>,
     );
 
-    expect(container.querySelectorAll(".run-chain")).toHaveLength(0);
+    // Asked by role and by text rather than by class, so a renamed class cannot turn this
+    // into a pass. The text check reaches into the `aria-hidden` canvas the role query skips.
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(container.textContent).not.toInclude("Chained");
   });
 });
 
@@ -76,8 +82,11 @@ describe("a run chained on both sides", () => {
       </MemoryRouter>,
     );
 
-    expect(container.textContent).toInclude("Chained into a model build");
-    expect(container.querySelectorAll(".run-plate")).toHaveLength(1);
+    // Counted in the text, which includes the `aria-hidden` canvas: a second printing
+    // anywhere on the leaf is a second occurrence, whatever class it is drawn with.
+    const text = container.textContent ?? "";
+    expect(text.split("Chained from the HubSpot ingest")).toHaveLength(2);
+    expect(text.split("Chained into a model build")).toHaveLength(2);
   });
 });
 
