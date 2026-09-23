@@ -1,6 +1,6 @@
 ---
 description: The database role and grant model
-globs: ["packages/db/sql/**/*.sql"]
+paths: ["packages/db/sql/**/*.sql"]
 ---
 
 # Privileges: who can read what, and why BI cannot read raw

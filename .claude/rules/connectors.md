@@ -1,6 +1,6 @@
 ---
 description: The declarative connector contract
-globs: ["packages/connector-runtime/**/*.ts", "specs/**/*.yaml"]
+paths: ["packages/connector-runtime/**/*.ts", "specs/**/*.yaml"]
 ---
 
 # Connectors are configuration, not code

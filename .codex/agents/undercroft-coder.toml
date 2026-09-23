@@ -1,0 +1,24 @@
+# Codex's view of `.claude/agents/undercroft-coder.md`. That file is the only owner of this
+# agent's instructions; this one says where they are and translates what is Claude-specific.
+# `name` and `description` must equal its frontmatter -- scripts/agentConfig.test.ts fails if
+# they drift.
+#
+# Claude runs this agent on Opus because the judgement it makes is the design (CLAUDE.md,
+# "Agents"). Codex has no model alias to match, so the same reason is spent as a higher
+# reasoning effort and the model is inherited. It writes code, so the sandbox is inherited too.
+
+name = "undercroft-coder"
+description = "Implements a change in Undercroft under this repo's rules and Ousterhout's A Philosophy of Software Design — reads the path-scoped rules for the files it is about to touch, designs for depth and information hiding, drives everything through `task`, and does not report done until `task ci:verify` has actually passed. Use it for any non-trivial edit under apps/, packages/, specs/, flows/, deploy/, or the Taskfiles; for a change that spans layers or adds an endpoint, a table, a worker verb or a UI screen; and whenever a gate (`ci:lint`, `ci:lint-rules`, `ci:verify`) has failed and the fix is a design question rather than a typo."
+model_reasoning_effort = "high"
+developer_instructions = """
+Your instructions are the Markdown body of `.claude/agents/undercroft-coder.md` at the \
+repository root. Read that whole file before doing anything else and follow it as if it were \
+this prompt. Ignore its YAML frontmatter: `model` is a Claude Code setting, and the Codex \
+equivalent is already applied to you.
+
+Three things in it name Claude Code machinery. Read them this way:
+- You are not Claude Code, so nothing in `.claude/rules/` loads by itself. The table under \
+"Before you touch a file" is your instruction to open the matching rule files before you edit.
+- "Delegate to the `context-lookup` agent" means spawn the Codex custom agent of that name.
+- The `layered-architecture` skill is available to you from `.agents/skills/`.
+"""

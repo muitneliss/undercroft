@@ -1,6 +1,6 @@
 ---
 description: The Dokploy API is the only channel; every service declares a memory limit
-globs:
+paths:
   [
     "deploy/**",
     "flows/**",

@@ -1,6 +1,6 @@
 ---
 description: Real implementations over mocks; a guard needs two tests
-globs: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
+paths: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
 ---
 
 # Tests
