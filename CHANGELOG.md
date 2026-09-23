@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/muitneliss/undercroft/compare/v1.17.0...v1.18.0) (2026-09-23)
+
+
+### Features
+
+* **ui:** a pane's whole edge is its handle, not a corner speck ([#128](https://github.com/muitneliss/undercroft/issues/128)) ([7d41e94](https://github.com/muitneliss/undercroft/commit/7d41e94b62c86c7ca5421aede214ab770b2f8bf9))
+
 ## [1.17.0](https://github.com/muitneliss/undercroft/compare/v1.16.0...v1.17.0) (2026-09-23)
 
 
