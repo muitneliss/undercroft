@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/muitneliss/undercroft/compare/v1.21.0...v1.22.0) (2026-09-23)
+
+
+### Features
+
+* **cli:** install the CLI once, from the latest release ([#159](https://github.com/muitneliss/undercroft/issues/159)) ([33e8776](https://github.com/muitneliss/undercroft/commit/33e8776c9f0ae141f5e3b479a6062d4cf58e7bc5))
+
 ## [1.21.0](https://github.com/muitneliss/undercroft/compare/v1.20.1...v1.21.0) (2026-09-23)
 
 
