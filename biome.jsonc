@@ -29,7 +29,10 @@
       "!apps/ui/public/fonts",
       // Boundary files emitted by `bun run geo:build`. Formatting a 170 KB TopoJSON means
       // the generator and the formatter disagree on every run, as with `specs/schema`.
-      "!apps/ui/public/geo"
+      "!apps/ui/public/geo",
+      // Rewritten by release-please on every release, in its own compact JSON. Formatting it
+      // turned main's gate red on the 1.20.0 release commit, and would on every release after.
+      "!.release-please-manifest.json"
     ]
   },
 

@@ -32,15 +32,22 @@ it("names itself after its directory, which is the name an install asks for", ()
   expect(typeof description).toBe("string");
 });
 
-it("pins the CLI of the release it ships in", () => {
+// The README shows a person the same pinned `npx` line, and release-please bumps both files
+// (`extra-files`), so both are held to the release.
+it.each([
+  ["skills/undercroft-cli/SKILL.md", SKILL],
+  ["README.md", readFileSync(join(REPO, "README.md"), "utf8")],
+])("%s pins the CLI of the release it ships in", (_file, text) => {
   const pinned =
     /<!-- x-release-please-start-version -->(?<block>[\s\S]*?)<!-- x-release-please-end -->/u.exec(
-      SKILL,
+      text,
     )?.groups?.block;
   const versions = [...(pinned ?? "").matchAll(/\d+\.\d+\.\d+/gu)].map(([version]) => version);
 
-  // The tag and the tarball's name: two mentions, one number.
-  expect(versions).toEqual([versionOf("package.json"), versionOf("package.json")]);
+  // Exactly ONE mention, which the tag and the tarball's name both read through `$v`.
+  // release-please's generic updater rewrites only the first version on a line, so the 1.20.0
+  // release left `.../download/v1.20.0/undercroft-cli-1.19.1.tgz` -- a URL that 404s.
+  expect(versions).toEqual([versionOf("package.json")]);
 });
 
 it("builds its tarball under the release's version", () => {

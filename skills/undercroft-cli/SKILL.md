@@ -17,13 +17,14 @@ Always run the CLI through this pinned release, and always pass `--agent`:
 <!-- x-release-please-start-version -->
 
 ```sh
-npx -y --package=https://github.com/muitneliss/undercroft/releases/download/v1.20.0/undercroft-cli-1.19.1.tgz undercroft <command> --agent
+v=1.20.0; npx -y --package="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz" undercroft <command> --agent
 ```
 
 <!-- x-release-please-end -->
 
-In the rest of this file, `undercroft` means that whole `npx` line. It needs Node 22 or
-newer.
+In the rest of this file, `undercroft` means that whole line, including the `v=…;` in front
+of it: the version is written once, and the URL uses it for both the tag and the tarball. It
+needs Node 22 or newer and a POSIX shell.
 
 `--agent` makes stdout hold exactly one JSON envelope, never prompts, and never uses colour.
 Parse stdout as JSON and branch on `ok`, then on `error.code`. The exit code agrees with the
