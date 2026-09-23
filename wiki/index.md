@@ -52,6 +52,7 @@
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
 - [Runbook Xero Setup](sources/runbook-xero-setup.md)
 - [The readers ADR 0028 deferred, and a refusal that can be retried](sources/the-readers-adr-0028-deferred-and-a-refusal-that-can-be-retried.md)
+- [Vietnamese OCR was measurable after all, and the fixture was what could not measure it](sources/vietnamese-ocr-was-measurable-after-all-and-the-fixture-was-what-could-not-measure-it.md)
 
 ## Notes
 

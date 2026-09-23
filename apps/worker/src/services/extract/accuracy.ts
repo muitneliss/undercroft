@@ -251,12 +251,12 @@ export interface Gap {
  */
 export const UNMEASURED: readonly Gap[] = [
   {
-    what: "OCR fidelity on a real scan",
-    why: "there is no labelled data, and producing some means a person reading customer documents. Tier A scores OCR over a rendered page, which is far cleaner than a photographed invoice, and tier B asks only whether output is plausible.",
+    what: "OCR fidelity on a real scan, BY THIS TOOL",
+    why: "there is no labelled data here, and producing some means reading customer documents one at a time. Tier A scores OCR over a rendered page, which is far cleaner than a photographed invoice, and tier B asks only whether output is plausible. A hand-labelled sample HAS been taken once, out of band -- 41/44 anchors over three real documents on 2026-09-23, with every identifier, amount, bank detail and date exact -- and ADR 0041 records both the figure and why a sample of three is a reading rather than a rate.",
   },
   {
-    what: "OCR fidelity on Vietnamese, at any quality",
-    why: "a gold page can only be rendered in the fonts poppler substitutes, and none of them holds a Vietnamese glyph -- measured: `pdftotext` reads `Hợp đồng` from the gold PDF exactly and the same file rasterised loses the accents. A score from that would be measuring the fixture. GARBAGE-FREE IS NOT ACCURATE: this is precisely where a missing language pack hides.",
+    what: "OCR fidelity on Vietnamese BY A SYNTHETIC FIXTURE -- which is narrower than it sounds",
+    why: "a gold page can only be rendered in the fonts poppler substitutes, and none of them holds a Vietnamese glyph -- measured: `pdftotext` reads `Hợp đồng` from the gold PDF exactly and the same file rasterised loses the accents. A score from that would be measuring the fixture. It does NOT follow that the quantity is unmeasurable: a REAL Vietnamese scan carries real diacritics, and the hand-labelled sample scored 13/14 anchors with accents required, at 32.4 marks per 100 letters. GARBAGE-FREE IS STILL NOT ACCURATE -- a missing language pack hides exactly here -- but the pack is doing its job, and the earlier wording of this entry claimed more than the evidence did.",
   },
   {
     what: "whether a defect count is a defect",

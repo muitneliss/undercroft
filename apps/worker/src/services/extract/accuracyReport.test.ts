@@ -99,7 +99,12 @@ describe("what a report always ends with", () => {
     const report = run({ gaps: [] });
     expect(report).toContain("TIER C -- what this run did NOT measure");
     expect(report).toContain("OCR fidelity on a real scan");
-    expect(report).toContain("GARBAGE-FREE IS NOT ACCURATE");
+    // Pinned on the wording rather than on "a warning is present", because this is the
+    // sentence the whole tier exists to carry: a clean-looking OCR of a Vietnamese page read
+    // without the language pack passes every tier B signal there is. Rewording it fails here,
+    // which is the point -- it did fail when ADR 0041 narrowed the gap beside it, and that is
+    // a reviewer being asked whether the warning survived rather than nobody noticing.
+    expect(report).toContain("GARBAGE-FREE IS STILL NOT ACCURATE");
   });
 
   it("puts the caller's own gaps in as well", () => {
