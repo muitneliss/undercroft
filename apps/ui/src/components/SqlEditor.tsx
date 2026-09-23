@@ -19,6 +19,15 @@
  * the cursor and fight the undo history. The store is still the owner of the draft --
  * `onChange` writes it there -- and `.claude/rules/state.md` holds: there is no `useState`,
  * and every `useRef` here is a DOM handle or a latch for a callback.
+ *
+ * THE HOST DIV HAS ONE REACT CHILD: the grip on its bottom edge. CodeMirror APPENDS its own
+ * `view.dom` to the parent it is given rather than clearing it, and React never reorders a
+ * single static child, so the two live in the same box without either reconciling the
+ * other's nodes -- and the grip is out of flow, so it changes no measurement CodeMirror makes.
+ * Whether that grip is the live one is decided by the SHEET and not by a prop: in the lake
+ * console this editor is a pane inside a window that carries its own edge, and
+ * `.workbench__editor > .editor > .grip` is where those two grips are told apart. An editor
+ * should not have to know which window it was put in. ADR 0042.
  */
 
 import { autocompletion, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
@@ -30,7 +39,9 @@ import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, highlightActiveLine, keymap, lineNumbers } from "@codemirror/view";
 import type { SchemaResponse } from "@undercroft/contracts";
 import { useEffect, useImperativeHandle, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
+import { SizeGrip } from "@/components/SizeGrip.tsx";
 import { listing, paper } from "@/lib/sqlPaper.ts";
 
 /**
@@ -236,6 +247,7 @@ export function SqlEditor({
   className,
   schema,
 }: SqlEditorProps): React.JSX.Element {
+  const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const changeRef = useRef(onChange);
@@ -289,6 +301,8 @@ export function SqlEditor({
       className={["editor", readOnly ? "editor--readonly" : "", className ?? ""]
         .filter((name) => name !== "")
         .join(" ")}
-    />
+    >
+      <SizeGrip axis="block" label={t("grip.editorHeight")} />
+    </div>
   );
 }

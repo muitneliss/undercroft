@@ -45,6 +45,7 @@
 - [ADR 0038 The Console Buffer Is a Script](sources/adr-0038-the-console-buffer-is-a-script.md)
 - [ADR 0039 A Count Has a Route to Its Constituents](sources/adr-0039-a-count-has-a-route-to-its-constituents.md)
 - [ADR 0040 The Catalogue Does Not Inherit the Lake's Deduplication](sources/adr-0040-the-catalogue-does-not-inherit-the-lake-s-deduplication.md)
+- [ADR 0042 A Pane's Whole Edge Is Its Handle](sources/adr-0042-a-pane-s-whole-edge-is-its-handle.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)

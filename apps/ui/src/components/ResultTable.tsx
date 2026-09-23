@@ -12,6 +12,7 @@ import type { Locale } from "@undercroft/core/locale";
 import { useTranslation } from "react-i18next";
 
 import type { TableResult } from "@/api/types.ts";
+import { SizeGrip } from "@/components/SizeGrip.tsx";
 import {
   Table,
   TableBody,
@@ -119,6 +120,10 @@ export function ResultTable({
                 <TableHead key={column.name} scope="col">
                   {column.name}
                   <span className="datum datum--quiet result__type">{column.type}</span>
+                  {/* The boundary with the next column, the full height of the cell. It is
+                      written here rather than in `ui/table.tsx`, which is vendored and
+                      re-fetched (ADR 0025) and does not know a grid from a schedule. */}
+                  <SizeGrip axis="inline" label={t("grip.columnWidth", { name: column.name })} />
                 </TableHead>
               ))}
             </TableRow>

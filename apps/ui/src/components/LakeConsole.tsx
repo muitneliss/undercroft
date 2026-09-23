@@ -56,6 +56,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "@/components/Icon.tsx";
 import { ResultPanels } from "@/components/LakeAnswers.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { SizeGrip } from "@/components/SizeGrip.tsx";
 import type { SqlEditorHandle } from "@/components/SqlEditor.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { type LakeStream, streamKey, streamLabel, streamQuery } from "@/lib/lake.ts";
@@ -113,6 +114,10 @@ function SchemaRail({ schema }: { schema: SchemaResponse | undefined }): React.J
         {folded ? <ArrowRight /> : <ArrowLeft />}
       </button>
       {folded ? null : <SchemaTables schema={schema} />}
+      {/* The rail's own edge, on the same condition as its tables: folded, the two states
+          are a spine and the width the reader last chose, and there is nothing in between
+          for a drag to reach. */}
+      {folded ? null : <SizeGrip axis="inline" label={t("grip.railWidth")} />}
     </aside>
   );
 }
@@ -335,6 +340,8 @@ export function LakeConsole({
               {...(schema.data === undefined ? {} : { schema: schema.data })}
             />
           </Suspense>
+          {/* The boundary between the query and its answers, the whole width of it. */}
+          <SizeGrip axis="block" label={t("grip.paneHeight")} />
         </div>
 
         <ResultPanels tenantId={tenantId} locale={locale} run={run} />

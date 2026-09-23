@@ -93,3 +93,4 @@
 ## [2026-09-23] ingest | ADR 0040 The Catalogue Does Not Inherit the Lake's Deduplication
 ## [2026-09-23] ingest | Vietnamese OCR was measurable after all, and the fixture was what could not measure it
 ## [2026-09-23] ingest | Vietnamese OCR was measurable after all, and the fixture was what could not measure it
+## [2026-09-23] ingest | ADR 0042 A Pane's Whole Edge Is Its Handle

@@ -23,6 +23,12 @@ that way on seven bands, which is why it is a gate now and not a habit. ADR 0027
 - **NEVER hard-code a control's height.** `--control-h` is the input's own height solved once,
   and it is what makes a plate and the box beside it one object rather than two that nearly
   line up.
+- **NEVER make a surface resizable with the CSS `resize` property.** It draws one 16px grip in
+  the bottom-right corner and answers no key at all, on boundaries that are lines the height or
+  the width of the pane. A resizable box gets `position: relative`, its floor and ceiling in
+  the sheet, and a `<SizeGrip axis=… label=…/>` written into it; the grip reads those two
+  limits back off the computed style, so the sheet stays the only place they are written. No
+  linter can see a re-added `resize:` — this rule file is its enforcement. ADR 0042.
 
 ## Follow
 

@@ -334,6 +334,12 @@
      `min-height` it feeds can only ever match a control, never shorten one. */
     --control-h: 2.375rem;
 
+    /* How far a draggable edge reaches into its own pane. A hairline is the line a
+     reader AIMS at, not a thing a hand can hit -- the browser's own grip was a 16px
+     corner square for exactly that reason. Half a step, so the strip stays inside the
+     pane's own frame rather than becoming a gutter between two of them. */
+    --grip-reach: 0.5rem;
+
     /*
      * Motion, and there is no easing curve anywhere in this sheet.
      *
@@ -1239,6 +1245,93 @@
   .plate--small {
     padding: 0.3rem 0.6rem;
     font-size: 10px;
+  }
+
+  /* -- the grip: a pane's whole edge -------------------------------------------- */
+
+  /*
+ * THE WHOLE EDGE, NOT A CORNER SPECK.
+ *
+ * Four surfaces in this book are the reader's to resize: the console's reference rail, the
+ * editor pane above its answers, the model editor, and every column of a query's grid. All
+ * four used the browser's `resize`, which draws one 16px grip in the bottom-right corner and
+ * nothing anywhere else -- so a hand reaching for the EDGE, which is where every other
+ * resizable pane a reader has met puts it, closed on nothing, four times on one screen. And
+ * that corner has no keyboard at all, at any size, for anyone.
+ *
+ * What it costs is written here rather than discovered later: a component (`SizeGrip`) with a
+ * ref per grip, a keyboard story that is now ours to keep, pointer capture, and the
+ * `touch-action` below. What it does NOT cost is the thing `resize` was kept for -- the pane
+ * still declares its own floor and ceiling in this sheet, and the grip reads them from here.
+ * ADR 0042, superseding that part of ADR 0037.
+ */
+  .grip {
+    position: absolute;
+    z-index: 1;
+    /* This sheet does not import Preflight (ADR 0025), so the UA's own `hr` -- a margin and
+     an inset border -- is still there to undo. */
+    margin: 0;
+    border: none;
+    background: transparent;
+    /* Without this a touch drag is a page scroll: the browser claims the gesture as a pan
+     and not one `pointermove` ever arrives. Nothing in the offline gate can see a gesture,
+     so `layout.test.ts` pins this one declaration instead. */
+    touch-action: none;
+    user-select: none;
+  }
+
+  /* The ink, drawn ON the edge rather than across the reach: a hairline is what the eye
+   wants and 8px is what the hand needs, and they are not the same object.
+   *
+   * NOTHING AT REST. Three of these four edges are already a drawn frame, and a second
+   * hairline 4px inside the first is two rules where the sheet has one -- measured in a
+   * browser against the real stylesheet. The fourth, a grid's column boundary, had no rule
+   * there before this and gains one only under the hand. So the edge answers when a reader
+   * arrives at it, which is the convention every other resizable pane uses and what the
+   * `col-resize` cursor above is already saying. */
+  .grip::before {
+    content: "";
+    position: absolute;
+    background: transparent;
+    transition: background var(--hinge);
+  }
+
+  .grip:hover::before,
+  .grip:active::before,
+  .grip:focus-visible::before {
+    background: var(--rule-strong);
+  }
+
+  /* The sheet's one focus treatment, as on the fold beside it. */
+  .grip:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+
+  .grip--inline {
+    inset: 0 0 0 auto;
+    width: var(--grip-reach);
+    cursor: col-resize;
+  }
+
+  .grip--inline::before {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: var(--hair);
+  }
+
+  .grip--block {
+    inset: auto 0 0 0;
+    height: var(--grip-reach);
+    cursor: row-resize;
+  }
+
+  .grip--block::before {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--hair);
   }
 
   /* -- the language pair -------------------------------------------------------- */
@@ -2722,16 +2815,23 @@
    * has, `captured_at` and `timestamptz`, break across two lines at 15, and a column name
    * printed as `captured_a / t` is the one thing a reference must never do.
    *
-   * AND ITS EDGE IS THE WORKBENCH'S OTHER HANDLE. The editor's own grip moves the boundary
-   * between writing and reading; this one moves the boundary between the reference and both
-   * of them at once, because the work column is what the rail does not take. The fold is
-   * still the two-state answer -- 17rem or a spine -- and this is the one in between, for a
-   * schema whose names are longer than 17rem or a query whose answer wants the screen. The
-   * floor keeps a drag from leaving a column of `captured_a / t`; the ceiling keeps one from
-   * pushing the editor off the leaf. */
+   * AND ITS WHOLE EDGE IS THE WORKBENCH'S OTHER HANDLE. The editor's own grip moves the
+   * boundary between writing and reading; this one moves the boundary between the reference
+   * and both of them at once, because the work column is what the rail does not take. The
+   * fold is still the two-state answer -- 17rem or a spine -- and this is the one in between,
+   * for a schema whose names are longer than 17rem or a query whose answer wants the screen.
+   * The floor keeps a drag from leaving a column of `captured_a / t`; the ceiling keeps one
+   * from pushing the editor off the leaf.
+   *
+   * `position: relative` rather than `resize: horizontal`, because `resize` put that handle
+   * in the bottom-right corner alone -- at the FOOT of a rail whose boundary runs the height
+   * of the workbench -- and gave a reader without a mouse nothing at all. The rail's own
+   * `<SizeGrip>` takes the whole edge, reads the two limits above out of this sheet, and
+   * writes the same inline width `resize` wrote. ADR 0042. */
   .rail-ref {
     display: flex;
     flex-direction: column;
+    position: relative;
     width: 17rem;
     min-width: 11rem;
     max-width: 34rem;
@@ -2741,7 +2841,6 @@
     border-radius: var(--r-leaf);
     /* The fold stays put at the head while the tables move under it. */
     overflow: hidden;
-    resize: horizontal;
   }
 
   /* Folded: the reference is read down its own edge, the way a book on a shelf is.
@@ -2750,12 +2849,16 @@
    * declarations. A drag writes an INLINE width, which no class can outrank -- so a rail
    * dragged to 30rem and then folded stayed 30rem wide, a spine's label in a third of the
    * page. Clamped, the fold always folds, and unfolding returns the reader to the width
-   * they chose rather than to ours. */
+   * they chose rather than to ours.
+   *
+   * That argument got STRONGER when the drag became ours: `SizeGrip` writes the same inline
+   * width, and this is still the only thing that outranks it. The grip itself is not
+   * rendered while the rail is folded -- there is no edge to move when the two states are a
+   * spine and the width the reader last chose. */
   .rail-ref--folded {
     width: 2.75rem;
     min-width: 0;
     max-width: 2.75rem;
-    resize: none;
   }
 
   /* The fold itself. A whole-width press rather than a glyph in a corner: the target is the
@@ -2913,38 +3016,47 @@
     white-space: nowrap;
   }
 
-  /* THE DIVIDER IS THE EDITOR'S OWN HANDLE.
+  /* THE DIVIDER IS THE EDITOR'S OWN HANDLE, AND IT IS THE WHOLE DIVIDER.
    *
-   * `resize` rather than a dragged element with a stored ratio: it is the browser's own
-   * affordance for exactly this, it needs no state to own and nothing to persist, and a
-   * reader who has used any other resizable pane already knows where the grip is.
+   * A dragged element of our own rather than `resize`, which was the answer here until the
+   * corner it draws was measured against what a reader does: they push the BOUNDARY between
+   * the query and its answers, and the boundary is a line the width of the work column while
+   * `resize`'s grip is 16px of one end of it. What that costs is `SizeGrip` -- a ref, pointer
+   * capture, and a keyboard story; what it buys is the edge, a keyboard where there was none,
+   * and a double-click back to the split below. ADR 0042.
    *
    * The height is a share of the window rather than a figure in rem, so the same split
    * holds on a laptop and on a 27-inch display instead of leaving one of them a strip. The
    * floor keeps a drag from closing the query; the ceiling keeps one from closing the
-   * answer. */
+   * answer -- and both are still declared HERE, which is where the grip reads them from. */
   .workbench__editor {
     flex: none;
+    position: relative;
     height: 42%;
     min-height: 9rem;
     max-height: 72%;
     overflow: hidden;
-    resize: vertical;
     border: var(--hair) solid var(--rule-strong);
     border-radius: var(--r-plate);
     background: var(--leaf);
   }
 
-  /* The editor fills the pane it was given; `.editor`'s own minimum belongs to the model
-   editor, which is a band on a leaf rather than a pane in a window. */
+  /* The editor fills the pane it was given; `.editor`'s own minimum and maximum belong to the
+   model editor, which is a band on a leaf rather than a pane in a window. */
   .workbench__editor > .editor {
     height: 100%;
     min-height: 0;
-    /* The PANE carries the handle here, not the editor inside it. Two nested grips in one
-     corner is one grip a reader can never hit. */
-    resize: none;
+    max-height: none;
     border: none;
     border-radius: 0;
+  }
+
+  /* The PANE carries the handle here, not the editor inside it: two grips on one boundary is
+   one grip a reader can never hit. The sheet arbitrates rather than a prop, because the
+   editor should not have to know which window it was put in -- and it has arbitrated this
+   since the pane was written, when what it switched off was the editor's `resize`. */
+  .workbench__editor > .editor > .grip {
+    display: none;
   }
 
   /* WHERE THE ANSWERS GO -- one pane per statement the press ran, stacked in the order they
@@ -3094,7 +3206,15 @@
       max-width: 100%;
       max-height: 20rem;
       order: 2;
-      resize: none;
+    }
+
+    /* Which is why the edge goes too. The sheet switches this one off rather than the
+     component, because a breakpoint is a fact only the sheet knows: reaching it from React
+     would mean `matchMedia`, a subscription, and somewhere to keep the answer -- `useState`
+     under another name (`.claude/rules/state.md`). `display: none` also takes the dead grip
+     out of the tab order, which a hidden-but-present one would not. */
+    .rail-ref .grip {
+      display: none;
     }
 
     /* Folded is a horizontal head again: a label turned onto its spine is read down the
@@ -3114,9 +3234,14 @@
       writing-mode: horizontal-tb;
     }
 
+    /* A definite height rather than a share, because the page scrolls here and there is no
+     window to take a share OF. The ceiling is still a ceiling, just a figure instead of 72%:
+     an edge with no end declared is one whose `End` key goes nowhere and whose position a
+     screen reader cannot report, and a query pane dragged past the screen on a tablet is not
+     the freedom that would buy. */
     .workbench__editor {
       height: 18rem;
-      max-height: none;
+      max-height: 36rem;
     }
 
     /* The page scrolls here, so the column does not: capping it would give every pane of a
@@ -3250,13 +3375,17 @@
    * model into a leaf whose tests form, reference and delete verb are all a long scroll below
    * the SQL that produced them. Now the document scrolls inside the box, the box opens deep
    * enough to hold a real query whole, and a reader whose model is longer than that drags it
-   * taller. `resize` rather than a handle of our own: it is the browser's own affordance for
-   * exactly this, it owns no state and needs nothing persisted, and the floor is what keeps a
-   * drag from closing the editor onto one line. */
+   * taller -- by its bottom EDGE, anywhere along it, which is the change ADR 0042 records.
+   * `resize` drew that grip in one corner and answered no key at all; `SizeGrip` is a handle
+   * of our own that reads the floor and the ceiling below out of this sheet. The floor is
+   * what keeps a drag from closing the editor onto one line; the ceiling is what keeps one
+   * from leaving the form and the verbs under it off the screen entirely, which is the same
+   * defect the definite height exists to answer. */
   .editor {
+    position: relative;
     height: 34rem;
     min-height: 12rem;
-    resize: vertical;
+    max-height: 80vh;
     border: var(--hair) solid var(--rule-strong);
     border-radius: var(--r-plate);
     background: var(--leaf);
@@ -3328,7 +3457,7 @@
    * from. Left to itself the browser sizes a column to its content, so a `text` column of
    * extracted documents takes everything and a `count` column takes nothing, and no width a
    * reader asks for survives the next query. Fixed layout takes the width off the header
-   * cell instead -- which is the cell `resize` puts a grip on.
+   * cell instead -- which is the cell the grip sits in.
    *
    * 6rem is not the resting width; it is the width a column HOLDS when its neighbour is
    * dragged wide, and above it the pane's spare width divides equally. So four columns are
@@ -3338,20 +3467,29 @@
    * takes the neighbours to 29px and the grid never scrolls. `min-width` cannot do this
    * job; fixed layout ignores it on a cell.
    *
-   * `resize` rather than a handle of our own, for the reason the editor's pane gives one
-   * screen up: it is the browser's affordance, it owns no state and persists nothing, and a
-   * width is not a fact the platform needs to remember. Where a browser does not support it
-   * on a cell the grid simply keeps its equal columns. */
+   * A GRIP OF OUR OWN, for the reason the editor's pane gives one screen up: `resize` put
+   * one 16px square in the bottom-right corner of a header cell, so the boundary between two
+   * columns -- a line the height of the whole grid -- was grabbable at one speck of its top
+   * end, and not at all without a mouse. `SizeGrip` takes the full height of the cell. ADR
+   * 0042; everything above it here is ADR 0037 and stands unchanged. */
   .result--grid .table {
     table-layout: fixed;
   }
 
+  /* `min-width` and `max-width` are INERT TO LAYOUT AND LIVE TO THE GRIP, which is the one
+   thing about this rule a reader has to know before tidying it. Fixed layout ignores both on
+   a cell -- that is ADR 0037's own measurement, and it is why the floor is a `width` --
+   but `getComputedStyle` reports them regardless, and the grip is what reads them. They are
+   therefore the ONLY place a column's travel is written, exactly as `min-height` is for the
+   pane above; `layout.test.ts` pins them for the same reason. */
   .result--grid .table th {
+    position: relative;
     width: 6rem;
+    min-width: 6rem;
+    max-width: 60rem;
     overflow: hidden;
     /* A name too long for its column says so, rather than being cut mid-word. */
     text-overflow: ellipsis;
-    resize: horizontal;
   }
 
   /* The column clips, so the cell does not have to guess a measure. */
