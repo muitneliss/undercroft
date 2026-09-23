@@ -2,7 +2,7 @@
  * An edge a reader drags -- the whole of it, rather than a speck in one corner.
  *
  * This replaces the browser's own `resize` property on the four surfaces that had it (ADR
- * 0040, superseding that part of ADR 0037). `resize` draws its grip in the bottom-right
+ * 0042, superseding that part of ADR 0037). `resize` draws its grip in the bottom-right
  * corner and nowhere else, so a reader who reaches for the edge -- where every other
  * resizable pane they have ever used puts it -- finds nothing, and a reader without a mouse
  * finds nothing at all, because that corner has no keyboard at any time.

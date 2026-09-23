@@ -5,7 +5,7 @@
  * measure. Everything it has to get RIGHT is here instead, because the offline gate has no
  * layout engine -- happy-dom computes style but not boxes, and it has no `setPointerCapture`
  * at all -- so a drag cannot be asserted end to end (ADR 0037 recorded that limit for the
- * browser's own grip; ADR 0040 inherits it). What a test can see is this: given where a drag
+ * browser's own grip; ADR 0042 inherits it). What a test can see is this: given where a drag
  * began and where the pointer is now, what measure is being asked for, and what the sheet
  * allows it to be.
  *

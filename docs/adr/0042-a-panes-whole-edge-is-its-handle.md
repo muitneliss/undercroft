@@ -1,4 +1,4 @@
-# 40. A pane's whole edge is its handle
+# 42. A pane's whole edge is its handle
 
 - Status: Accepted
 - Date: 2026-09-23

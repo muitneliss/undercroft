@@ -204,7 +204,7 @@ describe("a query's answer", () => {
  * The editor's own grip moves the boundary between writing and reading; this one moves what
  * the editor and the answer share. What is worth pinning is the fold, which is a drag's
  * natural enemy: a drag writes an INLINE width that no class outranks -- `resize` did, and
- * `SizeGrip` still does (ADR 0040) -- so the folded rule has to CLAMP rather than set, or a
+ * `SizeGrip` still does (ADR 0042) -- so the folded rule has to CLAMP rather than set, or a
  * rail dragged wide stays wide when it is folded and the spine's label sits in a third of the
  * page.
  */
@@ -261,7 +261,7 @@ describe("the reference rail", () => {
  * turns every touch drag into a page scroll -- no `pointermove` ever arrives, and the
  * component looks perfectly correct. And where an editor sits inside a pane that carries its
  * own edge, TWO grips land on one boundary; which of them is live is decided here, in the
- * sheet, because the editor should not have to know which window it was put in. ADR 0040.
+ * sheet, because the editor should not have to know which window it was put in. ADR 0042.
  *
  * The drag is not asserted, here or anywhere: there is no layout engine offline and happy-dom
  * has no pointer capture, so `@/lib/dragSize` holds everything about the drag that a machine

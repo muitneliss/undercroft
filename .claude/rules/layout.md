@@ -28,7 +28,7 @@ that way on seven bands, which is why it is a gate now and not a habit. ADR 0027
   the width of the pane. A resizable box gets `position: relative`, its floor and ceiling in
   the sheet, and a `<SizeGrip axis=… label=…/>` written into it; the grip reads those two
   limits back off the computed style, so the sheet stays the only place they are written. No
-  linter can see a re-added `resize:` — this rule file is its enforcement. ADR 0040.
+  linter can see a re-added `resize:` — this rule file is its enforcement. ADR 0042.
 
 ## Follow
 

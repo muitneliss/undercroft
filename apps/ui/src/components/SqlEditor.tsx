@@ -27,7 +27,7 @@
  * Whether that grip is the live one is decided by the SHEET and not by a prop: in the lake
  * console this editor is a pane inside a window that carries its own edge, and
  * `.workbench__editor > .editor > .grip` is where those two grips are told apart. An editor
- * should not have to know which window it was put in. ADR 0040.
+ * should not have to know which window it was put in. ADR 0042.
  */
 
 import { autocompletion, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";

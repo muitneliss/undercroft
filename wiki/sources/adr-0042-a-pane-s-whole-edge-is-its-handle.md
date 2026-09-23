@@ -1,15 +1,15 @@
 ---
-title: ADR 0040 A Pane's Whole Edge Is Its Handle
+title: ADR 0042 A Pane's Whole Edge Is Its Handle
 type: source
 date: 2026-09-23
 tags: []
-source: docs/adr/0040-a-panes-whole-edge-is-its-handle.md
-source_path: docs/adr/0040-a-panes-whole-edge-is-its-handle.md
-source_hash: e0db6c91471fff9107ed7d098f3d6f96ca7d6af7a07443209d1395c632c9e52c
+source: docs/adr/0042-a-panes-whole-edge-is-its-handle.md
+source_path: docs/adr/0042-a-panes-whole-edge-is-its-handle.md
+source_hash: 4fc073cfe8f942dfa7e027b6c558228a0e5cae2d1a91780bf85eff775063902e
 ingested: 2026-09-23
 ---
 
-# ADR 0040 A Pane's Whole Edge Is Its Handle
+# ADR 0042 A Pane's Whole Edge Is Its Handle
 
 Four surfaces in the SPA were the reader's to resize -- the console's reference rail `.rail-ref`, the editor pane `.workbench__editor` above its answers, the model editor `.editor`, and every column of a query's grid `.result--grid .table th` -- and all four said so with the browser's CSS `resize` property. `resize` draws exactly one grip, in the bottom-right corner, about 16px square. Every boundary it was asked to move is a LINE: the rail's edge is the height of the workbench, the editor pane's is the width of the work column, a column's is the height of the grid. A hand reaching for that line closed on nothing anywhere along it except one speck at one end, four times on one screen, and the corner answered no key at all -- four resizable surfaces were mouse-only, a WCAG 2.1.1 failure shipped four times.
 
@@ -17,7 +17,7 @@ The decision replaces `resize` on all four with `apps/ui/src/components/SizeGrip
 
 The markup is an `<hr>`, not a `<div role="separator">`. `hr`'s implicit role IS separator and Biome's `useSemanticElements` refuses the div outright; measured against this repo's Biome 2.5.14, the `<hr>` form passes every a11y rule under `preset: "all"` with no suppression, because Biome's ARIA table classes `separator` as a widget (so `noNoninteractiveTabindex` and `noStaticElementInteractions` both return early) and its event tables do not model pointer events at all.
 
-ADR 0040 supersedes only the "`resize` rather than a handle of our own" bullet of ADR 0037 and its rejected option "widths dragged with our own handle and kept in the store"; ADR 0037's other three decisions -- a grid reads from the left, it divides its pane, `table-layout: fixed` with a declared header width -- stand unchanged. ADR 0037's objection was to state, and there is none here: no store entry, nothing persisted, the reset is `removeProperty`. The property that argument was defending, that the sheet owns the limits, is kept by reading them back out of the computed style.
+ADR 0042 supersedes only the "`resize` rather than a handle of our own" bullet of ADR 0037 and its rejected option "widths dragged with our own handle and kept in the store"; ADR 0037's other three decisions -- a grid reads from the left, it divides its pane, `table-layout: fixed` with a declared header width -- stand unchanged. ADR 0037's objection was to state, and there is none here: no store entry, nothing persisted, the reset is `removeProperty`. The property that argument was defending, that the sheet owns the limits, is kept by reading them back out of the computed style.
 
 The arithmetic lives in `apps/ui/src/lib/dragSize.ts` with no DOM in it -- clamping, the measure a drag or a key asks for, reading a computed length (a percentage needs a basis because Chrome leaves `max-height: 72%` unresolved), and the share of its travel an edge sits at for `aria-valuenow`. That split exists because the offline gate has no layout engine: happy-dom computes style but not boxes and has no pointer capture, so the drag itself is not asserted -- the declarations it needs are pinned in `layout.test.ts` and the behaviour is measured in a real browser, which is ADR 0037's own precedent.
 

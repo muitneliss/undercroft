@@ -44,8 +44,8 @@
 - [ADR 0037 A Query Grid Divides Its Pane](sources/adr-0037-a-query-grid-divides-its-pane.md)
 - [ADR 0038 The Console Buffer Is a Script](sources/adr-0038-the-console-buffer-is-a-script.md)
 - [ADR 0039 A Count Has a Route to Its Constituents](sources/adr-0039-a-count-has-a-route-to-its-constituents.md)
-- [ADR 0040 A Pane's Whole Edge Is Its Handle](sources/adr-0040-a-pane-s-whole-edge-is-its-handle.md)
 - [ADR 0040 The Catalogue Does Not Inherit the Lake's Deduplication](sources/adr-0040-the-catalogue-does-not-inherit-the-lake-s-deduplication.md)
+- [ADR 0042 A Pane's Whole Edge Is Its Handle](sources/adr-0042-a-pane-s-whole-edge-is-its-handle.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
@@ -53,6 +53,7 @@
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
 - [Runbook Xero Setup](sources/runbook-xero-setup.md)
 - [The readers ADR 0028 deferred, and a refusal that can be retried](sources/the-readers-adr-0028-deferred-and-a-refusal-that-can-be-retried.md)
+- [Vietnamese OCR was measurable after all, and the fixture was what could not measure it](sources/vietnamese-ocr-was-measurable-after-all-and-the-fixture-was-what-could-not-measure-it.md)
 
 ## Notes
 
