@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.0](https://github.com/muitneliss/undercroft/compare/v1.16.0...v1.17.0) (2026-09-23)
+
+
+### Features
+
+* **extract:** measure whether the readers are right, not just that they ran ([#122](https://github.com/muitneliss/undercroft/issues/122)) ([24f2256](https://github.com/muitneliss/undercroft/commit/24f22566fc734f29b0014a6135d0f37418b232bd))
+* **extract:** read a digest once, and answer every document holding it ([#119](https://github.com/muitneliss/undercroft/issues/119)) ([04ee814](https://github.com/muitneliss/undercroft/commit/04ee8148f26486b542c2186597c697dc518278b5))
+* **journal:** a refusal count has a route to its constituents ([#121](https://github.com/muitneliss/undercroft/issues/121)) ([334a73c](https://github.com/muitneliss/undercroft/commit/334a73cda658d80dd0f1f1b320143a31b2b17345))
+* **lake:** say what the lake stores, not what the catalogue counts ([#123](https://github.com/muitneliss/undercroft/issues/123)) ([76b5959](https://github.com/muitneliss/undercroft/commit/76b5959033ac821e5f81418a80167d61f967edb1))
+
 ## [1.16.0](https://github.com/muitneliss/undercroft/compare/v1.15.5...v1.16.0) (2026-09-22)
 
 
