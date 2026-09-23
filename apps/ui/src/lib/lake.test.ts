@@ -8,6 +8,7 @@ import { describe, expect, test as it } from "bun:test";
 
 import type { RawSearchHit } from "@/api/types.ts";
 import { translatorFor } from "@/i18n/index.ts";
+import { formatDate } from "@/lib/when.ts";
 import {
   hitNotes,
   hitWhere,
@@ -171,7 +172,13 @@ describe("a search hit as a reader sees it", () => {
 
   it("a hit the source has since deleted says so, in either kind", () => {
     const gone = "2026-09-18T12:00:00.000Z";
-    expect(hitNotes(en, { ...record, deletedAt: gone }, "en")).toEqual(["Deleted 18 Sept 2026"]);
+    // The date as the platform formats every date, not a literal month: whether September is
+    // "Sep" or "Sept" is CLDR's call and changes with the ICU the runtime links -- Bun on macOS
+    // uses the system's, the Linux build bundles its own -- so a literal pinned one machine's
+    // data and failed on the other. What this note promises is that it SAYS the date.
+    expect(hitNotes(en, { ...record, deletedAt: gone }, "en")).toEqual([
+      `Deleted ${formatDate(gone, "en")}`,
+    ]);
     expect(hitNotes(en, { ...document, deletedAt: gone }, "en")).toHaveLength(2);
   });
 });
