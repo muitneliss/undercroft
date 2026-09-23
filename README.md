@@ -80,12 +80,15 @@ current release through `npx`:
 <!-- x-release-please-start-version -->
 
 ```sh
-v=1.20.1; npx -y --package="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz" undercroft --help
+v=1.20.1
+tgz="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
+undercroft() { npx -y --package="$tgz" undercroft "$@"; }
+undercroft --help
 ```
 
 <!-- x-release-please-end -->
 
-Below, `undercroft` stands for that whole line:
+That defines `undercroft` for the current shell, so the rest reads as plain commands:
 
 ```sh
 undercroft config set-profile prod --url https://undercroft.example.test
