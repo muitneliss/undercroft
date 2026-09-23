@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/muitneliss/undercroft/compare/v1.20.0...v1.20.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **cli:** pin the release CLI with one version per line; sync the README and add badges ([#149](https://github.com/muitneliss/undercroft/issues/149)) ([8a1aa0f](https://github.com/muitneliss/undercroft/commit/8a1aa0f8c57658131236e0fd830413f76dde58ee))
+
 ## [1.20.0](https://github.com/muitneliss/undercroft/compare/v1.19.1...v1.20.0) (2026-09-23)
 
 
