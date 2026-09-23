@@ -1,0 +1,88 @@
+name: Question
+description: How do I, why does it, where is. When nothing is broken but something is unclear.
+title: "question: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The [runbooks](https://github.com/muitneliss/undercroft/tree/main/docs/runbook) answer most
+        setup questions, and the [ADRs](https://github.com/muitneliss/undercroft/tree/main/docs/adr)
+        explain why the platform refuses the obvious thing. If it is not in either, ask here.
+        Vietnamese or English are both fine.
+
+        This repository is public: use `CASE-0042` or `acme@example.test` in place of a real customer.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you ask
+      options:
+        - label: I searched the [issues](https://github.com/muitneliss/undercroft/issues?q=is%3Aissue), the runbooks and the README.
+          required: true
+        - label: I removed customer names, credentials and real data from everything below.
+          required: true
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: What is it about?
+      options:
+        - Setting up or deploying
+        - Signing in, People and roles
+        - Connecting a source or writing a YAML spec
+        - Gmail, Drive and documents
+        - Journal, runs and scheduling
+        - Raw lake, the lake API or search
+        - dbt models and transforms
+        - Reports
+        - The assistant
+        - The CLI or using it from an agent
+        - Why it works the way it does
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      placeholder: Can one tenant have two Xero organisations as separate sources?
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you ultimately trying to do?
+      description: The bigger goal behind the question. It often has a shorter answer than the question itself.
+      placeholder: We run two companies and want one report across both.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried or read?
+      description: Commands you ran, pages you read, and what came back.
+      placeholder: Read docs/runbook/xero-setup.md. Connecting a second organisation replaced the first one's connection.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How is Undercroft running?
+      options:
+        - A hosted instance someone else operates
+        - Self-hosted with deploy/compose/docker-compose.server.yml (Dokploy or plain Docker)
+        - Local development (task dev:run)
+        - I only use the CLI against a server I do not operate
+        - Not running yet, I am evaluating it
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The server's image tag, `undercroft --version`, or `git describe --tags --always`. Leave empty if you are not running it yet.
+      placeholder: v1.20.1
