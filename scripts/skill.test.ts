@@ -32,8 +32,8 @@ it("names itself after its directory, which is the name an install asks for", ()
   expect(typeof description).toBe("string");
 });
 
-// The README shows a person the same pinned `npx` line, and release-please bumps both files
-// (`extra-files`), so both are held to the release.
+// The README shows a person the same pinned install line, for one exact release, and
+// release-please bumps both files (`extra-files`), so both are held to the release.
 it.each([
   ["skills/undercroft-cli/SKILL.md", SKILL],
   ["README.md", readFileSync(join(REPO, "README.md"), "utf8")],

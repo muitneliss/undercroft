@@ -49,6 +49,7 @@
 - [ADR 0043 A Second Mailbox Is a Second Source](sources/adr-0043-a-second-mailbox-is-a-second-source.md)
 - [ADR 0044: An agent reaches Undercroft as a caller](sources/adr-0044-an-agent-reaches-undercroft-as-a-caller.md)
 - [ADR 0045: The mark in an email is drawn, not fetched](sources/adr-0045-the-mark-in-an-email-is-drawn-not-fetched.md)
+- [ADR 0046: The CLI installs once, from the latest release](sources/adr-0046-the-cli-installs-once-from-the-latest-release.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)

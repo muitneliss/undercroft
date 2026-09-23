@@ -101,3 +101,6 @@
 ## [2026-09-23] ingest | ADR 0044: An agent reaches Undercroft as a caller
 ## [2026-09-23] ingest | Runbook: The undercroft CLI
 ## [2026-09-23] ingest | ADR 0045: The mark in an email is drawn, not fetched
+## [2026-09-23] ingest | ADR 0046: The CLI installs once, from the latest release
+## [2026-09-23] ingest | Runbook: The undercroft CLI
+## [2026-09-23] ingest | Runbook: The undercroft CLI
