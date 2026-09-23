@@ -50,6 +50,27 @@ it.each([
   expect(versions).toEqual([versionOf("package.json")]);
 });
 
+// The skill files bugs through `bug_report.yml`, naming its field ids in a prefilled URL and
+// one of its options verbatim. Renaming either in the form would leave an agent sending a
+// link whose fields arrive empty, or picking an option the form no longer has, with nothing
+// to say so.
+it("reports bugs through form fields and options that exist", () => {
+  const form = parse(
+    readFileSync(join(REPO, ".github", "ISSUE_TEMPLATE", "bug_report.yml"), "utf8"),
+  ) as { body: { id?: string; attributes: { options?: unknown[] } }[] };
+  const prefill = /issues\/new\?template=bug_report\.yml&(?<query>\S+)`/u.exec(SKILL)?.groups
+    ?.query;
+  const named = [...(prefill ?? "").matchAll(/&?(?<id>[\w-]+)=/gu)]
+    .map((match) => match.groups?.id)
+    .filter((id) => id !== "title");
+  const options = form.body.flatMap((field) => field.attributes.options ?? []);
+
+  expect(named.length).toBeGreaterThan(0);
+  expect(form.body.map((field) => field.id)).toEqual(expect.arrayContaining(named));
+  expect(options).toContain("CLI in agent mode (Claude Code, Codex or another agent)");
+  expect(SKILL).toContain("`CLI in agent mode (Claude Code, Codex or another agent)`");
+});
+
 it("builds its tarball under the release's version", () => {
   expect(versionOf("apps/cli/package.json")).toBe(versionOf("package.json"));
 });
