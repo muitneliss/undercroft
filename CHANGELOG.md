@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/muitneliss/undercroft/compare/v1.18.0...v1.19.0) (2026-09-23)
+
+
+### Features
+
+* **connections:** several Gmail and Drive accounts per tenant ([#125](https://github.com/muitneliss/undercroft/issues/125)) ([#132](https://github.com/muitneliss/undercroft/issues/132)) ([c646bce](https://github.com/muitneliss/undercroft/commit/c646bcea635fe58327a608d19dddc0c6ac3268d6))
+
 ## [1.18.0](https://github.com/muitneliss/undercroft/compare/v1.17.0...v1.18.0) (2026-09-23)
 
 
