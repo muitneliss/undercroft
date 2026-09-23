@@ -44,6 +44,13 @@ export const en = {
     nothingToShow: "Nothing to show.",
   },
 
+  grip: {
+    railWidth: "Reference width",
+    paneHeight: "Query pane height",
+    editorHeight: "Editor height",
+    columnWidth: "Width of column {{name}}",
+  },
+
   signIn: {
     title: "Control plane",
     lead: "Connect your accounts and see what has been synced.",

@@ -174,15 +174,22 @@ describe("a query's answer", () => {
     ).toBe("right");
   });
 
-  it("divides its pane into columns, each with a width the reader can drag", () => {
+  it("divides its pane into columns, each with a width and a travel the reader can drag", () => {
     const grid = render(GRID);
     const table = globalThis.getComputedStyle(grid.querySelector(".table") as Element);
     const head = globalThis.getComputedStyle(grid.querySelector("th") as Element);
     // Fixed layout is what puts the width on the header cell -- which is the cell the grip
-    // is on. Without the declared width a drag takes the neighbouring columns to nothing.
+    // is in. Without the declared width a drag takes the neighbouring columns to nothing.
     expect(table.tableLayout).toBe("fixed");
     expect(head.width).not.toBe("");
-    expect(head.resize).toBe("horizontal");
+    // The cell is what the grip is positioned against.
+    expect(head.position).toBe("relative");
+    // And these two are the whole reason this assertion exists. Fixed layout IGNORES them on
+    // a cell -- which is why the floor is a `width` -- so a reader who knows that arrives
+    // here certain they are dead and deletes them. They are the only place a column's travel
+    // is written, and `SizeGrip` reads them off the computed style.
+    expect(head.minWidth).not.toBe("");
+    expect(head.maxWidth).not.toBe("");
   });
 
   it("leaves a schedule's columns to the browser, which sizes them from their content", () => {
@@ -196,11 +203,14 @@ describe("a query's answer", () => {
  *
  * The editor's own grip moves the boundary between writing and reading; this one moves what
  * the editor and the answer share. What is worth pinning is the fold, which is a drag's
- * natural enemy: `resize` writes an INLINE width that no class outranks, so the folded rule
- * has to CLAMP rather than set, or a rail dragged wide stays wide when it is folded and the
- * spine's label sits in a third of the page.
+ * natural enemy: a drag writes an INLINE width that no class outranks -- `resize` did, and
+ * `SizeGrip` still does (ADR 0040) -- so the folded rule has to CLAMP rather than set, or a
+ * rail dragged wide stays wide when it is folded and the spine's label sits in a third of the
+ * page.
  */
 describe("the reference rail", () => {
+  const RAIL = `<aside class="rail-ref"><hr class="grip grip--inline" /></aside>`;
+
   // happy-dom opens a 1024px window, which is exactly the workbench's narrow breakpoint --
   // where there is no column beside the rail to trade width with and the drag is off by
   // design. So a desk is asked for explicitly, and given back.
@@ -211,10 +221,13 @@ describe("the reference rail", () => {
     viewport(WINDOW);
   });
 
-  it("hands its edge to the reader", () => {
-    expect(globalThis.getComputedStyle(render(`<aside class="rail-ref"></aside>`)).resize).toBe(
-      "horizontal",
-    );
+  it("hands its whole edge to the reader", () => {
+    const rail = render(RAIL);
+    const grip = globalThis.getComputedStyle(rail.querySelector(".grip") as Element);
+    // The rail is what the grip is positioned against; the grip is the full height of it.
+    expect(globalThis.getComputedStyle(rail).position).toBe("relative");
+    expect(grip.display).not.toBe("none");
+    expect(grip.cursor).toBe("col-resize");
   });
 
   it("folds to its spine however wide it was dragged", () => {
@@ -222,20 +235,64 @@ describe("the reference rail", () => {
       render(`<aside class="rail-ref rail-ref--folded"></aside>`),
     );
     expect(style.maxWidth).toBe(style.width);
-    expect(style.resize).toBe("none");
   });
 
   it("stops being a rail where there is no column beside it", () => {
     viewport(720);
-    const style = globalThis.getComputedStyle(render(`<aside class="rail-ref"></aside>`));
+    const rail = render(RAIL);
+    const style = globalThis.getComputedStyle(rail);
+    const grip = globalThis.getComputedStyle(rail.querySelector(".grip") as Element);
     // Read before the window goes back: the declaration is live, so a value read after it
     // is the desk's answer again.
-    const narrow = { resize: style.resize, maxWidth: style.maxWidth };
+    const narrow = { display: grip.display, maxWidth: style.maxWidth };
     viewport(1440);
-    // Under the work rather than beside it: nothing to trade width with, and the inline
-    // width a drag at a desk left behind is clamped rather than obeyed.
-    expect(narrow.resize).toBe("none");
+    // Under the work rather than beside it: nothing to trade width with, so there is no edge
+    // to hand over -- and `display: none` also keeps a dead grip out of the tab order. The
+    // inline width a drag at a desk left behind is clamped rather than obeyed.
+    expect(narrow.display).toBe("none");
     expect(narrow.maxWidth).toBe("100%");
+  });
+});
+
+/**
+ * The grip itself: the two facts about it that nothing else in the gate can see.
+ *
+ * Neither is visible to a reviewer either. `touch-action` is one declaration whose absence
+ * turns every touch drag into a page scroll -- no `pointermove` ever arrives, and the
+ * component looks perfectly correct. And where an editor sits inside a pane that carries its
+ * own edge, TWO grips land on one boundary; which of them is live is decided here, in the
+ * sheet, because the editor should not have to know which window it was put in. ADR 0040.
+ *
+ * The drag is not asserted, here or anywhere: there is no layout engine offline and happy-dom
+ * has no pointer capture, so `@/lib/dragSize` holds everything about the drag that a machine
+ * can check and this holds the declarations it needs to be reachable at all.
+ */
+describe("a pane's grip", () => {
+  it("takes the gesture rather than leaving it to scroll the page", () => {
+    const grip = globalThis.getComputedStyle(render(`<hr class="grip grip--block" />`));
+    expect(grip.touchAction).toBe("none");
+    expect(grip.cursor).toBe("row-resize");
+  });
+
+  it("belongs to the pane, not to the editor inside it", () => {
+    render(`<div class="workbench__editor">
+      <div class="editor"><hr class="grip grip--block" /></div>
+      <hr class="grip grip--block" />
+    </div>`);
+    const inner = document.querySelector(".editor > .grip") as Element;
+    const pane = document.querySelector(".workbench__editor > .grip") as Element;
+    expect(globalThis.getComputedStyle(inner).display).toBe("none");
+    expect(globalThis.getComputedStyle(pane).display).not.toBe("none");
+  });
+
+  it("is alone on the boundary when the editor is a band on a leaf", () => {
+    const editor = render(`<div class="editor"><hr class="grip grip--block" /></div>`);
+    const grip = globalThis.getComputedStyle(editor.querySelector(".grip") as Element);
+    expect(grip.display).not.toBe("none");
+    // The travel the grip reads off this box, and the only place it is written.
+    const style = globalThis.getComputedStyle(editor);
+    expect(style.minHeight).not.toBe("");
+    expect(style.maxHeight).not.toBe("");
   });
 });
 

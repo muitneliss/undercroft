@@ -64,6 +64,21 @@ export const vi = {
     nothingToShow: "Không có gì để hiển thị.",
   },
 
+  /**
+   * The edges a reader drags, one key per surface.
+   *
+   * Each names the MEASURE it moves and the thing it moves it on, because a screen reader
+   * hears the label with no picture of where the edge is -- "chiều rộng" on its own would be
+   * four identical separators on one screen. A column's name is a SQL identifier, so it is
+   * interpolated and never translated.
+   */
+  grip: {
+    railWidth: "Chiều rộng bảng tham chiếu",
+    paneHeight: "Chiều cao ô truy vấn",
+    editorHeight: "Chiều cao ô soạn thảo",
+    columnWidth: "Chiều rộng cột {{name}}",
+  },
+
   signIn: {
     title: "Bảng điều khiển",
     lead: "Kết nối các tài khoản của bạn và xem những gì đã được đồng bộ.",
