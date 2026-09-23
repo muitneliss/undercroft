@@ -1,0 +1,24 @@
+---
+title: 'ADR 0044: An agent reaches Undercroft as a caller'
+type: source
+date: 2026-09-23
+tags: []
+source: docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md
+source_path: docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md
+source_hash: db606713292dd59aff818ec716a0358e128caab890e6b238c10ee87baa90401f
+ingested: 2026-09-23
+---
+
+# ADR 0044: An agent reaches Undercroft as a caller
+
+The `undercroft` CLI (`apps/cli`, `@undercroft/cli`) lets a person at a terminal or an LLM agent do everything the web UI does, without a browser and without a backdoor. Because the UI does everything through `/trpc`, `appRouter` IS the UI's feature list; a client that sends the same procedures over the same endpoint with the person's own Better Auth session has exactly the UI's capabilities, so every `tenantProcedure`, `requireRole` and `superadminProcedure` gate, the 404-not-403 boundary and the localized refusals apply unchanged. This extends [[ADR 0029: The assistant is an interleaf, and it acts only through the router]] to a process outside the control plane.
+
+Sign-in is the same email one-time code the SPA uses (`/api/auth/email-otp/...`); Better Auth checks `Origin` only on cookie-bearing requests, and neither sign-in POST carries one. There is no DSN, service token, new auth plugin or table. The ast-grep rule `cli-no-backdoor` (`.ast-grep/rules/cli-boundary.yml`, pinned by `scripts/cliBoundary.test.ts`) bans value imports of the control plane, the database seam and drivers, crypto, the lake, the connector runtime and Better Auth from `apps/cli/src`; type-only imports are allowed.
+
+The command surface is derived at build time: `apps/cli/scripts/build.ts` walks `appRouter._def.procedures`, converts each chained zod input with `asSchema` from `ai`, merges them as tRPC does, and bundles the result as `virtual:procedures`. A dotted path maps mechanically to a command (`bi.questions.save` -> `undercroft bi questions save`) and each top-level scalar input to a kebab-case flag; `cli.test.ts` fails the gate when the commands and `Object.keys(appRouter._def.procedures)` disagree. The one hand-written table, `apps/cli/src/procedures.ts`, records each mutation's effect (`read`/`write`/`destructive`); the build refuses an unclassified mutation, a stale classification, a missing catalogue sentence, or a flag colliding with a global one. `lake.query` is classed `write` because it runs admin-written SQL.
+
+Environments are named profiles in `config.json` (`{ url, allowWrites }`), resolved `--url` > `UNDERCROFT_URL` > profile (`--profile` > `UNDERCROFT_PROFILE` > nearest `undercroft.cli.json` > default); with none the answer is `CONFIG_REQUIRED`, never localhost. `credentials.json` (0600) keys each session by the exact origin that issued it. `allowWrites` is off by default and cannot be granted, or moved to another URL, in agent mode (`HUMAN_REQUIRED`); a one-off `--url` never allows writes; writes on a profile without it return `WRITES_DISABLED`; destructive commands need `--yes` where nobody can be asked; `--dry-run` makes no call; there is no idempotency key. The accepted limit: a harness that fakes a TTY defeats the guard.
+
+Distribution is a GitHub release asset `undercroft-cli-X.Y.Z.tgz` installed by the canonical skill `skills/undercroft-cli`, via `npx -y --package=<URL>`. release-please moved to `release-please-config.json` and a manifest, with `extra-files` for the skill's pinned version and `apps/cli/package.json`, and `include-component-in-tag: false` to keep `vX.Y.Z` tags. Two departures from the plan: `@oclif/core` 5 (the latest, Node 22 floor) loaded with an in-memory `pjson` because oclif does not support single-file bundles; and tRPC's non-batched wire spoken directly, because `@trpc/client` is released in lockstep with `@trpc/server` and the latest client cannot bundle against the repo's server 11.0.0. Follow-up: return to `createTRPCUntypedClient` once tRPC is upgraded. Rejected: an in-process `createCaller` with a DSN, a service token, device flow or bearer tokens, publishing to npm, an MCP server, and a read-only scope.
+
+Running the CLI against a real server found what the gate had not. Node's `fetch` (undici) always sends `Sec-Fetch-Mode: cors`, which Better Auth's `validateFormCsrf` reads as a browser, so every cookieless sign-in was refused `MISSING_OR_NULL_ORIGIN`; the suites missed it because Better Auth skips its origin check when `NODE_ENV` is `test`. The CLI now posts its two sign-in requests through `node:http`/`node:https` (no forged `Origin`), and `createAuth` sets `advanced.disableOriginCheck: false` explicitly so the suites run production's check. Likewise `Bun.build` had inlined `NODE_ENV` as `"development"`, making oclif print development warnings into agent-mode stderr; the build now defines `"production"`.

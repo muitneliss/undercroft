@@ -1,0 +1,18 @@
+{
+  "name": "@undercroft/cli",
+  "version": "1.19.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@clack/prompts": "1.8.1",
+    "@oclif/core": "5.0.0",
+    "@undercroft/core": "workspace:*",
+    "i18next": "26.4.2"
+  },
+  "devDependencies": {
+    "@undercroft/control-plane": "workspace:*",
+    "@undercroft/db": "workspace:*",
+    "ai": "7.0.107",
+    "zod": "3.25.76"
+  }
+}

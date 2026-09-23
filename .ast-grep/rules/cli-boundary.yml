@@ -1,0 +1,59 @@
+# The CLI is a CALLER of the platform, never a second way into it.
+#
+# `apps/cli` reaches Undercroft exactly as the web UI does: HTTP to `/trpc` and `/api/auth`,
+# carrying the person's own Better Auth session cookie. That is what makes every role gate,
+# the 404-not-403 boundary and the localized refusals apply to it unchanged. The backdoor would
+# be the obvious shortcut -- import the control plane's services, open a pool with a DSN, and
+# call them in-process -- which skips authentication entirely and turns a laptop's CLI into a
+# standing superuser. ADR 0044.
+#
+# So the shipped source may not import, BY VALUE, anything that could open that door: the
+# control plane itself, the database seam and its drivers, the crypto package that holds the
+# sealing key, the lake store, the connector runtime, or Better Auth. A TYPE import is allowed
+# (`import type { AppRouter } ...`): it is erased at compile time and ships nothing.
+#
+# Exempt, and why:
+#   **/*.test.ts     -- a test is a composition root. `cli.test.ts` starts the real control
+#                       plane (`@undercroft/control-plane/testing`) to run the CLI against it.
+#   apps/cli/scripts -- outside `src/`, so outside `files:` below. The BUILD reads the router
+#                       to extract its schemas; what it ships is data, not router code.
+#
+# Pinned from both sides -- fires, and stays quiet -- by `scripts/cliBoundary.test.ts`.
+id: cli-no-backdoor
+language: typescript
+severity: error
+message: >-
+  The CLI reaches the platform only over HTTP with the person's own session. Do not import the
+  control plane, the database, crypto, the lake, the connector runtime or Better Auth by value
+  here -- call the procedure through handlers/remote.ts. See docs/adr/0044.
+files:
+  - "apps/cli/src/**"
+ignores:
+  - "**/*.test.ts"
+utils:
+  forbidden:
+    kind: string
+    regex: '^["''](@undercroft/(control-plane|db|crypto|lake|connector-runtime)(/[^"'']*)?|pg|pg-[a-z-]+|@electric-sql/pglite|better-auth(/[^"'']*)?)["'']$'
+rule:
+  any:
+    # `import { x } from "..."`, but not `import type { x } from "..."`.
+    - kind: import_statement
+      has:
+        matches: forbidden
+      not:
+        regex: "^import\\s+type\\s"
+    # `export { x } from "..."` re-exports a value just as surely.
+    - kind: export_statement
+      has:
+        matches: forbidden
+      not:
+        regex: "^export\\s+type\\s"
+    # `await import("...")`, the spelling that would slip past a rule about import statements.
+    - kind: call_expression
+      all:
+        - has:
+            kind: import
+        - has:
+            kind: arguments
+            has:
+              matches: forbidden

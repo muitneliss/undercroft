@@ -371,10 +371,14 @@
     // which is the only tree where importing one would be a real bug -- and that is the whole
     // value of the rule here, so it is scoped rather than switched off.
     //
+    // `apps/cli` is bundled too, but for Node (`Bun.build` with `target: "node"`): its files
+    // and its terminal ARE the platform, the same as for the servers.
+    //
     // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
     // respectively, never in the browser.
     {
       "includes": [
+        "apps/cli/**",
         "apps/control-plane/**",
         "apps/worker/**",
         "packages/**",
@@ -746,6 +750,16 @@
         "apps/worker/src/services/validateCredential.ts",
         "scripts/geo/vnProvinces.ts"
       ],
+      "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // Four findings in the CLI's two catalogues, all of them a sentence quoting a profile name
+    // in typographic quotes -- `“{{profile}}”`, twice per language -- one of which also quotes
+    // the command that fixes it. Curly quotes, braces and a backticked command line are what
+    // the entropy score counts; none of it is a credential, and the catalogues hold no value
+    // that could be. The rule stays on for the CLI's source.
+    {
+      "includes": ["apps/cli/src/i18n/vi.ts", "apps/cli/src/i18n/en.ts"],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
     },
 

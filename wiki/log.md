@@ -96,3 +96,6 @@
 ## [2026-09-23] ingest | ADR 0042 A Pane's Whole Edge Is Its Handle
 ## [2026-09-23] ingest | ADR 0043 A Second Mailbox Is a Second Source
 ## [2026-09-23] ingest | Runbook Google Ingestion Setup
+## [2026-09-23] ingest | ADR 0044: An agent reaches Undercroft as a caller
+## [2026-09-23] ingest | Runbook: The undercroft CLI
+## [2026-09-23] ingest | ADR 0044: An agent reaches Undercroft as a caller
