@@ -39,9 +39,9 @@
  *
  * WHY IT IS BUILT LIKE AN ICON. Same authored geometry as `@/components/Icon`, on
  * a 32-unit grid that is exactly twice the icon grid, so every radius and every
- * edge lands on the same half-unit the interface's glyphs do. `public/favicon.svg`
- * and `public/mark.svg` carry this same path; if the geometry changes here, it
- * changes there.
+ * edge lands on the same half-unit the interface's glyphs do. `public/favicon.svg`,
+ * `public/mark.svg` and the email running head (`packages/core/src/emailTemplate.ts`)
+ * carry this same path; if the geometry changes here, it changes there.
  *
  * It is `aria-hidden` everywhere it appears, because it appears beside the word
  * Undercroft every time, and announcing both would say the name twice.

@@ -215,6 +215,14 @@ describe("self-containment", () => {
     expect(html).not.toContain("background-image");
   });
 
+  it("sets the mark before the wordmark, drawn into the markup and silent to a reader", () => {
+    // The tests either side are its quiet half: the leaves they render carry the mark too,
+    // and neither finds a fetch or a URL it was not given.
+    const { html } = renderEmailLeaf(leaf());
+
+    expect(html).toMatch(/<svg [^>]*aria-hidden="true"[^>]*><path d="[^"]+"\/><\/svg>UNDERCROFT/u);
+  });
+
   it("the only absolute URLs are the ones the leaf was given", () => {
     const { html } = renderEmailLeaf(
       leaf({ blocks: [{ kind: "plate", label: "Sign in", href: "https://example.test/go" }] }),

@@ -22,7 +22,9 @@
  *
  * ## Nothing here calls home
  *
- * No image, no remote font, no `url(`, no tracking pixel -- asserted by a test. A web font
+ * No fetched image, no remote font, no `url(`, no tracking pixel -- asserted by a test. The
+ * one picture, the mark in the running head, is vector geometry written into the markup
+ * (ADR 0045), so it arrives with the message and asks nobody for anything. A web font
  * would tell Google that a sign-in code had been opened, by which IP, at what time, which is
  * a worse thing to ship than an email set in Georgia. The font stacks below therefore name
  * the real faces first (a reader who has Archivo gets Archivo) and then the closest thing
@@ -92,6 +94,14 @@ export interface RenderedEmail {
 
 /** The wordmark, in the running head of every leaf. */
 const WORDMARK = "UNDERCROFT";
+
+/**
+ * The device, the same block and cutting `apps/ui/src/components/Mark.tsx` draws (ADR 0010).
+ * Core cannot import the UI, so the path is carried here as `public/mark.svg` carries it;
+ * if the geometry changes there, it changes here.
+ */
+const MARK_PATH =
+  "M3 0h26a3 3 0 0 1 3 3v26a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3ZM5 27.5V15.5a11 11 0 0 1 22 0V27.5ZM9 27.5V15.5a7 7 0 0 1 14 0V27.5ZM12.5 27.5V15.5a3.5 3.5 0 0 1 7 0V27.5ZM5 15.5h4v1.5H5ZM23 15.5h4v1.5h-4Z";
 
 const INK = "#16150f";
 const INK_2 = "#56513f";
@@ -265,13 +275,29 @@ function blockHtml(block: EmailBlock): string {
   }
 }
 
-/** The running head: the wordmark, and on the right whose book is open. */
+/**
+ * The device set before the wordmark, drawn inline rather than fetched (ADR 0045).
+ *
+ * Gmail and Outlook's Word engine strip `<svg>`, and that is the accepted cost: the element
+ * carries every bit of its own spacing, so where it is stripped nothing is left behind and
+ * the running head is the wordmark alone, exactly as before. No `<title>` either, for the
+ * same reason the app's mark is `aria-hidden` -- it always sits beside the word, and a
+ * client that strips the tags but keeps their text would print the name twice.
+ *
+ * No `xmlns`: HTML parses inline SVG without it, and it would be the one absolute URL in the
+ * markup that the leaf was not given. The arch is a hole under `evenodd`, so it fills with
+ * the page stock, as it does in the interface's running head. 18px keeps each order at least
+ * two pixels wide; the offset centres the block on the caps of the 11px wordmark.
+ */
+const MARK_HTML = `<svg width="18" height="18" viewBox="0 0 32 32" fill="${INK}" fill-rule="evenodd" aria-hidden="true" focusable="false" style="vertical-align:-5px;margin-right:7px;"><path d="${MARK_PATH}"/></svg>`;
+
+/** The running head: the device and the wordmark, and on the right whose book is open. */
 function runningHeadHtml(leaf: EmailLeaf): string {
   const right =
     leaf.runningHead === undefined
       ? ""
       : `<td align="right" style="${DATUM}color:${INK_2};">${esc(leaf.runningHead)}</td>`;
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="${LABEL}color:${INK};">${WORDMARK}</td>${right}</tr></table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="${LABEL}color:${INK};">${MARK_HTML}${WORDMARK}</td>${right}</tr></table>`;
 }
 
 /**
