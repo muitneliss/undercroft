@@ -17,7 +17,7 @@ Always run the CLI through this pinned release, and always pass `--agent`:
 <!-- x-release-please-start-version -->
 
 ```sh
-npx -y --package=https://github.com/muitneliss/undercroft/releases/download/v1.19.0/undercroft-cli-1.19.0.tgz undercroft <command> --agent
+npx -y --package=https://github.com/muitneliss/undercroft/releases/download/v1.19.1/undercroft-cli-1.19.1.tgz undercroft <command> --agent
 ```
 
 <!-- x-release-please-end -->
