@@ -44,7 +44,7 @@ export function streamsOf(summary: LakeSummary): LakeStream[] {
  */
 export type LakeNote =
   | { kind: "tombstoned"; count: number }
-  | { kind: "bytes"; bytes: number; readable: number; total: number }
+  | { kind: "bytes"; bytes: number; distinctBlobs: number; readable: number; total: number }
   | { kind: "none" };
 
 /** One line of the index: a stream, how much of it there is, and when it last moved. */
@@ -80,7 +80,18 @@ export function inventoryOf(summary: LakeSummary): LakeEntry[] {
       (d): LakeEntry => ({
         stream: { kind: "documents", source: d.source },
         held: d.documents,
-        note: { kind: "bytes", bytes: d.bytes, readable: d.readable, total: d.documents },
+        // `held` is catalogue rows and `bytes` is what the lake stores under them, which are
+        // two grains and would be a quiet lie printed as one: the same attachment quoted four
+        // times is four rows over one blob. `distinctBlobs` is what makes the gap legible, so
+        // it travels beside them rather than being left for a reader to infer -- the ratio is
+        // not recoverable from the other two figures, because duplicates are not one size.
+        note: {
+          kind: "bytes",
+          bytes: d.bytes,
+          distinctBlobs: d.distinctBlobs,
+          readable: d.readable,
+          total: d.documents,
+        },
         latestObservedAt: d.latestObservedAt,
       }),
     ),

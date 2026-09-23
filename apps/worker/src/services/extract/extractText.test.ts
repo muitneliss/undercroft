@@ -17,7 +17,7 @@ import {
   LEGACY_DOC,
   MAX_TEXT_CHARS,
   normalizeText,
-  TEXT_LAYER_MIN_CHARS,
+  TEXT_LAYER_ROUTING_CHARS,
   UNSUPPORTED_TYPE,
 } from "./extractText.ts";
 // Running a child program, and what an absent one is called, moved to their own module when
@@ -95,8 +95,8 @@ describe("a PDF's text layer", () => {
   it("measures the threshold in characters a reader would see, not raw bytes", async () => {
     // Pins the normalisation the threshold depends on. Whitespace-padded noise must not pass
     // by being long; this is the guard that makes the two tests above mean what they say.
-    expect(normalizeText(SCAN_NOISE).length).toBeLessThan(TEXT_LAYER_MIN_CHARS);
-    expect(normalizeText(A_PAGE).length).toBeGreaterThanOrEqual(TEXT_LAYER_MIN_CHARS);
+    expect(normalizeText(SCAN_NOISE).length).toBeLessThan(TEXT_LAYER_ROUTING_CHARS);
+    expect(normalizeText(A_PAGE).length).toBeGreaterThanOrEqual(TEXT_LAYER_ROUTING_CHARS);
     expect(normalizeText("  a \n\n b \f c  ")).toBe("a b c");
   });
 });

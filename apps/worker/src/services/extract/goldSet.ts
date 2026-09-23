@@ -371,7 +371,7 @@ const VIETNAMESE_PDF_LINES: readonly string[] = [
 /**
  * Vietnamese through the text layer, which is the one path that can carry it here.
  *
- * Comfortably over `TEXT_LAYER_MIN_CHARS` on purpose: a shorter page would be routed to OCR
+ * Comfortably over `TEXT_LAYER_ROUTING_CHARS` on purpose: a shorter page would be routed to OCR
  * and this case would silently stop testing what it names.
  */
 const VIETNAMESE_PDF: GoldCase = {

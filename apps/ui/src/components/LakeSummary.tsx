@@ -159,8 +159,13 @@ function IndexRow({
       <TableCell className="num datum">{formatCount(entry.held, locale)}</TableCell>
       <TableCell className="datum datum--quiet">
         {note.kind === "bytes"
-          ? t("lake.alsoBytesReadable", {
+          ? // `count` is the distinct-blob figure because that is the noun the sentence
+            // pluralises; the other three are plain interpolations. One key, one sentence --
+            // a line assembled from translated fragments could only be right in the language
+            // it was assembled in (`.claude/rules/i18n.md`).
+            t("lake.alsoBytesReadable", {
               bytes: formatBytes(note.bytes, locale),
+              count: note.distinctBlobs,
               readable: note.readable,
               total: note.total,
             })

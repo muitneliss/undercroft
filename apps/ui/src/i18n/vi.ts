@@ -209,7 +209,13 @@ export const vi = {
     colHeld: "Số lượng",
     colAlso: "Ghi chú",
     alsoTombstoned_other: "{{count, number}} đã xoá ở nguồn",
-    alsoBytesReadable: "{{bytes}} · đọc được {{readable, number}}/{{total, number}}",
+    /**
+     * `{{bytes}}` is what the lake stores, which is the distinct blobs and not the rows --
+     * `{{count}}` of them, against the `{{total}}` catalogue rows in the column beside this
+     * one. The gap between the two is the same attachment quoted down a reply chain.
+     */
+    alsoBytesReadable_other:
+      "{{bytes}} trong {{count, number}} tệp riêng biệt · đọc được {{readable, number}}/{{total, number}}",
     consoleHead: "Truy vấn SQL",
     consoleLead:
       "Viết một câu SELECT trên hồ dữ liệu thô. Chạy bằng quyền đọc của tenant: mọi thao tác ghi đều bị từ chối, và bạn chỉ thấy dữ liệu của chính mình.",
