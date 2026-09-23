@@ -30,6 +30,13 @@
  * that gap is the one that matters most -- OCR without the language pack does not produce
  * garbage, it produces clean confident English words that were never on the page.
  *
+ * IT IS THE FIXTURE THAT CANNOT MEASURE THIS, NOT THE QUANTITY. A real Vietnamese scan was
+ * rendered by whatever produced it, so its diacritics are real and reach the page image. A
+ * hand-labelled sample over real documents scored 13/14 anchors with accents required, at 32.4
+ * combining marks per 100 letters -- ADR 0041. So do not add a Vietnamese case here on the
+ * strength of that result: this file is still rendering through the same substituted fonts,
+ * and the number that closed the gap came from outside it.
+ *
  * Nor is there a second plain-text case: `text/csv`, `text/plain` and
  * `text/tab-separated-values` are one reader, and which types reach it is pinned by
  * `extractText.test.ts`. A redundant case is a defect (`tests.md`).
