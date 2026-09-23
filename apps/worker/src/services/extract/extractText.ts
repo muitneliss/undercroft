@@ -44,14 +44,34 @@ export const EMPTY_SOURCE = "document-has-no-bytes";
 export const MAX_TEXT_CHARS = 1_000_000;
 
 /**
- * The text layer is believed at 80 normalised characters.
+ * WHICH READER A PDF GOES TO, and nothing else. It is not a quality bar.
  *
- * Taken from the reference implementation this strategy comes from, and the number matters in
- * one direction only: a scanned PDF still carries a few stray characters from a header or a
- * stamp, so "the layer returned something" is not "the layer worked". Eighty is comfortably
- * more than that noise and comfortably less than a page of real text.
+ * Below 80 normalised characters the text layer is not believed and the pages are rasterised
+ * and OCR'd instead. The number matters in one direction only: a scanned PDF still carries a
+ * few stray characters from a header or a stamp, so "the layer returned something" is not
+ * "the layer worked". Eighty is comfortably more than that noise and comfortably less than a
+ * page of real text; it is the reference implementation's figure.
+ *
+ * OCR HAS NO SUCH FLOOR AND MUST NOT GROW ONE. The two paths look inconsistent -- 96 of the
+ * 197 OCR'd images on production hold less text than this, and a reader who takes 80 for a
+ * quality bar will reach for it -- so the difference is written here rather than left to be
+ * "harmonised" later. A routing threshold asks "is there a better reader for this?", and for
+ * a PDF there is: `pdf_ocr` reads the same document a second way. For an image there is no
+ * second way, so the identical number would mean REFUSE, which is a different decision
+ * entirely and one the data refuses. Applying the garbage heuristic in `corpusSignals.ts` to
+ * those 96 rows returns zero, mean 0.0: they are clean text from small images that genuinely
+ * hold a few real words, and an 80-character floor on OCR would throw away 96 correct
+ * readings -- a loss dressed as a fix. `ocr.ts` gates on SOURCE BYTES instead, before it
+ * spends a child process, which is the question an image can actually answer.
+ *
+ * What the data DOES support is a signal rather than a refusal: `terseForSize` in
+ * `corpusSignals.ts` counts a source big enough that almost no text is the suspicious shape.
+ * It is a lead and stays one. The count and the argument live there, in the module that
+ * measures it, rather than being restated here where nothing would keep the two in step.
+ *
+ * ADR 0040.
  */
-export const TEXT_LAYER_MIN_CHARS = 80;
+export const TEXT_LAYER_ROUTING_CHARS = 80;
 
 export interface Extracted {
   readonly method: ExtractMethod | null;
@@ -123,12 +143,13 @@ async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
   if (!layer.ok) {
     return refused(layer.missing ? extractorMissing("pdftotext") : "pdftotext-failed");
   }
-  if (normalizeText(layer.text).length >= TEXT_LAYER_MIN_CHARS) {
+  if (normalizeText(layer.text).length >= TEXT_LAYER_ROUTING_CHARS) {
     return read("pdf_text", layer.text);
   }
   // Below the threshold this is a scan: the handful of stray characters a stamp left in the
   // text layer is not what the document says, and storing it would read downstream as a
-  // contract that says almost nothing. So the pages are rasterised and OCR'd instead.
+  // contract that says almost nothing. So the pages are rasterised and OCR'd instead -- this
+  // is a ROUTING decision, and the alternative reader is what makes it one.
   //
   // THE RASTERISATION IS NOT OPTIONAL and is why this is two programs rather than one:
   // tesseract's input is an image, so `tesseract scan.pdf stdout` answers "Pdf reading is not

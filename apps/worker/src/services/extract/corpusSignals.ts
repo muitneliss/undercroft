@@ -80,11 +80,17 @@ function looksLikeGarbage(text: string): boolean {
 /**
  * A source big enough that almost no text is the suspicious shape.
  *
- * 100 KB and 80 characters, which on production names 17 images: a large picture holding one
- * line of text is a scan that mostly failed, where a small one holding the same line is a logo
- * and is fine. THE RATIO IS THE SIGNAL, not either number alone -- which is why this is a
- * reported count here and not a refusal in `ocr.ts`, where a bare length floor would have
- * thrown away the 96 correct short reads above.
+ * 100 KB and 80 characters: a large picture holding one line of text is a scan that mostly
+ * failed, where a small one holding the same line is a logo and is fine. THE RATIO IS THE
+ * SIGNAL, not either number alone -- which is why this is a reported count here and not a
+ * refusal in `ocr.ts`, where a bare length floor would have thrown away the 96 correct short
+ * reads above.
+ *
+ * It named 17 images on production on 2026-09-22 and 21 an hour later, and the date is part
+ * of the claim rather than decoration: this counts LIVE rows, so it moves as the extract
+ * backlog drains. Every other measured figure in this codebase is over a fixed tree and
+ * stays put. Do not "correct" this one against a fresh run -- re-date it, or take the count
+ * out and leave the reasoning, which is the half that does not age.
  */
 const LARGE_SOURCE_BYTES = 100 * 1024;
 const TERSE_TEXT_CHARS = 80;

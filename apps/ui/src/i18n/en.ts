@@ -176,7 +176,10 @@ export const en = {
     colAlso: "Also",
     alsoTombstoned_one: "{{count, number}} deleted at source",
     alsoTombstoned_other: "{{count, number}} deleted at source",
-    alsoBytesReadable: "{{bytes}} · {{readable, number}}/{{total, number}} readable",
+    alsoBytesReadable_one:
+      "{{bytes}} in {{count, number}} distinct file · {{readable, number}}/{{total, number}} readable",
+    alsoBytesReadable_other:
+      "{{bytes}} in {{count, number}} distinct files · {{readable, number}}/{{total, number}} readable",
     consoleHead: "SQL console",
     consoleLead:
       "Write one SELECT over the raw lake. It runs with the tenant's read-only authority: every write is refused, and you see only your own data.",

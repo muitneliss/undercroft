@@ -55,7 +55,16 @@ describe("a stream's address", () => {
       records: [
         { source: "hubspot", entity: "deals", records: 1, tombstoned: 0, latestObservedAt: "" },
       ],
-      documents: [{ source: "gmail", documents: 1, bytes: 1, readable: 0, latestObservedAt: "" }],
+      documents: [
+        {
+          source: "gmail",
+          documents: 1,
+          distinctBlobs: 1,
+          bytes: 1,
+          readable: 0,
+          latestObservedAt: "",
+        },
+      ],
     });
     expect(streams).toEqual([DEALS, MAIL]);
   });

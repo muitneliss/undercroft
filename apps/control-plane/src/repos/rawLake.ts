@@ -33,7 +33,35 @@ export interface RecordStreamSummary {
 
 export interface DocumentSummary {
   readonly source: string;
+  /**
+   * Catalogue rows: how many times this source has told us about a document.
+   *
+   * NOT how many files there are, and the difference is not small. `raw.documents` is
+   * provenance-addressed -- Gmail's stable identity for an attachment is
+   * `(messageId, partIndex)` -- so one attachment quoted down a reply chain is one row per
+   * message. Production holds 4,476 rows over 2,030 distinct digests.
+   */
   readonly documents: number;
+  /**
+   * Of those rows, how many DISTINCT sets of bytes they name.
+   *
+   * The gap against `documents` is the duplication, reported rather than hidden, in the same
+   * spirit as `readable` below: 4,476 documents of which 2,030 distinct says what the
+   * catalogue holds AND what the lake stores, where either number alone says only half. The
+   * lake underneath is content-addressed (`packages/lake/src/store.ts`), so it is this figure
+   * and not the row count that the object store's own inventory agrees with.
+   */
+  readonly distinctBlobs: number;
+  /**
+   * Bytes the lake holds for this source -- summed over `distinctBlobs`, never over rows.
+   *
+   * Summing `byte_length` across catalogue rows counts a quoted attachment once per quote and
+   * so names a quantity that exists nowhere: not on the disk, not on the bill, not in any
+   * download a customer could perform. It is not the honest half of a pair the way the row
+   * count is, because the row count is at least a true count of rows; a doubled byte total is
+   * true of nothing. Nor is the error recoverable from the two counts beside it -- duplicates
+   * are not uniformly sized, so the 2.2:1 row ratio does not carry over to bytes.
+   */
   readonly bytes: number;
   /**
    * How many of them an extract run could actually read into text.
@@ -42,6 +70,10 @@ export interface DocumentSummary {
    * the useful figure: 122 documents of which 55 are readable says what a run achieved and
    * what is still opaque, where either number alone says neither. Zero means the extract
    * verb has not run over this source yet -- not that nothing in it can be read.
+   *
+   * Counted over ROWS, like `documents` and unlike `bytes`: an extraction is now fanned out
+   * to every row sharing a digest (`apps/worker/src/repos/documentText.ts`), so a row with no
+   * text is a row nothing can read, not a row that was merely never reached.
    */
   readonly readable: number;
   readonly latestObservedAt: string;
@@ -122,32 +154,52 @@ export async function summariseDocuments(
   const { rows } = await exec.query<{
     source: string;
     documents: number;
+    distinct_blobs: number;
     bytes: number;
     readable: number;
     latest_observed_at: Date | string;
   }>(
+    // TWO GRAINS, ONE PASS. Every figure but `bytes` is counted per catalogue ROW; `bytes` is
+    // summed per distinct BLOB, because that is the only grain at which a byte total is true
+    // of anything (see `DocumentSummary.bytes`). `nth_of_digest` is how the second grain is
+    // expressed without a second scan: number the rows within each digest, then let the sum
+    // take the first of each. Which row that is cannot change the answer -- identical digests
+    // carry identical lengths by construction -- and ordering by `document_id` only makes the
+    // choice deterministic rather than meaningful.
+    //
     // `readable` is how many of this source's documents an extract run could actually read.
     // A LEFT JOIN, so a source nobody has run the extract verb over counts zero rather than
     // disappearing: "we have not read these yet" and "we read them and got nothing" are
     // different facts, and the second one is a row with a `reason`.
-    `SELECT d.source,
+    //
+    // The scan is served by `documents_digest` on `(source, tenant_id, sha256)`
+    // (250_documents_sha_idx.sql), which is also what the extract worker's fan-out reads.
+    `WITH catalogued AS (
+       SELECT d.source, d.sha256, d.byte_length, d.observed_at, t.method,
+              row_number() OVER (PARTITION BY d.source, d.sha256
+                                 ORDER BY d.document_id) AS nth_of_digest
+       FROM raw.documents d
+       LEFT JOIN raw.document_text t
+         ON t.source = d.source
+        AND t.tenant_id = d.tenant_id
+        AND t.document_id = d.document_id
+       WHERE d.tenant_id = $1
+     )
+     SELECT source,
             count(*)::int AS documents,
-            coalesce(sum(d.byte_length), 0)::float8 AS bytes,
-            count(t.method)::int AS readable,
-            max(d.observed_at) AS latest_observed_at
-     FROM raw.documents d
-     LEFT JOIN raw.document_text t
-       ON t.source = d.source
-      AND t.tenant_id = d.tenant_id
-      AND t.document_id = d.document_id
-     WHERE d.tenant_id = $1
-     GROUP BY d.source
-     ORDER BY d.source`,
+            count(DISTINCT sha256)::int AS distinct_blobs,
+            coalesce(sum(byte_length) FILTER (WHERE nth_of_digest = 1), 0)::float8 AS bytes,
+            count(method)::int AS readable,
+            max(observed_at) AS latest_observed_at
+     FROM catalogued
+     GROUP BY source
+     ORDER BY source`,
     [tenantId],
   );
   return rows.map((r) => ({
     source: r.source,
     documents: r.documents,
+    distinctBlobs: r.distinct_blobs,
     bytes: r.bytes,
     readable: r.readable,
     latestObservedAt: iso(r.latest_observed_at),

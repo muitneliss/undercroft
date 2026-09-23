@@ -57,11 +57,16 @@ describe("LakeSummary", () => {
           },
         ],
         documents: [
+          // FOUR ROWS OVER TWO BLOBS, and no two of these numbers are equal on purpose. The
+          // note has four slots and three of them are counts; a fixture where the row count
+          // and the distinct count agreed would print the same line whichever of the two the
+          // component passed as `count`, which is exactly the mix-up worth catching.
           {
             source: "gmail",
-            documents: 2,
+            documents: 4,
+            distinctBlobs: 2,
             bytes: 3500,
-            readable: 0,
+            readable: 1,
             latestObservedAt: new Date().toISOString(),
           },
         ],
@@ -78,7 +83,11 @@ describe("LakeSummary", () => {
     // document one. Two half-empty numeric columns became one column that always says
     // something, which is the whole reason the two tables became one.
     expect(screen.getByText("12 đã xoá ở nguồn")).toBeDefined();
-    expect(screen.getByText("3.5 kB · đọc được 0/2")).toBeDefined();
+    // The bytes are what the LAKE holds -- two blobs -- printed beside the four catalogue
+    // rows that name them. The old line said only "3.5 kB · đọc được 0/2" and so reported a
+    // byte total that the object store underneath disagrees with by the duplication ratio,
+    // with nothing on the page to show a reader that it did.
+    expect(screen.getByText("3.5 kB trong 2 tệp riêng biệt · đọc được 1/4")).toBeDefined();
 
     expect(screen.queryByText("Chưa có gì về")).toBeNull();
   });
