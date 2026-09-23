@@ -16,11 +16,37 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+      # `apps/cli/src/cli.test.ts` runs the built CLI under `node`, as its users do, and the
+      # packed CLI promises Node 22 (`@oclif/core` 5's floor). Pinned to that floor rather than
+      # left to whatever the runner image ships, so the gate tests the promise.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
       - uses: go-task/setup-task@v2
       - run: bun install --frozen-lockfile
       # One definition of the gate: the same `task ci:verify` a developer runs locally --
       # itself a thin wrapper over `bun run verify`. See .claude/rules/tooling.md.
       - run: task ci:verify
+
+  cli:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: go-task/setup-task@v2
+      - run: bun install --frozen-lockfile
+      # The package, not just the bundle: pack the tarball a release attaches and run it
+      # through `npx --package=<tgz>`, which is exactly how the skill runs it.
+      - name: the packed CLI runs through npx
+        run: task ci:cli-pack-check
+      # Needs the network (it fetches the `skills` CLI), which is why it is not in ci:verify.
+      - name: npx skills finds the undercroft-cli skill
+        run: task ci:skill-check
 
   compose:
     runs-on: ubuntu-24.04

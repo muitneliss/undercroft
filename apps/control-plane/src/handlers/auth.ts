@@ -395,6 +395,12 @@ export function createAuth(config: AuthConfig): Auth {
     baseURL: config.baseUrl,
     // Same-origin: the SPA is served by this process, so the only trusted origin is itself.
     trustedOrigins: [config.baseUrl],
+    // Explicit, although `false` is already Better Auth's production default: left unset,
+    // Better Auth SKIPS its Origin/CSRF check whenever NODE_ENV is `test`, so every suite ran
+    // a laxer server than production does. That hid a real defect -- the CLI's sign-in was
+    // refused in production and accepted in the gate (ADR 0044) -- and a check the suite does
+    // not run is a check nothing proves.
+    advanced: { disableOriginCheck: false },
 
     user: userModel(config, superadmins),
 

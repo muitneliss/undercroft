@@ -97,6 +97,20 @@ tasks:
         done
         exit $fail
 
+  cli-pack-check:
+    desc: >-
+      Pack the CLI, then run the tarball the way the skill does (npx --package=<tgz> undercroft)
+      and assert --help and `describe --agent` answer. Needs Node 22+ and npm on PATH.
+    cmds:
+      - bun run cli:pack-check
+
+  skill-check:
+    desc: >-
+      Assert `npx skills add . --list` finds the undercroft-cli skill. Needs the network (it
+      fetches the skills CLI), so it is NOT part of ci:verify.
+    cmds:
+      - bun run skill:check
+
   wiki-check:
     desc: The wiki's coverage and provenance gate.
     cmds:

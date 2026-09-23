@@ -57,6 +57,32 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 - **An assistant with exactly your permissions.** It reaches the platform's own procedures
   through the real role gates, so it can refuse you; a change is proposed as a proof you
   strike, and a separate model checks you asked for it before one is ever offered.
+- **A CLI for people and agents.** `undercroft` does everything the web UI does, one command
+  per API procedure, as the person who signed in — never more. Writes stay off per
+  environment until a person turns them on.
+
+## From a terminal, or from an agent
+
+A person runs it through the release it ships in, with Node 22 or newer. Below,
+`undercroft` stands for
+`npx -y --package=https://github.com/muitneliss/undercroft/releases/download/vX.Y.Z/undercroft-cli-X.Y.Z.tgz undercroft`:
+
+```sh
+undercroft config set-profile prod --url https://undercroft.example.test
+undercroft auth login          # the same emailed code as the web sign-in
+undercroft runs list           # asks which customer
+```
+
+An agent such as Claude Code or Codex gets it as a skill, which runs the pinned release with
+`--agent`, so every answer is one JSON envelope:
+
+```sh
+npx skills add muitneliss/undercroft --skill undercroft-cli --agent claude-code -y
+```
+
+Signing in and allowing writes stay a person's job. The CLI refuses an agent that tries
+either. See [docs/runbook/cli.md](docs/runbook/cli.md) and
+[ADR 0044](docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md).
 
 ## Design rules
 
@@ -86,6 +112,7 @@ bun install
 task ci:verify      # typecheck, lint, format, tests -- offline, no credentials needed
 task dev:run        # the whole local stack -- Postgres, MinIO, Kestra, the worker, the
                      # control plane, the UI -- with hot reload, one command
+task dev:cli -- describe   # build the CLI and run it against your local stack
 ```
 
 `ci:verify` is the gate and runs with no Docker, no network and no credentials. `task

@@ -226,6 +226,16 @@ tasks:
         ignore_error: true
       - task: serve
 
+  cli:
+    desc: "Build the CLI and run it. Usage: task dev:cli -- runs list --profile local"
+    # Interactive so a person gets the terminal itself: the CLI decides human mode from
+    # stdin and stdout being a TTY, and Task's prefixed output would otherwise pipe stdout
+    # and silently turn every run into agent mode.
+    interactive: true
+    cmds:
+      - task: :build:cli
+      - node {{.ROOT_DIR}}/apps/cli/dist/undercroft.mjs {{.CLI_ARGS}}
+
   email-preview:
     desc: >-
       Render every email (both languages) to data/email-preview/ and print where. An email

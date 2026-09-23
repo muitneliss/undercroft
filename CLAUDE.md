@@ -44,7 +44,7 @@ about to touch.** That is the only reason this index exists.
 | `privileges.md`   | `packages/db/sql/**`                                                     | the role and grant model; why the BI role cannot read `raw`                              |
 | `tests.md`        | `**/*.test.ts(x)`, `**/testing.ts`                                       | real in-memory implementations over mocks, a guard needs two tests                       |
 | `state.md`        | `apps/ui/**`                                                             | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
-| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`                                | Vietnamese default, English second; no user-facing string written in place               |
+| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`, `apps/cli/src/**`             | Vietnamese default, English second; no user-facing string written in place               |
 | `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                   | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
 | `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                    | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
 | `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures                                  | no real customer data in any tracked file                                                |
@@ -65,6 +65,11 @@ things about it are load-bearing enough to state here rather than only in the AD
   system; the gate asks a separate model, about the reader's own words with tool results
   excluded, whether they asked for this action. An unconfigured gate DENIES -- one that failed
   open would not be a gate. `docs/runbook/assistant-setup.md` covers turning it on.
+- **An agent OUTSIDE the platform uses the same door, over HTTP.** `apps/cli` (ADR 0044) sends
+  every router procedure to `/trpc` with the person's own Better Auth session. It never uses a
+  DSN, a service token or an in-process caller, and `cli-no-backdoor` fails the gate on one.
+  Its guard against injected text is a per-profile `allowWrites` that only a person at a
+  terminal can set.
 
 ## Agents
 
@@ -99,6 +104,12 @@ A new skill or agent therefore needs its Codex pointer in the same change, and
 `scripts/agentConfig.test.ts` fails the gate until it has one. Codex loads `.codex/` only for
 a project it trusts.
 
+`skills/` at the root is a different thing: the skills this repo PUBLISHES for its users'
+agents, installed with `npx skills add muitneliss/undercroft --skill <name>`. They are not
+instructions for working on this repo, so they get no `.claude/` or Codex pointer.
+`skills/undercroft-cli` is the CLI's, and `scripts/skill.test.ts` keeps its pinned version in
+step with the release.
+
 ## Language and runtime
 
 **TypeScript only.** There is deliberately no Python in this repo's source. dbt is a
@@ -114,13 +125,13 @@ Every operation goes through [Task](https://taskfile.dev) — never a bare `bun 
 shell/docker command typed by hand. `task --list-all` enumerates everything that exists; the
 surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
 
-| Namespace | Lives in                | Covers                                                                    |
-| --------- | ----------------------- | ------------------------------------------------------------------------- |
-| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included    |
-| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, generated assets/schemas, local Docker images             |
-| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs      |
-| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand                             |
-| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one |
+| Namespace | Lives in                | Covers                                                                                                                                           |
+| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                         |
+| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), generated assets/schemas, local Docker images           |
+| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check` and `ci:skill-check` (network) are CI steps outside it |
+| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` attaches the CLI to a release                                                     |
+| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one                                                                        |
 
 Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —
 Task is the mandated way to invoke it, never a second place that redefines what it does. A
@@ -156,6 +167,12 @@ sides — fires, and stays quiet — so it cannot quietly stop matching:
   `biome-ignore-all` **anywhere**, test files included, no group-wide `lint:` /
   `lint/plugin:` spelling (both reach the money plugin), no `ast-grep-ignore` at all. Pinned
   by `scripts/suppressions.test.ts`, whose last two tests run Biome to prove the hole is real.
+- `cli-no-backdoor` is an **ast-grep** rule that keeps `apps/cli/src` a caller of the
+  platform. It forbids importing the control plane, the database seam and its drivers,
+  crypto, the lake, the connector runtime or Better Auth by value, including a dynamic
+  `import()` and a re-export. A type-only import is allowed. The build script and the suite
+  are outside it, because they read the router and start the real server. Pinned by
+  `scripts/cliBoundary.test.ts`. ADR 0044.
 - The money bans, the no-mock bans, the UI's type-only import of the server router and the
   UI's outright ban on a **model provider** are **Biome GritQL plugins** in `.biome/plugins/`,
   which fail `task ci:lint` (`bun run lint`). Pinned by `scripts/biomePlugins.test.ts`. They

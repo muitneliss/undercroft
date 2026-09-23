@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/handlers/server.ts",
-    "./router": "./src/handlers/router.ts"
+    "./router": "./src/handlers/router.ts",
+    "./trpc": "./src/handlers/trpc.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "dev": "bun --watch src/main.ts"
