@@ -31,8 +31,9 @@ that belongs in a user's dbt project, not here.
 ## Rules
 
 `.claude/rules/*.md` are path-scoped: each loads when a matching file is opened, which is
-the moment its rule actually bites. **Claude Code discovers these automatically. Other
-agents do not — if you are not Claude Code, read the ones matching the files you are
+the moment its rule actually bites — the `paths:` frontmatter decides which files match, and
+`money.md` has none, so it is always loaded. **Claude Code discovers these automatically.
+Other agents do not — if you are not Claude Code, read the ones matching the files you are
 about to touch.** That is the only reason this index exists.
 
 | Rule file         | Applies to                                                               | Governs                                                                                  |
@@ -81,6 +82,22 @@ drifts (the same reason `wiki/tracked.yaml` scopes the wiki to `docs/` and not t
   the three collisions that actually come up are written out at the end of its file. It gets
   the larger model because the judgement it makes is the design, and a design mistake here
   survives the review that a wrong quotation would not.
+
+## Codex
+
+Codex reads this file as `AGENTS.md`, and everything else it gets is a pointer into
+`.claude/`, never a copy. **Edit the `.claude/` source; the Codex side follows it.**
+
+| Codex reads                 | What it is                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `.agents/skills/<name>`     | a symlink to `.claude/skills/<name>`                                               |
+| `.codex/agents/<name>.toml` | the same `name` and `description`, instructions that say "read `.claude/agents/…`" |
+| `.codex/hooks.json`         | runs the same `.claude/hooks/block-wiki-edits.mjs` on `apply_patch`                |
+| `.claude/rules/*.md`        | nothing loads them for Codex; the index above is its instruction to read them      |
+
+A new skill or agent therefore needs its Codex pointer in the same change, and
+`scripts/agentConfig.test.ts` fails the gate until it has one. Codex loads `.codex/` only for
+a project it trusts.
 
 ## Language and runtime
 

@@ -1,0 +1,16 @@
+{
+  "description": "Codex's side of .claude/settings.json: the same PreToolUse hook script, so neither agent can hand-edit a CLI-owned wiki page. apply_patch is Codex's only file-writing tool; the path is resolved from the git root because Codex runs a hook in the session's cwd.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.claude/hooks/block-wiki-edits.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

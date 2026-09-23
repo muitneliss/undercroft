@@ -1,6 +1,6 @@
 ---
 description: One direction only — handler → service → repo; SQL lives in repos; dependencies are injected
-globs:
+paths:
   [
     "apps/*/src/**/*.ts",
     "packages/db/src/**/*.ts",

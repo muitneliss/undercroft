@@ -1,6 +1,6 @@
 ---
 description: A control sits on the line of the field beside it; .row--field, not a centred .row
-globs: ["apps/ui/**/*.tsx", "apps/ui/**/*.css"]
+paths: ["apps/ui/**/*.tsx", "apps/ui/**/*.css"]
 ---
 
 # A control sits on its field's line

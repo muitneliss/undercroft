@@ -1,24 +1,49 @@
 #!/usr/bin/env node
 
-// A Claude Code hook: the agent harness runs it as a Node script, handing it the tool call on
-// stdin and reading the verdict from stdout. It is linted rather than ignored because a broken
-// hook fails OPEN -- hand-edits would then reach CLI-owned wiki pages silently.
+// A PreToolUse hook for BOTH agents: Claude Code runs it from `.claude/settings.json`, Codex from
+// `.codex/hooks.json`. Each hands it the tool call on stdin and reads the verdict from stdout, in
+// the same `hookSpecificOutput` shape. It is linted rather than ignored because a broken hook
+// fails OPEN -- hand-edits would then reach CLI-owned wiki pages silently.
+//
+// The two agents name the file differently. Claude Code's Write/Edit carry one absolute
+// `file_path`. Codex's `apply_patch` carries the whole patch as `command`, whose `*** ... File:`
+// headers name every file it touches, relative to the session's `cwd` -- and the patterns below
+// only match an absolute path, so a relative one left unresolved would pass unnoticed.
 
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import process from "node:process";
 
+const PATCH_TARGET = /^\*\*\* (?:Add File|Update File|Delete File|Move to): (?<path>.+)$/gmu;
+const CLI_OWNED = [
+  /\/wiki\/sources\//u,
+  /\/wiki\/notes\//u,
+  /\/wiki\/index\.md$/u,
+  /\/wiki\/log\.md$/u,
+];
+
 const input = JSON.parse(readFileSync(0, "utf8"));
-const file = input?.tool_input?.file_path ?? "";
+const toolInput = input?.tool_input ?? {};
 
-const norm = file.replaceAll("\\", "/");
+function targets() {
+  if (typeof toolInput.file_path === "string") {
+    return [toolInput.file_path];
+  }
+  if (typeof toolInput.command !== "string") {
+    return [];
+  }
+  const cwd = typeof input.cwd === "string" ? input.cwd : process.cwd();
+  return [...toolInput.command.matchAll(PATCH_TARGET)].map((match) =>
+    resolve(cwd, match.groups.path.trim()),
+  );
+}
 
-const blocked =
-  /\/wiki\/sources\//u.test(norm) ||
-  /\/wiki\/notes\//u.test(norm) ||
-  /\/wiki\/index\.md$/u.test(norm) ||
-  /\/wiki\/log\.md$/u.test(norm);
+function isCliOwned(file) {
+  const norm = file.replaceAll("\\", "/");
+  return CLI_OWNED.some((pattern) => pattern.test(norm));
+}
 
-if (blocked) {
+if (targets().some(isCliOwned)) {
   process.stdout.write(
     JSON.stringify(
       {

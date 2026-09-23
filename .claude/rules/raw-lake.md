@@ -1,6 +1,6 @@
 ---
 description: The raw lake is the only durable layer
-globs:
+paths:
   [
     "packages/lake/**/*.ts",
     "apps/worker/src/services/land*.ts",

@@ -1,6 +1,6 @@
 ---
 description: One owner per piece of UI state; useState is banned
-globs: ["apps/ui/**/*.ts", "apps/ui/**/*.tsx"]
+paths: ["apps/ui/**/*.ts", "apps/ui/**/*.tsx"]
 ---
 
 # UI state has one owner

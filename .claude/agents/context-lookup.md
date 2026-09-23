@@ -1,6 +1,6 @@
 ---
 name: context-lookup
-description: Answers "why is it like this / where does this live / what did we decide" about Undercroft by searching the LLM-maintained wiki first and then confirming against the repo. Use it before designing or changing anything non-trivial, when a rule or an ADR is referenced but not at hand, when a constraint looks arbitrary and you are about to simplify it away, or when you need the reasoning behind a decision rather than the code that implements it. Read-only: it never edits a file and never writes to the wiki.
+description: 'Answers "why is it like this / where does this live / what did we decide" about Undercroft by searching the LLM-maintained wiki first and then confirming against the repo. Use it before designing or changing anything non-trivial, when a rule or an ADR is referenced but not at hand, when a constraint looks arbitrary and you are about to simplify it away, or when you need the reasoning behind a decision rather than the code that implements it. Read-only: it never edits a file and never writes to the wiki.'
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

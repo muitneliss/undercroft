@@ -1,6 +1,6 @@
 ---
 description: No real customer data in any tracked file
-globs: ["specs/**", "docs/**", "**/*.md", "**/*.test.ts", "**/fixtures/**"]
+paths: ["specs/**", "docs/**", "**/*.md", "**/*.test.ts", "**/fixtures/**"]
 ---
 
 # PII does not enter git

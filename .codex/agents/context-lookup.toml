@@ -1,0 +1,22 @@
+# Codex's view of `.claude/agents/context-lookup.md`. That file is the only owner of this agent's
+# instructions; this one says where they are and translates what is Claude-specific. `name` and
+# `description` must equal its frontmatter -- scripts/agentConfig.test.ts fails if they drift.
+#
+# Claude runs this agent on Sonnet because retrieval is search and quotation, not judgement
+# (CLAUDE.md, "Agents"). Codex has no model alias to match, so the same reason is spent as a
+# lower reasoning effort and the model is inherited. `tools: Read, Grep, Glob, Bash` plus "never
+# edits a file" becomes a read-only sandbox.
+
+name = "context-lookup"
+description = "Answers \"why is it like this / where does this live / what did we decide\" about Undercroft by searching the LLM-maintained wiki first and then confirming against the repo. Use it before designing or changing anything non-trivial, when a rule or an ADR is referenced but not at hand, when a constraint looks arbitrary and you are about to simplify it away, or when you need the reasoning behind a decision rather than the code that implements it. Read-only: it never edits a file and never writes to the wiki."
+sandbox_mode = "read-only"
+model_reasoning_effort = "medium"
+developer_instructions = """
+Your instructions are the Markdown body of `.claude/agents/context-lookup.md` at the repository \
+root. Read that whole file before doing anything else and follow it as if it were this prompt. \
+Ignore its YAML frontmatter: `tools` and `model` are Claude Code settings, and the Codex \
+equivalents are already applied to you.
+
+You run in a read-only sandbox. If the wiki CLI's `query` fails because it cannot write, that is \
+the "when `query` fails, say so, then fall back" case in that file: report it and grep instead.
+"""
