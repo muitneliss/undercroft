@@ -80,7 +80,7 @@ current release through `npx`:
 <!-- x-release-please-start-version -->
 
 ```sh
-v=1.20.1
+v=1.21.0
 tgz="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
 undercroft() { npx -y --package="$tgz" undercroft "$@"; }
 undercroft --help
