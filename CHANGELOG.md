@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/muitneliss/undercroft/compare/v1.19.1...v1.20.0) (2026-09-23)
+
+
+### Features
+
+* **cli:** an undercroft CLI for people and LLM agents, 1:1 with the web UI ([#146](https://github.com/muitneliss/undercroft/issues/146)) ([7abcb1d](https://github.com/muitneliss/undercroft/commit/7abcb1d0270060f6b0a82d7974276ee8b6c1a0f3))
+
 ## [1.19.1](https://github.com/muitneliss/undercroft/compare/v1.19.0...v1.19.1) (2026-09-23)
 
 
