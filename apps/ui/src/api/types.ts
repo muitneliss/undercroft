@@ -14,11 +14,21 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@undercroft/control-plane/router";
 
+/**
+ * What a source IS -- its kind -- and not which connection.
+ *
+ * Since ADR 0043 a tenant may hold several Gmail mailboxes and several Drive accounts, each its
+ * own source (`gmail`, `gmail.3fa9c1d2e0ab`). Everything keyed by this type -- the vendor's
+ * name, the consent sentence, which picker opens -- is a fact about the KIND, so it is read
+ * off `connection.kind`, or off `sourceKind(source)` from `@undercroft/contracts/sources`.
+ * Anything that acts on one connection -- a mutation, a draft in the store -- takes the
+ * instance `source` string instead, so it acts on the account the reader is looking at.
+ */
 export type Source = "hubspot" | "xero" | "gmail" | "drive";
 
 export const SOURCES: readonly Source[] = ["hubspot", "xero", "gmail", "drive"] as const;
 
-/** Whether a string from a URL or a ledger row names one of the four. */
+/** Whether a string from a URL or a ledger row names one of the four kinds. */
 export function isSource(value: string | undefined): value is Source {
   return SOURCES.some((source) => source === value);
 }
@@ -63,6 +73,9 @@ export const SOURCE_ACCESS: Record<
  * `status` here is the CARD's status, which is not the database's: `needs_scope` and
  * `needs_reconnect` are derived server-side in `services/connections.ts`, because both are
  * facts about rows in other tables rather than a column anybody writes.
+ *
+ * `kind` is what the connection is and `source` is which one; see `Source` above. The list
+ * carries one of these per ACCOUNT, so a kind with two mailboxes appears twice.
  */
 export type Connection = inferRouterOutputs<AppRouter>["connections"]["list"][number];
 

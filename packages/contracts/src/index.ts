@@ -55,9 +55,9 @@ export {
   ConnectionScope,
   DriveScope,
   GmailScope,
+  isScopedSource,
   needsScope,
   parseScope,
-  SCOPED_SOURCES,
   XeroScope,
 } from "./connectionScope.ts";
 export {
@@ -104,3 +104,11 @@ export {
   TableResult,
 } from "./transformApi.ts";
 export { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";
+export {
+  ACCOUNT_KEY_LENGTH,
+  accountSourceOf,
+  MULTI_ACCOUNT_KINDS,
+  parseSourceInstance,
+  type SourceInstance,
+  sourceKind,
+} from "./sourceInstance.ts";

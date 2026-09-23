@@ -94,3 +94,5 @@
 ## [2026-09-23] ingest | Vietnamese OCR was measurable after all, and the fixture was what could not measure it
 ## [2026-09-23] ingest | Vietnamese OCR was measurable after all, and the fixture was what could not measure it
 ## [2026-09-23] ingest | ADR 0042 A Pane's Whole Edge Is Its Handle
+## [2026-09-23] ingest | ADR 0043 A Second Mailbox Is a Second Source
+## [2026-09-23] ingest | Runbook Google Ingestion Setup

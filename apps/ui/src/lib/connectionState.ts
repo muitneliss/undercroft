@@ -30,8 +30,17 @@
  * the second from the catalogue it is handed. Keeping them apart is what lets
  * `setupProgress` count finished sources without a translator in scope -- a progress count
  * that needed a language to be computed would be a decision taken in the wrong place.
+ *
+ * ## One card per ACCOUNT, one switcher per kind
+ *
+ * A tenant may hold several Gmail mailboxes and several Drive accounts (ADR 0043), and the
+ * server lists each as a card of its own, because one status over two mailboxes could not say
+ * which of them stopped. `groupByKind`, `selectedFor` and `offersAccounts` decide how those
+ * cards are gathered and which one is on show; the choice itself is the reader's, kept in the
+ * store (`selectedAccount`), and what these functions add to it is the fallback.
  */
 
+import { MULTI_ACCOUNT_KINDS } from "@undercroft/contracts/sources";
 import type { TFunction } from "i18next";
 
 import type { Connection, Source } from "@/api/types.ts";
@@ -45,8 +54,8 @@ export type CardState = "not_connected" | "connected" | "needs_scope" | "needs_r
  * opens a form in the row where the others send the browser away. Wordless, so the card
  * test can ask it with no translator in scope.
  */
-export function connectsBy(source: Source): "consent" | "token" {
-  return source === "hubspot" ? "token" : "consent";
+export function connectsBy(kind: Source): "consent" | "token" {
+  return kind === "hubspot" ? "token" : "consent";
 }
 
 /** The single thing to do next, as a decision rather than as a button label. */
@@ -110,6 +119,17 @@ export function connectionFacts(connection: Connection): CardFacts {
     }
   }
 }
+
+/**
+ * The word printed beside each mark. One table, because the card and the account switcher
+ * both print a grant's mark, and two tables would be two chances for them to disagree.
+ */
+export const MARK_LABEL = {
+  granted: "grant.markGranted",
+  pending: "grant.markPending",
+  lapsed: "grant.markLapsed",
+  absent: "grant.markAbsent",
+} as const satisfies Record<CardFacts["mark"], string>;
 
 /** The card's state, with the words a reader of `t`'s language sees. */
 export function presentConnection(t: TFunction, connection: Connection): CardPresentation {
@@ -184,7 +204,7 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
   const labels = connection.config.labels ?? [];
   const entities = connection.config.entities ?? [];
 
-  switch (connection.source) {
+  switch (connection.kind) {
     case "drive":
       return driveScope(t, connection.config);
 
@@ -208,7 +228,7 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
       return entities.length === 0 ? null : entities.join(", ");
 
     default: {
-      const exhaustive: never = connection.source;
+      const exhaustive: never = connection.kind;
       throw new Error(`unhandled source ${String(exhaustive)}`);
     }
   }
@@ -222,4 +242,65 @@ export function setupProgress(connections: Connection[]): {
 } {
   const done = connections.filter((c) => connectionFacts(c).complete).length;
   return { done, total: connections.length, finished: done === connections.length && done > 0 };
+}
+
+/**
+ * The accounts of one kind, in the order the server listed them. Never empty: a kind appears
+ * because at least one card of it came back, so "which account is shown" always has an answer.
+ */
+export interface KindAccounts {
+  readonly kind: Source;
+  readonly accounts: readonly [Connection, ...Connection[]];
+}
+
+/**
+ * The schedule's cards, gathered by what they are.
+ *
+ * The server already orders them -- kinds in its own order, each kind's first account first
+ * and the rest by address (`services/connections.ts`) -- and that order is kept rather than
+ * re-decided here, so the browser and the server cannot disagree about which account is "the
+ * first".
+ */
+export function groupByKind(connections: readonly Connection[]): KindAccounts[] {
+  const groups = new Map<Source, [Connection, ...Connection[]]>();
+  for (const connection of connections) {
+    const held = groups.get(connection.kind);
+    if (held === undefined) {
+      groups.set(connection.kind, [connection]);
+    } else {
+      held.push(connection);
+    }
+  }
+  return [...groups].map(([kind, accounts]) => ({ kind, accounts }));
+}
+
+/**
+ * Which account of a kind is on show: the one the reader chose, while it is still there, and
+ * otherwise the first.
+ *
+ * The default is derived, never stored. A stored default would be a second answer to "which is
+ * first" that goes stale the moment an account is disconnected; a choice that names an
+ * account no longer listed falls back rather than showing nothing.
+ */
+export function selectedFor(
+  accounts: KindAccounts["accounts"],
+  chosen: string | undefined,
+): Connection {
+  return accounts.find((account) => account.source === chosen) ?? accounts[0];
+}
+
+/**
+ * Whether a kind offers a choice of account, and the plate that adds one.
+ *
+ * Only Gmail and Drive may hold several (`MULTI_ACCOUNT_KINDS`), and only once one is actually
+ * held. A kind nobody has connected comes back as a single blank card the server synthesised
+ * -- disconnected, with no address -- and the offer there is the card's own Connect plate:
+ * "add ANOTHER account" over no account at all would be a second button for the same consent.
+ * A disconnected account that still carries its address is real (its history is its own, and
+ * it can be reconnected), so it keeps the switcher.
+ */
+export function offersAccounts(group: KindAccounts): boolean {
+  const [first] = group.accounts;
+  const blank = first.status === "disconnected" && first.externalAccountLabel === "";
+  return MULTI_ACCOUNT_KINDS.has(group.kind) && (group.accounts.length > 1 || !blank);
 }

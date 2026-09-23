@@ -50,15 +50,15 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import type { Connection, Source } from "@/api/types.ts";
-import { SOURCE_LABEL } from "@/api/types.ts";
+import { DriveChoice } from "@/components/DriveChoice.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
 import { LabelIndex } from "@/components/LabelIndex.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import { openDrivePicker } from "@/lib/drivePicker.ts";
 import type { BrowsedLabel } from "@/lib/labelIndex.ts";
+import { sourceLabel } from "@/lib/runs.ts";
 import { type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -89,7 +89,7 @@ const NOTHING_CHOSEN: Omit<ScopeDraft, "source"> = {
  * An admin changing a selection should see what they chose last time, not an empty form that
  * silently means "everything".
  */
-function useStoredScope(source: Source, connections: readonly Connection[] | undefined): void {
+function useStoredScope(source: string, connections: readonly Connection[] | undefined): void {
   const setDraft = useUiStore((s) => s.setScopeDraft);
   const current = connections?.find((c) => c.source === source);
 
@@ -127,11 +127,11 @@ function useStoredScope(source: Source, connections: readonly Connection[] | und
  * selection recorded by name alone would start reading nothing the day a label is renamed.
  */
 function selectionFor(
-  source: Source,
+  kind: Source,
   chosen: Omit<ScopeDraft, "source">,
   items: readonly { id: string; name: string }[],
 ): unknown {
-  if (source === "gmail") {
+  if (kind === "gmail") {
     return {
       labels: chosen.labels.map((name) => ({
         id: items.find((i) => i.name === name)?.id ?? name,
@@ -140,43 +140,70 @@ function selectionFor(
       fileTypes: chosen.fileTypes,
     };
   }
-  if (source === "xero") {
+  if (kind === "xero") {
     return { organisation: chosen.organisation, entities: chosen.entities };
   }
   return { files: chosen.files, fileTypes: chosen.fileTypes, recurse: chosen.recurse };
 }
 
-export function ScopePicker({
-  tenantId,
-  source,
-}: {
-  tenantId: string;
-  source: Source;
-}): React.JSX.Element {
-  const { t } = useTranslation();
+/**
+ * Record the selection, then go back to the schedule -- showing the account just scoped.
+ *
+ * For a mailbox added a moment ago that last part matters: without it the schedule would open
+ * on the kind's FIRST account, and the one the admin has just finished setting up would be a
+ * click away and easy to take for not having worked.
+ */
+function useSaveScope(
+  tenantId: string,
+  kind: Source,
+  source: string,
+): ReturnType<typeof trpc.connections.setScope.useMutation> {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const draft = useUiStore((s) => s.scopeDraft);
+  const selectAccount = useUiStore((s) => s.selectAccount);
 
-  const connections = trpc.connections.list.useQuery({ tenantId });
-  const labels = trpc.connections.browseScope.useQuery(
-    { tenantId, source },
-    // Drive has no server-side listing to fetch; asking for one would be a guaranteed 400.
-    { enabled: BROWSED.has(source) },
-  );
-
-  const setScope = trpc.connections.setScope.useMutation({
+  return trpc.connections.setScope.useMutation({
     onSuccess: async () => {
+      selectAccount(tenantId, kind, source);
       await utils.connections.list.invalidate({ tenantId });
       // `navigate` returns a promise in react-router 7; nothing here waits on the
       // transition, and the component unmounts when it lands.
       void navigate(divisionPath("sources", tenantId));
     },
   });
+}
+
+/**
+ * The picker for one connection.
+ *
+ * `kind` decides the SHAPE of the choice -- the lead, which picker, what gets recorded -- and
+ * `source` decides WHICH connection it is recorded against: since ADR 0043 a tenant may hold
+ * two mailboxes, and they are scoped one at a time.
+ */
+export function ScopePicker({
+  tenantId,
+  source,
+  kind,
+}: {
+  tenantId: string;
+  source: string;
+  /** What `source` is. The route has already read it off the URL. */
+  kind: Source;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const draft = useUiStore((s) => s.scopeDraft);
+
+  const connections = trpc.connections.list.useQuery({ tenantId });
+  const labels = trpc.connections.browseScope.useQuery(
+    { tenantId, source },
+    // Drive has no server-side listing to fetch; asking for one would be a guaranteed 400.
+    { enabled: BROWSED.has(kind) },
+  );
+  const setScope = useSaveScope(tenantId, kind, source);
 
   useStoredScope(source, connections.data);
 
-  if (connections.isPending || (BROWSED.has(source) && labels.isPending)) {
+  if (connections.isPending || (BROWSED.has(kind) && labels.isPending)) {
     return <Skeleton rows={4} />;
   }
 
@@ -191,19 +218,24 @@ export function ScopePicker({
   const chosen = draft?.source === source ? draft : NOTHING_CHOSEN;
   // Xero cannot be saved without an organisation: the server would refuse it, and the
   // plate saying so beforehand is cheaper than the errata afterwards.
-  const unsaveable = source === "xero" && chosen.organisation === null;
+  const unsaveable = kind === "xero" && chosen.organisation === null;
+  const account = connections.data.find((c) => c.source === source)?.externalAccountLabel ?? "";
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("nav.sources")}</div>
-      <ScopeLead source={source} />
+      <ScopeLead kind={kind} />
 
       <div className="band-rule" />
 
-      <div className="head">{SOURCE_LABEL[source]}</div>
+      {/* "Gmail · ops@acme.test" once the tenant holds two mailboxes: an admin scoping one of
+          them has to be able to see WHICH, and the vendor's name alone would not say. */}
+      <div className="head">{sourceLabel(source, connections.data)}</div>
       <div className="body stack">
         <SourceChoice
+          kind={kind}
           source={source}
+          account={account}
           items={labels.data?.items ?? []}
           loadError={labels.isError ? labels.error.message : null}
           chosen={chosen}
@@ -225,7 +257,7 @@ export function ScopePicker({
             setScope.mutate({
               tenantId,
               source,
-              selection: selectionFor(source, chosen, labels.data?.items ?? []),
+              selection: selectionFor(kind, chosen, labels.data?.items ?? []),
             });
           }}
         >
@@ -237,16 +269,16 @@ export function ScopePicker({
 }
 
 /** What this source is about to be asked, in the words its own consent card uses. */
-function ScopeLead({ source }: { source: Source }): React.JSX.Element {
+function ScopeLead({ kind }: { kind: Source }): React.JSX.Element {
   const { t } = useTranslation();
 
   return (
     <div className="body stack">
       <h1>{t("scopePicker.title")}</h1>
-      <p className="prose prose--lead">{t(LEAD_KEY[source])}</p>
+      <p className="prose prose--lead">{t(LEAD_KEY[kind])}</p>
 
-      {source === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
-      {source === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
+      {kind === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
+      {kind === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
     </div>
   );
 }
@@ -259,26 +291,31 @@ function ScopeLead({ source }: { source: Source }): React.JSX.Element {
  * worker, so a browse error is not its error to report.
  */
 function SourceChoice({
+  kind,
   source,
+  account,
   items,
   loadError,
   chosen,
 }: {
-  source: Source;
+  kind: Source;
+  source: string;
+  /** The connection's account address, or `""` when none is recorded. */
+  account: string;
   items: readonly BrowsedLabel[];
   loadError: string | null;
   chosen: Omit<ScopeDraft, "source">;
 }): React.JSX.Element | null {
   const { t } = useTranslation();
 
-  if (loadError !== null && BROWSED.has(source)) {
+  if (loadError !== null && BROWSED.has(kind)) {
     return (
       <Errata heading={t("common.notLoaded")} live={true}>
         {loadError}
       </Errata>
     );
   }
-  if (source === "xero") {
+  if (kind === "xero") {
     return (
       <XeroChoice
         source={source}
@@ -288,7 +325,7 @@ function SourceChoice({
       />
     );
   }
-  if (source === "gmail") {
+  if (kind === "gmail") {
     return (
       <>
         <GmailChoice source={source} items={items} chosen={chosen.labels} />
@@ -296,10 +333,10 @@ function SourceChoice({
       </>
     );
   }
-  if (source === "drive") {
+  if (kind === "drive") {
     return (
       <>
-        <DriveChoice source={source} chosen={chosen} />
+        <DriveChoice source={source} account={account} chosen={chosen} />
         <FileTypeChoice source={source} fileTypes={chosen.fileTypes} />
       </>
     );
@@ -321,7 +358,7 @@ function GmailChoice({
   items,
   chosen,
 }: {
-  source: Source;
+  source: string;
   items: readonly BrowsedLabel[];
   chosen: readonly string[];
 }): React.JSX.Element {
@@ -355,82 +392,6 @@ function GmailChoice({
           </button>
         ) : null}
       </div>
-    </>
-  );
-}
-
-/**
- * Drive's choice: Google's own Picker, running in the browser, and how deep to read.
- *
- * Under the `drive.file` scope a server-side folder listing is not merely unnecessary, it is
- * impossible -- the credential cannot see anything that has not been picked. That is the
- * point: Google enforces the promise instead of our query filter.
- *
- * **How deep the read goes is a choice, and it is said while it is made.** "Sub-folders are
- * not read" used to be a standing note above the picker, because it was always true. Now that
- * it is true only until an admin ticks the box, it stands BENEATH the box as a line that
- * changes with the tick -- the pattern `GmailChoice` uses for "no label means the whole
- * mailbox", `role="status"` included, so a screen reader is told at the same moment.
- */
-function DriveChoice({
-  source,
-  chosen,
-}: {
-  source: Source;
-  chosen: Omit<ScopeDraft, "source">;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const setDraft = useUiStore((s) => s.setScopeDraft);
-  const toggleRecurse = useUiStore((s) => s.toggleScopeRecurse);
-  const config = trpc.config.google.useQuery();
-
-  return (
-    <>
-      <button
-        type="button"
-        className="plate"
-        disabled={config.data === undefined || config.data === null}
-        onClick={(): void => {
-          // Null when no ingestion client is configured; the button is disabled then,
-          // and this guard is what makes that a type-level fact rather than a habit.
-          const picker = config.data;
-          if (picker === undefined || picker === null) {
-            return;
-          }
-          void openDrivePicker(picker, chosen.fileTypes, (picked) => {
-            // Spread `chosen` rather than re-listing every other field: this used to hardcode
-            // `fileTypes` (and every field but `files`) back to empty, so picking one more
-            // file after choosing "Word documents" silently reset the run to "any file type".
-            setDraft({ ...chosen, source, files: picked });
-          });
-        }}
-      >
-        {t("scopePicker.pickFromDrive")}
-      </button>
-      {config.isError ? (
-        <p className="note">{t("scopePicker.pickerUnavailable")}</p>
-      ) : (
-        <ul className="stack stack--tight">
-          {chosen.files.map((file) => (
-            <li key={file.id}>{file.name}</li>
-          ))}
-        </ul>
-      )}
-
-      <label className="punch">
-        <input
-          type="checkbox"
-          checked={chosen.recurse}
-          onChange={(): void => {
-            toggleRecurse(source);
-          }}
-        />
-        <span className="punch__box" />
-        <span>{t("scopePicker.includeSubFolders")}</span>
-      </label>
-      <p className="note" role="status">
-        {chosen.recurse ? t("scopePicker.willReadDeep") : t("scopePicker.willReadOneLevel")}
-      </p>
     </>
   );
 }

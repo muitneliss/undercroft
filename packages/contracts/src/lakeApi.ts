@@ -52,7 +52,8 @@ export type LandRecordsResponse = z.infer<typeof LandRecordsResponse>;
 /**
  * The error envelope every non-2xx response uses. `message` never carries a payload value.
  *
- * The last seven codes are what the worker's error boundary answers when a verb throws
+ * `account_mismatch` is a credential for a different account than the connection it was
+ * offered to is pinned to (ADR 0043). The last seven codes are what the worker's error boundary answers when a verb throws
  * rather than refuses: a run that cannot start because nobody chose a scope, a credential
  * that cannot be refreshed, a source that failed mid-read, a run already in progress, a
  * pasted token the source rejected, a thing that does not exist, and everything else --
@@ -75,6 +76,7 @@ export const ApiError = z.object({
     "source_failed",
     "run_in_progress",
     "credential_rejected",
+    "account_mismatch",
     "query_failed",
     "not_found",
     "internal_error",

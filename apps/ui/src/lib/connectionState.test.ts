@@ -16,7 +16,14 @@ import { describe, expect, test as it } from "bun:test";
 
 import { translatorFor } from "@/i18n/index.ts";
 import { connection } from "@/test/fixtures.ts";
-import { connectsBy, presentConnection, scopeSummary, setupProgress } from "./connectionState.ts";
+import {
+  connectsBy,
+  offersAccounts,
+  presentConnection,
+  scopeSummary,
+  selectedFor,
+  setupProgress,
+} from "./connectionState.ts";
 
 // The real catalogue, not a stub that answers anything asked of it. A key these functions
 // reach for that no catalogue carries would pass against a stub and render raw on the page.
@@ -138,5 +145,37 @@ describe("setupProgress", () => {
   it("an empty list is not finished", () => {
     // Otherwise a tenant whose connections failed to load renders as complete.
     expect(setupProgress([]).finished).toBe(false);
+  });
+});
+
+describe("selectedFor", () => {
+  const first = connection("gmail", { status: "connected", externalAccountLabel: "ops@acme.test" });
+  const second = connection("gmail.3fa9c1d2e0ab", {
+    status: "connected",
+    externalAccountLabel: "sales@acme.test",
+  });
+
+  it("shows the account the reader chose while it is still listed", () => {
+    expect(selectedFor([first, second], "gmail.3fa9c1d2e0ab")).toBe(second);
+  });
+
+  it("falls back to the first account once the chosen one is gone", () => {
+    // Disconnected and dropped from the list: the row shows the next account, not nothing.
+    expect(selectedFor([first], "gmail.3fa9c1d2e0ab")).toBe(first);
+  });
+});
+
+describe("offersAccounts", () => {
+  it("a kind holding a real account offers the switcher, and with it the plate to add one", () => {
+    const accounts = [connection("gmail", { status: "connected" })] as const;
+
+    expect(offersAccounts({ kind: "gmail", accounts })).toBe(true);
+  });
+
+  it("a kind nobody has connected offers only its card's own Connect", () => {
+    // "Add another account" over no account at all would be a second button for one consent.
+    const accounts = [connection("gmail")] as const;
+
+    expect(offersAccounts({ kind: "gmail", accounts })).toBe(false);
   });
 });

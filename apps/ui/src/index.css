@@ -1631,6 +1631,26 @@
   }
 
   /*
+   * The accounts of one kind, set over the one card that shows the chosen account.
+   *
+   * No rule of its own: it belongs to the card beneath it, and a rule between them would
+   * print the switcher as a row of the schedule. The fieldset's browser border goes for the
+   * reason `.index` gives. Each option is a punch carrying its account's own mark, so the
+   * health of every mailbox reads here without opening one.
+   */
+  .accounts {
+    border: 0;
+    margin: 0;
+    padding: var(--s-4) 0 0;
+    min-width: 0;
+  }
+
+  .accounts__legend {
+    padding: 0;
+    margin-bottom: var(--s-2);
+  }
+
+  /*
    * A row that inks in is a row that was not there before.
    *
    * That is the whole meaning, and it is why there is NO STAGGER here. A

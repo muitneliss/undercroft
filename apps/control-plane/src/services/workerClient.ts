@@ -65,6 +65,12 @@ export type WorkerFailure =
   | "credential-rejected"
   /** The worker's 409: the tenant already has a run of this kind going. */
   | "in-progress"
+  /**
+   * The worker's 412: the credential is for a different account than the connection it was
+   * offered to is pinned to. Its own value because its remedy is its own -- add the account as
+   * a connection of its own -- and because the consent flow re-resolves on it. ADR 0043.
+   */
+  | "account-mismatch"
   /** The author's SQL did not run. The outcome carries Postgres's sentence about it. */
   | "query-failed";
 
@@ -174,6 +180,16 @@ const FORBIDDEN = 403;
 const CONFLICT = 409;
 /** The worker's answer for a pasted credential the provider turned away. */
 const UNPROCESSABLE = 422;
+/** The worker's answer to a credential for an account its connection is not pinned to. */
+const PRECONDITION_FAILED = 412;
+
+/** The refusals a status alone names. Anything else is `refused`: the worker said no. */
+const REFUSAL_BY_STATUS: ReadonlyMap<number, WorkerFailure> = new Map([
+  [FORBIDDEN, "scope-insufficient"],
+  [UNPROCESSABLE, "credential-rejected"],
+  [CONFLICT, "in-progress"],
+  [PRECONDITION_FAILED, "account-mismatch"],
+]);
 
 /** Where the worker is and how to reach it. Passed rather than closed over, so the two
  * request helpers below can live at module scope and be read on their own. */
@@ -208,16 +224,7 @@ function postTo(t: WorkerTransport): typeof post {
         // can echo a request that carried a live refresh token, and a control-plane log is
         // not where that belongs. The STATUS carries no such payload, which is what makes
         // it the right place to tell a withheld permission from every other refusal.
-        if (response.status === FORBIDDEN) {
-          return { ok: false, reason: "scope-insufficient" };
-        }
-        if (response.status === UNPROCESSABLE) {
-          return { ok: false, reason: "credential-rejected" };
-        }
-        if (response.status === CONFLICT) {
-          return { ok: false, reason: "in-progress" };
-        }
-        return { ok: false, reason: "refused" };
+        return { ok: false, reason: REFUSAL_BY_STATUS.get(response.status) ?? "refused" };
       }
       return { ok: true, value: (await response.json()) as T };
     } catch {

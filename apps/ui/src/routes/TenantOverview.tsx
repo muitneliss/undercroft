@@ -10,6 +10,10 @@
  * written BEFORE the redirect, not on a help page nobody opens. This route's job is to hand
  * it a grant and three actions and otherwise stay out of the way.
  *
+ * A kind that holds several accounts -- two Gmail mailboxes, ADR 0043 -- is still one row: an
+ * `AccountSwitcher` above the card says which accounts there are, how each is doing, and which
+ * one the card is about, and offers the consent for one more.
+ *
  * Connecting navigates the whole window rather than opening a tab: the consent ends at
  * Google's screen and returns through a server redirect, so a same-tab journey is the one the
  * person is already on. A failed return lands back here with `?connect=failed`, read from the
@@ -27,13 +31,21 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
 import type { Connection } from "@/api/types.ts";
+import { AccountSwitcher } from "@/components/AccountSwitcher.tsx";
 import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { IngestKeys } from "@/components/IngestKeys.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { TokenForm } from "@/components/TokenForm.tsx";
+import {
+  groupByKind,
+  type KindAccounts,
+  offersAccounts,
+  selectedFor,
+} from "@/lib/connectionState.ts";
 import { divisionPath } from "@/lib/divisions.ts";
+import { chosenAccount, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 /**
@@ -44,19 +56,36 @@ import { trpc } from "@/trpc.ts";
  * Told only "this source could not be connected", they repeat the exact steps that produced
  * it -- so the case that names the tick to leave alone has to be its own sentence.
  *
+ * Two more since a tenant may hold several Google accounts of one kind (ADR 0043), and both
+ * are about WHICH account consented rather than whether anybody did. `account-mismatch` is a
+ * reconnect finished by somebody else's Google account, or by one already connected under
+ * another entry -- most often an admin who meant to add a second mailbox, so its sentence
+ * names the plate that does that. `account-unidentified` is Google not saying who consented,
+ * and its sentence says the one thing that fixes it.
+ *
  * A function rather than a chain inside the JSX, because it is a decision with a name and
  * the compiler checks each key against the catalogue.
  */
 function connectFailureKey(
   reason: string | null,
-): "grant.connectDeclined" | "grant.connectScopeDeclined" | "grant.connectFailed" {
-  if (reason === "declined") {
-    return "grant.connectDeclined";
+):
+  | "grant.connectDeclined"
+  | "grant.connectScopeDeclined"
+  | "grant.connectAccountMismatch"
+  | "grant.connectAccountUnidentified"
+  | "grant.connectFailed" {
+  switch (reason) {
+    case "declined":
+      return "grant.connectDeclined";
+    case "scope-declined":
+      return "grant.connectScopeDeclined";
+    case "account-mismatch":
+      return "grant.connectAccountMismatch";
+    case "account-unidentified":
+      return "grant.connectAccountUnidentified";
+    default:
+      return "grant.connectFailed";
   }
-  if (reason === "scope-declined") {
-    return "grant.connectScopeDeclined";
-  }
-  return "grant.connectFailed";
 }
 
 /** How often the list re-reads while a run is in progress. A run is minutes; this is not. */
@@ -269,7 +298,13 @@ function Refusals({
   );
 }
 
-/** The schedule: one card per source, each wired to the four mutations. */
+/**
+ * The schedule: one row per KIND, each wired to the four mutations.
+ *
+ * One row per kind rather than per account, so the schedule keeps the shape of the four
+ * vendors a customer recognises however many mailboxes they connect. A kind holding several
+ * accounts gets a switcher above its card; see `SourceRow`.
+ */
 function SourceCards({
   tenantId,
   list,
@@ -293,33 +328,95 @@ function SourceCards({
 
   return (
     <div className="schedule">
-      {list.map((connection: Connection) => (
-        <ConnectionCard
-          key={connection.source}
+      {groupByKind(list).map((group) => (
+        <SourceRow
+          key={group.kind}
           tenantId={tenantId}
-          connection={connection}
+          group={group}
           canRun={canRun}
           busy={busy}
-          onConnect={(): void => {
-            startOAuth.mutate({ tenantId, source: connection.source });
-          }}
-          onScope={(): void => {
-            globalThis.location.assign(
-              `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
-            );
-          }}
-          onDisconnect={(): void => {
-            disconnect.mutate({ tenantId, source: connection.source });
-          }}
-          onRun={(): void => {
-            runNow.mutate({ tenantId, source: connection.source });
-          }}
-          onCadence={(cadence): void => {
-            setCadence.mutate({ tenantId, source: connection.source, cadence });
-          }}
-          tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
+          actions={actions}
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * One kind's row: which of its accounts is on show, and that account's card.
+ *
+ * The choice is the reader's and lives in the store; the fallback to the first account is
+ * derived (`selectedFor`), so disconnecting the chosen account leaves the row showing the next
+ * one rather than nothing. Every action on the card sends the card's own `connection.source`,
+ * so Run now, Disconnect and the rest act on the account the reader is looking at and never on
+ * its sibling.
+ *
+ * The card is keyed by that source: switching accounts is a different grant, and whatever the
+ * card holds open -- a token form, a cadence being chosen -- belonged to the one before.
+ */
+function SourceRow({
+  tenantId,
+  group,
+  canRun,
+  busy,
+  actions,
+}: {
+  tenantId: string;
+  group: KindAccounts;
+  canRun: boolean;
+  busy: boolean;
+  actions: Actions;
+}): React.JSX.Element {
+  const { startOAuth, disconnect, runNow, setCadence } = actions;
+  const chosen = useUiStore((state) => chosenAccount(state, tenantId, group.kind));
+  const selectAccount = useUiStore((state) => state.selectAccount);
+  const connection = selectedFor(group.accounts, chosen);
+
+  return (
+    <>
+      {offersAccounts(group) ? (
+        <AccountSwitcher
+          kind={group.kind}
+          accounts={group.accounts}
+          selected={connection.source}
+          onSelect={(source): void => {
+            selectAccount(tenantId, group.kind, source);
+          }}
+          canAdd={canRun}
+          busy={busy}
+          // The bare kind, never an account's source: adding is a consent for an account
+          // nobody here holds yet, and the server resolves which source it lands under.
+          onAdd={(): void => {
+            startOAuth.mutate({ tenantId, source: group.kind, addAccount: true });
+          }}
+        />
+      ) : null}
+
+      <ConnectionCard
+        key={connection.source}
+        tenantId={tenantId}
+        connection={connection}
+        canRun={canRun}
+        busy={busy}
+        onConnect={(): void => {
+          startOAuth.mutate({ tenantId, source: connection.source });
+        }}
+        onScope={(): void => {
+          globalThis.location.assign(
+            `${divisionPath("sources", tenantId)}/connect/${connection.source}/scope`,
+          );
+        }}
+        onDisconnect={(): void => {
+          disconnect.mutate({ tenantId, source: connection.source });
+        }}
+        onRun={(): void => {
+          runNow.mutate({ tenantId, source: connection.source });
+        }}
+        onCadence={(cadence): void => {
+          setCadence.mutate({ tenantId, source: connection.source, cadence });
+        }}
+        tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
+      />
+    </>
   );
 }

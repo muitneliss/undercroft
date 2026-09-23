@@ -14,6 +14,8 @@
 
 import { z } from "zod";
 
+import { sourceKind } from "./sourceInstance.ts";
+
 const Chosen = z.object({
   id: z.string().min(1),
   /** As the customer sees it. PII: never copied into `raw.documents.metadata` or a key. */
@@ -90,13 +92,22 @@ export type XeroScope = z.infer<typeof XeroScope>;
 export type ConnectionScope = z.infer<typeof ConnectionScope>;
 
 /**
- * Sources that must be told what to read before a run may read anything.
+ * Kinds that must be told what to read before a run may read anything.
  *
  * One set, shared by the card that shows `needs_scope`, the schedule that skips such a
  * source, and the collector that refuses to run it. A second copy is how one of the three
  * starts reading a whole mailbox on the strength of a missing row.
+ *
+ * Not exported: it holds KINDS, and a caller handed a set would ask it `.has(source)` -- which
+ * answers `false` for `gmail.3fa9c1d2e0ab` and so waves a second mailbox past the scope check.
+ * `isScopedSource` reads the kind first, every time.
  */
-export const SCOPED_SOURCES: ReadonlySet<string> = new Set(["gmail", "drive", "xero"]);
+const SCOPED_KINDS: ReadonlySet<string> = new Set(["gmail", "drive", "xero"]);
+
+/** Whether this source must have a chosen scope before it may be read. Any account of a kind. */
+export function isScopedSource(source: string): boolean {
+  return SCOPED_KINDS.has(sourceKind(source));
+}
 
 /** The key a source's selection must carry to count as chosen. See `parseScope`. */
 const SELECTION_KEY: Readonly<Record<string, string>> = {
@@ -107,7 +118,7 @@ const SELECTION_KEY: Readonly<Record<string, string>> = {
 
 /** True when this source needs a scope and none usable has been chosen. */
 export function needsScope(source: string, selectionJson: string): boolean {
-  return SCOPED_SOURCES.has(source) && parseScope(source, selectionJson) === null;
+  return isScopedSource(source) && parseScope(source, selectionJson) === null;
 }
 
 /**
@@ -133,13 +144,15 @@ export function parseScope(source: string, selectionJson: string): ConnectionSco
   // exactly the collapse of "nobody has chosen yet" into "somebody chose everything" that
   // the rest of this file exists to prevent. It also catches a Drive-shaped selection saved
   // under Gmail: the key it carries is not the key that source uses.
-  const key = SELECTION_KEY[source];
+  // Every account of a kind is scoped the same way, so the shape is decided by the kind.
+  const kind = sourceKind(source);
+  const key = SELECTION_KEY[kind];
   const carried = key === undefined || !isRecord(raw) ? undefined : raw[key];
   if (carried === undefined || carried === null || typeof carried !== "object") {
     return null;
   }
 
-  const parsed = ConnectionScope.safeParse({ ...raw, kind: source });
+  const parsed = ConnectionScope.safeParse({ ...raw, kind });
   return parsed.success ? parsed.data : null;
 }
 

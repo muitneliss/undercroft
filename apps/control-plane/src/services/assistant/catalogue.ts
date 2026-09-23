@@ -28,6 +28,8 @@
 import { Cadence } from "@undercroft/contracts";
 import { z } from "zod";
 
+import { ConnectionSource } from "./connectionSource.ts";
+
 /**
  * How far a tool may go, and therefore what has to happen before it runs.
  *
@@ -127,7 +129,8 @@ export const READ_TOOLS = {
   sourceStatus: {
     description:
       "For one customer, every connected source (hubspot, xero, gmail, drive) with its grant " +
-      "status, ingest cadence and last run. This answers 'is my data flowing?'.",
+      "status, ingest cadence and last run. This answers 'is my data flowing?'. Gmail and " +
+      "Drive may list several accounts, each with its own `source` id; name each by address.",
     inputSchema: inTenant,
     tier: "read",
     plate: "grants",
@@ -257,7 +260,7 @@ export const WRITE_TOOLS = {
       "Start an ingest run for one source of one customer, now, instead of waiting for its " +
       "cadence. Use when the reader wants fresh data immediately.",
     inputSchema: inTenant.extend({
-      source: z.enum(["hubspot", "xero", "gmail", "drive"]),
+      source: ConnectionSource,
     }),
     tier: "write",
     plate: "runs",
@@ -269,7 +272,7 @@ export const WRITE_TOOLS = {
       "Change how often one source is ingested. Paused means it only runs when asked. This is " +
       "reversible; the previous cadence is not remembered, so name the new one plainly.",
     inputSchema: inTenant.extend({
-      source: z.enum(["hubspot", "xero", "gmail", "drive"]),
+      source: ConnectionSource,
       cadence: Cadence,
     }),
     tier: "write",
@@ -321,7 +324,7 @@ export const PRIVILEGED_WRITE_TOOLS = {
       "Disconnect one source for a customer, revoking the stored credential. Ingestion for " +
       "that source stops until somebody reconnects it, which requires the account holder.",
     inputSchema: inTenant.extend({
-      source: z.enum(["hubspot", "xero", "gmail", "drive"]),
+      source: ConnectionSource,
     }),
     tier: "privileged",
     plate: "grants",

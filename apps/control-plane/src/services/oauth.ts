@@ -26,11 +26,12 @@
  *   which would turn the callback into an oracle for whether a guessed state ever existed.
  */
 
+import { sourceKind } from "@undercroft/contracts";
 import { createPkce, hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
-import { writeConnectionDetail } from "@undercroft/db/repos";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { consentTarget } from "./accountResolution.ts";
+import { sealResolved } from "./consentSeal.ts";
 import {
   consumeHandshake,
   pruneExpiredHandshakes,
@@ -93,7 +94,7 @@ function capabilityScopes(requestedScope: string): string[] {
  * would park a working connection at "reconnect" forever.
  */
 export function requestedScopeFor(source: string): string {
-  return (SOURCE_SCOPES[source] ?? []).join(" ");
+  return (SOURCE_SCOPES[sourceKind(source)] ?? []).join(" ");
 }
 
 /**
@@ -128,6 +129,28 @@ export type StartOutcome =
   | { ok: false; reason: "not-configured" | "unsupported-source" };
 
 /**
+ * The authorize parameters that say WHICH account, for a provider whose consent names one.
+ *
+ * An add must let the admin CHOOSE: with one Google session in the browser, Google otherwise
+ * skips its chooser and consents the account already signed in -- the account they already
+ * have, so "Add another account" would quietly reconnect it. A reconnect names its account, so
+ * a browser signed into several offers that one first. ADR 0043.
+ */
+function accountParams(
+  shape: (typeof PROVIDERS)[Provider],
+  addAccount: boolean,
+  loginHint: string,
+): Record<string, string> {
+  if (!shape.identity) {
+    return {};
+  }
+  return {
+    ...(addAccount ? { prompt: "consent select_account" } : {}),
+    ...(loginHint === "" ? {} : { login_hint: loginHint }),
+  };
+}
+
+/**
  * Begin a consent: record the handshake, return the URL to send the browser to.
  *
  * The provider's own authorize parameters (`oauthProviders.ts`) are what make it issue a
@@ -137,7 +160,7 @@ export type StartOutcome =
  */
 export async function startConsent(
   deps: OAuthDeps,
-  input: { tenantId: string; source: string; startedBy: string },
+  input: { tenantId: string; source: string; startedBy: string; addAccount?: boolean },
 ): Promise<StartOutcome> {
   const provider = providerOf(input.source);
   if (provider === null) {
@@ -147,8 +170,13 @@ export async function startConsent(
   if (config === undefined) {
     return { ok: false, reason: "not-configured" };
   }
+  const addAccount = input.addAccount ?? false;
+  const target = await consentTarget(deps.exec, { ...input, addAccount });
+  if (target === null) {
+    return { ok: false, reason: "unsupported-source" };
+  }
   const shape = PROVIDERS[provider];
-  const scopes = shape.scopes[input.source] ?? [];
+  const scopes = shape.scopes[sourceKind(input.source)] ?? [];
 
   // Housekeeping on the way past: abandoned consents leave rows holding a live PKCE
   // verifier, and this is the only path that runs often enough to need no scheduler.
@@ -166,6 +194,7 @@ export async function startConsent(
     requestedScope: scopes.join(" "),
     startedBy: input.startedBy,
     expiresAt: new Date(now.getTime() + HANDSHAKE_TTL_MS).toISOString(),
+    addsAccount: addAccount,
   });
 
   const url = new URL(config.authorizeUrl ?? shape.authorizeUrl);
@@ -173,7 +202,11 @@ export async function startConsent(
   url.searchParams.set("redirect_uri", redirectUri(config.publicUrl, provider));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", scopes.join(" "));
-  for (const [key, value] of Object.entries(shape.authorizeParams)) {
+  const params = {
+    ...shape.authorizeParams,
+    ...accountParams(shape, addAccount, target.loginHint),
+  };
+  for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
   url.searchParams.set("state", state);
@@ -195,7 +228,11 @@ export type CompleteOutcome =
         | "not-admin"
         | "exchange-failed"
         | "scope-declined"
-        | "worker-refused";
+        | "worker-refused"
+        /** A different account than the connection is pinned to. ADR 0043. */
+        | "account-mismatch"
+        /** The consent named no account, or the connection it might be never recorded one. */
+        | "account-unidentified";
       tenantId?: string;
       source?: string;
     };
@@ -228,85 +265,6 @@ export interface CompleteDeps extends OAuthDeps {
  * spent. A code exchanged before those checks is a token minted into a customer's account
  * on the strength of a request nobody verified.
  */
-/**
- * Everything after the consent is known good: seal the credential, label the card, audit it.
- *
- * The ORDER is the point. The worker seals first, because it is the only process holding the
- * master key (ADR 0016); the address is written only once the worker has confirmed, since a
- * label for a connection that does not exist is worse than no label; and the audit insert is
- * swallowed, because a failed audit must not undo a consent Google has already accepted.
- */
-async function sealAndRecord(
-  deps: CompleteDeps,
-  input: {
-    handshake: { tenantId: string; source: string };
-    exchanged: Awaited<ReturnType<typeof exchangeCode>> & object;
-    caller: { userId: string; email: string };
-  },
-): Promise<CompleteOutcome> {
-  const { handshake, exchanged, caller } = input;
-  const { worker } = deps;
-  if (worker === undefined) {
-    return { ok: false, reason: "not-configured" };
-  }
-
-  const stored = await worker.storeCredential({
-    source: handshake.source,
-    tenantId: handshake.tenantId,
-    // Google's opaque `sub`, never the address: `ops.connection` is readable by BI. Xero
-    // names nobody here; its organisation id is recorded when the admin chooses one.
-    externalAccountId: exchanged.sub,
-    scope: exchanged.scope,
-    credential: {
-      accessToken: exchanged.accessToken,
-      refreshToken: exchanged.refreshToken,
-      expiresAt: exchanged.expiresAt,
-    },
-  });
-  if (!stored.ok) {
-    return {
-      ok: false,
-      reason: "worker-refused",
-      tenantId: handshake.tenantId,
-      source: handshake.source,
-    };
-  }
-
-  // The address, for the card. `app.connection_detail`, never `ops.connection`, which BI
-  // can read. Written only after the worker confirmed the credential is sealed: a label for
-  // a connection that does not exist is worse than no label. A provider that names nobody
-  // writes nothing; the organisation's name arrives with the scope.
-  if (exchanged.email !== "") {
-    await writeConnectionDetail(deps.exec, {
-      tenantId: handshake.tenantId,
-      source: handshake.source,
-      accountLabel: exchanged.email,
-    });
-  }
-
-  // Swallowed exactly as `recordRefusal` swallows its own, and for the same reason: a
-  // failed audit insert must not undo a consent that has already succeeded at the provider.
-  try {
-    await recordAudit(deps.exec, {
-      tenantId: handshake.tenantId,
-      actor: caller.email,
-      action: "connection.connected",
-      // Which source and who. Not the address: that is in `connection_detail`, and
-      // `ops.audit_log` has a different readership.
-      detail: JSON.stringify({ source: handshake.source }),
-    });
-  } catch {
-    // Intentionally ignored; see above.
-  }
-
-  return {
-    ok: true,
-    tenantId: handshake.tenantId,
-    source: handshake.source,
-    accountLabel: exchanged.email,
-  };
-}
-
 export async function completeConsent(
   deps: CompleteDeps,
   input: {
@@ -370,5 +328,5 @@ export async function completeConsent(
     };
   }
 
-  return await sealAndRecord(deps, { handshake, exchanged, caller });
+  return await sealResolved(deps, { handshake, exchanged, caller });
 }

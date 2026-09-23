@@ -340,6 +340,13 @@ export const en = {
     connectDeclined: "You cancelled at Google’s screen. Nothing was granted.",
     connectScopeDeclined:
       "A permission this source needs was unticked at Google’s screen, so nothing was saved. Connect again and leave every tick in place.",
+    connectAccountMismatch:
+      "The Google account that just gave consent is not the one this connection belongs to, or it is already connected under another entry. Nothing was changed. To connect a further account, use “Add another account”.",
+    connectAccountUnidentified:
+      "It could not be established which Google account gave consent, so nothing was saved. If this source already has an account connected, reconnect that account first, then try again.",
+    accountsLegend: "{{name}} accounts",
+    addAccount: "Add another account",
+    unnamedAccount: "Unnamed account",
     disconnectFailed: "This could not be disconnected.",
     disconnected: "Disconnected.",
     disconnectedNotRevoked:

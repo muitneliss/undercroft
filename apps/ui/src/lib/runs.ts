@@ -13,6 +13,7 @@
  * printing a time that already went by.
  */
 
+import { parseSourceInstance } from "@undercroft/contracts/sources";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
@@ -30,21 +31,51 @@ import { formatDateTime } from "@/lib/when.ts";
 export type LastRun = NonNullable<Connection["lastRun"]>;
 export type RunStatus = LastRun["status"];
 
-/** A vendor's own name where we have one; the source's id where we do not. */
-export function sourceLabel(source: string): string {
-  return isSource(source) ? SOURCE_LABEL[source] : source;
+/** What `sourceLabel` needs to know about a tenant's connections to tell two accounts apart. */
+export type AccountName = Pick<Connection, "source" | "kind" | "externalAccountLabel">;
+
+/**
+ * A vendor's own name where we have one; the source's id where we do not -- and, where a
+ * tenant holds more than one account of that vendor, which account.
+ *
+ * `Gmail` for a tenant with one mailbox, `Gmail · ops@acme.test` for one with two, because two
+ * lines both reading "Gmail · messages" are a ledger nobody can reconcile. The address comes
+ * from `accounts` (the tenant's `connections.list`), since a source names its account only by
+ * an opaque digest. A further account whose address is not known -- no list was passed, or the
+ * connection is gone -- is qualified by that digest rather than printed as the bare vendor:
+ * the digest is ugly, but it is true, and the bare name would claim it was the first account.
+ * Label and address are two facts set side by side, not a sentence, so they are joined with
+ * the same ` · ` the lake's lines use rather than worded through the catalogue.
+ */
+export function sourceLabel(source: string, accounts: readonly AccountName[] = []): string {
+  const instance = parseSourceInstance(source);
+  if (instance === null || !isSource(instance.kind)) {
+    return source;
+  }
+  const name = SOURCE_LABEL[instance.kind];
+  const siblings = accounts.filter((account) => account.kind === instance.kind);
+  if (instance.account === null && siblings.length < 2) {
+    return name;
+  }
+  const address = siblings.find((account) => account.source === source)?.externalAccountLabel;
+  const qualifier = address === undefined || address === "" ? instance.account : address;
+  return qualifier === null ? name : `${name} · ${qualifier}`;
 }
 
 /**
  * What a run did, as one line of the journal: the source and what it read, or that it was
  * a build of the models. Entity names stay as the source calls them -- `deals`, `contacts`
  * -- because they are identifiers a reader will meet again in the raw lake.
+ *
+ * `accounts` is the tenant's connections, so a run of the second mailbox says which mailbox;
+ * see `sourceLabel`.
  */
 export function describeRun(
   t: TFunction,
   run: Pick<RunView, "kind" | "source" | "entities">,
+  accounts: readonly AccountName[] = [],
 ): string {
-  const source = run.source === null ? "" : sourceLabel(run.source);
+  const source = run.source === null ? "" : sourceLabel(run.source, accounts);
   switch (run.kind) {
     case "ingest":
       return run.entities.length === 0 ? source : `${source} · ${run.entities.join(", ")}`;
