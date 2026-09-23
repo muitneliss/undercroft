@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.0](https://github.com/muitneliss/undercroft/compare/v1.20.1...v1.21.0) (2026-09-23)
+
+
+### Features
+
+* **email:** set the Undercroft mark in every email's running head ([#157](https://github.com/muitneliss/undercroft/issues/157)) ([bb2b72b](https://github.com/muitneliss/undercroft/commit/bb2b72b3b2b81b84b4f21800b133dbac64d186d7))
+
 ## [1.20.1](https://github.com/muitneliss/undercroft/compare/v1.20.0...v1.20.1) (2026-09-23)
 
 
