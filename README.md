@@ -18,6 +18,15 @@
 
 # Undercroft
 
+[![CI](https://github.com/muitneliss/undercroft/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/muitneliss/undercroft/actions/workflows/ci.yml)
+[![Release](https://github.com/muitneliss/undercroft/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/muitneliss/undercroft/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/muitneliss/undercroft?sort=semver)](https://github.com/muitneliss/undercroft/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/muitneliss/undercroft)](LICENSE)
+[![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=black)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-only-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![CLI: Node 22+](https://img.shields.io/badge/CLI-Node%2022%2B-5fa04e?logo=nodedotjs&logoColor=white)](docs/runbook/cli.md)
+[![Agent skill](https://img.shields.io/badge/npx%20skills-undercroft--cli-000000)](skills/undercroft-cli/SKILL.md)
+
 > An immutable raw lake, declarative connectors, and a schema you define yourself.
 
 An _undercroft_ is the vaulted chamber beneath a building — the part that holds
@@ -40,7 +49,8 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   writes nothing. Nothing is ever overwritten in place. It is the one layer that cannot
   be recomputed, so it is the one layer treated as durable.
 - **Connectors are YAML, not code.** Base URL, auth, pagination, entities, cursors.
-  Adding a REST source needs no migration and no pull request.
+  Adding a REST source needs no migration and no pull request. HubSpot and Xero ship as
+  examples in `specs/connectors/`.
 - **No business schema ships.** Records land in one generic table; every table above it
   is a dbt model you wrote. Undercroft has no opinion about what a "customer" is.
 - **Multi-tenant.** Per-tenant credentials sealed with AES-256-GCM, and a control-plane
@@ -49,7 +59,8 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   land data too — through the same create-only, content-addressed path.
 - **Documents, not only records.** Gmail and Drive are first-party collectors, because a
   PDF is bytes and a YAML spec cannot describe bytes. Their text is extracted and lands
-  beside the records.
+  beside the records. A tenant can connect several mailboxes and drives, and each one is a
+  source of its own.
 - **Search the whole lake.** One box over both payloads and document text, folded so that
   Vietnamese matches with or without tone marks, and stemmed for English.
 - **The BI is first-party.** Questions and dashboards live in the Reports division, and
@@ -63,9 +74,18 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 
 ## From a terminal, or from an agent
 
-A person runs it through the release it ships in, with Node 22 or newer. Below,
-`undercroft` stands for
-`npx -y --package=https://github.com/muitneliss/undercroft/releases/download/vX.Y.Z/undercroft-cli-X.Y.Z.tgz undercroft`:
+Every release attaches the CLI as a tarball, and it runs on Node 22 or newer. Run the
+current release through `npx`:
+
+<!-- x-release-please-start-version -->
+
+```sh
+v=1.20.0; npx -y --package="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz" undercroft --help
+```
+
+<!-- x-release-please-end -->
+
+Below, `undercroft` stands for that whole line:
 
 ```sh
 undercroft config set-profile prod --url https://undercroft.example.test
@@ -122,6 +142,26 @@ Signing in to the control plane is **invite-only**, by Google or a one-time code
 [docs/runbook/sign-in-setup.md](docs/runbook/sign-in-setup.md) walks through the OAuth client,
 the mail key, the first invitation, and how to check each step actually worked.
 
+## Documentation
+
+- **Decisions:** [`docs/adr/`](docs/adr/). Each ADR records the options that were rejected
+  and why.
+- **Runbooks:** [`docs/runbook/`](docs/runbook/):
+  - [sign-in](docs/runbook/sign-in-setup.md)
+  - [Google ingestion](docs/runbook/google-ingestion-setup.md)
+  - [Xero](docs/runbook/xero-setup.md)
+  - [the assistant](docs/runbook/assistant-setup.md)
+  - [the CLI](docs/runbook/cli.md)
+  - [deployment](docs/runbook/deployment.md)
+- **Working on the code:** [CLAUDE.md](CLAUDE.md), also linked as `AGENTS.md`, is the map
+  of the conventions. The rules it points to live in `.claude/rules/`.
+- **Changes:** [CHANGELOG.md](CHANGELOG.md), maintained by release-please.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md). Report
+vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
+
 ## License
 
-MIT
+[MIT](LICENSE)

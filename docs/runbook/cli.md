@@ -6,13 +6,19 @@ how to change it.
 
 ## Running it
 
-| Where                     | Command                                                                                                                            |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| In this repo              | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                                          |
-| Anywhere, a released CLI  | `npx -y --package=https://github.com/muitneliss/undercroft/releases/download/vX.Y.Z/undercroft-cli-X.Y.Z.tgz undercroft <command>` |
-| For an agent, via a skill | `npx skills add muitneliss/undercroft --skill undercroft-cli [--agent claude-code\|codex] -y`                                      |
+| Where                     | Command                                                                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| In this repo              | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                                               |
+| Anywhere, a released CLI  | `v=X.Y.Z; npx -y --package="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz" undercroft <command>` |
+| For an agent, via a skill | `npx skills add muitneliss/undercroft --skill undercroft-cli [--agent claude-code\|codex] -y`                                           |
 
 It needs Node 22 or newer.
+
+The version is written ONCE, in `v`, because release-please's generic updater rewrites only
+the first version on a line. The 1.20.0 release bumped the tag in the pinned URL and left the
+tarball's name at 1.19.1, which is a 404. The README and `skills/undercroft-cli/SKILL.md`
+both pin their line this way, and `scripts/skill.test.ts` fails when a pinned block holds more
+than one version or a version other than the release's.
 
 ## First use, as a person
 
@@ -68,7 +74,8 @@ It never prints the session itself.
   through `npx`. **The skill** is checked by `task ci:skill-check`, which needs the network.
 - **A release** attaches the tarball on its own. The `release-cli` job in `release.yml` runs
   `task build:cli-pack`, then `task cd:cli-upload TAG=vX.Y.Z`. release-please bumps the version
-  in `skills/undercroft-cli/SKILL.md` and `apps/cli/package.json` along with the root.
+  in `skills/undercroft-cli/SKILL.md`, `README.md` and `apps/cli/package.json` along with the
+  root.
 
 ## When it goes wrong
 
