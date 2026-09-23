@@ -2140,7 +2140,11 @@
     transition: background var(--hinge);
   }
 
-  .table tbody tr:hover td {
+  /* A row's state is its OWN cells', which is why these selectors, and the journal's two
+   below, are child combinators. A table hinged into a row is inside that row, and a
+   descendant selector reached every cell of it: hovering a run's leaf took the whole
+   ledger drawn in it, gutter included, and set `17:15:16Bắt đầu.` as one word. */
+  .table > tbody > tr:hover > td {
     background: color-mix(in srgb, var(--board) 8%, transparent);
   }
 
@@ -2184,7 +2188,7 @@
   /* The open row: its leaf is hinged down in the row beneath it, and the row itself
    takes the board's wash so the eye finds which line the leaf belongs to. The same
    wash as the hover, held. */
-  .table tbody tr[aria-current] td {
+  .table > tbody > tr[aria-current] > td {
     background: color-mix(in srgb, var(--board) 14%, transparent);
   }
 
@@ -2200,9 +2204,10 @@
 
    Both selectors carry `tbody tr` so they outweigh `.table td:last-child`, which a
    bare `.table__hinge td` does not -- the first attempt at this fix lost that
-   specificity race and changed nothing on screen. */
-  .table tbody tr.table__hinge td,
-  .table tbody tr.table__hinge:hover td {
+   specificity race and changed nothing on screen. The same weight is kept under the child
+   combinators, which also keep these off the cells of the ledger the leaf carries. */
+  .table > tbody > tr.table__hinge > td,
+  .table > tbody > tr.table__hinge:hover > td {
     padding: 0 0 var(--s-4);
     background: transparent;
     text-align: start;
@@ -2714,7 +2719,9 @@
    * WebKit do pay it out (measured off this sheet: the instant ends at 99.6 and the sentence
    * opens at 111.6, at every viewport from 200px to 1280px). A reader reported
    * `11:33:38Bắt đầu.` set as one word, which is the same rule paying out nothing, and neither
-   * engine here reproduces it. That is the whole argument for moving it: a gutter whose
+   * engine here reproduces it. (It came back on hover, and that one was not the engine: the
+   * journal's hinge-row rules reached into this table -- see `.table > tbody > tr:hover`.)
+   * That is the whole argument for moving it: a gutter whose
    * existence is an engine's opinion is not a gutter, and the sheet reads as correct either
    * way. The column beside this one is free to stretch, so padding there is space, full stop. */
   .feed__region .table td:first-child,

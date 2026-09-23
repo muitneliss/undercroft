@@ -122,6 +122,29 @@ describe("the ledger's instant column", () => {
     expect(instant.paddingRight).toBe("0px");
     expect(sentence.paddingLeft).not.toBe("0px");
   });
+
+  // The ledger is drawn inside the journal's hinge row, and the hinge's cell rules were written
+  // with descendant selectors -- so they reached every cell of the ledger too. Hovering the
+  // run's leaf zeroed the gutter above and set `17:15:16Bắt đầu.` as one word again; at rest
+  // they took the line spacing and an error line's wash. Hover is not computable here, so the
+  // same leak is asserted at rest: a hinged ledger draws its lines as a bare one does.
+  it("draws its lines inside the journal's hinge row exactly as it does on its own", () => {
+    const line = LINE.replace("<tr>", `<tr class="feed__line feed__line--error">`);
+    function drawn(cell: Element): Record<string, string> {
+      const style = globalThis.getComputedStyle(cell);
+      return {
+        paddingTop: style.paddingTop,
+        paddingBottom: style.paddingBottom,
+        paddingLeft: style.paddingLeft,
+        background: style.background,
+      };
+    }
+    const bare = drawn(render(line).querySelector("td:last-child") as Element);
+    const hinged = render(
+      `<table class="table"><tbody><tr class="table__hinge"><td>${line}</td></tr></tbody></table>`,
+    );
+    expect(drawn(hinged.querySelector(".feed__region td:last-child") as Element)).toEqual(bare);
+  });
 });
 
 /**
