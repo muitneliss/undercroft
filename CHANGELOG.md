@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.1](https://github.com/muitneliss/undercroft/compare/v1.19.0...v1.19.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **ui:** hovering a run's leaf no longer runs the ledger's instant into its sentence ([#136](https://github.com/muitneliss/undercroft/issues/136)) ([db8f232](https://github.com/muitneliss/undercroft/commit/db8f232943304c30936a5f7f675cee5000b3d651))
+
 ## [1.19.0](https://github.com/muitneliss/undercroft/compare/v1.18.0...v1.19.0) (2026-09-23)
 
 
