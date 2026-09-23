@@ -62,7 +62,7 @@ describe("what a run narrates", () => {
   });
 });
 
-describe("progress is coalesced, because a line per record is not evidence", () => {
+describe("progress is a dial, read at an interval and kept in one place", () => {
   it("a second progress line too soon after the first is dropped", async () => {
     const journal = createRunJournal({ exec: db, runId: "r1", clock });
 
@@ -73,7 +73,7 @@ describe("progress is coalesced, because a line per record is not evidence", () 
     expect((await eventsFor(db, "r1")).map((e) => e.detail.read)).toEqual([100]);
   });
 
-  it("once the interval has passed it is kept, and it carries the newer count", async () => {
+  it("once the interval has passed the reading is taken, and it replaces the last one", async () => {
     const journal = createRunJournal({ exec: db, runId: "r1", clock });
 
     journal.progress("records_read", { entity: "messages", read: 100 });
@@ -81,7 +81,7 @@ describe("progress is coalesced, because a line per record is not evidence", () 
     journal.progress("records_read", { entity: "messages", read: 200 });
     await journal.flush();
 
-    expect((await eventsFor(db, "r1")).map((e) => e.detail.read)).toEqual([100, 200]);
+    expect((await eventsFor(db, "r1")).map((e) => e.detail.read)).toEqual([200]);
   });
 
   it("two entities do not silence each other", async () => {
@@ -92,6 +92,16 @@ describe("progress is coalesced, because a line per record is not evidence", () 
     await journal.flush();
 
     expect((await eventsFor(db, "r1")).map((e) => e.entity)).toEqual(["messages", "files"]);
+  });
+
+  it("a milestone is an occurrence and still appends, however many there are", async () => {
+    const journal = createRunJournal({ exec: db, runId: "r1", clock });
+
+    journal.info("entity_started", { entity: "messages" });
+    journal.info("entity_started", { entity: "messages" });
+    await journal.flush();
+
+    expect(await eventsFor(db, "r1")).toHaveLength(2);
   });
 });
 
@@ -120,6 +130,21 @@ describe("the feed is capped, and says so rather than looking complete", () => {
 
     const events = await eventsFor(db, "r1", MAX_EVENTS_PER_RUN + 10);
     expect(events.at(-1)?.event).toBe("run_failed");
+  });
+
+  it("a run past the cap keeps reading its dial: the counter is what a watcher is watching", async () => {
+    const journal = createRunJournal({ exec: db, runId: "r1", clock });
+
+    for (let n = 0; n < MAX_EVENTS_PER_RUN + 5; n += 1) {
+      journal.info("entity_started", { entity: "messages", n });
+    }
+    await clock.advance(PROGRESS_INTERVAL_MS);
+    journal.progress("records_read", { entity: "messages", read: 7786 });
+    await journal.flush();
+
+    const events = await eventsFor(db, "r1", MAX_EVENTS_PER_RUN + 10);
+    const gauge = events.find((e) => e.event === "records_read");
+    expect(gauge?.detail).toEqual({ read: 7786 });
   });
 
   it("a run that stays under the cap records no truncation", async () => {

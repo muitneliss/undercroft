@@ -1,6 +1,5 @@
 ---
 description: Money is a string, and the platform never guesses
-globs: ["packages/**/*.ts", "apps/**/*.ts", "apps/**/*.tsx", "dbt/**/*.sql"]
 ---
 
 # Money, and never guessing

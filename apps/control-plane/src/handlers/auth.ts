@@ -52,7 +52,13 @@
  * ADR 0013.
  */
 
-import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
+import {
+  type EmailMessage,
+  type EmailSender,
+  type Locale,
+  negotiateLocale,
+  postEmailLeaf,
+} from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -92,6 +98,34 @@ function localeOf(context: HookContext | null | undefined): Locale {
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
+
+/**
+ * What somebody signing in is sent.
+ *
+ * A pure value, like `invitationMessage` and the three alert composers -- composing the
+ * words is a decision, sending them is transport. It is named and exported rather than
+ * built inline inside the hook so that `task dev:email-preview` renders the message this
+ * platform actually sends, instead of a copy of it that drifts the first time one is edited
+ * and the other is not.
+ */
+export function signInCodeMessage(to: string, otp: string, locale: Locale): EmailMessage {
+  const t = messages(locale);
+  return postEmailLeaf(to, {
+    locale,
+    subject: t("signInCode.subject"),
+    // No running head: a sign-in code belongs to a person, not to a customer. Naming one
+    // would also tell whoever is holding the inbox which customers this address can reach,
+    // before they have proved they are it.
+    heading: t("signInCode.heading"),
+    lead: t("signInCode.lead"),
+    colophon: t("email.colophon"),
+    blocks: [
+      { kind: "token", value: otp },
+      { kind: "note", text: t("signInCode.expiry", { minutes: String(OTP_EXPIRES_SECONDS / 60) }) },
+      { kind: "note", text: t("signInCode.ignore") },
+    ],
+  });
+}
 
 export interface GoogleCredentials {
   readonly clientId: string;
@@ -297,19 +331,12 @@ function authPlugins(
         // In the language the browser asked for. This is the one email whose recipient
         // IS the person at the keyboard, so their choice of language is known exactly --
         // `apps/ui/src/auth.ts` sends `accept-language` on this very call.
-        const t = messages(localeOf(context));
+        const locale = localeOf(context);
 
         // Deliberately not awaited: how long the send takes is a signal for whether the
         // address exists, and the response should not carry it.
         void config.email
-          .send({
-            to: email,
-            subject: t("signInCode.subject"),
-            text: t("signInCode.body", {
-              otp,
-              minutes: String(OTP_EXPIRES_SECONDS / 60),
-            }),
-          })
+          .send(signInCodeMessage(email, otp, locale))
           .catch((error: unknown) => config.onEmailError?.(error));
       },
     }),
@@ -368,6 +395,12 @@ export function createAuth(config: AuthConfig): Auth {
     baseURL: config.baseUrl,
     // Same-origin: the SPA is served by this process, so the only trusted origin is itself.
     trustedOrigins: [config.baseUrl],
+    // Explicit, although `false` is already Better Auth's production default: left unset,
+    // Better Auth SKIPS its Origin/CSRF check whenever NODE_ENV is `test`, so every suite ran
+    // a laxer server than production does. That hid a real defect -- the CLI's sign-in was
+    // refused in production and accepted in the gate (ADR 0044) -- and a check the suite does
+    // not run is a check nothing proves.
+    advanced: { disableOriginCheck: false },
 
     user: userModel(config, superadmins),
 

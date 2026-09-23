@@ -135,6 +135,9 @@ function RunTable({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
+  // Which mailbox a run read, for a tenant with more than one (`sourceLabel`). The same cached
+  // query the page above already made, so asking for it here costs no request.
+  const accounts = trpc.connections.list.useQuery({ tenantId }).data ?? [];
 
   return (
     <table className="table">
@@ -164,7 +167,13 @@ function RunTable({
       <tbody>
         {items.map((run) => (
           <Fragment key={run.id}>
-            <RunRow run={run} locale={locale} open={run.id === openId} href={`${base}/${run.id}`} />
+            <RunRow
+              run={run}
+              locale={locale}
+              open={run.id === openId}
+              href={`${base}/${run.id}`}
+              accounts={accounts}
+            />
             {run.id === openId ? (
               <tr className="table__hinge">
                 <td colSpan={COLUMNS}>

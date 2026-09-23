@@ -88,6 +88,38 @@ services:
         limits:
           memory: 512m
 
+  # Make Kestra's two volumes writable by the user Kestra actually runs as.
+  #
+  # WITHOUT THIS KESTRA CRASH-LOOPS AND THE WHOLE SCHEDULE IS DEAD. A named volume is created
+  # root-owned; `kestra/kestra:v2.0.2` runs as uid 1000 (`docker exec kestra id` ->
+  # `uid=1000(kestra)`), so `PluginManager.createLocalRepositoryIfNotExist` cannot mkdir
+  # `/app/storage/plugins` and the server exits with `AccessDeniedException` before it serves
+  # a request.
+  #
+  # The symptom is why this is a one-shot and not a comment somewhere: nothing goes red.
+  # Kestra restarts forever, `kestra-flows` cannot reach it, zero flows are ever registered,
+  # and every run in the ledger quietly arrives with `trigger: manual` because a human started
+  # it. Measured on the server before this fix: `select count(*) from flows` -> 0,
+  # `select count(*) from executions` -> 0, volumes root-owned since they were created.
+  #
+  # `chown -R` rather than `chown`: the first run has two empty directories, but a re-run
+  # after Kestra has written storage must not leave that content unreachable. Idempotent, so
+  # it costs a second on every deploy and nothing else.
+  kestra-init:
+    # Deliberately NOT `<<: *restart`, for the reason `db-migrate` gives: this is meant to
+    # exit, and `restart: unless-stopped` would turn a completed chown into a crash-loop.
+    image: alpine:3.24
+    command: ["sh", "-c", "chown -R 1000:1000 /app/storage /tmp/kestra-wd && echo done"]
+    # Mounted at Kestra's own paths, so the thing being fixed is named the same way in both
+    # services and a path change here cannot silently miss.
+    volumes:
+      - kestra-storage:/app/storage
+      - kestra-workdir:/tmp/kestra-wd
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
   kestra:
     <<: *restart
     image: kestra/kestra:v2.0.2
@@ -95,6 +127,10 @@ services:
     depends_on:
       kestra-postgres:
         condition: service_healthy
+      # Before the server starts, not eventually: the plugin directory is created during
+      # startup, so a chown that lands afterwards is a chown that lands too late.
+      kestra-init:
+        condition: service_completed_successfully
     environment:
       KESTRA_CONFIGURATION: |
         datasources:
@@ -172,6 +208,12 @@ services:
       # "not connected" -- the right state while Google verification is pending.
       UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_ID:-}
       UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: ${UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET:-}
+      # Milliseconds between two Gmail/Drive requests. Unset paces three a second, inside
+      # the 2-4 messages.get/second/user Google enforces for this project -- a sixth of the
+      # published rate, and the reason a 7,777-message backfill died 378 messages in. Set it
+      # only to match a project whose enforced quota differs; a bad value fails the run
+      # rather than quietly pacing at the rate that caused the outage.
+      UNDERCROFT_GOOGLE_MIN_INTERVAL_MS: ${UNDERCROFT_GOOGLE_MIN_INTERVAL_MS:-}
       # The Xero client, for refreshing and revoking; the control plane runs the consent.
       UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
       UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
@@ -181,7 +223,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          # 3g, kept in step with docker-compose.server.yml, where the reasoning is written
+          # out: a 25 MiB Gmail attachment costs ~220 MiB in transit because it arrives
+          # base64-encoded inside a JSON body. A change only in the server file would not
+          # survive a deploy, and a dev stack that OOMs where production does not is a bug
+          # nobody can reproduce locally -- `.claude/rules/deployment.md`.
+          memory: 3g
 
   # The schema, applied before anything reads it. Same image as the control plane, which
   # carries the migrations and the `migrate` script; it runs once and exits.
@@ -253,6 +300,17 @@ services:
       UNDERCROFT_SECRET_KEY: ${UNDERCROFT_SECRET_KEY}
       UNDERCROFT_SESSION_SECRET: ${UNDERCROFT_SESSION_SECRET:?set in .env}
       UNDERCROFT_WORKER_URL: http://worker:8081
+      # The assistant. All four optional, and the degradation is in two steps rather than
+      # one: with no model key the interleaf says it is unavailable; with a model key but no
+      # TypeSafe key it answers questions and REFUSES to offer any change, because the
+      # injection gate fails closed. The boot log names which state it came up in. ADR 0029.
+      UNDERCROFT_ANTHROPIC_API_KEY: ${UNDERCROFT_ANTHROPIC_API_KEY:-}
+      UNDERCROFT_TYPESAFE_API_KEY: ${UNDERCROFT_TYPESAFE_API_KEY:-}
+      # Signs each approval request, so "the reader said yes" cannot be a claim the browser
+      # makes about itself. Unset means unsigned, which the boot log also names.
+      UNDERCROFT_ASSISTANT_APPROVAL_SECRET: ${UNDERCROFT_ASSISTANT_APPROVAL_SECRET:-}
+      # Defaults to claude-opus-5 in `main.ts`; set only to pin a different one.
+      UNDERCROFT_ASSISTANT_MODEL: ${UNDERCROFT_ASSISTANT_MODEL:-}
       UNDERCROFT_TRIGGER_TOKEN: ${UNDERCROFT_TRIGGER_TOKEN}
       # Sign-in. All optional: with any of them unset the process starts with no way in and
       # says so once at boot, rather than offering a button that fails at the first click.

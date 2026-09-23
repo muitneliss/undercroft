@@ -7,8 +7,11 @@
  * this row only marks itself `aria-current` so a reader with a screen reader, or without
  * colour, knows which line the leaf belongs to.
  *
- * A run still in progress prints MISSING in every count. A number still changing is not a
- * number, and printing what has landed so far would be read as the total.
+ * A run with no counts to give prints MISSING in every one of them: one still in progress,
+ * because a number still changing is not a number and what has landed so far would be read
+ * as the total, and a build, which lands no records at all. Which of them has counts is the
+ * ledger's decision (`countsOf`, control-plane `services/runs.ts`), not this row's -- the row
+ * prints the four figures or the four dashes.
  */
 
 import type { Locale } from "@undercroft/core/locale";
@@ -17,8 +20,9 @@ import { Link } from "react-router-dom";
 
 import type { RunView } from "@/api/types.ts";
 import { StatusMark } from "@/components/StatusMark.tsx";
+import { TableCell, TableRow } from "@/components/ui/table.tsx";
 import { formatCount, MISSING } from "@/lib/money.ts";
-import { describeRun, runMark, runMarkLabel, triggerLabel } from "@/lib/runs.ts";
+import { type AccountName, describeRun, runMark, runMarkLabel, triggerLabel } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration, relativeTime } from "@/lib/when.ts";
 
 export function RunRow({
@@ -26,6 +30,7 @@ export function RunRow({
   locale,
   open,
   href,
+  accounts = [],
 }: {
   run: RunView;
   locale: Locale;
@@ -33,6 +38,8 @@ export function RunRow({
   open: boolean;
   /** Where the row opens: the journal at this run. */
   href: string;
+  /** The tenant's connections, so a run of a second mailbox names it. See `sourceLabel`. */
+  accounts?: readonly AccountName[];
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { counts } = run;
@@ -43,17 +50,17 @@ export function RunRow({
   }
 
   return (
-    <tr {...(open ? { "aria-current": "true" as const } : {})}>
-      <td className="datum datum--quiet" title={formatDateTime(run.startedAt, locale)}>
+    <TableRow {...(open ? { "aria-current": "true" as const } : {})}>
+      <TableCell className="datum datum--quiet" title={formatDateTime(run.startedAt, locale)}>
         {relativeTime(run.startedAt, locale)}
-      </td>
-      <td>
+      </TableCell>
+      <TableCell>
         <Link className="journal__what" to={href}>
-          {describeRun(t, run)}
+          {describeRun(t, run, accounts)}
         </Link>
         <span className="datum datum--quiet journal__trigger">{triggerLabel(t, run.trigger)}</span>
-      </td>
-      <td>
+      </TableCell>
+      <TableCell>
         <StatusMark mark={runMark(run.status)} label={runMarkLabel(t, run.status)} />
         {run.testsFailed !== null && run.testsFailed > 0 ? (
           <span className="datum datum--quiet journal__trigger">
@@ -63,14 +70,14 @@ export function RunRow({
             })}
           </span>
         ) : null}
-      </td>
-      <td className="num">{count(counts?.landed ?? 0)}</td>
-      <td className="num">{count(counts?.created ?? 0)}</td>
-      <td className="num">{count(counts?.changed ?? 0)}</td>
-      <td className="num">{count(counts?.refused ?? 0)}</td>
-      <td className="num datum datum--quiet">
+      </TableCell>
+      <TableCell className="num">{count(counts?.landed ?? 0)}</TableCell>
+      <TableCell className="num">{count(counts?.created ?? 0)}</TableCell>
+      <TableCell className="num">{count(counts?.changed ?? 0)}</TableCell>
+      <TableCell className="num">{count(counts?.refused ?? 0)}</TableCell>
+      <TableCell className="num datum datum--quiet">
         {formatDuration(run.startedAt, run.endedAt, locale)}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

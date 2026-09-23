@@ -6,8 +6,12 @@
 
 import { describe, expect, test as it } from "bun:test";
 
+import type { RawSearchHit } from "@/api/types.ts";
 import { translatorFor } from "@/i18n/index.ts";
+import { formatDate } from "@/lib/when.ts";
 import {
+  hitNotes,
+  hitWhere,
   type LakeStream,
   lakeEmptyBody,
   parseStream,
@@ -15,6 +19,7 @@ import {
   streamKey,
   streamLabel,
   streamParams,
+  streamQuery,
   streamsOf,
 } from "./lake.ts";
 
@@ -51,9 +56,52 @@ describe("a stream's address", () => {
       records: [
         { source: "hubspot", entity: "deals", records: 1, tombstoned: 0, latestObservedAt: "" },
       ],
-      documents: [{ source: "gmail", documents: 1, bytes: 1, latestObservedAt: "" }],
+      documents: [
+        {
+          source: "gmail",
+          documents: 1,
+          distinctBlobs: 1,
+          bytes: 1,
+          readable: 0,
+          latestObservedAt: "",
+        },
+      ],
     });
     expect(streams).toEqual([DEALS, MAIL]);
+  });
+});
+
+describe("the query a line of the index opens with", () => {
+  it("asks for the stream it was opened from, ordered so the console can page it", () => {
+    const deals = streamQuery(DEALS);
+    expect(deals).toContain("FROM records");
+    expect(deals).toContain("WHERE source = 'hubspot'");
+    expect(deals).toContain("AND entity = 'deals'");
+    expect(deals).toContain("ORDER BY observed_at DESC");
+
+    const mail = streamQuery(MAIL);
+    expect(mail).toContain("FROM documents");
+    expect(mail).toContain("WHERE source = 'gmail'");
+    expect(mail).not.toContain("entity");
+  });
+
+  /**
+   * The regression this guards is invisible, which is why it is worth a test of its own: a
+   * `jsonb` column reaches the driver as a parsed object and is re-serialised on its way to
+   * the browser, and every number in it comes out a float. Nothing fails; the digits are
+   * just wrong. Postgres has to be the one that renders it.
+   */
+  it("renders a payload as Postgres text, so a number too big for a float survives", () => {
+    expect(streamQuery(DEALS)).toContain("payload::text AS payload");
+  });
+
+  it("cannot be broken out of by a source's own naming", () => {
+    const hostile = streamQuery({
+      kind: "records",
+      source: "hubspot",
+      entity: "deals'; DROP TABLE records; --",
+    });
+    expect(hostile).toContain("AND entity = 'deals''; DROP TABLE records; --'");
   });
 });
 
@@ -65,5 +113,72 @@ describe("lakeEmptyBody", () => {
     expect(lakeEmptyBody(en, "en", [{ nextRunAt: "2026-09-17T14:00:00Z" }], NOW)).toContain(
       "22:00",
     );
+  });
+});
+
+describe("a search hit as a reader sees it", () => {
+  const record: RawSearchHit = {
+    kind: "record",
+    source: "hubspot",
+    entity: "deals",
+    sourceRecordId: "d-1",
+    rank: 0.3,
+    excerpt: '"deal_name":"Hợp đồng thuê nhà"',
+    observedAt: "2026-09-17T12:00:00.000Z",
+    deletedAt: null,
+  };
+  const document: RawSearchHit = {
+    kind: "document",
+    source: "drive",
+    documentId: "f-1",
+    method: "pdf_ocr",
+    truncated: false,
+    rank: 0.4,
+    excerpt: "Hợp đồng thuê nhà",
+    observedAt: "2026-09-17T12:00:00.000Z",
+    deletedAt: null,
+  };
+
+  it("says where it is with the vendor's own name and the source's own ids", () => {
+    expect(hitWhere(record)).toBe("HubSpot · deals · d-1");
+    expect(hitWhere(document)).toBe("Google Drive · f-1");
+  });
+
+  it("a record with nothing else to say says nothing else", () => {
+    // The quiet side. Notes that always appeared would be chrome a reader learns to skip,
+    // and the two that matter -- OCR, and a tombstone -- would go with them.
+    expect(hitNotes(vi, record, "vi")).toEqual([]);
+    expect(hitNotes(en, record, "en")).toEqual([]);
+  });
+
+  it("a document says how it was read, in the reader's language", () => {
+    expect(hitNotes(vi, document, "vi")).toEqual(["đọc bằng pdf_ocr"]);
+    expect(hitNotes(en, document, "en")).toEqual(["read by pdf_ocr"]);
+  });
+
+  it("a document nothing could be read from says that, rather than going quiet", () => {
+    const unread: RawSearchHit = { ...document, method: null };
+    expect(hitNotes(vi, unread, "vi")).toEqual(["chưa đọc được nội dung"]);
+    expect(hitNotes(en, unread, "en")).toEqual(["nothing could be read from it"]);
+  });
+
+  it("a document cut short at extraction says the rest was never searched", () => {
+    const cut: RawSearchHit = { ...document, truncated: true };
+    expect(hitNotes(en, cut, "en")).toEqual([
+      "read by pdf_ocr",
+      "This document was cut short when it was read, so the rest was not searched.",
+    ]);
+  });
+
+  it("a hit the source has since deleted says so, in either kind", () => {
+    const gone = "2026-09-18T12:00:00.000Z";
+    // The date as the platform formats every date, not a literal month: whether September is
+    // "Sep" or "Sept" is CLDR's call and changes with the ICU the runtime links -- Bun on macOS
+    // uses the system's, the Linux build bundles its own -- so a literal pinned one machine's
+    // data and failed on the other. What this note promises is that it SAYS the date.
+    expect(hitNotes(en, { ...record, deletedAt: gone }, "en")).toEqual([
+      `Deleted ${formatDate(gone, "en")}`,
+    ]);
+    expect(hitNotes(en, { ...document, deletedAt: gone }, "en")).toHaveLength(2);
   });
 });

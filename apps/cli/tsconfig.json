@@ -1,0 +1,15 @@
+{
+  "//": "The CLI's source, its build scripts and its suite. It references the control plane because the BUILD reads the router and the suite runs the real server; the shipped source may not import it (`.ast-grep/rules/cli-boundary.yml`). `virtual:procedures` is the build's generated manifest; the path maps it to its declaration.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "paths": { "virtual:procedures": ["./src/virtual.d.ts"] }
+  },
+  "include": ["src/**/*", "scripts/**/*", "package.json"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/db" },
+    { "path": "../control-plane" }
+  ]
+}

@@ -13,8 +13,10 @@
  * empty page, which is what it is: absence, not an error.
  */
 
+import type { RawSearchResponse, SearchKind } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 
+import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 import {
   type DocumentSummary,
   listDocuments,
@@ -69,5 +71,29 @@ export function documents(
   return listDocuments(exec, tenantId, input.source, {
     limit: input.limit,
     cursor: input.cursor ?? null,
+  });
+}
+
+/**
+ * One question over the whole lake, asked of the worker.
+ *
+ * NO `exec` AND NO REPO, unlike everything above it in this file, and the asymmetry is the
+ * point: `summary`, `records` and `documents` read tables the control plane holds SELECT on,
+ * and search reaches `raw.document_text.text`, which it deliberately does not (180's
+ * docstring). So it goes the way `lake.query` goes -- through the worker, as the tenant's own
+ * dbt login -- and this function exists to make that a decision a reader can see rather than a
+ * detail buried in the handler. ADR 0026.
+ */
+export function search(
+  worker: WorkerClient,
+  tenantId: string,
+  input: { q: string; kinds?: readonly SearchKind[]; limit: number; offset: number },
+): Promise<WorkerOutcome<RawSearchResponse>> {
+  return worker.searchRaw({
+    tenantId,
+    q: input.q,
+    ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+    limit: input.limit,
+    offset: input.offset,
   });
 }

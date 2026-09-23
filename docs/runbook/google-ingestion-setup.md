@@ -139,16 +139,63 @@ Press **Disconnect**, then open <https://myaccount.google.com/permissions> as th
 account. The grant should be gone there too, not only from our table. If the UI says it could
 not tell Google, revoke it by hand there — the card says so for exactly this case.
 
+## 9. A second mailbox, or a second Drive account
+
+A tenant may connect several Gmail mailboxes and several Drive accounts at once. On the card,
+**Add another account** starts a consent that shows Google's account chooser. The account
+chosen there gets a connection of its own. Each account on the card has its own:
+
+- status mark;
+- scope;
+- schedule;
+- last run;
+- **Run now**, **Change scope** and **Disconnect**.
+
+Two Gmail accounts are not a subset of each other, so connect both rather than choosing one.
+[ADR 0043](../adr/0043-a-second-mailbox-is-a-second-source.md) explains why each account is a
+source of its own.
+
+The first account of a kind keeps the source `gmail`, or `drive` for Drive. Every further one is
+`gmail.<account key>`, twelve hex characters derived from Google's account id:
+
+```sql
+SELECT source, status, external_account_id FROM ops.connection
+WHERE source = 'gmail' OR source LIKE 'gmail.%';
+SELECT source, account_label FROM app.connection_detail
+WHERE source = 'gmail' OR source LIKE 'gmail.%';
+```
+
+**A dbt model that filters `source = 'gmail'` sees only the first mailbox.** Filter
+`source = 'gmail' OR source LIKE 'gmail.%'` instead, or select from the shipped macro.
+
+The same letter often reaches both mailboxes, under unrelated Gmail ids, and
+`{{ gmail_letters() }}` folds those copies into one row per letter. It keys on the RFC 5322
+`Message-ID` header, and a letter without one stands alone. For each letter it also returns:
+
+- which mailboxes held it, under which ids;
+- whether the copies disagree on their headers.
+
+```sql
+select letter_key, copies, sources, headers_conflict
+from {{ gmail_letters() }}
+```
+
+**Reconnect is pinned to its account.** Completing "Reconnect" on one mailbox while the browser
+is signed in as another is refused. It is not silently switched to the other mailbox, which
+would file that mailbox's mail under this one.
+
 ---
 
 ## When something is wrong
 
-| Symptom                                                         | Cause                                                                                                                                     |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| The connect button does nothing                                 | `UNDERCROFT_GOOGLE_INGEST_CLIENT_ID` is unset; the source falls back to the placeholder URL.                                              |
-| `redirect_uri_mismatch`                                         | `UNDERCROFT_PUBLIC_URL` is not the origin the browser uses. Google builds the redirect URI from it.                                       |
-| Returned to the schedule with `connect=failed&reason=not-admin` | The session is not an admin of that tenant. Starting a flow is not a standing authorisation; it is re-checked at the callback.            |
-| `reason=bad-state`                                              | The consent took longer than 15 minutes, or the link was opened twice. Both are refused identically by design.                            |
-| `reason=worker-refused`                                         | The worker is unreachable or `UNDERCROFT_TRIGGER_TOKEN` differs between the two services.                                                 |
-| A run fails with "has no recorded scope"                        | Connected but nobody has chosen what to read. That is deliberate: an absent scope is never defaulted to the whole mailbox.                |
-| Gmail returns nothing with several labels chosen                | Should not happen — `labelIds` is AND, and the collector issues one query per label. If it recurs, that union is the first place to look. |
+| Symptom                                                         | Cause                                                                                                                                                                                                               |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The connect button does nothing                                 | `UNDERCROFT_GOOGLE_INGEST_CLIENT_ID` is unset; the source falls back to the placeholder URL.                                                                                                                        |
+| `redirect_uri_mismatch`                                         | `UNDERCROFT_PUBLIC_URL` is not the origin the browser uses. Google builds the redirect URI from it.                                                                                                                 |
+| Returned to the schedule with `connect=failed&reason=not-admin` | The session is not an admin of that tenant. Starting a flow is not a standing authorisation; it is re-checked at the callback.                                                                                      |
+| `reason=bad-state`                                              | The consent took longer than 15 minutes, or the link was opened twice. Both are refused identically by design.                                                                                                      |
+| `reason=worker-refused`                                         | The worker is unreachable or `UNDERCROFT_TRIGGER_TOKEN` differs between the two services.                                                                                                                           |
+| `reason=account-mismatch`                                       | A Reconnect was completed by a different Google account from the one that connection belongs to, or by an account already connected under another source. To connect that mailbox too, use **Add another account**. |
+| `reason=account-unidentified`                                   | Google did not say which account consented, or the first account never recorded one. Reconnect the existing account first, then add the next.                                                                       |
+| A run fails with "has no recorded scope"                        | Connected but nobody has chosen what to read. That is deliberate: an absent scope is never defaulted to the whole mailbox.                                                                                          |
+| Gmail returns nothing with several labels chosen                | Should not happen — `labelIds` is AND, and the collector issues one query per label. If it recurs, that union is the first place to look.                                                                           |

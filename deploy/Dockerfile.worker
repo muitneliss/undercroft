@@ -1,4 +1,5 @@
-# The worker: ingest, the lake write API, the raw loader, and the dbt transform.
+# The worker: ingest, the lake write API, the raw loader, the extract verb and the dbt
+# transform.
 #
 # Bun runs TypeScript directly, so there is no build step for our code. dbt is installed as
 # a BINARY we invoke -- we author no Python and import nothing from it. It lives here
@@ -7,8 +8,41 @@
 FROM oven/bun:1.4.2-debian
 
 # dbt-core and the Postgres adapter, pinned. A venv keeps them off the system Python.
+#
+# `poppler-utils` is here for the SAME REASON and in the same category: it supplies
+# `pdftotext`, which `services/extract/extractText.ts` invokes by name and never imports.
+# Without it every PDF in the lake is recorded `extractor-missing:pdftotext` -- the
+# extractor refuses by name rather than crashing, so the run stays green and the symptom is
+# a Lake division reading "122 documents, 0 readable" with nothing failing anywhere.
+# It also supplies `pdftoppm`, which `services/extract/pdfPages.ts` uses to turn a scanned
+# page into an image -- so the scanned-PDF reader below costs no new package at all.
+#
+# `tesseract-ocr` was deferred on the condition this file stated in as many words -- shipping
+# a binary nothing calls is weight in the image and an attack surface in the process, so "it
+# arrives with the reader that needs it". THE CONDITION IS NOW MET: `services/extract/ocr.ts`
+# invokes `tesseract` for `image/png` and `image/jpeg`, which is 1,557 files in the lake that
+# no reader could open before. The "200 MB" in that note was an estimate; measured on amd64 on
+# top of the three packages above, `tesseract-ocr` is 24 packages and 75.5 MB.
+#
+# `tesseract-ocr-vie` IS NOT OPTIONAL, and it is 547 kB of that. Of the 409 documents read on
+# production, 69 (17%) carry Vietnamese diacritics, and tesseract without the pack does not
+# fail on them -- it returns confident English-looking words that were never on the page, which
+# reaches a search index looking exactly like data. `which tesseract` answers "installed" and
+# cannot answer "can read Vietnamese"; this line is the only place that question is settled.
+# Trimming it to save half a megabyte quietly turns a sixth of the corpus into fiction.
+#
+# `pdf_ocr` is the second caller, and it is why the two packages sit beside each other rather
+# than in one line: tesseract's input is an IMAGE, so `tesseract scan.pdf` answers "Pdf reading
+# is not supported" and exits 1. A scan is `pdftoppm` first and `tesseract` after, at 150 DPI
+# -- measured on a rendered Vietnamese invoice, where 150 kept all 38 accented letters and read
+# the page exactly, and 300 and 400 DPI each scored slightly worse for 1.6x and 2.6x the bytes.
+# Neither program may be trimmed without the other losing its purpose.
+#
+# A spreadsheet or a Word document needs no binary at all -- `services/extract/xlsx.ts` and
+# `docx.ts` say why.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-venv \
+    && apt-get install -y --no-install-recommends python3 python3-venv poppler-utils \
+        tesseract-ocr tesseract-ocr-vie \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/dbt \
     && /opt/dbt/bin/pip install --no-cache-dir "dbt-core==1.9.1" "dbt-postgres==1.9.0"
@@ -28,8 +62,45 @@ RUN bun install --frozen-lockfile --production
 COPY specs ./specs
 
 ENV UNDERCROFT_SPECS_DIR=/app/specs/connectors
+
+# WHICH BUILD THIS IS, baked in rather than deduced at run time.
+#
+# The deploy pointer cannot answer this. CI pushes `v1.16.0` AND `latest`, and Dokploy tracks
+# `latest` deliberately -- so there is no version to set by hand in the panel, and no mismatch
+# between what CI built and what the panel points at to chase. The price of that choice is that
+# a running container has no way to name its own version, and that is exactly the gap which
+# made a 245-refusal run unexplainable: the run an hour earlier behaved differently, and
+# nothing recorded that a deploy had landed between the two.
+#
+# So the version travels INSIDE the artifact. `build-images.yml` passes the release tag it is
+# already given; a build cut from no release passes the commit instead. The default is empty,
+# and empty means "this build did not say" -- `ops.run.release_tag` stores that blank rather
+# than a guess, which is rule 2 applied to our own provenance.
+ARG UNDERCROFT_RELEASE=""
+ENV UNDERCROFT_RELEASE=${UNDERCROFT_RELEASE}
+
 EXPOSE 8081
 
 # Idle until called. Kestra invokes the HTTP verbs on a schedule; the worker starts no work
 # on its own, so a restart never re-runs a sync.
-CMD ["bun", "run", "apps/worker/src/server.ts"]
+#
+# `--smol` -- "use less memory, but run garbage collection more often" -- because THIS process
+# cannot see the budget it is held to. `deploy/compose/docker-compose.server.yml` gives the
+# worker a 3 GiB cgroup limit, and the host it shares has 23 GB; JSC sizes its heap against
+# what it can see, so it feels no pressure while the kernel is about to SIGKILL it. The limit
+# was 1 GiB when this flag was added and `--smol` alone did not hold it -- the number moved in
+# the same investigation, and the flag stayed because collecting more often is still right for
+# a process paced at three requests a second.
+#
+# The path that makes this bite is Gmail attachments, and it bites because of how Gmail ships
+# bytes: an attachment arrives base64-encoded INSIDE a JSON body, so a 10 MB file is ~13 MB of
+# base64 text, ~26 MB once held as UTF-16, plus the parsed object graph holding that string
+# again, before `decodeBase64Url` produces the 10 MB we wanted. Each one is a transient several
+# times the size of the file, and they are collectable -- the run dies holding garbage, not
+# data. Nothing here is buffered: on 2026-09-22 the worker was killed at message 3,199 of 7,786
+# with `records_read` still advancing, which is what a transient problem looks like and is not
+# what the streaming rewrite in ADR 0033 was for.
+#
+# It is a GC policy, not a fix for a leak. If a run still reaches the limit with this set, the
+# next question is the attachment path itself, not another flag.
+CMD ["bun", "--smol", "run", "apps/worker/src/server.ts"]

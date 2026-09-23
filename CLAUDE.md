@@ -31,24 +31,84 @@ that belongs in a user's dbt project, not here.
 ## Rules
 
 `.claude/rules/*.md` are path-scoped: each loads when a matching file is opened, which is
-the moment its rule actually bites. **Claude Code discovers these automatically. Other
-agents do not — if you are not Claude Code, read the ones matching the files you are
+the moment its rule actually bites — the `paths:` frontmatter decides which files match, and
+`money.md` has none, so it is always loaded. **Claude Code discovers these automatically.
+Other agents do not — if you are not Claude Code, read the ones matching the files you are
 about to touch.** That is the only reason this index exists.
 
 | Rule file         | Applies to                                                               | Governs                                                                                  |
 | ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | `money.md`        | everywhere                                                               | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
-| `raw-lake.md`     | `packages/lake/**`                                                       | create-only writes, idempotent by content, retention bounded and reported                |
+| `raw-lake.md`     | `packages/lake/**`, the worker's `land*.ts` / `loadToRaw.ts`             | create-only writes, idempotent by content, retention bounded and reported                |
 | `connectors.md`   | `packages/connector-runtime/**`, `specs/**`                              | the spec contract; a failure raises, never an empty stream                               |
 | `privileges.md`   | `packages/db/sql/**`                                                     | the role and grant model; why the BI role cannot read `raw`                              |
-| `tests.md`        | `**/*.test.ts`                                                           | real in-memory implementations over mocks, a guard needs two tests                       |
+| `tests.md`        | `**/*.test.ts(x)`, `**/testing.ts`                                       | real in-memory implementations over mocks, a guard needs two tests                       |
 | `state.md`        | `apps/ui/**`                                                             | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
-| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`                                | Vietnamese default, English second; no user-facing string written in place               |
+| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`, `apps/cli/src/**`             | Vietnamese default, English second; no user-facing string written in place               |
+| `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                   | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
 | `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                    | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
 | `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures                                  | no real customer data in any tracked file                                                |
 | `deployment.md`   | `deploy/**`, `flows/**`, deploy workflows                                | the Dokploy API is the only channel, every service declares a memory limit               |
-| `suppressions.md` | everywhere                                                               | where a lint decision goes; `biome-ignore-all` is banned outside a test file             |
+| `suppressions.md` | every source and test file, `biome.jsonc`, the rule files                | where a lint decision goes; `biome-ignore-all` is banned everywhere, tests included      |
 | `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
+
+## The assistant
+
+The interleaf (ADR 0029) is a chat panel that reaches the platform's own tRPC procedures. Two
+things about it are load-bearing enough to state here rather than only in the ADR:
+
+- **It acts only through `appRouter.createCaller(ctx)`**, so every role gate, the 404-not-403
+  boundary and the locale-worded refusals apply unchanged and cannot be re-implemented into
+  drift. A tool refuses itself.
+- **A mutation needs the reader's struck proof AND the injection gate's agreement.** The
+  assistant reads the raw lake, so a tool result carries text written by people outside this
+  system; the gate asks a separate model, about the reader's own words with tool results
+  excluded, whether they asked for this action. An unconfigured gate DENIES -- one that failed
+  open would not be a gate. `docs/runbook/assistant-setup.md` covers turning it on.
+- **An agent OUTSIDE the platform uses the same door, over HTTP.** `apps/cli` (ADR 0044) sends
+  every router procedure to `/trpc` with the person's own Better Auth session. It never uses a
+  DSN, a service token or an in-process caller, and `cli-no-backdoor` fails the gate on one.
+  Its guard against injected text is a per-profile `allowWrites` that only a person at a
+  terminal can set.
+
+## Agents
+
+`.claude/agents/*.md` are two project-local subagents. They own no rules of their own — both
+are procedures that send you back to the files above, because normative text with two owners
+drifts (the same reason `wiki/tracked.yaml` scopes the wiki to `docs/` and not to the rules).
+
+- **`context-lookup`** (Sonnet) — read-only. Searches the wiki, then confirms the answer at
+  the ADR, the rule file or the code, and reports with citations plus the gaps it could not
+  close. Use it before contradicting a constraint that looks arbitrary. Retrieval is search
+  and quotation rather than judgement, and it runs often, so it does not need the larger model.
+- **`undercroft-coder`** (Opus) — implements a change under the rules above and under
+  Ousterhout's _A Philosophy of Software Design_: deep modules, information hiding, complexity
+  pulled downward, design it twice. Where the book and this repo collide the repo wins, and
+  the three collisions that actually come up are written out at the end of its file. It gets
+  the larger model because the judgement it makes is the design, and a design mistake here
+  survives the review that a wrong quotation would not.
+
+## Codex
+
+Codex reads this file as `AGENTS.md`, and everything else it gets is a pointer into
+`.claude/`, never a copy. **Edit the `.claude/` source; the Codex side follows it.**
+
+| Codex reads                 | What it is                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `.agents/skills/<name>`     | a symlink to `.claude/skills/<name>`                                               |
+| `.codex/agents/<name>.toml` | the same `name` and `description`, instructions that say "read `.claude/agents/…`" |
+| `.codex/hooks.json`         | runs the same `.claude/hooks/block-wiki-edits.mjs` on `apply_patch`                |
+| `.claude/rules/*.md`        | nothing loads them for Codex; the index above is its instruction to read them      |
+
+A new skill or agent therefore needs its Codex pointer in the same change, and
+`scripts/agentConfig.test.ts` fails the gate until it has one. Codex loads `.codex/` only for
+a project it trusts.
+
+`skills/` at the root is a different thing: the skills this repo PUBLISHES for its users'
+agents, installed with `npx skills add muitneliss/undercroft --skill <name>`. They are not
+instructions for working on this repo, so they get no `.claude/` or Codex pointer.
+`skills/undercroft-cli` is the CLI's, and `scripts/skill.test.ts` keeps its pinned version in
+step with the release.
 
 ## Language and runtime
 
@@ -65,13 +125,13 @@ Every operation goes through [Task](https://taskfile.dev) — never a bare `bun 
 shell/docker command typed by hand. `task --list-all` enumerates everything that exists; the
 surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
 
-| Namespace | Lives in                | Covers                                                                    |
-| --------- | ----------------------- | ------------------------------------------------------------------------- |
-| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included    |
-| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, generated assets/schemas, local Docker images             |
-| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs      |
-| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand                             |
-| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one |
+| Namespace | Lives in                | Covers                                                                                                                                           |
+| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                         |
+| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), generated assets/schemas, local Docker images           |
+| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check` and `ci:skill-check` (network) are CI steps outside it |
+| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` attaches the CLI to a release                                                     |
+| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one                                                                        |
 
 Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —
 Task is the mandated way to invoke it, never a second place that redefines what it does. A
@@ -80,8 +140,9 @@ added. See `.claude/rules/tooling.md` and ADR 0023.
 
 ## The gate
 
-`task ci:verify` — typecheck, lint, format check, the SPA build, then the test suite (it
-wraps `bun run verify`: one definition of the gate, Task is just how you invoke it). It must
+`task ci:verify` — typecheck, lint, the ast-grep rules, format check, spec validation, the
+SPA build, then the test suite (it wraps `bun run verify`: one definition of the gate, Task
+is just how you invoke it). It must
 pass with **no Docker, no network and no credentials**. `task ci:itest` is the Docker-backed
 tier and is deliberately separate.
 
@@ -99,21 +160,40 @@ Some rules are the exception, because a machine _can_ see them, and each is pinn
 sides — fires, and stays quiet — so it cannot quietly stop matching:
 
 - `no-usestate` and the `layer-*` rules are **ast-grep** rules that fail `task ci:lint-rules`
-  (`bun run lint:rules`). Pinned by `scripts/layering.test.ts`.
+  (`bun run lint:rules`). The `layer-*` rules are pinned by `scripts/layering.test.ts`;
+  `no-usestate` (including its `apps/ui/src/components/ui/**` exemption, docs/adr/0025) is
+  pinned separately by `scripts/state.test.ts`.
 - `no-biome-ignore-all` is the same kind of rule and bans the lint bypass itself: no
   `biome-ignore-all` **anywhere**, test files included, no group-wide `lint:` /
   `lint/plugin:` spelling (both reach the money plugin), no `ast-grep-ignore` at all. Pinned
   by `scripts/suppressions.test.ts`, whose last two tests run Biome to prove the hole is real.
-- The money bans, the no-mock bans and the UI's type-only import of the server router are
-  **Biome GritQL plugins** in `.biome/plugins/`, which fail `task ci:lint` (`bun run lint`).
-  Pinned by `scripts/biomePlugins.test.ts`. They are plugins because Biome ships no
-  `no-restricted-syntax`; see ADR 0012.
+- `cli-no-backdoor` is an **ast-grep** rule that keeps `apps/cli/src` a caller of the
+  platform. It forbids importing the control plane, the database seam and its drivers,
+  crypto, the lake, the connector runtime or Better Auth by value, including a dynamic
+  `import()` and a re-export. A type-only import is allowed. The build script and the suite
+  are outside it, because they read the router and start the real server. Pinned by
+  `scripts/cliBoundary.test.ts`. ADR 0044.
+- The money bans, the no-mock bans, the UI's type-only import of the server router and the
+  UI's outright ban on a **model provider** are **Biome GritQL plugins** in `.biome/plugins/`,
+  which fail `task ci:lint` (`bun run lint`). Pinned by `scripts/biomePlugins.test.ts`. They
+  are plugins because Biome ships no `no-restricted-syntax`; see ADR 0012. The provider ban has
+  no type-only carve-out, unlike the router's: the browser needs the router's _shape_ and needs
+  nothing at all from `@ai-sdk/anthropic` or `@typesafe-ai/sdk`, which are constructed with an
+  API key (ADR 0029).
+- `row-field-alignment` is an **ast-grep** rule too, and the one layout defect a machine can
+  see: a `.field` written into a centred `.row` hangs the control beside it half a caption
+  above the box it acts on, and renders perfectly while doing it. It requires `row--field`,
+  whose `:has(> .field)` companion in `index.css` catches the field a linter cannot follow —
+  one from a child component or a `.map`. Pinned by `scripts/alignment.test.ts` (the rule,
+  and that the two selectors stay one block) and `apps/ui/src/layout.test.ts` (the computed
+  value, off the real stylesheet). ADR 0027.
 
 Where a rule can be made mechanical it is.
 
 **Biome is the linter and the formatter**, at `preset: "all"` — every rule it ships, at error
-severity. `domains` names the four frameworks actually in `package.json`; the other eleven are
-`none`, which costs no coverage because a Solid rule only ever fires on Solid code.
+severity. `domains` names the five that apply here — `react` and `tailwind`, both in
+`package.json`, plus `project`, `test` and `types`; the other ten are `none`, which costs no
+coverage because a Solid rule only ever fires on Solid code.
 
 Where a rule cannot apply here it is answered in `biome.jsonc`, with the reason beside it —
 repo-wide when it can never hold, and as a path entry naming the files when it is an

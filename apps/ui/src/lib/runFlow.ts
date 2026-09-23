@@ -39,23 +39,34 @@ function outcomeStage(t: TFunction, locale: Locale, run: RunDetail): RunStage {
   return {
     key: "outcome",
     kind: "outcome",
-    label: runMarkLabel(t, run.status),
+    // What the stage IS, not how it went. The status is already the mark beside it, and a
+    // plate printing "Succeeded" above "Succeeded" says one thing twice and the stage's own
+    // name not at all.
+    label: t("journal.flow.outcome"),
     mark,
     markLabel: runMarkLabel(t, run.status),
     detail:
       run.counts === null ? null : landedSummary(t, locale, run.counts.landed, run.counts.refused),
+    // The verdict is reached or it is not; there is no part of it to ink in.
+    gathered: null,
     href: null,
   };
 }
 
 /** The one stage of a transform/build run: there is no per-model live signal, only an outcome. */
-function modelsStage(t: TFunction, run: RunDetail): RunStage {
+function modelsStage(t: TFunction, run: RunDetail, events: readonly RunEventView[]): RunStage {
   const mark = markForStatus(run.status);
   let detail: string | null = null;
   if (run.status !== "running") {
     const models = run.steps.filter((step) => step.kind === "model").length;
     const tests = run.steps.filter((step) => step.kind === "test").length;
-    if (run.steps.length === 0) {
+    // "No models" is a claim about the CUSTOMER, not about this run, and no step of the run
+    // says it: a build whose `--select` matched nothing has an empty step list too. Only the
+    // worker can tell those apart -- it lists the tenant's models before it spawns dbt -- and
+    // it says so with `no_models`, a warning, which is the level the feed keeps when it
+    // truncates. Without that word the summary below answers instead, with the narrower truth
+    // that this run built nothing, rather than contradicting the sentence beside it.
+    if (run.steps.length === 0 && events.some((event) => event.event === "no_models")) {
       detail = t("journal.flow.modelsNone");
     } else if (run.testsFailed !== null && run.testsFailed > 0) {
       detail = t("journal.flow.modelsSummaryFailed", {
@@ -74,6 +85,9 @@ function modelsStage(t: TFunction, run: RunDetail): RunStage {
     mark,
     markLabel: runMarkLabel(t, run.status),
     detail,
+    // dbt reports when it has finished, not how far through it is: there is no fraction here
+    // that would not be invented.
+    gathered: null,
     href: null,
   };
 }
@@ -89,6 +103,8 @@ function lakeStage(t: TFunction, locale: Locale, run: RunDetail): RunStage {
     markLabel: runMarkLabel(t, run.status),
     detail:
       run.counts === null ? null : landedSummary(t, locale, run.counts.landed, run.counts.refused),
+    // An external caller posts batches under a run id; nothing states a total to measure against.
+    gathered: null,
     href: null,
   };
 }
@@ -110,6 +126,8 @@ function linkStage(
     mark: markForStatus(link.status),
     markLabel: runMarkLabel(t, link.status),
     detail: null,
+    // The other run's progress belongs to the other run's leaf.
+    gathered: null,
     href,
   };
 }
@@ -144,7 +162,7 @@ export function deriveRunFlow(
   } else if (run.kind === "lake-api") {
     stages.push(lakeStage(t, locale, run));
   } else {
-    stages.push(modelsStage(t, run));
+    stages.push(modelsStage(t, run, events));
   }
 
   if (run.childRun !== null) {

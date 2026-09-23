@@ -13,7 +13,7 @@
  * and a service that threw one would be callable from exactly one caller.
  */
 
-import type { CredentialInput } from "@undercroft/contracts";
+import { type CredentialInput, MULTI_ACCOUNT_KINDS, sourceKind } from "@undercroft/contracts";
 import type { ByteFetcher } from "@undercroft/core";
 import { ConnectorError, createByteFetcher, HttpError, raiseForByteStatus } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
@@ -58,7 +58,12 @@ export type StoreCredentialOutcome =
   /** The provider refused the credential; nothing was written. */
   | { ok: false; reason: "credential-rejected" }
   /** Validation was asked for and this source has no way to be probed; nothing was written. */
-  | { ok: false; reason: "cannot-validate" };
+  | { ok: false; reason: "cannot-validate" }
+  /**
+   * The credential is for a different account than the one this source is pinned to, or names
+   * no account where one is required; nothing was written. ADR 0043.
+   */
+  | { ok: false; reason: "account-mismatch" };
 
 /**
  * Record a connection and seal its credential.
@@ -102,16 +107,29 @@ export async function storeCredential(
     }
   }
 
+  // A source that may hold several accounts is keyed by which account it is, so a credential
+  // that names none cannot be pinned -- and unpinned, the next consent for anybody would be
+  // accepted into it. Refused here as well as in the control plane, because this is the one
+  // process that seals.
+  if (MULTI_ACCOUNT_KINDS.has(sourceKind(input.source)) && input.externalAccountId === "") {
+    return { ok: false, reason: "account-mismatch" };
+  }
+
   const run: Transactor =
     deps.transactor ?? (<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> => fn(deps.exec));
-  await run(async (tx) => {
-    await upsertConnection(tx, {
+  const pinned = await run(async (tx) => {
+    const recorded = await upsertConnection(tx, {
       tenantId: input.tenantId,
       source: input.source,
       status: "connected",
       externalAccountId: input.externalAccountId,
       scope: input.scope,
     });
+    // The connection belongs to another account, so nothing is sealed: the foreign key means
+    // there is no credential row to write without the connection row the guard refused.
+    if (!recorded) {
+      return false;
+    }
     await writeCredential(
       tx,
       input.tenantId,
@@ -126,7 +144,11 @@ export async function storeCredential(
         grantExpiresAt: grantExpiryFor(input.source),
       },
     );
+    return true;
   });
+  if (!pinned) {
+    return { ok: false, reason: "account-mismatch" };
+  }
 
   return { ok: true, expiresAt: input.credential.expiresAt };
 }
@@ -181,11 +203,12 @@ function listingFor(
   deps: BrowseDeps,
   input: { source: string; kind: "labels" | "organisations" },
 ): (() => Promise<(GmailLabel | XeroOrganisation)[]>) | null {
-  if (input.source === "gmail" && input.kind === "labels") {
+  const kind = sourceKind(input.source);
+  if (kind === "gmail" && input.kind === "labels") {
     const api = createGoogleApi(input.source, { fetcher: deps.fetcher, token: deps.token });
     return () => listLabels(api);
   }
-  if (input.source === "xero" && input.kind === "organisations") {
+  if (kind === "xero" && input.kind === "organisations") {
     return () => listOrganisations({ fetcher: deps.fetcher, token: deps.token });
   }
   return null;
@@ -279,7 +302,7 @@ async function revokeUpstream(
     raiseForByteStatus(request, response);
     return true;
   }
-  if (input.source === "xero" && deps.xero !== undefined) {
+  if (sourceKind(input.source) === "xero" && deps.xero !== undefined) {
     // The refresh token, not the access token: revoking it ends the grant and every
     // connection under it, which is what "disconnect" means to the customer.
     const credential = await readCredential(

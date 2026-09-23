@@ -17,7 +17,6 @@
 
 import { useTranslation } from "react-i18next";
 
-import type { Source } from "@/api/types.ts";
 import {
   CURATED_FILE_TYPES,
   describeFileType,
@@ -31,7 +30,8 @@ export function FileTypeChoice({
   source,
   fileTypes,
 }: {
-  source: Source;
+  /** Which connection the draft is for -- an account, so two mailboxes keep two drafts apart. */
+  source: string;
   fileTypes: readonly string[];
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -77,7 +77,7 @@ function CustomFileType({
   source,
   fileTypes,
 }: {
-  source: Source;
+  source: string;
   fileTypes: readonly string[];
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -130,7 +130,7 @@ function FileTypeEcho({
   source,
   fileTypes,
 }: {
-  source: Source;
+  source: string;
   fileTypes: readonly string[];
 }): React.JSX.Element {
   const { t } = useTranslation();

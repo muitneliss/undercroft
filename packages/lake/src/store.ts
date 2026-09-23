@@ -78,6 +78,12 @@ export interface JournalEntry {
   readonly sha256: string;
 }
 
+/** One observation: the payload bytes and the manifest that describes them. */
+export interface Observation {
+  readonly bytes: Uint8Array;
+  readonly manifest: Record<string, unknown>;
+}
+
 /**
  * Validate a journal stream: the `source/tenant/entity` prefix a loader pages by.
  *
@@ -127,12 +133,6 @@ export class LakeStore {
   // -- writing --------------------------------------------------------------
 
   /**
-   * Store `data` observed at `sourceKey`.
-   *
-   * Returns `unchanged` without writing if the newest observation at this key already has
-   * these bytes.
-   */
-  /**
    * Write the manifest, refusing to replace one.
    *
    * This is the create-only rule at its narrowest point: `raw-lake.md` says a store that can
@@ -164,6 +164,12 @@ export class LakeStore {
     );
   }
 
+  /**
+   * Store `data` observed at `sourceKey`.
+   *
+   * Returns `unchanged` without writing if the newest observation at this key already has
+   * these bytes.
+   */
   async put(
     sourceKey: string,
     data: Uint8Array,
@@ -266,32 +272,52 @@ export class LakeStore {
   }
 
   /**
-   * Return the payload bytes for an observation, verifying the digest.
+   * Read one observation, verifying the digest.
    *
    * A mismatch raises rather than returning suspect bytes: silent corruption flowing
    * downstream is far more expensive than a loud failure, and a hash of the wrong bytes is
    * still a valid hash, so our own re-hash is the only thing that catches a truncated read.
    */
-  async read(sourceKey: string, stamp?: string): Promise<Uint8Array> {
-    const key = LakeStore.validateSourceKey(sourceKey);
-    const stamps = await this.versions(key);
-    const chosen = stamp ?? stamps.at(-1);
-    if (chosen === undefined) {
-      throw new RangeError(`no observations at ${key}`);
-    }
-    const man = await this.manifest(key, chosen);
+  async #observationAt(key: string, stamp: string): Promise<Observation> {
+    const man = await this.manifest(key, stamp);
     const { blobKey } = man;
     if (typeof blobKey !== "string") {
-      throw new Error(`manifest for ${key}/${chosen} has no blobKey`);
+      throw new Error(`manifest for ${key}/${stamp} has no blobKey`);
     }
     const data = await this.#store.get(blobKey);
     const actual = await sha256Hex(data);
     if (actual !== man.sha256) {
       throw new ObjectExists(
-        `blob for ${key}/${chosen} is corrupt: manifest says ${String(man.sha256)}, bytes hash to ${actual}`,
+        `blob for ${key}/${stamp} is corrupt: manifest says ${String(man.sha256)}, bytes hash to ${actual}`,
       );
     }
-    return data;
+    return { bytes: data, manifest: man };
+  }
+
+  /**
+   * A named observation, bytes and manifest together.
+   *
+   * The loader wants both -- the payload to project, and `observedAt`, `runId` and
+   * `sourceUpdatedAt` from the manifest to stamp the row with -- and asking for them
+   * separately fetched the manifest twice per record. At 7,786 records that is the
+   * difference between a phase and a pause. The manifest is read once here and handed back
+   * whole, so the caller keeps the fields it needs without the store guessing which.
+   */
+  async observation(sourceKey: string, stamp: string): Promise<Observation> {
+    return await this.#observationAt(LakeStore.validateSourceKey(sourceKey), stamp);
+  }
+
+  /** The payload bytes of an observation; the newest one when no stamp is named. */
+  async read(sourceKey: string, stamp?: string): Promise<Uint8Array> {
+    const key = LakeStore.validateSourceKey(sourceKey);
+    // Only a caller that did NOT say which observation it wants needs this listing. The
+    // loader always knows -- the journal entry it is reading names the stamp -- and used to
+    // pay for the LIST anyway, once per record, for an answer it then discarded.
+    const chosen = stamp ?? (await this.versions(key)).at(-1);
+    if (chosen === undefined) {
+      throw new RangeError(`no observations at ${key}`);
+    }
+    return (await this.#observationAt(key, chosen)).bytes;
   }
 
   // -- journal --------------------------------------------------------------
@@ -299,11 +325,29 @@ export class LakeStore {
   /**
    * Journal entries for `stream` with a stamp strictly greater than `afterStamp`, oldest
    * first. This is the loader's incremental cursor: pass the last stamp it processed.
+   *
+   * **Yielded, not returned as an array.** A stream with a year of history has more entries
+   * than the process paging it should have to hold at once, and the loader batches anyway,
+   * so the array was a copy of the whole journal kept alive for nothing.
+   *
+   * **The scan starts at the cursor.** `keys.ts` puts the stamp ahead of the digest, and
+   * `core/stamp.ts` keeps stamps fixed-width and lexically ordered, so that a listing of
+   * this prefix sorts by observation time and a plain `StartAfter` over it IS this cursor.
+   * Both modules have said so since the key layout was designed; this is where it is
+   * finally used, and until it was, every call read the stream's entire history back to
+   * filter almost all of it out.
+   *
+   * The `stamp <= afterStamp` test below remains the authority on which entries are new.
+   * `startAfter` only narrows what is read -- the boundary key is a prefix of the entries
+   * AT the cursor, so the store still lists those and the filter is what drops them.
+   *
+   * Order comes from the key layout rather than from a sort: the stamp is the first segment
+   * after the stream, and `list` promises code-unit order.
    */
-  async journalSince(stream: string, afterStamp: string | null): Promise<JournalEntry[]> {
+  async *journalSince(stream: string, afterStamp: string | null): AsyncGenerator<JournalEntry> {
     const prefix = `_journal/${validateStream(stream)}/`;
-    const entries: JournalEntry[] = [];
-    for (const obj of await this.#store.list(prefix)) {
+    const from = afterStamp === null ? undefined : `${prefix}${afterStamp}`;
+    for (const obj of await this.#store.list(prefix, from)) {
       const stamp = obj.slice(prefix.length).split("/", 1)[0] ?? "";
       if (!isStamp(stamp)) {
         continue;
@@ -312,10 +356,8 @@ export class LakeStore {
         continue;
       }
       const bytes = await this.#store.get(obj);
-      entries.push(JSON.parse(decoder.decode(bytes)) as JournalEntry);
+      yield JSON.parse(decoder.decode(bytes)) as JournalEntry;
     }
-    entries.sort((a, b) => (a.stamp < b.stamp ? -1 : a.stamp > b.stamp ? 1 : 0));
-    return entries;
   }
 
   // -- retention ------------------------------------------------------------

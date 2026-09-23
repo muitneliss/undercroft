@@ -21,6 +21,9 @@ import {
   recordEntities,
   recordEvents,
   recordExternalBatch,
+  pruneRefusals,
+  reasonsFor,
+  recordRefusalReasons,
   recordRefusals,
   refusalsFor,
 } from "./runs.ts";
@@ -154,6 +157,7 @@ describe("what a run says while it is still running", () => {
         event: "work_listed",
         entity: "messages",
         detail: { total: 12_431 },
+        live: false,
       },
       {
         at: "2026-09-19T12:44:10.000Z",
@@ -161,6 +165,7 @@ describe("what a run says while it is still running", () => {
         event: "records_read",
         entity: "messages",
         detail: { read: 840, total: 12_431 },
+        live: true,
       },
     ]);
 
@@ -182,10 +187,106 @@ describe("what a run says while it is still running", () => {
         event: "records_read",
         entity: "messages",
         detail: { read: n },
+        live: false,
       })),
     );
 
     expect((await eventsFor(db, "r1", 2)).map((e) => e.detail.read)).toEqual([3, 4]);
+  });
+
+  it("a second reading of the same dial replaces the first rather than joining it", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    for (const read of [5, 840, 7786]) {
+      await recordEvents(db, "r1", [
+        {
+          at: `2026-09-19T12:4${String(read % 10)}:00.000Z`,
+          level: "info",
+          event: "records_read",
+          entity: "messages",
+          detail: { read, total: 7786 },
+          live: true,
+        },
+      ]);
+    }
+
+    const events = await eventsFor(db, "r1");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.detail).toEqual({ read: 7786, total: 7786 });
+    expect(events[0]?.live).toBe(true);
+  });
+
+  it("a gauge keeps the place it first appeared, so the ledger does not reshuffle under a reader", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    const gauge = {
+      at: "2026-09-19T12:00:00.000Z",
+      level: "info" as const,
+      event: "records_read",
+      entity: "messages",
+      detail: { read: 5 },
+      live: true,
+    };
+    await recordEvents(db, "r1", [gauge]);
+    await recordEvents(db, "r1", [
+      {
+        at: "2026-09-19T12:01:00.000Z",
+        level: "info",
+        event: "entity_done",
+        entity: "messages",
+        detail: { landed: 5 },
+        live: false,
+      },
+    ]);
+    await recordEvents(db, "r1", [
+      { ...gauge, at: "2026-09-19T12:02:00.000Z", detail: { read: 9 } },
+    ]);
+
+    const events = await eventsFor(db, "r1");
+    expect(events.map((e) => e.event)).toEqual(["records_read", "entity_done"]);
+    expect(events[0]?.detail).toEqual({ read: 9 });
+  });
+
+  it("two readings in one flush write the last one, which is the only one still true", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await recordEvents(
+      db,
+      "r1",
+      [11, 22, 33].map((read) => ({
+        at: "2026-09-19T12:00:00.000Z",
+        level: "info" as const,
+        event: "records_read",
+        entity: "messages",
+        detail: { read },
+        live: true,
+      })),
+    );
+
+    const events = await eventsFor(db, "r1");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.detail).toEqual({ read: 33 });
+  });
+
+  it("two entities read at once keep one gauge each", async () => {
+    await openRun(db, { id: "r1", ...PAIR });
+    await recordEvents(db, "r1", [
+      {
+        at: "2026-09-19T12:00:00.000Z",
+        level: "info",
+        event: "records_read",
+        entity: "messages",
+        detail: { read: 4 },
+        live: true,
+      },
+      {
+        at: "2026-09-19T12:00:00.000Z",
+        level: "info",
+        event: "records_read",
+        entity: "files",
+        detail: { read: 7 },
+        live: true,
+      },
+    ]);
+
+    expect((await eventsFor(db, "r1")).map((e) => e.entity)).toEqual(["messages", "files"]);
   });
 
   it("a run with no events has an empty feed rather than a refusal", async () => {
@@ -202,6 +303,7 @@ describe("what a run says while it is still running", () => {
         event: "no_models",
         entity: null,
         detail: {},
+        live: false,
       },
     ]);
     await db.asSuperuser((tx) => tx.exec("DELETE FROM ops.run WHERE id = 'r1'"));
@@ -328,5 +430,89 @@ describe("a failure is claimed for notice once", () => {
       tx.exec("UPDATE ops.run SET ended_at = now() - interval '2 days' WHERE id = 'old'"),
     );
     expect(await claimFailedRuns(db)).toEqual([]);
+  });
+});
+
+/**
+ * The split that keeps retention from reintroducing the defect it lives inside a fix for.
+ *
+ * Prune the per-record rows alone and a month-old run prints `refused: 245` over an empty
+ * table -- which is indistinguishable from the bug where the verb recorded nothing at all.
+ * The rollup is what stops that, so "it survives" is the promise, not an implementation
+ * detail. ADR 0039.
+ */
+describe("refusal retention", () => {
+  async function runThatRefused(id: string): Promise<void> {
+    await openRun(db, { id, ...PAIR });
+    await recordRefusals(db, id, [
+      { entity: "documents", sourceRecordId: "d1", reason: "image-too-small-to-read" },
+      { entity: "documents", sourceRecordId: "d2", reason: "image-too-small-to-read" },
+    ]);
+    await recordRefusalReasons(db, id, [
+      { entity: "documents", reason: "image-too-small-to-read", count: 2 },
+    ]);
+    await closeRun(db, id, { status: "ok", refused: 2 });
+  }
+
+  it("drops the per-record rows once they are older than the window", async () => {
+    await runThatRefused("r-old");
+    await db.asSuperuser((tx) =>
+      tx.exec("UPDATE ops.run_refusal SET at = now() - interval '30 days'"),
+    );
+
+    expect(await pruneRefusals(db, 7)).toBe(2);
+    expect(await refusalsFor(db, "r-old")).toEqual([]);
+  });
+
+  it("keeps the rollup that explains them, so the count still has an answer", async () => {
+    await runThatRefused("r-old");
+    await db.asSuperuser((tx) =>
+      tx.exec("UPDATE ops.run_refusal SET at = now() - interval '30 days'"),
+    );
+
+    await pruneRefusals(db, 7);
+
+    expect(await reasonsFor(db, "r-old")).toEqual([
+      { entity: "documents", reason: "image-too-small-to-read", count: 2 },
+    ]);
+  });
+
+  it("leaves a refusal inside the window alone", async () => {
+    // The quiet half of the guard: a prune that removed everything would pass the test above
+    // and lose a week of detail in production.
+    await runThatRefused("r-fresh");
+
+    expect(await pruneRefusals(db, 7)).toBe(0);
+    expect(await refusalsFor(db, "r-fresh")).toHaveLength(2);
+  });
+
+  it("counts a reason once per run, however many batches recorded it", async () => {
+    // Summed on conflict, like `recordEntities`: a verb that records in batches adds to its
+    // own tally rather than overwriting the half already counted.
+    await openRun(db, { id: "r-batched", ...PAIR });
+    await recordRefusalReasons(db, "r-batched", [
+      { entity: "documents", reason: "ocr-found-nothing", count: 3 },
+    ]);
+    await recordRefusalReasons(db, "r-batched", [
+      { entity: "documents", reason: "ocr-found-nothing", count: 4 },
+    ]);
+
+    expect(await reasonsFor(db, "r-batched")).toEqual([
+      { entity: "documents", reason: "ocr-found-nothing", count: 7 },
+    ]);
+  });
+});
+
+describe("a run says which build produced it", () => {
+  it("keeps the stamp it was opened with", async () => {
+    // Stamped at open rather than at close, so it is true even of a run that failed -- which
+    // is the run whose build a reader most wants to know. ADR 0039.
+    await openRun(db, { id: "r-stamped", ...PAIR, releaseTag: "v1.16.0" });
+    expect((await getRun(db, PAIR.tenantId, "r-stamped"))?.releaseTag).toBe("v1.16.0");
+  });
+
+  it("records a blank when the image did not say, rather than a guess", async () => {
+    await openRun(db, { id: "r-blank", ...PAIR });
+    expect((await getRun(db, PAIR.tenantId, "r-blank"))?.releaseTag).toBe("");
   });
 });

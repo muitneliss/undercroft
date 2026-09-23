@@ -44,6 +44,13 @@ export const en = {
     nothingToShow: "Nothing to show.",
   },
 
+  grip: {
+    railWidth: "Reference width",
+    paneHeight: "Query pane height",
+    editorHeight: "Editor height",
+    columnWidth: "Width of column {{name}}",
+  },
+
   signIn: {
     title: "Control plane",
     lead: "Connect your accounts and see what has been synced.",
@@ -169,6 +176,67 @@ export const en = {
     recordsHead: "Records",
     recordsCaption_one: "{{count, number}} stream",
     recordsCaption_other: "{{count, number}} streams",
+    indexCaption_one: "{{count, number}} stream landed",
+    indexCaption_other: "{{count, number}} streams landed",
+    colHolds: "Holds",
+    colHeld: "Count",
+    colAlso: "Also",
+    alsoTombstoned_one: "{{count, number}} deleted at source",
+    alsoTombstoned_other: "{{count, number}} deleted at source",
+    alsoBytesReadable_one:
+      "{{bytes}} in {{count, number}} distinct file · {{readable, number}}/{{total, number}} readable",
+    alsoBytesReadable_other:
+      "{{bytes}} in {{count, number}} distinct files · {{readable, number}}/{{total, number}} readable",
+    consoleHead: "SQL console",
+    consoleLead:
+      "Write one SELECT over the raw lake. It runs with the tenant's read-only authority: every write is refused, and you see only your own data.",
+    consoleSqlLabel: "Query",
+    consoleTables: "Tables you can query",
+    consoleRun: "Run query",
+    consoleChord: "Ctrl ↵",
+    consoleRunning: "Running…",
+    consoleIdle: "Nothing run yet. Write a query and press Run query, or Ctrl ↵.",
+    consoleQueued: "Waiting…",
+    consoleWaiting: "No answer to this statement yet.",
+    consoleStatement: "Statement {{n, number}}",
+    consoleFromSelection: "ran the selection",
+    consoleCapped: "Only the first {{ran, number}} statements ran; {{skipped, number}} did not.",
+    consoleFromStream: "written from {{stream}}",
+    consoleBack: "Raw lake",
+    consoleOpen: "Open the SQL console",
+    consoleAdminOnly:
+      "Only an administrator of this customer runs queries over the raw lake. The counts of what has landed are still yours to read on the Raw lake page.",
+    consoleRows_one: "{{count, number}} row",
+    consoleRows_other: "{{count, number}} rows",
+    consoleRowsFrom_one: "{{count, number}} row, from row {{from, number}}",
+    consoleRowsFrom_other: "{{count, number}} rows, from row {{from, number}}",
+    consoleRefused: "The query did not run",
+    consoleNewer: "Previous page",
+    consoleOlder: "Next page",
+    consoleNoOrderBy:
+      "This query names no ORDER BY, so paging it may return a row on two pages or on neither. Add an ORDER BY for a stable order.",
+    chooseFromIndex: "Choose a line above to read that stream's own rows.",
+    searchHead: "Search the lake",
+    searchLead:
+      "Search every landed record and the text of every document. Typing without Vietnamese tone marks still finds them: “hop dong” finds “Hợp đồng”.",
+    searchLabel: "Search for",
+    searchPlaceholder: "hop dong",
+    searchSubmit: "Search",
+    searching: "Searching…",
+    searchIdle: "Type something and press Search.",
+    searchNotLoaded: "The search could not be run. Try again in a few minutes.",
+    searchNothing: "No record or document matches “{{q}}”.",
+    searchHits_one: "{{count, number}} result",
+    searchHits_other: "{{count, number}} results",
+    searchMore: "There are more results. Add a word to narrow it down.",
+    searchColWhere: "Where",
+    searchColMatch: "What matched",
+    searchKindRecord: "Record",
+    searchKindDocument: "Document",
+    searchMethod: "read by {{method}}",
+    searchMethodUnknown: "nothing could be read from it",
+    searchTruncated: "This document was cut short when it was read, so the rest was not searched.",
+    searchOpenStream: "Open stream",
     colSource: "Source",
     colEntity: "Kind",
     colRecords: "Records",
@@ -272,6 +340,13 @@ export const en = {
     connectDeclined: "You cancelled at Google’s screen. Nothing was granted.",
     connectScopeDeclined:
       "A permission this source needs was unticked at Google’s screen, so nothing was saved. Connect again and leave every tick in place.",
+    connectAccountMismatch:
+      "The Google account that just gave consent is not the one this connection belongs to, or it is already connected under another entry. Nothing was changed. To connect a further account, use “Add another account”.",
+    connectAccountUnidentified:
+      "It could not be established which Google account gave consent, so nothing was saved. If this source already has an account connected, reconnect that account first, then try again.",
+    accountsLegend: "{{name}} accounts",
+    addAccount: "Add another account",
+    unnamedAccount: "Unnamed account",
     disconnectFailed: "This could not be disconnected.",
     disconnected: "Disconnected.",
     disconnectedNotRevoked:
@@ -314,7 +389,10 @@ export const en = {
     chooseOrganisation: "Choose an organisation before saving.",
     wholeMailboxHint:
       "Choosing no label means the whole mailbox. That is a deliberate choice, not an empty one.",
-    directChildrenOnly: "Only files directly inside a chosen folder are read. Sub-folders are not.",
+    includeSubFolders: "Read sub-folders too",
+    willReadOneLevel: "Only files directly inside a chosen folder are read. Sub-folders are not.",
+    willReadDeep:
+      "Every file inside a chosen folder is read, including the files in its sub-folders, however deep they go.",
     labelsHead: "Labels",
     labelsMine: "Your labels",
     labelsSystem: "Gmail’s own labels",
@@ -349,6 +427,12 @@ export const en = {
   scope: {
     driveFolders_one: "Matching files in {{count, number}} selected folder",
     driveFolders_other: "Matching files in {{count, number}} selected folders",
+    driveFoldersDeep_one:
+      "Matching files in {{count, number}} selected folder and every sub-folder inside it",
+    driveFoldersDeep_other:
+      "Matching files in {{count, number}} selected folders and every sub-folder inside them",
+    driveFiles_one: "{{count, number}} selected document",
+    driveFiles_other: "{{count, number}} selected documents",
     xeroContacts: "Contacts",
     xeroInvoices: "Invoices",
     xeroPayments: "Payments",
@@ -442,6 +526,63 @@ export const en = {
     colRecordId: "Record id",
     colReason: "Reason",
     colAt: "At",
+
+    rollupHead: "Why they were refused",
+    rollupCaption_one: "{{count, number}} reason",
+    rollupCaption_other: "{{count, number}} reasons",
+    colCount: "Count",
+    reasonRecords: "The files refused",
+    refusalsPrunedNote:
+      "The per-document detail was cleared after {{days}} days. The breakdown by reason is kept.",
+    reasonActs: "Needs attention",
+    reasonBenign: "Nothing to do",
+
+    backlogHead: "Queue",
+    backlogNote_one:
+      "{{count, number}} document was waiting when this run started. A run reads at most 500.",
+    backlogNote_other:
+      "{{count, number}} documents were waiting when this run started. A run reads at most 500.",
+    backlogEmpty: "Nothing was waiting to be read when this run started.",
+    release: "Build",
+
+    reason: {
+      imageTooSmall: "Image too small to be a document",
+      imageTooSmallNote: "Almost always a logo, a signature image or a footer icon. Nothing to do.",
+      ocrFoundNothing: "Read the whole page and found no text",
+      ocrFoundNothingNote: "Usually a blank page or an image with no writing on it. Nothing to do.",
+      noBytes: "The document has no content",
+      noBytesNote: "The source returned an empty file. Nothing to do.",
+      legacyDoc: "Legacy .doc format, not read",
+      legacyDocNote:
+        "Reading .doc needs LibreOffice in the image — a considered decision, not a fault.",
+      legacyXls: "Legacy .xls format, not read",
+      legacyXlsNote: "Same as .doc: it would take LibreOffice in the image to read one.",
+      unsupportedType: "No reader for this file type yet",
+      unsupportedTypeNote:
+        "The document is offered again by itself once a reader can open it. Nothing to do.",
+      pdftotextFailed: "pdftotext failed on this file",
+      pdftotextFailedNote: "The PDF may be corrupt. Worth a look if it keeps happening.",
+      pdftoppmFailed: "Could not render the PDF page to an image for OCR",
+      pdftoppmFailedNote: "The PDF may be corrupt. Worth a look if it keeps happening.",
+      tesseractFailed: "tesseract failed on this file",
+      tesseractFailedNote: "The image may be corrupt. Worth a look if it keeps happening.",
+      ocrOutOfTime: "Ran out of time before the first page was read",
+      ocrOutOfTimeNote:
+        "The document is very heavy, or the worker is loaded. It is read again on a later run.",
+      xlsxUnreadable: "Could not open the workbook",
+      xlsxUnreadableNote: "The .xlsx file may be corrupt.",
+      docxUnreadable: "Could not open the Word document",
+      docxUnreadableNote: "The .docx file may be corrupt.",
+      lakeUnreadable: "The lake did not return the file's bytes",
+      lakeUnreadableNote:
+        "The catalogue says the bytes are there and the lake disagrees. Check this now.",
+      extractorMissing: "The {{program}} program is missing from the worker",
+      extractorMissingNote:
+        "Every file that needs {{program}} stays refused until the image has it back.",
+      unknown: "No explanation for this reason code",
+      unknownNote: "The interface has no words for this code yet. The raw code is beside it.",
+    },
+
     stepsHead: "dbt steps",
     colStep: "Step",
     colStatus: "Status",
@@ -449,19 +590,34 @@ export const en = {
     colTook: "Took",
     nothingRecorded: "This run recorded nothing further.",
 
+    gauge: {
+      head: "Reading now",
+      share: "{{share}}%",
+      noTotal: "total not yet known",
+      reading: "{{entity}}: read {{figure}}",
+    },
+
     feedHead: "What happened",
+    feedCount_one: "{{count}} milestone",
+    feedCount_other: "{{count}} milestones",
+    feedEmpty: "This run has recorded no milestone yet.",
     colWhen2: "At",
     colWhat2: "What",
     event: {
       runOpened: "Started.",
       entityStarted: "Reading {{entity}}.",
       workListed: "{{total}} {{entity}} to read.",
+      workListedSkipping: "{{total}} {{entity}} listed, {{skipped}} already held and not read.",
       recordsRead: "Read {{read}} {{entity}}.",
       recordsReadOf: "Read {{read}} of {{total}} {{entity}}.",
       entityDone:
         "Finished {{entity}}: {{landed}} landed, {{created}} new, {{changed}} changed, {{refused}} refused.",
+      entityDoneSkipping:
+        "Finished {{entity}}: {{landed}} landed, {{created}} new, {{changed}} changed, {{refused}} refused, {{skipped}} already held and not read.",
       picksListed:
         "Listed {{folders}} picked folders and found {{matched}} matching files. Sub-folders are not read.",
+      picksListedDeep:
+        "Listed {{listed}} folders under {{folders}} picked and found {{matched}} matching files.",
       documentsLanded:
         "Documents: {{created}} new, {{unchanged}} unchanged, {{skipped}} skipped, {{failed}} failed.",
       noModels: "This customer has no models yet, so there was nothing to build.",
@@ -479,10 +635,13 @@ export const en = {
       modelsNone: "No models",
       modelsSummary: "{{models}} models · {{tests}} tests",
       modelsSummaryFailed: "{{models}} models · {{tests}} tests · {{testsFailed}} failed",
+      outcome: "Outcome",
       entityDone: "Done",
       entityActive: "In progress",
       entityInterrupted: "Stopped here",
-      entityLandedRefused: "{{landed}} · {{refused}} refused",
+      entityLanded_one: "{{landed}} record",
+      entityLanded_other: "{{landed}} records",
+      entityLandedRefused: "{{landed}} records · {{refused}} refused",
       chainedFrom: "Chained from the {{source}} ingest",
       chainedTo: "Chained into a model build",
     },
@@ -612,6 +771,7 @@ export const en = {
     total: "Total",
     pivotNeeds:
       "A pivot needs a label column and a value column; Split by gives the table its columns.",
+    totalsPartial: "More rows exist; these totals cover only the first {{count, number}} shown.",
   },
 
   reports: {
@@ -778,5 +938,51 @@ export const en = {
     gmailReads: "Message headers and the attachment types you allow, from the mailbox you connect.",
     driveReads:
       "The documents inside the folders you select, in the file types you allow. No other folder is read.",
+  },
+
+  assistant: {
+    open: "Open the assistant",
+    close: "Close the assistant",
+    title: "Assistant",
+    lead: "Ask about this customer's data, or ask the assistant to do something for you.",
+    emptyTitle: "Nothing asked yet",
+    emptyBody:
+      "Try: “Did this month's invoices land?”, “Why was this row refused?”, or “How are the sources doing?”.",
+    askLabel: "Your question",
+    askPlaceholder: "Ask about this customer…",
+    send: "Send",
+    sending: "Answering…",
+    stop: "Stop",
+    clear: "Clear the conversation",
+    working: "The assistant is answering",
+    figure: "FIG. {{number}}",
+    foundNothing: "Nothing found",
+    figureRows_other: "{{count, number}} rows",
+    notKept: "The result is not kept. Ask again if you need to see it.",
+    notKeptFailed: "That call failed. The error text is not kept.",
+    ranTool: "Looked up: {{tool}}",
+    failedTitle: "Not answered",
+    failedBody: "The assistant could not answer that. Nothing was changed.",
+    retry: "Try again",
+    proof: {
+      head: "Confirm",
+      strike: "Go ahead",
+      discard: "Discard",
+      confirmLabel: "Type it back to confirm",
+      confirmHint: "Type “{{expected}}” to enable the confirm button.",
+      revokeGrant:
+        "Disconnect {{source}} for {{tenantId}} and revoke the stored credential. Ingestion stops until somebody reconnects it.",
+      withdrawIngestKey:
+        "Revoke ingest key {{id}} for {{tenantId}}. Anything posting with it is refused immediately.",
+      revokeInvitation:
+        "Withdraw invitation {{id}} for {{tenantId}}. That address can no longer sign in.",
+      deleteModel: "Delete the model “{{name}}” for {{tenantId}}. Its SQL goes with it.",
+      struck: "Discarded",
+      runIngestNow: "Run an ingest of {{source}} for {{tenantId}} now.",
+      setCadence: "Change {{source}}'s ingest cadence to “{{cadence}}”.",
+      invitePerson: "Invite {{email}} to {{tenantId}} as {{role}}.",
+    },
+    unconfiguredTitle: "The assistant is not ready",
+    unconfiguredBody: "This deployment has no assistant configured. Tell whoever administers it.",
   },
 };

@@ -7,6 +7,16 @@ tasks:
     cmds:
       - bun run build:ui
 
+  cli:
+    desc: Build the CLI into apps/cli/dist/undercroft.mjs -- one Node ES module, the router's manifest baked in.
+    cmds:
+      - bun run build:cli
+
+  cli-pack:
+    desc: Build the CLI and pack it as apps/cli/dist/undercroft-cli-X.Y.Z.tgz, the file each release attaches.
+    cmds:
+      - bun run build:cli-pack
+
   spec-schema:
     desc: Emit the connector spec's JSON Schema to specs/schema/connector.v1.json.
     cmds:

@@ -64,6 +64,21 @@ export const vi = {
     nothingToShow: "Không có gì để hiển thị.",
   },
 
+  /**
+   * The edges a reader drags, one key per surface.
+   *
+   * Each names the MEASURE it moves and the thing it moves it on, because a screen reader
+   * hears the label with no picture of where the edge is -- "chiều rộng" on its own would be
+   * four identical separators on one screen. A column's name is a SQL identifier, so it is
+   * interpolated and never translated.
+   */
+  grip: {
+    railWidth: "Chiều rộng bảng tham chiếu",
+    paneHeight: "Chiều cao ô truy vấn",
+    editorHeight: "Chiều cao ô soạn thảo",
+    columnWidth: "Chiều rộng cột {{name}}",
+  },
+
   signIn: {
     title: "Bảng điều khiển",
     lead: "Kết nối các tài khoản của bạn và xem những gì đã được đồng bộ.",
@@ -204,6 +219,109 @@ export const vi = {
     goToSources: "Đến Nguồn dữ liệu",
     recordsHead: "Bản ghi",
     recordsCaption_other: "{{count, number}} luồng dữ liệu",
+    indexCaption_other: "{{count, number}} luồng đã về",
+    colHolds: "Chứa",
+    colHeld: "Số lượng",
+    colAlso: "Ghi chú",
+    alsoTombstoned_other: "{{count, number}} đã xoá ở nguồn",
+    /**
+     * `{{bytes}}` is what the lake stores, which is the distinct blobs and not the rows --
+     * `{{count}}` of them, against the `{{total}}` catalogue rows in the column beside this
+     * one. The gap between the two is the same attachment quoted down a reply chain.
+     */
+    alsoBytesReadable_other:
+      "{{bytes}} trong {{count, number}} tệp riêng biệt · đọc được {{readable, number}}/{{total, number}}",
+    consoleHead: "Truy vấn SQL",
+    consoleLead:
+      "Viết một câu SELECT trên hồ dữ liệu thô. Chạy bằng quyền đọc của tenant: mọi thao tác ghi đều bị từ chối, và bạn chỉ thấy dữ liệu của chính mình.",
+    consoleSqlLabel: "Câu truy vấn",
+    consoleTables: "Bảng có thể truy vấn",
+    consoleRun: "Chạy truy vấn",
+    consoleChord: "Ctrl ↵",
+    consoleRunning: "Đang chạy…",
+    consoleIdle: "Chưa chạy. Viết câu lệnh rồi nhấn Chạy truy vấn, hoặc Ctrl ↵.",
+    /**
+     * Said on the head of a pane whose statement has not had its turn yet.
+     *
+     * The statements of one press run one at a time -- two queries at once collide at the
+     * login the worker mints for them -- and a pane that simply sat empty in the meantime
+     * would read as one that had answered nothing.
+     */
+    consoleQueued: "Đang chờ…",
+    /** The body of that same pane, where its rows will be. */
+    consoleWaiting: "Chưa có kết quả cho câu lệnh này.",
+    /**
+     * Which statement a pane answers, printed only when there is more than one. A lone pane
+     * needs no number, and "Câu lệnh 1" over the only answer on screen is furniture.
+     */
+    consoleStatement: "Câu lệnh {{n, number}}",
+    /** Said while what is on screen answers a selection rather than the whole buffer. */
+    consoleFromSelection: "chạy phần đang chọn",
+    /**
+     * What was NOT run, when the buffer held more statements than one press may run. Said
+     * rather than dropped in silence: a reader who does not know a statement was skipped
+     * reads its absence as an answer with nothing in it.
+     */
+    consoleCapped: "Chỉ chạy {{ran, number}} câu lệnh đầu; còn {{skipped, number}} câu chưa chạy.",
+    /**
+     * Said only while the editor still holds the query that was generated, so it never
+     * claims anything about a query the reader has since edited.
+     *
+     * A phrase rather than the two sentences it used to be: it now sits in the workbench's
+     * own head, beside the run plate, where a sentence telling the reader they may edit the
+     * text would be an instruction about the editor they are already looking at.
+     */
+    consoleFromStream: "tạo sẵn từ luồng {{stream}}",
+    /** The way back to the index, printed on the plate that goes there. */
+    consoleBack: "Hồ dữ liệu",
+    /**
+     * The door on the lake's index. It names the surface rather than the act, because what
+     * the reader is choosing is a place to go and not a query to run.
+     */
+    consoleOpen: "Mở bảng truy vấn",
+    /**
+     * Said to a reader who followed a pasted address they may not open. It names who can do
+     * this rather than only saying that they cannot, so the next step is obvious.
+     */
+    consoleAdminOnly:
+      "Chỉ quản trị viên của khách hàng này mới chạy được truy vấn trên hồ dữ liệu thô. Bạn vẫn xem được số lượng đã về ở trang Hồ dữ liệu.",
+    consoleRows_other: "{{count, number}} dòng",
+    consoleRowsFrom_other: "{{count, number}} dòng, từ dòng {{from, number}}",
+    consoleRefused: "Truy vấn không chạy được",
+    consoleNewer: "Trang trước",
+    consoleOlder: "Trang sau",
+    consoleNoOrderBy:
+      "Câu truy vấn này không có ORDER BY, nên khi lật trang Postgres có thể trả một dòng ở hai trang hoặc bỏ sót. Thêm ORDER BY để thứ tự ổn định.",
+    chooseFromIndex: "Chọn một dòng ở bảng trên để xem từng bản ghi của luồng đó.",
+    searchHead: "Tìm trong hồ dữ liệu",
+    /**
+     * Says the one thing a Vietnamese operator most needs to know before typing: that they do
+     * not have to put the tones in. Nothing else about the feature is worth a sentence here --
+     * a search box explains itself.
+     */
+    searchLead:
+      "Tìm trong mọi bản ghi và nội dung tài liệu đã về. Gõ không dấu vẫn ra kết quả có dấu: “hop dong” tìm được “Hợp đồng”.",
+    searchLabel: "Từ khoá",
+    searchPlaceholder: "hop dong",
+    searchSubmit: "Tìm",
+    searching: "Đang tìm…",
+    searchIdle: "Nhập từ khoá rồi nhấn Tìm.",
+    searchNotLoaded: "Không tìm được. Hãy thử lại sau ít phút.",
+    /** Absence, worded as absence. The lake is not broken; this word is not in it. */
+    searchNothing: "Không có bản ghi hay tài liệu nào khớp với “{{q}}”.",
+    searchHits_other: "{{count, number}} kết quả",
+    /** Said only when the page was cut, so a reader knows to narrow rather than to conclude. */
+    searchMore: "Còn kết quả khác. Hãy thêm từ khoá để thu hẹp.",
+    searchColWhere: "Ở đâu",
+    searchColMatch: "Nội dung khớp",
+    searchKindRecord: "Bản ghi",
+    searchKindDocument: "Tài liệu",
+    /** How the text was read. An OCR'd scan is a likelier place for a near-miss than a text layer. */
+    searchMethod: "đọc bằng {{method}}",
+    searchMethodUnknown: "chưa đọc được nội dung",
+    /** The extractor hit its ceiling: what was searched is less than what the document says. */
+    searchTruncated: "Tài liệu bị cắt bớt khi đọc, nên phần sau chưa được tìm.",
+    searchOpenStream: "Mở luồng",
     colSource: "Nguồn",
     colEntity: "Loại",
     colRecords: "Bản ghi",
@@ -307,6 +425,21 @@ export const vi = {
      */
     connectScopeDeclined:
       "Ở màn hình của Google, quyền cần thiết đã bị bỏ tích nên kết nối chưa được lưu. Hãy kết nối lại và giữ nguyên mọi dấu tích.",
+    /**
+     * A reconnect finished by a different Google account than the connection belongs to, or
+     * by an account already connected under another entry (ADR 0043). The likeliest intent is
+     * a second mailbox, so the sentence names the plate that does that.
+     */
+    connectAccountMismatch:
+      "Tài khoản Google vừa đồng ý không phải tài khoản của kết nối này, hoặc tài khoản đó đã được kết nối ở một mục khác. Không có gì bị thay đổi. Nếu bạn muốn kết nối thêm một tài khoản khác, hãy dùng nút “Thêm tài khoản khác”.",
+    /** Google did not say who consented, or the first account never recorded who it is. */
+    connectAccountUnidentified:
+      "Không xác định được tài khoản Google nào vừa đồng ý nên chưa có gì được lưu. Nếu nguồn này đã có một tài khoản được kết nối, hãy kết nối lại tài khoản đó trước rồi thử lại.",
+    /** The legend over one kind's accounts: "Tài khoản Gmail". */
+    accountsLegend: "Tài khoản {{name}}",
+    addAccount: "Thêm tài khoản khác",
+    /** An account whose address was never recorded. Never shown as an empty radio. */
+    unnamedAccount: "Tài khoản chưa rõ tên",
     disconnectFailed: "Chưa ngắt kết nối được.",
     disconnected: "Đã ngắt kết nối.",
     disconnectedNotRevoked:
@@ -359,8 +492,12 @@ export const vi = {
     chooseOrganisation: "Hãy chọn một tổ chức trước khi lưu.",
     wholeMailboxHint:
       "Không chọn nhãn nào nghĩa là đọc toàn bộ hòm thư. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
-    directChildrenOnly:
+    /** Drive's depth choice, and the consequence said beneath it as the tick changes. */
+    includeSubFolders: "Đọc cả thư mục con",
+    willReadOneLevel:
       "Chỉ đọc tệp nằm trực tiếp trong thư mục đã chọn. Thư mục con không được đọc.",
+    willReadDeep:
+      "Đọc mọi tệp trong thư mục đã chọn, kể cả tệp nằm trong các thư mục con, sâu đến đâu cũng đọc.",
     labelsHead: "Nhãn",
     /** The runs of the index. Gmail reports who owns a label; nothing here infers it. */
     labelsMine: "Nhãn của bạn",
@@ -396,6 +533,10 @@ export const vi = {
 
   scope: {
     driveFolders_other: "Tệp phù hợp trong {{count, number}} thư mục đã chọn",
+    /** The same reading, to the bottom of the tree. The card must tell the two apart. */
+    driveFoldersDeep_other:
+      "Tệp phù hợp trong {{count, number}} thư mục đã chọn và mọi thư mục con",
+    driveFiles_other: "{{count, number}} tài liệu đã chọn",
     gmailWholeMailbox: "Tiêu đề thư và tệp đính kèm phù hợp, toàn bộ hòm thư",
     gmailLabels: "Tiêu đề thư và tệp đính kèm phù hợp trong {{labels}}",
     /** Xero's entities, by the spec's ids. The ids are recorded; these are the words. */
@@ -488,6 +629,75 @@ export const vi = {
     colRecordId: "Mã bản ghi",
     colReason: "Lý do",
     colAt: "Lúc",
+
+    /**
+     * Bảng tổng hợp lý do — thứ trả lời câu "245 bị từ chối là những gì".
+     *
+     * Con số vẫn nằm trên sơ đồ như trước, nhưng lý do thì trước đây không hiện ở đâu cả, nên
+     * muốn biết phải SSH vào máy chủ. Bảng này giữ mãi, kể cả sau khi chi tiết từng tài liệu
+     * đã bị dọn. Xem ADR 0039.
+     */
+    rollupHead: "Vì sao bị từ chối",
+    rollupCaption_other: "{{count, number}} lý do",
+    colCount: "Số lượng",
+    reasonRecords: "Xem các tệp bị từ chối",
+    refusalsPrunedNote:
+      "Chi tiết từng tài liệu đã được dọn sau {{days}} ngày. Bảng tổng hợp theo lý do vẫn còn nguyên.",
+    reasonActs: "Cần xử lý",
+    reasonBenign: "Không cần xử lý",
+
+    /** Hàng đợi tại lúc lần chạy này lấy phần việc của nó — không phải hàng đợi hôm nay. */
+    backlogHead: "Hàng đợi",
+    backlogNote_other:
+      "Còn {{count, number}} tài liệu chờ đọc khi lần chạy này bắt đầu. Mỗi lần chạy đọc tối đa 500 tài liệu.",
+    backlogEmpty: "Không còn tài liệu nào chờ đọc khi lần chạy này bắt đầu.",
+    release: "Bản dựng",
+
+    /**
+     * Lời cho từng mã lý do mà worker ghi lại.
+     *
+     * Mã gốc vẫn được in bằng phông mono bên cạnh câu chữ: người đọc cần hiểu trang này mà
+     * không phải học thuộc bộ mã, còn người báo lỗi cho lập trình viên thì cần đúng mã.
+     */
+    reason: {
+      imageTooSmall: "Ảnh quá nhỏ để là một tài liệu",
+      imageTooSmallNote:
+        "Hầu hết là logo, ảnh chữ ký hoặc biểu tượng ở chân thư. Không cần làm gì.",
+      ocrFoundNothing: "Đã đọc hết trang nhưng không thấy chữ nào",
+      ocrFoundNothingNote: "Thường là trang trắng hoặc ảnh không chứa chữ. Không cần làm gì.",
+      noBytes: "Tài liệu không có nội dung",
+      noBytesNote: "Nguồn trả về một tệp rỗng. Không cần làm gì.",
+      legacyDoc: "Định dạng .doc cũ, không đọc",
+      legacyDocNote:
+        "Đọc .doc cần thêm LibreOffice vào image — một quyết định đã cân nhắc, không phải lỗi.",
+      legacyXls: "Định dạng .xls cũ, không đọc",
+      legacyXlsNote: "Cùng lý do với .doc: phải thêm LibreOffice vào image mới đọc được.",
+      unsupportedType: "Chưa có trình đọc cho loại tệp này",
+      unsupportedTypeNote:
+        "Tài liệu sẽ tự được đọc lại khi có trình đọc phù hợp. Không cần làm gì.",
+      pdftotextFailed: "pdftotext chạy lỗi trên tệp này",
+      pdftotextFailedNote: "Tệp PDF có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
+      pdftoppmFailed: "Không dựng được trang PDF thành ảnh để OCR",
+      pdftoppmFailedNote: "Tệp PDF có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
+      tesseractFailed: "tesseract chạy lỗi trên tệp này",
+      tesseractFailedNote: "Ảnh có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
+      ocrOutOfTime: "Hết thời gian trước khi đọc xong trang đầu",
+      ocrOutOfTimeNote:
+        "Tài liệu quá nặng, hoặc worker đang quá tải. Tài liệu sẽ được đọc lại ở lần chạy sau.",
+      xlsxUnreadable: "Không mở được bảng tính",
+      xlsxUnreadableNote: "Tệp .xlsx có thể hỏng.",
+      docxUnreadable: "Không mở được tài liệu Word",
+      docxUnreadableNote: "Tệp .docx có thể hỏng.",
+      lakeUnreadable: "Hồ dữ liệu không trả về nội dung tệp",
+      lakeUnreadableNote:
+        "Danh mục nói tệp có, hồ dữ liệu nói không. Đây là sai lệch cần kiểm tra ngay.",
+      extractorMissing: "Thiếu chương trình {{program}} trong worker",
+      extractorMissingNote:
+        "Mọi tệp cần {{program}} sẽ còn bị từ chối cho tới khi image có lại chương trình này.",
+      unknown: "Mã lý do chưa có diễn giải",
+      unknownNote: "Giao diện chưa đặt lời cho mã này. Mã gốc ở ngay bên cạnh.",
+    },
+
     stepsHead: "Các bước dbt",
     colStep: "Bước",
     colStatus: "Trạng thái",
@@ -495,7 +705,22 @@ export const vi = {
     colTook: "Mất",
     nothingRecorded: "Lần chạy này chưa ghi nhận gì thêm.",
 
+    /**
+     * Dải đồng hồ đo phía trên sổ diễn biến: mỗi loại dữ liệu đang đọc một dòng, cập nhật tại
+     * chỗ. Không dòng nào ở đây là "việc đã xảy ra" — chúng là số đang chạy, nên chúng không
+     * nằm trong sổ. ADR 0032.
+     */
+    gauge: {
+      head: "Đang đọc",
+      share: "{{share}}%",
+      noTotal: "chưa biết tổng số",
+      reading: "{{entity}}: đã đọc {{figure}}",
+    },
+
     feedHead: "Diễn biến",
+    feedCount_one: "{{count}} mốc",
+    feedCount_other: "{{count}} mốc",
+    feedEmpty: "Lần chạy này chưa ghi mốc nào.",
     colWhen2: "Lúc",
     colWhat2: "Việc",
     /**
@@ -511,12 +736,17 @@ export const vi = {
       runOpened: "Bắt đầu.",
       entityStarted: "Bắt đầu đọc {{entity}}.",
       workListed: "Cần đọc {{total}} {{entity}}.",
+      workListedSkipping: "Có {{total}} {{entity}}, {{skipped}} đã có sẵn nên không đọc lại.",
       recordsRead: "Đã đọc {{read}} {{entity}}.",
       recordsReadOf: "Đã đọc {{read}}/{{total}} {{entity}}.",
       entityDone:
         "Xong {{entity}}: {{landed}} về, {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối.",
+      entityDoneSkipping:
+        "Xong {{entity}}: {{landed}} về, {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối, {{skipped}} đã có sẵn nên không đọc lại.",
       picksListed:
         "Đã xem {{folders}} thư mục được chọn, thấy {{matched}} tệp phù hợp. Thư mục con không được đọc.",
+      picksListedDeep:
+        "Đã xem {{listed}} thư mục nằm trong {{folders}} thư mục được chọn, thấy {{matched}} tệp phù hợp.",
       documentsLanded:
         "Tài liệu: {{created}} mới, {{unchanged}} không đổi, {{skipped}} bỏ qua, {{failed}} lỗi.",
       noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
@@ -536,10 +766,16 @@ export const vi = {
       modelsNone: "Chưa có mô hình",
       modelsSummary: "{{models}} mô hình · {{tests}} kiểm tra",
       modelsSummaryFailed: "{{models}} mô hình · {{tests}} kiểm tra · {{testsFailed}} không đạt",
+      outcome: "Kết quả",
       entityDone: "Xong",
       entityActive: "Đang xử lý",
       entityInterrupted: "Dừng ở đây",
-      entityLandedRefused: "{{landed}} · {{refused}} bị từ chối",
+      /* The unit matters on the rail: a datum hangs under the line on its own, where a
+       bare "0" is a stray digit rather than a count of anything. `landed` carries the
+       digits already grouped for the reader, or the em dash when there is no count at
+       all; `count` is there only to choose the plural form English needs. */
+      entityLanded_other: "{{landed}} bản ghi",
+      entityLandedRefused: "{{landed}} bản ghi · {{refused}} bị từ chối",
       chainedFrom: "Nối từ lần đồng bộ {{source}}",
       chainedTo: "Nối sang việc dựng mô hình",
     },
@@ -664,6 +900,7 @@ export const vi = {
       "Đường biên quốc gia: Natural Earth (thuộc phạm vi công cộng), qua gói world-atlas.",
     total: "Tổng",
     pivotNeeds: "Bảng xoay cần một cột nhãn và một cột giá trị; cột Tách theo là các cột của bảng.",
+    totalsPartial: "Còn nhiều dòng hơn; các tổng này chỉ tính trên {{count, number}} dòng đầu.",
   },
 
   reports: {
@@ -838,5 +1075,82 @@ export const vi = {
     gmailReads: "Tiêu đề thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
     driveReads:
       "Tài liệu trong các thư mục bạn chọn, theo loại tệp bạn cho phép. Không thư mục nào khác được đọc.",
+  },
+
+  /**
+   * The interleaf: the assistant bound into the book as the reader's own sheet.
+   *
+   * `trợ lý` rather than a borrowed "assistant": the operators read Vietnamese first, and a
+   * panel whose own name is in English is the screen-half-in-English this catalogue exists to
+   * prevent. The printer's fist has no Vietnamese name and needs none -- it is a mark, and its
+   * accessible name is the sentence below rather than a transliteration of a glyph.
+   */
+  assistant: {
+    open: "Mở trợ lý",
+    close: "Đóng trợ lý",
+    title: "Trợ lý",
+    lead: "Hỏi về dữ liệu của khách hàng này, hoặc nhờ trợ lý làm giúp một việc.",
+    /** The empty state teaches the panel rather than saying it is empty. */
+    emptyTitle: "Chưa có câu hỏi nào",
+    emptyBody:
+      "Hãy thử: “Hoá đơn tháng này về chưa?”, “Vì sao dòng này bị từ chối?”, hoặc “Các nguồn đang chạy thế nào?”.",
+    /** The composer. A label, not a placeholder standing in for one. */
+    askLabel: "Câu hỏi của bạn",
+    askPlaceholder: "Hỏi về khách hàng này…",
+    send: "Gửi",
+    sending: "Đang trả lời…",
+    stop: "Dừng",
+    clear: "Xoá cuộc trò chuyện",
+    /** Read to a screen reader while the answer is still being set. */
+    working: "Trợ lý đang trả lời",
+    /**
+     * A figure the assistant set, numbered as a printed manual numbers one.
+     *
+     * The caption is an honesty device as much as a decoration: the reader can always tell
+     * what the assistant set apart from what the application drew.
+     */
+    figure: "HÌNH {{number}}",
+    /** A result that was shown live but is not kept. See `transcript.ts` on why. */
+    foundNothing: "Không tìm thấy gì",
+    figureRows_other: "{{count, number}} dòng",
+    notKept: "Kết quả không được lưu lại. Hãy hỏi lại nếu bạn cần xem.",
+    notKeptFailed: "Lần gọi này đã thất bại. Nội dung lỗi không được lưu lại.",
+    /** The assistant read something; says which tool, never what it returned. */
+    ranTool: "Đã tra: {{tool}}",
+    /** A whole turn failed. Vermilion belongs to the errata slip, and this is one. */
+    failedTitle: "Chưa trả lời được",
+    failedBody: "Trợ lý chưa trả lời được câu hỏi này. Không có gì bị thay đổi.",
+    retry: "Thử lại",
+    /** No model configured. The reader cannot fix it; the sentence points at a person. */
+    /**
+     * A PROOF: the printer's trial impression, pulled before the press run.
+     *
+     * One sentence per action, interpolated with the real arguments, and it comes from HERE
+     * rather than from the model -- asking the thing that proposed an action to also word the
+     * confirmation of it is how a reader ends up striking a sentence that does not describe
+     * what will happen.
+     */
+    proof: {
+      head: "Xác nhận",
+      strike: "Đồng ý",
+      discard: "Bỏ",
+      confirmLabel: "Nhập lại để xác nhận",
+      confirmHint: "Hãy nhập “{{expected}}” để bật nút đồng ý.",
+      revokeGrant:
+        "Ngắt kết nối nguồn {{source}} của khách hàng {{tenantId}} và thu hồi quyền truy cập đã lưu. Việc đồng bộ sẽ dừng cho tới khi có người kết nối lại.",
+      withdrawIngestKey:
+        "Thu hồi khoá nạp dữ liệu {{id}} của khách hàng {{tenantId}}. Mọi nơi đang dùng khoá này sẽ bị từ chối ngay.",
+      revokeInvitation:
+        "Thu hồi lời mời {{id}} của khách hàng {{tenantId}}. Địa chỉ đó sẽ không đăng nhập được nữa.",
+      deleteModel:
+        "Xoá mô hình “{{name}}” của khách hàng {{tenantId}}. Câu SQL của mô hình sẽ mất theo.",
+      struck: "Đã bỏ",
+      runIngestNow: "Chạy đồng bộ nguồn {{source}} cho khách hàng {{tenantId}} ngay bây giờ.",
+      setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",
+      invitePerson: "Mời {{email}} vào khách hàng {{tenantId}} với vai trò {{role}}.",
+    },
+    unconfiguredTitle: "Trợ lý chưa sẵn sàng",
+    unconfiguredBody:
+      "Bản triển khai này chưa được cấu hình trợ lý. Hãy báo người quản trị hệ thống.",
   },
 };

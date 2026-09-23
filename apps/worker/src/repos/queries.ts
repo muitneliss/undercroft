@@ -35,23 +35,51 @@ function trimSql(sql: string): string {
  * Always rolled back: nothing a read-only transaction did needs keeping, and a ROLLBACK
  * after a failed statement is what returns the connection to a usable state.
  */
-export async function runFramed(
+export function runFramed(
   exec: SqlExecutor,
-  frame: { schema: string; sql: string; limit: number; timeoutMs: number },
+  frame: { schema: string; sql: string; limit: number; offset?: number; timeoutMs: number },
 ): Promise<Framed> {
-  await exec.query("BEGIN");
-  try {
-    await exec.query("SET TRANSACTION READ ONLY");
-    await exec.query("SELECT set_config('statement_timeout', $1, true)", [String(frame.timeoutMs)]);
-    await exec.query("SELECT set_config('search_path', $1, true)", [frame.schema]);
+  return inReadOnlyTransaction(exec, frame, async () => {
     // The limit is an integer we validated, spliced rather than bound so that the author's
     // own `$1`, if any, is not silently satisfied by it. The empty parameter list keeps the
     // extended protocol, which refuses a second statement.
     const result = await exec.query<Record<string, unknown>>(
-      `SELECT * FROM (\n${trimSql(frame.sql)}\n) AS _q LIMIT ${String(frame.limit + 1)}`,
+      // Both numbers are integers this module validated, spliced rather than bound so the
+      // author's own `$1`, if any, is not silently satisfied by one of them. The empty
+      // parameter list keeps the extended protocol, which refuses a second statement.
+      `SELECT * FROM (\n${trimSql(frame.sql)}\n) AS _q LIMIT ${String(frame.limit + 1)} OFFSET ${String(Math.trunc(frame.offset ?? 0))}`,
       [],
     );
     return { rows: result.rows, fields: result.fields ?? [] };
+  });
+}
+
+/**
+ * The frame itself, without an opinion about what runs inside it.
+ *
+ * Shared rather than copied because it is a SECURITY boundary and not a convenience: a second
+ * spelling of it somewhere else is a second place for `SET TRANSACTION READ ONLY` to be left
+ * out, and the symptom of leaving it out is a tenant's dbt login -- which CAN create in its own
+ * two schemas -- running whatever it was handed. `searchLake` is the other caller; it passes no
+ * `schema` because it names its tables in full, and an unqualified name in OUR SQL resolving
+ * somewhere unexpected is not a hazard this repo has.
+ *
+ * Always rolled back: nothing a read-only transaction did needs keeping, and a ROLLBACK after a
+ * failed statement is what returns the connection to a usable state.
+ */
+export async function inReadOnlyTransaction<T>(
+  exec: SqlExecutor,
+  frame: { schema?: string; timeoutMs: number },
+  fn: () => Promise<T>,
+): Promise<T> {
+  await exec.query("BEGIN");
+  try {
+    await exec.query("SET TRANSACTION READ ONLY");
+    await exec.query("SELECT set_config('statement_timeout', $1, true)", [String(frame.timeoutMs)]);
+    if (frame.schema !== undefined) {
+      await exec.query("SELECT set_config('search_path', $1, true)", [frame.schema]);
+    }
+    return await fn();
   } finally {
     await exec.query("ROLLBACK");
   }

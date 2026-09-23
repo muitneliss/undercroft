@@ -7,10 +7,22 @@
 
 import { describe, expect, test as it } from "bun:test";
 
-import { MACROS, parseRunResults, PASSWORD_VAR, renderProject } from "./dbtProject.ts";
+import {
+  gmailLettersSql,
+  MACROS,
+  parseRunResults,
+  PASSWORD_VAR,
+  renderProject,
+} from "./dbtProject.ts";
 
 /** A `password:` line whose value is a literal rather than a template or a quoted template. */
 const LITERAL_PASSWORD = /password: [^"{]/u;
+
+/** Any Jinja delimiter: an expression, a statement or a comment. */
+const JINJA = /\{[{%#]/u;
+
+/** A file that is one Jinja comment and nothing else. */
+const ONLY_A_COMMENT = /^\{#[^#]*#\}\n$/u;
 
 const PROJECT = renderProject({
   slug: "case_0042",
@@ -50,6 +62,17 @@ describe("renderProject", () => {
     for (const macro of MACROS) {
       expect(PROJECT[`macros/${macro.name}.sql`]).toBe(macro.sql);
     }
+  });
+
+  it("ships gmail_letters as exactly the SQL the offline suite runs, over dbt's source", () => {
+    // gmailLetters.test.ts runs gmailLettersSql("raw.records") on PGlite. That proves the
+    // shipped macro only while the macro is that same text with the relation swapped and a
+    // docstring before it -- no Jinja of its own that the suite would never execute.
+    const wrapped = `{% macro gmail_letters() %}\n${gmailLettersSql("{{ source('undercroft', 'records') }}")}\n{% endmacro %}\n`;
+    const file = PROJECT["macros/gmail_letters.sql"] ?? "";
+    expect(file.endsWith(wrapped)).toBe(true);
+    expect(file.slice(0, file.length - wrapped.length)).toMatch(ONLY_A_COMMENT);
+    expect(gmailLettersSql("raw.records")).not.toMatch(JINJA);
   });
 });
 

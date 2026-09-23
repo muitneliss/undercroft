@@ -168,7 +168,11 @@ describe("models.build", () => {
     const viewer = await seedMember("v@example.test", "viewer");
     const reference = await caller(viewer, "v@example.test").models.reference({ tenantId: TENANT });
     expect(reference.sourcesYml).toContain("name: undercroft");
-    expect(reference.macros.map((m) => m.name)).toEqual(["parse_amount", "generate_schema_name"]);
+    expect(reference.macros.map((m) => m.name)).toEqual([
+      "parse_amount",
+      "generate_schema_name",
+      "gmail_letters",
+    ]);
   });
 });
 

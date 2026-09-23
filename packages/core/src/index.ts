@@ -10,6 +10,14 @@ export {
   InMemoryEmailSender,
   UnsendableEmail,
 } from "./email.ts";
+export {
+  type EmailBlock,
+  type EmailLeaf,
+  postEmailLeaf,
+  type RenderedEmail,
+  renderEmailLeaf,
+  type ScheduleRow,
+} from "./emailTemplate.ts";
 export { ConnectorError, HttpError, QuotaExhausted, UndercroftError } from "./errors.ts";
 export { getPath, getStringPath, parsePath } from "./getPath.ts";
 export {

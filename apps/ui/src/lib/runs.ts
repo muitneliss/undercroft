@@ -13,6 +13,7 @@
  * printing a time that already went by.
  */
 
+import { parseSourceInstance } from "@undercroft/contracts/sources";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
@@ -30,21 +31,51 @@ import { formatDateTime } from "@/lib/when.ts";
 export type LastRun = NonNullable<Connection["lastRun"]>;
 export type RunStatus = LastRun["status"];
 
-/** A vendor's own name where we have one; the source's id where we do not. */
-export function sourceLabel(source: string): string {
-  return isSource(source) ? SOURCE_LABEL[source] : source;
+/** What `sourceLabel` needs to know about a tenant's connections to tell two accounts apart. */
+export type AccountName = Pick<Connection, "source" | "kind" | "externalAccountLabel">;
+
+/**
+ * A vendor's own name where we have one; the source's id where we do not -- and, where a
+ * tenant holds more than one account of that vendor, which account.
+ *
+ * `Gmail` for a tenant with one mailbox, `Gmail · ops@acme.test` for one with two, because two
+ * lines both reading "Gmail · messages" are a ledger nobody can reconcile. The address comes
+ * from `accounts` (the tenant's `connections.list`), since a source names its account only by
+ * an opaque digest. A further account whose address is not known -- no list was passed, or the
+ * connection is gone -- is qualified by that digest rather than printed as the bare vendor:
+ * the digest is ugly, but it is true, and the bare name would claim it was the first account.
+ * Label and address are two facts set side by side, not a sentence, so they are joined with
+ * the same ` · ` the lake's lines use rather than worded through the catalogue.
+ */
+export function sourceLabel(source: string, accounts: readonly AccountName[] = []): string {
+  const instance = parseSourceInstance(source);
+  if (instance === null || !isSource(instance.kind)) {
+    return source;
+  }
+  const name = SOURCE_LABEL[instance.kind];
+  const siblings = accounts.filter((account) => account.kind === instance.kind);
+  if (instance.account === null && siblings.length < 2) {
+    return name;
+  }
+  const address = siblings.find((account) => account.source === source)?.externalAccountLabel;
+  const qualifier = address === undefined || address === "" ? instance.account : address;
+  return qualifier === null ? name : `${name} · ${qualifier}`;
 }
 
 /**
  * What a run did, as one line of the journal: the source and what it read, or that it was
  * a build of the models. Entity names stay as the source calls them -- `deals`, `contacts`
  * -- because they are identifiers a reader will meet again in the raw lake.
+ *
+ * `accounts` is the tenant's connections, so a run of the second mailbox says which mailbox;
+ * see `sourceLabel`.
  */
 export function describeRun(
   t: TFunction,
   run: Pick<RunView, "kind" | "source" | "entities">,
+  accounts: readonly AccountName[] = [],
 ): string {
-  const source = run.source === null ? "" : sourceLabel(run.source);
+  const source = run.source === null ? "" : sourceLabel(run.source, accounts);
   switch (run.kind) {
     case "ingest":
       return run.entities.length === 0 ? source : `${source} · ${run.entities.join(", ")}`;
@@ -92,6 +123,77 @@ function counted(detail: Record<string, unknown>, key: string, locale: Locale): 
 }
 
 /**
+ * What a Drive run looked in, and how far down.
+ *
+ * `listed` exceeds `folders` exactly when the walk went below the picked folders, and the
+ * shallow sentence ends "Sub-folders are not read" -- which would be a false statement about
+ * a run that read them. BOTH counts must be numbers for the deep sentence: a run recorded
+ * before `listed` existed carries no such key, and reading its absence as "deeper" would put
+ * a sentence about sub-folders on a run that never read one. Rule 2 -- no evidence is not a
+ * yes, in either direction.
+ */
+function picksSentence(
+  t: TFunction,
+  n: (key: string) => string,
+  detail: Record<string, unknown>,
+): string {
+  const { listed, folders } = detail;
+  const deeper = typeof listed === "number" && typeof folders === "number" && listed > folders;
+
+  return deeper
+    ? t("journal.event.picksListedDeep", {
+        listed: n("listed"),
+        folders: n("folders"),
+        matched: n("matched"),
+      })
+    : t("journal.event.picksListed", { folders: n("folders"), matched: n("matched") });
+}
+
+/**
+ * What the run has to read, and how much of it it already held.
+ *
+ * Two sentences rather than one with a count appended, and for a mechanical reason as well
+ * as a linguistic one: `counted` renders an absent number as MISSING, so a single sentence
+ * carrying `{{skipped}}` would print MISSING on every run from a source that does not skip.
+ * Same shape as `recordsRead` / `recordsReadOf`.
+ */
+function listedSentence(
+  t: TFunction,
+  n: (key: string) => string,
+  entity: string,
+  detail: Record<string, unknown>,
+): string {
+  return detail.skipped === undefined
+    ? t("journal.event.workListed", { entity, total: n("total") })
+    : t("journal.event.workListedSkipping", { entity, total: n("total"), skipped: n("skipped") });
+}
+
+/**
+ * What one entity's read finished with.
+ *
+ * `skipped` is the count that makes a STEADY-STATE run readable: in steady state an ingest
+ * lands nothing, and `landed: 0` on its own reads the same whether the mailbox is empty,
+ * the credential is broken, or nothing has changed since yesterday.
+ */
+function doneSentence(
+  t: TFunction,
+  n: (key: string) => string,
+  entity: string,
+  detail: Record<string, unknown>,
+): string {
+  const counts = {
+    entity,
+    landed: n("landed"),
+    created: n("created"),
+    changed: n("changed"),
+    refused: n("refused"),
+  };
+  return detail.skipped === undefined
+    ? t("journal.event.entityDone", counts)
+    : t("journal.event.entityDoneSkipping", { ...counts, skipped: n("skipped") });
+}
+
+/**
  * One line of a run's feed, as a sentence.
  *
  * The worker writes an enumerated verb and a handful of counts; the wording is entirely
@@ -119,21 +221,15 @@ export function eventSentence(
     case "entity_started":
       return t("journal.event.entityStarted", { entity });
     case "work_listed":
-      return t("journal.event.workListed", { entity, total: n("total") });
+      return listedSentence(t, n, entity, event.detail);
     case "records_read":
       return event.detail.total === undefined
         ? t("journal.event.recordsRead", { entity, read: n("read") })
         : t("journal.event.recordsReadOf", { entity, read: n("read"), total: n("total") });
     case "entity_done":
-      return t("journal.event.entityDone", {
-        entity,
-        landed: n("landed"),
-        created: n("created"),
-        changed: n("changed"),
-        refused: n("refused"),
-      });
+      return doneSentence(t, n, entity, event.detail);
     case "picks_listed":
-      return t("journal.event.picksListed", { folders: n("folders"), matched: n("matched") });
+      return picksSentence(t, n, event.detail);
     case "documents_landed":
       return t("journal.event.documentsLanded", {
         created: n("created"),

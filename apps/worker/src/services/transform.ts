@@ -95,7 +95,12 @@ export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 /** How many trailing lines of dbt's output are kept. Enough to name the fault; never a row. */
 const TAIL_LINES = 20;
 
-async function realSpawn(
+/**
+ * How this repo runs a child process. Exported so the extract verb's composition root wires
+ * the SAME one rather than a second implementation -- a second spawn is a second place for a
+ * timeout to be forgotten.
+ */
+export async function realSpawn(
   cmd: readonly string[],
   options: SpawnOptions,
 ): Promise<{ exitCode: number; output: string }> {

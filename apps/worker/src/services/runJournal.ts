@@ -17,11 +17,20 @@
  * losing a sync over a full disk in `ops` would be the tail wagging the dog.
  *
  * **It must not become the thing it is describing.** A progress line every message would be
- * tens of thousands of rows per run; `progress` is therefore coalesced to one per event per
- * entity per {@link PROGRESS_INTERVAL_MS} off an injected `Clock`, and the whole run is
- * capped at {@link MAX_EVENTS_PER_RUN}. Past the cap only `warn` and `error` get through --
- * and the truncation itself is recorded, because a store that prunes without saying so is
- * indistinguishable from one that lost the rows (`.claude/rules/raw-lake.md`).
+ * tens of thousands of rows per run, so the two kinds of line are bounded differently -- and
+ * the difference is what they ARE, not how important they are.
+ *
+ * A MILESTONE is a thing that happened, at an instant. It appends, it is never rewritten, and
+ * a run is capped at {@link MAX_EVENTS_PER_RUN} of them; past the cap only `warn` and `error`
+ * get through, and the truncation itself is recorded, because a store that prunes without
+ * saying so is indistinguishable from one that lost the rows (`.claude/rules/raw-lake.md`).
+ *
+ * A PROGRESS line is a reading of a dial, and the next reading replaces it rather than adding
+ * to it. It is coalesced to one per event per entity per {@link PROGRESS_INTERVAL_MS} off an
+ * injected `Clock`, and then written to ONE row per `(run, event, entity)`, rewritten in place
+ * (`210_run_event_live.sql`). So it is exempt from the cap: it cannot grow the table by running
+ * longer, and capping it was what froze an hours-long ingest at whatever figure its
+ * two-hundredth line happened to carry, for the remaining three hours of the run. ADR 0032.
  *
  * **It must not carry a payload.** `detail` is counts and opaque provider ids. A filename, a
  * mail subject or a folder name belongs in the lake manifest, which dbt and BI cannot reach;
@@ -68,12 +77,21 @@ export interface RunJournalDeps {
   readonly clock?: Clock;
 }
 
-/** How often one entity's progress is worth a row. A run is minutes; this is not. */
-export const PROGRESS_INTERVAL_MS = 2000;
+/**
+ * How often one entity's dial is worth re-reading.
+ *
+ * A second, not the two it was: a reading now overwrites its own row rather than appending, so
+ * the cost of reading more often is one UPDATE of one row instead of a row per reading, and the
+ * interval no longer has to trade liveness against the size of the table. The leaf polls at the
+ * same interval -- reading faster than the worker writes would buy nothing.
+ */
+export const PROGRESS_INTERVAL_MS = 1000;
 
 /**
- * How many events one run may record. A feed is evidence, not a log file: 200 lines is more
- * than any run's milestones and far less than its messages.
+ * How many MILESTONES one run may record. A feed is evidence, not a log file: 200 lines is more
+ * than any run has milestones.
+ *
+ * Progress lines are not counted, because they cannot accumulate -- see the docstring above.
  */
 export const MAX_EVENTS_PER_RUN = 200;
 
@@ -142,14 +160,39 @@ function detailOf(fields: Omit<EventFields, "entity">): Record<string, unknown> 
   return detail;
 }
 
+/**
+ * Whether this dial is worth reading again yet: one reading per event per entity per
+ * {@link PROGRESS_INTERVAL_MS}, off the injected clock.
+ *
+ * A reading refused here is lost silently, and that is the one place silence is right: the
+ * one it would have replaced said the same thing about the same entity a moment ago, and the
+ * next will say it again. Nothing is lost, which is what distinguishes this from pruning.
+ *
+ * Its own function because it is the rule that makes a reading a reading, and because a map
+ * of last-seen instants is a thing to own rather than a variable to keep in view.
+ */
+function createPacing(clock: Clock): (event: string, entity: string | undefined) => boolean {
+  const lastRead = new Map<string, number>();
+  return (event, entity): boolean => {
+    const key = `${event}:${entity ?? ""}`;
+    const nowMs = clock.now().getTime();
+    const last = lastRead.get(key);
+    if (last !== undefined && nowMs - last < PROGRESS_INTERVAL_MS) {
+      return false;
+    }
+    lastRead.set(key, nowMs);
+    return true;
+  };
+}
+
 export function createRunJournal(deps: RunJournalDeps): RunJournal {
   const clock = deps.clock ?? systemClock;
   const buffer = createEventBuffer(deps);
-  const lastProgressAt = new Map<string, number>();
+  const due = createPacing(clock);
   let accepted = 0;
   let truncationNoted = false;
 
-  function push(level: RunEvent["level"], event: string, fields: EventFields): void {
+  function push(level: RunEvent["level"], event: string, fields: EventFields, live = false): void {
     const { entity, ...rest } = fields;
     buffer.push({
       at: clock.now().toISOString(),
@@ -157,6 +200,7 @@ export function createRunJournal(deps: RunJournalDeps): RunJournal {
       event,
       entity: entity ?? null,
       detail: detailOf(rest),
+      live,
     });
   }
 
@@ -166,6 +210,9 @@ export function createRunJournal(deps: RunJournalDeps): RunJournal {
    * A milestone below the cap always does. Above it, only a `warn` or an `error` does --
    * and the first thing refused buys one `events_truncated` row so the feed says it is
    * short rather than looking complete.
+   *
+   * A progress line never reaches here; it owns one row and cannot accumulate, so there is
+   * nothing for a cap to protect the table from.
    */
   function admit(level: RunEvent["level"], event: string): boolean {
     if (accepted < MAX_EVENTS_PER_RUN || level !== "info") {
@@ -193,21 +240,20 @@ export function createRunJournal(deps: RunJournalDeps): RunJournal {
     error: (event, fields): void => note("error", event, fields),
 
     /**
-     * A progress line, if the last one for this entity is old enough.
+     * A reading of this entity's dial, if the last one is old enough ({@link createPacing}).
      *
-     * Dropped silently, and that is the one place silence is right: the line it replaces
-     * said the same thing about the same entity a moment ago, and the next one will say it
-     * again. Nothing is lost, which is what distinguishes this from pruning.
+     * It does not go through `admit`, and that is the whole of the fix this file carries: a
+     * reading overwrites its own row (`210_run_event_live.sql`), so however long a run goes
+     * on it owns one row per entity and cannot crowd out a milestone. Counting it against a
+     * cap bought nothing and cost the counter -- an ingest over a mailbox stopped saying
+     * anything new seven minutes into three hours of work. ADR 0032.
      */
     progress(event, fields = {}): void {
-      const key = `${event}:${fields.entity ?? ""}`;
-      const nowMs = clock.now().getTime();
-      const last = lastProgressAt.get(key);
-      if (last !== undefined && nowMs - last < PROGRESS_INTERVAL_MS) {
+      if (!due(event, fields.entity)) {
         return;
       }
-      lastProgressAt.set(key, nowMs);
-      note("info", event, fields);
+      push("info", event, fields, true);
+      deps.log?.write("info", event, fields);
     },
 
     flush: buffer.flush,

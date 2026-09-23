@@ -19,10 +19,11 @@ import { registerConnectionRoutes } from "./connections.ts";
 import { authenticate } from "../services/auth.ts";
 import type { XeroClient } from "../services/connections.ts";
 import type { Refresher, Transactor } from "../services/runTypes.ts";
+import { startExtractJob } from "../services/extract/job.ts";
 import { startIngestJob, startTransformJob } from "../services/jobs.ts";
 import { landRecords } from "../services/land.ts";
 import { claimExternal, recordExternal } from "../services/ledger.ts";
-import type { TransformDeps } from "../services/transform.ts";
+import type { Spawn, TransformDeps } from "../services/transform.ts";
 import { failureOf } from "./errors.ts";
 
 export interface LakeApiDeps {
@@ -37,6 +38,8 @@ export interface LakeApiDeps {
   /** Directory of connector specs, for the ingest verb. Absent disables /v1/runs/ingest. */
   readonly specsDir?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /** Which build opens the runs this API starts. See `RunDeps.releaseTag`. */
+  readonly releaseTag?: string;
   /**
    * Per-source token refreshers. A source with no entry cannot refresh -- correct for a
    * HubSpot private app, which has nothing to refresh with.
@@ -56,6 +59,11 @@ export interface LakeApiDeps {
    * tenant, and the spawn seam. Absent disables the transform, build and dq verbs.
    */
   readonly dbt?: Omit<TransformDeps, "exec">;
+  /**
+   * How a document's bytes are handed to a reader -- poppler and tesseract out of the worker
+   * image. Absent disables the extract verb, exactly as an absent `dbt` disables transform.
+   */
+  readonly extractSpawn?: Spawn;
   /** The Xero client, for revoking a grant. Absent means a disconnect only forgets our copy. */
   readonly xero?: XeroClient;
 }
@@ -217,6 +225,46 @@ function registerLakeRecordsRoute(app: Hono, deps: LakeApiDeps): void {
 }
 
 /**
+ * The extract verb: read what the landed documents say.
+ *
+ * Its own registrar because `registerRunRoutes` is at its line ceiling, and because this
+ * verb takes no `chain` and no spec directory -- the shape differs enough that folding it in
+ * would need a comment explaining which arguments do not apply to which route.
+ */
+function registerExtractRoute(app: Hono, deps: LakeApiDeps): void {
+  app.post("/v1/runs/extract", async (c) => {
+    if (deps.extractSpawn === undefined) {
+      return c.json(
+        { code: "invalid_request", message: "extract is not configured", details: [] },
+        400,
+      );
+    }
+    if (!serviceTokenOk(deps, c)) {
+      return c.json(UNAUTHENTICATED, 401);
+    }
+    const raw = (await c.req.json().catch(() => ({}))) as {
+      source?: unknown;
+      tenantId?: unknown;
+      trigger?: unknown;
+      triggeredBy?: unknown;
+    };
+    if (typeof raw.source !== "string" || typeof raw.tenantId !== "string") {
+      return c.json(
+        { code: "invalid_request", message: "source and tenantId are required", details: [] },
+        400,
+      );
+    }
+    const started = await startExtractJob(jobDepsFor(deps, raw.source, deps.specsDir ?? ""), {
+      source: raw.source,
+      tenantId: raw.tenantId,
+      trigger: raw.trigger === "manual" ? "manual" : "schedule",
+      triggeredBy: typeof raw.triggeredBy === "string" ? raw.triggeredBy : "",
+    });
+    return c.json(started, 202);
+  });
+}
+
+/**
  * The trigger allowlist. Kestra and the control plane can start exactly these verbs, with
  * the service token, and nothing else.
  */
@@ -253,6 +301,8 @@ function registerRunRoutes(app: Hono, deps: LakeApiDeps): void {
     });
     return c.json(started, 202);
   });
+
+  registerExtractRoute(app, deps);
 
   app.post("/v1/runs/transform", async (c) => {
     if (deps.dbt === undefined) {

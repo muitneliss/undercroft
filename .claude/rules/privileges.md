@@ -1,6 +1,6 @@
 ---
 description: The database role and grant model
-globs: ["packages/db/sql/**/*.sql"]
+paths: ["packages/db/sql/**/*.sql"]
 ---
 
 # Privileges: who can read what, and why BI cannot read raw
@@ -10,6 +10,15 @@ grant model a security boundary, not configuration.
 
 ## NEVER
 
+- **NEVER add a tenant grant anywhere but the list in
+  `packages/db/sql/repeatable/010_provision_tenant.sql`.** That list is the whole of what a
+  tenant's dbt login may read, and because the file is repeatable, editing it is the whole
+  change: the next deploy replaces the function in every database and re-provisions the
+  customers already there. A grant written into a numbered migration instead reaches the
+  tenants standing there that day and no tenant created afterwards — which is how production
+  came to hold one customer who could read neither `raw.document_text` nor its own search
+  index while two others were correct, with the offline gate green throughout, because every
+  test database is fresh and so always gets the newest function. ADR 0036.
 - **NEVER write an `ALTER DEFAULT PRIVILEGES` by hand.** Every one in the database is issued
   by `ops.provision_tenant`, scoped `FOR ROLE <the tenant's own dbt role> IN SCHEMA <that
 role's own analytics schema>`, plus the one legacy row `FOR ROLE undercroft_dbt IN SCHEMA

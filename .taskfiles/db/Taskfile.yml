@@ -14,3 +14,17 @@ tasks:
     desc: "Invite a user. Usage: UNDERCROFT_POSTGRES_DSN=... task db:invite -- you@x.test --tenant CASE-0001 --role admin [--create-tenant]"
     cmds:
       - bun run invite -- {{.CLI_ARGS}}
+
+  extract-accuracy:
+    # Here rather than in ci:* because it answers with a percentage and has no build-failing
+    # side. The part that CAN be asserted rides `bun test` from
+    # apps/worker/src/services/extract/accuracy.test.ts and is already inside ci:verify; this
+    # is the run that produces the numbers. It is in db:* because the corpus tiers read
+    # UNDERCROFT_POSTGRES_DSN -- with none set it still scores the authored gold set against
+    # the shipped readers and reports the rest as unmeasured rather than as zero.
+    desc: >-
+      Measure extraction accuracy and write the report to data/ (gitignored).
+      Tier A needs nothing; the corpus tiers use UNDERCROFT_POSTGRES_DSN, and the OOXML oracle
+      additionally needs UNDERCROFT_S3_BUCKET_RAW and its credentials.
+    cmds:
+      - bun run extract:accuracy

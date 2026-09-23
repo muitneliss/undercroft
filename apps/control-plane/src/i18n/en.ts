@@ -6,57 +6,59 @@
  */
 
 export const en = {
+  email: {
+    colophon: "Undercroft sent this automatically. No reply is needed.",
+    customer: "Customer",
+    source: "Source",
+    account: "Account",
+    address: "Address",
+    when: "When",
+    expires: "Expires",
+    key: "Key",
+    errata: "Erratum",
+  },
+
   invitation: {
     subject: "You have access to Undercroft",
-    body: [
-      "You have been given access to {{tenantId}} in Undercroft.",
-      "",
-      "Sign in at {{publicUrl}} — use this address ({{email}}) exactly, either with Google or by asking for a one-time code.",
-      "",
-      "If you were not expecting this, you can ignore it; nothing happens until you sign in.",
-    ].join("\n"),
+    heading: "An invitation to Undercroft",
+    lead: "You have been given access to {{tenantId}}.",
+    howToSignIn:
+      "Sign in with this address exactly, either with Google or by asking for a one-time code.",
+    action: "Sign in",
+    ignore: "If you were not expecting this, you can ignore it; nothing happens until you sign in.",
   },
 
   signInCode: {
     subject: "Your Undercroft sign-in code",
-    body: [
-      "Your sign-in code is {{otp}}",
-      "",
-      "It expires in {{minutes}} minutes. If you did not ask to sign in, you can ignore this email.",
-    ].join("\n"),
+    heading: "Your sign-in code",
+    lead: "Use this code to sign in to Undercroft.",
+    expiry: "It expires in {{minutes}} minutes.",
+    ignore: "If you did not ask to sign in, you can ignore this email.",
   },
 
   runFailed: {
     subject: "The {{source}} sync for {{tenantId}} failed",
     models: "the model build",
     noReason: "no reason recorded",
-    body: [
-      "The {{source}} run for {{tenantId}} at {{when}} failed.",
-      "",
-      "Reason: {{error}}",
-      "",
-      "See the detail in the journal: {{link}}",
-      "",
+    heading: "A run failed",
+    lead: "What this run would have updated is unchanged until a later one succeeds.",
+    action: "See the journal",
+    repeats:
       "If it keeps failing you will not receive another email about this source for 24 hours; a successful run resets that window.",
-    ].join("\n"),
   },
 
   grantExpiring: {
     subject: "{{tenantId}}'s {{source}} access is about to expire",
-    body: [
-      "The {{source}} access that {{tenantId}} granted expires on {{when}}.",
-      "",
-      "Reconnect the source under Sources before then so syncing is not interrupted: {{link}}",
-    ].join("\n"),
+    heading: "Access is about to expire",
+    lead: "Reconnect the source before then so syncing is not interrupted.",
+    action: "Reconnect",
   },
 
   keyExpiring: {
     subject: "{{tenantId}}'s ingest key “{{label}}” is about to expire",
-    body: [
-      "The ingest key “{{label}}” for {{tenantId}} expires on {{when}}.",
-      "",
-      "Mint a new key under Sources and pass it to whoever uses this one: {{link}}",
-    ].join("\n"),
+    heading: "An ingest key is about to expire",
+    lead: "Mint a new key under Sources and pass it to whoever uses this one.",
+    action: "Open Sources",
   },
 
   error: {
@@ -79,6 +81,8 @@ export const en = {
     queryFailed: "The query did not run: {{message}}",
     queryNotRun:
       "The query could not be run. The processing service did not answer; try again in a few minutes.",
+    searchNotRun:
+      "The search could not be run. The processing service did not answer; try again in a few minutes.",
     paramMissing: "The question needs a value for {{name}}. Set that filter and run again.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
@@ -97,5 +101,9 @@ export const en = {
       "{{source}} did not accept this token. Check the pasted token and the private app's scopes, then try again.",
     tokenNotStored:
       "The token for {{source}} could not be stored. The processing service refused it.",
+    assistantUnconfigured:
+      "The assistant is not set up for this deployment. Tell whoever administers it.",
+    assistantBadRequest: "The question could not be sent. Reload the page and try again.",
+    assistantThreadFull: "This conversation has grown too long. Clear it to start a new one.",
   },
 };

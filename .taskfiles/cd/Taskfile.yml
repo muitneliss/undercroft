@@ -1,6 +1,7 @@
 # scripts/dokploy.ts, one task per subcommand -- CI runs these, and an operator runs the
 # same commands by hand for a manual deploy or a rollback. The Dokploy API is the only
 # channel for a change; see .claude/rules/deployment.md and docs/runbook/deployment.md.
+# `cli-upload` is the one delivery that is not a deploy: it attaches the CLI to a release.
 #
 # Credentials (DOKPLOY_API_ENDPOINT/API_KEY/COMPOSE_ID) come from the ambient environment,
 # exactly as they do for `bun run scripts/dokploy.ts` today -- Task does not manage them.
@@ -42,6 +43,26 @@ tasks:
     desc: Print the compose stack's status and its most recent deployment.
     cmds:
       - bun run scripts/dokploy.ts status
+
+  cli-upload:
+    desc: >-
+      Attach the packed CLI to the GitHub release TAG (after task build:cli-pack), under its
+      versioned name and as undercroft-cli.tgz. Usage: task cd:cli-upload TAG=v1.2.3 -- needs
+      GH_TOKEN. The versioned file is what the skill pins; the plain one is what the README's
+      releases/latest/download URL installs.
+    requires:
+      vars: [TAG]
+    vars:
+      VERSIONED: apps/cli/dist/undercroft-cli-{{trimPrefix "v" .TAG}}.tgz
+      LATEST: apps/cli/dist/undercroft-cli.tgz
+    cmds:
+      # Delivery, but not to Dokploy: a release asset is how the CLI is published (ADR 0044).
+      # The file is named from the tag rather than globbed, so a stale tarball in dist/ from
+      # another version can never be the one attached. --clobber makes a re-run replace it.
+      # The unversioned copy is the same bytes: GitHub resolves releases/latest/download/<name>
+      # only for a name every release shares, which a versioned name never is (ADR 0046).
+      - cp {{.VERSIONED}} {{.LATEST}}
+      - gh release upload {{.TAG}} {{.VERSIONED}} {{.LATEST}} --clobber
 
   release:
     desc: "The full manual deploy sequence from docs/runbook/deployment.md. Usage: task cd:release TAG=v1.2.3"

@@ -167,6 +167,22 @@ export async function listDueCandidates(exec: SqlExecutor): Promise<DueCandidate
   }));
 }
 
+/**
+ * Record a connection, or refuse because it belongs to another account.
+ *
+ * **An account id, once recorded, is only ever replaced by itself.** A source names one
+ * account (ADR 0043), so a credential for a different account offered to it is not a
+ * reconnect -- it would file that account's mail under this one's stream, green, with nothing
+ * erroring. The guard is the statement's own `WHERE`, not a read-then-write in the caller,
+ * because two consents racing for one source must not both pass a check neither can see the
+ * other make: the conflict row is locked, and whoever comes second finds the first's account.
+ * `false` means nothing was written.
+ *
+ * An EMPTY incoming id pins nothing and erases nothing: a Xero consent names no organisation
+ * (the admin chooses one afterwards) and a pasted HubSpot token names no account, and each
+ * used to blank the id a previous choice had recorded -- which left a reconnected Xero unable
+ * to run until its scope was saved again.
+ */
 export async function upsertConnection(
   exec: SqlExecutor,
   input: {
@@ -176,15 +192,20 @@ export async function upsertConnection(
     externalAccountId?: string | null;
     scope?: string;
   },
-): Promise<void> {
-  await exec.query(
+): Promise<boolean> {
+  const { rows } = await exec.query<{ source: string }>(
     `INSERT INTO ops.connection (tenant_id, source, status, external_account_id, scope, updated_at)
      VALUES ($1, $2, $3, $4, $5, now())
      ON CONFLICT (tenant_id, source) DO UPDATE SET
        status              = EXCLUDED.status,
-       external_account_id = EXCLUDED.external_account_id,
+       external_account_id = COALESCE(NULLIF(EXCLUDED.external_account_id, ''),
+                                      ops.connection.external_account_id),
        scope               = EXCLUDED.scope,
-       updated_at          = now()`,
+       updated_at          = now()
+     WHERE COALESCE(EXCLUDED.external_account_id, '') = ''
+        OR COALESCE(ops.connection.external_account_id, '') = ''
+        OR ops.connection.external_account_id = EXCLUDED.external_account_id
+     RETURNING source`,
     [
       input.tenantId,
       input.source,
@@ -193,6 +214,7 @@ export async function upsertConnection(
       input.scope ?? "",
     ],
   );
+  return rows.length > 0;
 }
 
 /**

@@ -9,6 +9,13 @@
 # accepted because the alternative (a deploy webhook) returns no deployment id, so nothing
 # could poll, verify, or collect a log -- and an unverified deploy is how a release reports
 # success while the host runs the build before it.
+#
+# release-please reads `release-please-config.json` and `.release-please-manifest.json` rather
+# than inputs here, because the release now carries two files the `node` strategy alone would
+# not bump: the CLI skill's pinned version (`skills/undercroft-cli/SKILL.md`) and the CLI
+# package's (`apps/cli/package.json`) -- `extra-files`. The one package is still the root, and
+# `include-component-in-tag: false` keeps tags `vX.Y.Z`, so `tag_name` feeds the image and
+# deploy jobs below exactly as before. ADR 0044.
 name: release
 
 on:
@@ -35,18 +42,48 @@ jobs:
       #
       # An installation token is a different identity, so the gate does not apply. It is an
       # App rather than a PAT because a PAT belongs to a person: it expires, and it makes
-      # every release read as authored by whoever happened to mint it.
+      # every release read as authored by whoever happened to mint it. The App is named by its
+      # client id: v3 of the action deprecates `app-id`.
       - id: token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          client-id: ${{ vars.RELEASE_PLEASE_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
 
       - id: release
         uses: googleapis/release-please-action@v5
         with:
           token: ${{ steps.token.outputs.token }}
-          release-type: node
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Attach the CLI to the release: `undercroft-cli-X.Y.Z.tgz`, the file the skill's pinned URL
+  # installs, and the same bytes as `undercroft-cli.tgz`, which the README's
+  # `releases/latest/download` URL installs (ADR 0046). A GitHub release asset rather than an
+  # npm package, so the tag that deploys a server is the one place its matching CLI is
+  # published from. Its own job, needing only the release: it neither waits for the images nor
+  # holds up the deploy.
+  release-cli:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      # The engines floor of the packed CLI (`@oclif/core` 5), and what `npm pack` runs on.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: go-task/setup-task@v2
+      - run: bun install --frozen-lockfile
+      - run: task build:cli-pack
+      - run: task cd:cli-upload TAG=${{ needs.release-please.outputs.tag_name }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Publish the release's images. Gated on a release actually being cut, and granting
   # packages:write on THIS job -- a called workflow can only narrow the caller's token.

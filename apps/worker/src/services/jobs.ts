@@ -30,16 +30,27 @@ import { RunInProgress, startIngest } from "./ingest.ts";
 import type { RunDeps } from "./runTypes.ts";
 import { readRelation } from "./preview.ts";
 import { createRunJournal, type RunJournal } from "./runJournal.ts";
-import { runTransform, type TransformDeps, type TransformOutcome } from "./transform.ts";
+import {
+  runTransform,
+  type Spawn,
+  type TransformDeps,
+  type TransformOutcome,
+} from "./transform.ts";
 
 export interface JobDeps extends RunDeps {
   /** Absent means no transform is chained after an ingest: this deployment has no dbt. */
   readonly dbt?: TransformDeps;
+  /**
+   * How a document's bytes are handed to a reader. Injected in tests; the process passes one
+   * that runs poppler and tesseract out of the worker image. Absent means the extract verb
+   * is not configured in this deployment, exactly as an absent `dbt` disables transform.
+   */
+  readonly extractSpawn?: Spawn;
 }
 
 const inFlight = new Set<Promise<unknown>>();
 
-function track<T>(job: Promise<T>): void {
+export function track<T>(job: Promise<T>): void {
   const settled: Promise<unknown> = job.then(
     () => undefined,
     () => undefined,
@@ -126,6 +137,7 @@ async function startTransform(
     trigger: input.trigger,
     triggeredBy: input.triggeredBy ?? "",
     parentRunId: input.parentRunId ?? null,
+    releaseTag: deps.releaseTag ?? "",
   });
   if (!opened.ok) {
     throw new RunInProgress("transform", input.tenantId, opened.runId);

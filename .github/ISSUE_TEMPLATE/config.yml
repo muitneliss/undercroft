@@ -1,0 +1,13 @@
+# Every issue goes through a form, so the details a triager would otherwise ask for one
+# comment at a time are asked for once, up front, mostly as picks rather than prose.
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/muitneliss/undercroft/security/advisories/new
+    about: Privately, never as a public issue. SECURITY.md says why and what happens next.
+  - name: Runbooks
+    url: https://github.com/muitneliss/undercroft/tree/main/docs/runbook
+    about: Sign-in, Google ingestion, Xero, the assistant, the CLI and deployment, step by step.
+  - name: Architecture decisions
+    url: https://github.com/muitneliss/undercroft/tree/main/docs/adr
+    about: Why the platform refuses to do the obvious thing. Worth a look before asking why.

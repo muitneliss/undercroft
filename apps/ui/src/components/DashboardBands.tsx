@@ -16,6 +16,7 @@ import type { QuestionView } from "@/api/types.ts";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { QuestionCard } from "@/components/QuestionCard.tsx";
+import { Separator } from "@/components/ui/separator.tsx";
 import type { DashboardDraft } from "@/lib/dashboardDraft.ts";
 import { isDashboardDirty } from "@/lib/dashboardDraft.ts";
 import { addTile, applyTileAction, inReadingOrder } from "@/lib/dashboardLayout.ts";
@@ -202,7 +203,7 @@ export function TilesBand({
 
   return (
     <>
-      <div className="band-rule" />
+      <Separator className="band-rule" />
       <div className="head">{t("dashboard.tilesHead")}</div>
       <div className="body stack">
         {tiles.length === 0 ? (
@@ -266,7 +267,7 @@ export function DeleteBand({
 
   return (
     <>
-      <div className="band-rule" />
+      <Separator className="band-rule" />
       <div className="head">{t("dashboard.deleteHead")}</div>
       <div className="body stack">
         <p className="prose">{t("dashboard.deleteLead", { name: draft.name })}</p>
@@ -326,7 +327,7 @@ function AddTileForm({
 
   return (
     <form
-      className="row"
+      className="row row--field"
       onSubmit={(event): void => {
         event.preventDefault();
         const chosen = String(new FormData(event.currentTarget).get("question") ?? "");

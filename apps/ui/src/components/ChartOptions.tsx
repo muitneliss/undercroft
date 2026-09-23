@@ -50,7 +50,10 @@ export function ChartOptions({
 
   return (
     <div className="stack stack--tight">
-      <div className="row">
+      {/* Every child here renders a `.field`, one component deep -- see `TypeSelect`
+          below. The class is written out because the markup should say so; the
+          `:has(> .field)` net in index.css is what would carry it if it were not. */}
+      <div className="row row--field">
         <TypeSelect
           type={chart.type}
           onPick={(type): void => {

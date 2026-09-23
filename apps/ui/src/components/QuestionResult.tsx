@@ -17,6 +17,7 @@ import { ChartOptions } from "@/components/ChartOptions.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import type { BoundParams } from "@/components/QuestionBands.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { Separator } from "@/components/ui/separator.tsx";
 import { isQuestionDirty, type QuestionDraft } from "@/lib/questionDraft.ts";
 import { useUiStore } from "@/store.ts";
 import type { trpc } from "@/trpc.ts";
@@ -80,7 +81,7 @@ export function ResultBand({
 
   return (
     <>
-      <div className="band-rule" />
+      <Separator className="band-rule" />
       <div className="head">{t("bi.resultHead")}</div>
       <div className="body stack">
         <div className="row">

@@ -1,3 +1,8 @@
+---
+description: A lint decision lives in biome.jsonc, never as a header in the file
+paths: ["**/*.ts", "**/*.tsx", "biome.jsonc", ".ast-grep/rules/*.yml", ".biome/plugins/*.grit"]
+---
+
 # Where a lint decision goes
 
 A suppression is a decision about what this codebase is allowed to do. It belongs somewhere a
@@ -37,10 +42,15 @@ silences the rule for the **whole file**, and Biome never reports one that has g
   does not.
 - **A genuine one-off gets the line-level `// biome-ignore`**, which Biome expires by itself —
   `bun run lint` runs with `--error-on-warnings`, so an unused one fails the gate. This is the
-  only suppression form a source file or a suite may carry, and the whole tree holds **seven**
-  across five files: a `^` that flips a GCM tag bit, a control range that IS the assertion, a
-  compose file's `${IMAGE_TAG:-latest}` quoted as fixture bytes twice, an integration suite's
-  `process.env` gate and its CommonJS `pg` import, and the charting `Big#toNumber()` below.
+  only suppression form a source file or a suite may carry, and the whole tree holds **ten**
+  across eight files:
+  - a `^` that flips a GCM tag bit;
+  - a control range that IS the assertion;
+  - a compose file's `${IMAGE_TAG:-latest}` quoted as fixture bytes, twice;
+  - an integration suite's `process.env` gate and its CommonJS `pg` import;
+  - a refusal-reason catalogue key long enough to read as a secret;
+  - the `PATH` the CLI suite and the CLI pack check hand to the process they spawn;
+  - the charting `Big#toNumber()` below.
 - **A plugin is suppressed by NAME: `// biome-ignore lint/plugin/money:`.** Measured against
   Biome 2.5.14: naming the plugin silences that plugin and no other, and Biome reports the
   suppression as unused when the violation on that line came from a different one — which is

@@ -26,7 +26,14 @@ function event(
   detail: Record<string, unknown>,
   entity: string | null = null,
 ): RunEventView {
-  return { at: "2026-09-19T12:42:22.000Z", level: "info", event: name, entity, detail };
+  return {
+    at: "2026-09-19T12:42:22.000Z",
+    level: "info",
+    event: name,
+    entity,
+    detail,
+    live: false,
+  };
 }
 
 describe("an ingest run in progress", () => {
@@ -43,7 +50,7 @@ describe("an ingest run in progress", () => {
     const stages = flow(detail, events);
 
     expect(stages.map((s) => s.key)).toEqual(["entity:contacts", "entity:deals", "outcome"]);
-    expect(stages[0]).toMatchObject({ label: "contacts", mark: "granted", detail: "40" });
+    expect(stages[0]).toMatchObject({ label: "contacts", mark: "granted", detail: "40 records" });
     expect(stages[1]).toMatchObject({ label: "deals", mark: "pending", detail: "12 / 50" });
     // The run itself is still going, distinct from any one entity's own state.
     expect(stages[2]).toMatchObject({ mark: "pending" });
@@ -114,8 +121,8 @@ describe("a closed run's authoritative record", () => {
     const stages = flow(detail, events);
 
     expect(stages.map((s) => s.key)).toEqual(["entity:deals", "entity:contacts", "outcome"]);
-    expect(stages[0]).toMatchObject({ mark: "granted", detail: "40 · 10 refused" });
-    expect(stages[1]).toMatchObject({ mark: "granted", detail: "50" });
+    expect(stages[0]).toMatchObject({ mark: "granted", detail: "40 records · 10 refused" });
+    expect(stages[1]).toMatchObject({ mark: "granted", detail: "50 records" });
   });
 
   it("with no feed at all, still shows every entity entityCounts remembers", () => {
@@ -153,12 +160,29 @@ describe("a transform run", () => {
       source: null,
       entities: [],
       status: "ok",
-      counts: { landed: 0, created: 0, changed: 0, unchanged: 0, refused: 0 },
+      counts: null,
       steps: [],
     });
     const stages = flow(detail, [event("no_models", {})]);
 
     expect(stages[0]).toMatchObject({ mark: "granted", detail: "No models" });
+  });
+
+  it("says only that it built nothing when the worker never said there were no models", () => {
+    // The same empty step list, a different fact: a build whose `--select` matched nothing
+    // ran dbt and built none of the models the customer has. Calling that "No models" would
+    // contradict the sentence in the feed beside it.
+    const detail = runDetail({
+      kind: "build",
+      source: null,
+      entities: [],
+      status: "ok",
+      counts: null,
+      steps: [],
+    });
+    const stages = flow(detail, [event("run_opened", {})]);
+
+    expect(stages[0]).toMatchObject({ mark: "granted", detail: "0 models · 0 tests" });
   });
 
   it("summarises what it built, and calls out a failing test separately from a passing one", () => {
@@ -218,7 +242,7 @@ describe("a lake-api run", () => {
 
     const stages = flow(detail);
     expect(stages).toEqual([
-      expect.objectContaining({ kind: "lake", mark: "granted", detail: "8" }),
+      expect.objectContaining({ kind: "lake", mark: "granted", detail: "8 records" }),
     ]);
   });
 });

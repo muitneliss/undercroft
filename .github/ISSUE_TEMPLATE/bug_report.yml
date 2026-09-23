@@ -1,0 +1,178 @@
+name: Bug report
+description: Something is broken, wrong, or shows a value you do not believe.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Most of this form is picks, so it takes a couple of minutes,
+        and it saves the round trip of us asking for each detail in turn. Vietnamese or English
+        are both fine.
+
+        **A security problem?** Stop here and [report it privately](https://github.com/muitneliss/undercroft/security/advisories/new).
+        This repository is public: **never paste a customer's name, a credential, a token, a
+        session cookie, or real records.** Replace them with something like `CASE-0042` or
+        `acme@example.test`.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the [open and closed issues](https://github.com/muitneliss/undercroft/issues?q=is%3Aissue) and this is not already reported.
+          required: true
+        - label: I removed customer names, credentials, tokens and real data from everything below.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, in one or two sentences. Quote an error message exactly.
+      placeholder: The run for CASE-0042's HubSpot source finished "succeeded" but Raw lake shows no records for today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+      placeholder: Today's contacts to appear under Raw lake, or the run to fail and say why.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Starting from a signed-in page or a fresh terminal. Commands and clicks, in order.
+      placeholder: |
+        1. Sign in as an admin, choose customer CASE-0042 and open Sources.
+        2. Press "Run now" on the HubSpot source.
+        3. Wait for the run to finish in Journal, then open Raw lake.
+        4. Filter by today's date: no rows.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time I follow the steps
+        - Sometimes
+        - Once, and I could not make it happen again
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: How bad is it?
+      description: A wrong value that looks right is worse than an error, because nobody notices it.
+      options:
+        - A wrong value shown as if it were correct (an amount, a count, a record silently missing)
+        - It blocks my work and I have no workaround
+        - It gets in the way, but I have a workaround
+        - Cosmetic (layout, wording, translation)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did you see it?
+      description: Pick every place it shows up.
+      multiple: true
+      options:
+        - Web UI – signing in
+        - Web UI – Customers
+        - Web UI – Sources (connecting accounts)
+        - Web UI – Journal (runs)
+        - Web UI – Raw lake (records, documents, search)
+        - Web UI – Models
+        - Web UI – Reports (questions and dashboards)
+        - Web UI – People (invitations and roles)
+        - Web UI – the assistant
+        - CLI, typed by a person
+        - CLI in agent mode (Claude Code, Codex or another agent)
+        - The REST lake API, from a script or orchestrator
+        - A scheduled run (Kestra flow or the worker)
+        - dbt models or transforms
+        - Deployment, startup or a migration
+        - Somewhere else (say where below)
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Connector or source involved
+      description: Leave empty if none. For a custom YAML spec, the spec's name and which entity.
+      placeholder: "specs/connectors/hubspot.yaml, entity: contacts / Gmail / Google Drive / Xero"
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How is Undercroft running?
+      options:
+        - A hosted instance someone else operates
+        - Self-hosted with deploy/compose/docker-compose.server.yml (Dokploy or plain Docker)
+        - Local development (task dev:run)
+        - I only use the CLI against a server I do not operate
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: |
+        Whichever of these you can reach:
+        - **Server:** the `IMAGE_TAG` in the Dokploy environment, or the tag of the running `ghcr.io/muitneliss/undercroft-control-plane` image. If it is `latest`, say so and give the date you last deployed.
+        - **CLI:** the output of `undercroft --version`.
+        - **From source:** the output of `git describe --tags --always`.
+        - **Hosted by someone else:** write "unknown" and the URL's host, and we will find it.
+      placeholder: "server v1.20.1, CLI 1.20.1"
+    validations:
+      required: true
+
+  - type: input
+    id: last-working
+    attributes:
+      label: Last version where it worked
+      description: Only if this used to work. Leave empty if you do not know.
+      placeholder: v1.19.1
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Your side
+      description: Delete the lines that do not apply.
+      value: |
+        - Browser and version:
+        - Operating system:
+        - Node version (CLI only, `node --version`):
+        - Interface language (Vietnamese / English):
+        - Your role (viewer / member / admin / not sure):
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output and logs
+      description: |
+        Paste as text, not a screenshot, and redact as above. Useful places to look:
+        - **CLI:** re-run with `--agent` and paste the JSON envelope; it carries the error code.
+        - **Web UI:** the browser console, and in the Network tab the failing `/trpc` request's response.
+        - **A run:** the run's id from Journal, and the Kestra execution id if you have it.
+        - **Server:** the `control-plane` or `worker` service log around the time (`task dev:logs` locally, the service's log in Dokploy on a server).
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, a recording, a redacted spec, what you already tried.

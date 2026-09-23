@@ -41,6 +41,18 @@ export interface RunDeps {
   readonly exec: SqlExecutor;
   readonly specsDir: string;
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Which build is opening these runs -- `v1.16.0`, or `main@a1b2c3d` for a build cut from no
+   * release. Absent is `""`, which the ledger renders as "this build did not say" rather than
+   * guessing a version it cannot know.
+   *
+   * IT COMES FROM THE IMAGE, NOT THE DEPLOY POINTER. CI pushes the version tag AND `latest`,
+   * and Dokploy tracks `latest` deliberately so there is never a version to keep in step by
+   * hand -- which means the pointer carries no version at all, and the answer has to ride
+   * inside the artifact (`deploy/Dockerfile.worker`). Read at the composition root like every
+   * other configuration value; a layer below never reaches for `process.env` (`layering.md`).
+   */
+  readonly releaseTag?: string;
   /** Injected in tests; the process wires the real `fetch`-backed fetcher. */
   readonly fetcher?: Fetcher;
   /** The byte-returning seam the Google collectors use. Injected in tests, as above. */

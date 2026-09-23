@@ -52,6 +52,11 @@ async function main(): Promise<void> {
     for (const name of result.applied) {
       process.stdout.write(`apply  ${name}\n`);
     }
+    // Reported every run, and never as "skip": these are restated rather than applied, and a
+    // deploy log silent about them would hide the step that repairs a drifted grant. 0036.
+    for (const name of result.repeated) {
+      process.stdout.write(`state  ${name}\n`);
+    }
     process.stdout.write(
       result.applied.length === 0
         ? "already up to date\n"

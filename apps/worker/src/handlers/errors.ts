@@ -19,7 +19,12 @@ import type { ApiError } from "@undercroft/contracts";
 import { ConnectorError, HttpError } from "@undercroft/core";
 
 import { ScopeNotChosen } from "../services/google/collect.ts";
-import { ConnectionUnusable, RunInProgress, UnknownTenant } from "../services/ingest.ts";
+import {
+  ConnectionUnusable,
+  RunInProgress,
+  UnknownSource,
+  UnknownTenant,
+} from "../services/ingest.ts";
 import { QueryFailed } from "../services/queryRunner.ts";
 import { TenantNotProvisioned } from "../services/tenantSession.ts";
 
@@ -63,7 +68,7 @@ export function failureOf(error: unknown): Failure {
   if (error instanceof ConnectionUnusable) {
     return { status: 409, code: "credential_unusable", message: error.message, details: [] };
   }
-  if (error instanceof UnknownTenant) {
+  if (error instanceof UnknownTenant || error instanceof UnknownSource) {
     return { status: 404, code: "not_found", message: error.message, details: [] };
   }
   // Matched by name, not by class. The registry error lives in `@undercroft/db/repos`, which

@@ -1,0 +1,122 @@
+name: Feature request
+description: Something Undercroft cannot do yet, or does in a way that gets in your way.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us the problem before the solution: a clear problem often has a simpler answer
+        than the first one that comes to mind. Vietnamese or English are both fine.
+
+        Two things that usually need no change here:
+        - **A new REST source** is a YAML spec in `specs/connectors/`, with no code and no migration.
+        - **A business table** (customers, invoices, a revenue model) belongs in your own dbt project.
+          Undercroft deliberately ships no business schema.
+
+        This repository is public: use `CASE-0042` or `acme@example.test` in place of a real customer.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the [open and closed issues](https://github.com/muitneliss/undercroft/issues?q=is%3Aissue) and this has not been requested or declined already.
+          required: true
+        - label: I removed customer names, credentials and real data from everything below.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do, and what stops you today?
+      description: The job you are doing and the point where Undercroft gets in the way.
+      placeholder: Every month I reconcile Xero invoices against the bank feed. I can see both under Raw lake, but I have to export them and compare in a spreadsheet.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: The behaviour you want, from where you sit. A rough sketch or command is welcome.
+      placeholder: A Report question that lists invoices with no matching bank line, marked unverified when either side is missing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What do you do instead today?
+      description: Your workaround and what it costs you, or "nothing, I cannot do it at all".
+      placeholder: Export both tables to CSV and match by hand, about two hours a month.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Undercroft?
+      multiple: true
+      options:
+        - Connectors and YAML specs
+        - Gmail, Drive and document text
+        - Raw lake, search and the REST lake API
+        - Journal, runs, scheduling and Kestra flows
+        - Models, dbt and transforms
+        - Reports (questions and dashboards)
+        - The assistant
+        - The CLI and agent mode
+        - Signing in, People and roles
+        - Deployment and operations
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who would use it?
+      multiple: true
+      options:
+        - An admin connecting accounts and inviting people
+        - A member authoring questions and dashboards
+        - A viewer reading reports
+        - An analyst writing dbt models
+        - An operator deploying and running the platform
+        - An LLM agent through the CLI
+        - A script or orchestrator through the lake API
+    validations:
+      required: true
+
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How much does it matter to you?
+      options:
+        - It blocks us from adopting or keeping Undercroft
+        - Important, and we work around it every week
+        - Nice to have
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version you are on
+      description: The server's image tag, `undercroft --version`, or `git describe --tags --always`. Leave empty if it does not matter.
+      placeholder: v1.20.1
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Other shapes the solution could take, or another tool that does this well.
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to open a pull request for this, after we agree on the approach.

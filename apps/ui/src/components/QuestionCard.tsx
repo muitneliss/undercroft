@@ -12,7 +12,7 @@
  * the nine controls that move and size it, one cell at a time.
  */
 
-import { compile, type DashboardTile, paramNames } from "@undercroft/contracts/bi";
+import type { DashboardTile } from "@undercroft/contracts/bi";
 import type { Locale } from "@undercroft/core/locale";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,9 +21,10 @@ import { Link } from "react-router-dom";
 import type { QuestionView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { CardContent, CardHeader } from "@/components/ui/card.tsx";
 import { TILE_ACTIONS, type TileAction } from "@/lib/dashboardLayout.ts";
 import { divisionPath } from "@/lib/divisions.ts";
-import { paramsFromSearch } from "@/lib/params.ts";
+import { paramsFromSearch, questionParams } from "@/lib/params.ts";
 import { trpc } from "@/trpc.ts";
 
 // The charting library rides in its own chunk, fetched the first time a tile is drawn.
@@ -97,7 +98,7 @@ export function QuestionCard({
   onAction: (action: TileAction) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const names = question === null ? [] : paramNames(compile(question.definition));
+  const names = question === null ? [] : questionParams(question.definition);
   const bound = paramsFromSearch(search, names);
   const answer = trpc.bi.questions.answer.useQuery(
     { tenantId, id: tile.questionId, params: bound.params },
@@ -113,7 +114,7 @@ export function QuestionCard({
         gridRow: `${String(tile.y + 1)} / span ${String(tile.h)}`,
       }}
     >
-      <div className="grid__head">
+      <CardHeader className="grid__head">
         {question === null ? (
           <span className="label">{t("dashboard.questionGone")}</span>
         ) : (
@@ -125,8 +126,8 @@ export function QuestionCard({
           </Link>
         )}
         {edit ? <TileControls onAction={onAction} /> : null}
-      </div>
-      <div className="grid__body">
+      </CardHeader>
+      <CardContent className="grid__body">
         {question === null ? null : bound.missing.length > 0 ? (
           <p className="note">
             {t("dashboard.waiting", {
@@ -143,7 +144,7 @@ export function QuestionCard({
             <ChartFrame result={answer.data} chart={question.chart} locale={locale} />
           </Suspense>
         )}
-      </div>
+      </CardContent>
     </section>
   );
 }

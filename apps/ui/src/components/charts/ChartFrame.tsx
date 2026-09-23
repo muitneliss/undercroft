@@ -144,6 +144,13 @@ function Plot({
  *
  * A table rather than a drawing, because what a pivot is for is reading the figures -- so
  * every cell is `raw` through `figure`, never a float.
+ *
+ * A truncated result says so beneath its totals. `pivot` sums the rows it was handed, and
+ * the query was capped at its limit, so a grand total over the first thousand of forty
+ * thousand rows is not this result's total -- and on the page the two are indistinguishable.
+ * The figure is kept and qualified rather than withheld: a partial total is still worth
+ * reading, it just may not be called the total. `ResultTable` says the same thing the same
+ * way, for the rows it shows.
  */
 function PivotTable({
   result,
@@ -160,43 +167,48 @@ function PivotTable({
   }
   const table = pivot(result, { rowsBy: x, colsBy: series, value }, t("chart.total"));
   return (
-    <div className="result">
-      <table className="table">
-        <thead>
-          <tr>
-            <th scope="col">{x}</th>
-            {table.columns.map((column) => (
-              <th key={column} scope="col" className="num">
-                {column}
+    <div className="stack stack--tight">
+      <div className="result">
+        <table className="table">
+          <thead>
+            <tr>
+              <th scope="col">{x}</th>
+              {table.columns.map((column) => (
+                <th key={column} scope="col" className="num">
+                  {column}
+                </th>
+              ))}
+              <th scope="col" className="num">
+                {t("chart.total")}
               </th>
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row) => (
+              <tr key={row.key}>
+                <td className="datum">{row.key}</td>
+                {row.cells.map((cell, i) => (
+                  <td key={i} className="num datum">
+                    {figure(cell)}
+                  </td>
+                ))}
+                <td className="num datum">{figure(row.total)}</td>
+              </tr>
             ))}
-            <th scope="col" className="num">
-              {t("chart.total")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {table.rows.map((row) => (
-            <tr key={row.key}>
-              <td className="datum">{row.key}</td>
-              {row.cells.map((cell, i) => (
+            <tr>
+              <td className="datum">{t("chart.total")}</td>
+              {table.totals.map((cell, i) => (
                 <td key={i} className="num datum">
                   {figure(cell)}
                 </td>
               ))}
-              <td className="num datum">{figure(row.total)}</td>
             </tr>
-          ))}
-          <tr>
-            <td className="datum">{t("chart.total")}</td>
-            {table.totals.map((cell, i) => (
-              <td key={i} className="num datum">
-                {figure(cell)}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
+      {result.truncated ? (
+        <p className="note">{t("chart.totalsPartial", { count: result.rows.length })}</p>
+      ) : null}
     </div>
   );
 }

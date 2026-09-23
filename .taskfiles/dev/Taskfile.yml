@@ -96,6 +96,31 @@ tasks:
     cmds:
       - bun run migrate
 
+  extract:
+    desc: "Read landed documents into raw.document_text. Usage: task dev:extract TENANT=test001 SOURCE=drive"
+    requires:
+      vars: [TENANT]
+    vars:
+      SOURCE: '{{.SOURCE | default "drive"}}'
+    cmds:
+      # The same route Kestra and the control plane call, with the local trigger token. The
+      # verb answers 202 with a run id and reads on; watch it in the Journal, or with
+      # `task dev:psql -- "SELECT method, count(*) FROM raw.document_text GROUP BY 1"`.
+      - >-
+        curl -fsS -X POST "http://localhost:{{.WORKER_PORT}}/v1/runs/extract"
+        -H "content-type: application/json"
+        -H "authorization: Bearer {{.UNDERCROFT_TRIGGER_TOKEN}}"
+        -d '{"tenantId":"{{.TENANT}}","source":"{{.SOURCE}}","trigger":"manual"}'
+
+  psql:
+    desc: 'Run SQL against the local compose Postgres. Usage: task dev:psql -- "SELECT 1"'
+    cmds:
+      # The local stack's own database, via the container that already has psql. Read-only by
+      # convention -- this is for looking at what a run landed, not for changing it.
+      # No quotes around CLI_ARGS: Task already re-quotes an argument containing spaces, and
+      # adding a second pair makes psql read the whole statement as one string literal.
+      - docker compose -f {{.COMPOSE_FILE}} exec -T postgres psql -U {{.PG_USER}} -d {{.PG_DB}} -c {{.CLI_ARGS}}
+
   invite:
     desc: "Invite a user locally. Usage: task dev:invite -- you@x.test --tenant CASE-0001 --role admin --create-tenant"
     env:
@@ -122,6 +147,10 @@ tasks:
       UNDERCROFT_SESSION_SECRET: "{{.UNDERCROFT_SESSION_SECRET}}"
       UNDERCROFT_WORKER_URL: "http://localhost:{{.WORKER_PORT}}"
       UNDERCROFT_TRIGGER_TOKEN: "{{.UNDERCROFT_TRIGGER_TOKEN}}"
+      UNDERCROFT_ANTHROPIC_API_KEY: "{{.UNDERCROFT_ANTHROPIC_API_KEY}}"
+      UNDERCROFT_TYPESAFE_API_KEY: "{{.UNDERCROFT_TYPESAFE_API_KEY}}"
+      UNDERCROFT_ASSISTANT_APPROVAL_SECRET: "{{.UNDERCROFT_ASSISTANT_APPROVAL_SECRET}}"
+      UNDERCROFT_ASSISTANT_MODEL: "{{.UNDERCROFT_ASSISTANT_MODEL}}"
       UNDERCROFT_PUBLIC_URL: "http://localhost:5173"
       UNDERCROFT_API_PORT: "{{.API_PORT}}"
       UNDERCROFT_GOOGLE_CLIENT_ID: "{{.UNDERCROFT_GOOGLE_CLIENT_ID}}"
@@ -167,6 +196,11 @@ tasks:
   ui:
     desc: Run the UI dev server (Vite; hot module reload already built in).
     dir: "{{.ROOT_DIR}}/apps/ui"
+    env:
+      # Vite's dev proxy forwards /trpc, /oauth and /api to the control plane, so it has to
+      # be told the SAME port `dev:api` bound. Both read {{.API_PORT}}; leaving Vite to
+      # assume 3000 is how the two drift the moment 3000 is taken by something else.
+      UNDERCROFT_API_PORT: "{{.API_PORT}}"
     cmds:
       - bun run dev
 
@@ -191,3 +225,20 @@ tasks:
       - task: kestra-flows
         ignore_error: true
       - task: serve
+
+  cli:
+    desc: "Build the CLI and run it. Usage: task dev:cli -- runs list --profile local"
+    # Interactive so a person gets the terminal itself: the CLI decides human mode from
+    # stdin and stdout being a TTY, and Task's prefixed output would otherwise pipe stdout
+    # and silently turn every run into agent mode.
+    interactive: true
+    cmds:
+      - task: :build:cli
+      - node {{.ROOT_DIR}}/apps/cli/dist/undercroft.mjs {{.CLI_ARGS}}
+
+  email-preview:
+    desc: >-
+      Render every email (both languages) to data/email-preview/ and print where. An email
+      has no screen to check it on, so this is the only way to see one before it is posted.
+    cmds:
+      - bun run email:preview

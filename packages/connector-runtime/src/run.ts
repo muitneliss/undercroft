@@ -18,11 +18,11 @@
  */
 
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
+import { checkGuards } from "./guards.ts";
 import {
   type RawRecordOut,
   type Reader,
   type RunContext,
-  checkGuards,
   createReader,
   readBatch,
   readPages,

@@ -16,7 +16,14 @@ import type { RunDetail, RunEventView } from "@/api/types.ts";
 import { formatCount } from "@/lib/money.ts";
 import type { RunStage, StageMark } from "@/lib/runFlowTypes.ts";
 
-interface EntityAcc {
+/**
+ * Everything the run has said about one entity so far, folded into one value.
+ *
+ * Exported because the gauge band above the ledger reads it too (`runFeed.ts`): the figure on
+ * a plate and the figure on the gauge beneath the drawing are one derivation read twice,
+ * rather than two readings of the same events that can disagree with each other.
+ */
+export interface EntityReading {
   readonly entity: string;
   started: boolean;
   done: boolean;
@@ -26,12 +33,22 @@ interface EntityAcc {
   refused: number | null;
 }
 
+type EntityAcc = EntityReading;
+
 function numberField(detail: Readonly<Record<string, unknown>>, key: string): number | null {
   const value = detail[key];
   return typeof value === "number" ? value : null;
 }
 
-/** "234", or "234 · 12 refused" once a refusal is worth calling out. MISSING for no count at all. */
+/**
+ * "234 records", or "234 records · 12 refused" once a refusal is worth calling out.
+ *
+ * The unit is there because the rail hangs this under the line on its own, with no column
+ * head above it to say what is being counted, and a bare "0" under a station reads as a
+ * stray digit rather than as a count of nothing. MISSING stays bare for the same reason it
+ * is a dash and not a zero: there is no count to put a unit on. `formatCount` is what keeps
+ * that distinction -- `{{count, number}}` in the catalogue would render the absence as "0".
+ */
 export function landedSummary(
   t: TFunction,
   locale: Locale,
@@ -44,7 +61,10 @@ export function landedSummary(
       refused: formatCount(refused, locale),
     });
   }
-  return formatCount(landed, locale);
+  if (landed === null) {
+    return formatCount(landed, locale);
+  }
+  return t("journal.flow.entityLanded", { landed: formatCount(landed, locale), count: landed });
 }
 
 /** What one event says about the entity it concerns -- the caller has already resolved which. */
@@ -153,6 +173,21 @@ function entityStageMark(acc: EntityAcc, interrupted: boolean): StageMark {
   return acc.done ? "granted" : "pending";
 }
 
+/**
+ * How much of this entity has been read, as a fraction, for the rule along its plate's foot.
+ *
+ * Only while it is still being read and only against a total the run actually stated: a
+ * finished stage has its landed count to say what it did, and an entity with no total has no
+ * denominator that is not invented. Clamped, because `records_read` is written before the
+ * record it is about is fetched and a page boundary can briefly put the two a step apart.
+ */
+function gatheredSoFar(acc: EntityAcc): number | null {
+  if (acc.done || acc.read === null || acc.total === null || acc.total <= 0) {
+    return null;
+  }
+  return Math.min(1, Math.max(0, acc.read / acc.total));
+}
+
 export function entityStages(
   t: TFunction,
   locale: Locale,
@@ -169,6 +204,7 @@ export function entityStages(
       mark,
       markLabel: entityMarkLabel(t, mark),
       detail: entityDetail(t, locale, acc),
+      gathered: mark === "pending" ? gatheredSoFar(acc) : null,
       href: null,
     };
   });

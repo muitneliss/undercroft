@@ -1,8 +1,7 @@
 /**
- * Vite's own module types: `?worker` imports and `import.meta.env`.
+ * Vite's own module types: `import.meta.env` and its query-suffixed module imports.
  *
- * The one place this reference lives. It is what lets `components/SqlEditor.tsx` import
- * Monaco's editor worker as a constructor rather than as a URL string.
+ * The one place this reference lives, so a second file never declares a competing copy.
  */
 
 /// <reference types="vite/client" />

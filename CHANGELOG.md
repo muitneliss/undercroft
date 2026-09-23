@@ -1,5 +1,209 @@
 # Changelog
 
+## [1.22.0](https://github.com/muitneliss/undercroft/compare/v1.21.0...v1.22.0) (2026-09-23)
+
+
+### Features
+
+* **cli:** install the CLI once, from the latest release ([#159](https://github.com/muitneliss/undercroft/issues/159)) ([33e8776](https://github.com/muitneliss/undercroft/commit/33e8776c9f0ae141f5e3b479a6062d4cf58e7bc5))
+
+## [1.21.0](https://github.com/muitneliss/undercroft/compare/v1.20.1...v1.21.0) (2026-09-23)
+
+
+### Features
+
+* **email:** set the Undercroft mark in every email's running head ([#157](https://github.com/muitneliss/undercroft/issues/157)) ([bb2b72b](https://github.com/muitneliss/undercroft/commit/bb2b72b3b2b81b84b4f21800b133dbac64d186d7))
+
+## [1.20.1](https://github.com/muitneliss/undercroft/compare/v1.20.0...v1.20.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **cli:** pin the release CLI with one version per line; sync the README and add badges ([#149](https://github.com/muitneliss/undercroft/issues/149)) ([8a1aa0f](https://github.com/muitneliss/undercroft/commit/8a1aa0f8c57658131236e0fd830413f76dde58ee))
+
+## [1.20.0](https://github.com/muitneliss/undercroft/compare/v1.19.1...v1.20.0) (2026-09-23)
+
+
+### Features
+
+* **cli:** an undercroft CLI for people and LLM agents, 1:1 with the web UI ([#146](https://github.com/muitneliss/undercroft/issues/146)) ([7abcb1d](https://github.com/muitneliss/undercroft/commit/7abcb1d0270060f6b0a82d7974276ee8b6c1a0f3))
+
+## [1.19.1](https://github.com/muitneliss/undercroft/compare/v1.19.0...v1.19.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **ui:** hovering a run's leaf no longer runs the ledger's instant into its sentence ([#136](https://github.com/muitneliss/undercroft/issues/136)) ([db8f232](https://github.com/muitneliss/undercroft/commit/db8f232943304c30936a5f7f675cee5000b3d651))
+
+## [1.19.0](https://github.com/muitneliss/undercroft/compare/v1.18.0...v1.19.0) (2026-09-23)
+
+
+### Features
+
+* **connections:** several Gmail and Drive accounts per tenant ([#125](https://github.com/muitneliss/undercroft/issues/125)) ([#132](https://github.com/muitneliss/undercroft/issues/132)) ([c646bce](https://github.com/muitneliss/undercroft/commit/c646bcea635fe58327a608d19dddc0c6ac3268d6))
+
+## [1.18.0](https://github.com/muitneliss/undercroft/compare/v1.17.0...v1.18.0) (2026-09-23)
+
+
+### Features
+
+* **ui:** a pane's whole edge is its handle, not a corner speck ([#128](https://github.com/muitneliss/undercroft/issues/128)) ([7d41e94](https://github.com/muitneliss/undercroft/commit/7d41e94b62c86c7ca5421aede214ab770b2f8bf9))
+
+## [1.17.0](https://github.com/muitneliss/undercroft/compare/v1.16.0...v1.17.0) (2026-09-23)
+
+
+### Features
+
+* **extract:** measure whether the readers are right, not just that they ran ([#122](https://github.com/muitneliss/undercroft/issues/122)) ([24f2256](https://github.com/muitneliss/undercroft/commit/24f22566fc734f29b0014a6135d0f37418b232bd))
+* **extract:** read a digest once, and answer every document holding it ([#119](https://github.com/muitneliss/undercroft/issues/119)) ([04ee814](https://github.com/muitneliss/undercroft/commit/04ee8148f26486b542c2186597c697dc518278b5))
+* **journal:** a refusal count has a route to its constituents ([#121](https://github.com/muitneliss/undercroft/issues/121)) ([334a73c](https://github.com/muitneliss/undercroft/commit/334a73cda658d80dd0f1f1b320143a31b2b17345))
+* **lake:** say what the lake stores, not what the catalogue counts ([#123](https://github.com/muitneliss/undercroft/issues/123)) ([76b5959](https://github.com/muitneliss/undercroft/commit/76b5959033ac821e5f81418a80167d61f967edb1))
+
+## [1.16.0](https://github.com/muitneliss/undercroft/compare/v1.15.5...v1.16.0) (2026-09-22)
+
+
+### Features
+
+* **extract:** read the document types the lake already holds and cannot open ([#116](https://github.com/muitneliss/undercroft/issues/116)) ([da0d297](https://github.com/muitneliss/undercroft/commit/da0d297554941099641cf450a31fc943d61f4dcb))
+* **ui:** the lake console runs a script, and a selection is what a press means ([#118](https://github.com/muitneliss/undercroft/issues/118)) ([9af497c](https://github.com/muitneliss/undercroft/commit/9af497cb309fb68ba65983c04098111e965b6749))
+
+
+### Bug Fixes
+
+* **journal:** a build counts no records, and "no models" needs the worker's word ([#117](https://github.com/muitneliss/undercroft/issues/117)) ([89321d7](https://github.com/muitneliss/undercroft/commit/89321d7cee09bd43974e5cf843ffe17e7fb92310))
+* **ui:** a query's grid reads from the left, and its columns are draggable ([#114](https://github.com/muitneliss/undercroft/issues/114)) ([eae838f](https://github.com/muitneliss/undercroft/commit/eae838f68896acfaf3de4dd085eb62b8f3f2e069))
+
+## [1.15.5](https://github.com/muitneliss/undercroft/compare/v1.15.4...v1.15.5) (2026-09-22)
+
+
+### Bug Fixes
+
+* **db:** restate the provisioning function on every migrate, not once ([#108](https://github.com/muitneliss/undercroft/issues/108)) ([0f779bd](https://github.com/muitneliss/undercroft/commit/0f779bd797d4d2ed2f9c6cf6bae34d3c5121fc0d))
+
+## [1.15.4](https://github.com/muitneliss/undercroft/compare/v1.15.3...v1.15.4) (2026-09-22)
+
+
+### Bug Fixes
+
+* **deploy:** give the worker 3g, because 25 MiB attachments cost ~220 MiB ([#106](https://github.com/muitneliss/undercroft/issues/106)) ([ad57ee6](https://github.com/muitneliss/undercroft/commit/ad57ee6d49852d33173ce634c6d5f896fec52496))
+
+## [1.15.3](https://github.com/muitneliss/undercroft/compare/v1.15.2...v1.15.3) (2026-09-22)
+
+
+### Bug Fixes
+
+* **ui:** a grid wider than its pane shows the bar that says so ([#104](https://github.com/muitneliss/undercroft/issues/104)) ([a48ae1d](https://github.com/muitneliss/undercroft/commit/a48ae1d9a5c95deb365d4e8c0e02a59111998af7))
+* **worker:** run bun --smol, because the process cannot see its budget ([#103](https://github.com/muitneliss/undercroft/issues/103)) ([e6c9d67](https://github.com/muitneliss/undercroft/commit/e6c9d67416908a4056243fdda0ff0431b321b911))
+
+## [1.15.2](https://github.com/muitneliss/undercroft/compare/v1.15.1...v1.15.2) (2026-09-22)
+
+
+### Bug Fixes
+
+* **journal:** the ledger's instant and its sentence are two words again ([#101](https://github.com/muitneliss/undercroft/issues/101)) ([c52b379](https://github.com/muitneliss/undercroft/commit/c52b379032abc0251ad7e2bce6109091639c15d9))
+
+## [1.15.1](https://github.com/muitneliss/undercroft/compare/v1.15.0...v1.15.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **ingest:** a harvest records what it settled instead of asserting it ([#99](https://github.com/muitneliss/undercroft/issues/99)) ([1c83644](https://github.com/muitneliss/undercroft/commit/1c83644b82a887e823b231de77053a5de1d07ca7))
+
+## [1.15.0](https://github.com/muitneliss/undercroft/compare/v1.14.2...v1.15.0) (2026-09-21)
+
+
+### Features
+
+* an ingest streams, lands as it goes, and does not re-read what it holds ([#95](https://github.com/muitneliss/undercroft/issues/95)) ([911e133](https://github.com/muitneliss/undercroft/commit/911e13310941c86b6068430d402826bc71b73413))
+* **assistant:** an in-app assistant that answers and acts, as the reader ([#87](https://github.com/muitneliss/undercroft/issues/87)) ([98e5c97](https://github.com/muitneliss/undercroft/commit/98e5c972735ed55ed38a412415733d4f40704c68))
+* **drive:** let an admin sync a picked folder to the bottom ([#93](https://github.com/muitneliss/undercroft/issues/93)) ([94dfde9](https://github.com/muitneliss/undercroft/commit/94dfde91a387e02565d98cbef54372ffab395fb6))
+* **email:** the five emails are set as leaves of the book (ADR 0030) ([#91](https://github.com/muitneliss/undercroft/issues/91)) ([2b6d2f6](https://github.com/muitneliss/undercroft/commit/2b6d2f61bb9df56bda2ed809d9bdd5dd33f796a9))
+* **journal:** a progress line is a gauge, not an entry ([#94](https://github.com/muitneliss/undercroft/issues/94)) ([8ac5917](https://github.com/muitneliss/undercroft/commit/8ac5917261bf3b97c6ecff331e63fdbb6615f169))
+
+
+### Bug Fixes
+
+* **deploy:** preflight compares the panel's compose with the file this repo publishes ([#92](https://github.com/muitneliss/undercroft/issues/92)) ([657ef7f](https://github.com/muitneliss/undercroft/commit/657ef7f97ec2b12c2b1837d24a169ecc12c23534))
+
+## [1.14.2](https://github.com/muitneliss/undercroft/compare/v1.14.1...v1.14.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **google:** pace Gmail at the rate it enforces, and wait out a quota window ([#85](https://github.com/muitneliss/undercroft/issues/85)) ([40842ee](https://github.com/muitneliss/undercroft/commit/40842ee6306d23743ce4e70baa308178be2cede8))
+
+## [1.14.1](https://github.com/muitneliss/undercroft/compare/v1.14.0...v1.14.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **flows:** write both flows in the Kestra 2.x spellings the server accepts ([#80](https://github.com/muitneliss/undercroft/issues/80)) ([2db8214](https://github.com/muitneliss/undercroft/commit/2db821480e4c261b369ca9e6a6184a3f5a9e65a7))
+
+## [1.14.0](https://github.com/muitneliss/undercroft/compare/v1.13.1...v1.14.0) (2026-09-21)
+
+
+### Features
+
+* **ui:** give the lake's SQL console its own page, sized for the work ([#78](https://github.com/muitneliss/undercroft/issues/78)) ([fb76aae](https://github.com/muitneliss/undercroft/commit/fb76aaeace14f51fa7c972ca1be7fc5bc855320d))
+
+## [1.13.1](https://github.com/muitneliss/undercroft/compare/v1.13.0...v1.13.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **deploy:** give Kestra a writable storage volume, so the schedule runs at all ([#76](https://github.com/muitneliss/undercroft/issues/76)) ([b83c48e](https://github.com/muitneliss/undercroft/commit/b83c48eeceb3a8b4baff705bf803d3d1ee9a7a2e))
+
+## [1.13.0](https://github.com/muitneliss/undercroft/compare/v1.12.0...v1.13.0) (2026-09-21)
+
+
+### Features
+
+* **extract:** read spreadsheets, and give the extract verb a caller ([#73](https://github.com/muitneliss/undercroft/issues/73)) ([b740762](https://github.com/muitneliss/undercroft/commit/b74076292f7a6c5850d819725263302ff908949e))
+* **lake:** open a line of the index as a query, answered ([#71](https://github.com/muitneliss/undercroft/issues/71)) ([14cfb51](https://github.com/muitneliss/undercroft/commit/14cfb51e2da4c67f7c392cccfd443ffa589373b1))
+
+
+### Bug Fixes
+
+* **ui:** a control sits on its field's line, and a linter says so ([#74](https://github.com/muitneliss/undercroft/issues/74)) ([d28fd40](https://github.com/muitneliss/undercroft/commit/d28fd40596c9ce209f9b8c5e6ddc2a7effd1b3b8))
+
+## [1.12.0](https://github.com/muitneliss/undercroft/compare/v1.11.0...v1.12.0) (2026-09-21)
+
+
+### Features
+
+* **lake:** a SQL console on CodeMirror, extracted document text, and a role-login fix ([#68](https://github.com/muitneliss/undercroft/issues/68)) ([da07d9f](https://github.com/muitneliss/undercroft/commit/da07d9feff54448feaef30fd0a93e3b5af4e19bb))
+* **ui:** adopt shadcn/Radix for structure, restyled to the existing design ([#67](https://github.com/muitneliss/undercroft/issues/67)) ([81fc9b7](https://github.com/muitneliss/undercroft/commit/81fc9b702a4eda40e0880cc176ee3c124557e664))
+
+## [1.12.0](https://github.com/muitneliss/undercroft/compare/v1.11.0...v1.12.0) (2026-09-20)
+
+
+### Features
+
+* **ui:** adopt shadcn/Radix for structure, restyled to the existing design ([#67](https://github.com/muitneliss/undercroft/issues/67)) ([81fc9b7](https://github.com/muitneliss/undercroft/commit/81fc9b702a4eda40e0880cc176ee3c124557e664))
+
+## [1.11.0](https://github.com/muitneliss/undercroft/compare/v1.10.1...v1.11.0) (2026-09-19)
+
+
+### Features
+
+* **journal:** redraw a run as plates with the work flowing between them ([#63](https://github.com/muitneliss/undercroft/issues/63)) ([b1939fe](https://github.com/muitneliss/undercroft/commit/b1939fe1796d03677e054c0a9de8a72cf4eb958b))
+
+## [1.10.1](https://github.com/muitneliss/undercroft/compare/v1.10.0...v1.10.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **ui:** give a signed-in reader a page again — the route table is data ([#61](https://github.com/muitneliss/undercroft/issues/61)) ([e82ac14](https://github.com/muitneliss/undercroft/commit/e82ac14cd4515fe7c963d8510760d182833f61f3))
+
+## [1.10.0](https://github.com/muitneliss/undercroft/compare/v1.9.0...v1.10.0) (2026-09-19)
+
+
+### Features
+
+* **google:** let admins choose which file types Gmail and Drive ingest ([#59](https://github.com/muitneliss/undercroft/issues/59)) ([adf0a5b](https://github.com/muitneliss/undercroft/commit/adf0a5b90b67d5215159d46430b1cb6883847c83))
+* **journal:** draw a run's own shape with React Flow, beside what it said ([#60](https://github.com/muitneliss/undercroft/issues/60)) ([5409d1a](https://github.com/muitneliss/undercroft/commit/5409d1a6f03c493a387fd317c85d4caaa76bf1fa))
+* **journal:** let a run say what it is doing while it is doing it ([#54](https://github.com/muitneliss/undercroft/issues/54)) ([a8be7f6](https://github.com/muitneliss/undercroft/commit/a8be7f63ab94eca6dd9f371d14db4b2255880ba4))
+
 ## [1.9.0](https://github.com/muitneliss/undercroft/compare/v1.8.0...v1.9.0) (2026-09-19)
 
 

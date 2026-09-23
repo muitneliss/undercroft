@@ -7,7 +7,9 @@
  * server.
  */
 
-import type { Connection, RunDetail, RunView, Source } from "@/api/types.ts";
+import { sourceKind } from "@undercroft/contracts/sources";
+
+import { type Connection, isSource, type RunDetail, type RunView } from "@/api/types.ts";
 import type { LastRun } from "@/lib/runs.ts";
 
 /** One line of the journal: an ingest that landed, a little before the when-tests' `NOW`. */
@@ -25,6 +27,10 @@ export function run(over: Partial<RunView> = {}): RunView {
     testsFailed: null,
     error: null,
     parentRunId: null,
+    // A run from before the stamp existed carries the same blank a build that did not say
+    // does, which is the state the interface has to render either way.
+    releaseTag: "",
+    pendingBefore: null,
     ...over,
   };
 }
@@ -35,6 +41,8 @@ export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
     ...run(),
     entityCounts: [],
     refusals: [],
+    reasonCounts: [],
+    refusalsPruned: false,
     steps: [],
     parentRun: null,
     childRun: null,
@@ -70,8 +78,18 @@ export function lastRun(over: Partial<LastRun> = {}): LastRun {
   };
 }
 
-export function connection(source: Source, over: Partial<Connection> = {}): Connection {
+/**
+ * One card of the schedule, for `source` -- a kind (`gmail`) or a further account of one
+ * (`gmail.3fa9c1d2e0ab`). Its `kind` is read off the source the way the server derives it, so
+ * a fixture cannot claim a Drive source is a Gmail connection.
+ */
+export function connection(source: string, over: Partial<Connection> = {}): Connection {
+  const kind = sourceKind(source);
+  if (!isSource(kind)) {
+    throw new Error(`fixture: ${source} is not an account of any kind the schedule lists`);
+  }
   return {
+    kind,
     source,
     status: "disconnected",
     externalAccountId: "",

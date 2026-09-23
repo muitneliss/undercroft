@@ -7,6 +7,7 @@ import { describe, expect, test as it } from "bun:test";
 import type { RunEventView } from "@/api/types.ts";
 import { translatorFor } from "@/i18n/index.ts";
 import { MISSING } from "@/lib/money.ts";
+import { connection } from "@/test/fixtures.ts";
 import {
   describeRun,
   eventSentence,
@@ -14,6 +15,7 @@ import {
   nextRunNote,
   runMark,
   runMarkLabel,
+  sourceLabel,
 } from "./runs.ts";
 
 const en = translatorFor("en");
@@ -78,6 +80,24 @@ describe("describeRun", () => {
   });
 });
 
+describe("sourceLabel", () => {
+  const first = connection("gmail", { status: "connected", externalAccountLabel: "ops@acme.test" });
+  const second = connection("gmail.3fa9c1d2e0ab", {
+    status: "connected",
+    externalAccountLabel: "sales@acme.test",
+  });
+
+  it("two mailboxes of one tenant are told apart by address", () => {
+    // Otherwise the journal reads "Gmail · messages" twice and nobody can say whose run failed.
+    expect(sourceLabel("gmail", [first, second])).toBe("Gmail · ops@acme.test");
+    expect(sourceLabel("gmail.3fa9c1d2e0ab", [first, second])).toBe("Gmail · sales@acme.test");
+  });
+
+  it("a tenant with one mailbox reads the vendor's name alone", () => {
+    expect(sourceLabel("gmail", [first, connection("drive")])).toBe("Gmail");
+  });
+});
+
 describe("journalEmptyBody", () => {
   it("teaches when the first run comes, from the earliest due source", () => {
     const body = journalEmptyBody(
@@ -107,13 +127,44 @@ describe("eventSentence", () => {
     detail: Record<string, unknown>,
     entity: string | null = null,
   ): RunEventView {
-    return { at: "2026-09-19T12:42:22.000Z", level: "info", event: name, entity, detail };
+    return {
+      at: "2026-09-19T12:42:22.000Z",
+      level: "info",
+      event: name,
+      entity,
+      detail,
+      live: false,
+    };
   }
 
   it("words a run's own line in the reader's language, grouping the counts their way", () => {
     const listed = event("work_listed", { total: 12_431 }, "messages");
     expect(eventSentence(vi, "vi", listed)).toBe("Cần đọc 12.431 messages.");
     expect(eventSentence(en, "en", listed)).toBe("12,431 messages to read.");
+  });
+
+  it("says how much a run did not have to read, so a steady run is not a blank one", () => {
+    // In steady state an ingest lands nothing, and `landed: 0` alone reads the same whether
+    // the mailbox is empty, the credential is broken, or nothing has changed since
+    // yesterday. It is a second sentence rather than a count appended to the first, because
+    // a source that skips nothing sends no `skipped` and would otherwise print MISSING --
+    // the quiet side, which the MISSING test below already holds.
+    const held = event("work_listed", { total: 7786, skipped: 7786 }, "messages");
+    expect(eventSentence(en, "en", held)).toBe(
+      "7,786 messages listed, 7,786 already held and not read.",
+    );
+    expect(eventSentence(vi, "vi", held)).toBe(
+      "Có 7.786 messages, 7.786 đã có sẵn nên không đọc lại.",
+    );
+
+    const done = event(
+      "entity_done",
+      { landed: 0, created: 0, changed: 0, refused: 0, skipped: 7786 },
+      "messages",
+    );
+    expect(eventSentence(en, "en", done)).toBe(
+      "Finished messages: 0 landed, 0 new, 0 changed, 0 refused, 7,786 already held and not read.",
+    );
   });
 
   it("says why a green run built nothing, which the counts alone could not", () => {

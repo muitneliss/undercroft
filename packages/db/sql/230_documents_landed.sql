@@ -1,0 +1,61 @@
+-- raw.records.documents_landed: what a harvest SETTLED, so "fully harvested" is checked
+-- rather than assumed.
+--
+-- ADR 0033 made skip-known safe by landing a record's documents BEFORE the record, so that
+-- "present in raw.records" would mean "fully harvested". That binds only the rows the new
+-- code wrote. The rows already in the table were written by the OLD order -- records,
+-- projection, then documents -- and the ingest that was oom-killed on 2026-09-21 completed
+-- the first two and died before the third. One tenant was left with 7,786 Gmail records and
+-- ZERO documents, and every run after it skipped all 7,786 on presence alone: an invariant
+-- asserted over data it was never true of, which self-corrects never. ADR 0035.
+--
+-- NULL MEANS THE LANDING DID NOT SAY, which is the honest reading of a row written before
+-- this column existed -- so it does not count as held, is read once more, and lands its
+-- documents. That is the whole repair: no DELETE (the worker holds none on this table, and
+-- deleting a customer's rows by hand is not a remedy), no hand-run SQL against a production
+-- database, and it costs each affected tenant exactly one more full read.
+--
+-- A COUNT RATHER THAN A BOOLEAN, at the same width and the same cost. `documents_landed = 0`
+-- on 7,786 rows is the sentence the outage could not say; `complete = true` would have been
+-- the same shape of claim that was already wrong.
+--
+-- WHY THIS IS NOT IN THE LAKE MANIFEST. The obvious place for a fact about a landing is the
+-- manifest, which does not affect the content hash and so costs no re-landing. It cannot
+-- work here: the lake is idempotent by content, so re-landing an unchanged record writes no
+-- new version and therefore no journal entry, and `loadStreamToRaw` projects from the
+-- journal. A legacy Gmail record re-read produces byte-identical canonical JSON -- nothing
+-- new in the lake, nothing to project, the column still NULL, and the message re-read on
+-- every run FOREVER. A fact that changes while the bytes do not has no way through a
+-- content-addressed store. So this column is written by `markHarvested`
+-- (`apps/worker/src/repos/rawRecords.ts`), called by the record sink after it has projected
+-- the chunk -- and it is the one column here that is NOT a projection of the lake.
+--
+-- That has a consequence worth stating rather than discovering: rebuilding `raw.records`
+-- from the lake, which `raw-lake.md` says is always allowed, leaves every row NULL and so
+-- re-reads every source once. Slow, never wrong -- the direction this whole area fails in.
+
+ALTER TABLE raw.records ADD COLUMN IF NOT EXISTS documents_landed integer;
+
+-- NO NEW GRANT, and that is a finding rather than an omission. `privileges.md` requires a
+-- migration that creates a TABLE to grant it in the same file, because `040_grants.sql` names
+-- raw's tables one by one and the ledger keys on filename so it never runs again. A COLUMN is
+-- the other case: the grants on `raw.records` are table-level --
+-- `GRANT SELECT, INSERT, UPDATE ... TO undercroft_worker` in 040, `SELECT` to `undercroft_dbt`
+-- and `undercroft_app` -- and in Postgres a table-level privilege covers every column,
+-- including one added later. The worker's UPDATE therefore already reaches this column.
+-- Re-issuing the grant here would say nothing true that is not already true, and would teach
+-- the next reader that a column needs one.
+--
+-- The check that this is not wishful is `packages/db/src/privileges.test.ts`, which runs every
+-- statement as the role that runs it in production, plus the worker suites, which `become`
+-- `undercroft_worker` before touching a row. A missing grant fails the gate, not 02:00.
+
+-- NO INDEX. The filter lands in `knownRecords`, whose scan is already on the primary key's
+-- prefix (source, tenant_id, entity, source_record_id) and bounded by a listing the caller
+-- holds; `documents_landed IS NOT NULL` is a test applied to the rows that lookup already
+-- found. An index on it would be a second structure to maintain on every projection for a
+-- predicate that never selects rows on its own.
+
+-- NO ROW LEVEL SECURITY CHANGE. `080_tenant_isolation.sql` makes `raw.records` row-secure and
+-- its policies are over the ROW, not the column list, so a new column is inside them already.
+-- Recorded so the next reader diffing this file against 180's policy block does not "fix" it.

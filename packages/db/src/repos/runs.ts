@@ -18,7 +18,15 @@ import type { SqlExecutor } from "../executor.ts";
 import { decodeCursor, encodeCursor } from "./cursor.ts";
 
 export type RunStatus = "running" | "ok" | "failed";
-export type RunVerb = "ingest" | "transform";
+/**
+ * What a run was doing. The SQL column is free text with no CHECK, deliberately, so a new
+ * verb is a type change here and not a migration -- see `020_control_plane.sql`.
+ *
+ * `extract` reads landed documents into `raw.document_text`. It is separate from `ingest`
+ * rather than its tail because OCR over a real tenant is tens of minutes, and the unique
+ * index on `(tenant_id, source, verb)` lets the two run beside each other. ADR 0024.
+ */
+export type RunVerb = "ingest" | "transform" | "extract";
 export type RunTrigger = "schedule" | "manual" | "build" | "lake-api";
 
 export interface Run {
@@ -41,6 +49,30 @@ export interface Run {
   readonly error: string | null;
   readonly startedAt: string;
   readonly endedAt: string | null;
+  /**
+   * Which build produced this run -- `v1.16.0`, or `main@a1b2c3d` for a build cut from no
+   * release. `""` is "this build did not say", never a guess: the deploy pointer is `latest`
+   * by policy, so a version that is not baked into the image cannot be recovered from it.
+   */
+  readonly releaseTag: string;
+  /**
+   * How much work was outstanding when this run drew its batch, or `null` for a verb with no
+   * backlog to report. Never 0 for "unknown" -- 0 claims the queue was empty, which is the
+   * opposite fact and the one that makes a healthy drain look like a fault.
+   */
+  readonly pendingBefore: number | null;
+}
+
+/**
+ * How many records one run refused for one reason -- the rollup that outlives the records.
+ *
+ * `ops.run_refusal` is pruned at 7 days and this is not, so a year-old run still answers "what
+ * were the 245" with "230 of them were images too small to read". See `250_run_trace.sql`.
+ */
+export interface RunReasonCount {
+  readonly entity: string;
+  readonly reason: string;
+  readonly count: number;
 }
 
 export interface RunEntity {
@@ -83,6 +115,18 @@ export interface RunEvent {
   /** The entity it concerns; `null` is "the run as a whole". */
   readonly entity: string | null;
   readonly detail: Readonly<Record<string, unknown>>;
+  /**
+   * Whether this line is a reading of a dial rather than a thing that happened.
+   *
+   * A live line keeps ONE row per `(run, event, entity)` and is rewritten in place as its
+   * figure moves; a milestone appends and is never touched again. That distinction is the
+   * whole of `210_run_event_live.sql`, and it is what lets a run narrate itself for hours
+   * without the feed becoming the thing it is describing.
+   *
+   * It travels to the browser because the two are read differently there as well: a milestone
+   * is a line of the ledger, a live one is the gauge above it.
+   */
+  readonly live: boolean;
 }
 
 /** The longest error text a run keeps. Enough to name the fault, too short to hold a row. */
@@ -115,12 +159,15 @@ export async function openRun(
     trigger: RunTrigger;
     triggeredBy?: string;
     parentRunId?: string | null;
+    /** Which build is opening this run. Stamped here so it is true even of a run that fails. */
+    releaseTag?: string;
   },
 ): Promise<OpenOutcome> {
   try {
     await exec.query(
-      `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, triggered_by, parent_run_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, triggered_by, parent_run_id,
+                            release_tag)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         input.id,
         input.tenantId,
@@ -129,6 +176,7 @@ export async function openRun(
         input.trigger,
         input.triggeredBy ?? "",
         input.parentRunId ?? null,
+        input.releaseTag ?? "",
       ],
     );
     return { ok: true };
@@ -221,6 +269,72 @@ export async function recordRefusals(
   );
 }
 
+/**
+ * Record how many records one run refused for each reason.
+ *
+ * Summed on conflict rather than replaced, matching `recordEntities`: a verb that records in
+ * batches adds to its own tally, and a resumed entity must not overwrite the half already
+ * counted. Reasons are the fixed vocabulary in `extract/extractText.ts` and `extract/ocr.ts`,
+ * so this table stays a handful of rows per run however many records were refused.
+ */
+export async function recordRefusalReasons(
+  exec: SqlExecutor,
+  runId: string,
+  counts: readonly RunReasonCount[],
+): Promise<void> {
+  if (counts.length === 0) {
+    return;
+  }
+  await exec.query(
+    `INSERT INTO ops.run_refusal_reason (run_id, entity, reason, count)
+     SELECT $1, c->>'entity', left(c->>'reason', $3), (c->>'count')::int
+     FROM jsonb_array_elements($2::jsonb) AS c
+     ON CONFLICT (run_id, entity, reason) DO UPDATE SET
+       count = ops.run_refusal_reason.count + EXCLUDED.count`,
+    [runId, JSON.stringify(counts), MAX_ERROR_CHARS],
+  );
+}
+
+/** The rollup for one run, biggest reason first -- the order a reader wants to read it in. */
+export async function reasonsFor(exec: SqlExecutor, runId: string): Promise<RunReasonCount[]> {
+  const { rows } = await exec.query<{ entity: string; reason: string; count: number }>(
+    `SELECT entity, reason, count FROM ops.run_refusal_reason
+      WHERE run_id = $1 ORDER BY count DESC, reason`,
+    [runId],
+  );
+  return rows.map((row) => ({ entity: row.entity, reason: row.reason, count: row.count }));
+}
+
+/**
+ * How much was outstanding when this run drew its batch.
+ *
+ * Written when it is learned rather than folded into `closeRun`, so a run that FAILS still
+ * records the queue it was looking at -- which is the run whose depth a reader most wants.
+ */
+export async function recordPendingBefore(
+  exec: SqlExecutor,
+  runId: string,
+  pending: number,
+): Promise<void> {
+  await exec.query("UPDATE ops.run SET pending_before = $2 WHERE id = $1", [runId, pending]);
+}
+
+/**
+ * Drop per-record refusals older than `keepDays`, and answer how many went.
+ *
+ * The rollup is untouched -- it is a different table, and that is why it is a different table.
+ * Called by the verb that writes refusals rather than by a scheduler: one DELETE does not earn
+ * a cron, and the count comes back so the caller can say what it removed instead of pruning
+ * silently (`raw-lake.md`).
+ */
+export async function pruneRefusals(exec: SqlExecutor, keepDays: number): Promise<number> {
+  const { rows } = await exec.query<{ removed: number }>(
+    "SELECT ops.prune_run_refusals($1) AS removed",
+    [keepDays],
+  );
+  return rows[0]?.removed ?? 0;
+}
+
 export async function recordSteps(
   exec: SqlExecutor,
   runId: string,
@@ -242,8 +356,37 @@ export async function recordSteps(
   );
 }
 
+/** The key a live line is unique on, matching `run_event_live_one`'s own expression. */
+function liveKey(event: RunEvent): string {
+  return `${event.event} ${event.entity ?? ""}`;
+}
+
 /**
- * Append what a run is doing, while it is still doing it.
+ * The batch as the two statements below need it: milestones in the order they happened, and
+ * at most ONE live line per key -- the last, which is the only reading still true.
+ *
+ * The de-duplication is not an optimisation. `ON CONFLICT DO UPDATE` refuses a source that
+ * offers the same key twice ("cannot affect row a second time"), and a flush that spans two
+ * coalescing intervals offers exactly that.
+ */
+function partition(events: readonly RunEvent[]): {
+  appended: RunEvent[];
+  live: RunEvent[];
+} {
+  const appended: RunEvent[] = [];
+  const latest = new Map<string, RunEvent>();
+  for (const event of events) {
+    if (event.live) {
+      latest.set(liveKey(event), event);
+    } else {
+      appended.push(event);
+    }
+  }
+  return { appended, live: [...latest.values()] };
+}
+
+/**
+ * Record what a run is doing, while it is still doing it.
  *
  * `at` travels with each event rather than defaulting to `now()`, because the worker buffers
  * a handful of events and flushes them together: stamping them on arrival here would file
@@ -251,22 +394,46 @@ export async function recordSteps(
  *
  * JSON in, rows out, as `recordEntities` and `recordSteps` do -- one statement whatever the
  * count, and the same parameter shape under `pg` and PGlite.
+ *
+ * TWO STATEMENTS, because the table holds two kinds of line. A milestone is appended and never
+ * touched again. A live line -- a reading of a dial -- keeps one row per `(run, event, entity)`
+ * and is rewritten in place, which is what lets an hours-long run keep a counter moving without
+ * writing a row per reading. `210_run_event_live.sql` argues the distinction; the worker decides
+ * which side a line falls on by calling `progress` rather than `info`.
+ *
+ * The milestones go first, so a run's opening line is filed before the first reading of the
+ * dial it opened.
  */
 export async function recordEvents(
   exec: SqlExecutor,
   runId: string,
   events: readonly RunEvent[],
 ): Promise<void> {
-  if (events.length === 0) {
-    return;
+  const { appended, live } = partition(events);
+
+  if (appended.length > 0) {
+    await exec.query(
+      `INSERT INTO ops.run_event (run_id, at, level, event, entity, detail)
+       SELECT $1, (e->>'at')::timestamptz, e->>'level', e->>'event', e->>'entity',
+              coalesce(e->'detail', '{}'::jsonb)
+       FROM jsonb_array_elements($2::jsonb) AS e`,
+      [runId, JSON.stringify(appended)],
+    );
   }
-  await exec.query(
-    `INSERT INTO ops.run_event (run_id, at, level, event, entity, detail)
-     SELECT $1, (e->>'at')::timestamptz, e->>'level', e->>'event', e->>'entity',
-            coalesce(e->'detail', '{}'::jsonb)
-     FROM jsonb_array_elements($2::jsonb) AS e`,
-    [runId, JSON.stringify(events)],
-  );
+
+  if (live.length > 0) {
+    // The row keeps its id, and therefore its place in the feed: a gauge stays where it first
+    // appeared rather than jumping to the end of the ledger every two seconds.
+    await exec.query(
+      `INSERT INTO ops.run_event (run_id, at, level, event, entity, detail, live)
+       SELECT $1, (e->>'at')::timestamptz, e->>'level', e->>'event', e->>'entity',
+              coalesce(e->'detail', '{}'::jsonb), true
+       FROM jsonb_array_elements($2::jsonb) AS e
+       ON CONFLICT (run_id, event, coalesce(entity, '')) WHERE live
+       DO UPDATE SET at = EXCLUDED.at, detail = EXCLUDED.detail`,
+      [runId, JSON.stringify(live)],
+    );
+  }
 }
 
 /**
@@ -290,9 +457,10 @@ export async function eventsFor(
     event: string;
     entity: string | null;
     detail: Record<string, unknown>;
+    live: boolean;
   }>(
-    `SELECT at, level, event, entity, detail FROM (
-       SELECT id, at, level, event, entity, detail FROM ops.run_event
+    `SELECT at, level, event, entity, detail, live FROM (
+       SELECT id, at, level, event, entity, detail, live FROM ops.run_event
        WHERE run_id = $1 ORDER BY id DESC LIMIT $2
      ) AS recent ORDER BY id`,
     [runId, limit],
@@ -303,6 +471,7 @@ export async function eventsFor(
     event: r.event,
     entity: r.entity,
     detail: r.detail,
+    live: r.live,
   }));
 }
 
@@ -441,10 +610,13 @@ interface RunRow {
   error: string | null;
   started_at: Date | string;
   ended_at: Date | string | null;
+  release_tag: string;
+  pending_before: number | null;
 }
 
 const RUN_COLUMNS = `id, tenant_id, source, verb, trigger, triggered_by, parent_run_id, status,
-  created, changed, unchanged, refused, tests_failed, error, started_at, ended_at`;
+  created, changed, unchanged, refused, tests_failed, error, started_at, ended_at,
+  release_tag, pending_before`;
 
 function toRun(row: RunRow): Run {
   return {
@@ -464,6 +636,8 @@ function toRun(row: RunRow): Run {
     error: row.error,
     startedAt: new Date(row.started_at).toISOString(),
     endedAt: row.ended_at === null ? null : new Date(row.ended_at).toISOString(),
+    releaseTag: row.release_tag,
+    pendingBefore: row.pending_before,
   };
 }
 

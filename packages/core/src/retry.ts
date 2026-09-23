@@ -27,6 +27,19 @@ export interface RetryPolicy {
   readonly jitter: "full" | "none";
   readonly respectRetryAfter: boolean;
   readonly maxRetryAfterMs: number;
+  /**
+   * A body-aware test for a status that `on` does NOT list. Absent means status alone decides.
+   *
+   * It exists because one status can mean two opposite things at the same provider. Gmail
+   * answers a rate limit with `403 rateLimitExceeded` rather than 429, and it answers a
+   * missing scope with 403 too -- the first is transient and must be retried, the second is
+   * not and must not be. `on: [403]` cannot tell them apart, so the body has to be read, and
+   * reading it is the provider's business rather than this module's: the predicate lives with
+   * the caller that knows the provider's error shape.
+   *
+   * It can only ADD retries, never remove one: a status in `on` is retried whatever this says.
+   */
+  readonly retryWhen?: (error: HttpError) => boolean;
 }
 
 export const DEFAULT_RETRY: RetryPolicy = {
@@ -80,7 +93,10 @@ function backoffFor(policy: RetryPolicy, attempt: number, random: () => number):
 }
 
 function isRetryable(error: unknown, policy: RetryPolicy): boolean {
-  return error instanceof HttpError && policy.on.includes(error.status);
+  if (!(error instanceof HttpError)) {
+    return false;
+  }
+  return policy.on.includes(error.status) || (policy.retryWhen?.(error) ?? false);
 }
 
 /**

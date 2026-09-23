@@ -1,3 +1,15 @@
+---
+description: Task is the only entrypoint; bun and the scripts are what it calls into
+paths:
+  [
+    "Taskfile.yml",
+    ".taskfiles/**/*.yml",
+    "package.json",
+    "scripts/**/*.ts",
+    ".github/workflows/*.yml",
+  ]
+---
+
 # Task is the only entrypoint
 
 Every operation in this repo — dev, build, the gate, deploy, a migration — is invoked as
@@ -55,6 +67,6 @@ a Makefile, an npm script tree, or a bag of `scripts/*.sh`.
   a couple of these; without `run: once` Task has no reason not to run each dependency again
   for every task that lists it, and two `bun run migrate` processes racing the same
   connection is a failure mode worth not having.
-- **CI installs Task via `go-task/setup-task@v1`**, alongside `oven-sh/setup-bun@v2` in any
+- **CI installs Task via `go-task/setup-task@v2`**, alongside `oven-sh/setup-bun@v2` in any
   job whose tasks shell out to `bun`. A job whose tasks don't touch bun (`ci:compose-check`,
   `ci:secrets-check`) only needs the former.

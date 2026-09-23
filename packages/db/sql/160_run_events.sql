@@ -38,6 +38,11 @@ CREATE INDEX IF NOT EXISTS run_event_run ON ops.run_event (run_id, id);
 
 -- The worker appends; it never edits or removes an event, for the same reason it never
 -- edits a refusal. The control plane reads, and may delete a run's feed with the run.
+--
+-- ONE EXCEPTION, ADDED IN 210: a PROGRESS line is a reading of a dial rather than a thing that
+-- happened, so it keeps one row per (run, event, entity) and the worker updates it in place,
+-- under a column-scoped UPDATE grant reaching `at` and `detail` and nothing else. The sentence
+-- above still holds for every milestone, and for what an event IS. ADR 0032.
 GRANT SELECT, INSERT ON ops.run_event TO undercroft_worker;
 GRANT SELECT, DELETE ON ops.run_event TO undercroft_app;
 GRANT USAGE ON SEQUENCE ops.run_event_id_seq TO undercroft_worker;

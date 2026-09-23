@@ -18,10 +18,26 @@ import { Link } from "react-router-dom";
 
 import type { Connection, LakeSummary as Summary } from "@/api/types.ts";
 import { EmptyState } from "@/components/EmptyState.tsx";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import { lakeEmptyBody } from "@/lib/lake.ts";
+import {
+  inventoryOf,
+  type LakeEntry,
+  lakeEmptyBody,
+  type LakeStream,
+  sameStream,
+  streamKey,
+} from "@/lib/lake.ts";
 import { formatBytes, formatCount } from "@/lib/money.ts";
-import { sourceLabel } from "@/lib/runs.ts";
+import { type AccountName, sourceLabel } from "@/lib/runs.ts";
 import { relativeTime } from "@/lib/when.ts";
 
 export function LakeSummary({
@@ -29,15 +45,29 @@ export function LakeSummary({
   summary,
   connections,
   locale,
+  hrefFor,
+  openStream,
 }: {
   tenantId: string;
   summary: Summary;
-  /** For the empty leaf only: when the first run comes. */
-  connections: readonly Pick<Connection, "nextRunAt">[];
+  /**
+   * When the first run comes, for the empty leaf, and which account a stream belongs to, for a
+   * tenant with two mailboxes whose lines would otherwise both read "Gmail". See `sourceLabel`.
+   */
+  connections: readonly (Pick<Connection, "nextRunAt"> & AccountName)[];
   locale: Locale;
+  /**
+   * Where a stream's own rows are read. Absent for a reader who may not browse them, whose
+   * index is therefore the same facts as plain text -- the counts are theirs, the payload
+   * is not, and a link they cannot follow would be a promise this leaf does not keep.
+   */
+  hrefFor?: (stream: LakeStream) => string;
+  /** The stream currently open below, so the index can mark which line is being read. */
+  openStream?: LakeStream | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const nothing = summary.records.length === 0 && summary.documents.length === 0;
+  const entries = inventoryOf(summary);
+  const nothing = entries.length === 0;
 
   return (
     <>
@@ -56,67 +86,101 @@ export function LakeSummary({
         />
       ) : null}
 
-      {summary.records.length > 0 ? (
-        <table className="table">
-          <caption>{t("lake.recordsCaption", { count: summary.records.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("lake.colSource")}</th>
-              <th scope="col">{t("lake.colEntity")}</th>
-              <th scope="col" className="num">
-                {t("lake.colRecords")}
-              </th>
-              <th scope="col" className="num">
-                {t("lake.colTombstoned")}
-              </th>
-              <th scope="col">{t("lake.colLatest")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.records.map((stream) => (
-              <tr key={`${stream.source}/${stream.entity}`}>
-                <td className="datum">{sourceLabel(stream.source)}</td>
-                <td className="datum">{stream.entity}</td>
-                <td className="num datum">{formatCount(stream.records, locale)}</td>
-                <td className="num datum datum--quiet">{formatCount(stream.tombstoned, locale)}</td>
-                <td className="datum datum--quiet">
-                  {relativeTime(stream.latestObservedAt, locale)}
-                </td>
-              </tr>
+      {entries.length > 0 ? (
+        <Table>
+          <TableCaption>{t("lake.indexCaption", { count: entries.length })}</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">{t("lake.colSource")}</TableHead>
+              <TableHead scope="col">{t("lake.colHolds")}</TableHead>
+              <TableHead scope="col" className="num">
+                {t("lake.colHeld")}
+              </TableHead>
+              <TableHead scope="col">{t("lake.colAlso")}</TableHead>
+              <TableHead scope="col">{t("lake.colLatest")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {entries.map((entry) => (
+              <IndexRow
+                key={streamKey(entry.stream)}
+                entry={entry}
+                source={sourceLabel(entry.stream.source, connections)}
+                locale={locale}
+                open={sameStream(entry.stream, openStream ?? null)}
+                {...(hrefFor === undefined ? {} : { href: hrefFor(entry.stream) })}
+              />
             ))}
-          </tbody>
-        </table>
-      ) : null}
-
-      {summary.documents.length > 0 ? (
-        <table className="table">
-          <caption>{t("lake.documentsCaption", { count: summary.documents.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("lake.colSource")}</th>
-              <th scope="col" className="num">
-                {t("lake.colDocuments")}
-              </th>
-              <th scope="col" className="num">
-                {t("lake.colBytes")}
-              </th>
-              <th scope="col">{t("lake.colLatest")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.documents.map((source) => (
-              <tr key={source.source}>
-                <td className="datum">{sourceLabel(source.source)}</td>
-                <td className="num datum">{formatCount(source.documents, locale)}</td>
-                <td className="num datum">{formatBytes(source.bytes, locale)}</td>
-                <td className="datum datum--quiet">
-                  {relativeTime(source.latestObservedAt, locale)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       ) : null}
     </>
+  );
+}
+
+/**
+ * One line of the index, and the way into it.
+ *
+ * The whole point of this leaf's rework: the row that TELLS you a stream exists is the row
+ * that OPENS it. It used to take a second control, in a second band, listing the same streams
+ * again inside a closed `<select>` -- so a reader who had just read "Drive · 122 documents"
+ * had to go and find that same sentence a second time before they could look at it.
+ *
+ * A real `<a href>`, not a click handler: it keeps the shareable `?source=&entity=` URL the
+ * old picker already wrote, opens in a new tab on a middle click, and is reachable by
+ * keyboard without anything being added for it. A reader who may not browse gets the same
+ * row as plain text -- the facts are theirs, the payload is not.
+ */
+function IndexRow({
+  entry,
+  source,
+  locale,
+  open,
+  href,
+}: {
+  entry: LakeEntry;
+  /** The stream's source as the reader names it, account included. */
+  source: string;
+  locale: Locale;
+  open: boolean;
+  href?: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const { stream, note } = entry;
+  const holds = stream.kind === "records" ? stream.entity : t("lake.streamDocuments");
+
+  return (
+    <TableRow className={open ? "lake-index__row lake-index__row--open" : "lake-index__row"}>
+      <TableCell className="datum">
+        {href === undefined ? (
+          source
+        ) : (
+          // The punched hole this system marks a selection with, drawn by CSS on the row.
+          <Link className="lake-index__link" to={href} aria-current={open ? "true" : undefined}>
+            {source}
+          </Link>
+        )}
+      </TableCell>
+      <TableCell className="datum">{holds}</TableCell>
+      <TableCell className="num datum">{formatCount(entry.held, locale)}</TableCell>
+      <TableCell className="datum datum--quiet">
+        {note.kind === "bytes"
+          ? // `count` is the distinct-blob figure because that is the noun the sentence
+            // pluralises; the other three are plain interpolations. One key, one sentence --
+            // a line assembled from translated fragments could only be right in the language
+            // it was assembled in (`.claude/rules/i18n.md`).
+            t("lake.alsoBytesReadable", {
+              bytes: formatBytes(note.bytes, locale),
+              count: note.distinctBlobs,
+              readable: note.readable,
+              total: note.total,
+            })
+          : null}
+        {note.kind === "tombstoned" ? t("lake.alsoTombstoned", { count: note.count }) : null}
+      </TableCell>
+      <TableCell className="datum datum--quiet">
+        {relativeTime(entry.latestObservedAt, locale)}
+      </TableCell>
+    </TableRow>
   );
 }

@@ -27,6 +27,8 @@
  * deploy something nobody asked for.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import process from "node:process";
 
 const POLL_INTERVAL_MS = 10_000;
@@ -47,9 +49,14 @@ const IMAGE_LINE = /^\s+image:\s*(?<image>\S+)\s*$/u;
 /** A key at any depth, used to track which service a `depends_on` entry sits under. */
 const NESTED_NAME = /^\s+(?<name>[a-z0-9][a-z0-9-]*):\s*$/u;
 const COMPLETED_CONDITION = /^\s+condition:\s*service_completed_successfully\s*$/u;
+/** Blank lines at the very end of a file, which YAML does not read and a paste can add. */
+const TRAILING_NEWLINES = /\n+$/u;
 
 /** Flags the stored compose command must carry. Asserted by `preflight`, never written by CI. */
 const REQUIRED_COMMAND_FLAGS = ["--pull always", "--wait", "--wait-timeout", "--remove-orphans"];
+
+/** The file the panel's copy must match, relative to this script. */
+const SERVER_COMPOSE = "deploy/compose/docker-compose.server.yml";
 
 export interface Config {
   readonly endpoint: string;
@@ -314,16 +321,76 @@ export function oneShotServices(composeFile: string): Set<string> {
 }
 
 /**
- * The gate before anything is queued, when failing is free: the panel must be pointed at
- * published images and must be told to pull them.
+ * How the panel's compose file differs from the one this repo publishes, or `null` when it
+ * does not. The returned string is the whole complaint, so the wording has one owner.
+ *
+ * `.claude/rules/deployment.md` says the file in this repo is the source of truth and
+ * Dokploy holds a copy. Nothing checked that until this function existed, and the copy
+ * drifted far enough to run a service this repo had deleted (Metabase, ADR 0020) while
+ * missing the `depends_on` that declares `kestra-flows` a job allowed to exit -- so three
+ * releases in a row failed at `--wait` over a container that had in fact done its work, and
+ * every `preflight` before them passed. The two checks either side of this one are about
+ * what the panel points at; this one is about whether it is the same file at all.
+ *
+ * Line endings and trailing blank lines are normalized away first. Neither means anything
+ * in YAML, both survive a trip through a browser textarea, and a release refused over an
+ * invisible character is how a gate teaches the people it protects to work around it.
+ * Everything else compares byte for byte: a comment that drifted is a reason that drifted.
+ */
+export function composeDrift(panel: string, expected: string): string | null {
+  const held = normalizeCompose(panel).split("\n");
+  const published = normalizeCompose(expected).split("\n");
+  const longer = held.length >= published.length ? held : published;
+  const at = longer.findIndex((_line, index) => held[index] !== published[index]);
+  if (at === -1) {
+    return null;
+  }
+  return (
+    `the panel's compose file is not ${SERVER_COMPOSE} (first difference at line ${at + 1}, ` +
+    `panel ${held.length} lines, file ${published.length}).\n` +
+    `  panel: ${quoteLine(held[at])}\n` +
+    `  file:  ${quoteLine(published[at])}\n` +
+    "  Push the file to the panel (compose.update) rather than editing the file to match: " +
+    "CI does not write the panel's configuration, so a drift must be seen and repaired by a " +
+    "human."
+  );
+}
+
+/** A line of a compose file as it reads in an error, or where the file ran out. */
+function quoteLine(line: string | undefined): string {
+  return line === undefined ? "(end of file)" : `\`${line}\``;
+}
+
+function normalizeCompose(text: string): string {
+  return text.replaceAll("\r\n", "\n").replace(TRAILING_NEWLINES, "");
+}
+
+/**
+ * The compose file this repo publishes. Read at the entrypoint rather than inside
+ * `preflight`, so the comparison stays a value a test can hand in.
+ */
+export function publishedCompose(): string {
+  return readFileSync(join(import.meta.dirname, "..", SERVER_COMPOSE), "utf8");
+}
+
+/**
+ * The gate before anything is queued, when failing is free: the panel must hold the compose
+ * file this repo publishes, must be pointed at published images, and must be told to pull
+ * them.
  *
  * `--pull always` is what makes a moving `latest` fetch the release that was just built;
  * without it the stack restarts on the image it already has and reports success. `--wait`
  * is what stops a crash-looping container from deploying green.
  */
-export async function preflight(cfg: Config, deps: Deps): Promise<void> {
+export async function preflight(cfg: Config, deps: Deps, expected: string): Promise<void> {
   const compose = await composeRecord(cfg, deps);
   deps.log(`compose ${compose.name} (${compose.appName}), source ${compose.sourceType}`);
+
+  const drift = composeDrift(compose.composeFile, expected);
+  if (drift !== null) {
+    throw new Error(drift);
+  }
+  deps.log(`  holds ${SERVER_COMPOSE}`);
 
   const services = releasedServices(compose.composeFile);
   if (services.length === 0) {
@@ -587,7 +654,7 @@ async function main(): Promise<void> {
 
   switch (command) {
     case "preflight":
-      await preflight(cfg, deps);
+      await preflight(cfg, deps, publishedCompose());
       return;
     case "deploy": {
       const tag = process.argv[3] ?? process.env.IMAGE_TAG ?? "latest";

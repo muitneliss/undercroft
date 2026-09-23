@@ -1,0 +1,112 @@
+id: extract_due
+namespace: undercroft
+
+description: |
+  Every hour, ask the worker which (tenant, source) pairs have landed documents nobody has
+  read yet, and start an extract run for each.
+
+  Without this flow the verb was unreachable. `POST /v1/runs/extract` has existed and been
+  wired since ADR 0024, but nothing called it: `ingest_due` starts syncs, the control plane
+  has no extract counterpart, and the UI has no button -- so `raw.document_text` stayed
+  empty in production while every sync reported ok. A landed PDF or spreadsheet that nobody
+  can search is, for the customer asking "which contract mentions this clause", the same as
+  not having it.
+
+  NOT CHAINED TO THE INGEST THAT LANDED THE DOCUMENTS. Reading a real tenant's documents is
+  tens of minutes of CPU; chained, an ingest's duration would become a function of how much
+  reading is outstanding and a failed read would look like a failed sync -- two different
+  facts wearing one status. ADR 0024, and the docstring on services/extract/job.ts.
+
+  DUE HERE MEANS WORK OUTSTANDING, NOT A CADENCE. `extract-due` returns only pairs with a
+  document that has never been read or whose bytes have changed since it was, so a tick over
+  a settled tenant returns an empty list and starts nothing. That is what makes an hourly
+  schedule cheap rather than wasteful, and it is why this flow has no cadence setting of its
+  own to drift from the one the customer chose for syncs.
+
+  Hourly rather than every fifteen minutes: a run reads a capped batch (DEFAULT_BATCH, 500
+  documents) and a large backlog therefore drains over several ticks. Hourly is frequent
+  enough that a document landed by a sync is searchable the same working hour, and slow
+  enough that a tenant mid-backlog is not answering a new tick while still finishing the
+  last one.
+
+  A 409 is the worker's own guard -- an extract already running for that pair -- and is not
+  a failure of this flow, hence `allowFailed`, exactly as in `ingest_due`.
+
+labels:
+  owner: data-platform
+
+concurrency:
+  behavior: CANCEL
+  limit: 1
+
+tasks:
+  - id: due
+    type: io.kestra.plugin.core.http.Request
+    uri: http://undercroft-worker:8081/v1/runs/extract-due
+    method: GET
+    headers:
+      Authorization: "Bearer {{ envs.trigger_token }}"
+    options:
+      # Kestra 2.x nests the two timeouts under `timeout`; they were flat in 1.x and the
+      # server rejects the old spelling outright (422, "Unrecognized field").
+      timeout:
+        connectTimeout: PT30S
+        readIdleTimeout: PT1M
+
+  - id: start
+    # `Loop`, not `ForEach`: 2.x dropped the ForEach type outright and the server answers
+    # "Invalid type" for it. It is NOT a plain rename -- Loop runs each iteration as its own
+    # SUB-EXECUTION, which is why the body below reads `item.value` -- the spelling in
+    # Kestra's own example -- and not 1.x's `taskrun.value`, which is not in scope in a
+    # sub-execution. That failure is at RENDER time and the flow validator does not see
+    # it: a flow can validate clean and still fail on its first real iteration.
+    type: io.kestra.plugin.core.flow.Loop
+    # `fromJson`, not `json`: 2.x removed the `json` Pebble function and the expression
+    # fails at render time with "Function or Macro [json] does not exist" -- which the
+    # flow validator does NOT catch, because it only type-checks the task graph.
+    values: "{{ fromJson(outputs.due.body).due }}"
+    # One at a time: an extract run is CPU-bound in the worker process (pdftotext, and a
+    # spreadsheet inflated whole in memory), and the worker is memory-limited like every
+    # other service on this host. Fanning out would turn a backlog into an OOM kill that
+    # `deployment.md` exists to prevent.
+    concurrencyLimit: 1
+    tasks:
+      - id: extract
+        type: io.kestra.plugin.core.http.Request
+        uri: http://undercroft-worker:8081/v1/runs/extract
+        method: POST
+        contentType: application/json
+        body: "{{ item.value }}"
+        headers:
+          Authorization: "Bearer {{ envs.trigger_token }}"
+        options:
+          # A 409 is an extract already running for that pair -- the worker's own guard --
+          # and is not a failure of this flow. In 2.x `allowFailed` is an HTTP option, not
+          # a task property: at task level the server rejects it.
+          allowFailed: true
+          timeout:
+            connectTimeout: PT30S
+            # Longer than ingest_due's minute: the worker answers 202 as soon as the run is
+            # open, but opening it competes with whatever batch is already reading.
+            readIdleTimeout: PT5M
+
+  - id: report
+    type: io.kestra.plugin.core.log.Log
+    message: "asked the worker to read documents for {{ fromJson(outputs.due.body).due | length }} pair(s)"
+
+triggers:
+  - id: hourly
+    # :07 rather than :00, so the tick does not land on the same minute as `ingest_due`'s
+    # `*/15`. Both flows drive the same worker process; starting a CPU-bound read in the
+    # minute a batch of syncs is opening connections is a collision with no upside.
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "7 * * * *"
+
+errors:
+  - id: alert
+    type: io.kestra.plugin.core.log.Log
+    level: ERROR
+    message: |
+      extract_due FAILED. execution={{ execution.id }}
+      The worker could not be asked what is unread. Nothing was started; documents already
+      in the lake keep their text, and the unread ones stay unread rather than half-read.

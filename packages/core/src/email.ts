@@ -1,10 +1,15 @@
 /**
  * Sending an email, and the seam that keeps the gate offline.
  *
- * There is exactly one thing this platform emails: a one-time sign-in code. That is why the
- * interface is three fields and not a templating system -- the day a second kind of message
- * exists is the day to grow it, and guessing now would mean maintaining a mail framework
- * nobody asked for.
+ * This interface was three fields and no templating system, on the stated ground that "the
+ * day a second kind of message exists is the day to grow it". Five kinds exist now -- a
+ * sign-in code, an invitation, a failed run, a lapsing grant, a lapsing key -- so that day
+ * arrived and the growth is `emailTemplate.ts`, one leaf set two ways. ADR 0030 records it.
+ *
+ * `text` stayed REQUIRED while `html` is optional, which is the whole shape of the decision:
+ * the plain-text branch is the message and the markup is the same message set. A sender that
+ * accepted markup alone would let somebody ship a message that is blank in every client with
+ * images and styles off, and nobody would notice until a customer said so.
  *
  * An HTTPS API rather than SMTP. SMTP would mean a dependency and four settings whose
  * failure mode is a message that is silently never delivered; a JSON POST fails with a
@@ -23,8 +28,13 @@ export interface EmailMessage {
   /** A single recipient. Sign-in codes are never sent to more than one address. */
   readonly to: string;
   readonly subject: string;
-  /** Plain text. A sign-in code has nothing to gain from HTML and something to lose. */
+  /** The message. Never derived from `html`, and never optional -- see the docstring. */
   readonly text: string;
+  /**
+   * The same message, set. Optional so a caller with nothing to set can still send, and so
+   * the `text` branch can never be the thing that goes missing.
+   */
+  readonly html?: string;
 }
 
 export interface EmailSender {
@@ -34,7 +44,7 @@ export interface EmailSender {
 /** A message that no provider would accept. Raised before anything is sent. */
 export class UnsendableEmail extends UndercroftError {}
 
-/** Resend's endpoint. Any provider taking `{ from, to, subject, text }` works unchanged. */
+/** Resend's endpoint. Any provider taking `{ from, to, subject, text, html }` works unchanged. */
 export const DEFAULT_EMAIL_ENDPOINT = "https://api.resend.com/emails";
 
 export interface HttpEmailSenderOptions {
@@ -66,11 +76,15 @@ export function createHttpEmailSender(options: HttpEmailSenderOptions): EmailSen
           authorization: `Bearer ${options.apiKey}`,
           "content-type": "application/json",
         },
+        // `html` is omitted rather than sent as undefined when there is none: a provider
+        // handed an explicit null for it is within its rights to send an empty HTML part,
+        // and a mail client shown an empty HTML part renders an empty message.
         body: JSON.stringify({
           from: options.from,
           to: [message.to],
           subject: message.subject,
           text: message.text,
+          ...(message.html === undefined ? {} : { html: message.html }),
         }),
       });
 

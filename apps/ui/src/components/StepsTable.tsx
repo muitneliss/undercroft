@@ -7,6 +7,15 @@
 import type { Locale } from "@undercroft/core/locale";
 import { useTranslation } from "react-i18next";
 
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
 import { formatCount, MISSING } from "@/lib/money.ts";
 import { formatDuration } from "@/lib/when.ts";
 
@@ -34,29 +43,29 @@ export function StepsTable({
   const { t } = useTranslation();
 
   return (
-    <table className="table">
-      <caption>{t("journal.stepsHead")}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t("journal.colStep")}</th>
-          <th scope="col">{t("journal.colStatus")}</th>
-          <th scope="col" className="num">
+    <Table>
+      <TableCaption>{t("journal.stepsHead")}</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">{t("journal.colStep")}</TableHead>
+          <TableHead scope="col">{t("journal.colStatus")}</TableHead>
+          <TableHead scope="col" className="num">
             {t("journal.colFailures")}
-          </th>
-          <th scope="col" className="num">
+          </TableHead>
+          <TableHead scope="col" className="num">
             {t("journal.colTook")}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {steps.map((step) => (
-          <tr key={step.uniqueId}>
-            <td className="datum">{stepName(step)}</td>
-            <td>{step.status}</td>
-            <td className="num">
+          <TableRow key={step.uniqueId}>
+            <TableCell className="datum">{stepName(step)}</TableCell>
+            <TableCell>{step.status}</TableCell>
+            <TableCell className="num">
               {step.failures === null ? MISSING : formatCount(step.failures, locale)}
-            </td>
-            <td className="num datum datum--quiet">
+            </TableCell>
+            <TableCell className="num datum datum--quiet">
               {step.executionMs === null
                 ? MISSING
                 : formatDuration(
@@ -64,10 +73,10 @@ export function StepsTable({
                     new Date(step.executionMs).toISOString(),
                     locale,
                   )}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

@@ -29,7 +29,10 @@
       "!apps/ui/public/fonts",
       // Boundary files emitted by `bun run geo:build`. Formatting a 170 KB TopoJSON means
       // the generator and the formatter disagree on every run, as with `specs/schema`.
-      "!apps/ui/public/geo"
+      "!apps/ui/public/geo",
+      // Rewritten by release-please on every release, in its own compact JSON. Formatting it
+      // turned main's gate red on the 1.20.0 release commit, and would on every release after.
+      "!.release-please-manifest.json"
     ]
   },
 
@@ -62,6 +65,17 @@
     "globals": ["Bun", "__UNDERCROFT_RELEASE__"]
   },
 
+  // `tailwindDirectives` off by default treats `@theme`, `@utility` and `@custom-variant` as
+  // parse errors -- confirmed by running against `apps/ui/src/index.css`'s own `@theme inline`
+  // block (docs/adr/0025), which also made the following `@import` "wrong position" until this
+  // was on: Biome couldn't tell the untagged block was a valid Tailwind at-rule rather than an
+  // arbitrary style rule breaking the leading-imports-only prelude.
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+
   // ESLint's `no-restricted-syntax` has no equivalent rule in Biome, and the money and
   // no-mock bans it carried are the two rules this repo most needs a machine to enforce --
   // `money.md` exists because a wrong amount does not raise, it just arrives in a dashboard
@@ -70,6 +84,10 @@
   "plugins": [
     "./.biome/plugins/money.grit",
     "./.biome/plugins/no-mocks.grit",
+    // Keeps a model provider out of the browser bundle. Same `$filename` scoping as the
+    // router rule below, for the same 2.5.14 reason, and no type-only carve-out: the UI needs
+    // nothing at all from `@ai-sdk/anthropic` or `@typesafe-ai/sdk`.
+    "./.biome/plugins/ui-model-provider.grit",
     // Applies to `apps/ui/**` only -- the server packages import each other by value
     // legitimately. That scope is enforced inside the pattern with `$filename`, NOT with
     // this entry's `includes` option: the object form silently stops the plugin running in
@@ -106,8 +124,8 @@
       "suspicious": "error"
     },
 
-    // Domains are Biome's per-framework rule bundles. Four are on: the four whose framework
-    // is actually in `package.json`. The other eleven are `none`, and that costs NO coverage
+    // Domains are Biome's per-framework rule bundles. Five are on: the five whose framework
+    // is actually in `package.json`. The other ten are `none`, and that costs NO coverage
     // -- a Solid rule only ever fires on Solid code, so switching it off in a repo with no
     // Solid removes findings that were never about this codebase.
     //
@@ -124,7 +142,8 @@
     // `noUnsafeTypeAssertion` across from `typescript-eslint`'s type-checked preset. Losing
     // those was the one real risk in dropping typescript-eslint.
     //
-    // `react` is the UI (react 19.0.0) and `test` is the Bun suite. Turn a domain back on the
+    // `react` is the UI (react 19.0.0) and `test` is the Bun suite. `tailwind` joined once
+    // `tailwindcss` entered `apps/ui/package.json` (docs/adr/0025). Turn a domain back on the
     // day its framework enters `package.json`, not before. ADR 0018.
     "domains": {
       "astro": "none",
@@ -137,7 +156,7 @@
       "reactNative": "none",
       "solid": "none",
       "svelte": "none",
-      "tailwind": "none",
+      "tailwind": "all",
       "test": "all",
       "turborepo": "none",
       "types": "all",
@@ -355,10 +374,14 @@
     // which is the only tree where importing one would be a real bug -- and that is the whole
     // value of the rule here, so it is scoped rather than switched off.
     //
+    // `apps/cli` is bundled too, but for Node (`Bun.build` with `target: "node"`): its files
+    // and its terminal ARE the platform, the same as for the servers.
+    //
     // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
     // respectively, never in the browser.
     {
       "includes": [
+        "apps/cli/**",
         "apps/control-plane/**",
         "apps/worker/**",
         "packages/**",
@@ -381,6 +404,11 @@
         "apps/*/src/*Cli.ts",
         "packages/*/src/*Cli.ts",
         "scripts/**",
+        // A build config IS a composition root: it is where the dev server is wired, and the
+        // proxy target has to follow the same UNDERCROFT_API_PORT `task dev:api` binds. It is
+        // already named above for `noNodejsModules`, for the same reason -- it runs on Node,
+        // never in the browser.
+        "apps/ui/vite.config.ts",
         // DEBT, listed here rather than hidden: `keys()` takes an `env` and every public
         // function in the module threads one through, but the parameter still DEFAULTS to
         // `process.env`, so a caller that forgets gets ambient configuration in a package
@@ -410,7 +438,15 @@
     {
       "includes": [
         "apps/ui/src/main.tsx",
-        "apps/ui/src/App.tsx",
+        // `App.tsx` was here until the route table moved to `routeTable.tsx`, which took
+        // `lazy` and `Suspense` with it. The shell imports nothing from react now, so the
+        // rule is back on for it.
+        "apps/ui/src/routeTable.tsx",
+        // Joined when the assistant's interleaf arrived: `Book.tsx` now takes `lazy` and
+        // `Suspense` to load it only when a reader opens it, which is measured -- eager, the
+        // AI SDK adds 182 kB to the entry chunk.
+        "apps/ui/src/components/Book.tsx",
+        "apps/ui/src/components/LakeConsole.tsx",
         "apps/ui/src/components/QuestionBands.tsx",
         "apps/ui/src/components/QuestionResult.tsx",
         "apps/ui/src/components/QuestionCard.tsx",
@@ -484,12 +520,46 @@
     {
       "includes": [
         "scripts/dokploy.ts",
-        "apps/worker/src/services/google/drive.ts",
-        "packages/connector-runtime/src/reader.ts",
+        // The Drive `fields` mask and `includeItemsFromAllDrives` moved out of `drive.ts`
+        // with the listing itself when descent became a choice -- ADR 0031.
+        "apps/worker/src/services/google/driveListing.ts",
+        // Was `reader.ts`: the one finding there was `failOnEmpty`'s own message, and it moved
+        // with `checkGuards` when the end-of-entity guards became their own module. Re-checked
+        // by removing this line -- `reader.ts` is clean now, so it is not listed, because an
+        // exception that names a file it no longer needs is the dead header ADR 0018 measured.
+        "packages/connector-runtime/src/guards.ts",
         "packages/crypto/src/seal.ts",
-        "apps/ui/src/components/FileTypeChoice.tsx"
+        "apps/ui/src/components/FileTypeChoice.tsx",
+        // Four findings, all of them a row of the Vietnamese fold table -- `àáảãạăằắẳẵặâầấẩẫậ`
+        // and its three companions. Seventeen accented vowels with no repeat is about as
+        // entropic as a string gets, and there is no way to write the alphabet that is not.
+        "apps/ui/src/lib/fold.ts",
+        // Two findings, both halves of the Outlook conditional comment that gives the Word
+        // engine a fixed measure it cannot take from a `max-width` (ADR 0030):
+        // `<!--[if mso]><table role="presentation" width="560" ...` and its closing twin.
+        // Punctuation-dense, no repeated run, and there is no other spelling of it -- the
+        // syntax is Microsoft's, not ours.
+        "packages/core/src/emailTemplate.ts",
+        // Eight findings, every one of them a line of OOXML markup in the extraction-accuracy
+        // gold set -- `<row r="2"><c r="A2" t="s"><v>2</v></c>...` and its companions. Dense,
+        // punctuation-heavy and with no repeated run, which is what the entropy heuristic
+        // scores; the alternative is a committed `.docx` binary, and a gold document nobody in
+        // the repo can read or edit is worse than a lint exception. `testing.ts` writes the
+        // containers for the same reason.
+        "apps/worker/src/services/extract/goldSet.ts"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // The extraction-accuracy gold set is THIRTEEN AUTHORED DOCUMENTS, so its length is the
+    // number of documents rather than a file that grew -- the same argument the i18n
+    // catalogues above make. Splitting it puts some of the documents in one file and the rest
+    // in another, with nothing to say which belongs where, and the module docstring that
+    // records how they were authored (before any reader ran against them, which is the whole
+    // point) would then describe only half of them.
+    {
+      "includes": ["apps/worker/src/services/extract/goldSet.ts"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
     },
 
     // There is no Playwright here. The rule is nursery rather than playwright-domain, so
@@ -605,13 +675,19 @@
     // Styles computed per element, which is the one thing a class cannot express: the tab
     // rail's `flexGrow` IS the division's extent, the title-page wheel paints a different hue
     // per span, and the skeleton's widths are derived so the placeholder does not look ruled.
+    // The two run gauges are the same shape of fact: `scaleX` IS the fraction of the work
+    // that is done, read off `ops.run_event` once a second, and a class can only carry a
+    // value somebody wrote into the sheet beforehand (ADR 0032).
     // ADR 0012 records this rule's autofix DELETING the `flexGrow` that gives the rail its
-    // proportions, which is the failure mode to keep in mind if it is ever turned back on.
+    // proportions, which is the failure mode to keep in mind if it is ever turned back on --
+    // here the same fix would delete the measurement and leave a full bar on every run.
     {
       "includes": [
         "apps/ui/src/components/TabRail.tsx",
         "apps/ui/src/components/Skeleton.tsx",
         "apps/ui/src/components/QuestionCard.tsx",
+        "apps/ui/src/components/RunFlow.tsx",
+        "apps/ui/src/components/RunProgress.tsx",
         "apps/ui/src/routes/SignIn.tsx"
       ],
       "linter": { "rules": { "nursery": { "noInlineStyles": "off" } } }
@@ -677,6 +753,16 @@
         "apps/worker/src/services/validateCredential.ts",
         "scripts/geo/vnProvinces.ts"
       ],
+      "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // Four findings in the CLI's two catalogues, all of them a sentence quoting a profile name
+    // in typographic quotes -- `“{{profile}}”`, twice per language -- one of which also quotes
+    // the command that fixes it. Curly quotes, braces and a backticked command line are what
+    // the entropy score counts; none of it is a credential, and the catalogues hold no value
+    // that could be. The rule stays on for the CLI's source.
+    {
+      "includes": ["apps/cli/src/i18n/vi.ts", "apps/cli/src/i18n/en.ts"],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
     },
 
@@ -773,6 +859,7 @@
         "apps/control-plane/src/handlers/connectionsRouter.ts",
         "apps/control-plane/src/handlers/answers.ts",
         "apps/control-plane/src/handlers/biRouter.ts",
+        "apps/control-plane/src/handlers/lakeRouter.ts",
         "apps/control-plane/src/handlers/modelsRouter.ts",
         "apps/control-plane/src/handlers/peopleRouter.ts",
         "apps/control-plane/src/handlers/tenantsRouter.ts",

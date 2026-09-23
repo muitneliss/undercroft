@@ -5,7 +5,15 @@
  * the attachment types you allow, from the mailbox you connect", scoped to chosen labels or
  * deliberately to the whole mailbox. Bodies are never fetched.
  *
- * THREE THINGS HERE ARE EASY TO GET WRONG AND EXPENSIVE TO GET WRONG.
+ * FOUR THINGS HERE ARE EASY TO GET WRONG AND EXPENSIVE TO GET WRONG.
+ *
+ * **`format` decides whether attachments exist at all.** `metadata` returns "only email
+ * message ID, labels, and email headers" -- Google's own words -- which means no
+ * `payload.parts` and so no `body.attachmentId`. A collector that asks for it walks an empty
+ * parts list and lands every message with none of its attachments, looking for all the world
+ * like a mailbox that has none. Only `format=full` carries them. This module asked for
+ * `metadata` until the fix that added this paragraph, and the suite agreed with it because
+ * the fixture answered a metadata request with parts -- an API that does not exist.
  *
  * **`labelIds` is AND, not OR.** One query carrying three label ids returns only the
  * messages that hold all three, which for most selections is none. A single query looks
@@ -24,8 +32,12 @@
  * every type, the same recorded-decision idiom `@undercroft/contracts` uses for an empty
  * label or entity list.
  *
- * Headers are extracted rather than stored whole: the body of a message is not ours to
- * keep, and `format=metadata` is what the consent says we ask for.
+ * Headers are extracted rather than stored whole, and that is now the ONLY thing keeping a
+ * body out of the lake: `format=full` returns bodies and every header, where `format=metadata`
+ * returned neither. Nothing here reads `body.data` or `snippet`, `headerMap` keeps the six
+ * headers the consent names, and `messageRecord` builds its payload from extracted fields
+ * rather than the response -- so what is fetched is wider than before while what is STORED is
+ * byte-for-byte what it was. Both halves are pinned by tests; neither is safe to relax.
  */
 
 import { type GmailScope, allowsFileType } from "@undercroft/contracts";
@@ -33,8 +45,9 @@ import { canonicalJson, decodeBase64Url, getPath, getStringPath } from "@undercr
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
-import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
+import type { RunJournal } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
+import type { AlreadyHeld, Harvest } from "./harvest.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const ENTITY = "messages";
@@ -42,11 +55,6 @@ const ENTITY = "messages";
 const PAGE_SIZE = "100";
 /** Enough to identify and reconcile a message; deliberately not the body. */
 const HEADERS = ["From", "To", "Cc", "Subject", "Date", "Message-ID"] as const;
-
-export interface GmailHarvest {
-  readonly records: RecordToLand[];
-  readonly documents: DocumentToLand[];
-}
 
 export function gmailBaseUrl(): string {
   return GMAIL_BASE;
@@ -87,34 +95,60 @@ function labelKind(reported: string): "system" | "user" | null {
 }
 
 /**
- * Harvest a mailbox under a chosen scope.
+ * Harvest a mailbox under a chosen scope, one message at a time.
  *
- * Returns what to land rather than landing it, so the decision of what a mailbox contains
- * is testable without a lake or a database.
+ * Yields what to land rather than landing it, so the decision of what a mailbox contains is
+ * testable without a lake or a database -- and yields rather than returns, so the decision
+ * costs one message rather than the whole mailbox. Buffering it was what put 7,786 messages
+ * in a 1 GiB container and got the process oom-killed 76 minutes in.
+ *
+ * **A MESSAGE WE ALREADY HOLD, COMPLETE, IS NOT FETCHED AT ALL.** Listing ids is one request
+ * per hundred; reading a message is one paced request each, at 334ms, so a 7,786-message
+ * mailbox is 43 minutes of `messages.get` and nothing else. The test is a row in
+ * `raw.records` that is MARKED harvest-complete -- a message whose LABELS changed since is
+ * still skipped, which is a decision the user took with its cost stated: a second run that
+ * takes a minute instead of forty-three, at the price of a relabelling we will not notice
+ * until something else makes us read the message.
+ *
+ * PRESENCE ALONE WAS THE TEST FOR ONE RELEASE, AND IT LOST A MAILBOX. It rested on a message's
+ * record not reaching `raw.records` until its attachments had reached the lake -- true of
+ * every row that rule wrote, and untrue of every row written before it, which is all of them
+ * on a tenant that had already run. The 7,786 above is not an example: it is the mailbox, with
+ * 7,786 records and zero documents, skipped whole on every run until ADR 0035 made the mark
+ * something a landing states rather than something this file asserts. `harvest.ts` records the
+ * contract, `collect.ts` counts what got down, and `knownRecords` reads the count.
+ *
+ * **One consequence, so nobody reads the filter below as unconditional:** the defence-in-
+ * depth label check now runs only on a message this run actually fetched. A message we
+ * already hold is never fetched, so a label removed from it after it landed does not
+ * un-land it. Nothing widens -- what was stored was covered by the selection when it was
+ * stored -- but the check is a check on new reads, not a sweep over the mailbox.
  */
-export async function harvestGmail(
+export async function* harvestGmail(
   api: GoogleApi,
   scope: GmailScope,
-  journal: RunJournal = SILENT_JOURNAL,
-): Promise<GmailHarvest> {
+  journal: RunJournal,
+  held: AlreadyHeld,
+): Harvest {
   const selected = new Set(scope.labels.map((l) => l.id));
   const messageIds = await listMessageIds(api, scope);
-
-  const records: RecordToLand[] = [];
-  const documents: DocumentToLand[] = [];
+  // No timestamp: the listing carries none, so the only question this probe can put is
+  // whether we hold the message, complete. See `RecordProbe` and `knownRecords`.
+  const known = await held(messageIds.map((id) => ({ sourceRecordId: id, sourceUpdatedAt: null })));
+  const toRead = messageIds.filter((id) => !known.has(id));
 
   // The most useful line this run writes. What follows is one paced request per message --
   // minutes for a real mailbox -- and until now the first sign of how long that would take
-  // was the run ending. A total up front turns a blank screen into a quantity.
-  journal.info("work_listed", { entity: ENTITY, total: messageIds.length });
+  // was the run ending. A total up front turns a blank screen into a quantity, and `skipped`
+  // is what keeps "the mailbox is empty" and "nothing has changed" from being one sentence.
+  journal.info("work_listed", { entity: ENTITY, total: messageIds.length, skipped: known.size });
 
-  for (const messageId of messageIds) {
-    journal.progress("records_read", {
-      entity: ENTITY,
-      read: records.length,
-      total: messageIds.length,
-    });
-    const message = await api.getJson(messageUrl(messageId), ENTITY, records.length);
+  let read = 0;
+  for (const messageId of toRead) {
+    // The denominator is what is left to do, not what the mailbox holds: on a steady-state
+    // mailbox the second is a gauge frozen at zero out of thousands.
+    journal.progress("records_read", { entity: ENTITY, read, total: toRead.length });
+    const message = await api.getJson(messageUrl(messageId), ENTITY, read);
     const labelIds = strings(getPath(message, "labelIds"));
 
     // Defence in depth: the query said what to fetch, this says what may be kept. A label
@@ -126,13 +160,18 @@ export async function harvestGmail(
 
     const headers = headerMap(message);
     const internalDate = str(message, "internalDate");
-    records.push(messageRecord(messageId, message, labelIds, internalDate));
-    for (const part of matchingParts(message, scope.fileTypes)) {
-      documents.push(attachment(api, { messageId, headers, labelIds, internalDate }, part));
-    }
+    read += 1;
+    yield {
+      record: messageRecord(messageId, message, labelIds, internalDate),
+      documents: matchingParts(message, scope.fileTypes).map((part) =>
+        attachment(api, { messageId, headers, labelIds, internalDate }, part),
+      ),
+    };
   }
 
-  return { records, documents };
+  // Never `seenIds`. A message that stopped matching a label selection was relabelled, not
+  // deleted, and a tombstone would report a deletion that never happened.
+  return { seenIds: null, skipped: [], listed: messageIds.length, known: known.size };
 }
 
 /**
@@ -264,12 +303,22 @@ async function collectLabelIds(
   } while (pageToken !== null);
 }
 
+/**
+ * `format=full`, which is the ONLY format that carries attachments.
+ *
+ * Google's Format reference: `metadata` "Returns only email message ID, labels, and email
+ * headers" -- no `payload.parts`, so no `body.attachmentId`, so nothing for `matchingParts`
+ * to walk. This asked for `metadata` and therefore landed zero attachments for every tenant,
+ * while the suite stayed green because its fixture answered a metadata request with parts.
+ *
+ * `metadataHeaders` is dropped because it does nothing at this format; `headerMap` keeps the
+ * same six headers on the way in instead. What comes back that we do NOT want -- bodies,
+ * snippet, the full header set -- is never read and never landed, which is the part that
+ * matters and the part `headerMap` and `messageRecord` are pinned on.
+ */
 function messageUrl(messageId: string): string {
   const url = new URL(`${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}`);
-  url.searchParams.set("format", "metadata");
-  for (const header of HEADERS) {
-    url.searchParams.append("metadataHeaders", header);
-  }
+  url.searchParams.set("format", "full");
   return url.toString();
 }
 
@@ -317,12 +366,32 @@ function matchingParts(message: unknown, fileTypes: readonly string[]): Matching
   return found;
 }
 
+/**
+ * The six headers the consent names, keyed by their lowercase spelling.
+ *
+ * A sender writes the header name and Gmail passes it through, so `Subject` and `SUBJECT`
+ * are the same header; matching case-insensitively and storing under the canonical spelling
+ * is what keeps `headers.Subject` answering for both.
+ */
+const KEPT_HEADERS: ReadonlyMap<string, string> = new Map(
+  HEADERS.map((name) => [name.toLowerCase(), name] as const),
+);
+
+/**
+ * The consent's six headers, and nothing else.
+ *
+ * This filter is load-bearing NOW in a way it was not before. `format=metadata` returned only
+ * the headers `metadataHeaders` asked for, so taking all of them took six; `format=full`
+ * returns every header a message carries -- Received chains, DKIM signatures, X-* internals,
+ * each of which is more about the sender than the invoice is. Widening the fetch to reach
+ * attachments must not widen what lands in `raw.records`, so the narrowing moves here.
+ */
 function headerMap(message: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   for (const header of asArray(getPath(message, "payload.headers"))) {
-    const name = str(header, "name");
-    if (name !== "") {
-      out[name] = str(header, "value");
+    const canonical = KEPT_HEADERS.get(str(header, "name").toLowerCase());
+    if (canonical !== undefined) {
+      out[canonical] = str(header, "value");
     }
   }
   return out;

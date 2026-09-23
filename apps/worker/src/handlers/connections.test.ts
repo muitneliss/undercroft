@@ -162,6 +162,42 @@ describe("storing a credential", () => {
     expect(response.status).toBe(200);
     expect((await readCredential(db, TENANT, "gmail", { env: ENV })).refreshToken).toBe("rt2");
   });
+
+  it("a credential for another account is refused and the pinned one is kept", async () => {
+    // The firing side of the test above. Another mailbox's token sealed here would file its
+    // mail under this connection's stream, green, with nothing erroring. ADR 0043.
+    await post("/v1/connections/credential", VALID);
+
+    const response = await post("/v1/connections/credential", {
+      ...VALID,
+      externalAccountId: "208134092834092834",
+      credential: { ...CREDENTIAL, refreshToken: "somebody-else" },
+    });
+
+    expect(response.status).toBe(412);
+    expect((await readCredential(db, TENANT, "gmail", { env: ENV })).refreshToken).toBe("rt");
+  });
+
+  it("a Xero reconsent, which names no organisation, keeps the one already chosen", async () => {
+    // A Xero consent names nobody; the organisation is chosen afterwards. Reconnecting used to
+    // blank that choice, and the next run refused for want of the header it supplies.
+    const xero = { ...VALID, source: "xero", externalAccountId: "", scope: "" };
+    await post("/v1/connections/credential", xero);
+    await db.asSuperuser((tx) =>
+      tx.query(
+        "UPDATE ops.connection SET external_account_id = 'org-1' WHERE tenant_id = $1 AND source = 'xero'",
+        [TENANT],
+      ),
+    );
+
+    await post("/v1/connections/credential", xero);
+
+    const { rows } = await db.query<{ external_account_id: string }>(
+      "SELECT external_account_id FROM ops.connection WHERE tenant_id = $1 AND source = 'xero'",
+      [TENANT],
+    );
+    expect(rows[0]?.external_account_id).toBe("org-1");
+  });
 });
 
 describe("browsing what may be shared", () => {

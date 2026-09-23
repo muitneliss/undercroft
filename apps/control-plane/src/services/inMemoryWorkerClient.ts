@@ -9,8 +9,8 @@
 import type {
   BrowseScopeResponse,
   BuildModelResponse,
+  RawSearchResponse,
   RevokeConnectionResponse,
-  RunQueryRequest,
   SchemaResponse,
   StoreCredentialResponse,
   TableResult,
@@ -18,6 +18,8 @@ import type {
 import type { SqlExecutor } from "@undercroft/db";
 import { upsertConnection } from "@undercroft/db/repos";
 import type {
+  QueryInput,
+  SearchInput,
   StoreCredentialInput,
   TriggerOutcome,
   WorkerClient,
@@ -80,16 +82,22 @@ export class InMemoryWorkerClient implements WorkerClient {
     if (this.#failWith !== null) {
       return this.#fail();
     }
-    this.stored.push(input);
     if (this.#exec !== null) {
-      await upsertConnection(this.#exec, {
+      // The worker's own guard, run for real: a connection pinned to another account refuses,
+      // and nothing is recorded as stored. A fake that sealed it anyway would be the fake that
+      // never refuses, over the one refusal this flow exists to make. ADR 0043.
+      const recorded = await upsertConnection(this.#exec, {
         tenantId: input.tenantId,
         source: input.source,
         status: "connected",
         externalAccountId: input.externalAccountId,
         scope: input.scope,
       });
+      if (!recorded) {
+        return { ok: false, reason: "account-mismatch" };
+      }
     }
+    this.stored.push(input);
     return Promise.resolve({
       ok: true,
       value: {
@@ -165,8 +173,12 @@ export class InMemoryWorkerClient implements WorkerClient {
   }
 
   /** Every query this double was asked to run, in order. */
-  readonly queries: RunQueryRequest[] = [];
+  readonly queries: QueryInput[] = [];
+  /** Every search it was asked, in order. */
+  readonly searches: SearchInput[] = [];
   #answer: TableResult = { columns: [], rows: [], truncated: false };
+  /** Nothing found, which is a real answer rather than an absent one. */
+  #found: RawSearchResponse = { hits: [], truncated: false };
   #refusal: string | null = null;
 
   /** Answer every query with `result`. */
@@ -181,7 +193,7 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  runQuery(input: RunQueryRequest): Promise<WorkerOutcome<TableResult>> {
+  runQuery(input: QueryInput): Promise<WorkerOutcome<TableResult>> {
     if (this.#failWith !== null) {
       return this.#fail();
     }
@@ -197,6 +209,45 @@ export class InMemoryWorkerClient implements WorkerClient {
       return this.#fail();
     }
     return Promise.resolve({ ok: true, value: { tables: [] } });
+  }
+
+  /**
+   * The raw console answers exactly as the dashboard runner does here.
+   *
+   * Deliberately the same recorded list and the same canned answer: this fake exists to let
+   * a caller's OWN decisions be tested -- who is admitted, what is recorded, what a refusal
+   * becomes on screen -- and which Postgres login the real worker used is not a thing a fake
+   * can honestly model. The login boundary is proven where it lives, against real Postgres
+   * in `privileges.test.ts`.
+   */
+  runRawQuery(input: QueryInput): Promise<WorkerOutcome<TableResult>> {
+    return this.runQuery(input);
+  }
+
+  readRawSchema(): Promise<WorkerOutcome<SchemaResponse>> {
+    return this.readSchema();
+  }
+
+  /**
+   * Records the question and answers with whatever `answersSearchWith` was given.
+   *
+   * Like `runRawQuery`, this fake models the CALLER's decisions -- who is admitted, what is
+   * recorded, what a refusal becomes on screen -- and not the matching, which is Postgres's and
+   * is proven against it in `packages/db/src/rawSearch.test.ts`. A fake that pretended to fold
+   * Vietnamese would be a second, quietly different answer to what the reader asked.
+   */
+  searchRaw(input: SearchInput): Promise<WorkerOutcome<RawSearchResponse>> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    this.searches.push(input);
+    return Promise.resolve({ ok: true, value: this.#found });
+  }
+
+  /** What the next search answers with. Defaults to nothing found, which is a real answer. */
+  answersSearchWith(found: RawSearchResponse): this {
+    this.#found = found;
+    return this;
   }
 
   #fail<T>(): Promise<WorkerOutcome<T>> {

@@ -44,6 +44,7 @@ import { persist } from "zustand/middleware";
 import type { DashboardDraft } from "@/lib/dashboardDraft.ts";
 import type { ModelDraft } from "@/lib/modelDraft.ts";
 import { patchVisual, type QuestionDraft, switchToSql } from "@/lib/questionDraft.ts";
+import { type LakeRun, planRun } from "@/lib/statements.ts";
 
 /** One item an admin picked, as both the picker and the card need to see it. */
 export interface ChosenFile {
@@ -73,6 +74,13 @@ export interface ScopeDraft {
    * recorded-decision idiom as empty labels or entities, not an absent choice.
    */
   readonly fileTypes: string[];
+  /**
+   * Drive: whether a picked folder is read to the bottom, or one level only.
+   *
+   * False is what an unvisited form means, and what every selection saved before this
+   * existed means. ADR 0031.
+   */
+  readonly recurse: boolean;
 }
 
 interface UiState {
@@ -107,6 +115,8 @@ interface UiState {
    * read back beside the control it changed, rather than a loop of individual removals.
    */
   clearScopeFileTypes: (source: string) => void;
+  /** Drive: turn reading sub-folders on or off. ADR 0031. */
+  toggleScopeRecurse: (source: string) => void;
   /**
    * What the admin has typed into the custom-file-type field, and which source they typed it
    * against.
@@ -143,6 +153,72 @@ interface UiState {
    * list says so. Not persisted: a draft restored days later, after a colleague may have
    * changed the model beneath it, is worse than the saved version.
    */
+  /**
+   * The SQL typed into the raw lake's console, per tenant.
+   *
+   * Keyed by tenant because the console is about ONE customer's lake and a query written
+   * against another's tables would be answered with a refusal the author did not earn. Not
+   * persisted, for the same reason `modelDraft` is not: this is a scratch query, and one
+   * restored days later is not one anybody asked for.
+   */
+  lakeSql: Record<string, string>;
+  setLakeSql: (tenantId: string, sql: string) => void;
+  /**
+   * What the console's last press committed, per tenant: the statements it is running.
+   *
+   * THE PRESS IS THE COMMIT, and this is the record of it. The editor's text changes under
+   * every keystroke; what is on screen underneath must not, or a reader who starts typing
+   * their next question watches the answer to the last one rearrange itself. So the text is
+   * split at the press and the statements are kept here, and the panes below read this
+   * rather than `lakeSql`.
+   *
+   * Which PAGE each of those panes is on is deliberately not here: every pane runs its own
+   * mutation, so the offset it last asked for is already a fact of that mutation, and a
+   * second copy in this store would be two answers to one question. See `state.md`.
+   */
+  lakeRun: Record<string, LakeRun>;
+  /** Commit a run over `text` -- the whole buffer, or what the author had selected. */
+  startLakeRun: (tenantId: string, text: string, fromSelection: boolean) => void;
+  /**
+   * Which stream the console last wrote itself a query for, per tenant, as a `streamKey`.
+   *
+   * This exists to make opening a line of the index happen ONCE. The console seeds itself
+   * from the stream in the URL, and without a record of what it has already seeded it would
+   * re-seed on every render -- throwing away whatever the reader had typed since, which is
+   * the one thing a scratch editor must never do. Compare, seed, record: a reader who edits
+   * the generated query keeps their edit, and a reader who opens a different line gets that
+   * line's query.
+   */
+  lakeOpened: Record<string, string>;
+  setLakeOpened: (tenantId: string, streamKey: string) => void;
+  /**
+   * Whether the workbench's table reference is folded away to its spine.
+   *
+   * Not per tenant: it is a fact about how this reader is working right now -- writing a
+   * query, when the names are what they reach for, or reading a wide answer, when every
+   * column of the grid is worth more than the reference. Not persisted either, like every
+   * draft here: a fold restored days later is a rail somebody has to go and find.
+   */
+  lakeRailFolded: boolean;
+  toggleLakeRail: () => void;
+
+  /**
+   * Which refusal reason is unfolded on a run's leaf, per run id; absent is none.
+   *
+   * Per run rather than one value, because the journal can hold more than one run's leaf open
+   * at a time -- a single field would close a reason on the run above the moment a reader
+   * opened one on the run below, which reads as the page fighting them.
+   *
+   * Not in the URL, unlike the open RUN. A run's detail is a thing an operator pastes to a
+   * colleague mid-call; which of its reasons they had unfolded while reading is not, and
+   * putting it in the address bar would make every fold a history entry to press Back
+   * through. Client-only, so the store owns it and no component keeps a second copy
+   * (`state.md`).
+   */
+  openReason: Record<string, string>;
+  /** Unfold this reason, or fold it if it is the one already open on that run. */
+  toggleReason: (runId: string, reason: string) => void;
+
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
   setModelSql: (sql: string) => void;
@@ -173,6 +249,61 @@ interface UiState {
   setDashboardFilters: (filters: DashboardFilter[]) => void;
   /** The server now holds what the draft holds, under `id`. */
   markDashboardSaved: (id: string) => void;
+  /**
+   * Whether the interleaf is hinged open.
+   *
+   * Client state with no endpoint behind it, so the store owns it rather than `useState` --
+   * which is banned here and gated by ast-grep (`.claude/rules/state.md`). It is deliberately
+   * NOT per-customer: the assistant follows the reader across divisions and customers the way
+   * a hand in the margin does, and an open panel that closed itself on a tab change would read
+   * as the application losing it.
+   */
+  assistantOpen: boolean;
+  toggleAssistant: () => void;
+  /**
+   * The question being typed, before it is sent.
+   *
+   * In the store rather than in the input, for the reason every other draft here is: the
+   * interleaf is `React.lazy`-loaded and unmounts when it closes, and a reader who closed the
+   * panel mid-sentence should find the sentence still there. Cleared by whoever sends it.
+   */
+  assistantDraft: string;
+  setAssistantDraft: (draft: string) => void;
+  /**
+   * What the reader has typed into a privileged proof's confirmation field.
+   *
+   * One value rather than one per proof, because only one proof is ever awaiting an answer: the
+   * model stops at an approval request and asks nothing else until it has one. Keying it by
+   * approval id would be a map that never holds two entries.
+   */
+  assistantConfirm: string;
+  setAssistantConfirm: (typed: string) => void;
+  /**
+   * Which account of a kind the reader chose to look at, per tenant and kind. Read it through
+   * `chosenAccount`, which is the only other place that knows how it is keyed.
+   *
+   * Only an explicit choice is stored. Which account shows when nobody has chosen -- the
+   * first -- is derived from the list every render (`selectedFor` in
+   * `@/lib/connectionState`), so a disconnected account cannot leave a stale default behind.
+   * Not persisted: which mailbox somebody was reading last week is not a preference.
+   */
+  selectedAccount: Record<string, string>;
+  /** Show this account of `kind`. Also called once a newly added account is scoped. */
+  selectAccount: (tenantId: string, kind: string, source: string) => void;
+}
+
+/** One tenant's one kind, as `selectedAccount` is keyed. Nothing outside this file builds it. */
+function accountKey(tenantId: string, kind: string): string {
+  return `${tenantId}|${kind}`;
+}
+
+/** The account of `kind` the reader chose on `tenantId`'s schedule, if they chose one. */
+export function chosenAccount(
+  state: { readonly selectedAccount: Readonly<Record<string, string>> },
+  tenantId: string,
+  kind: string,
+): string | undefined {
+  return state.selectedAccount[accountKey(tenantId, kind)];
 }
 
 /**
@@ -186,7 +317,15 @@ function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
   if (held !== null && held.source === source) {
     return held;
   }
-  return { source, labels: [], files: [], organisation: null, entities: [], fileTypes: [] };
+  return {
+    source,
+    labels: [],
+    files: [],
+    organisation: null,
+    entities: [],
+    fileTypes: [],
+    recurse: false,
+  };
 }
 
 /** How a slice writes: Zustand's partial setter, narrowed to this store. */
@@ -213,6 +352,7 @@ function scopeSlice(
   | "toggleScopeEntity"
   | "toggleScopeFileType"
   | "clearScopeFileTypes"
+  | "toggleScopeRecurse"
   | "fileTypeInput"
   | "setFileTypeInput"
   | "scopeFilter"
@@ -263,6 +403,11 @@ function scopeSlice(
       }),
     clearScopeFileTypes: (source): unknown =>
       set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), fileTypes: [] } })),
+    toggleScopeRecurse: (source): unknown =>
+      set((state) => {
+        const draft = draftFor(state.scopeDraft, source);
+        return { scopeDraft: { ...draft, recurse: !draft.recurse } };
+      }),
     fileTypeInput: { source: "", value: "" },
     setFileTypeInput: (source, value): unknown => set({ fileTypeInput: { source, value } }),
     scopeFilter: { source: "", query: "" },
@@ -271,6 +416,57 @@ function scopeSlice(
 }
 
 /** A dbt model being edited: its SQL and the tests on each column. */
+/** The raw lake console's scratch SQL, one per tenant. Not persisted; see the type above. */
+function lakeSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  | "lakeSql"
+  | "setLakeSql"
+  | "lakeRun"
+  | "startLakeRun"
+  | "lakeOpened"
+  | "setLakeOpened"
+  | "lakeRailFolded"
+  | "toggleLakeRail"
+  | "openReason"
+  | "toggleReason"
+> {
+  return {
+    lakeSql: {},
+    // Typing does not disturb what is already on screen: the panes below answer the run that
+    // was pressed, and a keystroke is not a press.
+    setLakeSql: (tenantId, sql): unknown =>
+      set((state) => ({ lakeSql: { ...state.lakeSql, [tenantId]: sql } })),
+    lakeRun: {},
+    startLakeRun: (tenantId, text, fromSelection): unknown =>
+      set((state) => ({
+        lakeRun: {
+          ...state.lakeRun,
+          [tenantId]: planRun(state.lakeRun[tenantId], text, fromSelection),
+        },
+      })),
+    lakeOpened: {},
+    setLakeOpened: (tenantId, streamKey): unknown =>
+      set((state) => ({ lakeOpened: { ...state.lakeOpened, [tenantId]: streamKey } })),
+    // Open by default: an author who has just arrived does not know what they may name, and
+    // a reference they have to discover a control to see is one most of them never see.
+    lakeRailFolded: false,
+    toggleLakeRail: (): unknown => set((state) => ({ lakeRailFolded: !state.lakeRailFolded })),
+    openReason: {},
+    // Pressing the open reason again closes it, which is what a reader expects of a thing
+    // that opened when they pressed it. The key is dropped rather than set to `""`, so
+    // "closed" and "opened on a reason with no name" cannot be the same stored value.
+    toggleReason: (runId, reason): unknown =>
+      set((state) => {
+        const { [runId]: open, ...rest } = state.openReason;
+        return open === reason
+          ? { openReason: rest }
+          : { openReason: { ...rest, [runId]: reason } };
+      }),
+  };
+}
+
 function modelSlice(
   set: Setter,
 ): Pick<
@@ -438,14 +634,56 @@ function dashboardSlice(
   };
 }
 
+/**
+ * The interleaf: whether it is open, and what is half-typed in it.
+ *
+ * Neither is persisted. `partialize` keeps only the locale, and that is right here too: a
+ * half-typed question restored days later, against a customer the reader may no longer have
+ * open, is a sentence they did not write in a place they did not leave it.
+ */
+function assistantSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  | "assistantOpen"
+  | "toggleAssistant"
+  | "assistantDraft"
+  | "setAssistantDraft"
+  | "assistantConfirm"
+  | "setAssistantConfirm"
+> {
+  return {
+    assistantOpen: false,
+    toggleAssistant: (): unknown => set((state) => ({ assistantOpen: !state.assistantOpen })),
+    assistantDraft: "",
+    setAssistantDraft: (assistantDraft): unknown => set({ assistantDraft }),
+    assistantConfirm: "",
+    setAssistantConfirm: (assistantConfirm): unknown => set({ assistantConfirm }),
+  };
+}
+
+/** Which account of each multi-account kind is on show. See `selectedAccount`. */
+function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAccount"> {
+  return {
+    selectedAccount: {},
+    selectAccount: (tenantId, kind, source): unknown =>
+      set((state) => ({
+        selectedAccount: { ...state.selectedAccount, [accountKey(tenantId, kind)]: source },
+      })),
+  };
+}
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       ...localeSlice(set),
+      ...accountSlice(set),
       ...scopeSlice(set),
+      ...lakeSlice(set),
       ...modelSlice(set),
       ...questionSlice(set),
       ...dashboardSlice(set),
+      ...assistantSlice(set),
     }),
     {
       name: "undercroft.ui",

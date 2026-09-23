@@ -26,6 +26,14 @@ fixtures/live/
 # Local agent/tool scratch space, not part of the project.
 .kanna/
 
+# Feature-branch worktrees (`git worktree add .worktrees/<name>`). Each one is a second
+# checkout of this same repo, so leaving it unignored does more than dirty `git status`:
+# Biome reads this file (`vcs.useIgnoreFile` in `biome.jsonc`) and without this line it
+# descends into them, finds a nested root `biome.jsonc`, and fails the whole gate with
+# "Found a nested root configuration". Prettier needs the same line in `.prettierignore`,
+# which is the one file its CLI reads.
+.worktrees/
+
 .DS_Store
 .bun/
 

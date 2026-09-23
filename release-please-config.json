@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "undercroft",
+      "extra-files": [
+        { "type": "generic", "path": "skills/undercroft-cli/SKILL.md" },
+        { "type": "generic", "path": "README.md" },
+        { "type": "json", "path": "apps/cli/package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}

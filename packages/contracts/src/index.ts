@@ -55,9 +55,9 @@ export {
   ConnectionScope,
   DriveScope,
   GmailScope,
+  isScopedSource,
   needsScope,
   parseScope,
-  SCOPED_SOURCES,
   XeroScope,
 } from "./connectionScope.ts";
 export {
@@ -81,6 +81,15 @@ export {
 } from "./models.ts";
 export { documentKeyOf, documentPrefixOf, RawDocument } from "./rawDocument.ts";
 export {
+  DEFAULT_SEARCH_HITS,
+  MAX_SEARCH_HITS,
+  MAX_SEARCH_QUERY_CHARS,
+  RawSearchHit,
+  RawSearchRequest,
+  RawSearchResponse,
+  SearchKind,
+} from "./rawSearch.ts";
+export {
   BuildModelRequest,
   BuildModelResponse,
   Cell,
@@ -95,3 +104,11 @@ export {
   TableResult,
 } from "./transformApi.ts";
 export { lakeKeyOf, RawRecord, streamOf } from "./rawRecord.ts";
+export {
+  ACCOUNT_KEY_LENGTH,
+  accountSourceOf,
+  MULTI_ACCOUNT_KINDS,
+  parseSourceInstance,
+  type SourceInstance,
+  sourceKind,
+} from "./sourceInstance.ts";

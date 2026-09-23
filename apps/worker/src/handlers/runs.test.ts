@@ -8,7 +8,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
-import { createStampSource, TestClock } from "@undercroft/core";
+import { createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
 import { migrate } from "@undercroft/db";
 import { openRun } from "@undercroft/db/repos";
@@ -152,6 +152,77 @@ describe("POST /v1/runs/ingest", () => {
     expect(((await res.json()) as { code: string }).code).toBe("not_found");
   });
 
+  it("a second Gmail mailbox runs on its own credential and lands under its own source", async () => {
+    // ADR 0043: a further account is a source of its own. Every step of the run reads the
+    // source's KIND -- the Google path, the scope check, the refresher -- and a step that read
+    // the literal source instead would look for `gmail.3fa9c1d2e0ab.yaml` and fail.
+    const SECOND = "gmail.3fa9c1d2e0ab";
+    const sealed = seal(
+      JSON.stringify({
+        accessToken: "tok-b",
+        refreshToken: "",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      }),
+      { env: { UNDERCROFT_SECRET_KEY: KEY } },
+    );
+    await db.asSuperuser(async (tx) => {
+      await tx.query(
+        "INSERT INTO ops.connection (tenant_id, source, status, external_account_id) VALUES ('CASE-1', $1, 'connected', '208134092834092834')",
+        [SECOND],
+      );
+      await tx.query(
+        "INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version) VALUES ('CASE-1', $1, $2, 1)",
+        [SECOND, Buffer.from(sealed.blob)],
+      );
+      await tx.query(
+        `INSERT INTO app.connection_detail (tenant_id, source, selection) VALUES ('CASE-1', $1, '{"labels":[]}'::jsonb)`,
+        [SECOND],
+      );
+    });
+    const gmail = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
+    const google = new InMemoryByteFetcher()
+      .on("GET", `${gmail}?maxResults=100`, { body: { messages: [{ id: "m1" }] } })
+      .on("GET", `${gmail}/m1?format=full`, {
+        body: {
+          id: "m1",
+          threadId: "t1",
+          labelIds: [],
+          internalDate: "1700000000000",
+          payload: {},
+        },
+      });
+    const app = createLakeApi({
+      lake,
+      exec: db,
+      serviceToken: "svc-token",
+      specsDir,
+      env: { UNDERCROFT_SECRET_KEY: KEY },
+      byteFetcher: google,
+    });
+
+    const res = await post(app, "/v1/runs/ingest", { source: SECOND, tenantId: "CASE-1" });
+    const { runId } = (await res.json()) as { runId: string };
+    await drainJobs();
+
+    expect(await statusOf(runId)).toBe("ok");
+    expect(google.calls[0]?.headers?.authorization).toBe("Bearer tok-b");
+    const { rows } = await db.query<{ source: string; source_record_id: string }>(
+      "SELECT source, source_record_id FROM raw.records WHERE tenant_id = 'CASE-1'",
+    );
+    expect(rows).toEqual([{ source: SECOND, source_record_id: "m1" }]);
+  });
+
+  it("a source no connection could have is 404 before any run exists", async () => {
+    // A suffix on a kind that cannot hold a second account, or a path, is not a source.
+    const res = await post(api(), "/v1/runs/ingest", {
+      source: "demo.3fa9c1d2e0ab",
+      tenantId: "CASE-1",
+    });
+    expect(res.status).toBe(404);
+    const { rows } = await db.query<{ n: string }>("SELECT count(*)::text AS n FROM ops.run");
+    expect(rows[0]?.n).toBe("0");
+  });
+
   it("a failed run is recorded as failed and the verb still answered 202", async () => {
     // No request modelled: the source refuses the first read.
     const res = await post(api(new InMemoryFetcher()), "/v1/runs/ingest", {
@@ -231,6 +302,78 @@ describe("GET /v1/runs/due", () => {
 
   it("needs the trigger token", async () => {
     expect((await api().request("/v1/runs/due")).status).toBe(401);
+  });
+});
+
+describe("GET /v1/runs/extract-due", () => {
+  const SHA_A = "a".repeat(64);
+  const SHA_B = "b".repeat(64);
+
+  /** Catalogue a document the way an ingest leaves one. `sha` is what its bytes hashed to. */
+  async function landed(documentId: string, sha: string): Promise<void> {
+    await db.query(
+      `INSERT INTO raw.documents
+         (source, tenant_id, document_id, lake_key, sha256, byte_length, content_type,
+          observed_at, run_id)
+       VALUES ('drive', 'CASE-1', $1, $2, $3, 10, 'application/pdf', now(), 'run-seed')`,
+      [documentId, `documents/drive/CASE-1/${documentId}`, sha],
+    );
+  }
+
+  /** Record that a document was read, from the bytes `sha` names. */
+  async function readFrom(documentId: string, sha: string): Promise<void> {
+    await db.query(
+      `INSERT INTO raw.document_text
+         (source, tenant_id, document_id, source_sha256, method, text, chars, extracted_at, run_id)
+       VALUES ('drive', 'CASE-1', $1, $2, 'pdf_text', 'a page', 6, now(), 'run-seed')`,
+      [documentId, sha],
+    );
+  }
+
+  async function extractDue(): Promise<Response> {
+    return await api().request("/v1/runs/extract-due", {
+      headers: { authorization: "Bearer svc-token" },
+    });
+  }
+
+  it("lists a pair holding a document nobody has read", async () => {
+    await landed("doc-1", SHA_A);
+
+    const res = await extractDue();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ due: [{ tenantId: "CASE-1", source: "drive" }] });
+  });
+
+  it("stops listing a pair once its documents are read, so the tick does not run forever", async () => {
+    // The half of the guard that makes an hourly schedule cheap rather than wasteful: a
+    // settled tenant must fall off the list, or every tick starts a run that finds nothing.
+    await landed("doc-1", SHA_A);
+    await readFrom("doc-1", SHA_A);
+
+    expect(await (await extractDue()).json()).toEqual({ due: [] });
+  });
+
+  it("lists it again when a document's bytes have changed since it was read", async () => {
+    await landed("doc-1", SHA_A);
+    await readFrom("doc-1", SHA_B);
+
+    expect(await (await extractDue()).json()).toEqual({
+      due: [{ tenantId: "CASE-1", source: "drive" }],
+    });
+  });
+
+  it("does not list a pair whose only document has been tombstoned", async () => {
+    // Its bytes are gone from the source, so re-reading it is the opposite of what the
+    // tombstone records -- and a pair nothing can read that stays due ticks forever.
+    await landed("doc-1", SHA_A);
+    await db.query("UPDATE raw.documents SET deleted_at = now() WHERE document_id = 'doc-1'");
+
+    expect(await (await extractDue()).json()).toEqual({ due: [] });
+  });
+
+  it("needs the trigger token", async () => {
+    expect((await api().request("/v1/runs/extract-due")).status).toBe(401);
   });
 });
 

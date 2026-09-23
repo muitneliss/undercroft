@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { Cadence } from "@undercroft/contracts";
+import { Cadence, sourceKind } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
@@ -35,12 +35,15 @@ export const connectionsRouter = router({
   // so; `.claude/rules/money.md` calls this never guessing, and a fabricated URL is a
   // guess with a 200 on it.
   startOAuth: requireRole("admin")
-    .input(z.object({ source: z.string().min(1) }))
+    // `addAccount` connects a further account of the kind rather than (re)connecting `source`.
+    // ADR 0043.
+    .input(z.object({ source: z.string().min(1), addAccount: z.boolean().default(false) }))
     .mutation(async ({ ctx, input }) => {
       const started = await ctx.startConsent({
         tenantId: ctx.tenantId,
         source: input.source,
         startedBy: ctx.user.userId,
+        addAccount: input.addAccount,
       });
       if (started.ok) {
         return { authorizeUrl: started.authorizeUrl };
@@ -81,7 +84,7 @@ export const connectionsRouter = router({
       const outcome = await ctx.worker.browseScope({
         source: input.source,
         tenantId: ctx.tenantId,
-        kind: input.source === "xero" ? "organisations" : "labels",
+        kind: sourceKind(input.source) === "xero" ? "organisations" : "labels",
       });
       if (!outcome.ok) {
         // Three outcomes, three sentences. One message for all of them told an

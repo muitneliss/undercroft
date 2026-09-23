@@ -6,6 +6,21 @@
  * partially-applied database re-runs cleanly, and the ledger below means an already-run
  * file is skipped rather than re-executed.
  *
+ * WHY THERE IS A SECOND KIND OF FILE. The ledger keys on a file's NAME and stores no
+ * checksum, so editing an applied migration reaches new databases only. For a table that is
+ * harmless -- the table is already there. For a FUNCTION WHOSE BODY IS A POLICY it is a
+ * silent defect: `ops.provision_tenant` decides what every tenant login may read, and its
+ * grant list grew twice (ADR 0024, ADR 0026) by editing `080_tenant_isolation.sql` in place.
+ * In an upgraded database that edit changed nothing, so a tenant provisioned afterwards was
+ * created by the OLD body and silently lacked `raw.document_text` and the six search
+ * functions. Each of those files carried a catch-up loop, which covered the tenants that
+ * existed the day it ran and nothing after. It reached production, and this suite could not
+ * see it: every test database is fresh, so 080's current text always applies.
+ *
+ * So `sql/repeatable/` holds the files that state a CURRENT DEFINITION rather than a change,
+ * and they are re-applied on EVERY run, after the numbered ones. Editing one reaches every
+ * database at the next deploy -- which is the one thing a numbered file cannot do. ADR 0036.
+ *
  * No dbt, no ORM, no framework. The schema is stated once, here, in SQL.
  */
 
@@ -34,13 +49,30 @@ export function loadMigrations(dir: string = defaultSqlDir()): Migration[] {
     .map((name) => ({ name, sql: readFileSync(join(dir, name), "utf8") }));
 }
 
+/**
+ * The repeatable files, in application order.
+ *
+ * A file here is read exactly like a migration; what differs is the rule applied to it. It
+ * must state a whole current definition with `CREATE OR REPLACE`, because it runs again on
+ * every deploy -- a file that CREATEs a table or inserts a row does not belong here.
+ */
+export function loadRepeatables(dir: string = defaultRepeatableDir()): Migration[] {
+  return loadMigrations(dir);
+}
+
 function defaultSqlDir(): string {
   return join(import.meta.dirname, "..", "sql");
+}
+
+function defaultRepeatableDir(): string {
+  return join(defaultSqlDir(), "repeatable");
 }
 
 export interface MigrateResult {
   readonly applied: string[];
   readonly skipped: string[];
+  /** The repeatable files, which run every time. Never empty on a successful run. */
+  readonly repeated: string[];
 }
 
 /** The login roles a deploy sets a password on. Nothing else may be named to `setRolePassword`. */
@@ -85,10 +117,11 @@ export async function setRolePassword(
 export async function migrate(
   executor: SqlExecutor,
   migrations: Migration[] = loadMigrations(),
+  repeatables: Migration[] = loadRepeatables(),
 ): Promise<MigrateResult> {
   const [roles] = migrations;
   if (roles === undefined) {
-    return { applied: [], skipped: [] };
+    return { applied: [], skipped: [], repeated: [] };
   }
 
   // Bootstrap: roles, then the ledger. Both are idempotent.
@@ -113,5 +146,17 @@ export async function migrate(
     await executor.query("INSERT INTO ops.schema_migration (name) VALUES ($1)", [m.name]);
     applied.push(m.name);
   }
-  return { applied, skipped };
+
+  // After every numbered file, never before: a repeatable definition may reference anything
+  // the schema has by the end. `ops.provision_tenant` grants on `raw.document_text` and the
+  // search functions, which 180 and 190 create.
+  //
+  // Not recorded in the ledger, deliberately -- the ledger's whole job is to say what has
+  // already run, and the answer for these is "it runs again".
+  const repeated: string[] = [];
+  for (const r of repeatables) {
+    await executor.exec(r.sql);
+    repeated.push(r.name);
+  }
+  return { applied, skipped, repeated };
 }

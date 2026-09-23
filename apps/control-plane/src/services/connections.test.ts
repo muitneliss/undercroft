@@ -191,6 +191,42 @@ describe("the schedule", () => {
     expect(JSON.stringify(gmail)).not.toContain("rt");
   });
 
+  it("each mailbox is a card of its own, with its own status", async () => {
+    // One aggregate status over two mailboxes cannot say WHICH of them stopped. ADR 0043.
+    await upsertConnection(db, {
+      tenantId: TENANT,
+      source: "gmail",
+      status: "connected",
+      externalAccountId: "108134092834092834",
+    });
+    await writeConnectionDetail(db, {
+      tenantId: TENANT,
+      source: "gmail",
+      accountLabel: "ops@acme.test",
+      selectionJson: GMAIL_SCOPE,
+    });
+    await upsertConnection(db, {
+      tenantId: TENANT,
+      source: "gmail.3fa9c1d2e0ab",
+      status: "expired",
+      externalAccountId: "208134092834092834",
+    });
+    await writeConnectionDetail(db, {
+      tenantId: TENANT,
+      source: "gmail.3fa9c1d2e0ab",
+      accountLabel: "billing@acme.test",
+    });
+
+    const gmail = (await list(db, TENANT)).filter((r) => r.kind === "gmail");
+
+    expect(
+      gmail.map((r) => ({ source: r.source, account: r.externalAccountLabel, status: r.status })),
+    ).toEqual([
+      { source: "gmail", account: "ops@acme.test", status: "connected" },
+      { source: "gmail.3fa9c1d2e0ab", account: "billing@acme.test", status: "needs_reconnect" },
+    ]);
+  });
+
   it("the granted scope string comes back split", async () => {
     await upsertConnection(db, {
       tenantId: TENANT,

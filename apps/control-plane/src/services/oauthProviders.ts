@@ -13,6 +13,8 @@
  * source: the handshake row carries the source.
  */
 
+import { sourceKind } from "@undercroft/contracts";
+
 export type Provider = "google" | "xero";
 
 /** What a deployment holds for one provider: the client, and where the browser comes back. */
@@ -113,9 +115,14 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
 
 const PROVIDER_IDS: readonly Provider[] = ["google", "xero"];
 
-/** Which provider a source consents through, or `null` for one that has no consent flow. */
+/**
+ * Which provider a source consents through, or `null` for one that has no consent flow.
+ *
+ * By kind: every account of Gmail consents through Google, the second mailbox included.
+ */
 export function providerOf(source: string): Provider | null {
-  return PROVIDER_IDS.find((provider) => Object.hasOwn(PROVIDERS[provider].scopes, source)) ?? null;
+  const kind = sourceKind(source);
+  return PROVIDER_IDS.find((provider) => Object.hasOwn(PROVIDERS[provider].scopes, kind)) ?? null;
 }
 
 /** Where a provider is told to come back to. One URI per provider, registered in its console. */

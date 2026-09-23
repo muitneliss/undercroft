@@ -11,7 +11,6 @@
 
 import { useTranslation } from "react-i18next";
 
-import type { Source } from "@/api/types.ts";
 import { describeXeroEntity, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
 import { useUiStore } from "@/store.ts";
 
@@ -28,7 +27,8 @@ export function XeroChoice({
   organisation,
   entities,
 }: {
-  source: Source;
+  /** Which connection the draft is for; the store keys the draft by it. */
+  source: string;
   organisations: readonly { id: string; name: string }[];
   organisation: { id: string; name: string } | null;
   entities: readonly string[];

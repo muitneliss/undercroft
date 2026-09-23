@@ -9,35 +9,95 @@
  * defaulted, because the two readings of an absent scope are "nobody has chosen yet" and
  * "somebody chose everything", and guessing the second reads a customer's whole mailbox on
  * the strength of a missing row. The UI has a `needs_scope` state for exactly this.
+ *
+ * ## One pass, and the order inside it is the whole of the resume guarantee
+ *
+ * This used to read a harvest into arrays, land the records, land the documents, and then
+ * re-join the two with a `find` inside a loop over every result -- quadratic in the size of
+ * the mailbox, on top of holding the mailbox. It is now one walk of a {@link Harvest}
+ * feeding two sinks, which hold a chunk each and nothing else.
+ *
+ * **A RECORD IS HELD BACK UNTIL ITS DOCUMENTS ARE DOWN, AND THEN IT SAYS HOW MANY.** A
+ * message whose record landed while its attachment fetch was still failing would be skipped
+ * by every run after it, and the attachment would be lost from the one layer that cannot be
+ * recomputed -- rule 2 broken by the resume mechanism itself. So a batch's documents are
+ * flushed first, and only the records whose documents all reached the lake are added. A crash
+ * between the two re-does the message, which is idempotent by content, and that is the cheap
+ * direction to fail in.
+ *
+ * Presence in `raw.records` was the whole of the next run's test until ADR 0035, on the
+ * strength of that ordering alone. It was not enough, and the way it was not enough is the
+ * shape of every invariant a codebase asserts and does not record: it bound the rows written
+ * after it and said nothing about the rows already there. The rows already there were written
+ * records first and documents last, and the ingest oom-killed on 2026-09-21 stopped in
+ * between -- 7,786 messages present, zero attachments, and every run since skipped all 7,786
+ * on presence. So a released record now carries `documentsLanded` into the sink and the sink
+ * records it, and what the next run reads is what some run actually settled rather than what
+ * this file promises about itself.
+ *
+ * A document refused for its declared SIZE does not hold its record back, and is not counted
+ * either. That refusal is deterministic: waiting on it would make the message unharvestable
+ * rather than incomplete, and counting it would leave the message one document short of its
+ * own target on every run forever -- the same loss through the other door. A record held back
+ * for a retryable failure is itself refused with a reason, because a record quietly not landed
+ * would be the silent drop this is here to prevent.
+ *
+ * ## Refusals arrive in the order they happened
+ *
+ * They used to be grouped by kind -- every record refusal, then every document refusal,
+ * then every pick. Streamed, they arrive as the run met them, which is the better order:
+ * the refusal beside the chunk that caused it, rather than three lists a reader has to
+ * interleave by hand to see that one attachment is why one message is missing. A pick's
+ * refusal still comes last within its pick, because it is a statement about the whole pick.
  */
 
-import { parseScope } from "@undercroft/contracts";
+import { parseScope, sourceKind } from "@undercroft/contracts";
 import { newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { readConnectionDetail, type RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
+import { tombstoneMissing } from "../../repos/rawDocuments.ts";
+import { createDocumentSink } from "../documentSink.ts";
 import {
-  upsertDocuments,
-  type RawDocumentRow,
-  tombstoneMissing,
-} from "../../repos/rawDocuments.ts";
-import { landRecords } from "../land.ts";
-import { landDocuments } from "../landDocument.ts";
-import { loadStreamToRaw } from "../loadToRaw.ts";
+  CHUNK,
+  type DocumentSink,
+  type RecordSink,
+  type RefusalWriter,
+  type SinkDeps,
+} from "../landing.ts";
+import { createRecordSink } from "../recordSink.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
 import { harvestGmail } from "./gmail.ts";
+import { type Harvest, type HarvestItem, type HarvestSummary, heldBy } from "./harvest.ts";
 
-export const GOOGLE_SOURCES = ["gmail", "drive"] as const;
-export type GoogleSource = (typeof GOOGLE_SOURCES)[number];
+export const GOOGLE_KINDS = ["gmail", "drive"] as const;
+export type GoogleKind = (typeof GOOGLE_KINDS)[number];
 
-const GOOGLE_SOURCE_SET: ReadonlySet<string> = new Set<string>(GOOGLE_SOURCES);
+const GOOGLE_KIND_SET: ReadonlySet<string> = new Set<string>(GOOGLE_KINDS);
 
-export function isGoogleSource(source: string): source is GoogleSource {
-  return GOOGLE_SOURCE_SET.has(source);
+/**
+ * Whether a source is read by a Google collector -- any account of Gmail or Drive.
+ *
+ * By KIND: `gmail.3fa9c1d2e0ab` is a second mailbox, and a test on the literal source would
+ * send it down the spec path to look for a `gmail.3fa9c1d2e0ab.yaml` that does not exist.
+ * ADR 0043.
+ */
+export function isGoogleSource(source: string): boolean {
+  return GOOGLE_KIND_SET.has(sourceKind(source));
 }
+
+/**
+ * Why a record this run read was not landed: a document of its own did not reach the lake.
+ *
+ * Deliberately not a silent hold. The record IS coming -- the next run reads the message
+ * again, because nothing about it is in `raw.records` to skip -- but a run that read
+ * something and landed nothing must say which something and why, or the count is the only
+ * evidence and a count cannot be acted on.
+ */
+export const DOCUMENT_UNLANDED = "a-document-of-this-record-did-not-land";
 
 export class ScopeNotChosen extends Error {
   constructor(source: string, tenantId: string) {
@@ -63,6 +123,13 @@ export interface CollectResult {
   readonly source: string;
   readonly records: {
     landed: number;
+    /**
+     * Listed and NOT read, because this tenant already holds it unchanged.
+     *
+     * Reported because in steady state a run lands nothing, and `landed: 0` on its own
+     * makes "the mailbox is empty" and "nothing has changed" the same green run.
+     */
+    skipped: number;
     loadedCreated: number;
     loadedChanged: number;
     loadedUnchanged: number;
@@ -77,24 +144,11 @@ export interface CollectResult {
   /**
    * What this run refused, with why: a record that could not be landed under entity
    * `messages`/`files`, a document skipped over the size ceiling or failed under
-   * `documents`. The ids are opaque provider ids, never a subject or a filename.
+   * `documents`, a record held back because a document of its own did not land. The ids are
+   * opaque provider ids, never a subject or a filename.
    */
   readonly refusals: RunRefusal[];
 }
-
-/**
- * What a harvest answers with, whichever of the two collectors ran.
- *
- * `seenIds` is Drive's alone and null for Gmail, deliberately: a message that stops matching
- * a label selection has been relabelled, not deleted, and the tombstone pass must not be
- * handed a set that would report a deletion which never happened.
- */
-type Harvest = Omit<Awaited<ReturnType<typeof harvestDrive>>, "seenIds"> & {
-  readonly seenIds: readonly string[] | null;
-};
-
-/** What `landDocuments` answered, which the catalogue and the refusals both read. */
-type LandedDocuments = Awaited<ReturnType<typeof landDocuments>>;
 
 /**
  * The scope an admin chose, or a refusal.
@@ -104,7 +158,7 @@ type LandedDocuments = Awaited<ReturnType<typeof landDocuments>>;
  */
 async function googleScope(
   deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string },
+  input: { source: string; tenantId: string },
 ): Promise<Exclude<NonNullable<ReturnType<typeof parseScope>>, { kind: "xero" }>> {
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
@@ -114,156 +168,162 @@ async function googleScope(
   return scope;
 }
 
-/**
- * The rows `raw.documents` gets: only what actually reached the lake.
- *
- * A skipped or failed document has no bytes to point at, and a row claiming otherwise is
- * worse than no row. Nothing a human wrote goes in `metadata` -- `pii.md`, ADR 0015.
- */
-function catalogueRows(
-  harvest: Harvest,
-  landed: LandedDocuments,
-  stamp: { observedAt: string; runId: string },
-): RawDocumentRow[] {
-  const rows: RawDocumentRow[] = [];
-  for (const result of landed.results) {
-    if (result.status !== "created" && result.status !== "unchanged") {
-      continue;
-    }
-    const source = harvest.documents.find((d) => d.documentId === result.documentId);
-    if (source === undefined) {
-      continue;
-    }
-    rows.push({
-      documentId: result.documentId,
-      lakeKey: result.lakeKey ?? "",
-      sha256: result.sha256 ?? "",
-      byteLength: result.byteLength ?? "0",
-      contentType: source.contentType,
-      metadataJson: JSON.stringify({
-        ...source.metadata,
-        sourceUpdatedAt: source.sourceUpdatedAt,
-      }),
-      observedAt: stamp.observedAt,
-      runId: stamp.runId,
-    });
-  }
-  return rows;
-}
-
-/**
- * What this run refused, with why.
- *
- * Recorded rather than dropped: a record that could not be keyed, a document over the size
- * ceiling, a pick the harvest would not take. Every id is the provider's opaque one, never a
- * subject or a filename.
- */
-function refusalsFor(
-  entity: string,
-  harvest: Harvest,
-  landedRecords: Awaited<ReturnType<typeof landRecords>>,
-  landedDocuments: LandedDocuments,
-): RunRefusal[] {
-  const refusals: RunRefusal[] = [];
-  for (const result of landedRecords.results) {
-    if (result.status === "failed") {
-      refusals.push({
-        entity,
-        sourceRecordId: result.sourceRecordId,
-        reason: result.reason ?? "refused",
-      });
-    }
-  }
-  for (const result of landedDocuments.results) {
-    if (result.status === "skipped" || result.status === "failed") {
-      refusals.push({
-        entity: "documents",
-        sourceRecordId: result.documentId,
-        reason: result.reason ?? result.status,
-      });
-    }
-  }
-  for (const pick of harvest.skipped) {
-    refusals.push({ entity, sourceRecordId: pick.fileId, reason: pick.reason });
-  }
-  return refusals;
-}
-
-/** Where and when one harvest is landed: the lake first, then its projection in Postgres. */
+/** What one walk of a harvest writes through, held together so `drain` takes two arguments. */
 interface Landing {
-  readonly source: GoogleSource;
-  readonly tenantId: string;
-  readonly runId: string;
   readonly entity: string;
-  readonly observedAt: string;
+  readonly records: RecordSink;
+  readonly documents: DocumentSink;
+  readonly refuse: RefusalWriter;
 }
 
 /**
- * Land the harvest: records to the lake and on into `raw.records`, documents to the lake.
+ * Walk a harvest into the two sinks, documents first, and answer with what it said at the end.
  *
- * The lake write is first and is create-only; everything in Postgres after it is a
- * projection that may be dropped and rebuilt. `raw-lake.md`.
+ * `pending` is the only thing this holds and it is capped at one chunk of records. A record
+ * waits in it until `release` has flushed every document added since the last one -- which
+ * is what makes a row in `raw.records` mean the message behind it is complete, and therefore
+ * what makes skipping it on the next run safe.
+ *
+ * **AND THE RECORD CARRIES THE COUNT OUT WITH IT.** The ordering above is what MAKES a landed
+ * record complete; `documentsLanded` is what SAYS SO, and the difference cost a customer every
+ * attachment in a 7,786-message mailbox. Ordering binds the rows the ordering wrote, and the
+ * next run reads rows it did not write -- rows from a release where documents came last, and
+ * from a run that died between the two. This is the only layer that knows both halves, so it
+ * is where the count is computed: what the harvest offered, intersected with what the sink got
+ * down. A size-refused attachment is in neither set and so is counted as what it is, zero,
+ * rather than as a message forever one document short of itself. ADR 0035.
+ *
+ * A manual `next()` loop rather than `for await`, because `for await` discards a generator's
+ * return value and the summary IS the return value. Consumed to exhaustion, never broken out
+ * of: an abandoned harvest leaves a paged listing half-read, and the symptom is an unrelated
+ * "no recorded response" two tests away.
  */
-async function landHarvest(
-  deps: CollectDeps,
-  at: Landing,
-  harvest: Harvest,
-): Promise<{
-  landedRecords: Awaited<ReturnType<typeof landRecords>>;
-  loaded: Awaited<ReturnType<typeof loadStreamToRaw>>;
-  landedDocuments: LandedDocuments;
-}> {
-  const landedRecords = await landRecords(deps.lake, {
-    source: at.source,
-    tenantId: at.tenantId,
-    runId: at.runId,
-    records: harvest.records,
-  });
-  const loaded = await loadStreamToRaw(deps.exec, deps.lake, {
-    source: at.source,
-    tenantId: at.tenantId,
-    entity: at.entity,
-  });
-  const landedDocuments = await landDocuments(deps.lake, {
-    source: at.source,
-    tenantId: at.tenantId,
-    runId: at.runId,
-    documents: harvest.documents,
-  });
-  return { landedRecords, loaded, landedDocuments };
-}
+async function drain(harvest: Harvest, at: Landing): Promise<HarvestSummary> {
+  const pending: HarvestItem[] = [];
 
-/**
- * The Postgres projection of the documents: the catalogue, then the tombstones.
- *
- * Tombstoning is DRIVE'S ALONE and skipped when `seenIds` is null. A Gmail message that stops
- * matching a label selection has been relabelled, not deleted, and a tombstone would report a
- * deletion that never happened.
- */
-async function projectDocuments(
-  deps: CollectDeps,
-  at: Landing,
-  harvest: Harvest,
-  landed: LandedDocuments,
-): Promise<number> {
-  const scoped = { source: at.source, tenantId: at.tenantId };
-  await upsertDocuments(
-    deps.exec,
-    scoped,
-    catalogueRows(harvest, landed, { observedAt: at.observedAt, runId: at.runId }),
-  );
-  if (harvest.seenIds === null) {
-    return 0;
+  async function release(): Promise<void> {
+    const settled = await at.documents.flush();
+    for (const item of pending.splice(0)) {
+      if (item.documents.some((document) => settled.unfetched.has(document.documentId))) {
+        await at.refuse([
+          {
+            entity: at.entity,
+            sourceRecordId: item.record.sourceRecordId,
+            reason: DOCUMENT_UNLANDED,
+          },
+        ]);
+        continue;
+      }
+      await at.records.add({
+        ...item.record,
+        documentsLanded: item.documents.filter((document) =>
+          settled.landed.has(document.documentId),
+        ).length,
+      });
+    }
   }
-  return await tombstoneMissing(deps.exec, scoped, {
-    keptIds: harvest.seenIds,
-    observedAt: at.observedAt,
-  });
+
+  let step = await harvest.next();
+  while (!step.done) {
+    for (const document of step.value.documents) {
+      await at.documents.add(document);
+    }
+    pending.push(step.value);
+    if (pending.length >= CHUNK) {
+      await release();
+    }
+    step = await harvest.next();
+  }
+  await release();
+
+  return step.value;
+}
+
+/** Everything one collection reads through and writes into, wired once. */
+interface Collection {
+  readonly harvest: Harvest;
+  readonly records: RecordSink;
+  readonly documents: DocumentSink;
+  readonly refuse: RefusalWriter;
+  /** The array `refuse` fills. Answered to the caller; see {@link openCollection}. */
+  readonly refusals: RunRefusal[];
+}
+
+/**
+ * Wire one collection: which source to read, where its two halves land, and what it may skip.
+ *
+ * Refusals are COLLECTED here rather than written. `runGoogleCollect` answers with them and
+ * the caller that opened an `ops.run` row is the one that owns writing them; a collector
+ * driven with no ledger behind it -- the case `SILENT_JOURNAL` exists for -- has no run row
+ * for `ops.run_refusal` to reference and would fail its foreign key on the first one.
+ */
+function openCollection(
+  deps: CollectDeps,
+  scope: Awaited<ReturnType<typeof googleScope>>,
+  at: { source: string; tenantId: string; runId: string; entity: string; observedAt: string },
+  journal: RunJournal,
+): Collection {
+  const refusals: RunRefusal[] = [];
+  const refuse: RefusalWriter = (written): Promise<void> => {
+    refusals.push(...written);
+    return Promise.resolve();
+  };
+  const sinks: SinkDeps = { lake: deps.lake, exec: deps.exec, refuse };
+  const held = heldBy(deps.exec, { source: at.source, tenantId: at.tenantId, entity: at.entity });
+
+  return {
+    harvest:
+      scope.kind === "gmail"
+        ? harvestGmail(deps.api, scope, journal, held)
+        : harvestDrive(deps.api, scope, journal, held),
+    records: createRecordSink(sinks, at),
+    documents: createDocumentSink(sinks, at),
+    refuse,
+    refusals,
+  };
+}
+
+/**
+ * What is only decidable once the whole harvest has been walked: the tombstones, and the
+ * refusal owed to each pick. Answers how many documents were tombstoned.
+ *
+ * Tombstoning is DRIVE'S ALONE and skipped when `seenIds` is null. A Gmail message that
+ * stops matching a label selection has been relabelled, not deleted, and a tombstone would
+ * report a deletion that never happened. It also runs only once every catalogue row is
+ * written, because the sweep is a negated `ANY` over the ids this run kept -- a row written
+ * after it would look like one nobody saw.
+ *
+ * A pick's refusal comes last for the same reason it comes at all: it is a statement about
+ * the whole pick, and there is no such thing until the pick is exhausted.
+ */
+async function settleDocuments(
+  deps: CollectDeps,
+  at: {
+    entity: string;
+    observedAt: string;
+    scoped: { source: string; tenantId: string };
+    refuse: RefusalWriter;
+  },
+  summary: HarvestSummary,
+): Promise<number> {
+  const tombstoned =
+    summary.seenIds === null
+      ? 0
+      : await tombstoneMissing(deps.exec, at.scoped, {
+          keptIds: summary.seenIds,
+          observedAt: at.observedAt,
+        });
+
+  for (const pick of summary.skipped) {
+    await at.refuse([{ entity: at.entity, sourceRecordId: pick.fileId, reason: pick.reason }]);
+  }
+
+  return tombstoned;
 }
 
 export async function runGoogleCollect(
   deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string; runId?: string },
+  input: { source: string; tenantId: string; runId?: string },
 ): Promise<CollectResult> {
   // The caller that opened an `ops.run` row hands its id down; a caller with no ledger
   // still gets a run id on every object it lands.
@@ -275,22 +335,18 @@ export async function runGoogleCollect(
   const journal = deps.journal ?? SILENT_JOURNAL;
   journal.info("entity_started", { entity });
 
-  const harvest: Harvest =
-    scope.kind === "gmail"
-      ? { ...(await harvestGmail(deps.api, scope, journal)), seenIds: null, skipped: [] }
-      : await harvestDrive(deps.api, scope, journal);
+  const scoped = { source: input.source, tenantId: input.tenantId };
+  const { harvest, records, documents, refuse, refusals } = openCollection(
+    deps,
+    scope,
+    { ...scoped, runId, entity, observedAt },
+    journal,
+  );
 
-  const at: Landing = {
-    source: input.source,
-    tenantId: input.tenantId,
-    runId,
-    entity,
-    observedAt,
-  };
-  const { landedRecords, loaded, landedDocuments } = await landHarvest(deps, at, harvest);
-  const tombstoned = await projectDocuments(deps, at, harvest, landedDocuments);
-
-  const refusals = refusalsFor(entity, harvest, landedRecords, landedDocuments);
+  const summary = await drain(harvest, { entity, records, documents, refuse });
+  const landedRecords = await records.close();
+  const landedDocuments = await documents.close();
+  const tombstoned = await settleDocuments(deps, { entity, observedAt, scoped, refuse }, summary);
 
   journal.info("documents_landed", {
     entity: "documents",
@@ -305,10 +361,11 @@ export async function runGoogleCollect(
     runId,
     source: input.source,
     records: {
-      landed: landedRecords.created + landedRecords.unchanged,
-      loadedCreated: loaded.created,
-      loadedChanged: loaded.changed,
-      loadedUnchanged: loaded.unchanged,
+      landed: landedRecords.landed,
+      skipped: summary.known,
+      loadedCreated: landedRecords.loaded.created,
+      loadedChanged: landedRecords.loaded.changed,
+      loadedUnchanged: landedRecords.loaded.unchanged,
     },
     refusals,
     documents: {

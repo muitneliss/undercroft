@@ -55,4 +55,53 @@
 ## [2026-09-19] ingest | Runbook Sign-In Setup
 ## [2026-09-19] ingest | Runbook Deployment
 ## [2026-09-19] ingest | ADR 0023 Task Is the Mandatory Command Entrypoint
-## [2026-09-19] ingest | Runbook Deployment
+## [2026-09-20] ingest | ADR 0024: A document's text is readable by dbt
+## [2026-09-20] ingest | ADR 0025 shadcn/Radix for Structure, Never for Style
+## [2026-09-20] ingest | ADR 0026: Full-text search over the raw lake
+## [2026-09-21] ingest | ADR 0027 A Control Sits on Its Field's Line
+## [2026-09-21] ingest | ADR 0028: A workbook is read in process, and extract is scheduled by backlog
+## [2026-09-21] ingest | ADR 0029: The assistant is an interleaf, and it acts only through the router
+## [2026-09-21] ingest | Runbook: Setting the assistant up
+## [2026-09-21] ingest | ADR 0029: The assistant is an interleaf, and it acts only through the router
+## [2026-09-21] ingest | Runbook: Setting the assistant up
+## [2026-09-21] ingest | ADR 0027 A Control Sits on Its Field's Line
+## [2026-09-21] ingest | ADR 0017 Tests Are a Category in the Lint Config
+## [2026-09-21] ingest | ADR 0018 A Lint Decision Lives in the Config
+## [2026-09-21] ingest | ADR 0022 A Test File Is Not an Exception
+## [2026-09-21] ingest | ADR 0023 Task Is the Mandatory Command Entrypoint
+## [2026-09-21] ingest | Runbook Deployment
+## [2026-09-21] ingest | Runbook Sign-In Setup
+## [2026-09-21] ingest | ADR 0029: The assistant is an interleaf, and it acts only through the router
+## [2026-09-21] ingest | Runbook: Setting the assistant up
+## [2026-09-21] ingest | ADR 0026: Full-text search over the raw lake
+## [2026-09-21] ingest | ADR 0028: A workbook is read in process, and extract is scheduled by backlog
+## [2026-09-21] ingest | ADR 0030: An email is a leaf of the book, posted
+## [2026-09-21] remove | ADR 0030 A Picked Drive Folder May Be Read to the Bottom
+## [2026-09-21] ingest | ADR 0031 A Picked Drive Folder May Be Read to the Bottom
+## [2026-09-21] ingest | Runbook Deployment
+## [2026-09-21] ingest | ADR 0032 A Progress Line Is a Gauge Not an Entry
+## [2026-09-21] ingest | ADR 0034 The Watermark Is a Table Not a Max
+## [2026-09-21] ingest | An ingest streams, and does not re-read what it already holds
+## [2026-09-22] ingest | ADR 0035: A harvest records what it settled, rather than asserting it
+## [2026-09-22] ingest | ADR 0035: A harvest records what it settled, rather than asserting it
+## [2026-09-22] ingest | ADR 0036 — A definition is restated, not migrated
+## [2026-09-22] ingest | ADR 0037 A Query Grid Divides Its Pane
+## [2026-09-22] ingest | ADR 0038 The Console Buffer Is a Script
+## [2026-09-22] ingest | ADR 0038 The Console Buffer Is a Script
+## [2026-09-22] ingest | The readers ADR 0028 deferred, and a refusal that can be retried
+## [2026-09-22] ingest | ADR 0039 A Count Has a Route to Its Constituents
+## [2026-09-23] ingest | ADR 0040 The Catalogue Does Not Inherit the Lake's Deduplication
+## [2026-09-23] ingest | Vietnamese OCR was measurable after all, and the fixture was what could not measure it
+## [2026-09-23] ingest | Vietnamese OCR was measurable after all, and the fixture was what could not measure it
+## [2026-09-23] ingest | ADR 0042 A Pane's Whole Edge Is Its Handle
+## [2026-09-23] ingest | ADR 0043 A Second Mailbox Is a Second Source
+## [2026-09-23] ingest | Runbook Google Ingestion Setup
+## [2026-09-23] ingest | ADR 0044: An agent reaches Undercroft as a caller
+## [2026-09-23] ingest | Runbook: The undercroft CLI
+## [2026-09-23] ingest | ADR 0044: An agent reaches Undercroft as a caller
+## [2026-09-23] ingest | Runbook: The undercroft CLI
+## [2026-09-23] ingest | ADR 0045: The mark in an email is drawn, not fetched
+## [2026-09-23] ingest | ADR 0046: The CLI installs once, from the latest release
+## [2026-09-23] ingest | Runbook: The undercroft CLI
+## [2026-09-23] ingest | Runbook: The undercroft CLI
+## [2026-09-23] ingest | Runbook Deployment

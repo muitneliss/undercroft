@@ -11,97 +11,190 @@
  * wrong filter fails closed. The filter is still written narrowly, because failing closed is
  * a backstop and not an excuse.
  *
- * **Descent is one level.** A folder's children are listed; a child folder's children are
- * not. Recursive descent through a shared drive can reach folders the admin never saw in
- * the Picker, which would make the printed promise false even where Google would allow the
- * read.
+ * **How deep descent goes is the admin's recorded choice.** `scope.recurse` false -- which is
+ * what every selection saved before that field existed means -- lists a folder's children and
+ * stops; true walks the whole tree beneath it. Descent used to be one level ALWAYS, on the
+ * reasoning that a recursive walk can reach folders the admin never saw in the Picker and so
+ * would make the printed promise false. That reasoning was right about the hazard and wrong
+ * about the remedy: it is answered by the admin saying which they want, and reading that back
+ * on the card, rather than by the deeper read being impossible. ADR 0031.
  *
  * **Which types are allowed is a second, independent filter**, on top of folder-boundedness:
  * `scope.fileTypes` (empty means every type, the same recorded-decision idiom as an empty
  * label or entity list -- `@undercroft/contracts`). A folder listing asks Google's `q=` for
  * only the allowed types; a directly-picked single file is checked after the fact, because
  * there is nothing to filter a lookup of one specific id by.
+ *
+ * How Drive is ASKED any of this -- the query dialect, the paging, the fact that a listing
+ * hands back containers alongside files -- is `driveListing.ts`. What lands is here.
  */
 
-import { type DriveScope, allowsFileType } from "@undercroft/contracts";
-import { canonicalJson, getPath, getStringPath } from "@undercroft/core";
+import type { DriveScope } from "@undercroft/contracts";
+import { canonicalJson } from "@undercroft/core";
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
-import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
+import type { RunJournal } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
+import { DRIVE_BASE, type DriveFile, ENTITY, listMatchingIn, readOneFile } from "./driveListing.ts";
+import type { AlreadyHeld, Harvest, HarvestItem, PickSkipped, RecordProbe } from "./harvest.ts";
 
-/** Why a pick was not taken. The one reason this collector has, and it is a refusal. */
-export const NOT_ALLOWED_TYPE = "not-an-allowed-type";
+/**
+ * Why a picked FOLDER yielded nothing.
+ *
+ * Not an error -- an empty folder is a legitimate answer -- but it must be SAID. Without it,
+ * "the folder is empty", "everything in it is outside the allow-list" and "the pick no longer
+ * resolves" are one green run landing 0 with no refusals, which is the shape of the report
+ * "Drive syncs nothing even though I have data". A directly-picked file already refused with
+ * a reason; this is the folder half of the same rule. CLAUDE.md rule 2.
+ */
+export const NOTHING_MATCHED = "no-matching-files-in-folder";
 
-const DRIVE_BASE = "https://www.googleapis.com/drive/v3/files";
-const ENTITY = "files";
-const PAGE_SIZE = "100";
-const FIELDS = "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)";
-const FILE_FIELDS = "id,name,mimeType,size,modifiedTime,md5Checksum,parents";
-
-export interface DriveHarvest {
-  readonly records: RecordToLand[];
-  readonly documents: DocumentToLand[];
-  /** Every document id this run saw, so the caller can tombstone what vanished. */
-  readonly seenIds: string[];
-  /**
-   * What was picked and not taken, with why.
-   *
-   * A directly-picked file outside the allow-list used to be dropped where it was found,
-   * which made "we were given nothing" and "we refused what we were given" the same green
-   * run landing 0. CLAUDE.md rule 2: recorded with its reason, never dropped.
-   */
-  readonly skipped: { fileId: string; reason: string }[];
-}
+/**
+ * How many listed files one skip-known probe covers.
+ *
+ * The listing streams, so nothing here holds the tree; this is only how many files are
+ * gathered before one round trip asks which of them we already hold. Small enough that the
+ * hold is noise against a 1 GiB budget, large enough that a folder of ten thousand files
+ * costs fifty statements rather than ten thousand.
+ */
+const PROBE_BATCH = 200;
 
 export function driveBaseUrl(): string {
   return DRIVE_BASE;
 }
 
-export async function harvestDrive(
+/**
+ * Harvest what the admin picked, one file at a time.
+ *
+ * **A FILE WE ALREADY HOLD UNCHANGED IS NOT READ AGAIN**, and the comparison that decides
+ * that is Postgres's rather than this module's: `modifiedTime` goes into the probe as the
+ * text Drive sent and `raw.records.source_updated_at` is parsed beside it, because the two
+ * spellings of one instant are not equal as strings and a JavaScript compare would re-read
+ * the whole of a customer's Drive on every run while looking like it was skipping.
+ *
+ * Unchanged is necessary and was briefly mistaken for sufficient. A file whose record landed
+ * under the old order -- record first, bytes last -- has an unmoved `modifiedTime` and no
+ * document, so it matched the probe and was skipped forever with nothing in the lake. Drive
+ * carried the same exposure as Gmail here and for the same reason; the probe now also requires
+ * the row to be marked harvest-complete. ADR 0035. Note the asymmetry with Gmail: every Drive
+ * file IS a document, so a mark of zero means an oversized file whose record is legitimately
+ * alone -- which is why the mark is a count of what LANDED and not a comparison against what
+ * the pick matched, or such a file would be downloaded again every run for ever.
+ *
+ * **A SKIPPED FILE STILL ENTERS `seenIds`**, which is the quiet half and the dangerous one.
+ * `tombstoneMissing` negates the kept-id set, so a file left out of it because it had not
+ * changed is reported DELETED -- and in a steady-state Drive that is every file in it, on
+ * the second run. A file the listing named was seen; whether we re-read it is a different
+ * question from whether it exists.
+ *
+ * A file whose listing carries no `modifiedTime` is left out of the probe entirely rather
+ * than probed on presence alone. There is no evidence it is unchanged, and no evidence is
+ * not "unchanged" -- so it is read again, which costs a download and cannot lose an edit.
+ */
+export async function* harvestDrive(
   api: GoogleApi,
   scope: DriveScope,
-  journal: RunJournal = SILENT_JOURNAL,
-): Promise<DriveHarvest> {
-  const records: RecordToLand[] = [];
-  const documents: DocumentToLand[] = [];
+  journal: RunJournal,
+  held: AlreadyHeld,
+): Harvest {
   const seen = new Set<string>();
-  const skipped: DriveHarvest["skipped"] = [];
+  const skipped: PickSkipped[] = [];
   let folders = 0;
+  // Folders WALKED, which is not `HarvestSummary.listed` (files named). The journal's
+  // `listed` is this one, and it is what `picks_listed` compares against `folders` to say
+  // how far a recursive descent went.
+  let walked = 0;
+  let known = 0;
 
   for (const picked of scope.files) {
     if (picked.kind === "folder") {
       folders += 1;
     }
-    const files = await matchingFilesOf(api, picked, {
+    const files = filesOfPick(api, picked, {
       fileTypes: scope.fileTypes,
-      seen: records.length,
+      recurse: scope.recurse,
+      seen: seen.size,
       skipped,
     });
 
-    for (const file of files) {
-      if (seen.has(file.id)) {
-        continue; // One file picked twice, or in two picked folders.
+    const into: Taking = { api, picked, seen, held };
+    const batch: DriveFile[] = [];
+    let step = await files.next();
+    while (!step.done) {
+      batch.push(step.value);
+      if (batch.length >= PROBE_BATCH) {
+        known += yield* take(batch.splice(0), into);
       }
-      seen.add(file.id);
-
-      records.push(toRecord(file));
-      documents.push(toDocument(api, file, picked, records.length));
+      step = await files.next();
     }
+    known += yield* take(batch.splice(0), into);
+    walked += step.value;
   }
 
   // The sentence a green run landing nothing could not say before: what was looked in, what
-  // was found there, and the one-level rule that explains the difference between them.
+  // was found there, and the descent that explains the difference between them. `listed`
+  // exceeds `folders` exactly when a recursive walk found sub-folders, which is how the run
+  // says how far down it went rather than leaving the reader to infer it from the count.
+  // `matched` is still every distinct file the picks yielded, skipped ones included -- it
+  // answers "did the pick find anything", which is not "did we have to read it".
   journal.info("picks_listed", {
     entity: ENTITY,
     folders,
+    listed: walked,
     picks: scope.files.length,
-    matched: records.length,
+    matched: seen.size,
     skipped: skipped.length,
   });
 
-  return { records, documents, seenIds: [...seen], skipped };
+  return { seenIds: [...seen], skipped, listed: seen.size, known };
+}
+
+/** What one pick's batches are taken against: it outlives them, so it is not per batch. */
+interface Taking {
+  readonly api: GoogleApi;
+  readonly picked: DriveScope["files"][number];
+  /** Every file id this whole harvest has met. Mutated here; see {@link take}. */
+  readonly seen: Set<string>;
+  readonly held: AlreadyHeld;
+}
+
+/**
+ * One batch of listed files, turned into what to harvest. Answers how many it skipped.
+ *
+ * Every file here enters `seen` before anything decides whether to read it, which is the
+ * tombstone rule spelled out in `harvestDrive`'s docstring. De-duplication comes first: one
+ * file picked twice, or sitting in two picked folders, is one file.
+ */
+async function* take(
+  batch: readonly DriveFile[],
+  into: Taking,
+): AsyncGenerator<HarvestItem, number> {
+  const { api, picked, seen, held } = into;
+  const fresh: DriveFile[] = [];
+  for (const file of batch) {
+    if (!seen.has(file.id)) {
+      seen.add(file.id);
+      fresh.push(file);
+    }
+  }
+
+  const probes: RecordProbe[] = fresh.flatMap((file) =>
+    file.modifiedTime === ""
+      ? []
+      : [{ sourceRecordId: file.id, sourceUpdatedAt: file.modifiedTime }],
+  );
+  const unchanged = await held(probes);
+
+  let skippedHere = 0;
+  for (const file of fresh) {
+    if (unchanged.has(file.id)) {
+      skippedHere += 1;
+      continue;
+    }
+    yield { record: toRecord(file), documents: [toDocument(api, file, picked, seen.size)] };
+  }
+  return skippedHere;
 }
 
 /** The row that lands in `raw.records`: Drive's own facts about the file, canonicalised. */
@@ -155,147 +248,52 @@ function toDocument(
 }
 
 /**
- * The matching files one pick yields: a folder's, listed one level down, or the single file
- * itself.
+ * The matching files one pick yields: a folder's tree, to the depth the admin chose, or the
+ * single file itself. Answers how many folders were listed to produce them.
  *
  * A pick that yields nothing because it is outside the allow-list is appended to `skipped`
- * rather than returned empty, so the caller can refuse it with a reason instead of landing a
- * silent zero.
+ * rather than yielded empty, so the caller can refuse it with a reason instead of landing a
+ * silent zero. The refusal is recorded against the PICK, not against each folder walked: an
+ * admin picked one thing and is owed one sentence about it, and a tree of empty sub-folders
+ * would otherwise refuse once per branch.
+ *
+ * Streaming does not move that. The count it turns on is what this generator YIELDED, so it
+ * is only known at the end of the pick -- which is exactly where the refusal is pushed, one
+ * per pick, before the next pick starts. What it counts is the listing, not the landing: a
+ * folder whose only file was already seen through another pick still matched something.
  */
-async function matchingFilesOf(
+async function* filesOfPick(
   api: GoogleApi,
   picked: DriveScope["files"][number],
-  options: { fileTypes: readonly string[]; seen: number; skipped: DriveHarvest["skipped"] },
-): Promise<DriveFile[]> {
-  const { fileTypes, seen, skipped } = options;
-  if (picked.kind === "folder") {
-    return listMatchingIn(api, picked.id, fileTypes, seen);
-  }
-  const one = await readOneFile(api, picked.id, fileTypes, seen);
-  if (one.file === null) {
-    skipped.push({ fileId: picked.id, reason: one.reason });
-    return [];
-  }
-  return [one.file];
-}
+  options: {
+    fileTypes: readonly string[];
+    recurse: boolean;
+    seen: number;
+    skipped: PickSkipped[];
+  },
+): AsyncGenerator<DriveFile, number> {
+  const { fileTypes, recurse, seen, skipped } = options;
 
-interface DriveFile {
-  readonly id: string;
-  readonly name: string;
-  readonly mimeType: string;
-  readonly size: string;
-  readonly modifiedTime: string;
-  readonly md5Checksum: string;
-  readonly parents: string[];
-}
-
-/**
- * A value for Drive's query syntax, escaped.
- *
- * The folder id needs none of this -- it is Google-issued and opaque, and `'` is not in its
- * alphabet -- but a file type can now come from the free-text field an admin typed into, and
- * that IS ordinary text.
- */
-function escapeDriveQueryValue(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("'", "\\'");
-}
-
-/** "" for every type, one bare clause for one type, a parenthesized OR for several. */
-function mimeTypeClause(fileTypes: readonly string[]): string {
-  if (fileTypes.length === 0) {
-    return "";
-  }
-  const clauses = fileTypes.map((type) => `mimeType='${escapeDriveQueryValue(type)}'`).join(" or ");
-  if (fileTypes.length === 1) {
-    return clauses;
-  }
-  return `(${clauses})`;
-}
-
-async function listMatchingIn(
-  api: GoogleApi,
-  folderId: string,
-  fileTypes: readonly string[],
-  seen: number,
-): Promise<DriveFile[]> {
-  const files: DriveFile[] = [];
-  let pageToken: string | null = null;
-  const typeClause = mimeTypeClause(fileTypes);
-  const q =
-    typeClause === ""
-      ? `'${folderId}' in parents and trashed=false`
-      : `'${folderId}' in parents and ${typeClause} and trashed=false`;
-
-  do {
-    const url = new URL(DRIVE_BASE);
-    url.searchParams.set("q", q);
-    url.searchParams.set("fields", FIELDS);
-    url.searchParams.set("pageSize", PAGE_SIZE);
-    // A picked folder may live in a shared drive; without these the listing is silently
-    // empty there, which reads as "the folder has nothing in it".
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
-    if (pageToken !== null) {
-      url.searchParams.set("pageToken", pageToken);
+  if (picked.kind !== "folder") {
+    const one = await readOneFile(api, picked.id, fileTypes, seen);
+    if (one.file === null) {
+      skipped.push({ fileId: picked.id, reason: one.reason });
+      return 0;
     }
+    yield one.file;
+    return 0;
+  }
 
-    const page = await api.getJson(url.toString(), ENTITY, seen);
-    for (const raw of asArray(getPath(page, "files"))) {
-      files.push(toFile(raw));
-    }
-    const next = str(page, "nextPageToken");
-    pageToken = next === "" ? null : next;
-  } while (pageToken !== null);
-
-  return files;
-}
-
-/**
- * A directly picked file, or the reason it is not one we may take.
- *
- * A file outside the allow-list is refused: the consent says which types may be read. The
- * refusal is RETURNED rather than swallowed so the caller can record it -- an admin who
- * picked a spreadsheet nobody allowed is owed the sentence "that pick is not an allowed type"
- * and not a run that quietly landed nothing.
- */
-async function readOneFile(
-  api: GoogleApi,
-  fileId: string,
-  fileTypes: readonly string[],
-  seen: number,
-): Promise<{ file: DriveFile | null; reason: string }> {
-  const url = new URL(`${DRIVE_BASE}/${encodeURIComponent(fileId)}`);
-  url.searchParams.set("fields", FILE_FIELDS);
-  url.searchParams.set("supportsAllDrives", "true");
-
-  const file = toFile(await api.getJson(url.toString(), ENTITY, seen));
-  return allowsFileType(fileTypes, file.mimeType)
-    ? { file, reason: "" }
-    : { file: null, reason: NOT_ALLOWED_TYPE };
-}
-
-function toFile(raw: unknown): DriveFile {
-  return {
-    id: str(raw, "id"),
-    name: str(raw, "name"),
-    mimeType: str(raw, "mimeType"),
-    size: str(raw, "size") || "0",
-    modifiedTime: str(raw, "modifiedTime"),
-    md5Checksum: str(raw, "md5Checksum"),
-    parents: strings(getPath(raw, "parents")),
-  };
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-/** See the note in `gmail.ts`: `String(...)` on a lossless number gives "[object Object]". */
-function str(root: unknown, path: string): string {
-  return getStringPath(root, path) ?? "";
-}
-
-/** The string elements of an array. A non-string parent id is not one we can use. */
-function strings(value: unknown): string[] {
-  return asArray(value).filter((v): v is string => typeof v === "string");
+  let matched = 0;
+  const files = listMatchingIn(api, picked.id, { fileTypes, recurse, seen });
+  let step = await files.next();
+  while (!step.done) {
+    matched += 1;
+    yield step.value;
+    step = await files.next();
+  }
+  if (matched === 0) {
+    skipped.push({ fileId: picked.id, reason: NOTHING_MATCHED });
+  }
+  return step.value;
 }

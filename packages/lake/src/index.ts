@@ -1,4 +1,4 @@
-export { InMemoryObjectStore } from "./memory.ts";
+export { InMemoryObjectStore, type ObjectStoreCalls } from "./memory.ts";
 export { ObjectNotFound, type ObjectStore } from "./objectStore.ts";
 export { S3ObjectStore, type S3StoreConfig } from "./s3.ts";
 export {
@@ -6,6 +6,7 @@ export {
   LakeStore,
   type LakeStoreOptions,
   ObjectExists,
+  type Observation,
   type PutResult,
   RETENTION_UNBOUNDED,
 } from "./store.ts";

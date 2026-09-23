@@ -1,6 +1,6 @@
 ---
 description: No real customer data in any tracked file
-globs: ["specs/**", "docs/**", "**/*.md", "**/*.test.ts", "**/fixtures/**"]
+paths: ["specs/**", "docs/**", "**/*.md", "**/*.test.ts", "**/fixtures/**"]
 ---
 
 # PII does not enter git
@@ -24,6 +24,22 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   opaque provider ids, timestamps, enumerated types and counts. `landDocuments` takes
   `metadata` and `manifest` as two separate arguments so the split is visible at every call
   site; see `apps/worker/src/services/landDocument.ts` and ADR 0015.
+
+  **`raw.document_text` is the one named exception, and only for the text itself.** A
+  document's extracted content necessarily holds every name a human wrote in it, and ADR 0024
+  permits that in that table alone, because forbidding it forbids the feature the table
+  exists for. It does not loosen the rule above by a single column: `raw.documents` stays
+  opaque, and a filename still never reaches Postgres. What keeps the text off a dashboard is
+  that `undercroft_bi` is revoked the whole `raw` schema, so it is reachable only through a
+  model the customer wrote — **never grant the BI role anything in `raw`**.
+
+  Since ADR 0026 an **excerpt** of that text also crosses to the browser, for an admin who
+  searched the lake. It reaches them the way the Lake Console's rows already do — read by the
+  tenant's own dbt login inside the worker, never by the control plane, which is still denied
+  the `text` column. So it is the exposure that division already carried, not a new one, and
+  **the column grant is the line: never give `undercroft_app` `text`.** Give it that and every
+  control-plane handler becomes a place a customer's contracts can leak from, which is the
+  hazard the column scope in `180_document_text.sql` exists to close.
 
 ## Follow
 
