@@ -28,15 +28,95 @@
 *(`040_grants.sql:36-37`, `180_document_text.sql:63`,
 `repeatable/010_provision_tenant.sql:94-96`)*
 
+```mermaid
+flowchart LR
+  subgraph SRC["SOURCES"]
+    GM["Gmail"]
+    HS["HubSpot"]
+  end
+  subgraph LAKE["RAW LAKE (MinIO) - the only layer that cannot be recomputed"]
+    BLOB["bytes, content-addressed"]
+  end
+  subgraph RAWS["schema raw (Postgres) - projected from the lake"]
+    REC["records"]
+    DOC["documents (catalogue)"]
+    TXT["document_text (projection, rebuildable)"]
+    CUR["load_cursor / sync_cursor"]
+  end
+  subgraph OTHER["schema app + ops"]
+    APPO["credentials, sessions, runs, tenants"]
+  end
+  GM --> BLOB
+  HS --> BLOB
+  BLOB --> REC
+  BLOB --> DOC
+  DOC -->|"extract verb"| TXT
+  W(["undercroft_worker"]) -->|"WRITES"| REC
+  W -->|"WRITES"| DOC
+  W -->|"WRITES"| TXT
+  W -->|"WRITES"| CUR
+  D(["undercroft_dbt_slug"]) -->|"SELECT only"| REC
+  D -->|"SELECT only"| DOC
+  D -->|"SELECT only"| TXT
+  D -.->|"permission denied"| CUR
+  D -.->|"REVOKE ALL"| OTHER
+  B(["undercroft_bi_slug"]) -.->|"no USAGE on raw"| RAWS
+```
+
 ---
 
 ## 2. How they join
 
-```
-raw.records ──┐
-              │  (no foreign key — see the note below)
-              ▼
-raw.documents ──── (source, tenant_id, document_id) ────► raw.document_text
+```mermaid
+erDiagram
+    records {
+        text source PK "gmail, hubspot"
+        text tenant_id PK
+        text entity PK "messages, companies"
+        text source_record_id PK
+        jsonb payload "verbatim from the source"
+        timestamptz source_updated_at "NULL is honest"
+        timestamptz observed_at "when the lake saw it"
+        timestamptz loaded_at "when this row was projected"
+        integer documents_landed "NULL is not 0"
+        timestamptz deleted_at "NULL means alive"
+    }
+    documents {
+        text source PK
+        text tenant_id PK
+        text document_id PK
+        char sha256 "the bytes NOW"
+        bigint byte_length
+        text content_type
+        text lake_key "SQL cannot read the bytes"
+        timestamptz deleted_at
+    }
+    document_text {
+        text source PK
+        text tenant_id PK
+        text document_id PK
+        char source_sha256 "the bytes it was READ FROM"
+        text method "NULL means not read"
+        text reason "why it was refused"
+        text text "PII - the app role cannot read this"
+        integer chars
+        boolean truncated
+        integer reader_version "reader generation"
+    }
+    load_cursor {
+        text source PK
+        text tenant_id PK
+        text entity PK
+        text last_stamp "worker only"
+    }
+    sync_cursor {
+        text source PK
+        text tenant_id PK
+        text entity PK
+        text last_stamp "worker only"
+    }
+    documents ||--o| document_text : "join on all three columns - LEFT, never INNER"
+    records }o..o{ documents : "documents_landed is a COUNT - there is NO FK"
 ```
 
 **The join key between `documents` and `document_text` is all three columns.** Using
