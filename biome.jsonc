@@ -532,9 +532,27 @@
         // `<!--[if mso]><table role="presentation" width="560" ...` and its closing twin.
         // Punctuation-dense, no repeated run, and there is no other spelling of it -- the
         // syntax is Microsoft's, not ours.
-        "packages/core/src/emailTemplate.ts"
+        "packages/core/src/emailTemplate.ts",
+        // Eight findings, every one of them a line of OOXML markup in the extraction-accuracy
+        // gold set -- `<row r="2"><c r="A2" t="s"><v>2</v></c>...` and its companions. Dense,
+        // punctuation-heavy and with no repeated run, which is what the entropy heuristic
+        // scores; the alternative is a committed `.docx` binary, and a gold document nobody in
+        // the repo can read or edit is worse than a lint exception. `testing.ts` writes the
+        // containers for the same reason.
+        "apps/worker/src/services/extract/goldSet.ts"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
+    },
+
+    // The extraction-accuracy gold set is THIRTEEN AUTHORED DOCUMENTS, so its length is the
+    // number of documents rather than a file that grew -- the same argument the i18n
+    // catalogues above make. Splitting it puts some of the documents in one file and the rest
+    // in another, with nothing to say which belongs where, and the module docstring that
+    // records how they were authored (before any reader ran against them, which is the whole
+    // point) would then describe only half of them.
+    {
+      "includes": ["apps/worker/src/services/extract/goldSet.ts"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
     },
 
     // There is no Playwright here. The rule is nursery rather than playwright-domain, so
