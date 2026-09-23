@@ -153,16 +153,49 @@ function appFor(
   return app;
 }
 
-/** Start a real consent and return the `state` the provider would hand back. */
-async function beginConsent(source = "gmail"): Promise<string> {
+/** Start a real consent and return the URL the browser would be sent to. */
+async function consentUrl(source = "gmail", addAccount = false): Promise<URL> {
   const started = await startConsent(
     { exec: db, google, xero },
-    { tenantId: TENANT, source, startedBy: ADMIN.userId },
+    { tenantId: TENANT, source, startedBy: ADMIN.userId, addAccount },
   );
   if (!started.ok) {
     throw new Error("expected the consent to start");
   }
-  return new URL(started.authorizeUrl).searchParams.get("state") ?? "";
+  return new URL(started.authorizeUrl);
+}
+
+/** Start a real consent and return the `state` the provider would hand back. */
+async function beginConsent(source = "gmail", addAccount = false): Promise<string> {
+  return (await consentUrl(source, addAccount)).searchParams.get("state") ?? "";
+}
+
+/** Google's token answer for whichever account consented. */
+function consentedAs(sub: string, email: string): void {
+  const idToken = `header.${Buffer.from(JSON.stringify({ sub, email })).toString("base64url")}.signature`;
+  tokenResponse = {
+    status: 200,
+    body: {
+      access_token: `at-${sub}`,
+      refresh_token: `rt-${sub}`,
+      expires_in: 3599,
+      scope: "https://www.googleapis.com/auth/gmail.readonly",
+      id_token: idToken,
+    },
+  };
+}
+
+/** Every Gmail connection this tenant holds, with the account each is pinned to. */
+async function gmailAccounts(): Promise<{ source: string; account: string; label: string }[]> {
+  const { rows } = await db.query<{ source: string; account: string; label: string }>(
+    `SELECT c.source, c.external_account_id AS account, d.account_label AS label
+     FROM ops.connection c
+     JOIN app.connection_detail d ON d.tenant_id = c.tenant_id AND d.source = c.source
+     WHERE c.tenant_id = $1 AND (c.source = 'gmail' OR c.source LIKE 'gmail.%')
+     ORDER BY c.source`,
+    [TENANT],
+  );
+  return rows;
 }
 
 function callback(app: Hono, query: Record<string, string>, provider = "google") {
@@ -368,5 +401,70 @@ describe("completing a consent", () => {
     expect(rows[0]?.actor).toBe("ada@example.test");
     // The source and who, never the address: ops.audit_log has a different readership.
     expect(JSON.stringify(rows[0]?.detail)).not.toContain("ops@acme.test");
+  });
+});
+
+describe("several accounts of one kind", () => {
+  // The first mailbox, connected as every test above connects it.
+  async function connectFirstMailbox(): Promise<void> {
+    await callback(appFor(ADMIN), { state: await beginConsent(), code: "auth-code" });
+  }
+
+  it("adding a second mailbox gives it a source of its own and leaves the first intact", async () => {
+    await connectFirstMailbox();
+    consentedAs("208134092834092834", "billing@acme.test");
+
+    const response = await callback(appFor(ADMIN), {
+      state: await beginConsent("gmail", true),
+      code: "auth-code",
+    });
+
+    const accounts = await gmailAccounts();
+    expect(accounts).toHaveLength(2);
+    expect(accounts[0]).toEqual({
+      source: "gmail",
+      account: "108134092834092834",
+      label: "ops@acme.test",
+    });
+    expect(accounts[1]?.source).toMatch(/^gmail\.[0-9a-f]{12}$/u);
+    expect(accounts[1]?.label).toBe("billing@acme.test");
+    // Back to the scope page of the account just added, not the first one.
+    expect(response.headers.get("location")).toBe(
+      `/tenants/CASE-0042/connect/${accounts[1]?.source}/scope`,
+    );
+  });
+
+  it("an add asks Google to show its account chooser", async () => {
+    // With one Google session in the browser, Google otherwise consents the account already
+    // signed in -- the mailbox the tenant already has -- and "add" quietly reconnects it.
+    const url = await consentUrl("gmail", true);
+
+    expect(url.searchParams.get("prompt")).toBe("consent select_account");
+  });
+
+  it("a reconnect completed by a different Google account is refused and seals nothing", async () => {
+    // The quiet corruption: B's token under A's source files B's mail as A's, green.
+    await connectFirstMailbox();
+    const sealedBefore = worker.stored.length;
+    consentedAs("208134092834092834", "billing@acme.test");
+
+    const response = await callback(appFor(ADMIN), {
+      state: await beginConsent(),
+      code: "auth-code",
+    });
+
+    expect(response.headers.get("location")).toContain("reason=account-mismatch");
+    expect(worker.stored).toHaveLength(sealedBefore);
+    expect(await gmailAccounts()).toEqual([
+      { source: "gmail", account: "108134092834092834", label: "ops@acme.test" },
+    ]);
+  });
+
+  it("adding a mailbox that is already connected reconnects it rather than reading it twice", async () => {
+    await connectFirstMailbox();
+
+    await callback(appFor(ADMIN), { state: await beginConsent("gmail", true), code: "auth-code" });
+
+    expect((await gmailAccounts()).map((account) => account.source)).toEqual(["gmail"]);
   });
 });

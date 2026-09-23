@@ -15,6 +15,7 @@ import { LakeSummary } from "@/components/LakeSummary.tsx";
 // The side effect is the point: `useTranslation` resolves against the module-level i18next
 // singleton, and without it every key renders as itself. See `@/i18n`.
 import "@/i18n/index.ts";
+import { connection } from "@/test/fixtures.ts";
 
 const NO_SCHEDULE = /Chưa có nguồn nào sẵn sàng/u;
 
@@ -28,7 +29,7 @@ function leaf(summary: Summary): React.JSX.Element {
       <LakeSummary
         tenantId="CASE-0042"
         summary={summary}
-        connections={[{ nextRunAt: null }]}
+        connections={[connection("hubspot")]}
         locale="vi"
       />
     </MemoryRouter>

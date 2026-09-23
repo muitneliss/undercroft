@@ -10,6 +10,7 @@ export const en = {
     colophon: "Undercroft sent this automatically. No reply is needed.",
     customer: "Customer",
     source: "Source",
+    account: "Account",
     address: "Address",
     when: "When",
     expires: "Expires",

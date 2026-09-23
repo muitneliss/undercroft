@@ -44,7 +44,8 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
   const [params] = useSearchParams();
   const summary = trpc.lake.summary.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
-  // For the empty leaf only: when the first run comes. Cached from the Sources leaf.
+  // When the first run comes, for the empty leaf, and which mailbox a stream came from, for a
+  // tenant with more than one. Cached from the Sources leaf.
   const connections = trpc.connections.list.useQuery({ tenantId });
 
   if (summary.isPending || tenant.isPending) {

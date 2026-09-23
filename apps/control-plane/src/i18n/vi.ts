@@ -28,6 +28,8 @@ export const vi = {
     colophon: "Undercroft gửi thư này tự động. Không cần trả lời.",
     customer: "Khách hàng",
     source: "Nguồn",
+    /** Which mailbox or Drive account, when a source may hold several. ADR 0043. */
+    account: "Tài khoản",
     address: "Địa chỉ",
     when: "Lúc",
     expires: "Hết hạn",

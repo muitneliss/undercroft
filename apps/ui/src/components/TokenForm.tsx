@@ -16,7 +16,6 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { Source } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { trpc } from "@/trpc.ts";
 
@@ -25,7 +24,8 @@ export function TokenForm({
   source,
 }: {
   tenantId: string;
-  source: Source;
+  /** The connection the token is for: its instance source, as every mutation takes it. */
+  source: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const utils = trpc.useUtils();

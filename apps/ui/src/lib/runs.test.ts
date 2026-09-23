@@ -7,6 +7,7 @@ import { describe, expect, test as it } from "bun:test";
 import type { RunEventView } from "@/api/types.ts";
 import { translatorFor } from "@/i18n/index.ts";
 import { MISSING } from "@/lib/money.ts";
+import { connection } from "@/test/fixtures.ts";
 import {
   describeRun,
   eventSentence,
@@ -14,6 +15,7 @@ import {
   nextRunNote,
   runMark,
   runMarkLabel,
+  sourceLabel,
 } from "./runs.ts";
 
 const en = translatorFor("en");
@@ -75,6 +77,24 @@ describe("describeRun", () => {
     expect(describeRun(vi, run)).toBe("Dựng mô hình");
     expect(describeRun(en, run)).toBe("Build the models");
     expect(describeRun(en, { ...run, kind: "build" })).toBe("Try one model");
+  });
+});
+
+describe("sourceLabel", () => {
+  const first = connection("gmail", { status: "connected", externalAccountLabel: "ops@acme.test" });
+  const second = connection("gmail.3fa9c1d2e0ab", {
+    status: "connected",
+    externalAccountLabel: "sales@acme.test",
+  });
+
+  it("two mailboxes of one tenant are told apart by address", () => {
+    // Otherwise the journal reads "Gmail · messages" twice and nobody can say whose run failed.
+    expect(sourceLabel("gmail", [first, second])).toBe("Gmail · ops@acme.test");
+    expect(sourceLabel("gmail.3fa9c1d2e0ab", [first, second])).toBe("Gmail · sales@acme.test");
+  });
+
+  it("a tenant with one mailbox reads the vendor's name alone", () => {
+    expect(sourceLabel("gmail", [first, connection("drive")])).toBe("Gmail");
   });
 });
 

@@ -28,11 +28,13 @@ import {
   type Logger,
   postEmailLeaf,
 } from "@undercroft/core";
+import { MULTI_ACCOUNT_KINDS, sourceKind } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   claimExpiringGrants,
   claimExpiringKeys,
   claimFailedRuns,
+  readConnectionDetail,
   SOURCE_OF_TRANSFORM,
 } from "@undercroft/db/repos";
 
@@ -94,8 +96,28 @@ function formatWhen(iso: string, locale: Locale): string {
   }).format(new Date(iso));
 }
 
+/** The vendor's name for any account of it: a second mailbox is still Gmail. */
 function sourceName(source: string): string {
-  return SOURCE_NAMES[source] ?? source;
+  return SOURCE_NAMES[sourceKind(source)] ?? source;
+}
+
+/**
+ * Which account a notice is about, where a source may hold several -- or `""` where it cannot,
+ * or where no address was ever recorded.
+ *
+ * "The Gmail sync failed" is not a sentence an admin with two mailboxes can act on: which one
+ * stopped is the whole question (issue #125, item 6). The address is theirs -- they granted it
+ * -- and it is read from `app.connection_detail`, where it has always lived. ADR 0043.
+ */
+async function accountLabelOf(
+  exec: SqlExecutor,
+  input: { tenantId: string; source: string },
+): Promise<string> {
+  if (!MULTI_ACCOUNT_KINDS.has(sourceKind(input.source))) {
+    return "";
+  }
+  const detail = await readConnectionDetail(exec, input.tenantId, input.source);
+  return detail?.accountLabel ?? "";
 }
 
 /** What an admin is told about a run that failed. Pure: composing is a decision, sending is transport. */
@@ -109,11 +131,14 @@ export function failedRunMessage(
     endedAt: string;
     error: string | null;
     publicUrl: string;
+    /** The mailbox or Drive account that failed, where the source may hold several. */
+    account?: string;
   },
 ): EmailMessage {
   const t = messages(to.locale);
   const source =
     input.source === SOURCE_OF_TRANSFORM ? t("runFailed.models") : sourceName(input.source);
+  const account = input.account ?? "";
   return postEmailLeaf(to.email, {
     locale: to.locale,
     subject: t("runFailed.subject", { source, tenantId: input.tenantId }),
@@ -126,6 +151,7 @@ export function failedRunMessage(
         kind: "schedule",
         rows: [
           { label: t("email.source"), value: source },
+          ...(account === "" ? [] : [{ label: t("email.account"), value: account }]),
           { label: t("email.customer"), value: input.tenantId },
           { label: t("email.when"), value: formatWhen(input.endedAt, to.locale) },
         ],
@@ -260,10 +286,11 @@ export async function runAlerts(deps: AlertDeps): Promise<AlertSummary> {
       suppressed += 1;
     } else {
       failures += 1;
+      const account = await accountLabelOf(deps.exec, run);
       undeliverable += await deliver(
         deps,
         await recipientsFor(deps, run.tenantId),
-        (to) => failedRunMessage(to, { ...run, runId: run.id, publicUrl: deps.publicUrl }),
+        (to) => failedRunMessage(to, { ...run, runId: run.id, publicUrl: deps.publicUrl, account }),
         { kind: "run_failed", runId: run.id, tenantId: run.tenantId },
       );
     }

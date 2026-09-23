@@ -100,6 +100,8 @@ export interface Context {
     tenantId: string;
     source: string;
     startedBy: string;
+    /** Connect a further account of the source's kind. ADR 0043. */
+    addAccount?: boolean;
   }) => Promise<
     | { ok: true; authorizeUrl: string }
     | { ok: false; reason: "not-configured" | "unsupported-source" }

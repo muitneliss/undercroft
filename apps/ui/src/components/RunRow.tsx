@@ -22,7 +22,7 @@ import type { RunView } from "@/api/types.ts";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { TableCell, TableRow } from "@/components/ui/table.tsx";
 import { formatCount, MISSING } from "@/lib/money.ts";
-import { describeRun, runMark, runMarkLabel, triggerLabel } from "@/lib/runs.ts";
+import { type AccountName, describeRun, runMark, runMarkLabel, triggerLabel } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration, relativeTime } from "@/lib/when.ts";
 
 export function RunRow({
@@ -30,6 +30,7 @@ export function RunRow({
   locale,
   open,
   href,
+  accounts = [],
 }: {
   run: RunView;
   locale: Locale;
@@ -37,6 +38,8 @@ export function RunRow({
   open: boolean;
   /** Where the row opens: the journal at this run. */
   href: string;
+  /** The tenant's connections, so a run of a second mailbox names it. See `sourceLabel`. */
+  accounts?: readonly AccountName[];
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { counts } = run;
@@ -53,7 +56,7 @@ export function RunRow({
       </TableCell>
       <TableCell>
         <Link className="journal__what" to={href}>
-          {describeRun(t, run)}
+          {describeRun(t, run, accounts)}
         </Link>
         <span className="datum datum--quiet journal__trigger">{triggerLabel(t, run.trigger)}</span>
       </TableCell>

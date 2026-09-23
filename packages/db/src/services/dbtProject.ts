@@ -2,7 +2,7 @@
  * The dbt project the platform writes for one tenant, right before it builds it.
  *
  * There is no dbt project in the repository any more. What the platform ships is here, as
- * text: the source definition over `raw.records`, the two macros every model may use, and
+ * text: the source definition over `raw.records`, the macros every project carries, and
  * the shape of a `dbt_project.yml` and a `profiles.yml`. What the customer wrote is in
  * `app.model`. `renderProject` joins the two into the files dbt reads, for a directory that
  * exists for one build and is removed after.
@@ -39,6 +39,11 @@ export const SOURCES_YML = `version: 2
 # One source, one table. A new connector does NOT add a source here -- it filters
 # raw.records by \`source\` and \`entity\`. The platform never learns a source's shape at the
 # database level; the shape is asserted in your models, where you control it.
+#
+# A second account of the same kind is its own source: the first Gmail mailbox lands as
+# \`gmail\`, each one connected after it as \`<kind>.<account key>\` -- \`gmail.3fa9c1d2e0ab\`.
+# A model filtering \`source = 'gmail'\` therefore sees the first mailbox only. The
+# \`gmail_letters()\` macro folds every mailbox into one row per letter.
 sources:
   - name: undercroft
     schema: raw
@@ -85,10 +90,120 @@ const GENERATE_SCHEMA_NAME = `{#
 {%- endmacro %}
 `;
 
+/** The three headers two copies of one letter must agree on, as `lower()` folds their keys. */
+const COMPARED_HEADERS = ["from", "subject", "date"] as const;
+
+/**
+ * Whether the copies of one letter disagree about a header, NULL taken as a value.
+ *
+ * `count(DISTINCT ...)` alone skips NULLs, so a copy carrying `Subject: Invoice 7` beside a
+ * copy carrying no Subject at all would read as agreement. The collector asks every mailbox
+ * for the same headers, so that is two different messages under one Message-ID -- exactly
+ * what the flag is for -- and it counts as a conflict. Copies that ALL lack the header
+ * agree: there is nothing to disagree about. Values are compared as written, untrimmed.
+ */
+function disagree(header: string): string {
+  const column = `m.header_${header}`;
+  return `(count(DISTINCT ${column}) > 1 OR (count(${column}) > 0 AND count(${column}) < count(*)))`;
+}
+
+/**
+ * Every live Gmail letter of `relation` once, however many of a tenant's mailboxes hold it,
+ * as a parenthesised subquery: `SELECT * FROM <this> l`.
+ *
+ * `relation` is spliced in as written. The shipped macro passes dbt's `source()` call and
+ * the offline suite passes `raw.records`, so both run this one text; nothing else in it is
+ * Jinja, which `dbtProject.test.ts` pins.
+ *
+ * The grouping is on the letter key AND the Message-ID, not on the key alone. An anchorless
+ * key is `<source>:<gmail id>`, and a sender writes their own Message-ID -- one spelled
+ * `gmail:<some id>` would otherwise fuse a stranger's letter into one of ours. Grouped on
+ * both, the two key spaces cannot meet: a collision surfaces as two rows sharing a key,
+ * which a `unique` test sees, rather than one row that is silently two letters.
+ *
+ * The header lookup is one aggregate pass per row, `max(...) FILTER`, rather than a
+ * `LIMIT 1` subquery per header: it is deterministic if a legacy row ever held two spellings
+ * of one key, and an aggregate with no GROUP BY answers once even over no headers, so a row
+ * whose `headers` is absent or not an object is kept -- as an anchorless letter -- rather
+ * than dropped by the lateral join or failing the whole build inside `jsonb_each_text`.
+ */
+export function gmailLettersSql(relation: string): string {
+  const headerColumns = COMPARED_HEADERS.map(
+    (header) => `max(e.value) FILTER (WHERE lower(e.key) = '${header}') AS header_${header}`,
+  ).join(",\n                ");
+  const passThrough = COMPARED_HEADERS.map((header) => `h.header_${header}`).join(", ");
+  const conflict = COMPARED_HEADERS.map(disagree).join("\n            OR ");
+  return `(
+    SELECT
+        m.tenant_id,
+        m.letter_key,
+        m.rfc822_message_id,
+        count(*)::integer AS copies,
+        array_agg(m.source ORDER BY m.source, m.source_record_id) AS sources,
+        array_agg(m.source_record_id ORDER BY m.source, m.source_record_id) AS message_ids,
+        array_agg(m.thread_id ORDER BY m.source, m.source_record_id) AS thread_ids,
+        min(m.source_updated_at) AS message_time,
+        max(m.documents_landed) AS documents_landed,
+        (
+            ${conflict}
+        ) AS headers_conflict
+    FROM (
+        SELECT
+            r.tenant_id,
+            r.source,
+            r.source_record_id,
+            r.payload ->> 'threadId' AS thread_id,
+            r.source_updated_at,
+            r.documents_landed,
+            h.message_id AS rfc822_message_id,
+            COALESCE(h.message_id, r.source || ':' || r.source_record_id) AS letter_key,
+            ${passThrough}
+        FROM ${relation} AS r
+        CROSS JOIN LATERAL (
+            SELECT
+                NULLIF(btrim(max(e.value) FILTER (WHERE lower(e.key) = 'message-id')), '') AS message_id,
+                ${headerColumns}
+            FROM jsonb_each_text(
+                CASE WHEN jsonb_typeof(r.payload -> 'headers') = 'object' THEN r.payload -> 'headers' END
+            ) AS e (key, value)
+        ) AS h
+        WHERE (r.source = 'gmail' OR r.source LIKE 'gmail.%')
+          AND r.entity = 'messages'
+          AND r.deleted_at IS NULL
+    ) AS m
+    GROUP BY m.tenant_id, m.letter_key, m.rfc822_message_id
+)`;
+}
+
+const GMAIL_LETTERS = `{#
+    Every Gmail letter once, however many of this tenant's mailboxes received it:
+    select * from {{ gmail_letters() }} l
+
+    The first mailbox lands as source 'gmail', each one added after it as 'gmail.<account
+    key>'. Gmail's message and thread ids belong to one mailbox, so the same letter in two
+    mailboxes carries unrelated ids; the lists keep every copy's, ordered by source.
+
+    Rule 1 -- a letter is its RFC 5322 Message-ID, read whatever case the header key was
+    written in. A letter WITHOUT one stands alone, keyed on its own mailbox's id: grouping
+    on the blank would fuse every such letter into one message that never existed.
+
+    Rule 2 -- evidence found in one copy belongs to the letter. documents_landed is the
+    strongest copy's count, and NULL only when no copy said.
+
+    headers_conflict is true when the copies disagree on From, Subject or Date, a header
+    one copy carries and another lacks included. It is a question for a person, not a
+    verdict: the copies are still folded, and the column says they should be looked at.
+#}
+{% macro gmail_letters() %}
+${gmailLettersSql("{{ source('undercroft', 'records') }}")}
+{% endmacro %}
+`;
+
 /** The macros every tenant's project carries. Read-only from the editor's side. */
 export const MACROS: readonly { name: string; sql: string }[] = [
   { name: "parse_amount", sql: PARSE_AMOUNT },
   { name: "generate_schema_name", sql: GENERATE_SCHEMA_NAME },
+  { name: "gmail_letters", sql: GMAIL_LETTERS },
 ];
 
 export interface ProjectModel {

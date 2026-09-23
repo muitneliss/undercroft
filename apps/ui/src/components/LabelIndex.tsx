@@ -14,7 +14,6 @@
 
 import { useTranslation } from "react-i18next";
 
-import type { Source } from "@/api/types.ts";
 import { type BrowsedLabel, indexLabels, type LabelOwner } from "@/lib/labelIndex.ts";
 import { useUiStore } from "@/store.ts";
 
@@ -49,7 +48,8 @@ export function LabelIndex({
   items,
   chosen,
 }: {
-  source: Source;
+  /** Which mailbox the ticks and the filter belong to: an account, not the kind. */
+  source: string;
   items: readonly BrowsedLabel[];
   chosen: readonly string[];
 }): React.JSX.Element {

@@ -37,6 +37,7 @@ interface GoogleGlobals {
       initTokenClient: (config: {
         client_id: string;
         scope: string;
+        login_hint?: string;
         callback: (response: { access_token?: string }) => void;
       }) => { requestAccessToken: () => void };
     };
@@ -80,15 +81,23 @@ function loadScript(src: string): Promise<void> {
  * the worker's later filter must agree, or a file visibly pickable today could be silently
  * refused once the run reads it back. Empty means every type, so the Picker gets no filter at
  * all: Google's own reference for `setMimeTypes` says omitting it shows every type.
+ *
+ * `account` is the Google account the connection being scoped belongs to, passed to Google as
+ * `login_hint`. `drive.file` grants a picked file to the account that picked it, so a pick
+ * made as the wrong account -- the browser's default, when a tenant holds two Drive accounts
+ * -- would be a grant the connection cannot use (ADR 0043). A hint rather than a lock: Google
+ * skips the account chooser when it recognises the address, and otherwise shows it as before,
+ * which is also what an empty `account` does. `prompt` is left at Google's default.
  */
 export async function openDrivePicker(
   config: GooglePickerConfig,
-  fileTypes: readonly string[],
+  choice: { readonly fileTypes: readonly string[]; readonly account: string },
   onPicked: (files: ChosenFile[]) => void,
 ): Promise<void> {
+  const { fileTypes, account } = choice;
   await Promise.all([loadScript(GSI_SRC), loadScript(GAPI_SRC)]);
 
-  const accessToken = await requestBrowserToken(config.clientId);
+  const accessToken = await requestBrowserToken(config.clientId, account);
   if (accessToken === null) {
     return;
   }
@@ -138,7 +147,7 @@ export async function openDrivePicker(
 }
 
 /** A short-lived browser token for the Picker alone. Never sent to us, never stored. */
-function requestBrowserToken(clientId: string): Promise<string | null> {
+function requestBrowserToken(clientId: string, account: string): Promise<string | null> {
   const oauth2 = globalThis.google?.accounts?.oauth2;
   if (oauth2 === undefined) {
     return Promise.resolve(null);
@@ -149,6 +158,8 @@ function requestBrowserToken(clientId: string): Promise<string | null> {
       .initTokenClient({
         client_id: clientId,
         scope: DRIVE_FILE_SCOPE,
+        // No hint at all rather than an empty one: an unrecorded account is not an address.
+        ...(account === "" ? {} : { login_hint: account }),
         callback: (response) => {
           resolve(response.access_token ?? null);
         },

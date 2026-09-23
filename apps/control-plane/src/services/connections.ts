@@ -23,6 +23,7 @@ import {
   needsScope,
   nextRunAt,
   parseScope,
+  parseSourceInstance,
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -68,7 +69,14 @@ export type KnownSource = (typeof KNOWN_SOURCES)[number];
 export type CardStatus = "disconnected" | "connected" | "needs_scope" | "needs_reconnect";
 
 export interface ConnectionCardView {
-  readonly source: KnownSource;
+  /** What this connection IS -- which labels, access statement and consent it has. */
+  readonly kind: KnownSource;
+  /**
+   * Which connection: the kind itself for its first account, `<kind>.<account key>` for each
+   * further one (ADR 0043). Every per-connection procedure takes this, never the kind, so an
+   * action on the card acts on the account the card shows.
+   */
+  readonly source: string;
   readonly status: CardStatus;
   readonly externalAccountId: string;
   readonly externalAccountLabel: string;
@@ -173,11 +181,34 @@ export function presentStatus(row: {
 }
 
 /**
- * Every source, connected or not.
+ * The connections of one kind, as the schedule lists them: the first account, then the rest by
+ * the address a person reads.
+ *
+ * A row whose source is not a well-formed account of this kind is left out rather than shown:
+ * it is not a connection anything can run, and no button on it could work.
+ */
+function accountsOf(rows: readonly ConnectionView[], kind: KnownSource): ConnectionView[] {
+  return rows
+    .filter((row) => parseSourceInstance(row.source)?.kind === kind)
+    .toSorted((a, b) => {
+      if (a.source === kind || b.source === kind) {
+        return a.source === kind ? -1 : 1;
+      }
+      return a.accountLabel.localeCompare(b.accountLabel) || a.source.localeCompare(b.source);
+    });
+}
+
+/**
+ * Every source, connected or not -- and every ACCOUNT of a kind that may hold several.
  *
  * A tenant with nothing connected previously got `[]`, and the schedule -- which is the
  * product -- had nothing to offer on the very screen a new customer lands on. A source with
  * no row is synthesised as `disconnected`, which is what it is.
+ *
+ * A second Gmail mailbox is a card of its own, with its own status, last run and schedule:
+ * one aggregate status over two mailboxes could not say WHICH of them stopped. ADR 0043. A
+ * disconnected account stays listed, because it can be reconnected and its history is still
+ * its own.
  */
 export async function list(
   exec: SqlExecutor,
@@ -185,50 +216,58 @@ export async function list(
   now: Date = new Date(),
 ): Promise<ConnectionCardView[]> {
   const rows = await listConnectionViews(exec, tenantId);
-  // Typed explicitly: an inferred tuple widens to `(string | ConnectionView)[]` and the map
-  // loses its value type.
-  const bySource = new Map<string, ConnectionView>(rows.map((row) => [row.source, row]));
 
-  return KNOWN_SOURCES.map((source) => {
-    const row = bySource.get(source);
-    if (row === undefined) {
-      return {
-        source,
-        status: "disconnected" as const,
-        externalAccountId: "",
-        externalAccountLabel: "",
-        scopes: [],
-        config: {},
-        expiresAt: null,
-        lastRun: null,
-        cadence: "daily" as const,
-        nextRunAt: null,
-      };
-    }
-    return {
-      source,
-      status: presentStatus(row),
-      externalAccountId: row.externalAccountId ?? "",
-      externalAccountLabel: row.accountLabel,
-      // Google returns what it granted as one space-delimited string.
-      scopes: row.scope === "" ? [] : row.scope.split(" "),
-      config: configOf(row.source, row.selectionJson),
-      // Not `row.credentialExpiresAt`. See the field.
-      expiresAt: null,
-      lastRun: row.lastRun,
-      cadence: row.cadence,
-      nextRunAt: nextRunAt(
-        {
-          source: row.source,
-          status: row.status,
-          cadence: row.cadence,
-          selectionJson: row.selectionJson,
-          lastRunStartedAt: row.lastRun?.startedAt ?? null,
-        },
-        now,
-      ),
-    };
+  return KNOWN_SOURCES.flatMap((kind): ConnectionCardView[] => {
+    const accounts = accountsOf(rows, kind);
+    return accounts.length === 0
+      ? [unconnected(kind)]
+      : accounts.map((row) => presentCard(kind, row, now));
   });
+}
+
+/** A kind nobody has connected: one blank card, offering the consent. */
+function unconnected(kind: KnownSource): ConnectionCardView {
+  return {
+    kind,
+    source: kind,
+    status: "disconnected",
+    externalAccountId: "",
+    externalAccountLabel: "",
+    scopes: [],
+    config: {},
+    expiresAt: null,
+    lastRun: null,
+    cadence: "daily",
+    nextRunAt: null,
+  };
+}
+
+/** One stored connection as its card shows it. */
+function presentCard(kind: KnownSource, row: ConnectionView, now: Date): ConnectionCardView {
+  return {
+    kind,
+    source: row.source,
+    status: presentStatus(row),
+    externalAccountId: row.externalAccountId ?? "",
+    externalAccountLabel: row.accountLabel,
+    // Google returns what it granted as one space-delimited string.
+    scopes: row.scope === "" ? [] : row.scope.split(" "),
+    config: configOf(row.source, row.selectionJson),
+    // Not `row.credentialExpiresAt`. See the field.
+    expiresAt: null,
+    lastRun: row.lastRun,
+    cadence: row.cadence,
+    nextRunAt: nextRunAt(
+      {
+        source: row.source,
+        status: row.status,
+        cadence: row.cadence,
+        selectionJson: row.selectionJson,
+        lastRunStartedAt: row.lastRun?.startedAt ?? null,
+      },
+      now,
+    ),
+  };
 }
 
 export type SetCadenceOutcome = { ok: true } | { ok: false; reason: "no-connection" };

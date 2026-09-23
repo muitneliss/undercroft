@@ -21,6 +21,8 @@ export interface Handshake {
   readonly verifier: string;
   readonly requestedScope: string;
   readonly startedBy: string;
+  /** An "add another account" consent, rather than a (re)connect of `source`. ADR 0043. */
+  readonly addsAccount: boolean;
 }
 
 export async function startHandshake(
@@ -33,12 +35,14 @@ export async function startHandshake(
     requestedScope: string;
     startedBy: string;
     expiresAt: string;
+    addsAccount?: boolean;
   },
 ): Promise<void> {
   await exec.query(
     `INSERT INTO app.oauth_handshake
-       (state_sha256, tenant_id, source, verifier, requested_scope, started_by, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       (state_sha256, tenant_id, source, verifier, requested_scope, started_by, expires_at,
+        adds_account)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       input.stateSha256,
       input.tenantId,
@@ -47,6 +51,7 @@ export async function startHandshake(
       input.requestedScope,
       input.startedBy,
       input.expiresAt,
+      input.addsAccount ?? false,
     ],
   );
 }
@@ -68,10 +73,11 @@ export async function consumeHandshake(
     verifier: string;
     requested_scope: string;
     started_by: string;
+    adds_account: boolean;
   }>(
     `DELETE FROM app.oauth_handshake
      WHERE state_sha256 = $1 AND expires_at > now()
-     RETURNING tenant_id, source, verifier, requested_scope, started_by`,
+     RETURNING tenant_id, source, verifier, requested_scope, started_by, adds_account`,
     [stateSha256],
   );
   const [row] = rows;
@@ -84,6 +90,7 @@ export async function consumeHandshake(
     verifier: row.verifier,
     requestedScope: row.requested_scope,
     startedBy: row.started_by,
+    addsAccount: row.adds_account,
   };
 }
 

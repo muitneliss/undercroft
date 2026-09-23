@@ -51,7 +51,7 @@
  * refusal still comes last within its pick, because it is a statement about the whole pick.
  */
 
-import { parseScope } from "@undercroft/contracts";
+import { parseScope, sourceKind } from "@undercroft/contracts";
 import { newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { readConnectionDetail, type RunRefusal } from "@undercroft/db/repos";
@@ -73,13 +73,20 @@ import { harvestDrive } from "./drive.ts";
 import { harvestGmail } from "./gmail.ts";
 import { type Harvest, type HarvestItem, type HarvestSummary, heldBy } from "./harvest.ts";
 
-export const GOOGLE_SOURCES = ["gmail", "drive"] as const;
-export type GoogleSource = (typeof GOOGLE_SOURCES)[number];
+export const GOOGLE_KINDS = ["gmail", "drive"] as const;
+export type GoogleKind = (typeof GOOGLE_KINDS)[number];
 
-const GOOGLE_SOURCE_SET: ReadonlySet<string> = new Set<string>(GOOGLE_SOURCES);
+const GOOGLE_KIND_SET: ReadonlySet<string> = new Set<string>(GOOGLE_KINDS);
 
-export function isGoogleSource(source: string): source is GoogleSource {
-  return GOOGLE_SOURCE_SET.has(source);
+/**
+ * Whether a source is read by a Google collector -- any account of Gmail or Drive.
+ *
+ * By KIND: `gmail.3fa9c1d2e0ab` is a second mailbox, and a test on the literal source would
+ * send it down the spec path to look for a `gmail.3fa9c1d2e0ab.yaml` that does not exist.
+ * ADR 0043.
+ */
+export function isGoogleSource(source: string): boolean {
+  return GOOGLE_KIND_SET.has(sourceKind(source));
 }
 
 /**
@@ -151,7 +158,7 @@ export interface CollectResult {
  */
 async function googleScope(
   deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string },
+  input: { source: string; tenantId: string },
 ): Promise<Exclude<NonNullable<ReturnType<typeof parseScope>>, { kind: "xero" }>> {
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
@@ -253,7 +260,7 @@ interface Collection {
 function openCollection(
   deps: CollectDeps,
   scope: Awaited<ReturnType<typeof googleScope>>,
-  at: { source: GoogleSource; tenantId: string; runId: string; entity: string; observedAt: string },
+  at: { source: string; tenantId: string; runId: string; entity: string; observedAt: string },
   journal: RunJournal,
 ): Collection {
   const refusals: RunRefusal[] = [];
@@ -316,7 +323,7 @@ async function settleDocuments(
 
 export async function runGoogleCollect(
   deps: CollectDeps,
-  input: { source: GoogleSource; tenantId: string; runId?: string },
+  input: { source: string; tenantId: string; runId?: string },
 ): Promise<CollectResult> {
   // The caller that opened an `ops.run` row hands its id down; a caller with no ledger
   // still gets a run id on every object it lands.

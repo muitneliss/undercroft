@@ -19,13 +19,13 @@ import {
   readEntity,
   type RunContext,
 } from "@undercroft/connector-runtime";
-import { type ConnectorSpec, parseScope, parseSpec } from "@undercroft/contracts";
+import { type ConnectorSpec, parseScope, parseSpec, sourceKind } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
-import { type GoogleSource, runGoogleCollect } from "./google/collect.ts";
+import { runGoogleCollect } from "./google/collect.ts";
 import type { LandSummary, RefusalWriter } from "./landing.ts";
 import { createRecordSink } from "./recordSink.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
@@ -58,7 +58,7 @@ export async function chosenFor(
  */
 export async function runGoogleIngest(
   deps: RunDeps,
-  input: { source: GoogleSource; tenantId: string; runId: string },
+  input: { source: string; tenantId: string; runId: string },
   ledger: Ledger,
   journal: RunJournal,
 ): Promise<void> {
@@ -74,7 +74,7 @@ export async function runGoogleIngest(
 
   const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api, journal }, input);
 
-  const recordsEntity = input.source === "gmail" ? "messages" : "files";
+  const recordsEntity = sourceKind(input.source) === "gmail" ? "messages" : "files";
   const records = result.refusals.filter((r) => r.entity !== "documents").length;
   ledger.entities.push(
     {

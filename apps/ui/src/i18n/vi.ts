@@ -425,6 +425,21 @@ export const vi = {
      */
     connectScopeDeclined:
       "Ở màn hình của Google, quyền cần thiết đã bị bỏ tích nên kết nối chưa được lưu. Hãy kết nối lại và giữ nguyên mọi dấu tích.",
+    /**
+     * A reconnect finished by a different Google account than the connection belongs to, or
+     * by an account already connected under another entry (ADR 0043). The likeliest intent is
+     * a second mailbox, so the sentence names the plate that does that.
+     */
+    connectAccountMismatch:
+      "Tài khoản Google vừa đồng ý không phải tài khoản của kết nối này, hoặc tài khoản đó đã được kết nối ở một mục khác. Không có gì bị thay đổi. Nếu bạn muốn kết nối thêm một tài khoản khác, hãy dùng nút “Thêm tài khoản khác”.",
+    /** Google did not say who consented, or the first account never recorded who it is. */
+    connectAccountUnidentified:
+      "Không xác định được tài khoản Google nào vừa đồng ý nên chưa có gì được lưu. Nếu nguồn này đã có một tài khoản được kết nối, hãy kết nối lại tài khoản đó trước rồi thử lại.",
+    /** The legend over one kind's accounts: "Tài khoản Gmail". */
+    accountsLegend: "Tài khoản {{name}}",
+    addAccount: "Thêm tài khoản khác",
+    /** An account whose address was never recorded. Never shown as an empty radio. */
+    unnamedAccount: "Tài khoản chưa rõ tên",
     disconnectFailed: "Chưa ngắt kết nối được.",
     disconnected: "Đã ngắt kết nối.",
     disconnectedNotRevoked:

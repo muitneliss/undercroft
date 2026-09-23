@@ -21,6 +21,10 @@
  * Every state has its own copy and its own single next action. See
  * `@/lib/connectionState` for why `needs_scope` and `needs_reconnect` are
  * separate states rather than two shades of "not working".
+ *
+ * A card is ONE account (ADR 0043). What the connection is -- `connection.kind` -- decides its
+ * name and its access statement; which one it is -- `connection.source` -- decides its heading
+ * id, so two mailboxes' cards could never share one.
  */
 
 import type { ReactNode } from "react";
@@ -33,17 +37,10 @@ import { GrantWhen } from "@/components/GrantWhen.tsx";
 import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import type { Cadence } from "@/lib/cadence.ts";
-import { connectsBy, presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import { connectsBy, MARK_LABEL, presentConnection, scopeSummary } from "@/lib/connectionState.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
 import { expiryNote } from "@/lib/when.ts";
-
-const MARK_LABEL = {
-  granted: "grant.markGranted",
-  pending: "grant.markPending",
-  lapsed: "grant.markLapsed",
-  absent: "grant.markAbsent",
-} as const;
 
 export function ConnectionCard({
   tenantId,
@@ -78,8 +75,8 @@ export function ConnectionCard({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const card = presentConnection(t, connection);
-  const access = SOURCE_ACCESS[connection.source];
-  const name = SOURCE_LABEL[connection.source];
+  const access = SOURCE_ACCESS[connection.kind];
+  const name = SOURCE_LABEL[connection.kind];
   const headingId = `grant-${connection.source}`;
 
   const unprinted = card.state === "not_connected";
@@ -87,7 +84,7 @@ export function ConnectionCard({
   // A source with no consent screen opens a form in its row instead of sending the browser
   // away; the same plate wording covers a first connection and a reconnect.
   const pastes =
-    connectsBy(connection.source) === "token" &&
+    connectsBy(connection.kind) === "token" &&
     (card.action?.kind === "connect" || card.action?.kind === "reconnect");
   const running = connection.lastRun?.status === "running";
   const failedRun = connection.lastRun?.status === "failed" ? connection.lastRun : null;

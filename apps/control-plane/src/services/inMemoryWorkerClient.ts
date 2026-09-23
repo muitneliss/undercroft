@@ -82,16 +82,22 @@ export class InMemoryWorkerClient implements WorkerClient {
     if (this.#failWith !== null) {
       return this.#fail();
     }
-    this.stored.push(input);
     if (this.#exec !== null) {
-      await upsertConnection(this.#exec, {
+      // The worker's own guard, run for real: a connection pinned to another account refuses,
+      // and nothing is recorded as stored. A fake that sealed it anyway would be the fake that
+      // never refuses, over the one refusal this flow exists to make. ADR 0043.
+      const recorded = await upsertConnection(this.#exec, {
         tenantId: input.tenantId,
         source: input.source,
         status: "connected",
         externalAccountId: input.externalAccountId,
         scope: input.scope,
       });
+      if (!recorded) {
+        return { ok: false, reason: "account-mismatch" };
+      }
     }
+    this.stored.push(input);
     return Promise.resolve({
       ok: true,
       value: {

@@ -278,6 +278,32 @@ interface UiState {
    */
   assistantConfirm: string;
   setAssistantConfirm: (typed: string) => void;
+  /**
+   * Which account of a kind the reader chose to look at, per tenant and kind. Read it through
+   * `chosenAccount`, which is the only other place that knows how it is keyed.
+   *
+   * Only an explicit choice is stored. Which account shows when nobody has chosen -- the
+   * first -- is derived from the list every render (`selectedFor` in
+   * `@/lib/connectionState`), so a disconnected account cannot leave a stale default behind.
+   * Not persisted: which mailbox somebody was reading last week is not a preference.
+   */
+  selectedAccount: Record<string, string>;
+  /** Show this account of `kind`. Also called once a newly added account is scoped. */
+  selectAccount: (tenantId: string, kind: string, source: string) => void;
+}
+
+/** One tenant's one kind, as `selectedAccount` is keyed. Nothing outside this file builds it. */
+function accountKey(tenantId: string, kind: string): string {
+  return `${tenantId}|${kind}`;
+}
+
+/** The account of `kind` the reader chose on `tenantId`'s schedule, if they chose one. */
+export function chosenAccount(
+  state: { readonly selectedAccount: Readonly<Record<string, string>> },
+  tenantId: string,
+  kind: string,
+): string | undefined {
+  return state.selectedAccount[accountKey(tenantId, kind)];
 }
 
 /**
@@ -636,10 +662,22 @@ function assistantSlice(
   };
 }
 
+/** Which account of each multi-account kind is on show. See `selectedAccount`. */
+function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAccount"> {
+  return {
+    selectedAccount: {},
+    selectAccount: (tenantId, kind, source): unknown =>
+      set((state) => ({
+        selectedAccount: { ...state.selectedAccount, [accountKey(tenantId, kind)]: source },
+      })),
+  };
+}
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       ...localeSlice(set),
+      ...accountSlice(set),
       ...scopeSlice(set),
       ...lakeSlice(set),
       ...modelSlice(set),

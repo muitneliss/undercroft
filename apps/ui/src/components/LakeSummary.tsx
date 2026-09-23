@@ -37,7 +37,7 @@ import {
   streamKey,
 } from "@/lib/lake.ts";
 import { formatBytes, formatCount } from "@/lib/money.ts";
-import { sourceLabel } from "@/lib/runs.ts";
+import { type AccountName, sourceLabel } from "@/lib/runs.ts";
 import { relativeTime } from "@/lib/when.ts";
 
 export function LakeSummary({
@@ -50,8 +50,11 @@ export function LakeSummary({
 }: {
   tenantId: string;
   summary: Summary;
-  /** For the empty leaf only: when the first run comes. */
-  connections: readonly Pick<Connection, "nextRunAt">[];
+  /**
+   * When the first run comes, for the empty leaf, and which account a stream belongs to, for a
+   * tenant with two mailboxes whose lines would otherwise both read "Gmail". See `sourceLabel`.
+   */
+  connections: readonly (Pick<Connection, "nextRunAt"> & AccountName)[];
   locale: Locale;
   /**
    * Where a stream's own rows are read. Absent for a reader who may not browse them, whose
@@ -102,6 +105,7 @@ export function LakeSummary({
               <IndexRow
                 key={streamKey(entry.stream)}
                 entry={entry}
+                source={sourceLabel(entry.stream.source, connections)}
                 locale={locale}
                 open={sameStream(entry.stream, openStream ?? null)}
                 {...(hrefFor === undefined ? {} : { href: hrefFor(entry.stream) })}
@@ -129,11 +133,14 @@ export function LakeSummary({
  */
 function IndexRow({
   entry,
+  source,
   locale,
   open,
   href,
 }: {
   entry: LakeEntry;
+  /** The stream's source as the reader names it, account included. */
+  source: string;
   locale: Locale;
   open: boolean;
   href?: string;
@@ -141,7 +148,6 @@ function IndexRow({
   const { t } = useTranslation();
   const { stream, note } = entry;
   const holds = stream.kind === "records" ? stream.entity : t("lake.streamDocuments");
-  const source = sourceLabel(stream.source);
 
   return (
     <TableRow className={open ? "lake-index__row lake-index__row--open" : "lake-index__row"}>

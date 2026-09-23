@@ -24,7 +24,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { needsScope, parseSpec, SCOPED_SOURCES } from "@undercroft/contracts";
+import { needsScope, parseSourceInstance, parseSpec } from "@undercroft/contracts";
 import { describeError, newRunId, UndercroftError } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -76,6 +76,19 @@ export class ConnectionUnusable extends UndercroftError {
   }
 }
 
+/**
+ * The source is not one a connection could have: a kind with an account suffix it cannot hold,
+ * or a string that is not a connector id at all.
+ *
+ * Refused before anything reads it, because the spec path reads `${source}.yaml` from disk and
+ * a source is a string a caller chose. ADR 0043.
+ */
+export class UnknownSource extends UndercroftError {
+  constructor(readonly source: string) {
+    super(`${JSON.stringify(source)} is not a source this platform reads`);
+  }
+}
+
 export async function runIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string } & RunOpening,
@@ -99,6 +112,9 @@ export async function startIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string } & RunOpening,
 ): Promise<{ runId: string; done: Promise<IngestResult> }> {
+  if (parseSourceInstance(input.source) === null) {
+    throw new UnknownSource(input.source);
+  }
   if (!(await tenantExists(deps.exec, input.tenantId))) {
     throw new UnknownTenant(input.tenantId);
   }
@@ -193,11 +209,11 @@ async function requireUsableConnection(
   }
   // A scoped source with nothing chosen is refused before a row is opened, for the same
   // reason the scheduler skips it: a run that could only fail, every tick, is noise.
-  if (SCOPED_SOURCES.has(input.source)) {
-    const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
-    if (needsScope(input.source, detail?.selectionJson ?? "{}")) {
-      throw new ScopeNotChosen(input.source, input.tenantId);
-    }
+  // `needsScope` decides whether the source is scoped at all, by its kind -- a guard here that
+  // asked a set of kind names about the SOURCE waved every second mailbox straight past it.
+  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
+  if (needsScope(input.source, detail?.selectionJson ?? "{}")) {
+    throw new ScopeNotChosen(input.source, input.tenantId);
   }
 }
 
