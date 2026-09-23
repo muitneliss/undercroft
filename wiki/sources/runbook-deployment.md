@@ -1,12 +1,12 @@
 ---
 title: Runbook Deployment
 type: source
-date: 2026-09-21
+date: 2026-09-23
 tags: []
 source: docs/runbook/deployment.md
 source_path: docs/runbook/deployment.md
-source_hash: 30d1ac693f8e4155e36ae90c613007edabd291aad5c06ae6142ca2164cd1b50f
-ingested: 2026-09-21
+source_hash: b10f03b781eb1a243641cef25d7fbd989ba23f6097e810ccf463d1d75b5d9663
+ingested: 2026-09-23
 ---
 
 # Runbook Deployment
@@ -16,6 +16,8 @@ Undercroft runs on the Dokploy instance at `lowbit.link` as a **single raw-compo
 **Two compose files, kept in step.** `docker-compose.yml` is for development and `build:`s the images and binds ports to localhost; `docker-compose.server.yml` is what Dokploy holds a copy of, and differs in three ways, each a failure that happened once: published `ghcr.io` images (Dokploy raw compose has no checkout, so `build:` has no context), no host ports, and a **unique network alias per service** (`undercroft-postgres`, `undercroft-minio`) used by every reference -- because a domain-bearing service joins the shared `dokploy-network`, where `postgres` and `minio` are names other projects use too, and on the old stack a Metabase authenticated against another project's database, stopped only by a password mismatch. A change made only in the development file will not survive a deploy.
 
 **A deploy happens on a release and nowhere else.** Merging the release-please PR bumps the version, cuts a tag, builds the images, and runs `task cd:preflight → cd:deploy → cd:verify → cd:smoke` (each wrapping `scripts/dokploy.ts`); a plain push to `main` ships nothing. By hand it is the same client and the same four tasks, or `task cd:release TAG=vX.Y.Z` for the sequence, needing `DOKPLOY_API_ENDPOINT`, `DOKPLOY_API_KEY` and `DOKPLOY_COMPOSE_ID` exported and never written to a file. The API is the only channel for a change; SSH reads state and never makes one. See [[ADR 0008 Deploy on Release from CI]] and [[ADR 0023 Task Is the Mandatory Command Entrypoint]].
+
+**The release PR is opened by a GitHub App, not `github-actions[bot]`.** Since June 2026 GitHub holds every workflow run on a PR the default token authored behind "requires approval from a maintainer", so release-please runs on an App installation token (`actions/create-github-app-token@v3`) and the workflow's own `GITHUB_TOKEN` drops to `permissions: {}`. Two repository settings feed it: the variable `RELEASE_PLEASE_CLIENT_ID` (the App's client id) and the secret `RELEASE_PLEASE_PRIVATE_KEY` (the whole `.pem`); they must come from the same App, and a rotation that misses either fails the `release` workflow at its first step. The App needs Contents and Pull requests read & write and nothing else, and must be installed on the repo; it is an App rather than a PAT because a PAT expires and makes every release read as authored by whoever minted it.
 
 **What `preflight` proves** comes before any of that: the panel must hold this repo's `deploy/compose/docker-compose.server.yml`, compared line for line and forgiving only line endings and trailing blank lines, along with the four flags its stored command carries. The file here is the source of truth and Dokploy holds a copy, and nothing checked that claim until the comparison existed -- the copy had drifted far enough to run a service this repo deleted ([[ADR 0020: BI is first-party, Metabase leaves the stack]]) while missing the `depends_on` that declares `kestra-flows` a job allowed to exit, so three releases in a row failed on the host at `--wait` after a `preflight` that passed each time. A refusal names the first line that differs, and is repaired by pushing the file to the panel rather than editing the file to match it: CI never writes the panel's configuration, so a drift is meant to be seen by a human.
 

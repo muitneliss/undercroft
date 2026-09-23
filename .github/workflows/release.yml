@@ -22,9 +22,10 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
-  pull-requests: write
+# Nothing here runs on the workflow's own GITHUB_TOKEN: release-please acts as the App
+# below, and the two called workflows each grant themselves what they need. An unused
+# write-capable token is a credential nobody is watching.
+permissions: {}
 
 jobs:
   release-please:
@@ -33,9 +34,26 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # release-please MUST NOT author the release PR as the default GITHUB_TOKEN. Since
+      # June 2026 GitHub parks any workflow run on a PR that `github-actions[bot]` opened
+      # behind "requires approval from a maintainer" -- on a same-repo branch, not just a
+      # fork -- so the release PR sat with no CI until someone clicked. Approving it by hand
+      # every release is how a release eventually gets merged on a stale green.
+      #
+      # An installation token is a different identity, so the gate does not apply. It is an
+      # App rather than a PAT because a PAT belongs to a person: it expires, and it makes
+      # every release read as authored by whoever happened to mint it. The App is named by its
+      # client id: v3 of the action deprecates `app-id`.
+      - id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_PLEASE_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
+
       - id: release
         uses: googleapis/release-please-action@v5
         with:
+          token: ${{ steps.token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
