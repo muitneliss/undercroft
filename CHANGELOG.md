@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/muitneliss/undercroft/compare/v1.22.0...v1.22.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* model-build alert subject reads as one sentence; unit gate runs in 21s, not 174s ([#161](https://github.com/muitneliss/undercroft/issues/161)) ([a6b10b2](https://github.com/muitneliss/undercroft/commit/a6b10b28cbca101e891c100b5abc8606bd689189))
+
 ## [1.22.0](https://github.com/muitneliss/undercroft/compare/v1.21.0...v1.22.0) (2026-09-23)
 
 
