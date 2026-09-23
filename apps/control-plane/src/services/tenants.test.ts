@@ -4,16 +4,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { create } from "./tenants.ts";
 
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   // As the control plane: provisioning a tenant's roles is a privilege it must actually hold.
   await db.become("undercroft_app");
 });

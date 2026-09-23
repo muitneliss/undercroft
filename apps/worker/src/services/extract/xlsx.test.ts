@@ -70,20 +70,15 @@ describe("a workbook's amounts", () => {
 });
 
 describe("a workbook's words", () => {
-  it("resolve through the shared string table, in the operators' own language", () => {
-    const text = readXlsx(workbook());
-
-    expect(text).toContain("Tiền thanh toán");
-    expect(text).toContain("Acme Holdings");
-  });
-
   it("include a cell that carries its own text instead of a table index", () => {
     // An inline string is a different branch of the cell grammar, and a workbook written by
     // something other than Excel is often entirely inline.
     expect(readXlsx(workbook())).toContain("Ghi chú & điều khoản");
   });
 
-  it("arrive in reading order, cells across and rows down", () => {
+  it("resolve through the shared string table, in reading order, cells across and rows down", () => {
+    // Every word below except the amount is a shared-string index in the sheet, and one of
+    // them is in the operators' own language.
     const text = readXlsx(workbook());
 
     expect(text).toContain("Invoice\tTiền thanh toán\nAcme Holdings\t1234.10");
@@ -119,12 +114,7 @@ describe("bytes that are not a workbook we can open", () => {
   it("include a zip holding no worksheet at all, such as a document renamed", () => {
     expect(readXlsx(zipOf([{ name: "word/document.xml", body: "<w:document/>" }]))).toBeNull();
   });
-
-  it("stay quiet for a workbook that IS readable", () => {
-    // The other half of the guard: a rule with only its firing case is satisfied by code
-    // that always refuses (`tests.md`).
-    expect(readXlsx(workbook())).not.toBeNull();
-  });
+  // The quiet side of these refusals is every test above: each reads `workbook()` to text.
 });
 
 describe("the extract dispatch", () => {

@@ -44,8 +44,10 @@ tasks:
       - task: :build:ui
 
   test:
-    desc: The offline unit/component test suite (bun test).
+    desc: The offline unit/component test suite (bun test --parallel).
     cmds:
+      # Files run in one worker process per core, each in a fresh global (`--parallel` implies
+      # `--isolate`), so a suite may not rely on state another file left behind.
       - bun run test
 
   test-one:

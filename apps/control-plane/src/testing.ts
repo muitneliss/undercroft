@@ -18,8 +18,7 @@
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
@@ -94,8 +93,7 @@ function liftDom(): () => void {
 
 export async function startControlPlane(options: ControlPlaneOptions = {}): Promise<ControlPlane> {
   const restoreDom = liftDom();
-  const db = await createTestDatabase();
-  await migrate(db);
+  const db = await createMigratedTestDatabase();
   const sender = new InMemoryEmailSender();
   const worker = new InMemoryWorkerClient().backedBy(db);
   const superadmins = options.superadmins ?? new Set<string>();

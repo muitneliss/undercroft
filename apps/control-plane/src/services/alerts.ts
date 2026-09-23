@@ -136,12 +136,16 @@ export function failedRunMessage(
   },
 ): EmailMessage {
   const t = messages(to.locale);
-  const source =
-    input.source === SOURCE_OF_TRANSFORM ? t("runFailed.models") : sourceName(input.source);
+  const isModelBuild = input.source === SOURCE_OF_TRANSFORM;
+  const source = isModelBuild ? t("runFailed.models") : sourceName(input.source);
+  // Two whole sentences, never the build's name spliced into the sync's: see `modelsSubject`.
+  const subject = isModelBuild
+    ? t("runFailed.modelsSubject", { tenantId: input.tenantId })
+    : t("runFailed.subject", { source, tenantId: input.tenantId });
   const account = input.account ?? "";
   return postEmailLeaf(to.email, {
     locale: to.locale,
-    subject: t("runFailed.subject", { source, tenantId: input.tenantId }),
+    subject,
     runningHead: input.tenantId,
     heading: t("runFailed.heading"),
     lead: t("runFailed.lead"),

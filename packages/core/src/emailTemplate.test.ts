@@ -17,9 +17,10 @@ function leaf(overrides: Partial<EmailLeaf> = {}): EmailLeaf {
 
 describe("renderEmailLeaf", () => {
   it("carries the subject through untouched", () => {
-    expect(renderEmailLeaf(leaf({ subject: "Your sign-in code" })).subject).toBe(
-      "Your sign-in code",
-    );
+    // A subject is a mail header, not HTML: an escaper applied here would put `&amp;` in
+    // the reader's inbox.
+    const subject = 'Invoice <7> & "co"';
+    expect(renderEmailLeaf(leaf({ subject })).subject).toBe(subject);
   });
 
   it("writes the leaf's own locale onto <html lang>", () => {

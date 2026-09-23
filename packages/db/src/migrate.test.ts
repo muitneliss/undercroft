@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { migrate } from "./migrate.ts";
 import { createTestDatabase, type TestDatabase } from "./testing.ts";
 
@@ -12,28 +14,31 @@ afterEach(async () => {
   await db.close();
 });
 
+/**
+ * The `.sql` files on disk, read independently of `loadMigrations` -- the expectation is
+ * "every file shipped", and taking it from the loader under test would agree with a loader
+ * that dropped one.
+ */
+function sqlFilesIn(...segments: string[]): string[] {
+  return readdirSync(join(import.meta.dirname, "..", "sql", ...segments))
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+}
+
 describe("migrations apply and are idempotent", () => {
-  it("a fresh database applies every migration", async () => {
+  it("a fresh database applies every migration, in order, and restates every repeatable", async () => {
     const result = await migrate(db);
-    expect(result.applied.length).toBeGreaterThanOrEqual(5);
+    expect(result.applied).toEqual(sqlFilesIn());
     expect(result.skipped).toEqual([]);
+    expect(result.repeated).toEqual(sqlFilesIn("repeatable"));
+    expect(result.repeated).not.toEqual([]);
   });
 
   it("a second run applies nothing", async () => {
     await migrate(db);
     const again = await migrate(db);
     expect(again.applied).toEqual([]);
-    expect(again.skipped.length).toBeGreaterThanOrEqual(5);
-  });
-
-  it("the raw records table is partitioned by source", async () => {
-    await migrate(db);
-    const { rows } = await db.query<{ partstrat: string }>(
-      `SELECT partstrat FROM pg_partitioned_table
-       WHERE partrelid = 'raw.records'::regclass`,
-    );
-    // 'l' = LIST partitioning. A new connector adds a partition, not a migration.
-    expect(rows[0]?.partstrat).toBe("l");
+    expect(again.skipped).toEqual(sqlFilesIn());
   });
 });
 

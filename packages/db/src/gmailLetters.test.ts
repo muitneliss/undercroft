@@ -12,9 +12,8 @@
 
 import { afterEach, beforeEach, expect, test as it } from "bun:test";
 
-import { migrate } from "./migrate.ts";
 import { gmailLettersSql } from "./services/dbtProject.ts";
-import { createTestDatabase, type TestDatabase } from "./testing.ts";
+import { createMigratedTestDatabase, type TestDatabase } from "./testing.ts";
 
 const TENANT = "CASE-0042";
 const SECOND_MAILBOX = "gmail.3fa9c1d2e0ab";
@@ -54,8 +53,7 @@ let db: TestDatabase;
 let dbtRole: string;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.exec(`INSERT INTO ops.tenant (id) VALUES ('${TENANT}')`);
   await db.query("SELECT ops.provision_tenant($1)", [TENANT]);
   const { rows } = await db.query<{ role: string }>(

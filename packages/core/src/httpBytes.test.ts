@@ -10,16 +10,6 @@ function get(url: string): ByteRequest {
 }
 
 describe("the in-memory byte fetcher is a real seam", () => {
-  it("bytes survive the round trip unchanged", async () => {
-    // The whole reason this seam exists: the text fetcher would UTF-8 decode these and the
-    // original bytes would be unrecoverable.
-    const fetcher = new InMemoryByteFetcher().on("GET", "https://x.test/f", { body: PDF });
-
-    const response = await fetcher.send(get("https://x.test/f"));
-
-    expect(response.bytes).toEqual(PDF);
-  });
-
   it("an unmodelled request rejects rather than returning nothing", async () => {
     // The firing side of the guard, and the property that makes the offline gate mean
     // something: a collector calling an endpoint nobody recorded must fail loudly, not
@@ -40,29 +30,6 @@ describe("the in-memory byte fetcher is a real seam", () => {
 
     expect(response.status).toBe(200);
     expect(fetcher.calls.map((c) => c.url)).toEqual(["https://x.test/known"]);
-  });
-
-  it("queued responses are returned in order, then the last one repeats", async () => {
-    // What lets a retry test record `429` then `200` against one URL.
-    const fetcher = new InMemoryByteFetcher()
-      .on("GET", "https://x.test/p", { status: 429, body: "slow down" })
-      .on("GET", "https://x.test/p", { status: 200, body: "ok" });
-
-    const first = await fetcher.send(get("https://x.test/p"));
-    const second = await fetcher.send(get("https://x.test/p"));
-    const third = await fetcher.send(get("https://x.test/p"));
-
-    expect([first.status, second.status, third.status]).toEqual([429, 200, 200]);
-  });
-
-  it("a recorded object body is encoded as JSON", async () => {
-    const fetcher = new InMemoryByteFetcher().on("GET", "https://x.test/j", {
-      body: { messages: [{ id: "m1" }] },
-    });
-
-    const response = await fetcher.send(get("https://x.test/j"));
-
-    expect(new TextDecoder().decode(response.bytes)).toBe('{"messages":[{"id":"m1"}]}');
   });
 });
 

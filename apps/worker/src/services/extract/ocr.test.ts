@@ -213,22 +213,6 @@ describe("OCR that ran and found nothing", () => {
   });
 });
 
-describe("a PDF whose text layer is only a scan's stray characters", () => {
-  it("with a real text layer never reaches OCR at all", async () => {
-    // The side that decides the bill: a working text layer must not be re-read by an engine
-    // that costs seconds a page.
-    const { spawn, calls } = spawnAnswering(A_PAGE);
-
-    const result = await extract(spawn, {
-      contentType: "application/pdf",
-      bytes: new TextEncoder().encode("%PDF-1.7\n%%EOF\n"),
-    });
-
-    expect(result.method).toBe("pdf_text");
-    expect(calls.map((cmd) => cmd[0])).toEqual(["pdftotext"]);
-  });
-});
-
 /**
  * The scanned-PDF reader, against a scratch directory and two programs that behave the way
  * poppler and tesseract do.

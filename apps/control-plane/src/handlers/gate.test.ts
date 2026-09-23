@@ -18,10 +18,12 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test as it } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { startConsent } from "../services/oauth.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
@@ -104,13 +106,23 @@ const nativeStreams = {
   CountQueuingStrategy: globalThis.CountQueuingStrategy,
 };
 
+/**
+ * A built SPA, so the server under test has the catch-all it has in production. Without one
+ * there is no `GET /*` for an auth route to lose to, and the route-order test below would pass
+ * against a server that could not have failed it.
+ */
+let uiDist: string;
+
 beforeAll(async () => {
   await GlobalRegistrator.unregister();
+  uiDist = await mkdtemp(join(tmpdir(), "undercroft-gate-ui-"));
+  await writeFile(join(uiDist, "index.html"), "<!doctype html><title>Undercroft</title>");
 });
 
-afterAll(() => {
+afterAll(async () => {
   GlobalRegistrator.register();
   Object.assign(globalThis, nativeStreams);
+  await rm(uiDist, { recursive: true, force: true });
 });
 
 let db: TestDatabase;
@@ -122,8 +134,7 @@ let worker: InMemoryWorkerClient;
 let googleIngest: IngestClient;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   sender = new InMemoryEmailSender();
   worker = new InMemoryWorkerClient().backedBy(db);
 
@@ -169,6 +180,7 @@ beforeEach(async () => {
     superadmins: SUPERADMINS,
     googleIngest,
     worker,
+    uiDist,
   }).fetch;
   // From here on every statement runs as the control plane does.
   await db.become("undercroft_app");
@@ -410,7 +422,11 @@ describe("the session and the SPA do not fight over a route", () => {
     // would turn Google's redirect into a 200 serving the shell -- a sign-in that silently
     // never completes. Asserting "not HTML" is the durable form of that.
     const response = await Bun.fetch(`${origin}/api/auth/get-session`);
-
     expect(response.headers.get("content-type") ?? "").not.toContain("text/html");
+
+    // The catch-all IS mounted, so the assertion above had something to lose to: a path that
+    // belongs to nobody on the server gets the shell.
+    const shell = await Bun.fetch(`${origin}/tenants/CASE-0042`);
+    expect(shell.headers.get("content-type") ?? "").toContain("text/html");
   });
 });

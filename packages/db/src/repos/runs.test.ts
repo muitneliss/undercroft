@@ -5,8 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
-import { migrate } from "../migrate.ts";
-import { createTestDatabase, type TestDatabase } from "../testing.ts";
+import { createMigratedTestDatabase, type TestDatabase } from "../testing.ts";
 import {
   claimExternalRun,
   claimFailedRuns,
@@ -38,8 +37,7 @@ const PAIR = {
 } as const;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
   // The worker writes the ledger; every statement below runs with its grants and no more.
   await db.become("undercroft_worker");
@@ -194,28 +192,7 @@ describe("what a run says while it is still running", () => {
     expect((await eventsFor(db, "r1", 2)).map((e) => e.detail.read)).toEqual([3, 4]);
   });
 
-  it("a second reading of the same dial replaces the first rather than joining it", async () => {
-    await openRun(db, { id: "r1", ...PAIR });
-    for (const read of [5, 840, 7786]) {
-      await recordEvents(db, "r1", [
-        {
-          at: `2026-09-19T12:4${String(read % 10)}:00.000Z`,
-          level: "info",
-          event: "records_read",
-          entity: "messages",
-          detail: { read, total: 7786 },
-          live: true,
-        },
-      ]);
-    }
-
-    const events = await eventsFor(db, "r1");
-    expect(events).toHaveLength(1);
-    expect(events[0]?.detail).toEqual({ read: 7786, total: 7786 });
-    expect(events[0]?.live).toBe(true);
-  });
-
-  it("a gauge keeps the place it first appeared, so the ledger does not reshuffle under a reader", async () => {
+  it("a gauge's second reading replaces the first in the place it first appeared, so the ledger does not reshuffle under a reader", async () => {
     await openRun(db, { id: "r1", ...PAIR });
     const gauge = {
       at: "2026-09-19T12:00:00.000Z",
@@ -243,6 +220,7 @@ describe("what a run says while it is still running", () => {
     const events = await eventsFor(db, "r1");
     expect(events.map((e) => e.event)).toEqual(["records_read", "entity_done"]);
     expect(events[0]?.detail).toEqual({ read: 9 });
+    expect(events[0]?.live).toBe(true);
   });
 
   it("two readings in one flush write the last one, which is the only one still true", async () => {
@@ -454,7 +432,7 @@ describe("refusal retention", () => {
     await closeRun(db, id, { status: "ok", refused: 2 });
   }
 
-  it("drops the per-record rows once they are older than the window", async () => {
+  it("drops the per-record rows past the window, and keeps the rollup that explains them", async () => {
     await runThatRefused("r-old");
     await db.asSuperuser((tx) =>
       tx.exec("UPDATE ops.run_refusal SET at = now() - interval '30 days'"),
@@ -462,16 +440,7 @@ describe("refusal retention", () => {
 
     expect(await pruneRefusals(db, 7)).toBe(2);
     expect(await refusalsFor(db, "r-old")).toEqual([]);
-  });
-
-  it("keeps the rollup that explains them, so the count still has an answer", async () => {
-    await runThatRefused("r-old");
-    await db.asSuperuser((tx) =>
-      tx.exec("UPDATE ops.run_refusal SET at = now() - interval '30 days'"),
-    );
-
-    await pruneRefusals(db, 7);
-
+    // The rollup survives, so the run's refused count still has an answer.
     expect(await reasonsFor(db, "r-old")).toEqual([
       { entity: "documents", reason: "image-too-small-to-read", count: 2 },
     ]);

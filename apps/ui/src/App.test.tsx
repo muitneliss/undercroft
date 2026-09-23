@@ -21,9 +21,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import { App } from "@/App.tsx";
-// The side effect is the point: `useTranslation` resolves against the module-level i18next
-// singleton, and without it every key renders as itself. See `@/i18n`.
-import "@/i18n/index.ts";
+// For its side effect as much as for `translatorFor`: `useTranslation` resolves against the
+// module-level i18next singleton, and without it every key renders as itself. See `@/i18n`.
+import { translatorFor } from "@/i18n/index.ts";
 import { trpc } from "@/trpc.ts";
 
 const SIGNED_IN_AS = "ops@example.test";
@@ -89,6 +89,11 @@ describe("a reader with a session", () => {
   it("is given the book opened at a scoped division, not the title page", async () => {
     renderAt("/tenants/CASE-0042/lake");
 
-    expect(await screen.findByText(SIGNED_IN_AS)).toBeDefined();
+    // The running head names the reader on every page, so it cannot tell this route from
+    // `/tenants`. The lake's own leaf can: its queries are refused here, so it prints its
+    // not-loaded slip, naming the customer the URL scoped it to. The default locale is `vi`.
+    expect(
+      await screen.findByText(translatorFor("vi")("lake.notLoaded", { tenantId: "CASE-0042" })),
+    ).toBeDefined();
   });
 });

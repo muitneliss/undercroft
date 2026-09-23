@@ -11,8 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { bindParams, compileVisual } from "@undercroft/contracts";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { QueryFailed, type QueryDeps, readSchema, runQuery } from "./queryRunner.ts";
 import { sessionsBySetRole } from "./tenantSession.ts";
@@ -37,8 +36,7 @@ async function refusal(fn: () => Promise<unknown>): Promise<string> {
 }
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ('CASE-2')", [TENANT]);
   await db.query("SELECT ops.provision_tenant($1)", [TENANT]);
   await db.query("SELECT ops.provision_tenant('CASE-2')");

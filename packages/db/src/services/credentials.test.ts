@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "../migrate.ts";
 import {
   ConnectionRegistryError,
   type Credential,
@@ -7,24 +6,11 @@ import {
   upsertConnection,
   writeCredential,
 } from "../repos/connections.ts";
-import { createTestDatabase, type TestDatabase } from "../testing.ts";
+import { createMigratedTestDatabase, type TestDatabase } from "../testing.ts";
 import { accessToken, needsRefresh } from "./credentials.ts";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const env: NodeJS.ProcessEnv = { UNDERCROFT_SECRET_KEY: KEY };
-
-let db: TestDatabase;
-
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
-  await upsertConnection(db, { tenantId: "CASE-1", source: "xero", status: "connected" });
-});
-
-afterEach(async () => {
-  await db.close();
-});
 
 function cred(over: Partial<Credential> = {}): Credential {
   return {
@@ -54,6 +40,21 @@ describe("needsRefresh treats missing expiry as fresh", () => {
 });
 
 describe("accessToken refreshes and writes the rotated token back", () => {
+  let db: TestDatabase;
+
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
+    await upsertConnection(db, { tenantId: "CASE-1", source: "xero", status: "connected" });
+    // The worker is the one process holding UNDERCROFT_SECRET_KEY, and so the only caller
+    // of `accessToken` (runTypes.ts) and of the credential writes it rests on.
+    await db.become("undercroft_worker");
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
   it("returns the stored token when it is still fresh", async () => {
     await writeCredential(db, "CASE-1", "xero", cred({ expiresAt: null }), { env });
     const token = await accessToken(db, "CASE-1", "xero", { env });

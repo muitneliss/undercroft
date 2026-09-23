@@ -5,9 +5,8 @@ import { join } from "node:path";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { createStampSource, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
-import { migrate } from "@undercroft/db";
 import { eventsFor, openRun } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { RunInProgress, runIngest } from "./ingest.ts";
@@ -41,8 +40,7 @@ let specsDir: string;
 beforeEach(async () => {
   backing = new InMemoryObjectStore();
   lake = new LakeStore(backing, { stamps: createStampSource(new TestClock()) });
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
   await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
   await db.query(
@@ -134,7 +132,7 @@ describe("every run is a row in the ledger", () => {
     expect(entities.rows).toEqual([{ entity: "things", landed: 2, created: 2 }]);
   });
 
-  it("a run that failed is recorded as failed with the fault, and does not block the next", async () => {
+  it("a run that failed is recorded and narrated as failed, and does not block the next", async () => {
     // A fetcher modelling no request refuses the first one, which is a source fault.
     let failed = "";
     try {
@@ -153,12 +151,19 @@ describe("every run is a row in the ledger", () => {
     }
     expect(failed).not.toBe("");
 
-    const { rows } = await db.query<{ status: string; error: string | null }>(
-      "SELECT status, error FROM ops.run WHERE tenant_id = 'CASE-1' AND source = 'demo'",
+    const { rows } = await db.query<{ id: string; status: string; error: string | null }>(
+      "SELECT id, status, error FROM ops.run WHERE tenant_id = 'CASE-1' AND source = 'demo'",
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("failed");
     expect(rows[0]?.error).not.toBeNull();
+
+    // The feed says so too, with the fault's type and no payload.
+    const last = (await eventsFor(db, rows[0]?.id ?? "")).at(-1);
+    expect(last?.event).toBe("run_failed");
+    expect(last?.level).toBe("error");
+    expect(last?.detail.errorType).toBe("ConnectorError");
+    expect(last?.detail).not.toHaveProperty("errorMessage");
 
     const next = await runIngest(
       { lake, exec: db, specsDir, fetcher: goodFetcher(), env: { UNDERCROFT_SECRET_KEY: KEY } },
@@ -190,33 +195,6 @@ describe("every run is a row in the ledger", () => {
       unchanged: 0,
       refused: 0,
     });
-  });
-
-  it("a run that failed says so in its feed, with the fault's type and no payload", async () => {
-    let runId = "";
-    try {
-      await runIngest(
-        {
-          lake,
-          exec: db,
-          specsDir,
-          fetcher: new InMemoryFetcher(),
-          env: { UNDERCROFT_SECRET_KEY: KEY },
-        },
-        { source: "demo", tenantId: "CASE-1" },
-      );
-    } catch {
-      const { rows } = await db.query<{ id: string }>(
-        "SELECT id FROM ops.run WHERE tenant_id = 'CASE-1' AND source = 'demo'",
-      );
-      runId = rows[0]?.id ?? "";
-    }
-
-    const last = (await eventsFor(db, runId)).at(-1);
-    expect(last?.event).toBe("run_failed");
-    expect(last?.level).toBe("error");
-    expect(last?.detail.errorType).toBe("ConnectorError");
-    expect(last?.detail).not.toHaveProperty("errorMessage");
   });
 
   it("a run while one is in progress is refused, naming the run that is running", async () => {

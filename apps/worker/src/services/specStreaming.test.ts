@@ -26,8 +26,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { createStampSource, TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { CHUNK } from "./landing.ts";
@@ -57,8 +56,7 @@ let specsDir: string;
 
 beforeEach(async () => {
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
   await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
   specsDir = mkdtempSync(join(tmpdir(), "undercroft-specs-"));

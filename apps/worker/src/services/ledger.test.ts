@@ -4,16 +4,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { claimExternal, recordExternal } from "./ledger.ts";
 
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
   await db.become("undercroft_worker");
 });

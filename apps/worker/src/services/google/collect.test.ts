@@ -7,9 +7,8 @@
  */
 
 import { createPacer, createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
 import { writeConnectionDetail } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
@@ -31,8 +30,7 @@ let lake: LakeStore;
 let fetcher: InMemoryByteFetcher;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
   fetcher = new InMemoryByteFetcher();
@@ -75,47 +73,18 @@ function collect(source: "gmail" | "drive") {
 }
 
 /**
- * The message URL the collector actually fetches: `format=full`.
+ * The message URL the collector actually fetches: `format=full`, and the ONLY one any fixture
+ * here records.
  *
- * An attachment is only discoverable at this format. Gmail's `metadata` returns headers
- * alone, so a fixture registered against THAT url can never prove an attachment lands --
- * which is exactly how this suite stayed green while production landed none. `metadataUrl`
- * below is kept so one test can hold the distinction.
+ * An attachment is only discoverable at this format. Gmail's `metadata` returns headers alone
+ * -- Google's Format reference: "Returns only email message ID, labels, and email headers" --
+ * so a fixture that answered a metadata request with parts described an API that does not
+ * exist, and that is exactly how this suite stayed green while production landed no
+ * attachments. Nothing records the metadata URL now, so a collector that asked for it is
+ * refused by the fetcher and every attachment test below fails loudly.
  */
 function messageUrl(id: string): string {
   return `${GMAIL}/messages/${id}?format=full`;
-}
-
-/** The `format=metadata` url, kept only so one test can model what Gmail returns there. */
-function metadataUrl(id: string): string {
-  const url = new URL(`${GMAIL}/messages/${id}`);
-  url.searchParams.set("format", "metadata");
-  for (const header of ["From", "To", "Cc", "Subject", "Date", "Message-ID"]) {
-    url.searchParams.append("metadataHeaders", header);
-  }
-  return url.toString();
-}
-
-/**
- * What `format=metadata` ACTUALLY returns: id, labels and headers, and no `payload.parts`.
- *
- * Google's Format reference is explicit -- "Returns only email message ID, labels, and email
- * headers". A fixture that answers a metadata request with parts describes an API that does
- * not exist.
- */
-function metadataOnly(id: string, labelIds: string[]): unknown {
-  return {
-    id,
-    threadId: `t-${id}`,
-    labelIds,
-    internalDate: "1789400000000",
-    payload: {
-      headers: [
-        { name: "Subject", value: `Invoice ${id}` },
-        { name: "From", value: "billing@acme.test" },
-      ],
-    },
-  };
 }
 
 function listUrl(labelId: string | null): string {
@@ -309,30 +278,6 @@ describe("gmail", () => {
     expect(rows[0]?.lake_key).not.toContain("rotates");
   });
 
-  it("an attachment lands even though `format=metadata` carries no parts", async () => {
-    // The regression this suite could not see. Google's Format reference is explicit that
-    // `metadata` "Returns only email message ID, labels, and email headers" -- no `payload`
-    // parts, so no `body.attachmentId`. Every other attachment test here answers the
-    // metadata URL with a parts-bearing body, which describes an API that does not exist:
-    // they stay green whichever format the collector asks for, and a mailbox full of
-    // invoices lands zero documents in production.
-    //
-    // So this fixture models the real thing on both sides -- headers only at `metadata`,
-    // parts at `full` -- and the fetcher REFUSES anything unmodelled. A collector asking for
-    // metadata therefore fails loudly here instead of quietly finding no attachments.
-    await connect("gmail", { labels: [] });
-    fetcher
-      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
-      .on("GET", metadataUrl("m1"), { body: metadataOnly("m1", ["Label_A"]) })
-      .on("GET", messageUrl("m1"), { body: message("m1", ["Label_A"]) })
-      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-rotates`, { body: { data: PDF_B64 } });
-
-    const result = await collect("gmail");
-
-    expect(result.records.landed).toBe(1);
-    expect(result.documents.created).toBe(1);
-  });
-
   it("`format=full` widens what is fetched without widening what is stored", async () => {
     // The quiet side of the format change. `full` returns bodies, a snippet and every header
     // a message carries; `metadata` returned none of that, so the narrowing that used to be
@@ -456,23 +401,6 @@ describe("gmail", () => {
     expect(rows.map((r) => r.source_record_id)).toEqual(["m1", "m2"]);
   });
 
-  it("an oversized attachment is skipped with a reason rather than dropped", async () => {
-    await connect("gmail", { labels: [] });
-    const huge = message("m1", ["Label_A"]) as {
-      payload: { parts: { body: { size?: string } }[] };
-    };
-    huge.payload.parts[1]!.body.size = String(80 * 1024 * 1024);
-    fetcher
-      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
-      .on("GET", messageUrl("m1"), { body: huge });
-    // No attachment route recorded: if the collector fetched it anyway, the refusing
-    // fetcher would fail this test, which is exactly the assertion.
-
-    const result = await collect("gmail");
-
-    expect(result.documents.skipped).toBe(1);
-  });
-
   it("an attachment outside the allow-list is excluded, but a matching one still lands", async () => {
     // Default scope: PDF only. The Excel part must not widen what is stored beyond it.
     await connect("gmail", { labels: [] });
@@ -571,6 +499,8 @@ describe("gmail", () => {
       payload: { parts: { body: { size?: string } }[] };
     };
     huge.payload.parts[1]!.body.size = String(80 * 1024 * 1024);
+    // No attachment route is recorded: had the collector fetched the oversized part anyway,
+    // the refusing fetcher would fail it and `failed`, not `skipped`, would be 1.
     fetcher
       .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
       .on("GET", messageUrl("m1"), { body: huge });
@@ -853,7 +783,9 @@ describe("drive", () => {
   });
 
   it("a picked folder that matched something records no refusal", async () => {
-    // The quiet side. A guard that always fires is as useless as one that never does.
+    // The quiet side. A guard that always fires is as useless as one that never does. The
+    // empty allow-list is deliberate too: the listing is recorded only at the URL with NO type
+    // filter, so a query that kept one would be refused here.
     await connect("drive", {
       files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
       fileTypes: [],
@@ -1064,8 +996,11 @@ describe("drive", () => {
   it("a sub-folder is never landed as a document", async () => {
     // With an empty allow-list -- "every file type" -- Drive hands folders back in the
     // listing like anything else, and one landed as a document is a zero-byte file whose
-    // whole content is its name. The refusing fetcher is the assertion: no bytes route is
-    // recorded for `sub`, so an attempt to fetch it fails here.
+    // whole content is its name. No bytes route is recorded for `sub`, but the refusal alone
+    // proves nothing: a document whose fetch fails is COUNTED as failed and its record held
+    // back, not raised, so `created` would still read 1. The assertions are therefore on
+    // what a folder treated as a file would leave behind -- one failed document, a record
+    // held back with DOCUMENT_UNLANDED, and `sub` in neither count.
     await connect("drive", {
       files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
       fileTypes: [],
@@ -1076,13 +1011,18 @@ describe("drive", () => {
 
     const result = await collect("drive");
 
-    expect(result.documents.created).toBe(1);
+    expect(result.documents).toMatchObject({ created: 1, failed: 0, skipped: 0 });
+    expect(result.records.landed).toBe(1);
+    expect(result.refusals).toEqual([]);
+    expect(await projected("drive")).toEqual(["f1"]);
   });
 
   it("a folder reachable twice in one tree is listed once", async () => {
     // A shortcut can make a tree a graph, and Drive will happily describe a cycle. Without
-    // the visited set this walks forever; the fetcher records each listing ONCE, so a second
-    // request for either folder is unmodelled and fails rather than hanging.
+    // the visited set this walks forever -- and it HANGS rather than failing fast, because
+    // the fetcher replays the last response recorded for a URL, so a second listing of
+    // either folder is answered, not refused. The test then fails on bun's per-test timeout;
+    // the call counts below are what it asserts when the walk does end.
     await connect("drive", {
       files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
       recurse: true,
@@ -1099,6 +1039,11 @@ describe("drive", () => {
     const result = await collect("drive");
 
     expect(result.documents.created).toBe(1);
+    const listings = fetcher.calls.map((c) => c.url).filter((url) => !url.endsWith("?alt=media"));
+    expect(listings).toEqual([
+      listUrlFor("folder-1", ["application/pdf"], true),
+      listUrlFor("sub", ["application/pdf"], true),
+    ]);
   });
 
   it("a picked folder whose whole tree is empty refuses once, not once per branch", async () => {
@@ -1206,21 +1151,5 @@ describe("drive", () => {
       "SELECT content_type FROM raw.documents",
     );
     expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
-  });
-
-  it("an empty allow-list's folder query omits the type filter", async () => {
-    await connect("drive", {
-      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
-      fileTypes: [],
-    });
-    fetcher
-      .on("GET", listUrlFor("folder-1", []), {
-        body: { files: [file("f1", "application/vnd.ms-excel")] },
-      })
-      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
-
-    const result = await collect("drive");
-
-    expect(result.documents.created).toBe(1);
   });
 });

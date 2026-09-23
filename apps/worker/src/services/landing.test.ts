@@ -9,9 +9,9 @@
 
 import { streamOf } from "@undercroft/contracts";
 import { createStampSource, TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
+import type { SqlExecutor } from "@undercroft/db";
 import { openRun } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
@@ -20,6 +20,7 @@ import type { DocumentToLand } from "./landDocument.ts";
 import { createDocumentSink } from "./documentSink.ts";
 import { CHUNK, type DocumentLanding, refusalsToRun } from "./landing.ts";
 import { createRecordSink } from "./recordSink.ts";
+import { noDatabase } from "../testing.ts";
 
 const TENANT = "CASE-0042";
 const SOURCE = "demo";
@@ -41,30 +42,38 @@ let backing: InMemoryObjectStore;
 let lake: LakeStore;
 let db: TestDatabase;
 
-beforeEach(async () => {
+beforeEach(() => {
   backing = new InMemoryObjectStore();
   lake = new LakeStore(backing, { stamps: createStampSource(new TestClock()) });
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
-  await db.exec(
-    `CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('${SOURCE}')`,
-  );
-  // Seeded as the superuser; from here on every statement runs as the worker does, so a
-  // missing grant fails in the gate rather than at 02:00.
-  await db.become("undercroft_worker");
-  await openRun(db, {
-    id: RUN,
-    tenantId: TENANT,
-    source: SOURCE,
-    verb: "ingest",
-    trigger: "manual",
-  });
 });
 
-afterEach(async () => {
-  await db.close();
-});
+/**
+ * A migrated database with the run open, entered as the worker. Per describe, so the one
+ * test that never reaches a statement (the last describe) does not open a database.
+ */
+function withDatabase(): void {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+    await db.exec(
+      `CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('${SOURCE}')`,
+    );
+    // Seeded as the superuser; from here on every statement runs as the worker does, so a
+    // missing grant fails in the gate rather than at 02:00.
+    await db.become("undercroft_worker");
+    await openRun(db, {
+      id: RUN,
+      tenantId: TENANT,
+      source: SOURCE,
+      verb: "ingest",
+      trigger: "manual",
+    });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+}
 
 function record(id: string): RecordToLand {
   return {
@@ -124,11 +133,13 @@ async function documentRows(): Promise<{ document_id: string; metadata: unknown 
   return rows;
 }
 
-function sink(chunk?: number) {
-  return createRecordSink({ lake, exec: db, refuse: refusalsToRun(db, RUN) }, AT, chunk);
+function sink(chunk?: number, exec: SqlExecutor = db) {
+  return createRecordSink({ lake, exec, refuse: refusalsToRun(exec, RUN) }, AT, chunk);
 }
 
 describe("a record sink lands a source it never holds", () => {
+  withDatabase();
+
   it("a source larger than one chunk lands every record", async () => {
     const source = Array.from({ length: CHUNK * 2 + 50 }, (_, i) => record(`id-${i}`));
     const records = sink();
@@ -218,15 +229,6 @@ describe("a record sink lands a source it never holds", () => {
     await records.close();
   });
 
-  it("a sink refuses a record added after it closed", async () => {
-    // Nothing would ever land it: `close` has already flushed. Refusing says so rather than
-    // dropping it silently.
-    const records = sink();
-    await records.close();
-
-    await expect(records.add(record("id-0"))).rejects.toThrow("closed");
-  });
-
   it("re-landing an unchanged source writes nothing and reports it", async () => {
     // Content idempotence, reached through the sink. Without it an hourly schedule pushes
     // real history out through retention using copies of the same record.
@@ -254,6 +256,8 @@ describe("a record sink lands a source it never holds", () => {
 });
 
 describe("a chunk that landed is a chunk the next run can skip", () => {
+  withDatabase();
+
   it("a chunk is in raw.records before the sink that landed it is closed", async () => {
     // The resume promise, in the form a caller can see. What the next run skips is what
     // `raw.records` holds, so a run killed at minute 70 must have left its chunks THERE and
@@ -306,6 +310,8 @@ describe("a chunk that landed is a chunk the next run can skip", () => {
 });
 
 describe("a document sink catalogues what it lands, as it lands it", () => {
+  withDatabase();
+
   function documents(chunk?: number) {
     return createDocumentSink({ lake, exec: db, refuse: refusalsToRun(db, RUN) }, AT, chunk);
   }
@@ -364,5 +370,17 @@ describe("a document sink catalogues what it lands, as it lands it", () => {
     expect(await refusals()).toEqual([
       { entity: "documents", id: "doc-huge", reason: expect.stringContaining("over the") },
     ]);
+  });
+});
+
+describe("a sink that has closed", () => {
+  it("refuses a record added after it closed", async () => {
+    // Nothing would ever land it: `close` has already flushed. Refusing says so rather than
+    // dropping it silently. An empty sink never reaches a statement, and `noDatabase` would
+    // fail the test if it did.
+    const records = sink(undefined, noDatabase);
+    await records.close();
+
+    await expect(records.add(record("id-0"))).rejects.toThrow("closed");
   });
 });

@@ -5,9 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
 import { eventsFor, openRun } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { createRunJournal, MAX_EVENTS_PER_RUN, PROGRESS_INTERVAL_MS } from "./runJournal.ts";
 
@@ -15,8 +14,7 @@ let db: TestDatabase;
 let clock: TestClock;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
   await db.become("undercroft_worker");
   await openRun(db, {
@@ -146,17 +144,8 @@ describe("the feed is capped, and says so rather than looking complete", () => {
     const gauge = events.find((e) => e.event === "records_read");
     expect(gauge?.detail).toEqual({ read: 7786 });
   });
-
-  it("a run that stays under the cap records no truncation", async () => {
-    const journal = createRunJournal({ exec: db, runId: "r1", clock });
-
-    journal.info("entity_started", { entity: "messages" });
-    journal.info("entity_done", { entity: "messages" });
-    await journal.flush();
-
-    const events = await eventsFor(db, "r1");
-    expect(events.map((e) => e.event)).toEqual(["entity_started", "entity_done"]);
-  });
+  // The quiet side -- a run under the cap records no truncation -- is the first test in this
+  // file, which asserts an under-cap run's whole event list.
 });
 
 describe("the feed carries no sentence a provider wrote", () => {

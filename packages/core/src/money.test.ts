@@ -1,5 +1,4 @@
 import { describe, expect, test as it } from "bun:test";
-import Big from "big.js";
 import {
   add,
   compare,
@@ -40,6 +39,8 @@ describe("parseAmount reads exactly or not at all", () => {
   it.each([[""], [null], [undefined], ["-"], ["+"], ["."], ["abc"], ["$"]])(
     "returns null for %p rather than guessing",
     (input) => {
+      // Never zero: a zero is indistinguishable from a real zero downstream, so returning
+      // one here is data loss that looks like a fact.
       expect(parseAmount(input)).toBeNull();
     },
   );
@@ -60,13 +61,6 @@ describe("parseAmount reads exactly or not at all", () => {
 
   it("throws on a number rather than laundering the precision loss upstream", () => {
     expect(() => parseAmount(1234.56 as unknown as string)).toThrow(/already happened upstream/u);
-  });
-
-  it("an unreadable amount never becomes zero", () => {
-    // The whole rule in one assertion: a zero is indistinguishable from a real
-    // zero downstream, so returning one here is data loss that looks like a fact.
-    expect(parseAmount("not a number")).toBeNull();
-    expect(parseAmount("not a number")).not.toEqual(new Big(0));
   });
 });
 

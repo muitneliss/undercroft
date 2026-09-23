@@ -13,8 +13,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { messages } from "../i18n/index.ts";
@@ -29,8 +28,7 @@ const ADMIN = { userId: "", email: "ada@example.test" };
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   const { rows } = await db.query<{ id: string }>(
     "INSERT INTO app.app_user (email) VALUES ($1) RETURNING id",

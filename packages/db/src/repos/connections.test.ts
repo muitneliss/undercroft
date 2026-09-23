@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { migrate } from "../migrate.ts";
-import { createTestDatabase, type TestDatabase } from "../testing.ts";
+import { createMigratedTestDatabase, type TestDatabase } from "../testing.ts";
 import {
   ConnectionRegistryError,
   type Credential,
@@ -17,8 +16,7 @@ const env: NodeJS.ProcessEnv = { UNDERCROFT_SECRET_KEY: KEY };
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
   await upsertConnection(db, { tenantId: "CASE-1", source: "xero", status: "connected" });
 });
@@ -37,6 +35,12 @@ function cred(over: Partial<Credential> = {}): Credential {
 }
 
 describe("credentials are sealed at rest and open exactly", () => {
+  beforeEach(async () => {
+    // Only the worker holds UNDERCROFT_SECRET_KEY, so only it seals and opens credentials
+    // (apps/worker/src/services/connections.ts).
+    await db.become("undercroft_worker");
+  });
+
   it("what is written comes back unchanged", async () => {
     await writeCredential(db, "CASE-1", "xero", cred(), { env });
     const opened = await readCredential(db, "CASE-1", "xero", { env });
@@ -60,6 +64,11 @@ describe("credentials are sealed at rest and open exactly", () => {
 });
 
 describe("cadence", () => {
+  beforeEach(async () => {
+    // An admin sets cadence through the control plane (services/connections.ts).
+    await db.become("undercroft_app");
+  });
+
   it("a connection reads daily until an admin says otherwise, and the word is stored", async () => {
     expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("daily");
     expect(await setCadence(db, "CASE-1", "xero", "hourly")).toBe(true);

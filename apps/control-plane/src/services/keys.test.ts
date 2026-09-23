@@ -6,9 +6,8 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { hashToken } from "@undercroft/crypto";
-import { migrate } from "@undercroft/db";
 import { findByDigest } from "@undercroft/db/repos";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { list, mint, revoke } from "./keys.ts";
 
@@ -20,8 +19,7 @@ const KEY_ID = /^uk_[A-Za-z0-9_-]{8}$/u;
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ('CASE-0043')", [TENANT]);
   await db.become("undercroft_app");
 });
@@ -49,6 +47,8 @@ describe("minting", () => {
     const row = await findByDigest(db, hashToken(minted.token));
     expect(row?.id).toBe(minted.id);
     expect(row?.allowed_sources).toEqual(["hubspot"]);
+    // Unrevoked, so the worker's rule admits it -- the quiet half of the revoke test below.
+    expect(row?.revoked_at).toBeNull();
     const { rows } = await db.query<{ token_sha256: string }>(
       "SELECT token_sha256 FROM app.ingest_key WHERE id = $1",
       [minted.id],
@@ -98,6 +98,12 @@ describe("revoking", () => {
       true,
     );
     expect((await list(db, TENANT))[0]?.revokedAt).not.toBeNull();
+    // The worker's rule (`apps/worker/src/services/auth.ts`) looks the key up by the token's
+    // digest and refuses a row whose `revoked_at` is set. So the row it finds is the revoked
+    // one -- still there, which is what keeps it listed above -- and it is refused.
+    const seen = await findByDigest(db, hashToken(minted.token));
+    expect(seen?.id).toBe(minted.id);
+    expect(seen?.revoked_at).not.toBeNull();
     // Revoking twice, or from another tenant, revokes nothing and says so.
     expect(await revoke(db, { tenantId: TENANT, id: minted.id, actor: "ada@example.test" })).toBe(
       false,

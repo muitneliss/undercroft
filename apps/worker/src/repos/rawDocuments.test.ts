@@ -1,5 +1,4 @@
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { type RawDocumentRow, tombstoneMissing, upsertDocuments } from "./rawDocuments.ts";
@@ -11,8 +10,7 @@ const EARLIER = "2026-09-17T09:00:00.000Z";
 const LATER = "2026-09-17T12:00:00.000Z";
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   // Every statement runs as the worker does, so a missing grant on raw.documents fails here.
   await db.become("undercroft_worker");
 });

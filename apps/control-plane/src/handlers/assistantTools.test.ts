@@ -13,29 +13,26 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { DEFAULT_LOCALE } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { CATALOGUE } from "../services/assistant/catalogue.ts";
+import type { SqlExecutor } from "@undercroft/db";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { CATALOGUE, TOOLS } from "../services/assistant/catalogue.ts";
 import { bindTools, unresolvedProcedures } from "./assistantTools.ts";
 import type { Context, Role, SessionUser } from "./trpc.ts";
 
 let db: TestDatabase;
 
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
-  // Seeded as the superuser; from here on every statement runs as the control plane does.
-  await db.become("undercroft_app");
-});
+/**
+ * For the tests that only BIND tools: binding reads the catalogue and never runs a procedure,
+ * so a query here is a loud failure rather than a silent dependency on a fixture.
+ */
+const noDatabase: SqlExecutor = {
+  query: () => Promise.reject(new Error("binding a tool must not touch the database")),
+  exec: () => Promise.reject(new Error("binding a tool must not touch the database")),
+};
 
-afterEach(async () => {
-  await db.close();
-});
-
-function context(user: SessionUser | null, superadmin = false): Context {
+function context(user: SessionUser | null, superadmin = false, exec: SqlExecutor = db): Context {
   return {
-    exec: db,
+    exec,
     user,
     sessionId: "s1",
     superadmin,
@@ -82,12 +79,25 @@ describe("every tool the catalogue declares is bound to a procedure that exists"
     expect(unresolvedProcedures()).toEqual([]);
   });
 
-  it("the catalogue is not empty, so the assertion above is not vacuous", () => {
-    expect(Object.keys(CATALOGUE).length).toBeGreaterThan(0);
+  it("some tool declares a procedure, so the assertion above is not vacuous", () => {
+    // Not "the catalogue is not empty": a catalogue of navigate tools alone declares no
+    // procedure path, and the check above would pass having checked nothing.
+    expect(Object.values(TOOLS).some((spec) => spec.procedure !== undefined)).toBe(true);
   });
 });
 
 describe("a bound tool carries the caller's authority, not the assistant's", () => {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
+    // Seeded as the superuser; from here on every statement runs as the control plane does.
+    await db.become("undercroft_app");
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
   it("a member reading their own customer's sources is answered", async () => {
     const user = await seedMember("member@example.test", "member");
     const answered = await call(context(user), "sourceStatus", { tenantId: "CASE-0042" });
@@ -144,8 +154,8 @@ describe("a bound tool carries the caller's authority, not the assistant's", () 
 
 describe("a tier that is not bound cannot be reached at all", () => {
   it("binding only the read tier offers no write tool", () => {
-    const readOnly = bindTools(context(null), { tiers: ["read"] });
-    const everything = bindTools(context(null), {
+    const readOnly = bindTools(context(null, false, noDatabase), { tiers: ["read"] });
+    const everything = bindTools(context(null, false, noDatabase), {
       tiers: ["read", "navigate", "write", "privileged"],
     });
     // An unbound tool is a stronger guarantee than a bound one that refuses: no prompt can

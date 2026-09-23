@@ -12,30 +12,26 @@
  * may do what once they hold one is this suite's. It also means no part of this file has to
  * impersonate a library it does not exercise.
  *
- * Route ORDER gets its own test through `createServer`, because it is a property of the app
- * rather than of the route: registered after the SPA catch-all, `/api/assistant/chat` would
- * answer with `index.html`, and `useChat`'s error on a body of HTML is unreadable.
+ * Route ORDER is a property of the app rather than of the route, so it is `server.test.ts`'s:
+ * the SPA catch-all is a `GET`, which the history route can lose to and this POST cannot.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { Hono } from "hono";
 import { findThread, listTurns } from "../repos/assistantThread.ts";
 import { createAssistant } from "../services/assistant/agent.ts";
 import { inMemoryJudge, unavailableJudge } from "../services/assistant/judge.ts";
 import { inMemoryLanguageModel, type Turn } from "../services/assistant/model.ts";
 import { registerAssistantRoutes } from "./chat.ts";
-import { createServer } from "./server.ts";
 import type { Context, SessionUser } from "./trpc.ts";
 
 let db: TestDatabase;
 let operator: SessionUser;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042'), ('CASE-0043')");
   const { rows } = await db.query<{ id: string }>(
     "INSERT INTO app.app_user (email) VALUES ('ops@example.test') RETURNING id",
@@ -226,13 +222,9 @@ describe("who may speak, and about what", () => {
     expect(await response.text()).toBe("");
   });
 
-  it("a customer this reader is not in is NOT FOUND, never FORBIDDEN", async () => {
+  it("a customer this reader is not in is NOT FOUND, never FORBIDDEN, and nothing is written", async () => {
     // The anti-enumeration boundary. A worded refusal would confirm CASE-0043 exists.
     expect((await ask(appWith([]), "Hoá đơn?", "CASE-0043")).status).toBe(404);
-  });
-
-  it("nothing is written for a customer the reader may not speak about", async () => {
-    await ask(appWith([]), "Hoá đơn?", "CASE-0043");
     // A thread keyed to any tenantId a caller can type would be a write past the boundary.
     expect(await findThread(db, "CASE-0043", operator.userId)).toBeNull();
   });
@@ -274,34 +266,22 @@ describe("the scripted model refuses what it was not scripted for", () => {
   });
 });
 
-describe("the route is registered ahead of the SPA catch-all", () => {
-  it("the chat path is not answered with the app shell", async () => {
-    // With `uiDist` set, a route registered after the catch-all would return index.html with a
-    // 200. The assertion is that it does NOT: an anonymous 401 proves the assistant route won.
-    const app = createServer({ exec: db, uiDist: "/nonexistent-dist" });
-    const response = await app.fetch(
-      new Request("http://undercroft.test/api/assistant/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tenantId: "CASE-0042", message: {} }),
-      }),
-    );
-    expect(response.status).toBe(401);
-  });
-});
+/** A script that goes straight for a mutation, as a model asked to act would. */
+const WANTS_TO_RUN: readonly Turn[] = [
+  {
+    when: "chạy",
+    reply: [{ call: "runIngestNow", input: { tenantId: "CASE-0042", source: "xero" } }],
+  },
+];
 
 describe("a change is proposed, never performed", () => {
-  /** A script that goes straight for a mutation, as a model asked to act would. */
-  const WANTS_TO_RUN: readonly Turn[] = [
-    {
-      when: "chạy",
-      reply: [{ call: "runIngestNow", input: { tenantId: "CASE-0042", source: "xero" } }],
-    },
-  ];
-
   it("reaches approval-requested rather than running", async () => {
     // The whole promise of the write tier. `runs.trigger` would have refused anyway in this
     // suite (no worker), and that is the point: the call must not get far enough to find out.
+    //
+    // Also the quiet half of the injection test below: the reader DID ask for this, so the
+    // gate lets it through to the reader rather than denying it. Without it, a gate that
+    // denied everything would satisfy that test while the write tier was dead.
     const app = appWith(WANTS_TO_RUN, context(operator), ["chạy"]);
     const streamed = await frames(await ask(app, "Chạy đồng bộ Xero ngay"));
 
@@ -361,28 +341,11 @@ describe("data cannot command the assistant", () => {
     expect(states).toContain("tool-output-denied");
     // Deliberately not asserting the request frame's own `isAutomatic` flag: the presence of
     // a response alongside it is the signal that nobody was waited for, and it is the one
-    // verified here rather than a field shape guessed at.
-  });
-
-  it("the same proposal IS offered when the reader did ask for it", async () => {
-    // The firing half's counterpart. Without it, a gate that denied everything would satisfy
-    // the test above while the write tier was dead.
-    const app = appWith(WANTS_TO_RUN_FOR_INJECTION, context(operator), ["chạy"]);
-    const streamed = await frames(await ask(app, "Chạy đồng bộ Xero ngay"));
-    const states = streamed.map((frame) => frame.type);
-    expect(states).toContain("tool-approval-request");
-    // The difference from the test above: no response frame, because a person is being waited
-    // for. That difference IS the gate.
-    expect(states).not.toContain("tool-approval-response");
+    // verified here rather than a field shape guessed at. Its counterpart, the same proposal
+    // offered because the reader asked for it, is "reaches approval-requested rather than
+    // running" above: no response frame there, because a person is being waited for.
   });
 });
-
-const WANTS_TO_RUN_FOR_INJECTION: readonly Turn[] = [
-  {
-    when: "chạy",
-    reply: [{ call: "runIngestNow", input: { tenantId: "CASE-0042", source: "xero" } }],
-  },
-];
 
 describe("an unconfigured gate refuses to offer a change", () => {
   it("denies the write tier rather than waving it through", async () => {
@@ -393,7 +356,7 @@ describe("an unconfigured gate refuses to offer a change", () => {
     registerAssistantRoutes(app, {
       exec: db,
       createContext: () => Promise.resolve(context(operator)),
-      assistant: createAssistant(inMemoryLanguageModel(WANTS_TO_RUN_FOR_INJECTION)),
+      assistant: createAssistant(inMemoryLanguageModel(WANTS_TO_RUN)),
       judge: unavailableJudge,
     });
     const streamed = await frames(await ask(app, "Chạy đồng bộ Xero ngay"));
@@ -425,38 +388,7 @@ describe("a privileged change is held to the same gate, plus one", () => {
     expect(states).toContain("tool-approval-request");
     expect(states).not.toContain("tool-approval-response");
     expect(states).not.toContain("tool-output-available");
-  });
-
-  it("and a viewer cannot reach it at all, because the procedure is admin-only", async () => {
-    // Authorization is still the router's, not the tier's. `connections.disconnect` is
-    // `requireRole("admin")`, so a viewer's proposal is refused by the tool itself -- which is
-    // asserted here through the whole route rather than only at `bindTools`.
-    const viewer = await db.asSuperuser(async (su) => {
-      const { rows } = await su.query<{ id: string }>(
-        "INSERT INTO app.app_user (email) VALUES ('viewer@example.test') RETURNING id",
-      );
-      await su.query(
-        "INSERT INTO app.tenant_member (tenant_id, user_id, role) VALUES ($1, $2, 'viewer')",
-        ["CASE-0042", rows[0]!.id],
-      );
-      return { userId: rows[0]!.id, email: "viewer@example.test" };
-    });
-
-    const app = appWith(
-      [
-        {
-          when: "ngắt",
-          reply: [{ call: "revokeGrant", input: { tenantId: "CASE-0042", source: "xero" } }],
-        },
-        { when: "ngắt", reply: [{ say: "Bạn không có quyền." }] },
-      ],
-      context(viewer),
-      ["ngắt"],
-    );
-    // Struck by the reader is one thing; struck by the role is another, and the reader is told
-    // which. The approval is still requested -- the tier says so -- and the refusal lands when
-    // it runs, in the viewer's own language.
-    const states = (await frames(await ask(app, "Ngắt kết nối Xero"))).map((f) => f.type);
-    expect(states).toContain("tool-approval-request");
+    // Who may run it once struck is still the router's, not the tier's: a viewer's bound tool
+    // is refused FORBIDDEN by the procedure itself, pinned in `assistantTools.test.ts`.
   });
 });

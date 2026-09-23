@@ -8,14 +8,12 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import type { SqlExecutor } from "./executor.ts";
-import { migrate } from "./migrate.ts";
-import { createTestDatabase, type TestDatabase } from "./testing.ts";
+import { createMigratedTestDatabase, type TestDatabase } from "./testing.ts";
 
 let db: TestDatabase;
 
 beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
 });
 
 afterEach(async () => {
@@ -45,6 +43,30 @@ async function refusalOf(fn: () => Promise<unknown>): Promise<string> {
   }
 }
 
+/** Every `schema.table.column` in `schemas` whose text form contains `value`. */
+async function columnsHolding(value: string, schemas: readonly string[]): Promise<string[]> {
+  const { rows: columns } = await db.query<{ ref: string; sql: string }>(
+    `SELECT format('%s.%s.%s', c.table_schema, c.table_name, c.column_name) AS ref,
+            format('SELECT count(*)::int AS n FROM %I.%I WHERE strpos(%I::text, $1) > 0',
+                   c.table_schema, c.table_name, c.column_name) AS sql
+     FROM information_schema.columns c
+     JOIN information_schema.tables t
+       ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+     WHERE c.table_schema = ANY($1) AND t.table_type = 'BASE TABLE'`,
+    [schemas],
+  );
+  // The scan is not vacuous: both schemas have columns to look in.
+  expect(columns.length).toBeGreaterThan(0);
+  const holding: string[] = [];
+  for (const column of columns) {
+    const { rows } = await db.query<{ n: number }>(column.sql, [value]);
+    if ((rows[0]?.n ?? 0) > 0) {
+      holding.push(column.ref);
+    }
+  }
+  return holding;
+}
+
 async function defaultAcls(): Promise<{ grantor: string; schema: string; objtype: string }[]> {
   const { rows } = await db.query<{ grantor: string; schema: string; objtype: string }>(
     `SELECT pg_get_userbyid(defaclrole) AS grantor,
@@ -58,15 +80,9 @@ async function defaultAcls(): Promise<{ grantor: string; schema: string; objtype
 }
 
 describe("every default privilege is the one a tenant's own role was given, and no other", () => {
-  it("with no tenant, pg_default_acl has exactly the legacy row: dbt -> bi in analytics", async () => {
+  it("the set is the legacy dbt -> bi row plus one per tenant from ops.tenant_role, in full", async () => {
     // The structural control ADR 0005 introduced, kept: a hand-written ALTER DEFAULT
     // PRIVILEGES anywhere -- the exact shape of the original hazard -- makes this fail.
-    expect(await defaultAcls()).toEqual([
-      { grantor: "undercroft_dbt", schema: "analytics", objtype: "r" },
-    ]);
-  });
-
-  it("with tenants, the set is derived from ops.tenant_role and matches in full", async () => {
     // ADR 0018: none written by hand, one per tenant issued by provisioning. Derived rather
     // than listed, so a provisioning bug that forgets a tenant fails the same way a stray
     // default does.
@@ -211,6 +227,14 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     );
     expect(rows[0]?.rolvaliduntil).not.toBeNull();
 
+    // Not stored: the catalogue holds a verifier rather than the value, and no column in the
+    // platform's own schemas holds it either -- the shape a well-meant audit row would take.
+    const { rows: authid } = await db.query<{ rolpassword: string | null }>(
+      "SELECT rolpassword FROM pg_authid WHERE rolname = 'undercroft_bi_case_0042'",
+    );
+    expect(authid[0]?.rolpassword ?? "").not.toContain(password);
+    expect(await columnsHolding(password, ["ops", "app"])).toEqual([]);
+
     await db.asRole("undercroft_app", async (tx) => {
       await expectDenied(() => tx.query("SELECT ops.rotate_tenant_password('CASE-0042', 'bi')"));
     });
@@ -248,9 +272,9 @@ describe("a table dbt creates at runtime reaches BI, and only BI-safe schemas do
     expect(rows.rows[0]?.n).toBe(1);
   });
 
-  it("BI cannot reach credentials, raw payloads, or quarantine by any route", async () => {
+  it("BI cannot reach raw payloads or quarantine by any route", async () => {
+    // Credentials, sessions and consents live in app, which the describe below enumerates.
     await db.asRole("undercroft_bi", async (tx) => {
-      await expectDenied(() => tx.query("SELECT * FROM app.connection_secret"));
       await expectDenied(() => tx.query("SELECT * FROM raw.records"));
       await expectDenied(() => tx.query("SELECT * FROM dq.dummy"));
     });
@@ -292,6 +316,17 @@ describe("a run's event feed is granted like a refusal, not like a run", () => {
   });
 });
 
+/** Every ordinary table in schema app, enumerated rather than named so the next one counts. */
+async function appTables(): Promise<string[]> {
+  const { rows } = await db.query<{ table_name: string }>(
+    `SELECT c.relname AS table_name
+     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'app' AND c.relkind = 'r'
+     ORDER BY c.relname`,
+  );
+  return rows.map((r) => r.table_name);
+}
+
 describe("every table in app is granted to the control plane, and to nothing else", () => {
   // The hazard: `040_grants.sql` grants `ON ALL TABLES IN SCHEMA app`, which Postgres
   // expands to the tables existing at that moment, and the ledger means it never runs
@@ -325,14 +360,17 @@ describe("every table in app is granted to the control plane, and to nothing els
     expect(ungranted.map((r) => r.table_name)).toEqual([]);
   });
 
-  it("BI cannot read a session, a login identity or an OAuth token", async () => {
-    // The quiet side of the same boundary: app is revoked from BI wholesale, so the tables
-    // that hold a live session token are unreachable rather than merely ungranted.
+  it("BI is refused every table in app: a secret, a session, a mailbox address, a consent", async () => {
+    // The other side of the same boundary. app is revoked from BI wholesale, so the tables
+    // holding a sealed credential, a live session token, a mailbox address or an in-flight
+    // OAuth handshake are unreachable rather than merely ungranted -- and a table added
+    // tomorrow is covered the day it lands, because the list is read from the catalogue.
+    const tables = await appTables();
+    expect(tables).toContain("connection_secret");
     await db.asRole("undercroft_bi", async (tx) => {
-      await expectDenied(() => tx.query("SELECT * FROM app.auth_user"));
-      await expectDenied(() => tx.query("SELECT * FROM app.auth_session"));
-      await expectDenied(() => tx.query("SELECT * FROM app.auth_account"));
-      await expectDenied(() => tx.query("SELECT * FROM app.auth_verification"));
+      for (const table of tables) {
+        await expectDenied(() => tx.query(`SELECT * FROM app.${table}`));
+      }
     });
   });
 });
@@ -413,15 +451,6 @@ describe("the worker can seal a credential, and cannot choose what it reads", ()
           "CASE-0042",
         ]),
       );
-    });
-  });
-
-  it("BI cannot read a mailbox address or an in-flight consent", async () => {
-    // app is revoked from BI wholesale, so both new tables are unreachable rather than
-    // merely ungranted -- the same argument that keeps a label name off a dashboard.
-    await db.asRole("undercroft_bi", async (tx) => {
-      await expectDenied(() => tx.query("SELECT * FROM app.connection_detail"));
-      await expectDenied(() => tx.query("SELECT * FROM app.oauth_handshake"));
     });
   });
 });

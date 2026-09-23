@@ -88,13 +88,7 @@ describe("the navigate tier is not bound to the server at all", () => {
   it("there is a navigate tool, so the assertion above is not vacuous", () => {
     expect(Object.values(TOOLS).map((spec) => spec.tier)).toContain("navigate");
   });
-
-  it("a navigate tool needs no proof, because opening a page changes nothing", () => {
-    const navigating = Object.values(TOOLS).filter((spec) => spec.tier === "navigate");
-    for (const spec of navigating) {
-      expect(spec.proofKey).toBeUndefined();
-    }
-  });
+  // That a navigate tool carries no proof is `misdeclared`'s, above: it does not mutate.
 });
 
 describe("the panel has a plate for every tool that draws one", () => {

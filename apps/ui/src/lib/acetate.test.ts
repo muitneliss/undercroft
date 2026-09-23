@@ -6,10 +6,12 @@
  * section becomes unreadable -- and it would break silently, because the solver
  * runs at paint time and nothing else in the stack measures the result.
  *
- * The case that actually bites is a new division: someone adds a fifth section,
- * takes the next hue off the wheel, and never checks it. So the test walks the
- * whole wheel rather than the four hues in use today, and includes the two
- * extremes a hand-picked alpha would fail on.
+ * The case that actually bites is a new division: someone adds a section, gives it
+ * a hue, and never checks it. So the tests walk `DIVISIONS` -- what the app
+ * actually renders -- rather than a literal list of hues, which is a second copy
+ * that a new division does not update. The seven divisions hold all seven hues of
+ * the wheel today, including the two extremes a hand-picked alpha would fail on
+ * (the chrome and the ultramarine).
  */
 
 import { describe, expect, test as it } from "bun:test";
@@ -28,27 +30,13 @@ import {
 
 const LEAF = PAPER;
 
-/** Every hue in the wheel, as a literal: the seven the divisions claim, in the wheel's order. */
-const WHEEL = ["#b24b1a", "#eda600", "#3e782b", "#0f7673", "#234c9e", "#634cb0", "#7f4023"];
-
 describe("solveLeaf", () => {
-  it("every hue in the wheel yields a readable field", () => {
-    for (const hue of WHEEL) {
-      const board = parseHex(hue);
-      expect(board).not.toBeNull();
-
-      const solved = solveLeaf(LEAF, board!, INK);
-      const field = composite(LEAF, board!, solved.alpha);
-
-      expect(contrast(field, INK)).toBeGreaterThanOrEqual(TARGET_CONTRAST);
-    }
-  });
-
   it("every division's board yields a readable field", () => {
-    // The wheel above is a literal; this walks what the app actually renders, so
-    // a division pointing at a hue that is not on the wheel is caught too.
     for (const div of DIVISIONS) {
       const board = parseHex(div.hue);
+      // A hue the parser cannot read would otherwise reach the solver as a crash, or pass
+      // below as whatever `!` let through.
+      expect(board).not.toBeNull();
       const solved = solveLeaf(LEAF, board!, INK);
 
       expect(contrast(composite(LEAF, board!, solved.alpha), INK)).toBeGreaterThanOrEqual(
@@ -91,18 +79,9 @@ describe("solveLeaf", () => {
 });
 
 describe("letteringOn", () => {
-  it("every tab in the wheel is legibly lettered", () => {
+  it("every division's tab is legibly lettered", () => {
     // The rail shipped white-on-everything until this was measured: white on the
     // chrome board is 2.09:1. A division added later must not reintroduce that.
-    for (const hue of WHEEL) {
-      const board = parseHex(hue);
-      const lettering = parseHex(letteringOn(hue));
-
-      expect(contrast(board!, lettering!)).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  it("every division's tab is legibly lettered", () => {
     for (const div of DIVISIONS) {
       const board = parseHex(div.hue);
       const lettering = parseHex(letteringOn(div.hue));

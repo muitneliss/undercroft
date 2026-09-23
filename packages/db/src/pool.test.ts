@@ -1,45 +1,31 @@
-import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { createTestDatabase, type TestDatabase } from "./testing.ts";
+import { describe, expect, test as it } from "bun:test";
+import { types } from "pg";
+import { pinTypeParsers } from "./pool.ts";
 
-let db: TestDatabase;
+const NUMERIC_OID = 1700;
+const INT8_OID = 20;
 
-beforeEach(async () => {
-  db = await createTestDatabase();
-});
+/**
+ * `pg`'s own defaults already hand both types back as text, so asserting the parser after an
+ * import proves nothing: it would pass with `pinTypeParsers` emptied. What the pin exists for
+ * is a default that has moved, so each test installs one first -- a parser that answers
+ * something other than the text it was given -- and asserts the pin takes it back.
+ */
+describe("money-shaped types come back from pg as the text Postgres sent", () => {
+  it("numeric is its own digits, whatever default was installed before", () => {
+    types.setTypeParser(NUMERIC_OID, () => "a default that moved");
 
-afterEach(async () => {
-  await db.close();
-});
+    pinTypeParsers();
 
-describe("money-shaped types come back as strings", () => {
-  it("numeric is a string, not a float", async () => {
-    // The whole point: a numeric(18,4) that arrives as a JS number has already lost
-    // precision past a double, and one careless read turns it into a float.
-    const { rows } = await db.query<{ amount: string }>(
-      "SELECT 8500.0001::numeric(18,4) AS amount",
-    );
-    expect(typeof rows[0]?.amount).toBe("string");
-    expect(rows[0]?.amount).toBe("8500.0001");
+    expect(types.getTypeParser(NUMERIC_OID)("8500.0001")).toBe("8500.0001");
   });
 
-  it("a 25-digit numeric survives", async () => {
-    const { rows } = await db.query<{ big: string }>(
-      "SELECT 1234567890123456789012345::numeric AS big",
-    );
-    expect(rows[0]?.big).toBe("1234567890123456789012345");
-  });
+  it("an int8 past 2^53 keeps every digit", () => {
+    // 2^53 + 1 is the first integer a double cannot hold: as a float it reads back as ...992.
+    types.setTypeParser(INT8_OID, () => "a default that moved");
 
-  it("int8 is never a lossy float, so a large id is not rounded", async () => {
-    // The rule is "never a float", not "always a string". PGlite returns int8 as a JS
-    // `bigint` (exact); `pg` returns it as a string via the pinned parser. Both are
-    // lossless. This gate test asserts the safety property that holds in both; the
-    // pg-specific string representation is pinned in the integration tier against real
-    // Postgres, where a future pg default could otherwise flip it to a double.
-    const { rows } = await db.query<{ id: string | bigint }>(
-      "SELECT 90071992547409911::int8 AS id",
-    );
-    const id = rows[0]?.id;
-    expect(typeof id).not.toBe("number");
-    expect(String(id)).toBe("90071992547409911");
+    pinTypeParsers();
+
+    expect(types.getTypeParser(INT8_OID)("9007199254740993")).toBe("9007199254740993");
   });
 });

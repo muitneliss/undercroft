@@ -6,63 +6,33 @@
  * the way in fail for different reasons and are read at different times.
  */
 
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import type { SqlExecutor } from "@undercroft/db";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { startConsent } from "../services/oauth.ts";
 
 const TENANT = "CASE-0042";
 const ADMIN = { userId: "", email: "ada@example.test" };
-const TOKEN_URL = "https://oauth2.googleapis.test/token";
 
 let db: TestDatabase;
-/** What the token endpoint will answer. Set per test; no network, no mock. */
-let tokenResponse: { status: number; body: unknown };
 
-const ID_TOKEN = `header.${Buffer.from(
-  JSON.stringify({ sub: "108134092834092834", email: "ops@acme.test" }),
-).toString("base64url")}.signature`;
-
+/**
+ * No token endpoint and no `fetch`: starting a consent only builds a URL and writes a
+ * handshake row. The exchange is the callback's, in `oauth.test.ts`.
+ */
 const google = {
   clientId: "ingest.apps.googleusercontent.test",
   clientSecret: "ingest-secret",
   publicUrl: "https://undercroft.test",
   authorizeUrl: "https://accounts.google.test/o/oauth2/v2/auth",
-  tokenUrl: TOKEN_URL,
-  // A real function standing in for the platform's fetch, not a spy: it answers from the
-  // variable above and refuses anything it was not set up for.
-  fetch: (url: string) => {
-    if (url !== TOKEN_URL) {
-      return Promise.reject(new Error(`unexpected fetch to ${url}`));
-    }
-    return Promise.resolve(
-      new Response(JSON.stringify(tokenResponse.body), { status: tokenResponse.status }),
-    );
-  },
 };
 
-beforeEach(async () => {
-  db = await createTestDatabase();
-  await migrate(db);
-  await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
-  ADMIN.userId = await seedUser(ADMIN.email, "admin");
-  tokenResponse = {
-    status: 200,
-    body: {
-      access_token: "at",
-      refresh_token: "rt",
-      expires_in: 3599,
-      scope: "https://www.googleapis.com/auth/gmail.readonly",
-      id_token: ID_TOKEN,
-    },
-  };
-  await db.become("undercroft_app");
-});
-
-afterEach(async () => {
-  await db.close();
-});
+/** For the refusals, which are decided before any statement runs: a query here fails loudly. */
+const noDatabase: SqlExecutor = {
+  query: () => Promise.reject(new Error("a refused consent must not touch the database")),
+  exec: () => Promise.reject(new Error("a refused consent must not touch the database")),
+};
 
 async function seedUser(email: string, role: string): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
@@ -91,6 +61,17 @@ async function beginConsent(source = "gmail"): Promise<string> {
 }
 
 describe("starting a consent", () => {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+    ADMIN.userId = await seedUser(ADMIN.email, "admin");
+    await db.become("undercroft_app");
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
   it("the authorize URL asks for offline access and forces the consent screen", async () => {
     // Both are required. Without `access_type=offline` Google issues no refresh token at
     // all; without `prompt=consent` it issues one only on the very first consent, so a
@@ -138,28 +119,6 @@ describe("starting a consent", () => {
     expect(rows[0]?.state_sha256).toHaveLength(64);
   });
 
-  it("an unconfigured ingest client refuses rather than building a broken URL", async () => {
-    const started = await startConsent(
-      { exec: db },
-      {
-        tenantId: TENANT,
-        source: "gmail",
-        startedBy: ADMIN.userId,
-      },
-    );
-
-    expect(started).toEqual({ ok: false, reason: "not-configured" });
-  });
-
-  it("an unsupported source is refused", async () => {
-    const started = await startConsent(
-      { exec: db, google },
-      { tenantId: TENANT, source: "hubspot", startedBy: ADMIN.userId },
-    );
-
-    expect(started).toEqual({ ok: false, reason: "unsupported-source" });
-  });
-
   it("xero goes to Xero's authorize endpoint, with its own callback and no PKCE", async () => {
     // A confidential client with a secret: Xero takes it in a Basic header at the token
     // endpoint and reserves PKCE for clients that have none. `offline_access` is what makes
@@ -186,11 +145,35 @@ describe("starting a consent", () => {
     expect(url.searchParams.get("code_challenge")).toBeNull();
     expect(url.searchParams.get("client_id")).toBe("xero-client");
   });
+});
+
+describe("a consent that cannot start is refused before anything is written", () => {
+  it("an unconfigured ingest client refuses rather than building a broken URL", async () => {
+    const started = await startConsent(
+      { exec: noDatabase },
+      {
+        tenantId: TENANT,
+        source: "gmail",
+        startedBy: "",
+      },
+    );
+
+    expect(started).toEqual({ ok: false, reason: "not-configured" });
+  });
+
+  it("an unsupported source is refused", async () => {
+    const started = await startConsent(
+      { exec: noDatabase, google },
+      { tenantId: TENANT, source: "hubspot", startedBy: "" },
+    );
+
+    expect(started).toEqual({ ok: false, reason: "unsupported-source" });
+  });
 
   it("xero with no Xero client configured is refused, even with Google configured", async () => {
     const started = await startConsent(
-      { exec: db, google },
-      { tenantId: TENANT, source: "xero", startedBy: ADMIN.userId },
+      { exec: noDatabase, google },
+      { tenantId: TENANT, source: "xero", startedBy: "" },
     );
 
     expect(started).toEqual({ ok: false, reason: "not-configured" });

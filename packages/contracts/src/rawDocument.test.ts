@@ -5,18 +5,14 @@ const IDENTITY = { source: "gmail", tenantId: "CASE-0042", documentId: "19a2f:00
 
 describe("document keys", () => {
   it("a key is prefix plus id, and nothing else", () => {
+    // Under `documents/`, never `records/`: the record loader decodes every journalled
+    // object as JSON text, which a PDF is not.
     expect(documentKeyOf(IDENTITY)).toBe("documents/gmail/CASE-0042/19a2f:001");
   });
 
   it("the prefix is what a tenant's documents share", () => {
     expect(documentPrefixOf(IDENTITY)).toBe("documents/gmail/CASE-0042");
     expect(documentKeyOf(IDENTITY).startsWith(documentPrefixOf(IDENTITY))).toBe(true);
-  });
-
-  it("documents do not share the records prefix", () => {
-    // They are loaded by a different mechanism: the record loader decodes every journalled
-    // object as JSON text, which a PDF is not.
-    expect(documentKeyOf(IDENTITY).startsWith("records/")).toBe(false);
   });
 });
 

@@ -20,8 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { createStampSource, TestClock } from "@undercroft/core";
-import { migrate } from "@undercroft/db";
-import { createTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
@@ -60,8 +59,7 @@ let specsDir: string;
 
 beforeEach(async () => {
   lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
-  db = await createTestDatabase();
-  await migrate(db);
+  db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-1')");
   await db.exec("CREATE TABLE raw.records_demo PARTITION OF raw.records FOR VALUES IN ('demo')");
   specsDir = mkdtempSync(join(tmpdir(), "undercroft-specs-"));
@@ -154,15 +152,11 @@ describe("the second run asks the source for less", () => {
 });
 
 describe("a watermark is only ever handed back under the format it was written in", () => {
-  it("answers the stored value when the format still matches", async () => {
-    await writeSyncCursor(db, STREAM, { watermark: "900", format: "epoch-millis" });
-
-    expect(await readSyncCursor(db, STREAM, "epoch-millis")).toBe("900");
-  });
-
   it("answers nothing when the spec has changed format under it", async () => {
     // One honest full read, rather than comparing two incompatible renderings of an instant
-    // and being silently wrong about which is later.
+    // and being silently wrong about which is later. The quiet side -- the same format answers
+    // the stored value -- is "stays where it was when an incremental read finds nothing new",
+    // which writes this cursor and reads it back through a whole run.
     await writeSyncCursor(db, STREAM, { watermark: "900", format: "epoch-millis" });
 
     expect(await readSyncCursor(db, STREAM, "iso8601")).toBeNull();
