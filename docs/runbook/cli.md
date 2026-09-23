@@ -6,13 +6,25 @@ how to change it.
 
 ## Running it
 
-| Where                     | Command                                                                                                                                 |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| In this repo              | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                                               |
-| Anywhere, a released CLI  | `v=X.Y.Z; npx -y --package="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz" undercroft <command>` |
-| For an agent, via a skill | `npx skills add muitneliss/undercroft --skill undercroft-cli [--agent claude-code\|codex] -y`                                           |
+| Where                        | Command                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| In this repo                 | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                                |
+| Anywhere, the newest release | `npm install -g https://github.com/muitneliss/undercroft/releases/latest/download/undercroft-cli.tgz`                    |
+| Anywhere, one exact release  | `v=X.Y.Z; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"`         |
+| For an agent, via a skill    | `npx skills add muitneliss/undercroft --skill undercroft-cli [--agent claude-code\|codex] -y`, and the skill installs it |
 
-It needs Node 22 or newer.
+It needs Node 22 or newer. `npm uninstall -g undercroft-cli` removes it.
+
+Each release attaches the same tarball twice, as `undercroft-cli-X.Y.Z.tgz` and as
+`undercroft-cli.tgz`. GitHub resolves `releases/latest/download/<name>` only for a name that
+every release shares, so the unversioned copy is what gives "the newest release" one fixed
+URL. `task cd:cli-upload` attaches both. ADR 0046.
+
+The skill pins its release instead of taking the newest one, because its text documents one
+release's commands and error codes. Before its first command, the agent runs
+`undercroft --version`. It installs the pinned release when the CLI is missing, and asks the
+person first when a different release is installed. When a global install is refused, it
+runs the same pinned URL through `npx` instead.
 
 The version is written ONCE, in `v`, because release-please's generic updater rewrites only
 the first version on a line. The 1.20.0 release bumped the tag in the pinned URL and left the
@@ -72,10 +84,10 @@ It never prints the session itself.
   `@undercroft/control-plane/testing`.
 - **The package** is checked by `task ci:cli-pack-check`, which packs the tarball and runs it
   through `npx`. **The skill** is checked by `task ci:skill-check`, which needs the network.
-- **A release** attaches the tarball on its own. The `release-cli` job in `release.yml` runs
-  `task build:cli-pack`, then `task cd:cli-upload TAG=vX.Y.Z`. release-please bumps the version
-  in `skills/undercroft-cli/SKILL.md`, `README.md` and `apps/cli/package.json` along with the
-  root.
+- **A release** attaches the tarball on its own, under both names. The `release-cli` job in
+  `release.yml` runs `task build:cli-pack`, then `task cd:cli-upload TAG=vX.Y.Z`.
+  release-please bumps the version in `skills/undercroft-cli/SKILL.md`, `README.md` and
+  `apps/cli/package.json` along with the root.
 
 ## When it goes wrong
 
@@ -86,3 +98,4 @@ It never prints the session itself.
 | `WRITES_DISABLED`                                | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                       |
 | `NETWORK_ERROR` against a URL that is up         | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it. |
 | No colour in human mode                          | `--no-color`, or `NO_COLOR` set in the environment.                                                               |
+| `npm install -g` fails with `EACCES`             | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                        |

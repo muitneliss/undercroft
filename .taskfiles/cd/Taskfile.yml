@@ -46,15 +46,23 @@ tasks:
 
   cli-upload:
     desc: >-
-      Attach the packed CLI to the GitHub release TAG (after task build:cli-pack). Usage:
-      task cd:cli-upload TAG=v1.2.3 -- needs GH_TOKEN. What the skill's pinned URL fetches.
+      Attach the packed CLI to the GitHub release TAG (after task build:cli-pack), under its
+      versioned name and as undercroft-cli.tgz. Usage: task cd:cli-upload TAG=v1.2.3 -- needs
+      GH_TOKEN. The versioned file is what the skill pins; the plain one is what the README's
+      releases/latest/download URL installs.
     requires:
       vars: [TAG]
+    vars:
+      VERSIONED: apps/cli/dist/undercroft-cli-{{trimPrefix "v" .TAG}}.tgz
+      LATEST: apps/cli/dist/undercroft-cli.tgz
     cmds:
       # Delivery, but not to Dokploy: a release asset is how the CLI is published (ADR 0044).
       # The file is named from the tag rather than globbed, so a stale tarball in dist/ from
       # another version can never be the one attached. --clobber makes a re-run replace it.
-      - gh release upload {{.TAG}} apps/cli/dist/undercroft-cli-{{trimPrefix "v" .TAG}}.tgz --clobber
+      # The unversioned copy is the same bytes: GitHub resolves releases/latest/download/<name>
+      # only for a name every release shares, which a versioned name never is (ADR 0046).
+      - cp {{.VERSIONED}} {{.LATEST}}
+      - gh release upload {{.TAG}} {{.VERSIONED}} {{.LATEST}} --clobber
 
   release:
     desc: "The full manual deploy sequence from docs/runbook/deployment.md. Usage: task cd:release TAG=v1.2.3"

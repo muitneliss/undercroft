@@ -39,10 +39,12 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Attach the CLI to the release: `undercroft-cli-X.Y.Z.tgz`, the file the skill's pinned
-  # `npx --package=<URL>` fetches. A GitHub release asset rather than an npm package, so the
-  # tag that deploys a server is the one place its matching CLI is published from. Its own job,
-  # needing only the release: it neither waits for the images nor holds up the deploy.
+  # Attach the CLI to the release: `undercroft-cli-X.Y.Z.tgz`, the file the skill's pinned URL
+  # installs, and the same bytes as `undercroft-cli.tgz`, which the README's
+  # `releases/latest/download` URL installs (ADR 0046). A GitHub release asset rather than an
+  # npm package, so the tag that deploys a server is the one place its matching CLI is
+  # published from. Its own job, needing only the release: it neither waits for the images nor
+  # holds up the deploy.
   release-cli:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'

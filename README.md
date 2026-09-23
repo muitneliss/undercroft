@@ -74,21 +74,28 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 
 ## From a terminal, or from an agent
 
-Every release attaches the CLI as a tarball, and it runs on Node 22 or newer. Run the
-current release through `npx`:
+The `undercroft` CLI needs Node 22 or newer. Use either of the two ways below to get it.
+Choose by who will type the commands, you or your agent.
+
+### Install it yourself
+
+```sh
+npm install -g https://github.com/muitneliss/undercroft/releases/latest/download/undercroft-cli.tgz
+undercroft --help
+```
+
+That installs the newest release. Run the same line again to upgrade, and run
+`npm uninstall -g undercroft-cli` to remove it. To install one exact release instead:
 
 <!-- x-release-please-start-version -->
 
 ```sh
-v=1.21.0
-tgz="https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
-undercroft() { npx -y --package="$tgz" undercroft "$@"; }
-undercroft --help
+v=1.21.0; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
 ```
 
 <!-- x-release-please-end -->
 
-That defines `undercroft` for the current shell, so the rest reads as plain commands:
+Then point it at your server and sign in:
 
 ```sh
 undercroft config set-profile prod --url https://undercroft.example.test
@@ -96,16 +103,33 @@ undercroft auth login          # the same emailed code as the web sign-in
 undercroft runs list           # asks which customer
 ```
 
-An agent such as Claude Code or Codex gets it as a skill, which runs the pinned release with
-`--agent`, so every answer is one JSON envelope:
+Writes are off for each profile until you turn them on. To allow them, run
+`undercroft config set-profile prod --allow-writes`.
+
+### Let your agent install it
+
+Claude Code, Codex and other agents get the CLI through a skill. You install the skill, and
+the skill installs the CLI:
 
 ```sh
-npx skills add muitneliss/undercroft --skill undercroft-cli --agent claude-code -y
+npx skills add muitneliss/undercroft --skill undercroft-cli --agent claude-code -y   # or --agent codex
 ```
 
-Signing in and allowing writes stay a person's job. The CLI refuses an agent that tries
-either. See [docs/runbook/cli.md](docs/runbook/cli.md) and
-[ADR 0044](docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md).
+Then ask for the task in plain words, for example "list the latest runs for CASE-0042". On
+first use the agent checks for `undercroft`. When the CLI is missing, or is a different
+release from the one the skill was written for, the agent installs that release with
+`npm install -g` and tells you. It passes `--agent` to every command, so each answer is one
+JSON envelope it can read.
+
+Two steps stay yours, and the CLI refuses an agent that tries either:
+
+- **Signing in.** The agent asks you for the code that arrives by email.
+- **Allowing writes.** Run `undercroft config set-profile <name> --allow-writes` in your own
+  terminal.
+
+See [docs/runbook/cli.md](docs/runbook/cli.md),
+[ADR 0044](docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md) and
+[ADR 0046](docs/adr/0046-the-cli-installs-once-from-the-latest-release.md).
 
 ## Design rules
 
