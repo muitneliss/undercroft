@@ -455,7 +455,10 @@
         "apps/ui/src/routes/Lake.tsx",
         "apps/ui/src/routes/ModelEditor.tsx",
         "apps/ui/src/routes/Question.tsx",
-        "packages/db/src/pool.ts"
+        "packages/db/src/pool.ts",
+        // `@tradetrust-tt/dnsprove` declares `"types": "dist/ts"`, a directory, which `tsc`
+        // resolves to its `index.d.ts` and Biome reports as "found directory without index".
+        "apps/worker/src/services/extract/openAttestationVerify.ts"
       ],
       "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } }
     },
@@ -546,7 +549,12 @@
         // scores; the alternative is a committed `.docx` binary, and a gold document nobody in
         // the repo can read or edit is worse than a lint exception. `testing.ts` writes the
         // containers for the same reason.
-        "apps/worker/src/services/extract/goldSet.ts"
+        "apps/worker/src/services/extract/goldSet.ts",
+        // Two names the OpenAttestation and DID specifications define --
+        // `OpenAttestationSignature2018` and `EcdsaSecp256k1RecoveryMethod2020` -- long,
+        // camel-cased and numbered, which is what the entropy score counts.
+        "apps/worker/src/services/extract/openAttestation.ts",
+        "apps/worker/src/services/extract/openAttestationVerify.ts"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
     },

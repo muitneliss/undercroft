@@ -428,9 +428,10 @@ export const en = {
     anyFileTypeHint:
       "Choosing no file type means every file type is read. That is a deliberate choice, not an empty one.",
     fileTypesCustomLabel: "Add another file type",
-    fileTypesCustomPlaceholder: "e.g. image/png",
+    fileTypesCustomPlaceholder: "e.g. image/png or .oa",
     fileTypesCustomAdd: "Add",
-    fileTypesCustomInvalid: "Enter a file type as type/subtype, such as image/png.",
+    fileTypesCustomInvalid:
+      "Enter a file type as type/subtype, such as image/png, or a file extension starting with a dot, such as .oa.",
   },
 
   scope: {
@@ -456,12 +457,24 @@ export const en = {
     fileTypePdf: "PDF",
     fileTypeDocx: "Word document (.docx)",
     fileTypeDoc: "Word document (.doc)",
+    fileTypeGoogleDoc: "Google Docs",
     fileTypeXlsx: "Excel spreadsheet (.xlsx)",
+    fileTypeXlsm: "Macro-enabled Excel workbook (.xlsm)",
     fileTypeXls: "Excel spreadsheet (.xls)",
+    fileTypeGoogleSheet: "Google Sheets",
+    fileTypeGoogleSlides: "Google Slides",
     fileTypeCsv: "CSV file",
     fileTypeTxt: "Plain text",
+    fileTypeMarkdown: "Markdown (.md)",
+    fileTypeHtml: "Web page (.html)",
+    fileTypeMhtml: "Saved web page archive (.mhtml)",
+    fileTypeEml: "Email saved as a file (.eml)",
+    fileTypeXml: "XML, including XBRL filings (.xml)",
+    fileTypeJson: "JSON",
+    fileTypeOpenAttestation: "Signed OpenAttestation record (.oa)",
     fileTypeJpeg: "JPEG image",
     fileTypePng: "PNG image",
+    fileTypeWebp: "WebP image",
   },
 
   when: {

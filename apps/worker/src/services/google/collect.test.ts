@@ -1131,6 +1131,59 @@ describe("drive", () => {
     expect(result.documents.created).toBe(1);
   });
 
+  it("a Google Doc is exported and catalogued as the export, never downloaded", async () => {
+    // A Google-native file is a pointer with no bytes: `alt=media` has no route here, so a
+    // collector that tried to download it fails this test rather than landing an empty file.
+    const googleDoc = "application/vnd.google-apps.document";
+    const docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "Contracts", kind: "folder" }],
+      fileTypes: [googleDoc],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", [googleDoc]), {
+        body: {
+          files: [{ ...file("g1", googleDoc), name: "Services Agreement", size: undefined }],
+        },
+      })
+      .on("GET", `${DRIVE}/g1/export?mimeType=${encodeURIComponent(docx)}`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(1);
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((r) => r.content_type)).toEqual([docx]);
+  });
+
+  it("a .oa that Drive calls octet-stream lands as JSON; another octet-stream file does not", async () => {
+    // Drive's `q=` cannot filter by name, so the listing asks for every octet-stream file and
+    // the name decides. `bin1` has no bytes route: landing it would fail the test.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "Registry", kind: "folder" }],
+      fileTypes: [".oa"],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1", ["application/octet-stream"]), {
+        body: {
+          files: [
+            { ...file("oa1", "application/octet-stream"), name: "Business Profile.oa" },
+            { ...file("bin1", "application/octet-stream"), name: "Acme Pte. Ltd." },
+          ],
+        },
+      })
+      .on("GET", `${DRIVE}/oa1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.refusals).toEqual([]);
+    const { rows } = await db.query<{ document_id: string; content_type: string }>(
+      "SELECT document_id, content_type FROM raw.documents",
+    );
+    expect(rows).toEqual([{ document_id: "oa1", content_type: "application/json" }]);
+  });
+
   it("a folder listing's query is built from the chosen allow-list", async () => {
     // If the implementation forgot to thread `fileTypes` into the query, this listing's URL
     // would not match anything registered and the refusing fetcher would fail the test loudly.

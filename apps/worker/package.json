@@ -10,12 +10,18 @@
     "dev": "bun --watch src/server.ts"
   },
   "dependencies": {
-    "@undercroft/core": "workspace:*",
+    "@tradetrust-tt/dnsprove": "2.21.1",
+    "@tradetrust-tt/tt-verify": "9.7.6",
+    "@undercroft/connector-runtime": "workspace:*",
     "@undercroft/contracts": "workspace:*",
+    "@undercroft/core": "workspace:*",
     "@undercroft/crypto": "workspace:*",
     "@undercroft/db": "workspace:*",
     "@undercroft/lake": "workspace:*",
-    "@undercroft/connector-runtime": "workspace:*",
+    "did-resolver": "4.1.0",
     "hono": "4.6.14"
+  },
+  "devDependencies": {
+    "@tradetrust-tt/tradetrust": "6.10.4"
   }
 }

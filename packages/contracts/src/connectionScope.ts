@@ -28,7 +28,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Which MIME types a Gmail or Drive connection may land, shared by both scopes.
+ * Which file types a Gmail or Drive connection may land, shared by both scopes: MIME types,
+ * and extensions such as `.oa` for a format that has none. `fileFormats.ts` says how a file is
+ * matched against them.
  *
  * Empty is the same *recorded decision* idiom as `GmailScope.labels` and `XeroScope.entities`
  * below: it means every file type, not an absent choice. The default is `application/pdf`
@@ -154,14 +156,4 @@ export function parseScope(source: string, selectionJson: string): ConnectionSco
 
   const parsed = ConnectionScope.safeParse({ ...raw, kind });
   return parsed.success ? parsed.data : null;
-}
-
-/**
- * Whether a landed file's MIME type is one a Gmail or Drive scope agreed to.
- *
- * The one place "empty means every type" is decided, so `drive.ts` and `gmail.ts` never each
- * reimplement the rule -- and never quietly disagree on it.
- */
-export function allowsFileType(fileTypes: readonly string[], mimeType: string): boolean {
-  return fileTypes.length === 0 || fileTypes.includes(mimeType);
 }

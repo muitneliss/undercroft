@@ -9,7 +9,7 @@ import { translatorFor } from "@/i18n/index.ts";
 import {
   CURATED_FILE_TYPES,
   describeFileType,
-  isPlausibleMimeType,
+  isPlausibleFileType,
   normalizeFileType,
 } from "./fileTypes.ts";
 
@@ -29,13 +29,19 @@ describe("describeFileType", () => {
   });
 });
 
-describe("isPlausibleMimeType", () => {
+describe("isPlausibleFileType", () => {
   it("accepts a type/subtype shape and refuses anything else a form could carry", () => {
-    expect(isPlausibleMimeType("image/png")).toBe(true);
-    expect(isPlausibleMimeType("application/vnd.ms-excel")).toBe(true);
-    expect(isPlausibleMimeType("notamimetype")).toBe(false);
-    expect(isPlausibleMimeType("")).toBe(false);
-    expect(isPlausibleMimeType("a/b/c")).toBe(false);
+    expect(isPlausibleFileType("image/png")).toBe(true);
+    expect(isPlausibleFileType("application/vnd.ms-excel")).toBe(true);
+    expect(isPlausibleFileType("notamimetype")).toBe(false);
+    expect(isPlausibleFileType("")).toBe(false);
+    expect(isPlausibleFileType("a/b/c")).toBe(false);
+  });
+
+  it("accepts an extension such as .oa, and refuses one no file name could end in", () => {
+    expect(isPlausibleFileType(".oa")).toBe(true);
+    expect(isPlausibleFileType(".x b")).toBe(false);
+    expect(isPlausibleFileType(".1")).toBe(false);
   });
 });
 

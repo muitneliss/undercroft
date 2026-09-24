@@ -535,9 +535,10 @@ export const vi = {
     anyFileTypeHint:
       "Không chọn loại tệp nào nghĩa là đọc mọi loại tệp. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
     fileTypesCustomLabel: "Thêm loại tệp khác",
-    fileTypesCustomPlaceholder: "vd: image/png",
+    fileTypesCustomPlaceholder: "vd: image/png hoặc .oa",
     fileTypesCustomAdd: "Thêm",
-    fileTypesCustomInvalid: "Nhập loại tệp theo dạng loại/loại-con, ví dụ image/png.",
+    fileTypesCustomInvalid:
+      "Nhập loại tệp theo dạng loại/loại-con, ví dụ image/png, hoặc một đuôi tệp bắt đầu bằng dấu chấm, ví dụ .oa.",
   },
 
   scope: {
@@ -560,12 +561,24 @@ export const vi = {
     fileTypePdf: "PDF",
     fileTypeDocx: "Tài liệu Word (.docx)",
     fileTypeDoc: "Tài liệu Word (.doc)",
+    fileTypeGoogleDoc: "Google Tài liệu",
     fileTypeXlsx: "Bảng tính Excel (.xlsx)",
+    fileTypeXlsm: "Bảng tính Excel có macro (.xlsm)",
     fileTypeXls: "Bảng tính Excel (.xls)",
+    fileTypeGoogleSheet: "Google Trang tính",
+    fileTypeGoogleSlides: "Google Trang trình bày",
     fileTypeCsv: "Tệp CSV",
     fileTypeTxt: "Văn bản thuần",
+    fileTypeMarkdown: "Markdown (.md)",
+    fileTypeHtml: "Trang web (.html)",
+    fileTypeMhtml: "Trang web lưu trọn gói (.mhtml)",
+    fileTypeEml: "Thư điện tử lưu thành tệp (.eml)",
+    fileTypeXml: "XML, gồm báo cáo XBRL (.xml)",
+    fileTypeJson: "JSON",
+    fileTypeOpenAttestation: "Hồ sơ OpenAttestation có chữ ký số (.oa)",
     fileTypeJpeg: "Ảnh JPEG",
     fileTypePng: "Ảnh PNG",
+    fileTypeWebp: "Ảnh WebP",
   },
 
   /** Dates in the operator's terms. Chosen by `@/lib/when`. */
