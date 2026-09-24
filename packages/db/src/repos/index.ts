@@ -59,6 +59,7 @@ export {
 export {
   claimExternalRun,
   claimFailedRuns,
+  claimRecoveredRuns,
   closeAbandoned,
   closeRun,
   entitiesForRuns,
@@ -81,6 +82,7 @@ export {
   recordRefusalReasons,
   recordRefusals,
   recordSteps,
+  type RecoveredRunNotice,
   refusalsFor,
   type Run,
   type RunEntity,

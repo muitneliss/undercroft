@@ -4,8 +4,8 @@
  * Three notices, each sent at most once: a run that failed, a grant about to lapse, and an
  * ingest key about to expire. "At most once" is a property of the claim, not of this
  * module -- each repo claims its rows with one UPDATE that marks and returns, so a second
- * tick or a second replica finds nothing to send. What is decided here is who is told, in
- * which language, and in what words.
+ * tick or a second replica finds nothing to send. What is decided here is who is told, on
+ * which channel; the words are `alertEmails.ts`'s and `syncCards.ts`'s.
  *
  * A failure is told to the tenant's admins in each one's own language; a tenant with no
  * admin falls back to the platform's superadmins, in the default language, because the
@@ -17,6 +17,14 @@
  * Repeats are suppressed for a day per (tenant, source, verb) after a notice goes out, and
  * the email says so; a successful run in between resets the window. `claimFailedRuns`
  * decides that in SQL and answers `suppressed` for the runs it applied it to.
+ *
+ * A failure the admins are emailed about is also posted to the platform operators' Lark group,
+ * when the deployment names one, and so is the success that next ends it -- the group reads
+ * sync status across every customer, and a red card with no green one after it would read as
+ * a sync still down. The recovery is Lark's alone: an admin was told the data would not change
+ * until a later run succeeded, and that later run is visible on the screen they were linked
+ * to. Either channel may be absent. What only email carries -- grants and keys -- is not
+ * claimed without email, since a claim with nobody told is a notice lost.
  */
 
 import {
@@ -24,9 +32,8 @@ import {
   describeError,
   type EmailMessage,
   type EmailSender,
-  type Locale,
+  type LarkNotice,
   type Logger,
-  postEmailLeaf,
 } from "@undercroft/core";
 import { MULTI_ACCOUNT_KINDS, sourceKind } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
@@ -34,32 +41,25 @@ import {
   claimExpiringGrants,
   claimExpiringKeys,
   claimFailedRuns,
+  claimRecoveredRuns,
   readConnectionDetail,
-  SOURCE_OF_TRANSFORM,
 } from "@undercroft/db/repos";
 
-import { messages } from "../i18n/index.ts";
 import { listAdmins, type Recipient } from "../repos/membership.ts";
+import { failedRunMessage, grantExpiringMessage, keyExpiringMessage } from "./alertEmails.ts";
 import type { Superadmins } from "./superadmin.ts";
+import { failedRunCard, recoveredRunCard } from "./syncCards.ts";
 
 /** How far ahead a grant or a key is warned about. A week is a working week to act in. */
 export const WARN_DAYS = 7;
 
-/**
- * The vendors' own names, untranslated in both languages -- the same rule the interface
- * follows. A source this build has no name for keeps its id rather than being dropped.
- */
-const SOURCE_NAMES: Readonly<Record<string, string>> = {
-  hubspot: "HubSpot",
-  xero: "Xero",
-  gmail: "Gmail",
-  drive: "Google Drive",
-};
-
 export interface AlertDeps {
   readonly exec: SqlExecutor;
-  readonly email: EmailSender;
-  /** The origin a link in an email points at. */
+  /** Absent: nothing is emailed, and grants and keys are not claimed. */
+  readonly email?: EmailSender;
+  /** Posts a card to the operators' Lark group. Absent: failures are emailed only. */
+  readonly lark?: (notice: LarkNotice) => Promise<void>;
+  /** The origin a link in an email or a card points at. */
   readonly publicUrl: string;
   /** Who is told about a tenant that has no administrator of its own. */
   readonly superadmins: Superadmins;
@@ -71,34 +71,12 @@ export interface AlertSummary {
   readonly failures: number;
   /** Failures claimed and deliberately not sent, within a day of a sent notice. */
   readonly suppressed: number;
+  /** Successes that ended an announced failure, posted to Lark. */
+  readonly recoveries: number;
   readonly grants: number;
   readonly keys: number;
-  /** Messages the sender refused or could not deliver. Logged; never retried. */
+  /** Messages or cards the channel refused or could not deliver. Logged; never retried. */
   readonly undeliverable: number;
-}
-
-/**
- * Which CLDR locale writes a date for each language, in the platform's fixed zone -- the
- * same table and the same zone `apps/ui/src/lib/when.ts` uses, so an email and the screen
- * beside it never disagree by an hour.
- */
-const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
-
-function formatWhen(iso: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(CLDR[locale], {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Singapore",
-  }).format(new Date(iso));
-}
-
-/** The vendor's name for any account of it: a second mailbox is still Gmail. */
-function sourceName(source: string): string {
-  return SOURCE_NAMES[sourceKind(source)] ?? source;
 }
 
 /**
@@ -120,133 +98,20 @@ async function accountLabelOf(
   return detail?.accountLabel ?? "";
 }
 
-/** What an admin is told about a run that failed. Pure: composing is a decision, sending is transport. */
-export function failedRunMessage(
-  to: Recipient,
-  input: {
-    tenantId: string;
-    source: string;
-    verb: string;
-    runId: string;
-    endedAt: string;
-    error: string | null;
-    publicUrl: string;
-    /** The mailbox or Drive account that failed, where the source may hold several. */
-    account?: string;
-  },
-): EmailMessage {
-  const t = messages(to.locale);
-  const isModelBuild = input.source === SOURCE_OF_TRANSFORM;
-  const source = isModelBuild ? t("runFailed.models") : sourceName(input.source);
-  // Two whole sentences, never the build's name spliced into the sync's: see `modelsSubject`.
-  const subject = isModelBuild
-    ? t("runFailed.modelsSubject", { tenantId: input.tenantId })
-    : t("runFailed.subject", { source, tenantId: input.tenantId });
-  const account = input.account ?? "";
-  return postEmailLeaf(to.email, {
-    locale: to.locale,
-    subject,
-    runningHead: input.tenantId,
-    heading: t("runFailed.heading"),
-    lead: t("runFailed.lead"),
-    colophon: t("email.colophon"),
-    blocks: [
-      {
-        kind: "schedule",
-        rows: [
-          { label: t("email.source"), value: source },
-          ...(account === "" ? [] : [{ label: t("email.account"), value: account }]),
-          { label: t("email.customer"), value: input.tenantId },
-          { label: t("email.when"), value: formatWhen(input.endedAt, to.locale) },
-        ],
-      },
-      // The one errata slip in the family, because this is the one message that IS a
-      // correction. A run with no recorded reason keeps its sentence rather than becoming
-      // an em dash: a blank correction slip reads as a slip somebody forgot to write.
-      { kind: "errata", mark: t("email.errata"), text: input.error ?? t("runFailed.noReason") },
-      {
-        kind: "plate",
-        label: t("runFailed.action"),
-        href: `${input.publicUrl}/tenants/${input.tenantId}/journal/${input.runId}`,
-      },
-      { kind: "note", text: t("runFailed.repeats") },
-    ],
-  });
-}
-
-export function grantExpiringMessage(
-  to: Recipient,
-  input: { tenantId: string; source: string; grantExpiresAt: string; publicUrl: string },
-): EmailMessage {
-  const t = messages(to.locale);
-  return postEmailLeaf(to.email, {
-    locale: to.locale,
-    subject: t("grantExpiring.subject", {
-      source: sourceName(input.source),
-      tenantId: input.tenantId,
-    }),
-    runningHead: input.tenantId,
-    heading: t("grantExpiring.heading"),
-    lead: t("grantExpiring.lead"),
-    colophon: t("email.colophon"),
-    blocks: [
-      {
-        kind: "schedule",
-        rows: [
-          { label: t("email.source"), value: sourceName(input.source) },
-          { label: t("email.customer"), value: input.tenantId },
-          // Umber, the pending mark's tone. A thing about to lapse has not lapsed, and
-          // vermilion belongs to the correction slip alone.
-          {
-            label: t("email.expires"),
-            value: formatWhen(input.grantExpiresAt, to.locale),
-            tone: "pending",
-          },
-        ],
-      },
-      {
-        kind: "plate",
-        label: t("grantExpiring.action"),
-        href: `${input.publicUrl}/tenants/${input.tenantId}`,
-      },
-    ],
-  });
-}
-
-export function keyExpiringMessage(
-  to: Recipient,
-  input: { tenantId: string; label: string; expiresAt: string; publicUrl: string },
-): EmailMessage {
-  const t = messages(to.locale);
-  return postEmailLeaf(to.email, {
-    locale: to.locale,
-    subject: t("keyExpiring.subject", { label: input.label, tenantId: input.tenantId }),
-    runningHead: input.tenantId,
-    heading: t("keyExpiring.heading"),
-    lead: t("keyExpiring.lead"),
-    colophon: t("email.colophon"),
-    blocks: [
-      {
-        kind: "schedule",
-        rows: [
-          // The key's label is written by a customer, and this is the value that made the
-          // template's escaping a requirement rather than a courtesy.
-          { label: t("email.key"), value: input.label },
-          { label: t("email.customer"), value: input.tenantId },
-          {
-            label: t("email.expires"),
-            value: formatWhen(input.expiresAt, to.locale),
-            tone: "pending",
-          },
-        ],
-      },
-      {
-        kind: "plate",
-        label: t("keyExpiring.action"),
-        href: `${input.publicUrl}/tenants/${input.tenantId}`,
-      },
-    ],
-  });
+/** Post one card: 1 when Lark would not take it, to be counted. */
+async function post(
+  deps: AlertDeps,
+  lark: (notice: LarkNotice) => Promise<void>,
+  card: LarkNotice,
+  about: Record<string, string>,
+): Promise<0 | 1> {
+  try {
+    await lark(card);
+    return 0;
+  } catch (error) {
+    deps.log?.error("alert_post_failed", { ...about, ...describeError(error) });
+    return 1;
+  }
 }
 
 /** The tenant's admins, or the platform's when it has none. Never nobody, while anybody exists. */
@@ -260,7 +125,7 @@ async function recipientsFor(deps: AlertDeps, tenantId: string): Promise<Recipie
 
 /** Send one message to each recipient, counting what the sender would not take. */
 async function deliver(
-  deps: AlertDeps,
+  deps: AlertDeps & { readonly email: EmailSender },
   recipients: readonly Recipient[],
   compose: (to: Recipient) => EmailMessage,
   about: Record<string, string>,
@@ -277,51 +142,123 @@ async function deliver(
   return refused.length;
 }
 
-/**
- * One tick: claim what is due, tell whoever should be told. Safe to run as often as wanted.
- */
-export async function runAlerts(deps: AlertDeps): Promise<AlertSummary> {
+interface Counts {
+  readonly told: number;
+  readonly undeliverable: number;
+}
+
+/** Claim the failures and tell each channel there is; a suppressed one is told to neither. */
+async function tellFailures(deps: AlertDeps): Promise<{
+  readonly failures: number;
+  readonly suppressed: number;
+  readonly undeliverable: number;
+}> {
   let failures = 0;
   let suppressed = 0;
   let undeliverable = 0;
-
   for (const run of await claimFailedRuns(deps.exec)) {
     if (run.notice === "suppressed") {
       suppressed += 1;
-    } else {
-      failures += 1;
-      const account = await accountLabelOf(deps.exec, run);
+      continue;
+    }
+    failures += 1;
+    const about = { kind: "run_failed", runId: run.id, tenantId: run.tenantId };
+    const input = {
+      ...run,
+      runId: run.id,
+      publicUrl: deps.publicUrl,
+      account: await accountLabelOf(deps.exec, run),
+    };
+    if (deps.email !== undefined) {
       undeliverable += await deliver(
-        deps,
+        { ...deps, email: deps.email },
         await recipientsFor(deps, run.tenantId),
-        (to) => failedRunMessage(to, { ...run, runId: run.id, publicUrl: deps.publicUrl, account }),
-        { kind: "run_failed", runId: run.id, tenantId: run.tenantId },
+        (to) => failedRunMessage(to, input),
+        about,
       );
     }
+    if (deps.lark !== undefined) {
+      undeliverable += await post(deps, deps.lark, failedRunCard(input), about);
+    }
   }
+  return { failures, suppressed, undeliverable };
+}
 
+async function tellRecoveries(
+  deps: AlertDeps,
+  lark: (notice: LarkNotice) => Promise<void>,
+): Promise<Counts> {
+  const recovered = await claimRecoveredRuns(deps.exec);
+  let undeliverable = 0;
+  for (const run of recovered) {
+    const card = recoveredRunCard({
+      ...run,
+      runId: run.id,
+      publicUrl: deps.publicUrl,
+      account: await accountLabelOf(deps.exec, run),
+    });
+    undeliverable += await post(deps, lark, card, {
+      kind: "run_recovered",
+      runId: run.id,
+      tenantId: run.tenantId,
+    });
+  }
+  return { told: recovered.length, undeliverable };
+}
+
+async function tellExpiringGrants(deps: AlertDeps, email: EmailSender): Promise<Counts> {
   const grants = await claimExpiringGrants(deps.exec, WARN_DAYS);
+  let undeliverable = 0;
   for (const grant of grants) {
     undeliverable += await deliver(
-      deps,
+      { ...deps, email },
       await recipientsFor(deps, grant.tenantId),
       (to) => grantExpiringMessage(to, { ...grant, publicUrl: deps.publicUrl }),
       { kind: "grant_expiring", tenantId: grant.tenantId, source: grant.source },
     );
   }
+  return { told: grants.length, undeliverable };
+}
 
+async function tellExpiringKeys(deps: AlertDeps, email: EmailSender): Promise<Counts> {
   const keys = await claimExpiringKeys(deps.exec, WARN_DAYS);
+  let undeliverable = 0;
   for (const key of keys) {
     undeliverable += await deliver(
-      deps,
+      { ...deps, email },
       await recipientsFor(deps, key.tenantId),
       (to) => keyExpiringMessage(to, { ...key, publicUrl: deps.publicUrl }),
       { kind: "key_expiring", tenantId: key.tenantId, keyId: key.id },
     );
   }
+  return { told: keys.length, undeliverable };
+}
 
-  const summary = { failures, suppressed, grants: grants.length, keys: keys.length, undeliverable };
-  if (failures + suppressed + grants.length + keys.length > 0) {
+const NONE: Counts = { told: 0, undeliverable: 0 };
+
+/**
+ * One tick: claim what is due, tell whoever should be told. Safe to run as often as wanted.
+ */
+export async function runAlerts(deps: AlertDeps): Promise<AlertSummary> {
+  const failed = await tellFailures(deps);
+  // After the failures, so a failure and the success that ended it in one interval are both told.
+  const recoveries = deps.lark === undefined ? NONE : await tellRecoveries(deps, deps.lark);
+  const grants = deps.email === undefined ? NONE : await tellExpiringGrants(deps, deps.email);
+  const keys = deps.email === undefined ? NONE : await tellExpiringKeys(deps, deps.email);
+
+  const summary = {
+    failures: failed.failures,
+    suppressed: failed.suppressed,
+    recoveries: recoveries.told,
+    grants: grants.told,
+    keys: keys.told,
+    undeliverable:
+      failed.undeliverable + recoveries.undeliverable + grants.undeliverable + keys.undeliverable,
+  };
+  if (
+    summary.failures + summary.suppressed + summary.recoveries + summary.grants + summary.keys >
+    0
+  ) {
     deps.log?.info("alerts_tick", summary);
   }
   return summary;

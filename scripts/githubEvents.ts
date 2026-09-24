@@ -3,10 +3,10 @@
  *
  * The payload arrives as the JSON file GitHub writes for the run (`GITHUB_EVENT_PATH`), and
  * these notices quote from it -- titles, bodies, branch names -- text written by anyone who
- * can open an issue. It is safe to quote because `lark.ts` renders every string as plain text.
+ * can open an issue. It is safe to quote because `packages/core/src/lark.ts` renders every string as plain text.
  */
 
-import type { Notice, Tone } from "./lark.ts";
+import type { LarkNotice as Notice, LarkTone as Tone } from "../packages/core/src/lark.ts";
 
 /** How much of an issue or PR body a card carries; the rest is one click away. */
 const EXCERPT_CHARS = 400;

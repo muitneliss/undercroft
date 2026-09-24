@@ -339,6 +339,11 @@ services:
       UNDERCROFT_EMAIL_API_KEY: ${UNDERCROFT_EMAIL_API_KEY:-}
       UNDERCROFT_EMAIL_FROM: ${UNDERCROFT_EMAIL_FROM:-}
       UNDERCROFT_EMAIL_API_URL: ${UNDERCROFT_EMAIL_API_URL:-}
+      # The operators' Lark group: a sync's failure, and the success that ends it, posted as a
+      # card. The URL is the credential; the secret is set when the bot signs. Unset means
+      # failures are emailed only. See docs/runbook/deployment.md#notifications.
+      UNDERCROFT_LARK_WEBHOOK_URL: ${UNDERCROFT_LARK_WEBHOOK_URL:-}
+      UNDERCROFT_LARK_WEBHOOK_SECRET: ${UNDERCROFT_LARK_WEBHOOK_SECRET:-}
       # The platform administrators: a comma-separated list of addresses that may sign in
       # with no invitation and hold admin in every tenant. This variable IS the authority —
       # removing an address and redeploying withdraws it. See ADR 0013.

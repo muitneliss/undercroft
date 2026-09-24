@@ -1,9 +1,10 @@
 {
-  "//": "The deploy client is typechecked and linted like the rest of the repo: it is the thing that ships releases, and a type error here surfaces as a half-applied rollout.",
+  "//": "The deploy client is typechecked and linted like the rest of the repo: it is the thing that ships releases, and a type error here surfaces as a half-applied rollout. `packages/core` is referenced for its Lark module alone, imported by path so the notify job needs no `bun install`.",
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  "references": [{ "path": "../packages/core" }]
 }

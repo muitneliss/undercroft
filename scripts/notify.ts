@@ -9,16 +9,23 @@
  *            failed `ci` run on main -- see `githubEvents.ts`
  *   test     a card that says nothing happened, to prove the wiring after a rotation
  *
- * Each notice reads the environment its workflow job sets; `lark.ts` owns the wire format and
- * the webhook credential. A notice that cannot be posted exits non-zero -- the notify job goes
+ * Each notice reads the environment its workflow job sets; `packages/core/src/lark.ts` owns the
+ * wire format, shared with the control plane's sync alerts. The webhook is `LARK_WEBHOOK_URL`, a
+ * GitHub secret, and `LARK_WEBHOOK_SECRET` when the bot signs. A notice that cannot be posted exits non-zero -- the notify job goes
  * red rather than the group silently hearing nothing.
  */
 
 import { readFileSync } from "node:fs";
 import process from "node:process";
 
+import {
+  type LarkConfig,
+  larkMessage,
+  type LarkNotice as Notice,
+  type LarkTone as Tone,
+  postLark,
+} from "../packages/core/src/lark.ts";
 import { eventNotice, shortSha } from "./githubEvents.ts";
-import { larkConfigFromEnv, larkMessage, type Notice, send, type Tone } from "./lark.ts";
 
 const RELEASE_TAG = /^v\d/u;
 
@@ -155,6 +162,14 @@ function testNotice(env: Env): Notice {
   };
 }
 
+function larkConfigFromEnv(env: Env): LarkConfig {
+  const url = env.LARK_WEBHOOK_URL ?? "";
+  if (url === "") {
+    throw new Error("not configured: LARK_WEBHOOK_URL must be set");
+  }
+  return { url, secret: env.LARK_WEBHOOK_SECRET ?? "" };
+}
+
 function noticeFor(command: string, env: Env): Notice {
   switch (command) {
     case "deploy":
@@ -175,7 +190,7 @@ function noticeFor(command: string, env: Env): Notice {
 
 async function main(): Promise<void> {
   const notice = noticeFor(process.argv[2] ?? "", process.env);
-  await send(larkConfigFromEnv(process.env), larkMessage(notice), {
+  await postLark(larkConfigFromEnv(process.env), larkMessage(notice), {
     fetch: (input, init): Promise<Response> => globalThis.fetch(input, init ?? {}),
     now: () => Date.now(),
   });
