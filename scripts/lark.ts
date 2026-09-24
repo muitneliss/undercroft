@@ -11,27 +11,52 @@
  *
  * Two things here look like over-caution and are not:
  *
- *   - Every string a notice carries is rendered as `plain_text`, never `lark_md`. Notices
- *     quote what people outside this repo wrote -- an issue title, a PR body -- and Lark reads
- *     `<at id=all></at>` inside markdown as a mention, so an issue titled that way would page
- *     the whole group.
+ *   - No string a notice carries reaches Lark as markup. Notices quote what people outside
+ *     this repo wrote -- an issue title, a PR body -- and Lark reads `<at id=all></at>` inside
+ *     markdown as a mention, so an issue titled that way would page the whole group. The title
+ *     is `plain_text`; a fact is `larkLiteral` inside the emphasis this module adds; the body
+ *     is `larkMarkdown`, which renders GitHub's markdown but escapes every tag.
  *   - Lark refuses a message with HTTP 200 and a non-zero `code` (a bad signature, a missing
  *     keyword). Reading the status alone would report a notice as sent that nobody received.
  */
 
 import { createHmac } from "node:crypto";
 
+import { larkLiteral, larkMarkdown } from "./larkMarkdown.ts";
+
 type Env = Readonly<Record<string, string | undefined>>;
 
 /** Lark's header colours. */
 export type Tone = "green" | "red" | "blue" | "orange" | "grey";
 
-/** What a card says, before it is Lark's shape. Every string in it is rendered as plain text. */
+/** How a run of a fact's value stands out; a card has no other way to style text. */
+export type Emphasis = "bold" | "green" | "red" | "grey";
+
+/** A run of a fact's value. Its text is always shown exactly as written. */
+export type Span = string | { readonly text: string; readonly emphasis: Emphasis };
+
+export function bold(text: string): Span {
+  return { text, emphasis: "bold" };
+}
+
+export function green(text: string): Span {
+  return { text, emphasis: "green" };
+}
+
+export function red(text: string): Span {
+  return { text, emphasis: "red" };
+}
+
+export function grey(text: string): Span {
+  return { text, emphasis: "grey" };
+}
+
+/** What a card says, before it is Lark's shape. */
 export interface Notice {
   readonly title: string;
   readonly tone: Tone;
-  readonly facts: readonly (readonly [label: string, value: string])[];
-  /** Free text under the facts; empty for none. */
+  readonly facts: readonly (readonly [label: string, value: Span | readonly Span[]])[];
+  /** GitHub-flavoured markdown, possibly written outside this repo; empty for none. */
   readonly body: string;
   readonly links: readonly (readonly [label: string, url: string])[];
 }
@@ -58,8 +83,40 @@ export interface LarkConfig {
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
+/**
+ * How much of a body a card carries, cut at a line so no link is split. Lark refuses a
+ * request over 20 KB, and the rest of the body is one click away.
+ */
+const BODY_CHARS = 1200;
+
 function plain(content: string): PlainText {
   return { tag: "plain_text", content };
+}
+
+const EMPHASIS: Readonly<Record<Emphasis, (markup: string) => string>> = {
+  bold: (markup) => `**${markup}**`,
+  green: (markup) => `<font color='green'>${markup}</font>`,
+  red: (markup) => `<font color='red'>${markup}</font>`,
+  grey: (markup) => `<font color='grey'>${markup}</font>`,
+};
+
+function inline(value: Span | readonly Span[]): string {
+  const spans = typeof value === "string" || "text" in value ? [value] : value;
+  return spans
+    .map((span) =>
+      typeof span === "string"
+        ? larkLiteral(span)
+        : EMPHASIS[span.emphasis](larkLiteral(span.text)),
+    )
+    .join("");
+}
+
+function bounded(markdown: string): string {
+  if (markdown.length <= BODY_CHARS) {
+    return markdown;
+  }
+  const lineEnd = markdown.lastIndexOf("\n", BODY_CHARS);
+  return `${markdown.slice(0, lineEnd > 0 ? lineEnd : BODY_CHARS).trimEnd()}\n…`;
 }
 
 export function larkMessage(notice: Notice): LarkMessage {
@@ -68,21 +125,22 @@ export function larkMessage(notice: Notice): LarkMessage {
       tag: "div",
       fields: notice.facts.map(([label, value]) => ({
         is_short: true,
-        text: plain(`${label}: ${value}`),
+        text: { tag: "lark_md", content: `**${larkLiteral(label)}**\n${inline(value)}` },
       })),
     },
   ];
-  if (notice.body !== "") {
-    elements.push({ tag: "hr" }, { tag: "div", text: plain(notice.body) });
+  const body = bounded(larkMarkdown(notice.body));
+  if (body !== "") {
+    elements.push({ tag: "hr" }, { tag: "markdown", content: body });
   }
   if (notice.links.length > 0) {
     elements.push({
       tag: "action",
-      actions: notice.links.map(([label, url]) => ({
+      actions: notice.links.map(([label, url], index) => ({
         tag: "button",
         text: plain(label),
         url,
-        type: "default",
+        type: index === 0 ? "primary" : "default",
       })),
     });
   }

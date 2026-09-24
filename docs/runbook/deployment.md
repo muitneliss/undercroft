@@ -167,9 +167,11 @@ gh secret set LARK_WEBHOOK_URL          # paste the new URL at the prompt
 LARK_WEBHOOK_URL=... task notify:test   # posts a test card, exits non-zero if Lark refuses it
 ```
 
-Every issue title and pull-request body quoted on a card is shown as plain text, never as
-Lark markdown, because an issue titled `<at id=all></at>` would otherwise mention the whole
-group. `notify.yml` runs on `pull_request_target` so that a fork's pull request can use the
+A card renders an issue or pull-request body as Lark markdown (headings as bold lines,
+lists, links, GitHub emoji shortcodes) and colours a pull request's `+`/`−` line counts.
+Every tag in quoted text is escaped, never obeyed, because an issue titled
+`<at id=all></at>` would otherwise mention the whole group; titles stay plain text.
+`notify.yml` runs on `pull_request_target` so that a fork's pull request can use the
 secret too. That is safe only because it checks out the default branch and never runs the
 pull request's code, so never add a checkout of the pull request's head to that file.
 
