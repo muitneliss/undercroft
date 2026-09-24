@@ -82,6 +82,12 @@ entities:
   # Not a CRM object: the deal-to-company edge, on a different route with a different
   # shape. Without it a deal has no owner and every deal-to-customer join is a guess --
   # so a failure here is fatal, not skippable.
+  #
+  # No updatedAtPath, on purpose: the v4 associations batch read answers `from`, `to` and
+  # `associationTypes` only -- HubSpot keeps no change time on a link. source_updated_at is
+  # therefore NULL on every association, and correctly so; filling it from the deal's
+  # hs_lastmodifieddate or from observed_at would be a plausible wrong instant (ADR 0034,
+  # issue 141). The consent copy (`source.hubspotReads`) tells the user the same.
   - name: associations
     request:
       kind: batch-from

@@ -102,6 +102,26 @@ describe("batch-from reads a relation against ids from another entity", () => {
     expect(fetcher.calls.length).toBe(0);
   });
 
+  it("a relation with no source change time lands with none, not another clock's (issue 141)", async () => {
+    // HubSpot's association batch read carries no timestamp, so the spec declares no
+    // updatedAtPath. The fetch time, the run's start or a parent's modified date would each
+    // be a plausible wrong instant; empty is the answer a reader can recognise.
+    const spec = relationSpec(10);
+    const fetcher = new InMemoryFetcher().on("POST", `${BASE}/associations/batch/read`, {
+      body: { results: [{ from: { id: "d1" }, updatedAt: "2026-01-01T00:00:00Z" }] },
+    });
+
+    const records = await collect(
+      readEntity(spec, relation(spec), {
+        fetcher,
+        clock: new TestClock(),
+        sourceIds: ["d1"],
+      }),
+    );
+
+    expect(records.map((r) => r.sourceUpdatedAt)).toEqual([null]);
+  });
+
   it("a relation record with no id at its idPath is still fatal", async () => {
     const spec = relationSpec(10);
     const fetcher = new InMemoryFetcher().on("POST", `${BASE}/associations/batch/read`, {

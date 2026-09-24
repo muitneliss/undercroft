@@ -1092,7 +1092,8 @@ export const vi = {
    */
   source: {
     readOnly: "Không gì cả. Quyền chỉ đọc, và bạn có thể ngắt kết nối bất cứ lúc nào.",
-    hubspotReads: "Công ty, liên hệ và giao dịch từ CRM của bạn.",
+    hubspotReads:
+      "Công ty, liên hệ và giao dịch từ CRM của bạn, cùng việc mỗi giao dịch thuộc công ty nào. HubSpot không lưu thời điểm sửa cho liên kết đó, nên thời điểm sửa phía nguồn của nó luôn để trống.",
     xeroReads: "Hóa đơn, thanh toán, giấy báo có và liên hệ từ một tổ chức bạn chọn.",
     gmailReads: "Tiêu đề thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
     driveReads:
