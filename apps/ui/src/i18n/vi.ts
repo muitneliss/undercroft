@@ -540,6 +540,12 @@ export const vi = {
     selectAll: "Chọn tất cả",
     clearAll: "Bỏ chọn tất cả",
     pickFromDrive: "Chọn từ Google Drive",
+    /**
+     * Beside each Drive pick. The Picker only ever adds, so this is how one comes off; the
+     * named form is its accessible name, so a screen reader hears WHICH pick it removes.
+     */
+    removePick: "Bỏ",
+    removePickNamed: "Bỏ {{name}} khỏi lựa chọn",
     nothingToChoose: "Chưa có mục nào để chọn.",
     save: "Lưu lựa chọn",
     saving: "Đang lưu…",

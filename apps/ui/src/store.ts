@@ -139,6 +139,17 @@ interface UiState {
   /** Drive: turn reading sub-folders on or off. ADR 0031. */
   toggleScopeRecurse: (source: string) => void;
   /**
+   * Drive: add what one Picker session chose to what is already chosen.
+   *
+   * Adds, never replaces. Google's Picker opens with nothing ticked and cannot be told what was
+   * chosen before, so a session that replaced the list left an admin who picked two folders in
+   * two sessions with one (#197). A pick already held keeps its place and is not listed again:
+   * the id is what a run reads, so two entries with one id are one folder read twice over.
+   */
+  addScopeFiles: (source: string, picked: readonly ChosenFile[]) => void;
+  /** Drive: take one pick off the list. The Picker can only add, so this is the way back. */
+  removeScopeFile: (source: string, id: string) => void;
+  /**
    * What the admin has typed into the custom-file-type field, and which source they typed it
    * against.
    *
@@ -359,14 +370,29 @@ function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
 }
 
 /**
- * What "select all" leaves ticked: everything already held, then everything offered.
+ * What "select all" -- or a Drive pick -- leaves chosen: everything already held, in its place,
+ * then each offered entry not yet held, once, told apart by `key`.
  *
  * A union rather than `offered` alone, because what is held can be more than what is shown --
  * a custom file type the admin typed, a label saved last month that the mailbox no longer
- * lists -- and replacing the list with what is on screen would drop that entry without a word.
+ * lists, a folder picked in an earlier Picker session -- and replacing the list with what is
+ * on screen would drop that entry without a word.
  */
-function withEvery(held: readonly string[], offered: readonly string[]): string[] {
-  return [...held, ...offered.filter((entry) => !held.includes(entry))];
+function withEvery<T>(held: readonly T[], offered: readonly T[], key: (entry: T) => string): T[] {
+  const seen = new Set(held.map(key));
+  const added: T[] = [];
+  for (const entry of offered) {
+    if (!seen.has(key(entry))) {
+      seen.add(key(entry));
+      added.push(entry);
+    }
+  }
+  return [...held, ...added];
+}
+
+/** A tick-list entry is its own key. */
+function itself(entry: string): string {
+  return entry;
 }
 
 /** How a slice writes: Zustand's partial setter, narrowed to this store. */
@@ -403,7 +429,8 @@ function tickList(
         held.includes(entry) ? held.filter((e) => e !== entry) : [...held, entry],
       ),
     clear: (source): unknown => rewrite(source, () => []),
-    selectAll: (source, offered): unknown => rewrite(source, (held) => withEvery(held, offered)),
+    selectAll: (source, offered): unknown =>
+      rewrite(source, (held) => withEvery(held, offered, itself)),
   };
 }
 
@@ -433,6 +460,8 @@ function scopeSlice(
   | "clearScopeFileTypes"
   | "selectAllScopeFileTypes"
   | "toggleScopeRecurse"
+  | "addScopeFiles"
+  | "removeScopeFile"
   | "fileTypeInput"
   | "setFileTypeInput"
   | "scopeFilter"
@@ -460,6 +489,16 @@ function scopeSlice(
       set((state) => {
         const draft = draftFor(state.scopeDraft, source);
         return { scopeDraft: { ...draft, recurse: !draft.recurse } };
+      }),
+    addScopeFiles: (source, picked): unknown =>
+      set((state) => {
+        const draft = draftFor(state.scopeDraft, source);
+        return { scopeDraft: { ...draft, files: withEvery(draft.files, picked, (f) => f.id) } };
+      }),
+    removeScopeFile: (source, id): unknown =>
+      set((state) => {
+        const draft = draftFor(state.scopeDraft, source);
+        return { scopeDraft: { ...draft, files: draft.files.filter((f) => f.id !== id) } };
       }),
     fileTypeInput: { source: "", value: "" },
     setFileTypeInput: (source, value): unknown => set({ fileTypeInput: { source, value } }),

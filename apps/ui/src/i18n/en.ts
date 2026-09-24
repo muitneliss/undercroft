@@ -425,6 +425,8 @@ export const en = {
     selectAll: "Select all",
     clearAll: "Clear all",
     pickFromDrive: "Choose from Google Drive",
+    removePick: "Remove",
+    removePickNamed: "Remove {{name}} from the selection",
     nothingToChoose: "There is nothing to choose from yet.",
     save: "Save selection",
     saving: "Saving…",
