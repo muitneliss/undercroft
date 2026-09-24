@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.27.0](https://github.com/muitneliss/undercroft/compare/v1.26.0...v1.27.0) (2026-09-24)
+
+
+### Features
+
+* **drive:** recognise files by MIME type first, export Google-native files, verify OpenAttestation records ([#180](https://github.com/muitneliss/undercroft/issues/180)) ([715015e](https://github.com/muitneliss/undercroft/commit/715015e75b6101347f35438b450d4ca137b24053)), closes [#176](https://github.com/muitneliss/undercroft/issues/176)
+
+
+### Bug Fixes
+
+* **drive:** read Drive with drive.readonly and let browse-scope list Drive folders and types ([#179](https://github.com/muitneliss/undercroft/issues/179)) ([9e0a293](https://github.com/muitneliss/undercroft/commit/9e0a293bb21b2c47d1adeeca98d005a0c338f13c)), closes [#178](https://github.com/muitneliss/undercroft/issues/178) [#177](https://github.com/muitneliss/undercroft/issues/177)
+
 ## [1.26.0](https://github.com/muitneliss/undercroft/compare/v1.25.0...v1.26.0) (2026-09-24)
 
 
