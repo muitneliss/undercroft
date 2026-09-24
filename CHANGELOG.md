@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/muitneliss/undercroft/compare/v1.27.3...v1.28.0) (2026-09-24)
+
+
+### Features
+
+* **ui:** every scope tick-list can be filled in one press, and says when it is full ([#191](https://github.com/muitneliss/undercroft/issues/191)) ([9142873](https://github.com/muitneliss/undercroft/commit/9142873b22652d95e19c817ccb20e401b1920ec5)), closes [#175](https://github.com/muitneliss/undercroft/issues/175)
+
 ## [1.27.3](https://github.com/muitneliss/undercroft/compare/v1.27.2...v1.27.3) (2026-09-24)
 
 
