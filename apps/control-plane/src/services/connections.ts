@@ -18,12 +18,14 @@
  */
 
 import {
+  type BrowseListing,
   type Cadence,
   type ConnectionScope,
   needsScope,
   nextRunAt,
   parseScope,
   parseSourceInstance,
+  sourceKind,
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -178,6 +180,25 @@ export function presentStatus(row: {
     return "needs_scope";
   }
   return "connected";
+}
+
+/** The listing each kind's scope is chosen from. By kind, so a second account browses too. */
+const BROWSE_LISTINGS: ReadonlyMap<string, BrowseListing> = new Map<string, BrowseListing>([
+  ["gmail", "labels"],
+  ["xero", "organisations"],
+  ["drive", "folders"],
+]);
+
+/**
+ * Which listing a source's scope is chosen from, or `null` for a source chosen from none.
+ *
+ * Decided here rather than by asking the worker and reading its refusal: a HubSpot token has
+ * nothing to choose, and "the processing service could not fetch the list" is not true of a
+ * list that does not exist. It used to be decided inline as "Xero, else labels", which sent
+ * Drive to the worker asking for Gmail labels -- issue 177.
+ */
+export function browseListingFor(source: string): BrowseListing | null {
+  return BROWSE_LISTINGS.get(sourceKind(source)) ?? null;
 }
 
 /**

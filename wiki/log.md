@@ -109,3 +109,5 @@
 ## [2026-09-24] ingest | Runbook Sign-In Setup
 ## [2026-09-24] ingest | Runbook Deployment
 ## [2026-09-24] ingest | Runbook Deployment
+## [2026-09-24] ingest | ADR 0047: Drive reads with drive.readonly
+## [2026-09-24] ingest | Runbook Google Ingestion Setup

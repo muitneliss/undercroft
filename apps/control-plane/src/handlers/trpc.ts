@@ -120,12 +120,47 @@ export interface Context {
 
 export type { Role } from "../services/authz.ts";
 
+/** The facts a refusal names for a caller that acts on data: codes and ids, never sentences. */
+export type RefusalFacts = Readonly<Record<string, string | null>>;
+
+/**
+ * The carrier for {@link RefusalFacts}, as a `TRPCError`'s cause.
+ *
+ * A cause because that is the one slot tRPC carries from a `throw` to the formatter below; a
+ * class because the formatter must not publish an arbitrary cause -- a caught exception's
+ * text is the row that caused it. Only a cause built HERE reaches the wire.
+ */
+class Refusal extends Error {
+  readonly facts: RefusalFacts;
+
+  constructor(facts: RefusalFacts) {
+    super("refusal facts");
+    this.facts = facts;
+  }
+}
+
+/**
+ * A worded refusal that also names its facts, which the answer carries as `data.details`.
+ *
+ * The sentence is for a person and is in their language; the facts are for an agent, which
+ * matches on them the way it matches an error code, and so are never translated. The CLI
+ * passes them on as its envelope's `error.details`, beside the zod issues it already puts
+ * there -- so a refusal like "could not list Drive, reconnect" reaches an agent as something
+ * it can act on rather than only as prose (issue 177).
+ */
+export function refusal(code: TRPCError["code"], message: string, facts: RefusalFacts): TRPCError {
+  return new TRPCError({ code, message, cause: new Refusal(facts) });
+}
+
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
     // The type, never the detail. Exception text routinely embeds the offending row, and
     // this response goes to a browser.
     if (error.code === "INTERNAL_SERVER_ERROR") {
       return { ...shape, message: "internal_error" };
+    }
+    if (error.cause instanceof Refusal) {
+      return { ...shape, data: { ...shape.data, details: error.cause.facts } };
     }
     return shape;
   },

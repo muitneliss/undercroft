@@ -1,17 +1,19 @@
 /**
- * Google's file Picker, which is the only way `drive.file` can be scoped.
+ * Google's file Picker: how an admin in the browser CHOOSES what a Drive connection reads.
  *
- * Under `drive.file` a credential reaches exactly what the user picked through this dialog
- * and nothing else -- Google enforces it, which is what makes the card's promise "No other
- * folder is read" true rather than merely intended. There is no server-side alternative: a
- * folder listing would need `drive.readonly`, which is a Google *restricted* scope and would
- * pull the whole product into an annual CASA security assessment.
+ * Choosing only. The picks come back as ids and names and are recorded as the scope; what a
+ * run reads is the worker's own `'<id>' in parents` query under the connection's
+ * `drive.readonly` grant (ADR 0047), so the card's promise "No other folder is read" is kept
+ * by that query, not by this dialog. This used to be the other way round: under `drive.file`
+ * a pick was also the grant, and it turned out a picked FOLDER does not grant the files
+ * already inside it, so no folder pick could ever be read.
  *
  * TWO TOKENS, AND THEY ARE NOT THE SAME TOKEN. The Picker needs a short-lived access token
  * in the browser, obtained here through Google Identity Services. The credential the worker
- * seals comes from the separate server-side code flow. They share a client id, which is what
- * makes a file picked in this dialog readable by the server later -- `drive.file` grants
- * per (app, file), not per token. The browser's token is never sent to us and never stored.
+ * seals comes from the separate server-side code flow. The browser's token is never sent to
+ * us and never stored, and it stays `drive.file` deliberately: showing the Picker and handing
+ * back ids is all it does, `drive.file` is the narrowest scope the Picker works with, and a
+ * browser token able to read the whole Drive would be exposure bought for nothing.
  *
  * Both Google scripts are loaded on demand rather than in `index.html`: an operator who never
  * connects Drive should not be fetching Google's JavaScript on every page.
@@ -83,9 +85,10 @@ function loadScript(src: string): Promise<void> {
  * all: Google's own reference for `setMimeTypes` says omitting it shows every type.
  *
  * `account` is the Google account the connection being scoped belongs to, passed to Google as
- * `login_hint`. `drive.file` grants a picked file to the account that picked it, so a pick
- * made as the wrong account -- the browser's default, when a tenant holds two Drive accounts
- * -- would be a grant the connection cannot use (ADR 0043). A hint rather than a lock: Google
+ * `login_hint`. A pick made as the wrong account -- the browser's default, when a tenant holds
+ * two Drive accounts -- names a folder from THAT account's Drive, which the connection's own
+ * account may not be able to see at all, so its run would find nothing (ADR 0043). A hint
+ * rather than a lock: Google
  * skips the account chooser when it recognises the address, and otherwise shows it as before,
  * which is also what an empty `account` does. `prompt` is left at Google's default.
  */

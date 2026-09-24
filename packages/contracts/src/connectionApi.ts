@@ -54,38 +54,75 @@ export const StoreCredentialResponse = z.object({
 });
 
 /**
- * Listing what an admin may choose from. Needs a live token, so it lives in the worker.
+ * What one source's scope is chosen from, named for the thing listed.
  *
  * `labels` is Gmail's; `organisations` is Xero's -- the organisations one consent can see,
- * of which the platform must be told one rather than guess.
+ * of which the platform must be told one rather than guess; `folders` is Drive's, and carries
+ * the file types found across the grant beside them, because a Drive scope is chosen as both.
+ * ADR 0047.
  */
+export const BrowseListing = z.enum(["labels", "organisations", "folders"]);
+
+/** Listing what an admin may choose from. Needs a live token, so it lives in the worker. */
 export const BrowseScopeRequest = z.object({
   source: z.string().min(1),
   tenantId: z.string().min(1),
-  kind: z.enum(["labels", "organisations"]),
+  kind: BrowseListing,
 });
+
+/** The item kinds a listing can be cut short in. Labels and organisations never are. */
+const Bounded = z.enum(["folder", "file-type"]);
 
 export const BrowseScopeResponse = z.object({
   items: z.array(
     z.object({
+      /**
+       * What a scope records for this item: a label or organisation id, a Drive folder id, or
+       * -- for a `file-type` -- the MIME type itself, which is what `fileTypes` takes.
+       */
       id: z.string(),
       name: z.string(),
       /**
-       * Who owns the label, as the provider reports it: `system` for the set Gmail ships
-       * (INBOX, SENT, the CATEGORY_* group) and `user` for one somebody made.
+       * What sort of choice this is.
        *
-       * Kept THREE-VALUED. A provider that does not say leaves `null`, and the picker gives
-       * that its own run rather than filing it under "yours" -- which would be a claim about
-       * who made a label, made up by us, on the screen where an admin decides what a customer
-       * has agreed to hand over. `.claude/rules/money.md` is where that rule is written down,
-       * and it is about values rather than amounts.
+       * For a label, who owns it, as the provider reports it: `system` for the set Gmail
+       * ships (INBOX, SENT, the CATEGORY_* group) and `user` for one somebody made. For Drive,
+       * `folder` -- spelled as a Drive pick spells it, so `{ id, name, kind }` pastes into a
+       * `DriveScope`'s `files` unchanged -- or `file-type`, a MIME type present in the grant.
+       *
+       * Kept THREE-VALUED for a label. A provider that does not say leaves `null`, and the
+       * picker gives that its own run rather than filing it under "yours" -- which would be a
+       * claim about who made a label, made up by us, on the screen where an admin decides what
+       * a customer has agreed to hand over. `.claude/rules/money.md` is where that rule is
+       * written down, and it is about values rather than amounts.
        *
        * Defaulted rather than required so a worker built before this field answers a control
        * plane built after it: the missing field becomes "not classified", which is true.
        */
-      kind: z.enum(["system", "user"]).nullable().default(null),
+      kind: z.enum(["system", "user", "folder", "file-type"]).nullable().default(null),
+      /**
+       * A folder's place in its drive, outermost first and ending with its own name: a shared
+       * drive's name leads when the folder is in one. Absent for anything that is not a
+       * folder. It starts at the outermost folder the grant can see, which for a folder shared
+       * with the account from somebody else's drive is that folder itself.
+       */
+      path: z.array(z.string()).optional(),
     }),
   ),
+  /**
+   * The item kinds this answer does NOT hold every one of, because the listing stopped at its
+   * bound or Google said its own search was incomplete. Empty means complete.
+   *
+   * Said rather than left to be inferred, because a list that stopped at five thousand files
+   * looks exactly like a drive that holds five thousand files, and "the only types present
+   * are these" is a claim the admin then acts on. CLAUDE.md rule 2. A folder path computed
+   * from a cut listing may begin lower than it should, which `folder` here also covers.
+   *
+   * Defaulted to empty so a worker built before this field answers a control plane built
+   * after it -- and every such worker listed only labels and organisations, whole, so empty
+   * is what its answer was.
+   */
+  partial: z.array(Bounded).default([]),
 });
 
 export const RevokeConnectionRequest = z.object({
@@ -105,6 +142,7 @@ export const RevokeConnectionResponse = z.object({
 export type CredentialInput = z.infer<typeof CredentialInput>;
 export type StoreCredentialRequest = z.infer<typeof StoreCredentialRequest>;
 export type StoreCredentialResponse = z.infer<typeof StoreCredentialResponse>;
+export type BrowseListing = z.infer<typeof BrowseListing>;
 export type BrowseScopeRequest = z.infer<typeof BrowseScopeRequest>;
 export type BrowseScopeResponse = z.infer<typeof BrowseScopeResponse>;
 export type RevokeConnectionRequest = z.infer<typeof RevokeConnectionRequest>;

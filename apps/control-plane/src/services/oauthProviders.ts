@@ -13,7 +13,7 @@
  * source: the handshake row carries the source.
  */
 
-import { sourceKind } from "@undercroft/contracts";
+import { GOOGLE_READ_SCOPES, sourceKind } from "@undercroft/contracts";
 
 export type Provider = "google" | "xero";
 
@@ -66,18 +66,23 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
     /**
-     * Drive is `drive.file`, deliberately, not `drive.readonly`. `drive.file` reaches only
-     * what the admin picked in Google's own Picker, so the shipped promise "No other folder
-     * is read" is enforced by Google rather than by our query filter -- and it is not a
-     * Google "restricted" scope, so it carries no annual CASA security assessment. Gmail has
-     * no such option: no non-restricted Gmail scope reaches attachments.
+     * Each source asks for the read scope `GOOGLE_READ_SCOPES` names, which is also the one
+     * the worker refuses to run without -- one table, so the two cannot disagree.
+     *
+     * Drive is `drive.readonly`. It was `drive.file` until ADR 0047: under `drive.file` a
+     * folder picked in Google's Picker does not grant the files already inside it, so a
+     * folder pick listed nothing and every folder run landed zero. `drive.readonly` is a
+     * Google "restricted" scope, but this client already carries the restricted
+     * `gmail.readonly`, so the CASA assessment it brings was already this client's to pass.
+     * What it costs is that "No other folder is read" is now kept by the collector's own
+     * query rather than by Google.
      *
      * `openid email` rides along so the callback learns which account consented. It is the
      * same identity scope sign-in uses and grants nothing further.
      */
     scopes: {
-      gmail: ["openid", "email", "https://www.googleapis.com/auth/gmail.readonly"],
-      drive: ["openid", "email", "https://www.googleapis.com/auth/drive.file"],
+      gmail: ["openid", "email", GOOGLE_READ_SCOPES.gmail],
+      drive: ["openid", "email", GOOGLE_READ_SCOPES.drive],
     },
     pkce: true,
     clientAuth: "body",

@@ -16,6 +16,7 @@ import { CHUNK } from "../landing.ts";
 import { createGoogleApi } from "./api.ts";
 import { DOCUMENT_UNLANDED, runGoogleCollect, ScopeNotChosen } from "./collect.ts";
 import { NOTHING_MATCHED } from "./drive.ts";
+import { GrantTooNarrow } from "./grant.ts";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const DRIVE = "https://www.googleapis.com/drive/v3/files";
@@ -42,10 +43,11 @@ afterEach(async () => {
   await db.close();
 });
 
-async function connect(source: string, selection: unknown): Promise<void> {
+/** `granted` is what Google said it granted; empty is "nothing recorded", as on an old row. */
+async function connect(source: string, selection: unknown, granted = ""): Promise<void> {
   await db.query(
-    "INSERT INTO ops.connection (tenant_id, source, status) VALUES ($1, $2, 'connected')",
-    [TENANT, source],
+    "INSERT INTO ops.connection (tenant_id, source, status, scope) VALUES ($1, $2, 'connected', $3)",
+    [TENANT, source, granted],
   );
   // A chosen scope is an admin's decision recorded by the control plane; the worker may
   // read it and never write it, so the fixture is planted as the superuser.
@@ -213,6 +215,70 @@ describe("a scope is required, never assumed", () => {
     fetcher.on("GET", listUrl(null), { body: { messages: [] } });
 
     await expect(collect("gmail")).resolves.toMatchObject({ source: "gmail" });
+  });
+});
+
+describe("a grant that cannot read the source is refused before Google is asked", () => {
+  const PICKED = { files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }] };
+
+  it("a Drive grant of drive.file fails the run and names the reconnect", async () => {
+    // The firing side, and issue 178. Google does not refuse this grant: under drive.file a
+    // picked folder's existing files are simply not there, so the listing answers 200 and
+    // empty, and the run closed green on "no matching files in folder" with 0 landed. Every
+    // Drive connection made before ADR 0047 holds exactly this scope string.
+    await connect(
+      "drive",
+      PICKED,
+      "https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/drive.file",
+    );
+    // No route is recorded: the fetcher refuses anything unmodelled, and `calls` below proves
+    // nothing was even attempted.
+    const failed = collect("drive");
+
+    await expect(failed).rejects.toBeInstanceOf(GrantTooNarrow);
+    await expect(failed).rejects.toThrow(/drive\.readonly.*reconnect the source/u);
+    expect(fetcher.calls).toEqual([]);
+  });
+
+  it("a Drive grant of drive.readonly reads the picked folder", async () => {
+    // The quiet side: the grant every Drive consent asks for now.
+    await connect(
+      "drive",
+      PICKED,
+      "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.readonly",
+    );
+    const q = "'folder-1' in parents and mimeType='application/pdf' and trashed=false";
+    const listing = new URL(DRIVE);
+    listing.searchParams.set("q", q);
+    listing.searchParams.set(
+      "fields",
+      "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)",
+    );
+    listing.searchParams.set("pageSize", "100");
+    listing.searchParams.set("supportsAllDrives", "true");
+    listing.searchParams.set("includeItemsFromAllDrives", "true");
+    fetcher
+      .on("GET", listing.toString(), {
+        body: {
+          files: [
+            {
+              id: "f1",
+              name: "statement.pdf",
+              mimeType: "application/pdf",
+              size: String(PDF.byteLength),
+              modifiedTime: "2026-09-17T12:00:00.000Z",
+              md5Checksum: "abc",
+              parents: ["folder-1"],
+            },
+          ],
+        },
+      })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+
+    const result = await collect("drive");
+
+    expect(result.documents.created).toBe(1);
+    expect(result.refusals).toEqual([]);
   });
 });
 
@@ -966,23 +1032,29 @@ describe("drive", () => {
     expect(fetcher.calls.map((c) => c.url)).not.toContain(listUrlFor("sub"));
   });
 
-  it("a file two levels down lands when sub-folders were asked for", async () => {
+  it("a file five levels down lands when sub-folders were asked for", async () => {
     // The firing half. An admin picks the year and expects the months inside it, which is the
     // whole point of the toggle; landing only the loose files at the top would be the silent
     // subset this feature exists to stop being the only option.
+    //
+    // Five levels rather than two, because two cannot tell a walk from a walk that descends
+    // once: a sub-folder's own sub-folders must be queued too. Issue 178's tree held most of
+    // its files four and five levels down, and "recurse only reaches the children" was a
+    // hypothesis for its empty runs until the scope was shown to be the cause.
     await connect("drive", {
       files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
       recurse: true,
     });
     fetcher
       .on("GET", listUrlFor("folder-1", ["application/pdf"], true), {
-        body: { files: [file("f1"), folder("sub")] },
+        body: { files: [file("f1"), folder("d2")] },
       })
-      .on("GET", listUrlFor("sub", ["application/pdf"], true), {
-        body: { files: [file("f2")] },
-      })
+      .on("GET", listUrlFor("d2", ["application/pdf"], true), { body: { files: [folder("d3")] } })
+      .on("GET", listUrlFor("d3", ["application/pdf"], true), { body: { files: [folder("d4")] } })
+      .on("GET", listUrlFor("d4", ["application/pdf"], true), { body: { files: [folder("d5")] } })
+      .on("GET", listUrlFor("d5", ["application/pdf"], true), { body: { files: [file("f5")] } })
       .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF })
-      .on("GET", `${DRIVE}/f2?alt=media`, { body: PDF });
+      .on("GET", `${DRIVE}/f5?alt=media`, { body: PDF });
 
     const result = await collect("drive");
 
@@ -990,7 +1062,7 @@ describe("drive", () => {
     const { rows } = await db.query<{ document_id: string }>(
       "SELECT document_id FROM raw.documents ORDER BY document_id",
     );
-    expect(rows.map((r) => r.document_id)).toEqual(["f1", "f2"]);
+    expect(rows.map((r) => r.document_id)).toEqual(["f1", "f5"]);
   });
 
   it("a sub-folder is never landed as a document", async () => {

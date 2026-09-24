@@ -120,7 +120,8 @@ export const en = {
       list: "A customer's sources and how each is connected.",
       get: "One source and how it is connected.",
       startOAuth: "Begin an OAuth grant; returns the URL to open in a browser. Admins.",
-      browseScope: "What may be chosen for a source's scope, such as Gmail labels. Admins.",
+      browseScope:
+        "What may be chosen for a source's scope: Gmail labels, Xero organisations, or Google Drive folders with their paths and the file types present. Admins.",
       setScope: "Set what a source reads. Admins.",
       setToken: "Connect a source with a pasted token. Admins.",
       setCadence: "Set how often a source is read. Admins.",

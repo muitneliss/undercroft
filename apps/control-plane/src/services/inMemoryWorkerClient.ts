@@ -7,6 +7,7 @@
  */
 
 import type {
+  BrowseListing,
   BrowseScopeResponse,
   BuildModelResponse,
   RawSearchResponse,
@@ -39,7 +40,9 @@ export class InMemoryWorkerClient implements WorkerClient {
   readonly revoked: { source: string; tenantId: string }[] = [];
   readonly triggered: { source: string; tenantId: string; triggeredBy: string }[] = [];
   readonly built: { tenantId: string; model: string; triggeredBy: string }[] = [];
-  #labels: BrowseScopeResponse["items"] = [];
+  /** Which listing each browse asked for: the one fact about a browse only its caller decides. */
+  readonly browsed: { source: string; tenantId: string; kind: BrowseListing }[] = [];
+  #choices: BrowseScopeResponse = { items: [], partial: [] };
   #failWith: WorkerFailure | null = null;
   #runningAs: string | null = null;
   #exec: SqlExecutor | null = null;
@@ -71,8 +74,9 @@ export class InMemoryWorkerClient implements WorkerClient {
     return this;
   }
 
-  withLabels(labels: BrowseScopeResponse["items"]): this {
-    this.#labels = labels;
+  /** What every browse answers: labels, organisations, or Drive's folders and file types. */
+  withChoices(choices: BrowseScopeResponse): this {
+    this.#choices = choices;
     return this;
   }
 
@@ -109,11 +113,16 @@ export class InMemoryWorkerClient implements WorkerClient {
     });
   }
 
-  browseScope(): Promise<WorkerOutcome<BrowseScopeResponse>> {
+  browseScope(input: {
+    source: string;
+    tenantId: string;
+    kind: BrowseListing;
+  }): Promise<WorkerOutcome<BrowseScopeResponse>> {
+    this.browsed.push(input);
     if (this.#failWith !== null) {
       return this.#fail();
     }
-    return Promise.resolve({ ok: true, value: { items: this.#labels } });
+    return Promise.resolve({ ok: true, value: this.#choices });
   }
 
   revokeConnection(input: {
