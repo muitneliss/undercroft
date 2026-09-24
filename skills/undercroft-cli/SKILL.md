@@ -17,7 +17,7 @@ This file is written for one release of the CLI, and this line installs it:
 <!-- x-release-please-start-version -->
 
 ```sh
-v=1.27.2; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
+v=1.27.3; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
 ```
 
 <!-- x-release-please-end -->

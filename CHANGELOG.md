@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.27.3](https://github.com/muitneliss/undercroft/compare/v1.27.2...v1.27.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* **control-plane:** a tRPC refusal no longer carries the server's stack ([#186](https://github.com/muitneliss/undercroft/issues/186)) ([347fef4](https://github.com/muitneliss/undercroft/commit/347fef403f683f1fd6568a1126fdc014f104ed72)), closes [#152](https://github.com/muitneliss/undercroft/issues/152)
+* **hubspot:** say that a deal-to-company link has no source change time ([#187](https://github.com/muitneliss/undercroft/issues/187)) ([6c130a1](https://github.com/muitneliss/undercroft/commit/6c130a19438241673bbf77bbdc4936fec41c4037)), closes [#141](https://github.com/muitneliss/undercroft/issues/141)
+* **lake:** split the readable gap into refused and not read yet, with the reasons ([#189](https://github.com/muitneliss/undercroft/issues/189)) ([c715c34](https://github.com/muitneliss/undercroft/commit/c715c34e66e2ed22c8257f3470e55ecc1bd598fb)), closes [#139](https://github.com/muitneliss/undercroft/issues/139)
+
 ## [1.27.2](https://github.com/muitneliss/undercroft/compare/v1.27.1...v1.27.2) (2026-09-24)
 
 
