@@ -955,7 +955,8 @@ export const en = {
 
   source: {
     readOnly: "Nothing. Read-only access, and you can disconnect at any time.",
-    hubspotReads: "Companies, contacts and deals from your CRM.",
+    hubspotReads:
+      "Companies, contacts and deals from your CRM, and which companies each deal belongs to. HubSpot keeps no change time on that link, so its source-side change time is always empty.",
     xeroReads: "Invoices, payments, credit notes and contacts from one organisation you choose.",
     gmailReads: "Message headers and the attachment types you allow, from the mailbox you connect.",
     driveReads:
