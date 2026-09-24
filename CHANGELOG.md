@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/muitneliss/undercroft/compare/v1.24.0...v1.25.0) (2026-09-24)
+
+
+### Features
+
+* **notify:** render Lark cards as markdown, with emoji and coloured diffs ([#171](https://github.com/muitneliss/undercroft/issues/171)) ([9d748ed](https://github.com/muitneliss/undercroft/commit/9d748ed2559222e5db05c1fb7447726d55997448))
+
 ## [1.24.0](https://github.com/muitneliss/undercroft/compare/v1.23.0...v1.24.0) (2026-09-24)
 
 
