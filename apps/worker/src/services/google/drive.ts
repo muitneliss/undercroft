@@ -1,15 +1,14 @@
 /**
  * Google Drive: matching files from what the admin picked, into the lake.
  *
- * The scope is `drive.file`, not `drive.readonly`, and that is a security decision rather
- * than a preference. `drive.file` grants access only to items the user chose through the
- * Google Picker, so "the files you select, of the types you allow. No other folder is read"
- * -- copy this product already ships -- is enforced by Google rather than by our own `q=`
- * filter. It is also not a Google "restricted" scope, so it needs no annual CASA assessment.
- *
- * A consequence worth stating: a listing here cannot see anything that was not picked, so a
- * wrong filter fails closed. The filter is still written narrowly, because failing closed is
- * a backstop and not an excuse.
+ * **The credential can read more than this reads, and this is what keeps the difference.**
+ * The scope is `drive.readonly` (ADR 0047): `drive.file`, which it replaced, did not grant a
+ * picked folder's existing contents, so no folder pick could be read at all. So "the files you
+ * select, of the types you allow. No other folder is read" -- copy this product ships -- is
+ * no longer enforced by Google. It is enforced here: every listing is `'<picked id>' in
+ * parents`, descent goes no further than the admin's recorded `recurse`, and a directly picked
+ * file is read by its own id and nothing else. A wrong filter no longer fails closed, which is
+ * why the listing is built in one place (`driveListing.ts`) and its query is pinned by tests.
  *
  * **How deep descent goes is the admin's recorded choice.** `scope.recurse` false -- which is
  * what every selection saved before that field existed means -- lists a folder's children and

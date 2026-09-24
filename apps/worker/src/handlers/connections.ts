@@ -161,7 +161,7 @@ function registerConnectionsBrowseRoute(app: Hono, deps: LakeApiDeps): void {
         400,
       );
     }
-    return c.json({ items: outcome.items }, 200);
+    return c.json({ items: outcome.items, partial: outcome.partial }, 200);
   });
 }
 

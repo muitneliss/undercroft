@@ -5,6 +5,7 @@ export {
   ConnectorSpec,
 } from "./connectorSpec.ts";
 export {
+  BrowseListing,
   BrowseScopeRequest,
   BrowseScopeResponse,
   CredentialInput,
@@ -13,6 +14,7 @@ export {
   StoreCredentialRequest,
   StoreCredentialResponse,
 } from "./connectionApi.ts";
+export { GOOGLE_READ_SCOPES, missingReadScope } from "./googleGrant.ts";
 export {
   Aggregate,
   AGGREGATES,

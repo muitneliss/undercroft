@@ -37,6 +37,7 @@ interface Envelope {
     readonly code: string;
     readonly message: string;
     readonly recoverable: boolean;
+    readonly details?: unknown;
   };
 }
 
@@ -169,6 +170,34 @@ describe("an agent reads the platform through the same door as the browser", () 
     expect(entries.flatMap((entry) => entry.procedure ?? []).sort()).toEqual(
       Object.keys(appRouter._def.procedures).sort(),
     );
+  });
+
+  it("a browse the grant cannot serve says in error.details what could not be listed, and the fix", async () => {
+    // Issue 177. The refusal arrived as a sentence and nothing else, so an agent could not
+    // tell "this source has no list" from "reconnect it" without parsing Vietnamese prose.
+    writeProfile("local", plane.origin, false);
+    await signIn();
+    plane.worker.failing("scope-insufficient");
+
+    const refused = await undercroft([
+      "connections",
+      "browse-scope",
+      "--tenant-id",
+      OWN,
+      "--source",
+      "drive",
+      "--agent",
+    ]);
+
+    expect(envelope(refused).error).toMatchObject({
+      code: "CONFLICT",
+      details: {
+        source: "drive",
+        listing: "folders",
+        reason: "scope-insufficient",
+        remedy: "reconnect",
+      },
+    });
   });
 
   it("a tenant that is not yours is NOT_FOUND, never an empty list", async () => {

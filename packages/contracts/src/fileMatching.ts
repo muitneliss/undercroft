@@ -84,11 +84,14 @@ export function allowsFile(fileTypes: readonly string[], file: DescribedFile): b
     return true;
   }
   const type = bareType(file.mimeType);
-  if (isGeneric(type)) {
-    const extension = extensionOf(file.name);
-    return extension !== null && fileTypes.includes(`.${extension}`);
+  // A MIME type chosen as itself matches first -- `application/octet-stream` included, which
+  // the Drive browse offers like any other type present (ADR 0047). Only then does a generic
+  // type fall to the name.
+  if (chosenMimeTypes(fileTypes).includes(type)) {
+    return true;
   }
-  return mimeTypesOf(fileTypes).includes(type);
+  const extension = isGeneric(type) ? extensionOf(file.name) : null;
+  return extension !== null && fileTypes.includes(`.${extension}`);
 }
 
 /**
@@ -97,22 +100,24 @@ export function allowsFile(fileTypes: readonly string[], file: DescribedFile): b
  * is what a Drive listing has to ask for to see them at all.
  */
 export function mimeTypesOf(fileTypes: readonly string[]): string[] {
-  const types = new Set<string>();
-  for (const choice of fileTypes) {
-    const format = FILE_FORMATS.find((f) => f.choice === choice);
-    if (EXTENSION_CHOICE.test(choice)) {
-      for (const generic of GENERIC_MIME_TYPES) {
-        types.add(generic);
-      }
-    } else if (format === undefined) {
-      types.add(bareType(choice));
-    } else {
-      for (const alias of format.mimeTypes) {
-        types.add(alias);
-      }
+  const types = new Set(chosenMimeTypes(fileTypes));
+  if (fileTypes.some((choice) => EXTENSION_CHOICE.test(choice))) {
+    for (const generic of GENERIC_MIME_TYPES) {
+      types.add(generic);
     }
   }
   return [...types];
+}
+
+/** The MIME types chosen as MIME types: a curated choice with its aliases, a custom one as itself. */
+function chosenMimeTypes(fileTypes: readonly string[]): string[] {
+  return fileTypes.flatMap((choice) => {
+    if (EXTENSION_CHOICE.test(choice)) {
+      return [];
+    }
+    const format = FILE_FORMATS.find((f) => f.choice === choice);
+    return format === undefined ? [bareType(choice)] : format.mimeTypes.map(bareType);
+  });
 }
 
 /**

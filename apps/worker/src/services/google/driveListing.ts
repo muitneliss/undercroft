@@ -12,12 +12,14 @@
  * query. One landed as a document is a zero-byte file whose whole content is its name, so they
  * leave here as a separate list of places to look next, never mixed into the files.
  *
- * **Whether Google will answer a NESTED listing is not settled here.** A picked folder's direct
- * children are demonstrably readable under `drive.file`; whether that cascades to a sub-folder
- * is not something Google's documentation states either way. It is deliberately not guessed at:
- * a refusal raises through `api.getJson` as a `ConnectorError` carrying the reason and how many
- * records were seen, so the first run says so plainly. Swallowing it as a skip would land a
- * subset of a customer's folder and call the run green.
+ * **Depth is the walk's, not the grant's.** Under `drive.readonly` (ADR 0047) a listing sees
+ * every folder the account can see, at any depth, so a recursive walk reaches the bottom of the
+ * tree by descending one level per queued folder. It did not under `drive.file`, which answered
+ * a picked folder's existing contents with an empty page rather than a refusal; a grant still
+ * holding that scope is refused before this module is reached (`grant.ts`). A refusal Google
+ * does send still raises through `api.getJson` as a `ConnectorError` carrying the reason and
+ * how many records were seen. Swallowing it as a skip would land a subset of a customer's
+ * folder and call the run green.
  */
 
 import { allowsFile, mimeTypesOf } from "@undercroft/contracts";
@@ -28,7 +30,7 @@ import type { GoogleApi } from "./api.ts";
 export const DRIVE_BASE = "https://www.googleapis.com/drive/v3/files";
 export const ENTITY = "files";
 /** Drive's own type for a folder. */
-const FOLDER_MIME = "application/vnd.google-apps.folder";
+export const FOLDER_MIME = "application/vnd.google-apps.folder";
 const PAGE_SIZE = "100";
 const FIELDS = "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)";
 const FILE_FIELDS = "id,name,mimeType,size,modifiedTime,md5Checksum,parents";
@@ -92,6 +94,19 @@ export async function* listMatchingIn(
 }
 
 /**
+ * Ask a `files.list` about shared drives as well as My Drive.
+ *
+ * A picked folder may live in a shared drive, and without both flags a listing there is
+ * silently empty, which reads as "the folder has nothing in it". One place for them, because
+ * the browse (`driveChoices.ts`) needs the same two and a listing that forgot one would look
+ * exactly like a drive with nothing shared in it.
+ */
+export function acrossAllDrives(url: URL): void {
+  url.searchParams.set("supportsAllDrives", "true");
+  url.searchParams.set("includeItemsFromAllDrives", "true");
+}
+
+/**
  * A directly picked file, or the reason it is not one we may take.
  *
  * A file outside the allow-list is refused: the consent says which types may be read. The
@@ -141,10 +156,7 @@ async function* listOneFolder(
     url.searchParams.set("q", q);
     url.searchParams.set("fields", FIELDS);
     url.searchParams.set("pageSize", PAGE_SIZE);
-    // A picked folder may live in a shared drive; without these the listing is silently
-    // empty there, which reads as "the folder has nothing in it".
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
+    acrossAllDrives(url);
     if (pageToken !== null) {
       url.searchParams.set("pageToken", pageToken);
     }

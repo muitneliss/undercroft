@@ -37,6 +37,19 @@ export interface BrowsedLabel {
   readonly kind: LabelOwner;
 }
 
+/**
+ * Whether a browsed item is a label or an organisation, which is all this screen lists.
+ *
+ * The browse also answers Drive with `folder` and `file-type` items (ADR 0047), which this
+ * screen does not ask for -- Drive is chosen in Google's Picker here. Narrowed by the kind
+ * rather than cast, so an item of another kind can never be set as a label with no owner.
+ */
+export function isBrowsedLabel<T extends { readonly kind: string | null }>(
+  item: T,
+): item is T & BrowsedLabel {
+  return item.kind === null || item.kind === "system" || item.kind === "user";
+}
+
 /** One headed run of the index. Runs with nothing in them are not produced. */
 export interface LabelRun {
   readonly kind: LabelOwner;

@@ -92,10 +92,12 @@ describe("starting a consent", () => {
     expect(params.get("redirect_uri")).toBe("https://undercroft.test/oauth/google/callback");
   });
 
-  it("drive asks for drive.file, never drive.readonly", async () => {
-    // drive.file reaches only what the admin picked in the Picker, so "No other folder is
-    // read" is enforced by Google. It is also not a restricted scope, so it carries no
-    // annual CASA assessment.
+  it("drive asks for drive.readonly, never drive.file", async () => {
+    // Under drive.file a folder picked in Google's Picker does not grant the files already in
+    // it, so a folder pick could never be read: the run listed nothing and closed green with
+    // landed 0 (issue 178). drive.readonly is what reads a picked folder; the promise that no
+    // other folder is read is then the collector's query to keep. ADR 0047, superseding the
+    // drive.file half of ADR 0016.
     const started = await startConsent(
       { exec: db, google },
       { tenantId: TENANT, source: "drive", startedBy: ADMIN.userId },
@@ -105,8 +107,8 @@ describe("starting a consent", () => {
     }
 
     const scope = new URL(started.authorizeUrl).searchParams.get("scope") ?? "";
-    expect(scope).toContain("https://www.googleapis.com/auth/drive.file");
-    expect(scope).not.toContain("drive.readonly");
+    expect(scope.split(" ")).toContain("https://www.googleapis.com/auth/drive.readonly");
+    expect(scope).not.toContain("drive.file");
   });
 
   it("the state is stored as a digest, never in the clear", async () => {

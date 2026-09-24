@@ -165,7 +165,11 @@ function refused(
     message !== "" &&
     message !== trpcCode;
   if (worded) {
-    return failure(code, message);
+    // With the facts the router named beside its sentence, when it named any: which listing
+    // could not be had and what fixes it (`refusal` in the control plane's `trpc.ts`). Passed
+    // through verbatim -- re-deriving them here would mean parsing a sentence in whatever
+    // language the server answered in.
+    return failure(code, message, isRecord(error.data) ? error.data.details : undefined);
   }
   return failure(code, t(`error.${code}`, { origin: connection.origin }));
 }

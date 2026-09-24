@@ -13,19 +13,20 @@
  * `InMemoryWorkerClient` without a socket.
  */
 
-import type {
+import {
+  type BrowseListing,
   BrowseScopeResponse,
-  BuildModelResponse,
-  CredentialInput,
-  DqFailuresRequest,
-  RawSearchRequest,
-  RawSearchResponse,
-  RevokeConnectionResponse,
-  RunQueryRequest,
-  SchemaResponse,
-  SearchKind,
-  StoreCredentialResponse,
-  TableResult,
+  type BuildModelResponse,
+  type CredentialInput,
+  type DqFailuresRequest,
+  type RawSearchRequest,
+  type RawSearchResponse,
+  type RevokeConnectionResponse,
+  type RunQueryRequest,
+  type SchemaResponse,
+  type SearchKind,
+  type StoreCredentialResponse,
+  type TableResult,
 } from "@undercroft/contracts";
 
 /**
@@ -99,7 +100,7 @@ export interface WorkerClient {
   browseScope: (input: {
     source: string;
     tenantId: string;
-    kind: "labels" | "organisations";
+    kind: BrowseListing;
   }) => Promise<WorkerOutcome<BrowseScopeResponse>>;
   revokeConnection: (input: {
     source: string;
@@ -200,12 +201,17 @@ interface WorkerTransport {
   readonly triggerToken: string;
 }
 
-/** One POST to the worker, with its refusals mapped onto `WorkerOutcome`. */
+/**
+ * One POST to the worker, with its refusals mapped onto `WorkerOutcome`. With a `schema` the
+ * answer is parsed, not cast, so its defaults apply: `BrowseScopeResponse.partial` makes an
+ * older worker's answer read as "whole" rather than as no answer. Unparseable is a refusal.
+ */
 function postTo(t: WorkerTransport): typeof post {
   async function post<T>(
     path: string,
     body: unknown,
     deadlineMs: number = t.timeoutMs,
+    schema?: { safeParse: (raw: unknown) => { success: true; data: T } | { success: false } },
   ): Promise<WorkerOutcome<T>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), deadlineMs);
@@ -226,7 +232,9 @@ function postTo(t: WorkerTransport): typeof post {
         // it the right place to tell a withheld permission from every other refusal.
         return { ok: false, reason: REFUSAL_BY_STATUS.get(response.status) ?? "refused" };
       }
-      return { ok: true, value: (await response.json()) as T };
+      const raw: unknown = await response.json();
+      const parsed = schema?.safeParse(raw) ?? { success: true as const, data: raw as T };
+      return parsed.success ? { ok: true, value: parsed.data } : { ok: false, reason: "refused" };
     } catch {
       return { ok: false, reason: "unreachable" };
     } finally {
@@ -345,7 +353,7 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
 
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
-    browseScope: (input) => post("/v1/connections/browse", input),
+    browseScope: (input) => post("/v1/connections/browse", input, t.timeoutMs, BrowseScopeResponse),
     revokeConnection: (input) => post("/v1/connections/revoke", input),
     triggerIngest: trigger,
     // The worker's own build deadline plus room for the rows; the default would cut a

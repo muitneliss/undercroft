@@ -220,6 +220,78 @@ describe("browsing what may be shared", () => {
     // classification was lost on the way.
     expect(await response.json()).toEqual({
       items: [{ id: "Label_8", name: "Invoices", kind: "user" }],
+      partial: [],
+    });
+  });
+
+  it("a Drive grant of drive.file is a reconnect, and Google is never asked", async () => {
+    // Issue 177's "reconnect, not a generic refusal", and why it cannot be Google's 403 that
+    // says so: under drive.file Google refuses nothing, it answers the folder listing with an
+    // empty page, and the browse would offer "no folders" as the truth about a customer's
+    // drive. Every Drive connection made before ADR 0047 holds this scope.
+    await post("/v1/connections/credential", {
+      ...VALID,
+      source: "drive",
+      scope: "openid https://www.googleapis.com/auth/drive.file",
+    });
+
+    const response = await post("/v1/connections/browse", {
+      source: "drive",
+      tenantId: TENANT,
+      kind: "folders",
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "scope_insufficient" });
+    expect(fetcher.calls).toEqual([]);
+  });
+
+  it("a Drive grant of drive.readonly lists its folders and file types", async () => {
+    // The quiet side, through the verb: the pair is served, the grant passes, and what an
+    // admin pastes into a Drive scope -- `{ id, name, kind: "folder" }` -- crosses the hop
+    // with its path, beside a completeness verdict.
+    await post("/v1/connections/credential", {
+      ...VALID,
+      source: "drive",
+      scope: "openid https://www.googleapis.com/auth/drive.readonly",
+    });
+    function files(q: string, fields: string): string {
+      const url = new URL("https://www.googleapis.com/drive/v3/files");
+      url.searchParams.set("q", q);
+      url.searchParams.set("fields", `nextPageToken,incompleteSearch,${fields}`);
+      url.searchParams.set("pageSize", "1000");
+      url.searchParams.set("corpora", "allDrives");
+      url.searchParams.set("supportsAllDrives", "true");
+      url.searchParams.set("includeItemsFromAllDrives", "true");
+      return url.toString();
+    }
+    const folder = "application/vnd.google-apps.folder";
+    fetcher
+      .on(
+        "GET",
+        "https://www.googleapis.com/drive/v3/drives?pageSize=100&fields=nextPageToken%2Cdrives%28id%2Cname%29",
+        { body: { drives: [] } },
+      )
+      .on("GET", files(`mimeType = '${folder}' and trashed = false`, "files(id,name,parents)"), {
+        body: { files: [{ id: "fo-1", name: "Statements", parents: ["root"] }] },
+      })
+      .on("GET", files(`mimeType != '${folder}' and trashed = false`, "files(mimeType)"), {
+        body: { files: [{ mimeType: "application/pdf" }] },
+      });
+
+    const response = await post("/v1/connections/browse", {
+      source: "drive",
+      tenantId: TENANT,
+      kind: "folders",
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      items: [
+        { id: "fo-1", name: "Statements", kind: "folder", path: ["Statements"] },
+        { id: "application/pdf", name: "application/pdf", kind: "file-type" },
+      ],
+      partial: [],
     });
   });
 
@@ -297,7 +369,7 @@ describe("a request refused before the database is asked", () => {
     expect(JSON.stringify(await response.json())).not.toContain("super-secret-token");
   });
 
-  it("drive cannot be browsed, because its choosing happens in the Picker", async () => {
+  it("drive asked for labels is a pair nobody lists, refused before anything is read", async () => {
     const response = await post(
       "/v1/connections/browse",
       { source: "drive", tenantId: TENANT, kind: "labels" },

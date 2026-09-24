@@ -46,6 +46,12 @@ describe("allowsFile", () => {
     expect(allowsFile(["application/pdf"], { mimeType: OCTET, name: "scan.pdf" })).toBe(false);
   });
 
+  it("an octet-stream type chosen as itself matches every such file, whatever its name", () => {
+    // The Drive browse offers each MIME type present, octet-stream included; choosing it is
+    // a decision about the type, and the extension rule must not narrow it.
+    expect(allowsFile([OCTET], { mimeType: OCTET, name: "Acme Pte. Ltd." })).toBe(true);
+  });
+
   it("a chosen format matches every spelling a provider sends for it", () => {
     expect(allowsFile(["application/xml"], { mimeType: "text/xml", name: "fs.xbrl" })).toBe(true);
     expect(

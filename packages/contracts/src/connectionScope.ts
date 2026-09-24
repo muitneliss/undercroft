@@ -53,9 +53,10 @@ export const GmailScope = z.object({
 export const DriveScope = z.object({
   kind: z.literal("drive"),
   /**
-   * What the admin picked in the Google Picker. Under the `drive.file` scope these are the
-   * only things the credential can read at all -- Google enforces it, so the promise "no
-   * other folder is read" is not ours to keep or break.
+   * What the admin picked, in the Google Picker or from `connections.browseScope`. These are
+   * the only things a run reads. The credential is `drive.readonly` and could read more, so
+   * the promise "no other folder is read" is kept by the collector's own `'<id>' in parents`
+   * query and by `recurse`, not by Google. ADR 0047.
    */
   files: z.array(Chosen.extend({ kind: z.enum(["folder", "file"]) })).default([]),
   fileTypes: FileTypes,

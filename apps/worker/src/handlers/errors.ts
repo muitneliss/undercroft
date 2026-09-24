@@ -19,6 +19,7 @@ import type { ApiError } from "@undercroft/contracts";
 import { ConnectorError, HttpError } from "@undercroft/core";
 
 import { ScopeNotChosen } from "../services/google/collect.ts";
+import { GrantTooNarrow } from "../services/google/grant.ts";
 import {
   ConnectionUnusable,
   RunInProgress,
@@ -65,7 +66,9 @@ export function failureOf(error: unknown): Failure {
       details: [error.runId],
     };
   }
-  if (error instanceof ConnectionUnusable) {
+  // A grant too narrow to read its source has the remedy an unconnected one has: a reconnect.
+  // Its message names the scope it lacks.
+  if (error instanceof ConnectionUnusable || error instanceof GrantTooNarrow) {
     return { status: 409, code: "credential_unusable", message: error.message, details: [] };
   }
   if (error instanceof UnknownTenant || error instanceof UnknownSource) {

@@ -142,7 +142,8 @@ export const vi = {
       list: "Các nguồn của khách hàng và trạng thái kết nối.",
       get: "Một nguồn và trạng thái kết nối của nó.",
       startOAuth: "Bắt đầu cấp quyền OAuth; trả về URL để mở trong trình duyệt. Quản trị.",
-      browseScope: "Những gì có thể chọn cho phạm vi đọc, ví dụ nhãn Gmail. Quản trị.",
+      browseScope:
+        "Những gì có thể chọn cho phạm vi đọc: nhãn Gmail, tổ chức Xero, hoặc thư mục Google Drive kèm đường dẫn và các loại tệp đang có. Quản trị.",
       setScope: "Đặt phạm vi đọc của một nguồn. Quản trị.",
       setToken: "Kết nối một nguồn bằng token dán vào. Quản trị.",
       setCadence: "Đặt tần suất đọc một nguồn. Quản trị.",

@@ -6,12 +6,64 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { Cadence, sourceKind } from "@undercroft/contracts";
+import { type BrowseListing, Cadence } from "@undercroft/contracts";
+import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
-import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import type { WorkerFailure } from "../services/workerClient.ts";
+import { refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
+
+/**
+ * Why a browse was refused, and what the person or agent reading it can do about it.
+ *
+ * Four answers, because the remedies have nothing in common. One message for all of them
+ * told an administrator whose Gmail grant Google had refused that "the processing service is
+ * not responding" -- on the very screen where the remedy was a reconnect they could do
+ * themselves, and about a service that was answering perfectly. The sentence is worded for
+ * the reader; `details` carries the same verdict as codes an agent matches on, since the
+ * sentence alone left one guessing what could not be listed (issue 177).
+ */
+function browseRefusal(
+  locale: Locale,
+  at: { source: string; listing: BrowseListing | null },
+  reason: WorkerFailure | "unsupported",
+): TRPCError {
+  const t = messages(locale);
+  const facts = { source: at.source, listing: at.listing };
+  switch (reason) {
+    // A source with nothing to choose from. The request will never succeed, so BAD_REQUEST;
+    // the facts say so, which is what keeps an agent from "fixing the input" and retrying.
+    case "unsupported":
+      return refusal("BAD_REQUEST", t("error.browseUnsupported", { source: at.source }), {
+        ...facts,
+        reason: "unsupported",
+        remedy: "none",
+      });
+    // Google refused the grant, or the recorded grant lacks the scope -- a Drive grant from
+    // before ADR 0047 is `drive.file`, which Google answers with an empty list rather than a
+    // refusal, so the worker refuses it by the recorded scope instead.
+    case "scope-insufficient":
+      return refusal("PRECONDITION_FAILED", t("error.scopeInsufficient", { source: at.source }), {
+        ...facts,
+        reason: "scope-insufficient",
+        remedy: "reconnect",
+      });
+    case "unreachable":
+      return refusal("PRECONDITION_FAILED", t("error.workerUnavailable"), {
+        ...facts,
+        reason: "worker-unreachable",
+        remedy: "retry-later",
+      });
+    default:
+      return refusal("BAD_REQUEST", t("error.browseRefused", { source: at.source }), {
+        ...facts,
+        reason: "refused",
+        remedy: "none",
+      });
+  }
+}
 
 export const connectionsRouter = router({
   list: tenantProcedure.query(({ ctx, input }) => connections.list(ctx.exec, input.tenantId)),
@@ -65,45 +117,30 @@ export const connectionsRouter = router({
     }),
 
   /**
-   * What an admin may choose from, for the scope picker: Gmail's labels, or the
-   * organisations a Xero consent can see.
+   * What an admin may choose from, for the scope picker or an agent at the CLI: Gmail's
+   * labels, the organisations a Xero consent can see, or Drive's folders -- each with its
+   * path -- and the file types across the grant. ADR 0047.
    *
    * Proxied to the worker because it needs a live token, which only the worker can open.
-   * Drive has no listing: under `drive.file` the choosing happens in the browser through
-   * Google's own Picker, so there is nothing for the server to list.
+   * Every refusal names, in `details`, which listing could not be had and what would fix it.
    */
   browseScope: requireRole("admin")
     .input(z.object({ source: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
+      const listing = connections.browseListingFor(input.source);
+      if (listing === null) {
+        throw browseRefusal(ctx.locale, { source: input.source, listing }, "unsupported");
+      }
       if (ctx.worker === null) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: messages(ctx.locale)("error.workerUnavailable"),
-        });
+        throw browseRefusal(ctx.locale, { source: input.source, listing }, "unreachable");
       }
       const outcome = await ctx.worker.browseScope({
         source: input.source,
         tenantId: ctx.tenantId,
-        kind: sourceKind(input.source) === "xero" ? "organisations" : "labels",
+        kind: listing,
       });
       if (!outcome.ok) {
-        // Three outcomes, three sentences. One message for all of them told an
-        // administrator whose Gmail grant Google had refused that "the processing service
-        // is not responding" -- on the very screen where the remedy was a reconnect they
-        // could do themselves, and about a service that was answering perfectly.
-        if (outcome.reason === "scope-insufficient") {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: messages(ctx.locale)("error.scopeInsufficient"),
-          });
-        }
-        throw new TRPCError({
-          code: outcome.reason === "unreachable" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
-          message: messages(ctx.locale)(
-            outcome.reason === "unreachable" ? "error.workerUnavailable" : "error.browseRefused",
-            { source: input.source },
-          ),
-        });
+        throw browseRefusal(ctx.locale, { source: input.source, listing }, outcome.reason);
       }
       return outcome.value;
     }),

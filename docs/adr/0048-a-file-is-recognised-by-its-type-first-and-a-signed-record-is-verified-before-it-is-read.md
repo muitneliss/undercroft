@@ -1,4 +1,4 @@
-# 47. A file is recognised by its type first, and a signed record is verified before it is read
+# 48. A file is recognised by its type first, and a signed record is verified before it is read
 
 - Status: Accepted
 - Date: 2026-09-24

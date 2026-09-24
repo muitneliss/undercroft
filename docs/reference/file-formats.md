@@ -22,7 +22,8 @@ The reading level describes only what becomes searchable text.
    PDF, whatever its name says. An extension never overrides a MIME type and never widens one.
 2. **The name is consulted only when the MIME type is `application/octet-stream`**, the type a
    provider uses when it does not know. Then only an extension that was chosen as such counts,
-   for example `.oa`.
+   for example `.oa`. Choosing `application/octet-stream` itself, which the Drive browse offers
+   when such files are present, takes every file of that type, whatever its name.
 3. **An extension is one to eight letters or digits after the last dot, with at least one
    letter.** Anything else is a name that happens to contain a dot. `Services Agreement for
 Mr. Smith`, `Tax Queries Rev.1`, `Acme Pte. Ltd.` and `CONTRACT 01.01/2024 QT-FXpdf` all have

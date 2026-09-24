@@ -63,3 +63,32 @@ describe("reading a worker refusal", () => {
     expect(outcome).toEqual({ ok: false, reason: "unreachable" });
   });
 });
+
+describe("reading a browse answer from a worker of another build", () => {
+  it("a worker built before `partial` and `kind` is read as what it was: whole, unclassified", async () => {
+    // Worker and control plane deploy separately, so for a while one answers the other in an
+    // older shape. Cast rather than parsed, the missing `partial` would reach an agent as no
+    // answer at all to "is this list complete" -- which is not the same as "yes".
+    const client = createHttpWorkerClient({
+      baseUrl: "https://worker.test",
+      triggerToken: "t",
+      fetch: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ items: [{ id: "Label_8", name: "Invoices" }] }), {
+            status: 200,
+          }),
+        ),
+    });
+
+    const outcome = await client.browseScope({
+      source: "gmail",
+      tenantId: "CASE-0042",
+      kind: "labels",
+    });
+
+    expect(outcome).toEqual({
+      ok: true,
+      value: { items: [{ id: "Label_8", name: "Invoices", kind: null }], partial: [] },
+    });
+  });
+});

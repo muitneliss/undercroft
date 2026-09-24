@@ -1,21 +1,19 @@
 ---
 title: >-
-  ADR 0047: A file is recognised by its type first, and a signed record is
+  ADR 0048: A file is recognised by its type first, and a signed record is
   verified before it is read
 type: source
 date: 2026-09-24
 tags: []
 source: >-
-  docs/adr/0047-a-file-is-recognised-by-its-type-first-and-a-signed-record-is-verified-before-it-is-read.md
+  docs/adr/0048-a-file-is-recognised-by-its-type-first-and-a-signed-record-is-verified-before-it-is-read.md
 source_path: >-
-  docs/adr/0047-a-file-is-recognised-by-its-type-first-and-a-signed-record-is-verified-before-it-is-read.md
-source_hash: 6a165d836d7b3993a4ea62b26768d636acdebb0a8eb8da3356938418ea650ba7
+  docs/adr/0048-a-file-is-recognised-by-its-type-first-and-a-signed-record-is-verified-before-it-is-read.md
+source_hash: 1638e874461d6c1a7865d9a223e63a0219936f76653ae86ea5a0494cdff55083
 ingested: 2026-09-24
 ---
 
-# ADR 0047: A file is recognised by its type first, and a signed record is verified before it is read
-
-# ADR 0047: A file is recognised by its type first, and a signed record is verified before it is read
+# ADR 0048: A file is recognised by its type first, and a signed record is verified before it is read
 
 Accepted 2026-09-24, implementing issue #176. Builds on [[ADR 0031 A Picked Drive Folder May Be Read to the Bottom]] (no consent widens by deploying) and [[ADR 0024: A document's text is readable by dbt]] (what a reader writes is `raw.document_text`).
 

@@ -5,9 +5,10 @@
  * one self-contained control over the store's draft, and `ScopePicker` only decides which one
  * to show.
  *
- * Under the `drive.file` scope a server-side folder listing is not merely unnecessary, it is
- * impossible -- the credential cannot see anything that has not been picked. That is the
- * point: Google enforces the promise instead of our query filter.
+ * The Picker only chooses. What a run reads is the worker's own query over the picks, under the
+ * connection's `drive.readonly` grant, which is also what lets the worker list folders for an
+ * agent with no browser (ADR 0047). This screen keeps the Picker: it is Google's own view of
+ * the account's Drive, and an admin already knows how to use it.
  *
  * **How deep the read goes is a choice, and it is said while it is made.** "Sub-folders are
  * not read" used to be a standing note above the picker, because it was always true. Now that
@@ -15,11 +16,11 @@
  * changes with the tick -- the pattern `GmailChoice` uses for "no label means the whole
  * mailbox", `role="status"` included, so a screen reader is told at the same moment.
  *
- * **The Picker is opened as the connection's own Google account.** `drive.file` grants a file
- * to the app for the Google account that picked it: a folder picked while the browser is
- * signed in as somebody else is granted to THAT account, and the connection being scoped would
- * be refused it at run time. So the connection's address goes to Google as the sign-in hint,
- * which matters the moment a tenant holds two Drive accounts (ADR 0043).
+ * **The Picker is opened as the connection's own Google account.** A folder picked while the
+ * browser is signed in as somebody else is a folder in THAT account's Drive, which the
+ * connection being scoped may not be able to see at all, and its run would find nothing there.
+ * So the connection's address goes to Google as the sign-in hint, which matters the moment a
+ * tenant holds two Drive accounts (ADR 0043).
  */
 
 import { useTranslation } from "react-i18next";
