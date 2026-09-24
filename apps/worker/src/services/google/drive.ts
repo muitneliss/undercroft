@@ -28,7 +28,7 @@
  * hands back containers alongside files -- is `driveListing.ts`. What lands is here.
  */
 
-import type { DriveScope } from "@undercroft/contracts";
+import { type DriveScope, exportTypeOf, landedType } from "@undercroft/contracts";
 import { canonicalJson } from "@undercroft/core";
 
 import type { DocumentToLand } from "../landDocument.ts";
@@ -219,6 +219,11 @@ function toRecord(file: DriveFile): RecordToLand {
  * `metadata` reaches dbt and therefore a dashboard: ids, types and counts only. `manifest`
  * reaches the lake alone, which dbt and BI cannot read, and is where everything a person
  * named goes. Two arguments rather than one object, so the boundary is visible here. ADR 0015.
+ *
+ * **A Google Doc, Sheet or Slides file is EXPORTED, never downloaded.** It has no bytes of its
+ * own -- `alt=media` refuses it -- so what lands is the export, catalogued under the export's
+ * type, which is the type the reader for it opens. `metadata.mimeType` keeps what Drive said
+ * the file was, so the export is never mistaken for an upload.
  */
 function toDocument(
   api: GoogleApi,
@@ -226,9 +231,15 @@ function toDocument(
   picked: DriveScope["files"][number],
   seen: number,
 ): DocumentToLand {
+  const exportAs = exportTypeOf(file.mimeType);
+  const id = encodeURIComponent(file.id);
+  const url =
+    exportAs === null
+      ? `${DRIVE_BASE}/${id}?alt=media`
+      : `${DRIVE_BASE}/${id}/export?mimeType=${encodeURIComponent(exportAs)}`;
   return {
     documentId: file.id,
-    contentType: file.mimeType,
+    contentType: exportAs ?? landedType(file),
     declaredBytes: file.size,
     metadata: {
       mimeType: file.mimeType,
@@ -241,8 +252,7 @@ function toDocument(
       fileId: file.id,
     },
     sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
-    fetchBytes: () =>
-      api.getBytes(`${DRIVE_BASE}/${encodeURIComponent(file.id)}?alt=media`, ENTITY, seen),
+    fetchBytes: () => api.getBytes(url, ENTITY, seen),
   };
 }
 

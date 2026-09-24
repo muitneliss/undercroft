@@ -9,6 +9,8 @@
 
 import { describe, expect, test as it } from "bun:test";
 
+import { FILE_FORMATS } from "@undercroft/contracts";
+
 import type { Spawn } from "../transform.ts";
 import {
   EMPTY_SOURCE,
@@ -153,6 +155,129 @@ describe("the types that are not PDFs", () => {
     const result = await extract(spawn, { contentType: "text/plain; charset=utf-8", bytes });
 
     expect(result.method).toBe("txt");
+  });
+
+  it("has a reader, or a refusal by name, for every file type the picker offers", async () => {
+    // The docs page promises a reading level for each offered format; a format that reached
+    // `unsupported-content-type` would make that promise false for every file of it.
+    const { spawn } = spawnAnswering(A_PAGE);
+    for (const format of FILE_FORMATS) {
+      const landed = format.exportAs ?? format.landsAs ?? null;
+      for (const contentType of landed === null ? format.mimeTypes : [landed]) {
+        const result = await extract(spawn, { contentType });
+        expect({ contentType, reason: result.reason }).not.toEqual({
+          contentType,
+          reason: UNSUPPORTED_TYPE,
+        });
+      }
+    }
+  });
+});
+
+describe("a saved web page", () => {
+  it("is read as the text a reader sees, without its scripts or styles", async () => {
+    const { spawn } = spawnAnswering("");
+    const page = `<!doctype html><html><head><meta charset="utf-8"><title>Company search</title>
+      <style>.uen { color: red }</style><script>var tracking = "abc";</script></head>
+      <body><h1>Acme Holdings</h1><table><tr><td>UEN</td><td>209900001A</td></tr></table>
+      <p>C&#244;ng ty &amp; &#272;&#7889;i t&#225;c&nbsp;chung</p></body></html>`;
+
+    const result = await extract(spawn, {
+      contentType: "text/html",
+      bytes: new TextEncoder().encode(page),
+    });
+
+    expect(result.method).toBe("html");
+    expect(result.text).toContain("Company search");
+    expect(result.text).toContain("Acme Holdings");
+    expect(result.text).toContain("UEN | 209900001A |");
+    expect(result.text).toContain("Công ty & Đối tác chung");
+    expect(result.text).not.toContain("tracking");
+    expect(result.text).not.toContain("color");
+  });
+});
+
+describe("a saved email", () => {
+  const plain = "Điều khoản thanh toán: 30 ngày.";
+  const eml = [
+    `Subject: =?utf-8?B?${Buffer.from("Hóa đơn tháng 9").toString("base64")}?=`,
+    "From: Billing <billing@acme.test>",
+    "To: ops@example.test",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/alternative; boundary="b1"',
+    "",
+    "--b1",
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    Buffer.from(plain).toString("base64"),
+    "--b1",
+    "Content-Type: text/html; charset=utf-8",
+    "Content-Transfer-Encoding: quoted-printable",
+    "",
+    "<p>HTML copy of the same=",
+    " message</p>",
+    "--b1--",
+    "",
+  ].join("\r\n");
+
+  it("is read as its headers and its body, each decoded", async () => {
+    const { spawn } = spawnAnswering("");
+
+    const result = await extract(spawn, {
+      contentType: "message/rfc822",
+      bytes: new TextEncoder().encode(eml),
+    });
+
+    expect(result.method).toBe("mime");
+    expect(result.text).toContain("Subject: Hóa đơn tháng 9");
+    expect(result.text).toContain("From: Billing <billing@acme.test>");
+    expect(result.text).toContain(plain);
+  });
+
+  it("reads one of two alternatives, so its words are not indexed twice", async () => {
+    const { spawn } = spawnAnswering("");
+
+    const result = await extract(spawn, {
+      contentType: "message/rfc822",
+      bytes: new TextEncoder().encode(eml),
+    });
+
+    expect(result.text).not.toContain("HTML copy");
+  });
+});
+
+describe("a saved web page archive", () => {
+  it("is read from its page, soft line breaks undone, its images skipped", async () => {
+    const { spawn } = spawnAnswering("");
+    const mhtml = [
+      "From: <Saved by Blink>",
+      "Subject: Business profile",
+      'Content-Type: multipart/related; type="text/html"; boundary="----MultipartBoundary"',
+      "",
+      "------MultipartBoundary",
+      "Content-Type: text/html",
+      "Content-Transfer-Encoding: quoted-printable",
+      "",
+      '<html><body><p class=3D"name">Acme Holdings Pte.=',
+      " Ltd.</p></body></html>",
+      "------MultipartBoundary",
+      "Content-Type: image/png",
+      "Content-Transfer-Encoding: base64",
+      "",
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk",
+      "------MultipartBoundary--",
+      "",
+    ].join("\r\n");
+
+    const result = await extract(spawn, {
+      contentType: "multipart/related",
+      bytes: new TextEncoder().encode(mhtml),
+    });
+
+    expect(result.method).toBe("mime");
+    expect(result.text).toContain("Acme Holdings Pte. Ltd.");
+    expect(result.text).not.toContain("iVBOR");
   });
 });
 

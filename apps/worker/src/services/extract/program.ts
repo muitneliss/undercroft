@@ -26,6 +26,7 @@
  */
 
 import type { Spawn, SpawnOptions } from "../transform.ts";
+import type { OpenAttestationDeps } from "./openAttestationVerify.ts";
 
 export interface ExtractDeps {
   /** Injected in tests; the process passes one that runs the real program. */
@@ -48,6 +49,8 @@ export interface ExtractDeps {
    * children. Nothing else here needs a clock, so it stays optional.
    */
   readonly now?: () => number;
+  /** The DNS an OpenAttestation issuer's identity is checked against. `openAttestation.ts`. */
+  readonly openAttestation?: OpenAttestationDeps;
 }
 
 /** Long enough for a large scan, short enough that a hung child does not hold the run open. */

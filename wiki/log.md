@@ -111,3 +111,9 @@
 ## [2026-09-24] ingest | Runbook Deployment
 ## [2026-09-24] ingest | ADR 0047: Drive reads with drive.readonly
 ## [2026-09-24] ingest | Runbook Google Ingestion Setup
+## [2026-09-24] ingest | ADR 0047: A file is recognised by its type first, and a signed record is verified before it is read
+## [2026-09-24] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-24] ingest | ADR 0048: A file is recognised by its type first, and a signed record is verified before it is read
+## [2026-09-24] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-24] remove | ADR 0047: A file is recognised by its type first, and a signed record is verified before it is read
+## [2026-09-24] ingest | File formats a Gmail or Drive connection can land

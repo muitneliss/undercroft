@@ -22,7 +22,7 @@
  * folder and call the run green.
  */
 
-import { allowsFileType } from "@undercroft/contracts";
+import { allowsFile, mimeTypesOf } from "@undercroft/contracts";
 import { getPath, getStringPath } from "@undercroft/core";
 
 import type { GoogleApi } from "./api.ts";
@@ -69,7 +69,7 @@ export async function* listMatchingIn(
   const { fileTypes, recurse, seen } = options;
   const visited = new Set<string>([rootId]);
   const queue: string[] = [rootId];
-  const typeClause = mimeTypeClause(listingTypes(fileTypes, recurse));
+  const typeClause = mimeTypeClause(listingTypes(mimeTypesOf(fileTypes), recurse));
   let listed = 0;
 
   // A sub-folder pushed below is walked by this same loop: `for...of` reads the array live,
@@ -77,7 +77,7 @@ export async function* listMatchingIn(
   // still does inside a generator -- the loop is suspended at a yield, not restarted.
   for (const folderId of queue) {
     listed += 1;
-    const folders = yield* listOneFolder(api, queryFor(folderId, typeClause), seen);
+    const folders = yield* listOneFolder(api, queryFor(folderId, typeClause), fileTypes, seen);
 
     if (!recurse) {
       continue;
@@ -125,7 +125,7 @@ export async function readOneFile(
   url.searchParams.set("supportsAllDrives", "true");
 
   const file = toFile(await api.getJson(url.toString(), ENTITY, seen));
-  return allowsFileType(fileTypes, file.mimeType)
+  return allowsFile(fileTypes, file)
     ? { file, reason: "" }
     : { file: null, reason: NOT_ALLOWED_TYPE };
 }
@@ -137,10 +137,15 @@ export async function readOneFile(
  * value, because descent cannot start until the folder has been read to its last page.
  * Holding the folders is bounded by the tree's shape rather than by its contents, which is
  * the same reason `visited` is affordable one level up.
+ *
+ * `q=` narrows by MIME type and cannot narrow by name, so a listing for `.oa` asks for every
+ * `application/octet-stream` file and the allow-list is applied again here, to the name. A
+ * file it turns away was never chosen, so it is neither yielded nor counted as a match.
  */
 async function* listOneFolder(
   api: GoogleApi,
   q: string,
+  fileTypes: readonly string[],
   seen: number,
 ): AsyncGenerator<DriveFile, string[]> {
   const folders: string[] = [];
@@ -161,7 +166,7 @@ async function* listOneFolder(
       const file = toFile(raw);
       if (file.mimeType === FOLDER_MIME) {
         folders.push(file.id);
-      } else {
+      } else if (allowsFile(fileTypes, file)) {
         yield file;
       }
     }
@@ -180,18 +185,20 @@ function queryFor(folderId: string, typeClause: string): string {
 }
 
 /**
- * Which types a folder LISTING asks for, which is not quite the allow-list.
+ * Which MIME types a folder LISTING asks for, which is not quite the allow-list: a chosen
+ * format brings every spelling of its type, and an extension brings the generic type its
+ * files arrive under (`mimeTypesOf`).
  *
  * Empty stays empty: "every type" already includes folders, and adding the folder type to an
  * empty list would turn "everything" into "folders only" -- a filter that lands nothing while
  * looking like it widened something. A recursive walk otherwise adds the folder type, so one
  * request per page yields both the files to land and the folders to descend into.
  */
-function listingTypes(fileTypes: readonly string[], recurse: boolean): string[] {
-  if (fileTypes.length === 0) {
+function listingTypes(mimeTypes: readonly string[], recurse: boolean): string[] {
+  if (mimeTypes.length === 0) {
     return [];
   }
-  return recurse ? [...fileTypes, FOLDER_MIME] : [...fileTypes];
+  return recurse ? [...mimeTypes, FOLDER_MIME] : [...mimeTypes];
 }
 
 /**

@@ -21,7 +21,7 @@ import {
   CURATED_FILE_TYPES,
   describeFileType,
   isCuratedFileType,
-  isPlausibleMimeType,
+  isPlausibleFileType,
   normalizeFileType,
 } from "@/lib/fileTypes.ts";
 import { useUiStore } from "@/store.ts";
@@ -92,7 +92,7 @@ function CustomFileType({
   const normalized = normalizeFileType(input);
 
   function addCustom(): void {
-    if (!isPlausibleMimeType(normalized)) {
+    if (!isPlausibleFileType(normalized)) {
       return;
     }
     if (!fileTypes.includes(normalized)) {
@@ -118,7 +118,7 @@ function CustomFileType({
           {t("scopePicker.fileTypesCustomAdd")}
         </button>
       </div>
-      {input !== "" && !isPlausibleMimeType(normalized) ? (
+      {input !== "" && !isPlausibleFileType(normalized) ? (
         <p className="note">{t("scopePicker.fileTypesCustomInvalid")}</p>
       ) : null}
     </>

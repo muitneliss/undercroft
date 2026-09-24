@@ -14,12 +14,24 @@
  */
 
 import { readDocx } from "./docx.ts";
+import { decodeHtmlBytes, htmlToText } from "./html.ts";
+import { mimeToText } from "./mime.ts";
 import { ocrImage, ocrScan } from "./ocr.ts";
+import { claimsOpenAttestation, readOpenAttestation } from "./openAttestation.ts";
 import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
 import { readXlsx } from "./xlsx.ts";
 
 /** How the text was read. A new extractor is a new value; the column is deliberately not an enum. */
-export type ExtractMethod = "pdf_text" | "pdf_ocr" | "docx" | "xlsx" | "image_ocr" | "txt";
+export type ExtractMethod =
+  | "pdf_text"
+  | "pdf_ocr"
+  | "docx"
+  | "xlsx"
+  | "image_ocr"
+  | "txt"
+  | "html"
+  | "mime"
+  | "openattestation";
 
 /**
  * Why nothing could be read. Each names something an operator can act on.
@@ -183,6 +195,40 @@ function readWordDocument(_deps: ExtractDeps, input: Document): Extracted {
   return text === null ? refused(DOCX_UNREADABLE) : read("docx", text);
 }
 
+/** A web page's text nodes, in the charset the page declares. `html.ts`. */
+function readHtml(_deps: ExtractDeps, input: Document): Extracted {
+  return read("html", htmlToText(decodeHtmlBytes(input.bytes)));
+}
+
+/** A saved email or a saved web page: one MIME tree, walked by `mime.ts`. */
+function readMime(_deps: ExtractDeps, input: Document): Extracted {
+  return read("mime", mimeToText(input.bytes));
+}
+
+/**
+ * JSON is text, and is stored as the text it is -- except a document that claims to be
+ * OpenAttestation, which is verified before a word of it is believed (`openAttestation.ts`).
+ *
+ * `JSON.parse` here only asks what the document claims to be; no number it produces is ever
+ * read, so the lossless parser the money rule prefers would buy nothing. The verifier needs
+ * the plain value, and an OpenAttestation v2 document carries every value as a string anyway.
+ * A file that is not JSON at all is still text, and is kept as text.
+ */
+async function readJson(deps: ExtractDeps, input: Document): Promise<Extracted> {
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(input.bytes);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return read("txt", text);
+  }
+  if (!claimsOpenAttestation(parsed)) {
+    return read("txt", text);
+  }
+  const document = await readOpenAttestation(deps.openAttestation ?? {}, parsed);
+  return document.ok ? read("openattestation", document.text) : refused(document.reason);
+}
+
 /**
  * A picture of a document, read by OCR -- or one of `ocr.ts`'s four named refusals.
  *
@@ -218,8 +264,22 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   // the file does not state -- three guesses for an index that wants the words either way.
   ["text/csv", readPlainText],
   ["text/tab-separated-values", readPlainText],
+  // Markdown and XML are read as the text they are. For XML that is the point rather than a
+  // shortcut: an XBRL filing's element names -- `ifrs-full:Revenue` -- ARE its meaning, and
+  // stripping the tags to leave the numbers would keep the figures and lose what they are.
+  ["text/markdown", readPlainText],
+  ["text/x-markdown", readPlainText],
+  ["application/xml", readPlainText],
+  ["text/xml", readPlainText],
+  ["application/json", readJson],
+  ["text/html", readHtml],
+  ["message/rfc822", readMime],
+  ["multipart/related", readMime],
   ["application/pdf", readPdf],
   ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", readWorkbook],
+  // A macro-enabled workbook is the same OOXML package with one more part, which is never
+  // run: the reader opens the sheets' XML and nothing else. Lowercase, as the lookup is.
+  ["application/vnd.ms-excel.sheet.macroenabled.12", readWorkbook],
   ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", readWordDocument],
   // The two image types the connection picker offers and the only two the lake holds: 1,274
   // PNGs and 283 JPEGs, none of them readable until now. `ocr.ts` decides which of them are
@@ -232,6 +292,10 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   // downstream keys off the type -- tesseract sniffs the content -- so it is an alias, not a
   // second reader.
   ["image/jpg", readImage],
+  // tesseract opens WebP through leptonica, and Debian's leptonica -- the one the worker image
+  // installs with tesseract -- is built with WebP. Where it is not, tesseract exits non-zero
+  // and the refusal is `tesseract-failed`, by name.
+  ["image/webp", readImage],
   // The pre-2007 binary workbook. Reading BIFF needs LibreOffice in the image, which is a
   // container's worth of dependency for two files. Its own reason rather than `LEGACY_DOC`,
   // because an operator reading the ledger should not have to know that the Word reason was
@@ -261,6 +325,11 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * release where it stops. Without the bump `pdf_ocr` would ship reaching nothing at all: every
  * document it was written for already has a row, with bytes that have not moved.
  *
+ * GENERATION 3 IS ISSUE #176's FORMATS: macro-enabled workbooks, HTML, saved pages and emails,
+ * XML, JSON, Markdown, WebP, and OpenAttestation documents inside JSON. Each was recorded
+ * `unsupported-content-type` until now, which is a refusal whose whole point is that it stops
+ * being true.
+ *
  * BY HAND, AND DELIBERATELY SO. The honest alternative is deriving it -- hashing the binaries
  * and language packs behind these readers into the stamp, which is what the sibling project
  * does, because installing `tesseract-ocr-vie` changes what OCR can read without changing a
@@ -272,7 +341,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 2;
+export const CURRENT_READER_VERSION = 3;
 
 /**
  * One document, read whichever way its type allows.

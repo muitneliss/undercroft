@@ -53,7 +53,23 @@ export {
   type ScheduleFacts,
 } from "./cadence.ts";
 export {
-  allowsFileType,
+  FILE_FORMATS,
+  type FileFormat,
+  type FileFormatId,
+  type ReadLevel,
+} from "./fileFormats.ts";
+export {
+  allowsFile,
+  type DescribedFile,
+  exportTypeOf,
+  extensionOf,
+  GENERIC_MIME_TYPES,
+  isPlausibleFileChoice,
+  landedType,
+  mimeTypesOf,
+  normalizeFileChoice,
+} from "./fileMatching.ts";
+export {
   ConnectionScope,
   DriveScope,
   GmailScope,

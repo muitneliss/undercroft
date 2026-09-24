@@ -40,7 +40,7 @@
  * byte-for-byte what it was. Both halves are pinned by tests; neither is safe to relax.
  */
 
-import { type GmailScope, allowsFileType } from "@undercroft/contracts";
+import { allowsFile, type GmailScope, landedType } from "@undercroft/contracts";
 import { canonicalJson, decodeBase64Url, getPath, getStringPath } from "@undercroft/core";
 
 import type { DocumentToLand } from "../landDocument.ts";
@@ -225,7 +225,9 @@ function attachment(api: GoogleApi, facts: MessageFacts, part: MatchingPart): Do
   return {
     // (messageId, partIndex), never attachmentId. See the module docstring.
     documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
-    contentType: part.mimeType,
+    // An attachment Gmail could only call `application/octet-stream` is filed under what its
+    // extension says when the catalogue knows it -- a `.oa` as JSON. `fileFormats.ts`.
+    contentType: landedType({ mimeType: part.mimeType, name: part.filename }),
     declaredBytes: part.size,
     metadata: { labelIds, partIndex: String(part.index), messageId },
     manifest: {
@@ -346,7 +348,7 @@ function matchingParts(message: unknown, fileTypes: readonly string[]): Matching
     const mimeType = str(part, "mimeType");
     const attachmentId = str(part, "body.attachmentId");
     const filename = str(part, "filename");
-    if (allowsFileType(fileTypes, mimeType) && attachmentId !== "") {
+    if (allowsFile(fileTypes, { mimeType, name: filename }) && attachmentId !== "") {
       found.push({
         index,
         attachmentId,
