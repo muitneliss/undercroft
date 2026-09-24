@@ -6,11 +6,18 @@
  * worker like Gmail's labels; the choice is one organisation and any number of the spec's
  * entities, where none means all of them.
  *
+ * Every entity ticked is NOT another spelling of none. The worker reads the spec's entities
+ * filtered to the ticked names (`apps/worker/src/services/runPaths.ts`), so a full list reads
+ * the listed entities only: an entity the spec gains later is not read until it is ticked,
+ * where an empty list would read it. The echo says so in words rather than leaving the difference to
+ * be inferred from the ticks.
+ *
  * Its own module for the reason `LabelIndex` has one: it is a control, not a page.
  */
 
 import { useTranslation } from "react-i18next";
 
+import { ChoiceEcho } from "@/components/ChoiceEcho.tsx";
 import { describeXeroEntity, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
 import { useUiStore } from "@/store.ts";
 
@@ -36,6 +43,12 @@ export function XeroChoice({
   const { t } = useTranslation();
   const setOrganisation = useUiStore((s) => s.setScopeOrganisation);
   const toggleEntity = useUiStore((s) => s.toggleScopeEntity);
+  const clearEntities = useUiStore((s) => s.clearScopeEntities);
+  const selectAllEntities = useUiStore((s) => s.selectAllScopeEntities);
+
+  function named(ids: readonly string[]): string {
+    return ids.map((entity) => describeXeroEntity(t, entity)).join(", ");
+  }
 
   if (organisations.length === 0) {
     return <p className="note">{t("scopePicker.noOrganisations")}</p>;
@@ -86,16 +99,21 @@ export function XeroChoice({
         </div>
       </fieldset>
 
-      <div className="echo">
-        <span className="label">{t("scopePicker.echoHead")}</span>
-        <p className="note echo__says" role="status">
-          {entities.length === 0
-            ? t("scope.xeroAll")
-            : t("scope.xeroEntities", {
-                entities: entities.map((entity) => describeXeroEntity(t, entity)).join(", "),
-              })}
-        </p>
-      </div>
+      <ChoiceEcho
+        chosen={entities}
+        offered={XERO_ENTITIES}
+        says={{
+          none: t("scope.xeroAll"),
+          some: t("scope.xeroEntities", { entities: named(entities) }),
+          every: t("scopePicker.echoEveryEntity", { entities: named(XERO_ENTITIES) }),
+        }}
+        onSelectAll={(): void => {
+          selectAllEntities(source, XERO_ENTITIES);
+        }}
+        onClear={(): void => {
+          clearEntities(source);
+        }}
+      />
     </>
   );
 }

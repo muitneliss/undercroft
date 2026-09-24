@@ -417,6 +417,12 @@ export const en = {
     echoHead: "Will read",
     echoChosen_one: "Headers and matching attachments in {{count, number}} chosen label",
     echoChosen_other: "Headers and matching attachments in {{count, number}} chosen labels",
+    echoEveryLabel:
+      "Headers and matching attachments in the listed labels only. Mail carrying none of them is not read, and a label created later is not part of this choice.",
+    echoEveryFileType: "Only the listed file types. Any other type is not read.",
+    echoEveryEntity:
+      "Only the listed kinds of data: {{entities}}. A kind added later is not read until it is ticked.",
+    selectAll: "Select all",
     clearAll: "Clear all",
     pickFromDrive: "Choose from Google Drive",
     nothingToChoose: "There is nothing to choose from yet.",

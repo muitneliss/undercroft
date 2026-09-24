@@ -102,10 +102,26 @@ interface UiState {
    * reader is told about.
    */
   clearScopeLabels: (source: string) => void;
+  /**
+   * Tick every label the mailbox listed, keeping any already ticked that it did not list.
+   *
+   * NOT the same decision as clearing. A full list is a closed filter: only mail carrying one
+   * of these labels is read, and a label created later is not added to it. The three
+   * `selectAll*` verbs share one rule -- a union, never a replacement -- so pressing one can
+   * only add ticks and never silently drop one. `withEvery` below is that rule.
+   */
+  selectAllScopeLabels: (source: string, offered: readonly string[]) => void;
   /** Xero: choose the organisation to read. One at a time; a consent that sees several is told which. */
   setScopeOrganisation: (source: string, organisation: { id: string; name: string }) => void;
   /** Xero: add or remove one entity. No entity chosen means every one, deliberately. */
   toggleScopeEntity: (source: string, entity: string) => void;
+  /** Xero: put the entity choice back to none, which means every entity the spec declares. */
+  clearScopeEntities: (source: string) => void;
+  /**
+   * Xero: tick every entity the picker offers, keeping any already ticked that it does not.
+   * Closed like the other two: an entity the spec gains later is not read until it is ticked.
+   */
+  selectAllScopeEntities: (source: string, offered: readonly string[]) => void;
   /** Gmail and Drive: add or remove one file type. No type chosen means every one, deliberately. */
   toggleScopeFileType: (source: string, fileType: string) => void;
   /**
@@ -115,6 +131,11 @@ interface UiState {
    * read back beside the control it changed, rather than a loop of individual removals.
    */
   clearScopeFileTypes: (source: string) => void;
+  /**
+   * Tick every curated file type, keeping a custom one the admin typed in. A closed list: a
+   * type on neither is not read, which is exactly what an empty choice does NOT mean.
+   */
+  selectAllScopeFileTypes: (source: string, offered: readonly string[]) => void;
   /** Drive: turn reading sub-folders on or off. ADR 0031. */
   toggleScopeRecurse: (source: string) => void;
   /**
@@ -337,8 +358,54 @@ function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
   };
 }
 
+/**
+ * What "select all" leaves ticked: everything already held, then everything offered.
+ *
+ * A union rather than `offered` alone, because what is held can be more than what is shown --
+ * a custom file type the admin typed, a label saved last month that the mailbox no longer
+ * lists -- and replacing the list with what is on screen would drop that entry without a word.
+ */
+function withEvery(held: readonly string[], offered: readonly string[]): string[] {
+  return [...held, ...offered.filter((entry) => !held.includes(entry))];
+}
+
 /** How a slice writes: Zustand's partial setter, narrowed to this store. */
 type Setter = (partial: Partial<UiState> | ((state: UiState) => Partial<UiState>)) => void;
+
+/**
+ * The three verbs every scope tick-list answers -- one entry, none, every offered one -- written
+ * once for all three lists.
+ *
+ * Gmail's labels, Xero's entities and the file types are the same control over a different
+ * field of the draft, and three hand-copied toggles were three places for "the source is
+ * checked by `draftFor`" or "select all is a union" to be forgotten in one of them. The field
+ * name stays inside this file: the store's interface still speaks `toggleScopeLabel`, so no
+ * component learns how a draft is laid out.
+ */
+function tickList(
+  set: Setter,
+  field: "labels" | "entities" | "fileTypes",
+): {
+  toggle: (source: string, entry: string) => unknown;
+  clear: (source: string) => unknown;
+  selectAll: (source: string, offered: readonly string[]) => unknown;
+} {
+  function rewrite(source: string, next: (held: readonly string[]) => string[]): unknown {
+    return set((state) => {
+      const draft = draftFor(state.scopeDraft, source);
+      return { scopeDraft: { ...draft, [field]: next(draft[field]) } };
+    });
+  }
+
+  return {
+    toggle: (source, entry): unknown =>
+      rewrite(source, (held) =>
+        held.includes(entry) ? held.filter((e) => e !== entry) : [...held, entry],
+      ),
+    clear: (source): unknown => rewrite(source, () => []),
+    selectAll: (source, offered): unknown => rewrite(source, (held) => withEvery(held, offered)),
+  };
+}
 
 /** The interface language, and the only slice that is persisted. */
 function localeSlice(set: Setter): Pick<UiState, "locale" | "setLocale"> {
@@ -357,61 +424,38 @@ function scopeSlice(
   | "setScopeDraft"
   | "toggleScopeLabel"
   | "clearScopeLabels"
+  | "selectAllScopeLabels"
   | "setScopeOrganisation"
   | "toggleScopeEntity"
+  | "clearScopeEntities"
+  | "selectAllScopeEntities"
   | "toggleScopeFileType"
   | "clearScopeFileTypes"
+  | "selectAllScopeFileTypes"
   | "toggleScopeRecurse"
   | "fileTypeInput"
   | "setFileTypeInput"
   | "scopeFilter"
   | "setScopeFilter"
 > {
+  const labels = tickList(set, "labels");
+  const entities = tickList(set, "entities");
+  const fileTypes = tickList(set, "fileTypes");
+
   return {
     scopeDraft: null,
     setScopeDraft: (scopeDraft): unknown => set({ scopeDraft }),
-    toggleScopeLabel: (source, label): unknown =>
-      set((state) => {
-        const draft = draftFor(state.scopeDraft, source);
-        return {
-          scopeDraft: {
-            ...draft,
-            labels: draft.labels.includes(label)
-              ? draft.labels.filter((l) => l !== label)
-              : [...draft.labels, label],
-          },
-        };
-      }),
-    clearScopeLabels: (source): unknown =>
-      set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), labels: [] } })),
+    toggleScopeLabel: labels.toggle,
+    clearScopeLabels: labels.clear,
+    selectAllScopeLabels: labels.selectAll,
     setScopeOrganisation: (source, organisation): unknown =>
       set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), organisation } })),
-    toggleScopeEntity: (source, entity): unknown =>
-      set((state) => {
-        const draft = draftFor(state.scopeDraft, source);
-        return {
-          scopeDraft: {
-            ...draft,
-            entities: draft.entities.includes(entity)
-              ? draft.entities.filter((e) => e !== entity)
-              : [...draft.entities, entity],
-          },
-        };
-      }),
-    toggleScopeFileType: (source, fileType): unknown =>
-      set((state) => {
-        const draft = draftFor(state.scopeDraft, source);
-        return {
-          scopeDraft: {
-            ...draft,
-            fileTypes: draft.fileTypes.includes(fileType)
-              ? draft.fileTypes.filter((f) => f !== fileType)
-              : [...draft.fileTypes, fileType],
-          },
-        };
-      }),
-    clearScopeFileTypes: (source): unknown =>
-      set((state) => ({ scopeDraft: { ...draftFor(state.scopeDraft, source), fileTypes: [] } })),
+    toggleScopeEntity: entities.toggle,
+    clearScopeEntities: entities.clear,
+    selectAllScopeEntities: entities.selectAll,
+    toggleScopeFileType: fileTypes.toggle,
+    clearScopeFileTypes: fileTypes.clear,
+    selectAllScopeFileTypes: fileTypes.selectAll,
     toggleScopeRecurse: (source): unknown =>
       set((state) => {
         const draft = draftFor(state.scopeDraft, source);
