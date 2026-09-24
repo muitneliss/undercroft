@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/muitneliss/undercroft/compare/v1.22.1...v1.23.0) (2026-09-24)
+
+
+### Features
+
+* **ci:** post deploys, failed releases, issues, PRs and red CI to Lark ([#166](https://github.com/muitneliss/undercroft/issues/166)) ([fd705ef](https://github.com/muitneliss/undercroft/commit/fd705efc9909c8a50cedcfc82f422e95b5caf703))
+
 ## [1.22.1](https://github.com/muitneliss/undercroft/compare/v1.22.0...v1.22.1) (2026-09-23)
 
 
