@@ -153,6 +153,10 @@ export function refusal(code: TRPCError["code"], message: string, facts: Refusal
 }
 
 const t = initTRPC.context<Context>().create({
+  // Never development, whatever NODE_ENV says. tRPC's default reads `NODE_ENV !== "production"`,
+  // the deployment sets no NODE_ENV, and in development mode every error -- an anonymous 401
+  // included -- carries `data.stack`: server paths, line numbers, dependency versions (issue 152).
+  isDev: false,
   errorFormatter({ shape, error }) {
     // The type, never the detail. Exception text routinely embeds the offending row, and
     // this response goes to a browser.
