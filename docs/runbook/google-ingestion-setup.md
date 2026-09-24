@@ -19,9 +19,16 @@ capped at 100 test users behind an unverified-app interstitial, and restricted s
 additionally require a **security assessment (CASA)** that is repeated every twelve months.
 That is weeks of calendar time and a real invoice, and no amount of code changes it.
 
-`drive.file` — which is what Drive uses here — is **not** restricted. It needs only basic
-verification, no CASA, and no annual renewal. That is why Drive is scoped through Google's
-Picker rather than by a folder listing of our own.
+`drive.readonly`, which Drive uses here, is **also restricted**. It adds no second assessment:
+CASA covers the OAuth client, and this client needs it for Gmail anyway. Drive used
+`drive.file`, which is not restricted, until
+[ADR 0047](../adr/0047-drive-reads-with-drive-readonly.md). Under `drive.file` a folder picked
+in Google's Picker does not grant the files already in it, so no folder could be read.
+
+**Upgrading from a release before ADR 0047:** every Drive connection holds a `drive.file`
+grant. Its card reads "needs reconnect", and each of its runs fails with a reason that says to
+reconnect the source. An admin reconnects the source once and approves read access on Google's
+screen. Add `drive.readonly` to the consent screen (step 3) before anyone does.
 
 The whole surface is gated on `UNDERCROFT_GOOGLE_INGEST_CLIENT_ID`. With it unset, the
 feature is dormant: every Google source reads "not connected" and no button leads anywhere.
@@ -55,7 +62,7 @@ https://your-domain/oauth/google/callback
 | Source | Scope                                            | Classification                                           |
 | ------ | ------------------------------------------------ | -------------------------------------------------------- |
 | Gmail  | `https://www.googleapis.com/auth/gmail.readonly` | restricted — CASA                                        |
-| Drive  | `https://www.googleapis.com/auth/drive.file`     | non-sensitive                                            |
+| Drive  | `https://www.googleapis.com/auth/drive.readonly` | restricted — CASA (the same assessment as Gmail's)       |
 | both   | `openid`, `email`                                | identity, so the callback learns which account consented |
 
 ## 4. Create the Picker API key

@@ -71,6 +71,7 @@ import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
 import { harvestGmail } from "./gmail.ts";
+import { requireReadGrant } from "./grant.ts";
 import { type Harvest, type HarvestItem, type HarvestSummary, heldBy } from "./harvest.ts";
 
 export const GOOGLE_KINDS = ["gmail", "drive"] as const;
@@ -329,6 +330,9 @@ export async function runGoogleCollect(
   // still gets a run id on every object it lands.
   const runId = input.runId ?? newRunId();
   const observedAt = (deps.now ?? ((): Date => new Date()))().toISOString();
+  // Before anything is asked of Google: a Drive grant that cannot read a picked folder is
+  // answered with an empty listing, not a refusal, and the run would close green on it.
+  await requireReadGrant(deps.exec, input);
   const scope = await googleScope(deps, input);
   const entity = scope.kind === "gmail" ? "messages" : "files";
 

@@ -174,11 +174,17 @@ export const vi = {
      * responding" -- for a grant that Google had refused. An administrator told that waits,
      * retries, and eventually reports an outage; what was needed was a reconnect with the
      * Gmail permission left ticked.
+     *
+     * Names the source rather than Gmail since Drive browses too (ADR 0047): a Drive grant made
+     * before it carries `drive.file`, and its remedy is the same reconnect, to a consent that
+     * now asks for read access.
      */
     scopeInsufficient:
-      "Kết nối Google hiện chưa đủ quyền để đọc danh sách này. Hãy ngắt kết nối rồi kết nối lại, và giữ nguyên dấu tích ở quyền đọc Gmail trên màn hình của Google.",
+      "Kết nối {{source}} hiện chưa đủ quyền để đọc danh sách này. Hãy kết nối lại nguồn này và giữ nguyên dấu tích ở mọi quyền được hỏi trên màn hình cấp quyền.",
     /** The worker answered and said no, for a reason retrying will not change. */
     browseRefused: "Dịch vụ xử lý không lấy được danh sách cho nguồn {{source}}.",
+    /** A source whose scope is not chosen from a list at all -- not a fault anywhere. */
+    browseUnsupported: "Nguồn {{source}} không có danh sách nào để chọn phạm vi đọc.",
     scopeNotUnderstood: "Không đọc được lựa chọn cho nguồn {{source}}.",
     /**
      * Points at a person, not at a variable, for the same reason `requiresSuperadmin` does:

@@ -27,12 +27,13 @@ describe("browsing a Xero consent's organisations", () => {
 
     const outcome = await browseScope(
       { exec: noDatabase, fetcher, token: () => Promise.resolve("t") },
-      { source: "xero", kind: "organisations" },
+      { source: "xero", tenantId: "CASE-1", kind: "organisations" },
     );
 
     expect(outcome).toEqual({
       ok: true,
       items: [{ id: "org-9f2a", name: "Acme Pte Ltd", kind: null }],
+      partial: [],
     });
   });
 
@@ -45,13 +46,13 @@ describe("browsing a Xero consent's organisations", () => {
     expect(
       await browseScope(
         { exec: noDatabase, fetcher, token: () => Promise.resolve("t") },
-        { source: "xero", kind: "organisations" },
+        { source: "xero", tenantId: "CASE-1", kind: "organisations" },
       ),
     ).toEqual({ ok: false, reason: "scope-insufficient" });
     expect(
       await browseScope(
         { exec: noDatabase, fetcher, token: () => Promise.resolve("t") },
-        { source: "xero", kind: "labels" },
+        { source: "xero", tenantId: "CASE-1", kind: "labels" },
       ),
     ).toEqual({ ok: false, reason: "unsupported" });
   });

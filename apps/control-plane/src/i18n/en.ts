@@ -98,8 +98,9 @@ export const en = {
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",
     scopeInsufficient:
-      "The Google connection does not currently carry enough permission to read this list. Disconnect and connect again, leaving the Gmail permission ticked on Google's screen.",
+      "The {{source}} connection does not currently carry enough permission to read this list. Connect the source again, leaving every permission it asks for ticked on the consent screen.",
     browseRefused: "The processing service could not fetch the list for {{source}}.",
+    browseUnsupported: "{{source}} has no list to choose what it reads from.",
     scopeNotUnderstood: "The selection for {{source}} could not be read.",
     ingestNotConfigured:
       "This deployment is not set up to connect Google accounts. Tell whoever administers it.",

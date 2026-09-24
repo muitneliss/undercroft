@@ -45,7 +45,11 @@ Failure:
 - `details` is present only when there is something structured to add. It carries the
   missing flags for `MISSING_REQUIRED_ARGUMENT`, the server's zod `issues` or the local
   `issues` for `VALIDATION_FAILED`, the `reason` oclif gave for `INVALID_ARGUMENT`, and the
-  HTTP `status` for a sign-in refusal.
+  HTTP `status` for a sign-in refusal. It also carries any facts the server named with its
+  refusal, verbatim. For example, a refused `connections browse-scope` gives `source`,
+  `listing` (`labels`, `organisations` or `folders`), `reason` (`unsupported`,
+  `scope-insufficient`, `worker-unreachable` or `refused`) and `remedy` (`reconnect`,
+  `retry-later` or `none`).
 
 No envelope ever holds a cookie, a header, an environment value or a stack trace. With
 `--verbose`, diagnostics go to stderr, never stdout.

@@ -48,6 +48,10 @@ afterEach(async () => {
 });
 
 function callerWith(failure: WorkerFailure) {
+  return callerOf(new InMemoryWorkerClient().failing(failure));
+}
+
+function callerOf(worker: InMemoryWorkerClient) {
   const ctx: Context = {
     exec: db,
     user: { userId: ADMIN.userId, email: ADMIN.email },
@@ -57,7 +61,7 @@ function callerWith(failure: WorkerFailure) {
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
-    worker: new InMemoryWorkerClient().failing(failure),
+    worker,
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);
@@ -79,7 +83,9 @@ describe("a scope picker that cannot list anything", () => {
   it("a withheld permission names the remedy the reader owns", async () => {
     const refusal = await refusalOf("scope-insufficient");
 
-    expect(refusal.message).toBe(messages(DEFAULT_LOCALE)("error.scopeInsufficient"));
+    expect(refusal.message).toBe(
+      messages(DEFAULT_LOCALE)("error.scopeInsufficient", { source: "gmail" }),
+    );
     expect(refusal.code).toBe("PRECONDITION_FAILED");
   });
 
@@ -97,5 +103,41 @@ describe("a scope picker that cannot list anything", () => {
     expect(refusal.message).toBe(
       messages(DEFAULT_LOCALE)("error.browseRefused", { source: "gmail" }),
     );
+  });
+});
+
+describe("which list a source is browsed for", () => {
+  it("Drive asks the worker for its folders, and a second account does too", async () => {
+    // Issue 177: this was decided as "Xero, else labels", so Drive asked the worker for Gmail
+    // labels, the worker refused a pair it does not serve, and the CLI reported the refusal as
+    // VALIDATION_FAILED on input that matched the schema.
+    const folder = {
+      id: "fo-1",
+      name: "Statements",
+      kind: "folder" as const,
+      path: ["Statements"],
+    };
+    const worker = new InMemoryWorkerClient().withChoices({ items: [folder], partial: [] });
+
+    const answer = await callerOf(worker).connections.browseScope({
+      tenantId: TENANT,
+      source: "drive",
+    });
+    await callerOf(worker).connections.browseScope({
+      tenantId: TENANT,
+      source: "drive.3fa9c1d2e0ab",
+    });
+
+    expect(answer).toEqual({ items: [folder], partial: [] });
+    expect(worker.browsed.map((asked) => asked.kind)).toEqual(["folders", "folders"]);
+  });
+
+  it("a source with nothing to choose is refused as such, and the worker is not asked", async () => {
+    const worker = new InMemoryWorkerClient();
+
+    await expect(
+      callerOf(worker).connections.browseScope({ tenantId: TENANT, source: "hubspot" }),
+    ).rejects.toThrow(messages(DEFAULT_LOCALE)("error.browseUnsupported", { source: "hubspot" }));
+    expect(worker.browsed).toEqual([]);
   });
 });

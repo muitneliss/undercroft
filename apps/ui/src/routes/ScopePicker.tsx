@@ -13,10 +13,11 @@
  * Choosing none is a *recorded decision* meaning the whole mailbox -- not an empty one --
  * which is why the server refuses a connection with no row at all rather than defaulting it.
  *
- * **Drive** is Google's own Picker, running in the browser. Under the `drive.file` scope a
- * server-side folder listing is not merely unnecessary, it is impossible: the credential
- * cannot see anything that has not been picked. That is the point -- Google enforces the
- * promise instead of our query filter, and the scope needs no annual CASA assessment.
+ * **Drive** is Google's own Picker, running in the browser. The picks it returns are ids and
+ * names, recorded as the scope; what a run then reads is decided by the worker's own
+ * `'<id>' in parents` query under the connection's `drive.readonly` grant (ADR 0047), not by
+ * what the Picker's browser token can see. The worker can also list folders and file types
+ * (`connections.browseScope`) for an agent with no browser; this screen keeps the Picker.
  *
  * `useState` is banned, so the in-progress selection lives in the Zustand store: a draft the
  * user has made and no endpoint knows about is exactly what the store is for.
@@ -57,7 +58,7 @@ import { LabelIndex } from "@/components/LabelIndex.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import type { BrowsedLabel } from "@/lib/labelIndex.ts";
+import { type BrowsedLabel, isBrowsedLabel } from "@/lib/labelIndex.ts";
 import { sourceLabel } from "@/lib/runs.ts";
 import { type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -196,7 +197,8 @@ export function ScopePicker({
   const connections = trpc.connections.list.useQuery({ tenantId });
   const labels = trpc.connections.browseScope.useQuery(
     { tenantId, source },
-    // Drive has no server-side listing to fetch; asking for one would be a guaranteed 400.
+    // Drive is chosen in Google's Picker on this screen. Its server listing (ADR 0047) serves
+    // an agent at the CLI, which has no browser; this screen does not ask for it.
     { enabled: BROWSED.has(kind) },
   );
   const setScope = useSaveScope(tenantId, kind, source);
@@ -236,7 +238,7 @@ export function ScopePicker({
           kind={kind}
           source={source}
           account={account}
-          items={labels.data?.items ?? []}
+          items={(labels.data?.items ?? []).filter(isBrowsedLabel)}
           loadError={labels.isError ? labels.error.message : null}
           chosen={chosen}
         />
