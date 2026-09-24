@@ -41,11 +41,28 @@ export function streamsOf(summary: LakeSummary): LakeStream[] {
  * disk. Printing both under one column heading would be the kind of quiet lie this codebase
  * refuses elsewhere, so the VALUE carries its own word and the column heading stays neutral.
  * The wording is the component's, through `t`; this stays wordless.
+ *
+ * A document catalogue's note carries its reading as THREE figures -- `readable`, `refused`,
+ * `waiting`, which sum to `total` -- and never as one gap, because a mailbox of refused
+ * signature images and a mailbox nobody has read yet are different news (issue #139). The
+ * reasons travel with it so the row that states a refusal count is the row that explains it.
  */
 export type LakeNote =
   | { kind: "tombstoned"; count: number }
-  | { kind: "bytes"; bytes: number; distinctBlobs: number; readable: number; total: number }
+  | {
+      kind: "bytes";
+      bytes: number;
+      distinctBlobs: number;
+      readable: number;
+      refused: number;
+      waiting: number;
+      total: number;
+      reasons: DocumentReasons;
+    }
   | { kind: "none" };
+
+/** Why a source's refused documents were refused: a code and a count each, no document named. */
+export type DocumentReasons = LakeSummary["documents"][number]["reasons"];
 
 /** One line of the index: a stream, how much of it there is, and when it last moved. */
 export interface LakeEntry {
@@ -90,7 +107,10 @@ export function inventoryOf(summary: LakeSummary): LakeEntry[] {
           bytes: d.bytes,
           distinctBlobs: d.distinctBlobs,
           readable: d.readable,
+          refused: d.refused,
+          waiting: d.waiting,
           total: d.documents,
+          reasons: d.reasons,
         },
         latestObservedAt: d.latestObservedAt,
       }),

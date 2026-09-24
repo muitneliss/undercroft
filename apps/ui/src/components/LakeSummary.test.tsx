@@ -7,7 +7,7 @@
  */
 
 import { afterEach, describe, expect, test as it } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import type { LakeSummary as Summary } from "@/api/types.ts";
@@ -15,12 +15,15 @@ import { LakeSummary } from "@/components/LakeSummary.tsx";
 // The side effect is the point: `useTranslation` resolves against the module-level i18next
 // singleton, and without it every key renders as itself. See `@/i18n`.
 import "@/i18n/index.ts";
+import { useUiStore } from "@/store.ts";
 import { connection } from "@/test/fixtures.ts";
 
 const NO_SCHEDULE = /Chưa có nguồn nào sẵn sàng/u;
 
 afterEach(() => {
   cleanup();
+  // The store is the real module-level one, so a fold left open would open the next test's.
+  useUiStore.setState({ openLakeRefusals: {} });
 });
 
 function leaf(summary: Summary): React.JSX.Element {
@@ -68,6 +71,9 @@ describe("LakeSummary", () => {
             distinctBlobs: 2,
             bytes: 3500,
             readable: 1,
+            refused: 0,
+            waiting: 3,
+            reasons: [],
             latestObservedAt: new Date().toISOString(),
           },
         ],
@@ -88,8 +94,60 @@ describe("LakeSummary", () => {
     // rows that name them. The old line said only "3.5 kB · đọc được 0/2" and so reported a
     // byte total that the object store underneath disagrees with by the duplication ratio,
     // with nothing on the page to show a reader that it did.
-    expect(screen.getByText("3.5 kB trong 2 tệp riêng biệt · đọc được 1/4")).toBeDefined();
+    expect(
+      screen.getByText("3.5 kB trong 2 tệp riêng biệt · đọc được 1/4 · 0 bị từ chối · 3 chưa đọc"),
+    ).toBeDefined();
 
     expect(screen.queryByText("Chưa có gì về")).toBeNull();
+  });
+
+  /**
+   * Issue #139: "đọc được 1/5" read as mass breakage when the rest were logos nobody can read
+   * and a file the extract had not reached. The row now says which is which, and unfolds the
+   * reasons -- each marked for whether anyone has to act -- without naming a document.
+   */
+  it("a source's unread documents are told apart, and its refusals unfold marked benign or not", () => {
+    render(
+      leaf({
+        records: [],
+        documents: [
+          {
+            source: "gmail",
+            documents: 5,
+            distinctBlobs: 5,
+            bytes: 900,
+            readable: 1,
+            refused: 3,
+            waiting: 1,
+            reasons: [
+              { reason: "image-too-small-to-read", count: 2 },
+              { reason: "extractor-missing:pdftotext", count: 1 },
+            ],
+            latestObservedAt: new Date().toISOString(),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      screen.getByText("900 B trong 5 tệp riêng biệt · đọc được 1/5 · 3 bị từ chối · 1 chưa đọc"),
+    ).toBeDefined();
+    // Folded, the row already says the refusals need somebody: one of them is a deployment
+    // fault, and "benign" on the row would hide it behind the two signature images.
+    expect(screen.queryByRole("table", { name: "Vì sao bị từ chối" })).toBeNull();
+    expect(screen.getByText("Cần xử lý")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Xem lý do từ chối" }));
+
+    const rollup = within(screen.getByRole("table", { name: "Vì sao bị từ chối" }));
+    const [, benign, actionable] = rollup.getAllByRole("row");
+    expect(within(benign as HTMLElement).getByText("image-too-small-to-read")).toBeDefined();
+    expect(within(benign as HTMLElement).getByText("Không cần xử lý")).toBeDefined();
+    expect(
+      within(actionable as HTMLElement).getByText("extractor-missing:pdftotext"),
+    ).toBeDefined();
+    expect(within(actionable as HTMLElement).getByText("Cần xử lý")).toBeDefined();
+    // Reasons and counts only: the rollup has no record to unfold, so no reason is a control.
+    expect(rollup.queryAllByRole("button")).toEqual([]);
   });
 });

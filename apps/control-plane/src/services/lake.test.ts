@@ -159,9 +159,51 @@ describe("summary", () => {
         distinctBlobs: 2,
         bytes: 3500,
         readable: 0,
+        refused: 0,
+        waiting: 2,
+        reasons: [],
         latestObservedAt: "2026-09-18T09:30:00.000Z",
       },
     ]);
+  });
+
+  /**
+   * The gap under "readable" is two facts, and the summary names both (issue #139).
+   *
+   * A mailbox of benign refusals -- signature images, logos -- and a mailbox the extract verb
+   * has not reached printed the same "1/3 readable", and operators read the first as mass
+   * breakage. So one of each: a truncated read (still a read), a refusal with its reason, and
+   * a document with no `raw.document_text` row at all. The reason is grouped with its count,
+   * and nothing about which document it was leaves the summary.
+   */
+  it("splits the unread into refused, with its reasons, and never read", async () => {
+    await db.asSuperuser(async (tx) => {
+      await seedDocument(tx, {
+        tenantId: TENANT,
+        id: "m-3",
+        bytes: 10,
+        observedAt: "2026-09-18T07:00:00Z",
+      });
+      await tx.query(
+        `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method,
+           reason, truncated, extracted_at, run_id)
+         VALUES ('gmail', $1, 'm-1', lpad('m-1', 64, '0'), 'pdf_text', NULL, true, now(), 'x-1'),
+                ('gmail', $1, 'm-2', lpad('m-2', 64, '0'), NULL, 'image-too-small-to-read',
+                 false, now(), 'x-1')`,
+        [TENANT],
+      );
+    });
+
+    const [gmail] = (await summary(db, TENANT)).documents;
+
+    expect(gmail).toMatchObject({
+      documents: 3,
+      readable: 1,
+      refused: 1,
+      waiting: 1,
+      reasons: [{ reason: "image-too-small-to-read", count: 1 }],
+    });
+    expect(JSON.stringify(gmail)).not.toContain("m-2");
   });
 
   /**

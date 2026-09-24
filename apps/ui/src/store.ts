@@ -218,6 +218,15 @@ interface UiState {
   openReason: Record<string, string>;
   /** Unfold this reason, or fold it if it is the one already open on that run. */
   toggleReason: (runId: string, reason: string) => void;
+  /**
+   * Which document source has its refusal reasons unfolded on the lake's index, per tenant;
+   * absent is none. One per tenant, like a run's reason: the rollup unfolds under its own row,
+   * and two open at once would push the rows between them apart for no reading anyone asked
+   * for. Client-only and not in the URL, for the same reason `openReason` is not.
+   */
+  openLakeRefusals: Record<string, string>;
+  /** Unfold this source's refusals, or fold them if they are the ones already open. */
+  toggleLakeRefusals: (tenantId: string, source: string) => void;
 
   modelDraft: ModelDraft | null;
   setModelDraft: (draft: ModelDraft | null) => void;
@@ -431,6 +440,8 @@ function lakeSlice(
   | "toggleLakeRail"
   | "openReason"
   | "toggleReason"
+  | "openLakeRefusals"
+  | "toggleLakeRefusals"
 > {
   return {
     lakeSql: {},
@@ -454,17 +465,28 @@ function lakeSlice(
     lakeRailFolded: false,
     toggleLakeRail: (): unknown => set((state) => ({ lakeRailFolded: !state.lakeRailFolded })),
     openReason: {},
-    // Pressing the open reason again closes it, which is what a reader expects of a thing
-    // that opened when they pressed it. The key is dropped rather than set to `""`, so
-    // "closed" and "opened on a reason with no name" cannot be the same stored value.
     toggleReason: (runId, reason): unknown =>
-      set((state) => {
-        const { [runId]: open, ...rest } = state.openReason;
-        return open === reason
-          ? { openReason: rest }
-          : { openReason: { ...rest, [runId]: reason } };
-      }),
+      set((state) => ({ openReason: toggleOpen(state.openReason, runId, reason) })),
+    openLakeRefusals: {},
+    toggleLakeRefusals: (tenantId, source): unknown =>
+      set((state) => ({ openLakeRefusals: toggleOpen(state.openLakeRefusals, tenantId, source) })),
   };
+}
+
+/**
+ * Open `key` in `scope`, or close it if it is the one already open there.
+ *
+ * Pressing the open thing again closes it, which is what a reader expects of a thing that
+ * opened when they pressed it. The scope is dropped rather than set to `""`, so "closed" and
+ * "opened on a key with no name" cannot be the same stored value.
+ */
+function toggleOpen(
+  open: Record<string, string>,
+  scope: string,
+  key: string,
+): Record<string, string> {
+  const { [scope]: current, ...rest } = open;
+  return current === key ? rest : { ...rest, [scope]: key };
 }
 
 function modelSlice(

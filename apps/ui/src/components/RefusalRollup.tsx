@@ -18,6 +18,12 @@
  * run look like a fault. `refusalReasons.ts` decides which is which; this draws it with the
  * same four-geometry mark the rest of the book uses, so it survives greyscale.
  *
+ * TWO READERS, ONE BAND. A run's leaf passes the run's own rollup and the records behind it; the
+ * lake's index passes a document source's CURRENT refusals (`raw.document_text`) and no records
+ * at all, because a source's reasons are every member's to read and its document ids are an
+ * admin's. With no records a reason is a row, not a control, and nothing unfolds -- which is
+ * the component's own rule below, not a second mode of it.
+ *
  * WHAT IT DOES NOT SHOW: a filename, ever. `pii.md` keeps names a human wrote out of Postgres
  * entirely, so the id in the unfolded list is the provider's own opaque document id -- the
  * same string the Lake division shows -- and there is nothing here to widen later.
@@ -34,26 +40,37 @@ import { useUiStore } from "@/store.ts";
 /** The rollup's columns, which an unfolded reason's row spans. */
 const COLUMNS = 3;
 
-type ReasonCount = RunDetail["reasonCounts"][number];
+/** One reason and how many it covers. A run's rollup also names the entity it was counted in. */
+interface ReasonCount {
+  readonly reason: string;
+  readonly count: number;
+  readonly entity?: string;
+}
 type Refusal = RunDetail["refusals"][number];
 
+/** No records to unfold: the default, so a caller that may not show them simply omits them. */
+const NO_RECORDS: readonly Refusal[] = [];
+
 export function RefusalRollup({
-  runId,
+  scope,
   reasonCounts,
-  refusals,
-  pruned,
-  retainedDays,
+  refusals = NO_RECORDS,
+  prunedAfterDays,
 }: {
-  runId: string;
+  /** What this is the rollup OF -- a run id, a lake source -- which keys the unfolded reason. */
+  scope: string;
   reasonCounts: readonly ReasonCount[];
-  refusals: readonly Refusal[];
-  /** The rollup remembers refusals whose per-record rows have aged out. */
-  pruned: boolean;
-  retainedDays: number;
+  /** The refused records behind the reasons, for a reader who may see them. */
+  refusals?: readonly Refusal[];
+  /**
+   * Set when the rollup remembers refusals whose per-record rows have aged out: the retention,
+   * in days, that the note under the table names.
+   */
+  prunedAfterDays?: number;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
-  const openReason = useUiStore((state) => state.openReason[runId]);
+  const openReason = useUiStore((state) => state.openReason[scope]);
   const toggleReason = useUiStore((state) => state.toggleReason);
 
   return (
@@ -72,9 +89,9 @@ export function RefusalRollup({
         <tbody>
           {reasonCounts.map((row) => (
             <ReasonRow
-              key={`${row.entity}/${row.reason}`}
+              key={`${row.entity ?? ""}/${row.reason}`}
               row={row}
-              runId={runId}
+              scope={scope}
               locale={locale}
               open={openReason === row.reason}
               // Only the reasons whose records survive can be unfolded. A reason with none is
@@ -82,7 +99,7 @@ export function RefusalRollup({
               // list would be the original defect again, one fold deeper.
               records={refusals.filter((refusal) => refusal.reason === row.reason)}
               onToggle={(): void => {
-                toggleReason(runId, row.reason);
+                toggleReason(scope, row.reason);
               }}
             />
           ))}
@@ -92,23 +109,23 @@ export function RefusalRollup({
       {/* Said once under the table rather than on every row: it is a fact about the run's age,
           not about any one reason. Without it a month-old run reads as a count with nothing
           behind it, which is indistinguishable from the bug this band was built to close. */}
-      {pruned ? (
-        <p className="note">{t("journal.refusalsPrunedNote", { days: retainedDays })}</p>
-      ) : null}
+      {prunedAfterDays === undefined ? null : (
+        <p className="note">{t("journal.refusalsPrunedNote", { days: prunedAfterDays })}</p>
+      )}
     </div>
   );
 }
 
 function ReasonRow({
   row,
-  runId,
+  scope,
   locale,
   open,
   records,
   onToggle,
 }: {
   row: ReasonCount;
-  runId: string;
+  scope: string;
   locale: ReturnType<typeof useUiStore.getState>["locale"];
   open: boolean;
   records: readonly Refusal[];
@@ -116,7 +133,7 @@ function ReasonRow({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const reason = presentReason(t, row.reason);
-  const panelId = `reason-${runId}-${row.reason.replaceAll(/[^\w-]/gu, "_")}`;
+  const panelId = `reason-${scope}-${row.reason}`.replaceAll(/[^\w-]/gu, "_");
   const canOpen = records.length > 0;
 
   return (
