@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1](https://github.com/muitneliss/undercroft/compare/v1.28.0...v1.28.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **worker:** a password-protected PDF is refused as locked, not as possibly corrupt ([#194](https://github.com/muitneliss/undercroft/issues/194)) ([cfc6fe4](https://github.com/muitneliss/undercroft/commit/cfc6fe44495502378a448a0ef02f726876c86cd9))
+
 ## [1.28.0](https://github.com/muitneliss/undercroft/compare/v1.27.3...v1.28.0) (2026-09-24)
 
 
