@@ -36,21 +36,21 @@ the moment its rule actually bites — the `paths:` frontmatter decides which fi
 Other agents do not — if you are not Claude Code, read the ones matching the files you are
 about to touch.** That is the only reason this index exists.
 
-| Rule file         | Applies to                                                               | Governs                                                                                  |
-| ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `money.md`        | everywhere                                                               | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
-| `raw-lake.md`     | `packages/lake/**`, the worker's `land*.ts` / `loadToRaw.ts`             | create-only writes, idempotent by content, retention bounded and reported                |
-| `connectors.md`   | `packages/connector-runtime/**`, `specs/**`                              | the spec contract; a failure raises, never an empty stream                               |
-| `privileges.md`   | `packages/db/sql/**`                                                     | the role and grant model; why the BI role cannot read `raw`                              |
-| `tests.md`        | `**/*.test.ts(x)`, `**/testing.ts`                                       | real in-memory implementations over mocks, a guard needs two tests                       |
-| `state.md`        | `apps/ui/**`                                                             | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
-| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`, `apps/cli/src/**`             | Vietnamese default, English second; no user-facing string written in place               |
-| `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                   | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
-| `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                    | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
-| `pii.md`          | `specs/**`, `docs/**`, `*.md`, fixtures                                  | no real customer data in any tracked file                                                |
-| `deployment.md`   | `deploy/**`, `flows/**`, deploy workflows                                | the Dokploy API is the only channel, every service declares a memory limit               |
-| `suppressions.md` | every source and test file, `biome.jsonc`, the rule files                | where a lint decision goes; `biome-ignore-all` is banned everywhere, tests included      |
-| `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
+| Rule file         | Applies to                                                                                  | Governs                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `money.md`        | everywhere                                                                                  | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
+| `raw-lake.md`     | `packages/lake/**`, the worker's `land*.ts` / `loadToRaw.ts`                                | create-only writes, idempotent by content, retention bounded and reported                |
+| `connectors.md`   | `packages/connector-runtime/**`, `specs/**`                                                 | the spec contract; a failure raises, never an empty stream                               |
+| `privileges.md`   | `packages/db/sql/**`                                                                        | the role and grant model; why the BI role cannot read `raw`                              |
+| `tests.md`        | `**/*.test.ts(x)`, `**/testing.ts`                                                          | real in-memory implementations over mocks, a guard needs two tests                       |
+| `state.md`        | `apps/ui/**`                                                                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
+| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`, `apps/cli/src/**`, `packages/core/src/locale.ts` | Vietnamese default, English second; no user-facing string written in place               |
+| `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                                      | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
+| `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                                       | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
+| `pii.md`          | `specs/**`, `docs/**`, `**/*.md`, `**/*.test.ts`, `**/fixtures/**`                          | no real customer data in any tracked file                                                |
+| `deployment.md`   | `deploy/**`, `flows/**`, `scripts/dokploy.ts`, deploy workflows                             | the Dokploy API is the only channel, every service declares a memory limit               |
+| `suppressions.md` | every source and test file, `biome.jsonc`, ast-grep rules, GritQL plugins                   | where a lint decision goes; `biome-ignore-all` is banned everywhere, tests included      |
+| `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows                    | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
 
 ## The assistant
 
@@ -93,12 +93,13 @@ drifts (the same reason `wiki/tracked.yaml` scopes the wiki to `docs/` and not t
 Codex reads this file as `AGENTS.md`, and everything else it gets is a pointer into
 `.claude/`, never a copy. **Edit the `.claude/` source; the Codex side follows it.**
 
-| Codex reads                 | What it is                                                                         |
-| --------------------------- | ---------------------------------------------------------------------------------- |
-| `.agents/skills/<name>`     | a symlink to `.claude/skills/<name>`                                               |
-| `.codex/agents/<name>.toml` | the same `name` and `description`, instructions that say "read `.claude/agents/…`" |
-| `.codex/hooks.json`         | runs the same `.claude/hooks/block-wiki-edits.mjs` on `apply_patch`                |
-| `.claude/rules/*.md`        | nothing loads them for Codex; the index above is its instruction to read them      |
+| Codex reads                                                    | What it is                                                                         |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `.agents/skills/<name>`                                        | a symlink to `.claude/skills/<name>`                                               |
+| `.codex/agents/<name>.toml`                                    | the same `name` and `description`, instructions that say "read `.claude/agents/…`" |
+| `.codex/hooks.json`                                            | runs the same `.claude/hooks/block-wiki-edits.mjs` on `apply_patch`                |
+| `apps/AGENTS.md`, `packages/db/AGENTS.md`, `apps/ui/AGENTS.md` | symlinks to `layering.md` and `state.md`, the only rules Codex loads by directory  |
+| `.claude/rules/*.md`                                           | nothing else loads them for Codex; the index above is its instruction to read them |
 
 A new skill or agent therefore needs its Codex pointer in the same change, and
 `scripts/agentConfig.test.ts` fails the gate until it has one. Codex loads `.codex/` only for
@@ -125,14 +126,14 @@ Every operation goes through [Task](https://taskfile.dev) — never a bare `bun 
 shell/docker command typed by hand. `task --list-all` enumerates everything that exists; the
 surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
 
-| Namespace  | Lives in                | Covers                                                                                                                                           |
-| ---------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `dev:*`    | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                         |
-| `build:*`  | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), generated assets/schemas, local Docker images           |
-| `ci:*`     | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check` and `ci:skill-check` (network) are CI steps outside it |
-| `cd:*`     | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` attaches the CLI to a release                                                     |
-| `db:*`     | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one                                                                        |
-| `notify:*` | `.taskfiles/notify/`    | `scripts/notify.ts`: the Lark cards CI posts for deploys, failed releases, issues, PRs and a red `ci` on main; `notify:test` proves the webhook  |
+| Namespace  | Lives in                | Covers                                                                                                                                                                                                                           |
+| ---------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev:*`    | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                                                                                                         |
+| `build:*`  | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), generated assets/schemas, local Docker images                                                                                           |
+| `ci:*`     | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check`, `ci:skill-check` (network), `ci:compose-check` and `ci:secrets-check` are CI steps outside it; `ci:wiki-check` gates the wiki locally |
+| `cd:*`     | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` attaches the CLI to a release                                                                                                                                     |
+| `db:*`     | `.taskfiles/db/`        | DSN-parameterised migrate/invite and `db:extract-accuracy`, for a database that isn't the local one                                                                                                                              |
+| `notify:*` | `.taskfiles/notify/`    | `scripts/notify.ts`: the Lark cards CI posts for deploys, failed releases, issues, PRs and a red `ci` on main; `notify:test` proves the webhook                                                                                  |
 
 Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —
 Task is the mandated way to invoke it, never a second place that redefines what it does. A
@@ -223,7 +224,8 @@ through. ADR 0017 supersedes ADR 0012 here and ADR 0022 supersedes ADR 0017;
 One Dokploy compose stack on `lowbit.link`, cloning this repo's compose file from `main` (ADR 0049); the control plane is the only public
 surface — the Reports division inside it is the BI, and Metabase is gone (ADR 0020).
 Merging the release-please PR cuts a tag, which builds the images and deploys them,
-Kestra's flows included — nothing else does. The Dokploy API is the only channel for a
+Kestra's flows included — nothing else does. The same release attaches the packed CLI
+(`task build:cli-pack`, then `task cd:cli-upload`). The Dokploy API is the only channel for a
 change (SSH is read-only), and `task cd:verify` (wrapping `scripts/dokploy.ts`) checks a
 rollout landed rather than trusting Dokploy's `done`. A manual deploy or rollback is
 `task cd:release TAG=vX.Y.Z`, never a `bun run scripts/dokploy.ts` typed by hand. See

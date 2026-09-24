@@ -85,7 +85,7 @@ drives.
 **3. Handler — the transport.** Validate with zod, call one service, map the result.
 
 ```ts
-// apps/control-plane/src/handlers/router.ts
+// apps/control-plane/src/handlers/tenantsRouter.ts
 get: tenantProcedure.query(async ({ ctx, input }) => {
   const tenant = await tenants.get(ctx.exec, input.tenantId);
   if (tenant === null) throw new TRPCError({ code: "NOT_FOUND" });

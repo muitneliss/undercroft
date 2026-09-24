@@ -53,22 +53,27 @@ own database role, in that customer's own schema.
 - Each customer is a **case**, identified by a CASE-id (`CASE-0042`), never by a real name in
   any tracked file.
 - Sources today: Gmail (headers and attachments of admin-chosen file types in chosen labels),
-  Google Drive (files chosen in Google's own Picker, of admin-chosen file types), HubSpot CRM
-  (private-app token), Xero Accounting (OAuth, one organisation). Ingest runs on a per-source
+  Google Drive (folders or documents chosen in Google's own Picker, optionally with their
+  sub-folders, of admin-chosen file types), HubSpot CRM (private-app token), Xero Accounting
+  (OAuth, one organisation). A customer may connect several Gmail and several Drive accounts,
+  each one a source of its own. Ingest runs on a per-source
   cadence chosen by the customer's admin (hourly, every six hours, daily, paused) or on demand.
 - After each successful ingest, the customer's dbt models are built as that customer's role.
   Failing tests land in a per-customer `dq` schema.
 - Times are always shown in Asia/Singapore, in the reader's language. Amounts are never
   localised.
 - Operators and customers use the same browser application; there is no second BI tool.
+- The same procedures are reachable from the `undercroft` CLI, by a person or their LLM agent,
+  as the person who signed in; and from an in-app assistant, the interleaf, with exactly the
+  reader's permissions.
 - Anything else can land data through per-customer ingest keys on the lake's REST API.
 
 ## Capabilities and Constraints
 
 - **Divisions of a customer's book**: Sources (grants, cadence, run now, ingest keys),
-  Journal (every run, its counts, refusals and test results), Raw lake (what landed),
-  Models (dbt models authored in the browser), Reports (questions, charts, dashboards),
-  People (roster and invitations). Customers is the one division outside any book.
+  Journal (every run, its counts, refusals and test results), Raw lake (what landed, search,
+  and an admin's SQL console), Models (dbt models authored in the browser), Reports
+  (questions, charts, dashboards), People (roster, invitations, role changes and removals). Customers is the one division outside any book.
 - **Isolation is physical**: a customer's SQL runs as a Postgres role that can read only
   that customer's rows and write only that customer's schemas.
 - **Money is a string** at every boundary; charts may plot a numeric column as a
@@ -78,8 +83,8 @@ own database role, in that customer's own schema.
 - **Vietnamese first, English second**; no user-facing string is written in place.
 - **The offline gate** (`bun run verify`) must pass with no Docker, no network and no
   credentials.
-- Undecided: whether an eighth division will ever exist. The seven-hue wheel is full once
-  Journal, Models and Reports are bound; an eighth needs a decision, not a hex.
+- Undecided: whether an eighth division will ever exist. The seven-hue wheel is full;
+  an eighth needs a decision, not a hex.
 
 ## Brand Commitments
 

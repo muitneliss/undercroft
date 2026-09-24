@@ -44,8 +44,9 @@ Failure:
 - `recoverable` says whether the same caller can fix it and try again without a person.
 - `details` is present only when there is something structured to add. It carries the
   missing flags for `MISSING_REQUIRED_ARGUMENT`, the server's zod `issues` or the local
-  `issues` for `VALIDATION_FAILED`, the `reason` oclif gave for `INVALID_ARGUMENT`, and the
-  HTTP `status` for a sign-in refusal. It also carries any facts the server named with its
+  `issues` for `VALIDATION_FAILED`, the `reason` oclif gave for `INVALID_ARGUMENT` (or the
+  `source` for an `--input` / `--input-json` that is not a JSON object), and the HTTP
+  `status` for a sign-in refusal. It also carries any facts the server named with its
   refusal, verbatim. For example, a refused `connections browse-scope` gives `source`,
   `listing` (`labels`, `organisations` or `folders`), `reason` (`unsupported`,
   `scope-insufficient`, `worker-unreachable` or `refused`) and `remedy` (`reconnect`,
@@ -80,23 +81,30 @@ tRPC's codes map as follows:
 
 - `UNAUTHORIZED` becomes `AUTHENTICATION_REQUIRED`.
 - `FORBIDDEN` becomes `PERMISSION_DENIED`.
-- `CONFLICT` and `PRECONDITION_FAILED` become `CONFLICT`. `PRECONDITION_FAILED` is how the
-  platform says "the worker did not answer".
-- `BAD_REQUEST` becomes `VALIDATION_FAILED`.
+- `NOT_FOUND` stays `NOT_FOUND`.
+- `CONFLICT` and `PRECONDITION_FAILED` become `CONFLICT`. `PRECONDITION_FAILED` means the
+  request was fine but the platform's state refused it: the worker did not answer, a grant
+  lacks the scope, OAuth is not configured, or no rows are stored. The message says which.
+- `BAD_REQUEST`, `PARSE_ERROR`, `PAYLOAD_TOO_LARGE` and `UNPROCESSABLE_CONTENT` become
+  `VALIDATION_FAILED`.
+- `TIMEOUT` stays `TIMEOUT`, and `TOO_MANY_REQUESTS` becomes `NETWORK_ERROR`.
 - Anything unrecognised becomes `INTERNAL_ERROR`.
 
 ## Effects
 
 `undercroft describe --agent` gives every command an `effect`:
 
-| Effect        | Needs                                                                     |
-| ------------- | ------------------------------------------------------------------------- |
-| `read`        | A server and, for most commands, a session.                               |
-| `write`       | A named profile with `allowWrites: true`, which only a person can set.    |
-| `destructive` | That, and `--yes` in agent mode.                                          |
-| `local`       | Nothing on the server's side: `auth`, `config` and `describe` themselves. |
+| Effect        | Needs                                                                                                                                                                                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | A server and, for most commands, a session.                                                                                                                                                                                |
+| `write`       | A named profile with `allowWrites: true`, which only a person can set.                                                                                                                                                     |
+| `destructive` | That, and `--yes` in agent mode.                                                                                                                                                                                           |
+| `local`       | No `allowWrites` and no `--yes`: `auth login` / `logout` / `status`, `config show` / `set-profile` / `use` and `describe`. The `auth` commands still reach the server. `config google` is a procedure (`read`), not local. |
 
-`--dry-run` works on any command. It applies the `allowWrites` check, then stops before any
+`lake query` is `write` although it changes nothing: it runs SQL an admin wrote against the raw
+lake, so it takes the same per-profile opt-in.
+
+`--dry-run` works on any command that calls a procedure; the `local` commands ignore it. It applies the `allowWrites` check, then stops before any
 call and answers:
 
 ```json

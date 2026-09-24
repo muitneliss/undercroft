@@ -44,8 +44,12 @@ task dev:cli -- describe runs.trigger   # one command, with the JSON Schema of i
 
 `--allow-writes` can be set only here, at a terminal. An agent that tries it gets
 `HUMAN_REQUIRED`. Use a separate profile per environment, for example `local`, `staging`
-and `prod`. A session is kept per origin, so logging in to one never signs you in to
-another.
+and `prod`. The first profile you write becomes the default, and `config use <name>` changes
+it. A session is kept per origin, so logging in to one never signs you in to another;
+`auth status` says whether you have one and `auth logout` ends it.
+
+`--no-input` never prompts, even at a terminal: a missing argument is refused, and a
+destructive command needs `--yes`. `--quiet` prints less.
 
 ## As an agent
 
@@ -77,8 +81,9 @@ It never prints the session itself.
 
 - **A new procedure** needs nothing in the CLI except a sentence in `apps/cli/src/i18n/vi.ts`
   and `en.ts`, under `procedures`, mirroring the router's nesting. A new mutation also needs
-  its effect in `apps/cli/src/procedures.ts`. The build (`task build:cli`) refuses either
-  omission and names it.
+  its effect in `apps/cli/src/procedures.ts`. A new router namespace also needs a sentence
+  under `topics`, and an input property may not share a global flag's name (`profile`, `url`,
+  `yes` and the rest). The build (`task build:cli`) refuses each of these and names it.
 - **The gate** is `task ci:verify`, as everywhere. `apps/cli/src/cli.test.ts` builds the bundle
   into a temporary directory and runs it under `node` against `startControlPlane()` from
   `@undercroft/control-plane/testing`.
@@ -91,11 +96,11 @@ It never prints the session itself.
 
 ## When it goes wrong
 
-| Symptom                                          | Cause                                                                                                             |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `CONFIG_REQUIRED`                                | No `--profile`, `--url` or default profile. Run `config set-profile`.                                             |
-| `AUTHENTICATION_REQUIRED` right after signing in | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                     |
-| `WRITES_DISABLED`                                | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                       |
-| `NETWORK_ERROR` against a URL that is up         | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it. |
-| No colour in human mode                          | `--no-color`, or `NO_COLOR` set in the environment.                                                               |
-| `npm install -g` fails with `EACCES`             | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                        |
+| Symptom                                          | Cause                                                                                                                              |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `CONFIG_REQUIRED`                                | No `--profile`, `--url` or default profile, a profile that does not exist, or an unreadable config file. Run `config set-profile`. |
+| `AUTHENTICATION_REQUIRED` right after signing in | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                                      |
+| `WRITES_DISABLED`                                | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                                        |
+| `NETWORK_ERROR` against a URL that is up         | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it.                  |
+| No colour in human mode                          | `--no-color`, or `NO_COLOR` set in the environment.                                                                                |
+| `npm install -g` fails with `EACCES`             | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                                         |

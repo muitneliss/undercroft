@@ -5,6 +5,9 @@ discuss a direction is welcome before a large PR.
 
 ## Setup
 
+You need Bun (the version in `.bun-version`), [Task](https://taskfile.dev), and, for the local
+stack and the integration tier, Docker and Python 3 (the local dbt virtualenv).
+
 ```sh
 bun install
 task ci:verify    # the gate: typecheck, lint, rules, format, spec validation, SPA build, tests
@@ -14,6 +17,10 @@ Every operation goes through [Task](https://taskfile.dev) — `task --list-all` 
 them, and `.claude/rules/tooling.md` says why a bare `bun run` is not the way in. `ci:verify`
 must pass with no Docker, no network and no credentials; `task ci:itest` adds the
 Docker-backed integration tier, which needs `deploy/compose/.env` and Postgres.
+
+CI also runs checks outside the gate: `ci:cli-pack-check` (Node 22 and npm),
+`ci:skill-check` (network), `ci:compose-check` (every service in both compose files declares
+a memory limit) and `ci:secrets-check`. Run the ones your change touches.
 
 ## Ground rules
 

@@ -164,12 +164,15 @@ corrections alone.
 
 ### Secondary
 
-The rest of the wheel, taken in order as divisions are bound; each is a board hue, never an
-accent inside a page:
+The rest of the wheel, one hue per division; each is a board hue, never an accent inside a
+page. The wheel is full, so an eighth division needs a decision (ADR 0019), not a hex:
 
 - **Oxide** (#b24b1a): Customers.
-- **Grass** (#3e782b), **Teal** (#0f7673), **Ultramarine** (#234c9e), **Violet** (#634cb0),
-  **Sienna** (#7f4023): the remaining boards, taken in this order by the next divisions.
+- **Grass** (#3e782b): Journal.
+- **Teal** (#0f7673): Raw lake.
+- **Violet** (#634cb0): Models.
+- **Sienna** (#7f4023): Reports.
+- **Ultramarine** (#234c9e): People.
 
 ### Tertiary
 
@@ -240,7 +243,9 @@ language.
 
 ## Layout
 
-The book is a CSS grid with named areas: the tab strip across the head, then the leaf. The
+The book is a CSS grid with named areas: the tab strip across the head, then the leaf. When
+the assistant is open, a third area, the interleaf, sits beside the leaf; on a phone it takes
+the leaf's place. The
 strip is first in the DOM at every width; a phone moves it to the foot with
 `grid-template-areas`, not with source order, so navigation precedes the page it navigates for
 a keyboard and a screen reader whether it is drawn above or below.

@@ -99,6 +99,7 @@ body:
         - CLI in agent mode (Claude Code, Codex or another agent)
         - The REST lake API, from a script or orchestrator
         - A scheduled run (Kestra flow or the worker)
+        - An alert (email or the Lark group)
         - dbt models or transforms
         - Deployment, startup or a migration
         - Somewhere else (say where below)
@@ -130,6 +131,7 @@ body:
       label: Version
       description: |
         Whichever of these you can reach:
+        - **Web UI:** the version at the foot of any page, including the sign-in page.
         - **Server:** the `IMAGE_TAG` in the Dokploy environment, or the tag of the running `ghcr.io/muitneliss/undercroft-control-plane` image. If it is `latest`, say so and give the date you last deployed.
         - **CLI:** the output of `undercroft --version`.
         - **From source:** the output of `git describe --tags --always`.
@@ -168,7 +170,7 @@ body:
         - **CLI:** re-run with `--agent` and paste the JSON envelope; it carries the error code.
         - **Web UI:** the browser console, and in the Network tab the failing `/trpc` request's response.
         - **A run:** the run's id from Journal, and the Kestra execution id if you have it.
-        - **Server:** the `control-plane` or `worker` service log around the time (`task dev:logs` locally, the service's log in Dokploy on a server).
+        - **Server:** the `control-plane` or `worker` service log around the time (locally, the `task dev:run` terminal, since `task dev:logs` covers only Postgres, MinIO and Kestra; on a server, the service's log in Dokploy).
       render: shell
 
   - type: textarea

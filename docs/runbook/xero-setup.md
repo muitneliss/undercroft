@@ -51,8 +51,9 @@ UNDERCROFT_XERO_CLIENT_ID=
 UNDERCROFT_XERO_CLIENT_SECRET=
 ```
 
-In production these go into Dokploy's environment by hand — `preflight` asserts the panel's
-configuration and CI never writes it. Both compose files already pass them through.
+In production these go into Dokploy's environment by hand, and CI never writes it. `preflight`
+asserts the panel's compose source and command, not its environment: a missing variable shows
+up as **Connect Xero** being refused (section 5). Both compose files already pass them through.
 
 ## 3. Check the scopes agree
 
@@ -70,17 +71,18 @@ scope, add it in both places.
 3. The card now names the organisation and reads **connected**. `ops.connection` holds the
    organisation id in `external_account_id`; the name is in `app.connection_detail`, where BI
    cannot read it.
-4. Press **Run now**. The journal shows the run and its counts per entity. A `401` after zero
-   records is a scope problem (step 3); a `403` naming the organisation is the wrong
-   organisation chosen.
+4. Press **Run now**. The journal shows the run and its counts per entity. A `403` on every entity
+   is a scope problem (step 3); a `401` naming the organisation is the wrong organisation
+   chosen, or a lapsed grant.
 5. Disconnect. Xero is told to revoke the refresh token; the card says whether it could be.
 
 ## 5. What each failure looks like
 
-| Symptom                                          | Cause                                        | Fix                             |
-| ------------------------------------------------ | -------------------------------------------- | ------------------------------- |
-| Xero shows "invalid redirect_uri"                | The registered URI differs from the one sent | Register the exact callback URL |
-| Connect goes back with `reason=not-configured`   | The client is unset on the control plane     | Set both variables, redeploy    |
-| The scope page lists no organisation             | The Xero user has access to none             | Consent from a user who does    |
-| Every run fails after 0 records with 401         | A refresh failed, or the grant lapsed        | Reconnect; check the worker log |
-| Runs fail with "needs the provider's account id" | No organisation was chosen                   | Choose one on the scope page    |
+| Symptom                                          | Cause                                                                                 | Fix                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------- |
+| Xero shows "invalid redirect_uri"                | The registered URI differs from the one sent                                          | Register the exact callback URL |
+| Connect Xero is refused as not set up            | The client is unset on the control plane                                              | Set both variables, redeploy    |
+| The callback returns `reason=not-configured`     | `UNDERCROFT_WORKER_URL` or `UNDERCROFT_TRIGGER_TOKEN` is missing on the control plane | Set it, redeploy                |
+| The scope page lists no organisation             | The Xero user has access to none                                                      | Consent from a user who does    |
+| Every run fails after 0 records with 401         | A refresh failed, or the grant lapsed                                                 | Reconnect; check the worker log |
+| Runs fail with "needs the provider's account id" | No organisation was chosen                                                            | Choose one on the scope page    |

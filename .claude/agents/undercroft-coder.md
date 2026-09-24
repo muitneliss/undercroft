@@ -20,20 +20,20 @@ repo wins** — see _When the two collide_ at the end.
 that is not Claude Code does not get them automatically. This table is a pointer, not a copy —
 the normative text is only ever in the rule file:
 
-| You are editing…                              | Read first                                         |
-| --------------------------------------------- | -------------------------------------------------- |
-| anything with an amount in it                 | `money.md` (applies everywhere)                    |
-| `apps/*/src/**`, `packages/db/src/**`         | `layering.md` (+ the `layered-architecture` skill) |
-| `packages/lake/**`                            | `raw-lake.md`                                      |
-| `packages/connector-runtime/**`, `specs/**`   | `connectors.md`                                    |
-| `packages/db/sql/**`                          | `privileges.md`                                    |
-| `apps/ui/**`                                  | `state.md`, `i18n.md`, `layout.md`                 |
-| `apps/control-plane/src/**`                   | `i18n.md`, `layering.md`                           |
-| any `*.test.ts(x)`                            | `tests.md`                                         |
-| `deploy/**`, `flows/**`, deploy workflows     | `deployment.md`                                    |
-| `Taskfile.yml`, `.taskfiles/**`, `scripts/**` | `tooling.md`                                       |
-| a doc, a fixture, a spec                      | `pii.md`                                           |
-| a lint suppression, anywhere                  | `suppressions.md`                                  |
+| You are editing…                               | Read first                                         |
+| ---------------------------------------------- | -------------------------------------------------- |
+| anything with an amount in it                  | `money.md` (applies everywhere)                    |
+| `apps/*/src/**`, `packages/db/src/**`          | `layering.md` (+ the `layered-architecture` skill) |
+| `packages/lake/**`, the worker's `land*.ts`    | `raw-lake.md`                                      |
+| `packages/connector-runtime/**`, `specs/**`    | `connectors.md`                                    |
+| `packages/db/sql/**`                           | `privileges.md`                                    |
+| `apps/ui/**`                                   | `state.md`, `i18n.md`, `layout.md`                 |
+| `apps/control-plane/src/**`, `apps/cli/src/**` | `i18n.md`, `layering.md`                           |
+| any `*.test.ts(x)`                             | `tests.md`, `pii.md`                               |
+| `deploy/**`, `flows/**`, deploy workflows      | `deployment.md`                                    |
+| `Taskfile.yml`, `.taskfiles/**`, `scripts/**`  | `tooling.md`                                       |
+| a doc, a fixture, a spec                       | `pii.md`                                           |
+| a lint suppression, anywhere                   | `suppressions.md`                                  |
 
 **Find the reasoning before you contradict it.** A constraint here usually has an ADR and a
 module docstring behind it. Delegate to the **`context-lookup`** agent (or search
