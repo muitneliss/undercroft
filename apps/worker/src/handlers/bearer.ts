@@ -79,5 +79,6 @@ export function jobDepsFor(deps: LakeApiDeps, source: string, specsDir: string):
     ...(deps.byteFetcher === undefined ? {} : { byteFetcher: deps.byteFetcher }),
     ...(deps.dbt === undefined ? {} : { dbt: { ...deps.dbt, exec: deps.exec } }),
     ...(deps.extractSpawn === undefined ? {} : { extractSpawn: deps.extractSpawn }),
+    ...(deps.stop === undefined ? {} : { stop: deps.stop }),
   };
 }

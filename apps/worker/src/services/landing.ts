@@ -84,6 +84,16 @@
  * A projection that fails fails the run, for the same reason a refusal that cannot be
  * recorded does: a chunk that is in the lake and not in `raw.records` is exactly what the
  * next run silently re-fetches.
+ *
+ * ## A run told to stop keeps what it landed, and counts it
+ *
+ * Per-chunk projection makes a KILLED run resumable; it does not make one counted, because the
+ * counters live in this process and die with it. A deploy is the common kill, and it is not a
+ * kill unless the process ignores the SIGTERM before it. So a run told to stop (`RunDeps.stop`,
+ * ADR 0051) closes its record sink -- which holds only records whose documents are already
+ * down, so it lands in seconds -- and ABANDONS its document sink's buffer rather than landing
+ * it, which could take minutes of paced fetches. The two summaries then go into the run's
+ * ledger, and the counts on a stopped run are what reached the lake rather than zeroes.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -241,12 +251,26 @@ export interface DocumentSink {
    */
   flush: () => Promise<DocumentOutcome>;
   close: () => Promise<DocumentSummary>;
+  /**
+   * Close WITHOUT landing what is held, and answer for what already landed.
+   *
+   * For a run the process has told to stop (`RunDeps.stop`). What is held is the documents of
+   * records that have not been released yet -- a buffer of up to a chunk of attachments whose
+   * bytes are not fetched, which at Gmail's paced rate is minutes the container's stop grace
+   * period does not have. Nothing is lost by leaving them: their records are held back too, so
+   * nothing in `raw.records` claims them, and the next run reads those messages again and
+   * lands both halves. `close` would be the wrong call precisely because it is thorough.
+   *
+   * The counts are only what reached the lake, which is what makes them safe to record on the
+   * run. Synchronous, because there is nothing left to wait for.
+   */
+  abandon: () => DocumentSummary;
 }
 
 /** Refused after a sink was closed: a record added now would never be landed by anyone. */
 export class SinkClosed extends Error {
   constructor() {
-    super("this sink is closed; everything added before close() was landed");
+    super("this sink is closed; nothing added now would be landed");
     this.name = "SinkClosed";
   }
 }

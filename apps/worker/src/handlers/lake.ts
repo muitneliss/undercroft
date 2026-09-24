@@ -66,6 +66,8 @@ export interface LakeApiDeps {
   readonly extractSpawn?: Spawn;
   /** The Xero client, for revoking a grant. Absent means a disconnect only forgets our copy. */
   readonly xero?: XeroClient;
+  /** Aborted when the process is stopping; handed to every run this API starts. `RunDeps.stop`. */
+  readonly stop?: AbortSignal;
 }
 
 export function createLakeApi(deps: LakeApiDeps): Hono {

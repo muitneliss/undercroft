@@ -20,6 +20,15 @@
  * A second run for the same (tenant, source) while one is in progress is refused by the
  * database, not by this code: `run_one_running` in `090_runs.sql` is what makes the rule
  * hold for every caller at once.
+ *
+ * ## A run the process stops is settled here too, with what it landed
+ *
+ * A deploy recreates the worker mid-run more often than anything else ends one early. When the
+ * process asks (`RunDeps.stop`), the path stops at a safe boundary, writes what it landed into
+ * the ledger and throws `RunStopped`, and the same `settle` a failure goes through records
+ * those counts under `RUN_STOPPED` -- rather than the run staying `running` until the next boot
+ * closes it with no counts at all. `failed`, because the source was not read to the end; the
+ * error is what says nothing went wrong with it. ADR 0051.
  */
 
 import { readFileSync } from "node:fs";
@@ -39,7 +48,13 @@ import {
 } from "@undercroft/db/repos";
 import { isGoogleSource, ScopeNotChosen } from "./google/collect.ts";
 import { runGoogleIngest, runSpecIngest } from "./runPaths.ts";
-import type { IngestResult, Ledger, RunDeps, RunOpening } from "./runTypes.ts";
+import {
+  type IngestResult,
+  type Ledger,
+  type RunDeps,
+  type RunOpening,
+  RunStopped,
+} from "./runTypes.ts";
 import { createRunJournal, type RunJournal } from "./runJournal.ts";
 
 /** A run for the same (tenant, source) is already in progress. `runId` names it. */
@@ -173,10 +188,16 @@ async function execute(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await settle(deps.exec, runId, ledger, { status: "failed", error: message });
-    // Everything goes to stdout as before; the journal keeps `errorMessage` out of the feed
-    // itself, because a provider's sentence can quote the record that caused it and the
-    // ledger's own `error` column is where that belongs. See `runJournal.ts`.
-    journal.error("run_failed", { ...totals(ledger), ...describeError(error) });
+    if (error instanceof RunStopped) {
+      // A warning, not an error: nothing about the source failed, and the totals are the
+      // point -- they are what the reader checks to see that the stop lost nothing.
+      journal.warn("run_stopped", totals(ledger));
+    } else {
+      // Everything goes to stdout as before; the journal keeps `errorMessage` out of the feed
+      // itself, because a provider's sentence can quote the record that caused it and the
+      // ledger's own `error` column is where that belongs. See `runJournal.ts`.
+      journal.error("run_failed", { ...totals(ledger), ...describeError(error) });
+    }
     await journal.flush();
     throw error;
   }

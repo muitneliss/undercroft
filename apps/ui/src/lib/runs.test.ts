@@ -176,6 +176,19 @@ describe("eventSentence", () => {
     );
   });
 
+  it("says a run stopped by a deploy kept what it landed, with the counts that prove it", () => {
+    // The worker writes `run_stopped` on a run it stopped on purpose (ADR 0051). Rendered as
+    // "Event run_stopped." the one line meant to tell the reader nothing was lost would be the
+    // one they could not read.
+    const stopped = event("run_stopped", { created: 400, changed: 0, refused: 2 });
+    expect(eventSentence(en, "en", stopped)).toBe(
+      "Stopped part-way because the worker shut down, usually for a deploy. What it landed is kept: 400 new, 0 changed, 2 refused. The next run carries on from here.",
+    );
+    expect(eventSentence(vi, "vi", stopped)).toBe(
+      "Dừng giữa chừng vì worker tắt, thường do triển khai bản mới. Những gì đã về được giữ lại: 400 mới, 0 đổi, 2 bị từ chối. Lần chạy sau tiếp tục từ đây.",
+    );
+  });
+
   it("a count the worker did not send is MISSING, never a zero that reads as a real one", () => {
     expect(eventSentence(en, "en", event("work_listed", {}, "files"))).toBe(
       `${MISSING} files to read.`,

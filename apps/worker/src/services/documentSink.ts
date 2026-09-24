@@ -165,6 +165,12 @@ export function createDocumentSink(
       closed = true;
       return { landed: tally.created + tally.unchanged, ...tally };
     },
+    abandon(): DocumentSummary {
+      // Dropped, not landed: see `DocumentSink.abandon` for why that loses nothing.
+      buffer.splice(0);
+      closed = true;
+      return { landed: tally.created + tally.unchanged, ...tally };
+    },
   };
 }
 

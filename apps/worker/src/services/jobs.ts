@@ -4,12 +4,18 @@
  * A full ingest is minutes, and an HTTP connection held open for minutes survives neither
  * a worker restart nor a scheduler restart and leaves no id behind. So the verb opens the
  * run, answers with its id, and the work continues here -- in this process, with no queue.
- * The accepted cost is that a restart kills what is in flight, which `closeAbandonedRuns`
- * records honestly at the next boot: the state lives in `ops.run`, not in this module.
+ * The state lives in `ops.run`, not in this module.
  *
- * `drainJobs` exists for tests and for a graceful stop: it settles when every job started
- * through here has, and it never throws -- a job's failure is in the ledger and the log,
- * which is where a reader of "what happened" looks.
+ * The accepted cost is that a restart ENDS what is in flight; ADR 0051 is what keeps it from
+ * also erasing it. A stop the process is told about (a deploy's SIGTERM) aborts `RunDeps.stop`,
+ * an ingest stops at its next safe boundary and settles with what it landed, and `server.ts`
+ * waits for that here, through `drainJobs`, for a bounded time. What is still running when the
+ * bound runs out -- a transform mid-build, an ingest mid-way through a chunk of attachments --
+ * and whatever a kill takes without warning is closed by `closeAbandonedRuns` at the next
+ * boot, saying that its zero counts are not a count.
+ *
+ * `drainJobs` settles when every job started through here has, and it never throws -- a job's
+ * failure is in the ledger and the log, which is where a reader of "what happened" looks.
  */
 
 import { type BuildModelResponse, MAX_PREVIEW_ROWS, type TableResult } from "@undercroft/contracts";

@@ -216,6 +216,11 @@ services:
   worker:
     <<: *restart
     image: ghcr.io/muitneliss/undercroft-worker:${IMAGE_TAG:-latest}
+    # How long a deploy's SIGTERM waits before SIGKILL; Docker's default is 10s. The worker
+    # spends it stopping each ingest at a safe point and settling it with what it landed
+    # (ADR 0051), and gives up at `DRAIN_MS` (45s) in `apps/worker/src/server.ts` -- which
+    # must stay below this, or the kill lands mid-settle. The two numbers are one decision.
+    stop_grace_period: 60s
     depends_on:
       postgres:
         condition: service_healthy

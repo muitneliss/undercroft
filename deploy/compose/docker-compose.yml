@@ -178,6 +178,9 @@ services:
     build:
       context: ../..
       dockerfile: deploy/Dockerfile.worker
+    # Kept in step with docker-compose.server.yml, where the reasoning is written: time for a
+    # run to stop at a safe point and settle, above the worker's own 45s bound (ADR 0051).
+    stop_grace_period: 60s
     depends_on:
       postgres:
         condition: service_healthy
