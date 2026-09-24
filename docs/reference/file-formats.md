@@ -55,8 +55,8 @@ reader for it, it is recorded with the refusal `unsupported-content-type`, and t
 
 `pdftotext` reads the text layer. When the whole layer carries fewer than 80 visible
 characters, the PDF is treated as a scan. Its pages are then rasterised and read by OCR, recorded as `pdf_ocr`.
-The refusals are `extractor-missing:pdftotext`, `pdftotext-failed` and the OCR refusals under
-[JPEG](#jpeg-image).
+The refusals are `extractor-missing:pdftotext`, `pdftotext-failed`,
+`extractor-missing:pdftoppm`, `pdftoppm-failed` and the OCR refusals under [JPEG](#jpeg-image).
 
 ### Word document (.docx)
 

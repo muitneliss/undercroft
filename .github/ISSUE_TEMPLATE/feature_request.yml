@@ -10,7 +10,7 @@ body:
         than the first one that comes to mind. Vietnamese or English are both fine.
 
         Two things that usually need no change here:
-        - **A new REST source** is a YAML spec in `specs/connectors/`, with no code and no migration.
+        - **A new REST source** is mostly a YAML spec in `specs/connectors/`, with no migration. A one-off feed can land through the REST lake API with no change here at all.
         - **A business table** (customers, invoices, a revenue model) belongs in your own dbt project.
           Undercroft deliberately ships no business schema.
 
@@ -63,6 +63,7 @@ body:
         - Gmail, Drive and document text
         - Raw lake, search and the REST lake API
         - Journal, runs, scheduling and Kestra flows
+        - Alerts (email and Lark)
         - Models, dbt and transforms
         - Reports (questions and dashboards)
         - The assistant

@@ -74,7 +74,9 @@ code agrees with the code. `references/cli-contract.md` lists both.
   profile it named. Never try to change the profile yourself: in agent mode that returns
   `HUMAN_REQUIRED`, by design.
 - **Open a consent URL.** `connections start-oauth` returns a URL. Give it to the person to
-  open in their browser.
+  open in their browser. Pass `--add-account` to connect a further Gmail or Drive account.
+  Each further account is its own source, such as `gmail.3fa9c1d2e0ab`, and every `--source`
+  flag takes that full name. Take it from `connections list`; never build one.
 
 ## Never retry these
 

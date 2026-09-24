@@ -27,7 +27,7 @@ a Makefile, an npm script tree, or a bag of `scripts/*.sh`.
 
 - **NEVER type `bun run <script>`, `bun test`, `docker compose ...`, or
   `bun run scripts/*.ts` directly** once a task wraps it. Use the `task` command; if none
-  exists yet, add one in the matching namespace first (see the table below), then use it.
+  exists yet, add one in the matching namespace first (see the namespace list under Follow), then use it.
   This applies to Claude Code itself as much as to a human — do not shortcut past the
   Taskfile because a one-off bun command feels faster in the moment.
 - **NEVER re-implement a check or a build step's logic inside a Task task.** A task's `cmds:`
@@ -48,8 +48,8 @@ a Makefile, an npm script tree, or a bag of `scripts/*.sh`.
 - **Namespaces are operations, not features**: `dev:*` (`.taskfiles/dev/`) the local stack,
   `build:*` (`.taskfiles/artifacts/`) artifacts, `ci:*` (`.taskfiles/ci/`) the gate and its
   individual steps, `cd:*` (`.taskfiles/cd/`) `scripts/dokploy.ts`, `db:*`
-  (`.taskfiles/db/`) DSN-parameterised migrate/invite for a database that isn't the local
-  one, `notify:*` (`.taskfiles/notify/`) `scripts/notify.ts`, the cards CI posts to Lark. A
+  (`.taskfiles/db/`) DSN-parameterised migrate/invite and the extraction-accuracy
+  measurement for a database that isn't the local one, `notify:*` (`.taskfiles/notify/`) `scripts/notify.ts`, the cards CI posts to Lark. A
   task that doesn't fit one of these cleanly is a sign the namespace list is
   incomplete, not a reason to force it sideways — raise it rather than guessing.
 - **`task --list-all` before you add anything.** It is the one place every operation is

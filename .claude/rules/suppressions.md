@@ -37,7 +37,8 @@ silences the rule for the **whole file**, and Biome never reports one that has g
   it. `noTernary` is off because a ternary chooses between two values and JSX has no other
   inline conditional; that sentence is in the config, once, not in 62 files.
 - **A rule that cannot hold at NAMED PLACES gets a path entry.** `noSecrets` is off at the
-  four constants it misreads as credentials and on everywhere else. This is the form that
+  named files whose strings it misreads as credentials, each entry saying which, and on
+  everywhere else. This is the form that
   replaced the headers, and the difference matters: an exception names its files, a switch
   does not.
 - **A genuine one-off gets the line-level `// biome-ignore`**, which Biome expires by itself —

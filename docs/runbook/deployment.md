@@ -16,9 +16,11 @@ Everything else talks over the compose network and publishes nothing.
 | ---------------------------- | -------------------- | ---------------------------------------------------------------------- |
 | `control-plane`              | the internet, HTTPS  | tRPC + sign-in + SPA. **Configure sign-in — see the warning below.**   |
 | `worker`                     | compose network only | Ingestion, dbt per tenant, the BI query runner; HTTP verbs on :8081    |
-| `minio`                      | compose network only | Raw lake                                                               |
+| `minio`                      | compose network only | Raw lake, on the `pgsty/minio` community build (ADR 0050)              |
+| `minio-init`                 | one-shot, exits 0    | Creates the lake's bucket                                              |
 | `postgres`                   | compose network only | Curated + control-plane schema                                         |
-| `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 15 minutes                              |
+| `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 15 minutes, `extract_due` hourly        |
+| `kestra-init`                | one-shot, exits 0    | Hands Kestra's volumes to uid 1000; without it Kestra crash-loops      |
 | `db-migrate`                 | one-shot, exits 0    | Applies `packages/db/sql`, sets the two platform roles' passwords      |
 | `kestra-flows`               | one-shot, exits 0    | Delivers `flows/` to Kestra from the control-plane image, every deploy |
 
@@ -96,7 +98,7 @@ direct edit on the host is drift the next deploy silently reverts.
 
 ### What `preflight` proves
 
-Three things, before anything is queued:
+Four things, before anything is queued:
 
 1. **The panel clones the file rather than holding a copy.** Its compose source is `git`,
    `https://github.com/muitneliss/undercroft.git` at `main`, compose path
@@ -107,7 +109,10 @@ Three things, before anything is queued:
    were building would otherwise ship beside images that predate it; `preflight` refuses,
    and the next release carries the change with its own images. Line endings and trailing
    blank lines are forgiven, nothing else is.
-3. **The stored command** carries `--env-file deploy/compose/.env`,
+3. **The file names published images.** At least one service runs a
+   `ghcr.io/muitneliss/undercroft-*` image; the host deploys what a release published, and
+   never builds.
+4. **The stored command** carries `--env-file deploy/compose/.env`,
    `-f deploy/compose/docker-compose.server.yml`, `--pull always`, `--wait`, `--wait-timeout`
    and `--remove-orphans`. Dokploy runs it from the clone's root and writes `.env` beside the
    compose file, which is why both paths are the file's own.
@@ -134,8 +139,8 @@ The tag argument is which ghcr manifest to compare against. The **host** pulls `
 panel's `IMAGE_TAG`); passing `v1.2.3` makes the other side of the comparison that release's
 immutable manifest, so a pass means "the host runs this release" rather than "a moving
 pointer equals itself". A release publishes both tags to one digest, so they agree unless
-something is wrong. Omit the tag and it falls back to `latest`, which is the honest question
-when there is no release being rolled out.
+something is wrong. With no release being rolled out, pass `TAG=latest`; the task
+requires a tag.
 
 Two services need different questions, and `verify` reads which is which from the compose
 file's own `condition: service_completed_successfully` declarations rather than from a list
@@ -229,13 +234,17 @@ have no default and hard-fail the stack if unset:
 
 The per-source clients default to empty and are set when the source is offered:
 `UNDERCROFT_GOOGLE_INGEST_CLIENT_ID/SECRET` (Gmail, Drive) and
-`UNDERCROFT_XERO_CLIENT_ID/SECRET` (Xero, see [xero-setup.md](./xero-setup.md)). A source whose
-client is unset cannot be connected, and the card says so; HubSpot needs no client, because
+`UNDERCROFT_XERO_CLIENT_ID/SECRET` (Xero, see [xero-setup.md](./xero-setup.md)). The Drive
+Picker also needs `UNDERCROFT_GOOGLE_PICKER_API_KEY` and `UNDERCROFT_GOOGLE_PROJECT_NUMBER` on
+the control plane; without them Gmail still connects and the Picker says it is unavailable
+(see [google-ingestion-setup.md](./google-ingestion-setup.md)). The worker's optional
+`UNDERCROFT_GOOGLE_MIN_INTERVAL_MS` overrides how far apart it paces Gmail and Drive requests.
+A source whose client is unset cannot be connected, and the card says so; HubSpot needs no client, because
 its token is pasted. Neither dbt nor BI has a password of its own any more: each build and
 each question runs as the tenant's own login, whose password the worker mints right before
-(ADR 0018). `UNDERCROFT_DBT_PASSWORD` and `UNDERCROFT_METABASE_PG_PASSWORD` are dead, and
-removing them from Dokploy's environment — with the `undercroft-bi.lowbit.link` domain — is a
-human's step in rolling this release out, because CI never writes the blob.
+(ADR 0018). `UNDERCROFT_DBT_PASSWORD` and `UNDERCROFT_METABASE_PG_PASSWORD` are dead; remove them from
+Dokploy's environment, with the `undercroft-bi.lowbit.link` domain, if they are still there.
+CI never writes the blob.
 
 **Each service connects as its own role.** `db-migrate` is the one service that connects as
 the bootstrap superuser: it applies the schema and then sets `undercroft_app`'s and
@@ -243,8 +252,8 @@ the bootstrap superuser: it applies the schema and then sets `undercroft_app`'s 
 `UNDERCROFT_WORKER_PG_PASSWORD`. The control plane and the worker connect as those roles, so
 the grant model in `packages/db/sql` is what binds them — and a repo statement missing a grant
 fails in the offline gate, where every suite runs as the role that runs it in production
-(`db.become(...)` in `@undercroft/db/testing`). Adding the two variables to Dokploy's
-environment is part of rolling this release out; without them `db-migrate` refuses to start.
+(`db.become(...)` in `@undercroft/db/testing`). Without the two variables `db-migrate`
+refuses to start.
 
 ## Applying migrations
 
@@ -373,22 +382,26 @@ and the `kestra-flows` one-shot service runs `scripts/kestraFlows.ts` against Ke
 on every deploy — `PUT` per flow, `POST` when it is new — and exits non-zero on a flow Kestra
 rejects, so the worker (which waits on it) never starts against a scheduler holding last
 release's flow. There is nothing to upload by hand; a flow that is only on the server is
-drift the next deploy reverts. The one flow, `ingest_due`, asks the worker every fifteen
-minutes which (customer, source) pairs are due and starts each; a pair already running is a
-409 the flow ignores.
+drift the next deploy reverts. There are two flows. `ingest_due` asks the worker every fifteen
+minutes which (customer, source) pairs are due and starts each. `extract_due` asks hourly, at
+:07, which pairs hold landed documents not yet read into `raw.document_text`, and starts an
+extract run for each. A pair already running is a 409 both flows ignore.
 
 Kestra has no domain by design — it is an operator surface holding execution history. To
 inspect executions, tunnel to it over read-only SSH; a tunnel carries application data,
 which is not a Dokploy configuration change and so is not the thing the API-only rule is
 about.
 
-Two Kestra behaviours that waste time otherwise:
+Three Kestra behaviours that waste time otherwise:
 
 - `{{ envs.x }}` resolves from **`ENV_X`**, not `KESTRA_X`. The prefix changed in 0.23
   deliberately: a `KESTRA_*` variable can override Micronaut config and become readable from
   every flow.
 - Kestra **silently rejects a password that fails its complexity rules** — it 401s every
   request, including with the exact credentials configured. Use upper + lower + digit.
+- A Kestra that **crash-loops with `AccessDeniedException` on `/app/storage/plugins`** has
+  root-owned volumes. `kestra-init` hands them to uid 1000 on every deploy; if it did not run,
+  no flow is ever registered and every run arrives as `trigger: manual`.
 
 ## Known gaps
 

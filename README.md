@@ -49,28 +49,37 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   writes nothing. Nothing is ever overwritten in place. It is the one layer that cannot
   be recomputed, so it is the one layer treated as durable.
 - **Connectors are YAML, not code.** Base URL, auth, pagination, entities, cursors.
-  Adding a REST source needs no migration and no pull request. HubSpot and Xero ship as
-  examples in `specs/connectors/`.
+  A spec is data, validated against `specs/schema/connector.v1.json`, so a new REST source
+  needs no migration. It ships in the worker image, and the control plane lists the sources
+  it can connect, so offering one to users is a small code change and a release. HubSpot and
+  Xero ship as examples in `specs/connectors/`.
 - **No business schema ships.** Records land in one generic table; every table above it
   is a dbt model you wrote. Undercroft has no opinion about what a "customer" is.
 - **Multi-tenant.** Per-tenant credentials sealed with AES-256-GCM, and a control-plane
-  UI where someone connects their own accounts.
+  UI where someone connects their own accounts. Each tenant's rows are fenced by row-level
+  security, and its people are viewers, members or admins. An admin invites, changes a
+  role and removes a member, but never the last admin.
 - **Anything can ingest.** A REST lake API means a shell script or an orchestrator can
   land data too — through the same create-only, content-addressed path.
 - **Documents, not only records.** Gmail and Drive are first-party collectors, because a
   PDF is bytes and a YAML spec cannot describe bytes. Their text is extracted and lands
   beside the records. A tenant can connect several mailboxes and drives, and each one is a
-  source of its own.
+  source of its own. A file is recognised by its type first, Google Docs, Sheets and Slides
+  are exported, and a signed OpenAttestation record is verified before any of it is read;
+  [the file-format reference](docs/reference/file-formats.md) lists every type.
 - **Search the whole lake.** One box over both payloads and document text, folded so that
   Vietnamese matches with or without tone marks, and stemmed for English.
 - **The BI is first-party.** Questions and dashboards live in the Reports division, and
   every one runs as the tenant's own read-only login — not as the web process.
+- **It says when a sync breaks.** A failed run, a grant about to lapse and an ingest key
+  about to expire are emailed to the tenant's admins. A failure, and the run that next
+  succeeds, can also post to the operators' Lark group.
 - **An assistant with exactly your permissions.** It reaches the platform's own procedures
   through the real role gates, so it can refuse you; a change is proposed as a proof you
   strike, and a separate model checks you asked for it before one is ever offered.
 - **A CLI for people and agents.** `undercroft` does everything the web UI does, one command
-  per API procedure, as the person who signed in — never more. Writes stay off per
-  environment until a person turns them on.
+  per API procedure, as the person who signed in — never more. Writes stay off for
+  each profile until a person turns them on.
 
 ## From a terminal, or from an agent
 
@@ -143,7 +152,9 @@ See [docs/runbook/cli.md](docs/runbook/cli.md),
 
 ## Stack
 
-TypeScript on [Bun](https://bun.sh), end to end. Postgres, S3/MinIO,
+TypeScript on [Bun](https://bun.sh), end to end. Postgres, S3 (MinIO, run as the
+`pgsty/minio` community build; see
+[ADR 0050](docs/adr/0050-the-raw-lake-runs-a-community-build-of-minio.md)),
 [Kestra](https://kestra.io) for scheduling, [dbt](https://getdbt.com) for transforms, and
 charts in the control plane itself — plus a read-only Postgres role for any BI tool you
 would rather point at it.
@@ -154,9 +165,13 @@ Every operation goes through [Task](https://taskfile.dev) (`brew install go-task
 [the install docs](https://taskfile.dev/installation)) — never a bare `bun run` typed by
 hand. `task --list-all` enumerates everything; see `.claude/rules/tooling.md` for why.
 
+You need Bun (the version in `.bun-version`), Task, Docker, and Python 3 for the local dbt
+virtualenv. `task dev:env` writes `deploy/compose/.env` from its example; fill in its
+secrets before the first `task dev:run`.
+
 ```sh
 bun install
-task ci:verify      # typecheck, lint, format, tests -- offline, no credentials needed
+task ci:verify      # typecheck, lint, rules, format, specs, SPA build, tests -- offline
 task dev:run        # the whole local stack -- Postgres, MinIO, Kestra, the worker, the
                      # control plane, the UI -- with hot reload, one command
 task dev:cli -- describe   # build the CLI and run it against your local stack
@@ -180,6 +195,7 @@ the mail key, the first invitation, and how to check each step actually worked.
   - [the assistant](docs/runbook/assistant-setup.md)
   - [the CLI](docs/runbook/cli.md)
   - [deployment](docs/runbook/deployment.md)
+- **Reference:** [file formats a Gmail or Drive connection can land](docs/reference/file-formats.md).
 - **Working on the code:** [CLAUDE.md](CLAUDE.md), also linked as `AGENTS.md`, is the map
   of the conventions. The rules it points to live in `.claude/rules/`.
 - **Changes:** [CHANGELOG.md](CHANGELOG.md), maintained by release-please.

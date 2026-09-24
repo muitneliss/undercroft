@@ -136,7 +136,12 @@ apply  001_roles.sql
 apply  020_control_plane.sql
 ...
 apply  060_auth.sql
-applied 6 migration(s)
+...
+apply  270_run_recovered_notice.sql
+state  010_provision_tenant.sql
+applied 28 migration(s)
+set    password for undercroft_app
+set    password for undercroft_worker
 ```
 
 Re-running prints `already up to date`.
@@ -284,11 +289,11 @@ SELECT email, accepted_at FROM app.invitation;
 
 Open the tenant → **People**. Enter an address, pick a role, send.
 
-| Role     | Can                                                |
-| -------- | -------------------------------------------------- |
-| `viewer` | look                                               |
-| `member` | look, and trigger a sync                           |
-| `admin`  | all of it, plus connect accounts and invite people |
+| Role     | Can                                                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `viewer` | look                                                                                                                         |
+| `member` | look, and author questions and dashboards                                                                                    |
+| `admin`  | all of it, plus connect accounts, run a sync, edit and build models, browse and query the raw lake, invite and manage people |
 
 The page tells you whether the invitation was actually emailed. If mail is not configured it
 still works — you just have to tell the person yourself. They must sign in with **exactly**

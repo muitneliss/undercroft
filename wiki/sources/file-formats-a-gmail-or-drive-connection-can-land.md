@@ -5,7 +5,7 @@ date: 2026-09-24
 tags: []
 source: docs/reference/file-formats.md
 source_path: docs/reference/file-formats.md
-source_hash: 28e0d6a00ad9392f582b803f20783a29fa8f3ed8979383b1fd15193de5756fbe
+source_hash: c354ac9bc289d153e8c64ca31f641241b7ae6b29adb07e0fcfccef8a32550bf3
 ingested: 2026-09-24
 ---
 
@@ -21,7 +21,7 @@ The reference page for every file type the connection picker offers, kept in ste
 
 **Formats.**
 
-* Documents: PDF (text layer, else OCR), `.docx` (body, headers, footers, notes, nested tables, text boxes), `.doc` (refused `legacy-doc-unsupported`).
+* Documents: PDF (text layer, else OCR; refusals `extractor-missing:pdftotext`, `pdftotext-failed`, `extractor-missing:pdftoppm`, `pdftoppm-failed`, and the OCR refusals), `.docx` (body, headers, footers, notes, nested tables, text boxes), `.doc` (refused `legacy-doc-unsupported`).
 * Google-native: Google Docs exported to `.docx`, Google Sheets to `.xlsx` (every sheet), Google Slides to plain text.
 * Spreadsheets: `.xlsx`, `.xlsm` (macros never run; Drive's capital-E spelling matches), `.xls` (refused `legacy-xls-unsupported`).
 * Text: CSV (stored as text, not split into rows), plain text, Markdown.

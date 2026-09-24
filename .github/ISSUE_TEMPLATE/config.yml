@@ -8,6 +8,9 @@ contact_links:
   - name: Runbooks
     url: https://github.com/muitneliss/undercroft/tree/main/docs/runbook
     about: Sign-in, Google ingestion, Xero, the assistant, the CLI and deployment, step by step.
+  - name: File-format reference
+    url: https://github.com/muitneliss/undercroft/blob/main/docs/reference/file-formats.md
+    about: Every file type a Gmail or Drive connection can land, and what is read from it.
   - name: Architecture decisions
     url: https://github.com/muitneliss/undercroft/tree/main/docs/adr
     about: Why the platform refuses to do the obvious thing. Worth a look before asking why.

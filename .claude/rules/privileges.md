@@ -48,9 +48,10 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   `undercroft_bi_<slug>`, recorded in `ops.tenant_role` — the only authority for which login
   belongs to which customer.
 - **Migrations run as the bootstrap superuser** (`db-migrate` uses `POSTGRES_USER`), which
-  therefore owns every table; `undercroft_owner` owns the schemas. The two `SECURITY DEFINER`
-  functions in `080_tenant_isolation.sql` are owned by that bootstrap role and are the only
-  code that creates a role, a schema or a default privilege.
+  therefore owns every table; `undercroft_owner` owns the schemas. `ops.provision_tenant`
+  (`repeatable/010_provision_tenant.sql`) and `ops.rotate_tenant_password`
+  (`080_tenant_isolation.sql`) are `SECURITY DEFINER`, owned by that bootstrap role, and are
+  the only code that creates a role, a schema or a default privilege.
 - The worker's reach into `app` is exactly what its verbs need, column-scoped where a column
   is all it writes: `SELECT, INSERT, UPDATE, DELETE` on `app.connection_secret` (it seals,
   refreshes and revokes), `SELECT` on `app.connection_detail` (the chosen scope),

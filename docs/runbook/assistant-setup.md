@@ -36,8 +36,9 @@ Then `task dev:run`.
 
 On the server the same four go in the **Dokploy panel environment**, by hand. CI never writes
 the panel's configuration (`.claude/rules/deployment.md`): `saveEnvironment` replaces the whole
-blob, which holds every live credential. `task cd:preflight` asserts the config and a human
-repairs a drift.
+blob, which holds every live credential. `task cd:preflight` asserts the panel's compose source and
+command, not its environment; a missing variable shows up in the boot log, and a human repairs
+it.
 
 ## Checking it came up
 
@@ -68,10 +69,11 @@ Worth knowing before somebody asks for it as a bug:
   and takes you there; you read it and press Run. `lake.query` executes against a customer's
   data as their own role, and an author has to see what they are about to run.
 - **It does not author or build dbt models**, for the same reason.
-- **It does not remove a member.** The router has no such procedure; a membership ends in the
-  People division.
-- **It does not choose Gmail labels or Drive files.** That is consent, given in Google's own
-  picker.
+- **It does not change a member's role or remove a member.** Those procedures exist but are
+  deliberately not given to the assistant; use the People division, or
+  `undercroft people set-role` / `remove-member`.
+- **It does not choose Gmail labels or Drive files.** That is consent, given by an admin on
+  the scope page (Gmail labels) or in Google's Picker (Drive).
 
 ## When it goes wrong
 

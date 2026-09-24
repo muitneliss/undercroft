@@ -21,7 +21,8 @@ The UI has exactly two homes for state, and `useState` is neither.
   truth that competes with the query cache and the store, and the bug it causes — two
   values that should be one drifting apart — is invisible until a user hits it. Put the
   state in the store instead. This is enforced: `bun run lint:rules` (ast-grep, rule
-  `no-usestate`) fails the build, and it runs inside `bun run verify` and CI.
+  `no-usestate`) fails the build, and it runs inside `bun run verify` and CI. Vendored
+  shadcn source under `apps/ui/src/components/ui/**` is exempt (ADR 0025); nothing else is.
 
 ## Follow
 
