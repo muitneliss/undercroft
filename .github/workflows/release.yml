@@ -112,3 +112,28 @@ jobs:
     secrets:
       dokploy_api_key: ${{ secrets.DOKPLOY_API_KEY }}
       dokploy_compose_id: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+      lark_webhook_url: ${{ secrets.LARK_WEBHOOK_URL }}
+      lark_webhook_secret: ${{ secrets.LARK_WEBHOOK_SECRET }}
+
+  # A release that broke before its deploy started says so; the deploy reports itself, from
+  # deploy.yml, so `deploy` is deliberately NOT in `needs` -- listing it would post a failed
+  # rollout twice. `failure()` here is true only when one of the jobs named below failed.
+  notify:
+    needs: [release-please, release-cli, release-images]
+    if: failure()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      LARK_WEBHOOK_URL: ${{ secrets.LARK_WEBHOOK_URL }}
+      LARK_WEBHOOK_SECRET: ${{ secrets.LARK_WEBHOOK_SECRET }}
+      RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+      RELEASE_NEEDS: ${{ toJSON(needs) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      - run: task notify:release

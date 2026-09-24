@@ -32,6 +32,9 @@ includes:
   db:
     taskfile: ./.taskfiles/db/Taskfile.yml
     dir: "{{.ROOT_DIR}}"
+  notify:
+    taskfile: ./.taskfiles/notify/Taskfile.yml
+    dir: "{{.ROOT_DIR}}"
 
 tasks:
   default:

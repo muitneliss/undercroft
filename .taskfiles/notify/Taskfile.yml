@@ -1,0 +1,28 @@
+# scripts/notify.ts, one task per notice -- CI runs these to post into the team's Lark group,
+# and an operator runs `notify:test` by hand after rotating the webhook.
+#
+# The webhook (LARK_WEBHOOK_URL, and LARK_WEBHOOK_SECRET when the bot signs) comes from the
+# ambient environment, a GitHub secret in CI -- Task does not manage it, and it is never
+# written to a file. See docs/runbook/deployment.md#notifications.
+version: "3"
+
+tasks:
+  deploy:
+    desc: Post a deploy's outcome (reads DEPLOY_TAG, DEPLOY_RESULT, DEPLOY_STEPS, DEPLOY_SITE).
+    cmds:
+      - bun run scripts/notify.ts deploy
+
+  release:
+    desc: Post a release that failed before its deploy (reads RELEASE_TAG, RELEASE_NEEDS).
+    cmds:
+      - bun run scripts/notify.ts release
+
+  event:
+    desc: Post the GitHub event this workflow run was triggered by (issue, PR, failed CI run).
+    cmds:
+      - bun run scripts/notify.ts event
+
+  test:
+    desc: Post a test card to prove the webhook is wired. Needs LARK_WEBHOOK_URL.
+    cmds:
+      - bun run scripts/notify.ts test
