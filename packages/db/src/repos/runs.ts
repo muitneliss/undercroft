@@ -579,6 +579,76 @@ export async function claimFailedRuns(exec: SqlExecutor): Promise<FailedRunNotic
     .sort((a, b) => a.endedAt.localeCompare(b.endedAt));
 }
 
+/** A success claimed for notice because it ended a failure somebody was told about. */
+export interface RecoveredRunNotice {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly source: string;
+  readonly verb: RunVerb;
+  readonly endedAt: string;
+  /** When the first failure of the streak this run ended was recorded. */
+  readonly failingSince: string;
+}
+
+/**
+ * Claim every successful run of the last day that ended an announced failure.
+ *
+ * The streak a success ends is every failure of its pair since the pair's previous success.
+ * It was announced when any of those failures was claimed by `claimFailedRuns`, as sent or as
+ * suppressed; a streak nobody was told about needs no "it works again", so its success is left
+ * unclaimed. Marked `recovered` in the same UPDATE that returns it, so the notice goes out at
+ * most once whatever runs the tick.
+ *
+ * Runs are ordered by `(ended_at, id)`, not the timestamp alone: two runs can end in the same
+ * millisecond, and a run id leads with its start time, so the pair is a total order that
+ * agrees with the clock.
+ *
+ * Call it after `claimFailedRuns` in the same tick: a failure and the success that ended it
+ * can both land between two ticks, and the recovery only counts a failure already claimed.
+ */
+export async function claimRecoveredRuns(exec: SqlExecutor): Promise<RecoveredRunNotice[]> {
+  const { rows } = await exec.query<{
+    id: string;
+    tenant_id: string;
+    source: string;
+    verb: RunVerb;
+    ended_at: Date | string;
+    failing_since: Date | string;
+  }>(
+    `UPDATE ops.run r
+     SET notified_at = now(), notice = 'recovered'
+     FROM (
+       SELECT ok.id, min(f.ended_at) AS failing_since
+       FROM ops.run ok
+       JOIN ops.run f
+         ON f.tenant_id = ok.tenant_id AND f.source = ok.source AND f.verb = ok.verb
+        AND f.status = 'failed' AND (f.ended_at, f.id) < (ok.ended_at, ok.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM ops.run o
+          WHERE o.tenant_id = ok.tenant_id AND o.source = ok.source AND o.verb = ok.verb
+            AND o.status = 'ok'
+            AND (o.ended_at, o.id) > (f.ended_at, f.id) AND (o.ended_at, o.id) < (ok.ended_at, ok.id)
+        )
+       WHERE ok.status = 'ok' AND ok.notified_at IS NULL
+         AND ok.ended_at > now() - interval '1 day'
+       GROUP BY ok.id
+       HAVING bool_or(f.notice IS NOT NULL)
+     ) streak
+     WHERE r.id = streak.id
+     RETURNING r.id, r.tenant_id, r.source, r.verb, r.ended_at, streak.failing_since`,
+  );
+  return rows
+    .map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      source: row.source,
+      verb: row.verb,
+      endedAt: new Date(row.ended_at).toISOString(),
+      failingSince: new Date(row.failing_since).toISOString(),
+    }))
+    .sort((a, b) => a.endedAt.localeCompare(b.endedAt));
+}
+
 /**
  * Every run still marked running is one the worker was in the middle of when it stopped.
  * Called once at boot: a row that stayed `running` forever would hold `run_one_running`

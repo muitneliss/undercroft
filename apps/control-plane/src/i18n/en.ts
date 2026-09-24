@@ -48,6 +48,13 @@ export const en = {
       "If it keeps failing you will not receive another email about this source for 24 hours; a successful run resets that window.",
   },
 
+  syncCard: {
+    reason: "Reason",
+    failingSince: "Failing since",
+    recovered: "The {{source}} sync for {{tenantId}} is working again",
+    modelsRecovered: "The model build for {{tenantId}} is working again",
+  },
+
   grantExpiring: {
     subject: "{{tenantId}}'s {{source}} access is about to expire",
     heading: "Access is about to expire",

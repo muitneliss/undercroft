@@ -2,12 +2,12 @@
  * What an alert promises: the right people are told once, in their own language, with a
  * way in; a repeat within a day is held; and nothing goes out twice.
  *
- * No mocks: real Postgres in WASM, the real catalogues, and the in-memory sender that
- * refuses a message no provider would take.
+ * No mocks: real Postgres in WASM, the real catalogues, the in-memory sender that refuses a
+ * message no provider would take, and a Lark group that is the list of cards posted to it.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { DEFAULT_LOCALE, InMemoryEmailSender } from "@undercroft/core";
+import { DEFAULT_LOCALE, InMemoryEmailSender, type LarkNotice } from "@undercroft/core";
 import { closeRun, openRun, upsertConnection, writeCredential } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
@@ -21,6 +21,12 @@ const ENV = { UNDERCROFT_SECRET_KEY: Buffer.alloc(32, 9).toString("base64") };
 
 let db: TestDatabase;
 let email: InMemoryEmailSender;
+let cards: LarkNotice[];
+
+function larkGroup(notice: LarkNotice): Promise<void> {
+  cards.push(notice);
+  return Promise.resolve();
+}
 
 function deps(over: Partial<AlertDeps> = {}): AlertDeps {
   return { exec: db, email, publicUrl: PUBLIC_URL, superadmins: new Set<string>(), ...over };
@@ -48,6 +54,17 @@ async function failedRun(
   await closeRun(db, id, { status: "failed", error });
 }
 
+async function okRun(id: string): Promise<void> {
+  await openRun(db, {
+    id,
+    tenantId: TENANT,
+    source: "hubspot",
+    verb: "ingest",
+    trigger: "schedule",
+  });
+  await closeRun(db, id, { status: "ok" });
+}
+
 function caller(userId: string, address: string) {
   const ctx: Context = {
     exec: db,
@@ -69,6 +86,7 @@ beforeEach(async () => {
   await db.exec("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
   await db.become("undercroft_app");
   email = new InMemoryEmailSender();
+  cards = [];
 });
 
 afterEach(async () => {
@@ -166,6 +184,77 @@ describe("a failed run", () => {
     await runAlerts(deps());
 
     expect(email.last?.subject).toBe("The HubSpot sync for CASE-0042 failed");
+  });
+});
+
+describe("a sync's status in the operators' Lark group", () => {
+  it("a failure is posted once, in the platform's language, with the reason and a way in", async () => {
+    await failedRun("r-1");
+
+    await runAlerts(deps({ lark: larkGroup }));
+    await failedRun("r-2");
+    const held = await runAlerts(deps({ lark: larkGroup }));
+
+    expect(held.suppressed).toBe(1);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      title: "❌ Đồng bộ HubSpot cho CASE-0042 không thành công",
+      tone: "red",
+      links: [["Xem nhật ký", `${PUBLIC_URL}/tenants/CASE-0042/journal/r-1`]],
+    });
+    expect(cards[0]?.facts).toContainEqual(["Lý do", "HubSpot answered 401 after 0"]);
+  });
+
+  it("the success that ends an announced failure is posted once; the success after it is not", async () => {
+    await failedRun("r-1");
+    await runAlerts(deps({ lark: larkGroup }));
+    await failedRun("r-2");
+    await runAlerts(deps({ lark: larkGroup }));
+    await okRun("r-3");
+    await okRun("r-4");
+
+    const summary = await runAlerts(deps({ lark: larkGroup }));
+    const again = await runAlerts(deps({ lark: larkGroup }));
+
+    expect(summary.recoveries).toBe(1);
+    expect(again.recoveries).toBe(0);
+    expect(cards.map((c) => [c.tone, c.title])).toEqual([
+      ["red", "❌ Đồng bộ HubSpot cho CASE-0042 không thành công"],
+      ["green", "✅ Đồng bộ HubSpot cho CASE-0042 đã chạy lại bình thường"],
+    ]);
+    expect(cards[1]?.links).toEqual([
+      ["Xem nhật ký", `${PUBLIC_URL}/tenants/CASE-0042/journal/r-3`],
+    ]);
+  });
+
+  it("with Lark and no email, a failure is still posted and an expiry is left for email to tell", async () => {
+    await seedAdmin("bob@example.test", "en");
+    const soon = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    await db.query(
+      `INSERT INTO app.ingest_key (id, token_sha256, tenant_id, label, expires_at)
+       VALUES ('uk_live', repeat('a', 64), $1, 'Kestra feed', $2)`,
+      [TENANT, soon],
+    );
+    await failedRun("r-1");
+    const { email: _, ...larkOnly } = deps({ lark: larkGroup });
+
+    const summary = await runAlerts(larkOnly);
+
+    expect(summary).toMatchObject({ failures: 1, keys: 0 });
+    expect(cards).toHaveLength(1);
+    expect((await runAlerts(deps())).keys).toBe(1);
+  });
+
+  it("a card Lark refuses is counted and does not stop the email", async () => {
+    await seedAdmin("ada@example.test");
+    await failedRun("r-1");
+
+    const summary = await runAlerts(
+      deps({ lark: () => Promise.reject(new Error("Lark refused the notice: HTTP 200")) }),
+    );
+
+    expect(summary).toMatchObject({ failures: 1, undeliverable: 1 });
+    expect(email.sent).toHaveLength(1);
   });
 });
 

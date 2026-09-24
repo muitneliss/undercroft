@@ -97,6 +97,20 @@ export const vi = {
       "Nếu lỗi tiếp diễn, bạn sẽ không nhận thêm email về nguồn này trong 24 giờ; một lần chạy thành công sẽ đặt lại khoảng thời gian đó.",
   },
 
+  /**
+   * A sync's status as a card in the operators' Lark group. A failure's card is headed by
+   * `runFailed.subject`, the same sentence the email carries, so the group and the inbox name
+   * one event alike; what is here is only what the email never says.
+   */
+  syncCard: {
+    /** A label standing alone in a card's fact cell, before the run's own reason. */
+    reason: "Lý do",
+    failingSince: "Lỗi từ lúc",
+    recovered: "Đồng bộ {{source}} cho {{tenantId}} đã chạy lại bình thường",
+    /** Its own whole sentence, for the reason `runFailed.modelsSubject` is one. */
+    modelsRecovered: "Dựng mô hình cho {{tenantId}} đã chạy lại bình thường",
+  },
+
   grantExpiring: {
     subject: "Quyền truy cập {{source}} của {{tenantId}} sắp hết hạn",
     heading: "Quyền truy cập sắp hết hạn",

@@ -175,6 +175,31 @@ Every tag in quoted text is escaped, never obeyed, because an issue titled
 secret too. That is safe only because it checks out the default branch and never runs the
 pull request's code, so never add a checkout of the pull request's head to that file.
 
+### Sync status
+
+The control plane posts to a Lark group too, from its alert tick
+(`apps/control-plane/src/services/alerts.ts`), once a minute:
+
+| Card                                               | When                                                                                         |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| red: a sync or model build failed, with its reason | the same failure a tenant's admins are emailed about; a repeat within a day is held likewise |
+| green: it is working again, and since when it was  | the first successful run after a failure one of these cards (or an email) announced          |
+
+Cards are written in Vietnamese, the platform's language, and link to the run in the journal.
+The ledger's `ops.run.notice` claims each one, so a card goes out at most once however many
+replicas tick. A card Lark refuses is logged as `alert_post_failed` and not retried.
+
+| Where               | Name                             | Value                                                        |
+| ------------------- | -------------------------------- | ------------------------------------------------------------ |
+| Dokploy environment | `UNDERCROFT_LARK_WEBHOOK_URL`    | the custom bot's webhook URL — unset means email only        |
+| Dokploy environment | `UNDERCROFT_LARK_WEBHOOK_SECRET` | the bot's signing secret — set it when signing is on in Lark |
+
+These are not CI's `LARK_WEBHOOK_URL`: that one is a GitHub secret and this one is the
+deployment's environment, so the two may name the same group or different ones. Set them in
+Dokploy by hand and redeploy; the control plane's boot line `alerts_configured` then reports
+`lark: true`. The tick also needs `UNDERCROFT_PUBLIC_URL` for its links, and with Lark set it
+runs even where email is not configured.
+
 ## Environment variables
 
 **Dokploy does not inject its variables into containers.** A variable saved in Dokploy is

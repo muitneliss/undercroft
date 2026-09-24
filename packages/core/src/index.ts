@@ -30,6 +30,15 @@ export {
   type RecordedByteResponse,
 } from "./httpBytes.ts";
 export { newRequestId, newRunId } from "./ids.ts";
+export {
+  type LarkConfig,
+  type LarkFetch,
+  type LarkMessage,
+  type LarkNotice,
+  type LarkTone,
+  larkMessage,
+  postLark,
+} from "./lark.ts";
 export { DEFAULT_LOCALE, LOCALES, type Locale, negotiateLocale, parseLocale } from "./locale.ts";
 export {
   createLogger,

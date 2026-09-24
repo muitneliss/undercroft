@@ -17,6 +17,9 @@ import {
   createLogger,
   describeError,
   type EmailSender,
+  type LarkNotice,
+  larkMessage,
+  postLark,
 } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { createAuth } from "./handlers/auth.ts";
@@ -262,26 +265,61 @@ if (superadmins.addresses.size === 0) {
 }
 
 /**
- * The alert tick: failed runs and expiring grants and keys, emailed to a tenant's admins.
+ * The operators' Lark group, where a sync's failure and its recovery are posted as cards.
  *
- * Needs a sender and a public origin for the links, and starts only with both: a tick that
- * claimed failures and then could not send would mark them as told about. With either
- * absent the ledger still records everything; only the email is missing, and the boot line
- * says so.
+ * The webhook URL is the credential -- anyone holding it can post into the group -- so it is
+ * read here and never logged. The secret is Lark's optional signature check. A different
+ * variable from CI's `LARK_WEBHOOK_URL` on purpose: that one is a GitHub secret, this one is
+ * the deployment's environment, and the two may name different groups.
  */
-if (email === undefined || publicUrl === undefined) {
+const larkUrl = optional("UNDERCROFT_LARK_WEBHOOK_URL");
+const lark =
+  larkUrl === undefined
+    ? undefined
+    : (notice: LarkNotice): Promise<void> =>
+        postLark(
+          { url: larkUrl, secret: optional("UNDERCROFT_LARK_WEBHOOK_SECRET") ?? "" },
+          larkMessage(notice),
+          {
+            fetch: (input, init): Promise<Response> => globalThis.fetch(input, init ?? {}),
+            now: () => Date.now(),
+          },
+        );
+
+/**
+ * The alert tick: failed runs and expiring grants and keys, emailed to a tenant's admins, and
+ * a sync's failure and recovery posted to the operators' Lark group.
+ *
+ * Needs a public origin for the links and at least one channel, and starts only then: a tick
+ * that claimed failures and then could tell nobody would mark them as told about. With it not
+ * started the ledger still records everything; only the notices are missing, and the boot
+ * line says so.
+ */
+if (publicUrl === undefined || (email === undefined && lark === undefined)) {
   log.warn("alerts_unconfigured", {
     email: email !== undefined,
+    lark: lark !== undefined,
     publicUrl: publicUrl !== undefined,
   });
 } else {
-  const alertDeps = { exec, email, publicUrl, superadmins: superadmins.addresses, log };
+  const alertDeps = {
+    exec,
+    ...(email === undefined ? {} : { email }),
+    ...(lark === undefined ? {} : { lark }),
+    publicUrl,
+    superadmins: superadmins.addresses,
+    log,
+  };
   setInterval(() => {
     runAlerts(alertDeps).catch((error: unknown) => {
       log.error("alerts_tick_failed", describeError(error));
     });
   }, ALERT_TICK_MS);
-  log.info("alerts_configured", { everyMs: ALERT_TICK_MS });
+  log.info("alerts_configured", {
+    everyMs: ALERT_TICK_MS,
+    email: email !== undefined,
+    lark: lark !== undefined,
+  });
 }
 
 // The image bakes the built SPA in and points here; a bare `bun run` with the variable

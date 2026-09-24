@@ -26,7 +26,7 @@ import {
   failedRunMessage,
   grantExpiringMessage,
   keyExpiringMessage,
-} from "../src/services/alerts.ts";
+} from "../src/services/alertEmails.ts";
 import { invitationMessage } from "../src/services/people.ts";
 
 const OUT_DIR = path.join(process.cwd(), "data", "email-preview");

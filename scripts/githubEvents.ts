@@ -3,11 +3,19 @@
  *
  * The payload arrives as the JSON file GitHub writes for the run (`GITHUB_EVENT_PATH`), and
  * these notices quote from it -- titles, bodies, branch names -- text written by anyone who
- * can open an issue. It is safe to quote because `lark.ts` never lets it reach Lark as markup:
+ * can open an issue. It is safe to quote because `packages/core/src/lark.ts` never lets it reach Lark as markup:
  * a body's markdown is rendered, a Lark tag inside it never is.
  */
 
-import { bold, green, grey, type Notice, red, type Span, type Tone } from "./lark.ts";
+import {
+  bold,
+  green,
+  grey,
+  type LarkNotice as Notice,
+  type LarkTone as Tone,
+  red,
+  type Span,
+} from "../packages/core/src/lark.ts";
 
 const SHORT_SHA_CHARS = 7;
 
