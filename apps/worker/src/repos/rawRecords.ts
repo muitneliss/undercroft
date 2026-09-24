@@ -159,6 +159,10 @@ const PROBE_CHUNK = 1000;
  * writes no mark, so its rows are not held by this. Nothing probes them today (the spec path
  * resumes from `raw.sync_cursor` instead, ADR 0034); if one ever does, the answer it gets is
  * "read it again", which is the safe direction to be wrong in and the visible one.
+ *
+ * "Today" is held by `scripts/knownRecordsCallers.test.ts`, which pins the caller set outside
+ * the suites. A second caller is not forbidden -- it just cannot arrive without that test
+ * failing, so this paragraph is re-read by whoever adds one, and updated with them.
  */
 export async function knownRecords(
   exec: SqlExecutor,
