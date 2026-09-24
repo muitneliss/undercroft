@@ -26,6 +26,13 @@ fixtures/live/
 # Local agent/tool scratch space, not part of the project.
 .kanna/
 
+# A developer's personal agent skill: it posts to their own Lark group, and its config.json
+# holds that group's webhook URL, which IS the credential (`packages/core/src/lark.ts`).
+# The `.agents/` symlink is Codex's pointer to it, ignored with it so
+# `scripts/agentConfig.test.ts` still sees the two sides agree on a checkout that has it.
+.claude/skills/lark-notify/
+.agents/skills/lark-notify
+
 # Feature-branch worktrees (`git worktree add .worktrees/<name>`). Each one is a second
 # checkout of this same repo, so leaving it unignored does more than dirty `git status`:
 # Biome reads this file (`vcs.useIgnoreFile` in `biome.jsonc`) and without this line it
