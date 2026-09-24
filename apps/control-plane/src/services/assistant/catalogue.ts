@@ -313,10 +313,11 @@ export const WRITE_TOOLS = {
  * authoring SQL that will run as the customer's own database role is not a thing to do by
  * description, and `lake.query` is the same hazard with a shorter fuse. Both stay in the
  * Models division and the Lake Console, where an author sees what they wrote before it runs --
- * and the assistant's `navigate` tier is how it takes them there. `people.revokeInvitation`
- * appears rather than a "remove member" verb because the router has no such procedure: a
- * membership is ended in the People division, and inventing a tool for a verb the application
- * does not have would be the assistant growing a capability nobody reviewed.
+ * and the assistant's `navigate` tier is how it takes them there. `people.setRole` and
+ * `people.removeMember` are absent too, for now: they change who may read a customer's books,
+ * and giving them to the assistant is a decision to review on its own rather than something
+ * to add alongside the procedures. Until then a membership is changed in the People division
+ * or from the CLI.
  */
 export const PRIVILEGED_WRITE_TOOLS = {
   revokeGrant: {

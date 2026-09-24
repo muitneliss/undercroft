@@ -39,6 +39,10 @@ export const EFFECTS: Readonly<Record<string, Effect>> = {
 
   "people.invite": "write",
   "people.revokeInvitation": "destructive",
+  // A role change is undone by another; a removal is undone only by a fresh invitation,
+  // which the person has to accept.
+  "people.setRole": "write",
+  "people.removeMember": "destructive",
 
   // Reads nothing it could not read anyway, but it runs SQL an admin wrote against the raw
   // lake, which ADR 0029 kept away from the assistant for the same reason. Here it takes the

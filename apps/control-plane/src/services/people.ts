@@ -6,9 +6,9 @@
  * opening a SQL client.
  *
  * Every outcome is a VALUE, not an exception: `invite` reports `already-member` and
- * `not-created` the same way it reports success, and `revokeInvitation` answers `false`
- * when there was nothing open to withdraw. The handler turns those into CONFLICT and
- * NOT_FOUND. That is what makes this callable from a future CLI or backfill without
+ * `not-created` the same way it reports success, `setRole` and `removeMember` report
+ * `not-member` and `last-admin`, and `revokeInvitation` answers `false` when there was nothing
+ * open to withdraw. The handler turns those into CONFLICT and NOT_FOUND. That is what makes this callable from a future CLI or backfill without
  * catching tRPC errors.
  *
  * No invitation token is ever returned or sent. `app.invitation.token_sha256` exists for a
@@ -23,7 +23,15 @@ import type { SqlExecutor } from "@undercroft/db";
 import { messages } from "../i18n/index.ts";
 import { record as recordAudit } from "../repos/auditLog.ts";
 import * as invitations from "../repos/invitation.ts";
-import { listMembers, type Member, roleForEmail } from "../repos/membership.ts";
+import {
+  changeRole,
+  removeMember as deleteMembership,
+  listMembers,
+  type Member,
+  type MembershipChange,
+  type Role,
+  roleForEmail,
+} from "../repos/membership.ts";
 
 export type { Member } from "../repos/membership.ts";
 export type Invitation = invitations.InvitationRow;
@@ -150,6 +158,85 @@ export async function invite(
 
   const notified = await input.notify(input.email, input.tenantId);
   return { ok: true, id, notified };
+}
+
+export type MembershipResult =
+  /** `previous` is the role held before, so the audit row records both ends of a change. */
+  | { readonly ok: true; readonly previous: Role }
+  /** The address holds no role in this tenant: nothing to change or remove. */
+  | { readonly ok: false; readonly reason: "not-member" }
+  /** It is the tenant's last admin, and the change would leave the customer with none. */
+  | { readonly ok: false; readonly reason: "last-admin" };
+
+/**
+ * Turn what the statement found into an outcome, and record the ones that happened.
+ *
+ * The audit row is written only for a change that took effect. A refusal changed nobody's
+ * access, and a trail that recorded attempts as actions would say a person lost access
+ * when they did not.
+ */
+async function settle(
+  exec: SqlExecutor,
+  change: MembershipChange,
+  entry: { tenantId: string; actor: string; action: string; detail: Record<string, string> },
+): Promise<MembershipResult> {
+  if (change.held === null) {
+    return { ok: false, reason: "not-member" };
+  }
+  if (!change.done) {
+    return { ok: false, reason: "last-admin" };
+  }
+  await recordAudit(exec, {
+    tenantId: entry.tenantId,
+    actor: entry.actor,
+    action: entry.action,
+    detail: JSON.stringify({ ...entry.detail, previousRole: change.held }),
+  });
+  return { ok: true, previous: change.held };
+}
+
+/**
+ * Change the role an existing member holds.
+ *
+ * An admin may lower their own role, as long as another admin remains: the one change that
+ * is refused is the one that leaves the customer with no admin at all, because then nobody
+ * can invite, connect or undo anything, and only an operator with database access could
+ * repair it. The guard is in the statement (`repos/membership.ts` says why).
+ */
+export async function setRole(
+  exec: SqlExecutor,
+  input: { tenantId: string; email: string; role: Role; actor: string },
+): Promise<MembershipResult> {
+  const change = await changeRole(exec, input.tenantId, input.email, input.role);
+  return await settle(exec, change, {
+    tenantId: input.tenantId,
+    actor: input.actor,
+    action: "people.setRole",
+    detail: { email: input.email, role: input.role },
+  });
+}
+
+/**
+ * End an existing member's access to this tenant.
+ *
+ * Takes effect on the member's very next request, signed in or not: authority is resolved
+ * from `app.tenant_member` per request (`handlers/trpc.ts`), and nothing caches it in the
+ * session. Their `app_user` and their accepted invitation are kept -- the first keys the
+ * audit trail, the second is the record of how they came to have access.
+ *
+ * An admin may remove themselves while another admin remains, for the reason `setRole` gives.
+ */
+export async function removeMember(
+  exec: SqlExecutor,
+  input: { tenantId: string; email: string; actor: string },
+): Promise<MembershipResult> {
+  const change = await deleteMembership(exec, input.tenantId, input.email);
+  return await settle(exec, change, {
+    tenantId: input.tenantId,
+    actor: input.actor,
+    action: "people.remove",
+    detail: { email: input.email },
+  });
 }
 
 /** Withdraw an invitation that has not been accepted. `false` if there was none open. */

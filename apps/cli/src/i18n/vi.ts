@@ -158,6 +158,9 @@ export const vi = {
       invitations: "Các lời mời đang mở.",
       invite: "Mời một địa chỉ với một vai trò. Quản trị.",
       revokeInvitation: "Thu hồi một lời mời đang mở. Quản trị.",
+      setRole: "Đổi vai trò của một thành viên; không áp dụng cho admin cuối cùng. Quản trị.",
+      removeMember:
+        "Gỡ quyền truy cập của một thành viên; không áp dụng cho admin cuối cùng. Quản trị.",
     },
     lake: {
       summary: "Những gì đã nạp, theo từng luồng: số lượng và độ mới.",

@@ -136,6 +136,8 @@ export const en = {
       invitations: "The open invitations.",
       invite: "Invite an address with a role. Admins.",
       revokeInvitation: "Withdraw an open invitation. Admins.",
+      setRole: "Change the role a member holds; never the last admin's. Admins.",
+      removeMember: "End a member's access; never the last admin's. Admins.",
     },
     lake: {
       summary: "What has landed, per stream: counts and freshness.",

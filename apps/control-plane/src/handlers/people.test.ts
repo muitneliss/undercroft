@@ -265,6 +265,165 @@ describe("an invitation can be withdrawn before it is used", () => {
   });
 });
 
+describe("an admin can change or end an existing member's access", () => {
+  it("changing a member's role is what the roster then reports", async () => {
+    // A mis-clicked invitation: meant as viewer, accepted as admin. Before #168 this was
+    // permanent the moment it was accepted.
+    const api = await admin();
+    await seedMember("hand@example.test", "admin");
+
+    const changed = await api.people.setRole({
+      tenantId: "CASE-0042",
+      email: "hand@example.test",
+      role: "viewer",
+    });
+
+    expect(changed.previousRole).toBe("admin");
+    const members = await api.people.members({ tenantId: "CASE-0042" });
+    expect(members.find((m) => m.email === "hand@example.test")?.role).toBe("viewer");
+  });
+
+  it("a removed member is no longer listed", async () => {
+    const api = await admin();
+    await seedMember("hand@example.test", "member");
+
+    await api.people.removeMember({ tenantId: "CASE-0042", email: "hand@example.test" });
+
+    const members = await api.people.members({ tenantId: "CASE-0042" });
+    expect(members.map((m) => m.email)).toEqual(["boss@example.test"]);
+  });
+
+  it("a member removed while signed in is refused on their very next request", async () => {
+    // The session outlives the membership. Authority must not.
+    const api = await admin();
+    const userId = await seedMember("leaver@example.test", "admin");
+    const leaver = caller({ userId, email: "leaver@example.test" });
+    await leaver.people.members({ tenantId: "CASE-0042" });
+
+    await api.people.removeMember({ tenantId: "CASE-0042", email: "leaver@example.test" });
+
+    expect(await errorCode(() => leaver.people.members({ tenantId: "CASE-0042" }))).toBe(
+      "NOT_FOUND",
+    );
+  });
+
+  it("each change leaves an audit row saying who did it, to whom, and from what", async () => {
+    const api = await admin();
+    await seedMember("hand@example.test", "admin");
+    await seedMember("gone@example.test", "viewer");
+
+    await api.people.setRole({ tenantId: "CASE-0042", email: "hand@example.test", role: "member" });
+    await api.people.removeMember({ tenantId: "CASE-0042", email: "gone@example.test" });
+
+    const { rows } = await db.asSuperuser((tx) =>
+      tx.query<{ actor: string; action: string; detail: unknown }>(
+        "SELECT actor, action, detail FROM ops.audit_log WHERE tenant_id = $1 ORDER BY id",
+        ["CASE-0042"],
+      ),
+    );
+    expect(rows).toEqual([
+      {
+        actor: "boss@example.test",
+        action: "people.setRole",
+        detail: { email: "hand@example.test", role: "member", previousRole: "admin" },
+      },
+      {
+        actor: "boss@example.test",
+        action: "people.remove",
+        detail: { email: "gone@example.test", previousRole: "viewer" },
+      },
+    ]);
+  });
+
+  it("an address with no access here is reported as not found, not silently accepted", async () => {
+    const api = await admin();
+
+    const code = await errorCode(() =>
+      api.people.removeMember({ tenantId: "CASE-0042", email: "nobody@example.test" }),
+    );
+
+    expect(code).toBe("NOT_FOUND");
+  });
+});
+
+describe("a customer is never left without an admin", () => {
+  it("the only admin cannot lower their own role, and is told why", async () => {
+    const api = await admin();
+
+    const refusal = await errorMessage(() =>
+      api.people.setRole({ tenantId: "CASE-0042", email: "boss@example.test", role: "member" }),
+    );
+
+    expect(refusal).toContain("boss@example.test");
+    const members = await api.people.members({ tenantId: "CASE-0042" });
+    expect(members).toEqual([
+      { userId: expect.any(String), email: "boss@example.test", role: "admin" },
+    ]);
+  });
+
+  it("the only admin cannot be removed", async () => {
+    const api = await admin();
+
+    const code = await errorCode(() =>
+      api.people.removeMember({ tenantId: "CASE-0042", email: "boss@example.test" }),
+    );
+
+    expect(code).toBe("CONFLICT");
+    const members = await api.people.members({ tenantId: "CASE-0042" });
+    expect(members.map((m) => m.email)).toEqual(["boss@example.test"]);
+  });
+
+  it("an admin may step down or leave while another admin remains", async () => {
+    // The guard's quiet side, and the decision on #168's open question: only the LAST admin
+    // is protected, so an admin leaving a customer does not need a colleague to do it.
+    const api = await admin();
+    const deputyId = await seedMember("deputy@example.test", "admin");
+    const deputy = caller({ userId: deputyId, email: "deputy@example.test" });
+
+    await api.people.setRole({ tenantId: "CASE-0042", email: "boss@example.test", role: "viewer" });
+    await deputy.people.removeMember({ tenantId: "CASE-0042", email: "boss@example.test" });
+
+    const members = await deputy.people.members({ tenantId: "CASE-0042" });
+    expect(members.map((m) => [m.email, m.role])).toEqual([["deputy@example.test", "admin"]]);
+  });
+});
+
+describe("only an admin of this customer may change or end access", () => {
+  it("a viewer and a member are both refused", async () => {
+    await admin();
+    const target = { tenantId: "CASE-0042", email: "boss@example.test" };
+
+    for (const role of ["viewer", "member"] as const) {
+      const email = `${role}@example.test`;
+      const api = caller({ userId: await seedMember(email, role), email });
+      expect(await errorCode(() => api.people.setRole({ ...target, role: "viewer" }))).toBe(
+        "FORBIDDEN",
+      );
+      expect(await errorCode(() => api.people.removeMember(target))).toBe("FORBIDDEN");
+    }
+  });
+
+  it("an admin of another customer cannot reach this customer's members", async () => {
+    // The scoping guard. The statement is keyed by the caller's tenant, so naming their own
+    // tenant finds nobody, and naming this one finds that they are not a member of it.
+    const api = await admin();
+    await seedMember("hand@example.test", "member");
+    const farId = await seedMember("far@example.test", "admin", "CASE-0043");
+    const far = caller({ userId: farId, email: "far@example.test" });
+
+    const own = await errorCode(() =>
+      far.people.removeMember({ tenantId: "CASE-0043", email: "hand@example.test" }),
+    );
+    const theirs = await errorCode(() =>
+      far.people.removeMember({ tenantId: "CASE-0042", email: "hand@example.test" }),
+    );
+
+    expect([own, theirs]).toEqual(["NOT_FOUND", "NOT_FOUND"]);
+    const members = await api.people.members({ tenantId: "CASE-0042" });
+    expect(members.map((m) => m.email)).toContain("hand@example.test");
+  });
+});
+
 describe("the roster says who has access", () => {
   it("members are listed with their roles", async () => {
     const api = await admin();
