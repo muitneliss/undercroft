@@ -18,7 +18,18 @@ import { readFileSync } from "node:fs";
 import process from "node:process";
 
 import { eventNotice, shortSha } from "./githubEvents.ts";
-import { larkConfigFromEnv, larkMessage, type Notice, send, type Tone } from "./lark.ts";
+import {
+  bold,
+  green,
+  grey,
+  larkConfigFromEnv,
+  larkMessage,
+  type Notice,
+  red,
+  type Span,
+  send,
+  type Tone,
+} from "./lark.ts";
 
 const RELEASE_TAG = /^v\d/u;
 
@@ -75,22 +86,26 @@ export function deployNotice(env: Env): Notice {
   const tag = env.DEPLOY_TAG ?? "unknown";
   const result = env.DEPLOY_RESULT ?? "unknown";
   const site = env.DEPLOY_SITE ?? "";
-  const headings: Record<string, readonly [string, Tone]> = {
-    success: [`Deployed ${tag}`, "green"],
-    failure: [`Deploy of ${tag} failed`, "red"],
-    cancelled: [`Deploy of ${tag} was cancelled`, "grey"],
+  const headings: Record<string, readonly [string, Tone, Span]> = {
+    success: [`🚀 Deployed ${tag}`, "green", green(result)],
+    failure: [`❌ Deploy of ${tag} failed`, "red", red(result)],
+    cancelled: [`⏹️ Deploy of ${tag} was cancelled`, "grey", grey(result)],
   };
-  const [title, tone] = headings[result] ?? [`Deploy of ${tag} ended as ${result}`, "orange"];
-  const facts: [string, string][] = [
-    ["Release", tag],
-    ["Result", result],
+  const [title, tone, outcome] = headings[result] ?? [
+    `⚠️ Deploy of ${tag} ended as ${result}`,
+    "orange",
+    result,
+  ];
+  const facts: [string, Span | readonly Span[]][] = [
+    ["Release", bold(tag)],
+    ["Result", outcome],
   ];
   if (result === "failure") {
     facts.push(["Stopped at", failedStep(env.DEPLOY_STEPS ?? "")]);
   }
   facts.push(
     ["Trigger", env.GITHUB_EVENT_NAME === "workflow_dispatch" ? "by hand" : "release"],
-    ["By", run.actor],
+    ["By", bold(run.actor)],
     ["Commit", run.sha],
   );
   const links: [string, string][] = [["Deploy run", run.runUrl]];
@@ -128,12 +143,15 @@ export function releaseNotice(env: Env): Notice {
   const deployed =
     needs["release-please"]?.result === "success" && needs["release-images"]?.result === "success";
   return {
-    title: tag === "" ? "Release failed" : `Release ${tag} failed`,
+    title: tag === "" ? "❌ Release failed" : `❌ Release ${tag} failed`,
     tone: "red",
     facts: [
-      ["Failed", failed.length > 0 ? failed.join(", ") : "unknown -- see the run"],
-      ["Deploy", deployed ? "went ahead -- see its own notice" : "not started, nothing shipped"],
-      ["By", run.actor],
+      ["Failed", failed.length > 0 ? red(failed.join(", ")) : "unknown -- see the run"],
+      [
+        "Deploy",
+        deployed ? "went ahead -- see its own notice" : grey("not started, nothing shipped"),
+      ],
+      ["By", bold(run.actor)],
       ["Commit", run.sha],
     ],
     body: "",
@@ -144,11 +162,11 @@ export function releaseNotice(env: Env): Notice {
 function testNotice(env: Env): Notice {
   const run = githubRun(env);
   return {
-    title: "Undercroft notifications are wired up",
+    title: "🔔 Undercroft notifications are wired up",
     tone: "blue",
     facts: [
-      ["Repository", run.repository],
-      ["By", run.actor],
+      ["Repository", bold(run.repository)],
+      ["By", bold(run.actor)],
     ],
     body: "A test card. Deploys, failed releases, issues, pull requests and CI failures on main post here.",
     links: [],
