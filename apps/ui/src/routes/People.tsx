@@ -5,10 +5,11 @@
  * invitation; this page is how one comes to exist. Without it a correct sign-in admits
  * nobody without a SQL client, which is not a product.
  *
- * Inviting is admin-only on the server (`requireRole("admin")`). The form is hidden for
- * anyone else rather than shown and rejected, because the role is already known here — but
- * hiding it is courtesy, not the control: the procedure refuses regardless of what the
- * browser renders.
+ * Inviting, changing a member's role and removing a member are admin-only on the server
+ * (`requireRole("admin")`), and the server alone refuses to leave a customer without an
+ * admin. The form and the roster's controls are hidden for anyone else rather than shown and
+ * rejected, because the role is already known here — but hiding them is courtesy, not the
+ * control: the procedures refuse regardless of what the browser renders.
  *
  * No `useState`, per `state.md`, and nothing here needs it. The two inputs are uncontrolled
  * and read through refs on submit; everything else is server state in the query cache or
@@ -21,46 +22,12 @@ import type { Locale } from "@undercroft/core/locale";
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { Roster } from "@/components/Roster.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { formatDate } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
-
-/** Who has access today. */
-function Roster({
-  roster,
-}: {
-  roster: readonly { userId: string; email: string; role: string }[];
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <>
-      {roster.length === 0 ? (
-        <EmptyState title={t("people.emptyTitle")} body={t("people.emptyBody")} />
-      ) : (
-        <table className="table">
-          <caption>{t("people.caption", { count: roster.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("people.colAddress")}</th>
-              <th scope="col">{t("people.colRole")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {roster.map((member) => (
-              <tr key={member.userId}>
-                <td className="datum datum--quiet">{member.email}</td>
-                <td>{member.role}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </>
-  );
-}
 
 /** Invitations still open, and the refusal shown when one cannot be withdrawn. */
 function OpenInvitations({
@@ -278,13 +245,18 @@ function InvitePanel({
 interface PeopleMutations {
   readonly invite: ReturnType<typeof trpc.people.invite.useMutation>;
   readonly revoke: ReturnType<typeof trpc.people.revokeInvitation.useMutation>;
+  readonly setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
+  readonly remove: ReturnType<typeof trpc.people.removeMember.useMutation>;
 }
 
 /**
- * The two writes this page makes.
+ * The four writes this page makes.
  *
- * Both invalidate BOTH lists: accepting an invitation moves a row from one table to the
- * other, so refreshing only the one that was acted on leaves the other stale on screen.
+ * Every one invalidates BOTH lists: accepting an invitation moves a row from one table to the
+ * other, so refreshing only the one that was acted on leaves the other stale on screen. A
+ * role change or a removal also refreshes the tenant itself, because the admin acting may be
+ * the person acted on: one who steps down must stop being offered the admin controls, and
+ * one who leaves must stop being shown the customer.
  */
 function usePeopleMutations(
   tenantId: string,
@@ -297,6 +269,11 @@ function usePeopleMutations(
     await utils.people.members.invalidate({ tenantId });
   }
 
+  async function invalidateAccess(): Promise<void> {
+    await invalidate();
+    await utils.tenants.invalidate();
+  }
+
   return {
     invite: trpc.people.invite.useMutation({
       onSuccess: async () => {
@@ -307,6 +284,8 @@ function usePeopleMutations(
       },
     }),
     revoke: trpc.people.revokeInvitation.useMutation({ onSuccess: invalidate }),
+    setRole: trpc.people.setRole.useMutation({ onSuccess: invalidateAccess }),
+    remove: trpc.people.removeMember.useMutation({ onSuccess: invalidateAccess }),
   };
 }
 
@@ -321,7 +300,7 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
   const tenant = trpc.tenants.get.useQuery({ tenantId });
   const members = trpc.people.members.useQuery({ tenantId });
   const invitations = trpc.people.invitations.useQuery({ tenantId });
-  const { invite, revoke } = usePeopleMutations(tenantId, emailFieldRef);
+  const { invite, revoke, setRole, remove } = usePeopleMutations(tenantId, emailFieldRef);
 
   if (members.isPending || invitations.isPending) {
     return <Skeleton rows={4} />;
@@ -346,7 +325,13 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
         <h1>{t("people.title")}</h1>
         <p className="prose prose--lead">{t("people.lead", { tenantId })}</p>
 
-        <Roster roster={roster} />
+        <Roster
+          roster={roster}
+          isAdmin={isAdmin}
+          setRole={setRole}
+          remove={remove}
+          tenantId={tenantId}
+        />
       </div>
 
       <div className="band-rule" />

@@ -67,6 +67,9 @@ export const en = {
       "That address has not been invited. Ask an administrator for an invitation, and sign in with the exact address it was sent to.",
     alreadyMember: "{{email}} already has access as {{role}}.",
     noOpenInvitation: "No open invitation with that id.",
+    notMember: "{{email}} does not have access to this customer.",
+    lastAdmin:
+      "{{email}} is this customer's only admin. Make someone else an admin first, so the customer is not left with nobody who can manage access.",
     requiresRole: "This action requires the {{role}} role.",
     requiresSuperadmin: "This action requires platform administrator access.",
     tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",

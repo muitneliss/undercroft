@@ -1,12 +1,12 @@
 ---
 title: Runbook Sign-In Setup
 type: source
-date: 2026-09-21
+date: 2026-09-24
 tags: []
 source: docs/runbook/sign-in-setup.md
 source_path: docs/runbook/sign-in-setup.md
-source_hash: 4141bfcc1171d55494e45a7de0540358ffe78fc4dc06b5758fc887505b0f8fe1
-ingested: 2026-09-21
+source_hash: 31a998b3d40c5975ad8684a1c0857127864d911f598e6aa285f7a99991f67f18
+ingested: 2026-09-24
 ---
 
 # Runbook Sign-In Setup
@@ -17,6 +17,4 @@ Two paths, differing only in `UNDERCROFT_PUBLIC_URL` and how things start: Path 
 
 The steps: generate a session secret; create a Google OAuth client of type *Web application* whose authorized redirect URIs carry Better Auth's non-negotiable `/api/auth/callback/google` path, one line per origin, with scopes left at `openid email profile` and **nothing added**; get a mail API key; write `deploy/compose/.env` from `task dev:env`; start Postgres and `task dev:migrate`, checking `060_auth.sql` is in the applied or skipped list; start the control plane and read the boot log for `sign_in_configured` with its `methods`. If the schema is behind, sign-in does not degrade but **stops** -- Better Auth answers 500 to every `/api/auth/*` request and logs `Database schema mismatch` while still logging `sign_in_configured`, so "configured" in the log does not mean "working".
 
-Bootstrapping the first admin has two routes, since invitations come from the People page and nobody is in yet. `UNDERCROFT_SUPERADMINS` needs no shell: a comma-separated list, named with more than one address because a single person on holiday should not lock everybody out, confirmed by `superadmins_configured` with a count (`superadmins_none` means it never reached the process; `superadmins_rejected` prints back the entries it would not read, almost always a semicolon or space where a comma belongs, and never the addresses themselves). The variable is the **authority, not a seed** -- nothing in the database records who is a superadmin, so removing an address and redeploying withdraws it at the next request, which is also the recovery path if every tenant admin leaves; it grants authority and never identity, and it sits beside the `viewer`/`member`/`admin` ladder rather than atop it ([[ADR 0013 Superadmins Named in the Environment]]). The other route, `task dev:invite`, needs no deploy and remains the right tool for inviting somebody to one customer: `--create-tenant` is opt-in so a typo cannot invent a customer, and `--lang` takes `vi` or `en` and refuses anything else rather than quietly falling back, because this is the one invitation nobody can send from People ([[ADR 0012 Vietnamese First, i18next in Browser and Server]]). It writes an ordinary invitation and does not bypass the gate; no token is issued, since Google and the one-time code already prove control of the mailbox.
-
-A failure table closes the page -- `redirect_uri_mismatch` (the origin must match exactly, `http` versus `https` and the port both counting), `sign_in_unconfigured`, `Database schema mismatch`, an uninvited address, a session with no membership, `permission denied for table auth_user` (the auth tables exist without grants; `060_auth.sql` carries its own). Two by-design behaviours look like bugs: asking for a code for an uninvited address returns success and sends nothing, because saying "not invited" would turn the form into a way to test which addresses have access; and signing out leaves a cookie that resolves to no session. The production-specific half of all this is in [[Runbook Deployment]].
+Once people are in, **People** is where access is kept current. An admin invites an address at a role, withdraws an invitation nobody has accepted, changes the role of someone who already has access, or removes them. The last two are also `undercroft people set-role` and `undercroft people remove-member`. A removal takes effect on the removed person's next request, even while they are signed in, because authority is read from the membership on every request. The one change refused is the one that would leave a customer with no admin: make someone else an admin first. An admin may step down or leave while another admin remains. Every role change and removal lands in `ops.audit_log` as `people.setRole` or `people.remove`, with the actor, the time and the role held before.

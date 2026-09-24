@@ -114,6 +114,88 @@ export async function roleForEmail(
 }
 
 /**
+ * What a change to one membership found and did.
+ *
+ * `held` is the role the address held before, or `null` when it holds none here; `done` is
+ * whether the row was changed. `held` set and `done` false means the statement's own guard
+ * refused -- the change would have left the tenant with no admin.
+ */
+export interface MembershipChange {
+  readonly held: Role | null;
+  readonly done: boolean;
+}
+
+/*
+ * The last-admin guard is written into the statement rather than read first and checked in
+ * the service, because the check and the write must be one step. Two admins demoting each
+ * other at the same moment each see the other still in place, and a read-then-write lets
+ * both through; the customer is then locked out with every row looking legitimate.
+ *
+ * `admins` locks every admin row of the tenant `FOR UPDATE` before the guard counts them.
+ * The second of two concurrent statements waits on that lock, and when it proceeds Postgres
+ * re-reads each locked row, drops the one the first statement just demoted or deleted, and
+ * counts what is really left. `MATERIALIZED` keeps it a single locking scan rather than
+ * letting the planner fold it into the guard. It is only evaluated when the change could
+ * cost the tenant an admin -- the `OR` settles every other case before reaching it.
+ */
+const TARGET_AND_ADMINS = `
+  admins AS MATERIALIZED (
+    SELECT user_id FROM app.tenant_member
+    WHERE tenant_id = $1 AND role = 'admin'
+    FOR UPDATE
+  ),
+  target AS (
+    SELECT m.user_id, m.role FROM app.tenant_member m
+    JOIN app.app_user u ON u.id = m.user_id
+    WHERE m.tenant_id = $1 AND u.email = $2
+  )`;
+
+const ANOTHER_ADMIN_REMAINS = "EXISTS (SELECT 1 FROM admins a WHERE a.user_id <> t.user_id)";
+
+/** Change the role an address holds in one tenant, unless that removes the last admin. */
+export async function changeRole(
+  exec: SqlExecutor,
+  tenantId: string,
+  email: string,
+  role: Role,
+): Promise<MembershipChange> {
+  const { rows } = await exec.query<{ held: Role; done: boolean }>(
+    `WITH ${TARGET_AND_ADMINS},
+     changed AS (
+       UPDATE app.tenant_member m SET role = $3
+       FROM target t
+       WHERE m.tenant_id = $1 AND m.user_id = t.user_id
+         AND ($3 = 'admin' OR t.role <> 'admin' OR ${ANOTHER_ADMIN_REMAINS})
+       RETURNING m.user_id
+     )
+     SELECT t.role AS held, EXISTS (SELECT 1 FROM changed) AS done FROM target t`,
+    [tenantId, email, role],
+  );
+  return { held: rows[0]?.held ?? null, done: rows[0]?.done === true };
+}
+
+/** End an address's access to one tenant, unless it is the tenant's last admin. */
+export async function removeMember(
+  exec: SqlExecutor,
+  tenantId: string,
+  email: string,
+): Promise<MembershipChange> {
+  const { rows } = await exec.query<{ held: Role; done: boolean }>(
+    `WITH ${TARGET_AND_ADMINS},
+     removed AS (
+       DELETE FROM app.tenant_member m
+       USING target t
+       WHERE m.tenant_id = $1 AND m.user_id = t.user_id
+         AND (t.role <> 'admin' OR ${ANOTHER_ADMIN_REMAINS})
+       RETURNING m.user_id
+     )
+     SELECT t.role AS held, EXISTS (SELECT 1 FROM removed) AS done FROM target t`,
+    [tenantId, email],
+  );
+  return { held: rows[0]?.held ?? null, done: rows[0]?.done === true };
+}
+
+/**
  * Grant access, idempotently.
  *
  * `DO NOTHING` rather than an upsert: redeeming an invitation must not quietly change the

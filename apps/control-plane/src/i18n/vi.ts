@@ -116,6 +116,9 @@ export const vi = {
       "Địa chỉ đó chưa được mời. Hãy đề nghị quản trị viên gửi lời mời, và đăng nhập bằng đúng địa chỉ đã nhận lời mời.",
     alreadyMember: "{{email}} đã có quyền truy cập với vai trò {{role}}.",
     noOpenInvitation: "Không có lời mời nào đang mở với id đó.",
+    notMember: "{{email}} không có quyền truy cập khách hàng này.",
+    lastAdmin:
+      "{{email}} là quản trị viên duy nhất của khách hàng này. Hãy cấp vai trò admin cho người khác trước, để khách hàng không bị bỏ lại mà không còn ai quản lý được quyền truy cập.",
     requiresRole: "Thao tác này cần vai trò {{role}}.",
     /**
      * Says what is missing without naming the variable that grants it. An operator reading

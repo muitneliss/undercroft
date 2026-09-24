@@ -294,9 +294,13 @@ The page tells you whether the invitation was actually emailed. If mail is not c
 still works — you just have to tell the person yourself. They must sign in with **exactly**
 that address.
 
-You can withdraw an invitation that has not been accepted yet. Removing someone who already
-signed in means removing their membership, which is a different thing and not wired to a
-button yet.
+You can withdraw an invitation that has not been accepted yet. For someone who already has
+access, an admin can change their role or remove them from the roster on the same page, or
+with `undercroft people set-role` and `undercroft people remove-member`. A removal takes effect
+on that person's next request, even if they are signed in at the time. The one change that is
+refused is the one that would leave the customer with no admin: make someone else an admin
+first. Every role change and removal is written to `ops.audit_log` as `people.setRole` or
+`people.remove`, with who did it, when, and the role the person held before.
 
 ---
 
