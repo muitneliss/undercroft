@@ -53,6 +53,7 @@
 - [ADR 0047: Drive reads with drive.readonly](sources/adr-0047-drive-reads-with-drive-readonly.md)
 - [ADR 0048: A file is recognised by its type first, and a signed record is verified before it is read](sources/adr-0048-a-file-is-recognised-by-its-type-first-and-a-signed-record-is-verified-before-it-is-read.md)
 - [ADR 0049: Dokploy clones the compose file from main](sources/adr-0049-dokploy-clones-the-compose-file-from-main.md)
+- [ADR 0050: The raw lake runs a community build of MinIO](sources/adr-0050-the-raw-lake-runs-a-community-build-of-minio.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
