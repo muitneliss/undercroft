@@ -10,6 +10,13 @@
  * agent with no browser (ADR 0047). This screen keeps the Picker: it is Google's own view of
  * the account's Drive, and an admin already knows how to use it.
  *
+ * **A Picker session adds; each pick is removed on its own.** Google's Picker always opens with
+ * nothing ticked and cannot be told what was chosen before, so what a session hands back is
+ * only ever MORE to read. It used to replace the list, and an admin who picked a second folder
+ * in a second session lost the first (#197). Adding means the Picker can no longer say
+ * "remove", so every listed pick carries its own control for that, named after the pick so a
+ * screen reader hears which one it takes off.
+ *
  * **How deep the read goes is a choice, and it is said while it is made.** "Sub-folders are
  * not read" used to be a standing note above the picker, because it was always true. Now that
  * it is true only until an admin ticks the box, it stands BENEATH the box as a line that
@@ -41,7 +48,8 @@ export function DriveChoice({
   chosen: Omit<ScopeDraft, "source">;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const setDraft = useUiStore((s) => s.setScopeDraft);
+  const addFiles = useUiStore((s) => s.addScopeFiles);
+  const removeFile = useUiStore((s) => s.removeScopeFile);
   const toggleRecurse = useUiStore((s) => s.toggleScopeRecurse);
   const config = trpc.config.google.useQuery();
 
@@ -59,10 +67,7 @@ export function DriveChoice({
             return;
           }
           void openDrivePicker(picker, { fileTypes: chosen.fileTypes, account }, (picked) => {
-            // Spread `chosen` rather than re-listing every other field: this used to hardcode
-            // `fileTypes` (and every field but `files`) back to empty, so picking one more
-            // file after choosing "Word documents" silently reset the run to "any file type".
-            setDraft({ ...chosen, source, files: picked });
+            addFiles(source, picked);
           });
         }}
       >
@@ -73,7 +78,19 @@ export function DriveChoice({
       ) : (
         <ul className="stack stack--tight">
           {chosen.files.map((file) => (
-            <li key={file.id}>{file.name}</li>
+            <li key={file.id} className="row">
+              <span>{file.name}</span>
+              <button
+                type="button"
+                className="plate plate--small"
+                aria-label={t("scopePicker.removePickNamed", { name: file.name })}
+                onClick={(): void => {
+                  removeFile(source, file.id);
+                }}
+              >
+                {t("scopePicker.removePick")}
+              </button>
+            </li>
           ))}
         </ul>
       )}
