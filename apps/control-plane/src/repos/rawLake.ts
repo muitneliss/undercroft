@@ -13,7 +13,14 @@
  * `12345678901234567890` is worse than one that prints nothing. The interface shows the
  * string as it is. See the docstring on `raw.records` in 030_raw.sql.
  *
- * Counts are `::int` and byte totals `::float8`, so they arrive as numbers. The pinned
+ * A document's refusal reasons are read from `raw.document_text`, its CURRENT state -- what is
+ * unreadable right now -- and not from `ops.run_refusal_reason`, which is a history of what
+ * each run said and would count a document once per run that refused it, including refusals a
+ * later reader has since read. The control plane's column grant on that table
+ * (180_document_text.sql) covers `method` and `reason` and deliberately never `text`.
+ *
+ * Counts are `::int` and byte totals `::float8`, so they arrive as numbers; a reason's count
+ * travels inside `json`, which the driver parses, and is an int there too. The pinned
  * `int8`/`numeric` parsers return strings to keep MONEY out of floats (`.claude/rules/money.md`);
  * a row count or a byte total is a count, exact in a double to 2^53, and the cast says so
  * at the one place it happens.
@@ -64,19 +71,50 @@ export interface DocumentSummary {
    */
   readonly bytes: number;
   /**
-   * How many of them an extract run could actually read into text.
+   * How many of them an extract run could actually read into text -- a truncated read
+   * included, because a cut document still has text and says so on its own row.
    *
    * Reported beside the total rather than instead of it, because the gap between the two IS
    * the useful figure: 122 documents of which 55 are readable says what a run achieved and
-   * what is still opaque, where either number alone says neither. Zero means the extract
-   * verb has not run over this source yet -- not that nothing in it can be read.
+   * what is still opaque, where either number alone says neither. The gap is never left
+   * as one number, though: it is `refused` and `waiting` below, and the three always sum to
+   * `documents`. A mailbox whose 60 refusals are signature images and a mailbox the extract
+   * verb has not reached yet printed the same "55/122", and an operator reading it as mass
+   * breakage was the defect (issue #139).
    *
    * Counted over ROWS, like `documents` and unlike `bytes`: an extraction is now fanned out
    * to every row sharing a digest (`apps/worker/src/repos/documentText.ts`), so a row with no
    * text is a row nothing can read, not a row that was merely never reached.
    */
   readonly readable: number;
+  /**
+   * Read, and refused: the row in `raw.document_text` has no `method`, so its `reason` says
+   * why. Grouped by that reason in `reasons`, whose counts sum to this.
+   */
+  readonly refused: number;
+  /**
+   * Never read: no `raw.document_text` row at all. Usually the extract verb has not reached
+   * them yet; a document tombstoned before it did stays here, because the verb does not read
+   * what the source has deleted.
+   *
+   * A document read from bytes that have since CHANGED is not counted here but as whatever
+   * its last reading said -- that is still the text the lake holds for it until the next run.
+   */
+  readonly waiting: number;
+  /** Why the `refused` documents were refused: one entry per reason, most frequent first. */
+  readonly reasons: readonly DocumentReasonCount[];
   readonly latestObservedAt: string;
+}
+
+/**
+ * One refusal reason and how many of a source's documents it currently covers.
+ *
+ * A code, never a sentence: what it means and whether anybody must act is the UI's
+ * `refusalReasons.ts`, the one place that is written down.
+ */
+export interface DocumentReasonCount {
+  readonly reason: string;
+  readonly count: number;
 }
 
 export interface Page<T> {
@@ -157,6 +195,9 @@ export async function summariseDocuments(
     distinct_blobs: number;
     bytes: number;
     readable: number;
+    refused: number;
+    waiting: number;
+    reasons: DocumentReasonCount[];
     latest_observed_at: Date | string;
   }>(
     // TWO GRAINS, ONE PASS. Every figure but `bytes` is counted per catalogue ROW; `bytes` is
@@ -167,15 +208,25 @@ export async function summariseDocuments(
     // carry identical lengths by construction -- and ordering by `document_id` only makes the
     // choice deterministic rather than meaningful.
     //
-    // `readable` is how many of this source's documents an extract run could actually read.
-    // A LEFT JOIN, so a source nobody has run the extract verb over counts zero rather than
-    // disappearing: "we have not read these yet" and "we read them and got nothing" are
-    // different facts, and the second one is a row with a `reason`.
+    // THREE STATES THAT SUM TO THE TOTAL. A LEFT JOIN onto `raw.document_text`, so every
+    // catalogue row lands in exactly one: `readable` has a `method`; `refused` has a row but no
+    // `method`, and the table's `document_text_said_why` CHECK guarantees it a `reason`;
+    // `waiting` has no row at all. "We have not read these yet" and "we read them and got
+    // nothing" are different facts, and printing them as one gap is what issue #139 was.
+    // `was_read` tests the join's key rather than `reason`, so a future reader that records a
+    // method AND a caveat still counts as readable -- the same spelling, for the same reason,
+    // as `PENDING_JOIN` in the worker's `documentText.ts`.
+    //
+    // THE REASONS ARE AGGREGATED IN THE SAME STATEMENT, not a second one, so their counts
+    // come from the same snapshot as `refused` and always sum to it. A second query could
+    // interleave with an extract run and print a rollup that disagrees with the figure above
+    // it on the same page.
     //
     // The scan is served by `documents_digest` on `(source, tenant_id, sha256)`
     // (250_documents_sha_idx.sql), which is also what the extract worker's fan-out reads.
     `WITH catalogued AS (
-       SELECT d.source, d.sha256, d.byte_length, d.observed_at, t.method,
+       SELECT d.source, d.sha256, d.byte_length, d.observed_at, t.method, t.reason,
+              t.document_id IS NOT NULL AS was_read,
               row_number() OVER (PARTITION BY d.source, d.sha256
                                  ORDER BY d.document_id) AS nth_of_digest
        FROM raw.documents d
@@ -184,15 +235,35 @@ export async function summariseDocuments(
         AND t.tenant_id = d.tenant_id
         AND t.document_id = d.document_id
        WHERE d.tenant_id = $1
+     ),
+     by_reason AS (
+       SELECT source, reason, count(*)::int AS n
+       FROM catalogued
+       WHERE was_read AND method IS NULL
+       GROUP BY source, reason
+     ),
+     reasons AS (
+       SELECT source,
+              json_agg(json_build_object('reason', reason, 'count', n)
+                       ORDER BY n DESC, reason) AS reasons
+       FROM by_reason
+       GROUP BY source
+     ),
+     totals AS (
+       SELECT source,
+              count(*)::int AS documents,
+              count(DISTINCT sha256)::int AS distinct_blobs,
+              coalesce(sum(byte_length) FILTER (WHERE nth_of_digest = 1), 0)::float8 AS bytes,
+              count(method)::int AS readable,
+              count(*) FILTER (WHERE was_read AND method IS NULL)::int AS refused,
+              count(*) FILTER (WHERE NOT was_read)::int AS waiting,
+              max(observed_at) AS latest_observed_at
+       FROM catalogued
+       GROUP BY source
      )
-     SELECT source,
-            count(*)::int AS documents,
-            count(DISTINCT sha256)::int AS distinct_blobs,
-            coalesce(sum(byte_length) FILTER (WHERE nth_of_digest = 1), 0)::float8 AS bytes,
-            count(method)::int AS readable,
-            max(observed_at) AS latest_observed_at
-     FROM catalogued
-     GROUP BY source
+     SELECT totals.*, coalesce(reasons.reasons, '[]'::json) AS reasons
+     FROM totals
+     LEFT JOIN reasons USING (source)
      ORDER BY source`,
     [tenantId],
   );
@@ -202,6 +273,9 @@ export async function summariseDocuments(
     distinctBlobs: r.distinct_blobs,
     bytes: r.bytes,
     readable: r.readable,
+    refused: r.refused,
+    waiting: r.waiting,
+    reasons: r.reasons,
     latestObservedAt: iso(r.latest_observed_at),
   }));
 }

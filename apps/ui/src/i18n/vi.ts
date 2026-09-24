@@ -228,9 +228,14 @@ export const vi = {
      * `{{bytes}}` is what the lake stores, which is the distinct blobs and not the rows --
      * `{{count}}` of them, against the `{{total}}` catalogue rows in the column beside this
      * one. The gap between the two is the same attachment quoted down a reply chain.
+     *
+     * `{{readable}}`, `{{refused}}` and `{{waiting}}` sum to `{{total}}`, and are three words
+     * on purpose: a document refused with a recorded reason and one the extract has not
+     * reached yet are different news, and one gap made the first read as the second.
      */
-    alsoBytesReadable_other:
-      "{{bytes}} trong {{count, number}} tệp riêng biệt · đọc được {{readable, number}}/{{total, number}}",
+    alsoBytesRead_other:
+      "{{bytes}} trong {{count, number}} tệp riêng biệt · đọc được {{readable, number}}/{{total, number}} · {{refused, number}} bị từ chối · {{waiting, number}} chưa đọc",
+    refusalsOpen: "Xem lý do từ chối",
     consoleHead: "Truy vấn SQL",
     consoleLead:
       "Viết một câu SELECT trên hồ dữ liệu thô. Chạy bằng quyền đọc của tenant: mọi thao tác ghi đều bị từ chối, và bạn chỉ thấy dữ liệu của chính mình.",

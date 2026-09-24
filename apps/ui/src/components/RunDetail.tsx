@@ -208,11 +208,10 @@ function RunCounts({
           rows under it. */}
       {detail.reasonCounts.length > 0 ? (
         <RefusalRollup
-          runId={detail.id}
+          scope={detail.id}
           reasonCounts={detail.reasonCounts}
           refusals={detail.refusals}
-          pruned={detail.refusalsPruned}
-          retainedDays={REFUSAL_RETENTION_DAYS}
+          {...(detail.refusalsPruned ? { prunedAfterDays: REFUSAL_RETENTION_DAYS } : {})}
         />
       ) : null}
 
