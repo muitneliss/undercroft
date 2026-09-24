@@ -4,11 +4,11 @@
  * success, not a dead container) and calling a stale stack shipped (a container running last
  * release's digest, or a migration that never ran).
  *
- * `preflight` is the step before it, and it lies in one way that matters: passing a panel
- * whose compose file is no longer the one this repo publishes. Three releases in a row were
- * queued against such a panel and every one of them failed on the host, with `preflight` ok
- * each time -- so the drift check gets the two tests a guard needs, and the third pins what
- * it deliberately forgives.
+ * `preflight` is the step before it, and it lies by passing a deploy that would run some
+ * other compose file than this checkout's: a panel still holding a pasted copy (the copy that
+ * drifted until three releases failed on the host), a panel that would roll out every push,
+ * or a branch whose file moved past the release. Each gets a test that it fires, one that
+ * everything right passes, and one pins what the comparison deliberately forgives.
  *
  * The fetcher below REFUSES a URL nobody recorded rather than answering a default. A fake
  * that always answers would make `verify` pass against requests it never should have sent --
@@ -18,7 +18,14 @@
 
 import { expect, test as it } from "bun:test";
 
-import { type Config, type Deps, oneShotServices, preflight, verify } from "./dokploy.ts";
+import {
+  type Config,
+  type Deps,
+  oneShotServices,
+  preflight,
+  type Rollout,
+  verify,
+} from "./dokploy.ts";
 
 const ENDPOINT = "https://panel.example.test/api";
 const CFG: Config = { endpoint: ENDPOINT, apiKey: "test-key", composeId: "compose-1" };
@@ -27,6 +34,9 @@ const APP = "undercroft-test";
 const WORKER_DIGEST = `sha256:${"1".repeat(64)}`;
 const CONTROL_DIGEST = `sha256:${"2".repeat(64)}`;
 const STALE_DIGEST = `sha256:${"9".repeat(64)}`;
+
+const BRANCH_FILE_URL =
+  "https://api.github.com/repos/muitneliss/undercroft/contents/deploy/compose/docker-compose.server.yml?ref=main";
 
 /** Two released services: one meant to stay up, one meant to run and exit. */
 const COMPOSE = [
@@ -42,6 +52,32 @@ const COMPOSE = [
   "    image: ghcr.io/muitneliss/undercroft-control-plane:${IMAGE_TAG:-latest}",
   '    command: ["bun", "run", "migrate"]',
 ].join("\n");
+
+/**
+ * What a git-source panel still reports as its `composeFile`: the last paste, which is never
+ * deployed. Its only service is one the checkout does not have, so a reader that trusted it
+ * would ask for routes nobody recorded.
+ */
+const STALE_PASTE = ["services:", "  metabase:", "    image: metabase/metabase:latest"].join("\n");
+
+/** The release being verified, against this checkout's file. */
+const ROLLOUT: Rollout = { composeFile: COMPOSE, ghcrToken: "", releaseTag: "v1.3.0" };
+
+/** A panel set up the way ADR 0049 says: clone main's file, never deploy on push. */
+const PANEL = {
+  composeId: "compose-1",
+  name: "undercroft",
+  appName: APP,
+  composeFile: STALE_PASTE,
+  command:
+    "compose -p undercroft-test --env-file deploy/compose/.env -f deploy/compose/docker-compose.server.yml up -d --pull always --wait --wait-timeout 600 --remove-orphans",
+  sourceType: "git",
+  customGitUrl: "https://github.com/muitneliss/undercroft.git",
+  customGitBranch: "main",
+  composePath: "deploy/compose/docker-compose.server.yml",
+  autoDeploy: false,
+  composeStatus: "done",
+};
 
 interface Recorder {
   readonly deps: Deps;
@@ -59,7 +95,9 @@ function recorder(recorded: Record<string, unknown>): Recorder {
           new Error(`no recorded response for ${input}\nrecorded:\n  ${known}`),
         );
       }
-      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+      // A file is served as its bytes, the way GitHub's raw media type serves it.
+      const text = typeof body === "string" ? body : JSON.stringify(body);
+      return Promise.resolve(new Response(text, { status: 200 }));
     },
     sleep: () => Promise.resolve(),
     log: (line: string) => lines.push(line),
@@ -83,6 +121,8 @@ interface Scenario {
   readonly workerDigest?: string;
   readonly migrateState?: { Status: string; ExitCode: number } | "omitted";
   readonly migrateDigest?: string;
+  readonly panel?: Readonly<Record<string, unknown>>;
+  readonly onBranch?: string;
 }
 
 /** A stack where both services are healthy, minus whatever the scenario spoils. */
@@ -92,15 +132,8 @@ function routes(scenario: Scenario = {}): Record<string, unknown> {
   const migrateState = scenario.migrateState ?? ({ Status: "exited", ExitCode: 0 } as const);
 
   return {
-    [`${ENDPOINT}/compose.one?composeId=compose-1`]: {
-      composeId: "compose-1",
-      name: "undercroft",
-      appName: APP,
-      composeFile: COMPOSE,
-      command: "docker compose up -d --pull always --wait --wait-timeout 600 --remove-orphans",
-      sourceType: "raw",
-      composeStatus: "done",
-    },
+    [`${ENDPOINT}/compose.one?composeId=compose-1`]: { ...PANEL, ...scenario.panel },
+    [BRANCH_FILE_URL]: scenario.onBranch ?? COMPOSE,
     [`${ENDPOINT}/docker.getContainersByAppNameMatch?appName=${APP}`]: [
       {
         containerId: "worker-container",
@@ -137,7 +170,7 @@ it("a one-shot service that exited 0 is a success, not a dead container", async 
   // refusing unmodelled requests.
   const { deps, lines } = recorder(routes({ tag: "v1.3.0" }));
 
-  await verify(CFG, deps, "", "v1.3.0");
+  await verify(CFG, deps, ROLLOUT);
 
   expect(lines).toContain("verify ok");
 });
@@ -147,7 +180,7 @@ it("a one-shot service that exited non-zero fails the release", async () => {
     routes({ tag: "v1.3.0", migrateState: { Status: "exited", ExitCode: 1 } }),
   );
 
-  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
+  await expect(verify(CFG, deps, ROLLOUT)).rejects.toThrow(
     /db-migrate: one-shot service is exited with exit code 1/u,
   );
 });
@@ -157,7 +190,7 @@ it("a one-shot service still running when verify asks fails the release", async 
     routes({ tag: "v1.3.0", migrateState: { Status: "running", ExitCode: 0 } }),
   );
 
-  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
+  await expect(verify(CFG, deps, ROLLOUT)).rejects.toThrow(
     /db-migrate: one-shot service is running/u,
   );
 });
@@ -165,7 +198,7 @@ it("a one-shot service still running when verify asks fails the release", async 
 it("a one-shot service whose inspect carries no State is refused, not assumed complete", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", migrateState: "omitted" }));
 
-  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
+  await expect(verify(CFG, deps, ROLLOUT)).rejects.toThrow(
     /db-migrate: docker.getConfig returned no State/u,
   );
 });
@@ -173,7 +206,7 @@ it("a one-shot service whose inspect carries no State is refused, not assumed co
 it("a one-shot service that exited 0 on the wrong image still fails", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", migrateDigest: STALE_DIGEST }));
 
-  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
+  await expect(verify(CFG, deps, ROLLOUT)).rejects.toThrow(
     new RegExp(`db-migrate: running ${STALE_DIGEST}`, "u"),
   );
 });
@@ -181,18 +214,18 @@ it("a one-shot service that exited 0 on the wrong image still fails", async () =
 it("a long-running service that is not running still fails the release", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", workerState: "exited" }));
 
-  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(/worker: container is exited/u);
+  await expect(verify(CFG, deps, ROLLOUT)).rejects.toThrow(/worker: container is exited/u);
 });
 
 it("a long-running service on a stale digest fails the release", async () => {
   const { deps } = recorder(routes({ tag: "v1.3.0", workerDigest: STALE_DIGEST }));
 
-  await expect(verify(CFG, deps, "", "v1.3.0")).rejects.toThrow(
+  await expect(verify(CFG, deps, ROLLOUT)).rejects.toThrow(
     new RegExp(`worker: running ${STALE_DIGEST}`, "u"),
   );
 });
 
-it("preflight passes when the panel holds the compose file this repo publishes", async () => {
+it("preflight passes when the panel clones main's compose file and main carries this one", async () => {
   const { deps, lines } = recorder(routes());
 
   await preflight(CFG, deps, COMPOSE);
@@ -200,22 +233,34 @@ it("preflight passes when the panel holds the compose file this repo publishes",
   expect(lines).toContain("preflight ok");
 });
 
-it("preflight refuses a panel whose compose drifted from the published file", async () => {
-  // The panel kept a service the file no longer has -- the shape of the real drift, which
-  // deployed a deleted Metabase and lost the `depends_on` that lets `kestra-flows` exit.
-  const published = `${COMPOSE}\n  kestra-flows:\n    image: ghcr.io/muitneliss/undercroft-control-plane:latest`;
-  const { deps } = recorder(routes());
+it("preflight refuses a panel that still holds a pasted copy of the compose file", async () => {
+  const { deps } = recorder(routes({ panel: { sourceType: "raw", customGitUrl: null } }));
 
-  await expect(preflight(CFG, deps, published)).rejects.toThrow(
-    /the panel's compose file is not deploy\/compose\/docker-compose\.server\.yml \(first difference at line 10/u,
+  await expect(preflight(CFG, deps, COMPOSE)).rejects.toThrow(/sourceType is "raw", not "git"/u);
+});
+
+it("preflight refuses a panel that would deploy every push to main", async () => {
+  const { deps } = recorder(routes({ panel: { autoDeploy: true } }));
+
+  await expect(preflight(CFG, deps, COMPOSE)).rejects.toThrow(/autoDeploy is true, not false/u);
+});
+
+it("preflight refuses when main's compose file moved past the one this release carries", async () => {
+  // A change merged while the release's images built: the host would clone it and run it
+  // beside images that predate it.
+  const onBranch = `${COMPOSE}\n  kestra-flows:\n    image: ghcr.io/muitneliss/undercroft-control-plane:latest`;
+  const { deps } = recorder(routes({ onBranch }));
+
+  await expect(preflight(CFG, deps, COMPOSE)).rejects.toThrow(
+    /deploy\/compose\/docker-compose\.server\.yml on main is not the one this checkout carries \(first difference at line 10/u,
   );
 });
 
 it("preflight forgives line endings and trailing blank lines, which YAML does not read", async () => {
-  const pasted = `${COMPOSE.replaceAll("\n", "\r\n")}\n\n`;
+  const checkedOut = `${COMPOSE.replaceAll("\n", "\r\n")}\n\n`;
   const { deps, lines } = recorder(routes());
 
-  await preflight(CFG, deps, pasted);
+  await preflight(CFG, deps, checkedOut);
 
   expect(lines).toContain("preflight ok");
 });

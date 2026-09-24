@@ -1,14 +1,15 @@
 # The platform as deployed — SERVER VARIANT of docker-compose.yml.
 #
-# Dokploy holds a copy of this file, pushed through the API as raw compose. This file is
-# the source of truth; the copy is never edited on the server, because a direct edit is
-# drift the next deploy silently reverts.
+# Dokploy deploys THIS FILE: every deploy clones `main` and runs it from there (ADR 0049).
+# The panel holds no copy, so a merged change here is what the next release runs, and
+# nothing is ever pasted into the panel or edited on the server.
 #
 # Three differences from the development file, each of which is a failure that has already
 # happened once on this host:
 #
-#   1. The first-party services use PUBLISHED IMAGES. Dokploy raw compose has no repo
-#      checkout, so `build:` has no context and cannot work there.
+#   1. The first-party services use PUBLISHED IMAGES. The host's checkout is `main` at deploy
+#      time, not the release, so a `build:` there would ship code no release published and
+#      no `verify` could prove by digest.
 #   2. NO host ports. The development file binds five to 127.0.0.1 for convenience. Here,
 #      only the control plane is reachable, through Dokploy's proxy. MinIO, Postgres and
 #      Kestra each hold or can reach customer data, on a host shared with eleven other
@@ -324,7 +325,7 @@ services:
         limits:
           memory: 256m
 
-  # The Kestra flows, delivered by the deploy. Dokploy raw compose has no checkout to mount
+  # The Kestra flows, delivered by the deploy. The host's checkout is `main`, not the release,
   # and Kestra reads flows from its own database, so `flows/` is baked into the control-plane
   # image and this one-shot pushes each file through Kestra's API -- creating or updating
   # it -- then exits. It waits for Kestra to answer (a Java standalone takes a minute) and

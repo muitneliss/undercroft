@@ -3,8 +3,8 @@
  *
  *   bun run scripts/kestraFlows.ts
  *
- * A flow that lives only in this repository schedules nothing. Dokploy raw compose has no
- * checkout to mount, and Kestra reads flows from its own database, not from a directory --
+ * A flow that lives only in this repository schedules nothing. The host's checkout is `main`
+ * rather than the release, and Kestra reads flows from its own database, not a directory --
  * so for as long as nothing pushed them, `flows/ingest_daily.yml` was documentation and
  * every "scheduled" run was a run somebody started by hand. This closes that: the flows are
  * baked into the control-plane image, and this script PUTs each one through Kestra's API,
