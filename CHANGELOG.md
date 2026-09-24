@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.1](https://github.com/muitneliss/undercroft/compare/v1.27.0...v1.27.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **deploy:** Dokploy clones the compose file from main instead of holding a pasted copy ([#182](https://github.com/muitneliss/undercroft/issues/182)) ([36bd9f0](https://github.com/muitneliss/undercroft/commit/36bd9f0c6ce6bc4e75d73d9df9b3ed4253c8d340))
+
 ## [1.27.0](https://github.com/muitneliss/undercroft/compare/v1.26.0...v1.27.0) (2026-09-24)
 
 
