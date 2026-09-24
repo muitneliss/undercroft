@@ -198,11 +198,11 @@ describe("a sync's status in the operators' Lark group", () => {
     expect(held.suppressed).toBe(1);
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({
-      title: "Đồng bộ HubSpot cho CASE-0042 không thành công",
+      title: "❌ Đồng bộ HubSpot cho CASE-0042 không thành công",
       tone: "red",
-      body: "Lý do: HubSpot answered 401 after 0",
       links: [["Xem nhật ký", `${PUBLIC_URL}/tenants/CASE-0042/journal/r-1`]],
     });
+    expect(cards[0]?.facts).toContainEqual(["Lý do", "HubSpot answered 401 after 0"]);
   });
 
   it("the success that ends an announced failure is posted once; the success after it is not", async () => {
@@ -219,8 +219,8 @@ describe("a sync's status in the operators' Lark group", () => {
     expect(summary.recoveries).toBe(1);
     expect(again.recoveries).toBe(0);
     expect(cards.map((c) => [c.tone, c.title])).toEqual([
-      ["red", "Đồng bộ HubSpot cho CASE-0042 không thành công"],
-      ["green", "Đồng bộ HubSpot cho CASE-0042 đã chạy lại bình thường"],
+      ["red", "❌ Đồng bộ HubSpot cho CASE-0042 không thành công"],
+      ["green", "✅ Đồng bộ HubSpot cho CASE-0042 đã chạy lại bình thường"],
     ]);
     expect(cards[1]?.links).toEqual([
       ["Xem nhật ký", `${PUBLIC_URL}/tenants/CASE-0042/journal/r-3`],

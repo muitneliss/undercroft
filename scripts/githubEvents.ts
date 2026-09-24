@@ -3,22 +3,24 @@
  *
  * The payload arrives as the JSON file GitHub writes for the run (`GITHUB_EVENT_PATH`), and
  * these notices quote from it -- titles, bodies, branch names -- text written by anyone who
- * can open an issue. It is safe to quote because `packages/core/src/lark.ts` renders every string as plain text.
+ * can open an issue. It is safe to quote because `packages/core/src/lark.ts` never lets it reach Lark as markup:
+ * a body's markdown is rendered, a Lark tag inside it never is.
  */
 
-import type { LarkNotice as Notice, LarkTone as Tone } from "../packages/core/src/lark.ts";
+import {
+  bold,
+  green,
+  grey,
+  type LarkNotice as Notice,
+  type LarkTone as Tone,
+  red,
+  type Span,
+} from "../packages/core/src/lark.ts";
 
-/** How much of an issue or PR body a card carries; the rest is one click away. */
-const EXCERPT_CHARS = 400;
 const SHORT_SHA_CHARS = 7;
 
 export function shortSha(sha: string): string {
   return sha.slice(0, SHORT_SHA_CHARS);
-}
-
-function excerpt(text: string | null | undefined): string {
-  const trimmed = (text ?? "").trim();
-  return trimmed.length > EXCERPT_CHARS ? `${trimmed.slice(0, EXCERPT_CHARS)}…` : trimmed;
 }
 
 interface User {
@@ -76,16 +78,17 @@ function issueNotice(json: string): Notice {
   const { issue } = payload;
   const notPlanned = payload.action === "closed" && issue.state_reason === "not_planned";
   const tones: Record<string, Tone> = { opened: "blue", reopened: "orange", closed: "green" };
+  const icons: Record<string, string> = { opened: "📌", reopened: "🔁", closed: "✅" };
   const labels = issue.labels.map((label) => label.name).join(", ");
   return {
-    title: `Issue #${issue.number} ${notPlanned ? "closed as not planned" : payload.action}: ${issue.title}`,
+    title: `${notPlanned ? "🚫" : (icons[payload.action] ?? "📋")} Issue #${issue.number} ${notPlanned ? "closed as not planned" : payload.action}: ${issue.title}`,
     tone: notPlanned ? "grey" : (tones[payload.action] ?? "grey"),
     facts: [
-      ["By", payload.sender.login],
-      ["Author", issue.user.login],
-      ["Labels", labels === "" ? "none" : labels],
+      ["By", bold(payload.sender.login)],
+      ["Author", bold(issue.user.login)],
+      ["Labels", labels === "" ? grey("none") : labels],
     ],
-    body: payload.action === "opened" ? excerpt(issue.body) : "",
+    body: payload.action === "opened" ? (issue.body ?? "") : "",
     links: [["Open issue", issue.html_url]],
   };
 }
@@ -95,20 +98,29 @@ function pullRequestNotice(json: string): Notice {
   const pr = payload.pull_request;
   const action = payload.action === "closed" && pr.merged ? "merged" : payload.action;
   const tones: Record<string, Tone> = { opened: "blue", reopened: "orange", merged: "green" };
-  const facts: [string, string][] = [
-    ["By", payload.sender.login],
-    ["Author", pr.user.login],
-    ["Branch", `${pr.head.ref} → ${pr.base.ref}`],
-    ["Changes", `+${pr.additions} −${pr.deletions} in ${pr.changed_files} files`],
+  const icons: Record<string, string> = {
+    opened: "🔀",
+    reopened: "🔁",
+    merged: "🎉",
+    closed: "⛔",
+  };
+  const facts: [string, Span | readonly Span[]][] = [
+    ["By", bold(payload.sender.login)],
+    ["Author", bold(pr.user.login)],
+    ["Branch", [bold(pr.head.ref), " → ", bold(pr.base.ref)]],
+    [
+      "Changes",
+      [green(`+${pr.additions}`), " ", red(`−${pr.deletions}`), ` in ${pr.changed_files} files`],
+    ],
   ];
   if (pr.draft) {
-    facts.push(["Draft", "yes"]);
+    facts.push(["Draft", grey("yes")]);
   }
   return {
-    title: `PR #${pr.number} ${action}: ${pr.title}`,
+    title: `${icons[action] ?? "🔀"} PR #${pr.number} ${action}: ${pr.title}`,
     tone: tones[action] ?? "grey",
     facts,
-    body: payload.action === "opened" ? excerpt(pr.body) : "",
+    body: payload.action === "opened" ? (pr.body ?? "") : "",
     links: [["Open PR", pr.html_url]],
   };
 }
@@ -117,15 +129,16 @@ function workflowRunNotice(json: string): Notice {
   const payload: WorkflowRunPayload = JSON.parse(json);
   const wf = payload.workflow_run;
   return {
-    title: `${wf.name} ${wf.conclusion ?? "ended"} on ${wf.head_branch}`,
+    title: `${wf.conclusion === "failure" ? "🔴" : "🟠"} ${wf.name} ${wf.conclusion ?? "ended"} on ${wf.head_branch}`,
     tone: wf.conclusion === "failure" ? "red" : "orange",
     facts: [
-      ["Workflow", wf.name],
+      ["Workflow", bold(wf.name)],
+      ["Result", wf.conclusion === "failure" ? red("failure") : (wf.conclusion ?? "unknown")],
       ["Commit", shortSha(wf.head_sha)],
-      ["By", wf.actor.login],
+      ["By", bold(wf.actor.login)],
       ["Attempt", String(wf.run_attempt)],
     ],
-    body: excerpt(wf.head_commit?.message.split("\n")[0]),
+    body: wf.head_commit?.message.split("\n")[0] ?? "",
     links: [["Open run", wf.html_url]],
   };
 }

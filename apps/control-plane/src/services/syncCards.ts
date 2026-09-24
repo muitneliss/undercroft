@@ -3,9 +3,14 @@
  *
  * Pure: what a card says is decided here, and `alerts.ts` decides when one is posted. A failure's
  * card carries what the admins' email carries -- the same subject sentence, source, account,
- * customer and minute -- plus the run's reason in the body, so the group can triage without
- * opening the journal. A recovery's card says since when the pair had been failing, which is
- * the one fact the group cannot read off the red card above it.
+ * customer and minute -- plus the run's reason, so the group can triage without opening the
+ * journal. A recovery's card says since when the pair had been failing, which is the one fact
+ * the group cannot read off the red card above it.
+ *
+ * The reason is a fact, not the body. A body is rendered as markdown, and a vendor's error is
+ * not markdown: `invalid_grant ... refresh_token` would lose its underscores to italics. A
+ * fact is shown exactly as written. The title's leading mark is the one the group's other
+ * cards use for the same news, and carries no words to translate.
  */
 
 import { DEFAULT_LOCALE, type LarkNotice } from "@undercroft/core";
@@ -18,13 +23,15 @@ import { formatWhen, sourceName } from "./alertWording.ts";
 const CARD = messages(DEFAULT_LOCALE);
 
 function runTitle(
+  mark: string,
   input: { tenantId: string; source: string },
-  sync: MessageKey,
-  models: MessageKey,
+  keys: { readonly sync: MessageKey; readonly models: MessageKey },
 ): string {
-  return input.source === SOURCE_OF_TRANSFORM
-    ? CARD(models, { tenantId: input.tenantId })
-    : CARD(sync, { source: sourceName(input.source), tenantId: input.tenantId });
+  const sentence =
+    input.source === SOURCE_OF_TRANSFORM
+      ? CARD(keys.models, { tenantId: input.tenantId })
+      : CARD(keys.sync, { source: sourceName(input.source), tenantId: input.tenantId });
+  return `${mark} ${sentence}`;
 }
 
 /** The email's schedule, as a card's facts: source, the account where there are several, customer. */
@@ -63,10 +70,14 @@ export function failedRunCard(input: {
   account: string;
 }): LarkNotice {
   return {
-    title: runTitle(input, "runFailed.subject", "runFailed.modelsSubject"),
+    title: runTitle("❌", input, { sync: "runFailed.subject", models: "runFailed.modelsSubject" }),
     tone: "red",
-    facts: [...runFacts(input), [CARD("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)]],
-    body: `${CARD("syncCard.reason")}: ${input.error ?? CARD("runFailed.noReason")}`,
+    facts: [
+      ...runFacts(input),
+      [CARD("email.when"), formatWhen(input.endedAt, DEFAULT_LOCALE)],
+      [CARD("syncCard.reason"), input.error ?? CARD("runFailed.noReason")],
+    ],
+    body: "",
     links: journalLink(input.publicUrl, input),
   };
 }
@@ -82,7 +93,10 @@ export function recoveredRunCard(input: {
   account: string;
 }): LarkNotice {
   return {
-    title: runTitle(input, "syncCard.recovered", "syncCard.modelsRecovered"),
+    title: runTitle("✅", input, {
+      sync: "syncCard.recovered",
+      models: "syncCard.modelsRecovered",
+    }),
     tone: "green",
     facts: [
       ...runFacts(input),

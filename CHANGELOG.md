@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.25.0](https://github.com/muitneliss/undercroft/compare/v1.24.0...v1.25.0) (2026-09-24)
+
+
+### Features
+
+* **notify:** render Lark cards as markdown, with emoji and coloured diffs ([#171](https://github.com/muitneliss/undercroft/issues/171)) ([9d748ed](https://github.com/muitneliss/undercroft/commit/9d748ed2559222e5db05c1fb7447726d55997448))
+
+## [1.24.0](https://github.com/muitneliss/undercroft/compare/v1.23.0...v1.24.0) (2026-09-24)
+
+
+### Features
+
+* **people:** change a member's role and remove a member, never the last admin ([#169](https://github.com/muitneliss/undercroft/issues/169)) ([a268549](https://github.com/muitneliss/undercroft/commit/a268549989615d05051e8b1d84f7fdc2c0e5492c)), closes [#168](https://github.com/muitneliss/undercroft/issues/168)
+
 ## [1.23.0](https://github.com/muitneliss/undercroft/compare/v1.22.1...v1.23.0) (2026-09-24)
 
 
