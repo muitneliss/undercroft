@@ -49,7 +49,8 @@ a Makefile, an npm script tree, or a bag of `scripts/*.sh`.
   `build:*` (`.taskfiles/artifacts/`) artifacts, `ci:*` (`.taskfiles/ci/`) the gate and its
   individual steps, `cd:*` (`.taskfiles/cd/`) `scripts/dokploy.ts`, `db:*`
   (`.taskfiles/db/`) DSN-parameterised migrate/invite for a database that isn't the local
-  one. A task that doesn't fit one of these cleanly is a sign the namespace list is
+  one, `notify:*` (`.taskfiles/notify/`) `scripts/notify.ts`, the cards CI posts to Lark. A
+  task that doesn't fit one of these cleanly is a sign the namespace list is
   incomplete, not a reason to force it sideways — raise it rather than guessing.
 - **`task --list-all` before you add anything.** It is the one place every operation is
   enumerated; check it before assuming a script needs writing from scratch.

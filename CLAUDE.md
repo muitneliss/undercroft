@@ -125,13 +125,14 @@ Every operation goes through [Task](https://taskfile.dev) — never a bare `bun 
 shell/docker command typed by hand. `task --list-all` enumerates everything that exists; the
 surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
 
-| Namespace | Lives in                | Covers                                                                                                                                           |
-| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                         |
-| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), generated assets/schemas, local Docker images           |
-| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check` and `ci:skill-check` (network) are CI steps outside it |
-| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` attaches the CLI to a release                                                     |
-| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one                                                                        |
+| Namespace  | Lives in                | Covers                                                                                                                                           |
+| ---------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dev:*`    | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                         |
+| `build:*`  | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), generated assets/schemas, local Docker images           |
+| `ci:*`     | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check` and `ci:skill-check` (network) are CI steps outside it |
+| `cd:*`     | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` attaches the CLI to a release                                                     |
+| `db:*`     | `.taskfiles/db/`        | DSN-parameterised migrate/invite, for a database that isn't the local one                                                                        |
+| `notify:*` | `.taskfiles/notify/`    | `scripts/notify.ts`: the Lark cards CI posts for deploys, failed releases, issues, PRs and a red `ci` on main; `notify:test` proves the webhook  |
 
 Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —
 Task is the mandated way to invoke it, never a second place that redefines what it does. A

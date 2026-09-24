@@ -22,6 +22,12 @@ on:
         required: true
       dokploy_compose_id:
         required: true
+      # Optional so a fork without a Lark group can still deploy; the `notify` job then
+      # fails on its own, visibly, and the rollout's result is untouched.
+      lark_webhook_url:
+        required: false
+      lark_webhook_secret:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
@@ -49,12 +55,17 @@ jobs:
     permissions:
       contents: read
       packages: read # `verify` reads ghcr manifests to compare digests
+    # Every step the `notify` job can name as the one that stopped the rollout. Evaluated
+    # when the job ends, failed or not.
+    outputs:
+      steps: ${{ toJSON(steps) }}
     env:
       DOKPLOY_API_KEY: ${{ secrets.dokploy_api_key || secrets.DOKPLOY_API_KEY }}
       DOKPLOY_COMPOSE_ID: ${{ secrets.dokploy_compose_id || secrets.DOKPLOY_COMPOSE_ID }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Require the secrets this job cannot derive
+        id: secrets
         run: |
           missing=0
           [ -z "$DOKPLOY_API_KEY" ]   && { echo "::error::secret DOKPLOY_API_KEY is not set";   missing=1; }
@@ -75,9 +86,11 @@ jobs:
       # The gate before anything is queued, when failing is free: the panel must point at
       # published images and be told to pull them.
       - name: Preflight
+        id: preflight
         run: task cd:preflight
 
       - name: Deploy and wait for it to settle
+        id: deploy
         run: task cd:deploy TAG=${{ inputs.tag }}
 
       # BEFORE the smoke probes: Dokploy reports `done` for a deploy that changed nothing,
@@ -88,9 +101,11 @@ jobs:
       # `latest` (the panel's IMAGE_TAG), and comparing `latest` to itself would prove only
       # that a moving pointer equals itself.
       - name: Verify the host runs the published images
+        id: verify
         run: task cd:verify TAG=${{ inputs.tag }}
 
       - name: Smoke-test the public surface
+        id: smoke
         run: task cd:smoke URL=https://undercroft.lowbit.link/api/health
 
       # Otherwise the only record of why a rollout failed lives in a panel the reader may not
@@ -98,3 +113,29 @@ jobs:
       - name: Collect the deployment log
         if: failure()
         run: task cd:logs
+
+  # Its own job, not a last step: a step cannot run when the job failed before checkout, and
+  # the deploy job should never hold the Lark webhook it has no use for. A notice that fails
+  # to post turns THIS job red and leaves the deploy's own result as it was.
+  notify:
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      LARK_WEBHOOK_URL: ${{ secrets.lark_webhook_url || secrets.LARK_WEBHOOK_URL }}
+      LARK_WEBHOOK_SECRET: ${{ secrets.lark_webhook_secret || secrets.LARK_WEBHOOK_SECRET }}
+      DEPLOY_TAG: ${{ inputs.tag }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+      DEPLOY_STEPS: ${{ needs.deploy.outputs.steps }}
+      DEPLOY_SITE: https://undercroft.lowbit.link
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      # No `bun install`: scripts/notify.ts imports only Node built-ins.
+      - run: task notify:deploy
