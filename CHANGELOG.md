@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.2](https://github.com/muitneliss/undercroft/compare/v1.27.1...v1.27.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* **deploy:** run the raw lake on pgsty/minio, since MinIO withdrew its images ([#184](https://github.com/muitneliss/undercroft/issues/184)) ([8a3affe](https://github.com/muitneliss/undercroft/commit/8a3affea70d31d8834e36163aaa14c439c299e36))
+
 ## [1.27.1](https://github.com/muitneliss/undercroft/compare/v1.27.0...v1.27.1) (2026-09-24)
 
 
