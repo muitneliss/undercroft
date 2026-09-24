@@ -96,6 +96,21 @@ describe("the SPA is served without shadowing the API", () => {
   });
 });
 
+describe("a refusal over /trpc names its code and nothing of the server", () => {
+  it("a caller with no session gets the code without a stack (issue 152)", async () => {
+    // Anyone on the internet can reach this branch. tRPC attaches `data.stack` -- absolute
+    // paths, line numbers, dependency versions -- whenever it believes it is in development,
+    // and it believed so in production because the deployment sets no NODE_ENV.
+    const app = createServer({ exec: noDatabase });
+
+    const response = await app.fetch(new Request("http://c/trpc/session.me"));
+    const body = (await response.json()) as { error: { data: Record<string, unknown> } };
+
+    expect(response.status).toBe(401);
+    expect(body.error.data).toEqual({ code: "UNAUTHORIZED", httpStatus: 401, path: "session.me" });
+  });
+});
+
 describe("the consent callback, before it asks anything of the database", () => {
   it("an admin who declined at Google is not shown an error", async () => {
     // Pressing Cancel is answered before the state is read, so `noDatabase` doubles as the
