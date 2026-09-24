@@ -44,6 +44,22 @@ export const XLSX_UNREADABLE = "xlsx-unreadable";
 export const DOCX_UNREADABLE = "docx-unreadable";
 export const UNSUPPORTED_TYPE = "unsupported-content-type";
 export const EMPTY_SOURCE = "document-has-no-bytes";
+export const PDF_TEXT_FAILED = "pdftotext-failed";
+/**
+ * A PDF locked with an open password. Told apart from `PDF_TEXT_FAILED` because the two send a
+ * reader to different places: a corrupt file is worth a look, a locked one is intact in the
+ * lake and needs the sender's password -- and until this had its own name, six locked email
+ * attachments on production were reported as possibly corrupt.
+ */
+export const PDF_PASSWORD_PROTECTED = "pdf-password-protected";
+
+/**
+ * What poppler prints when a PDF will not open without a password; `pdftotext` exits 1 for
+ * this and for a corrupt file alike, so the diagnostic is the only thing that tells them apart.
+ * Should poppler ever reword it the refusal falls back to `pdftotext-failed` -- less specific,
+ * never wrong.
+ */
+const POPPLER_PASSWORD_DIAGNOSTIC = "Incorrect password";
 
 /**
  * The ceiling on stored text.
@@ -127,9 +143,20 @@ function refused(reason: string): Extracted {
 export async function pdfTextLayer(
   deps: ExtractDeps,
   path: string,
-): Promise<{ ok: true; text: string } | { ok: false; missing: boolean }> {
+): Promise<{ ok: true; text: string } | { ok: false; reason: string }> {
   const result = await runProgram(deps, ["pdftotext", "-layout", path, "-"]);
-  return result.ok ? { ok: true, text: result.output } : result;
+  if (result.ok) {
+    return { ok: true, text: result.output };
+  }
+  if (result.missing) {
+    return { ok: false, reason: extractorMissing("pdftotext") };
+  }
+  return {
+    ok: false,
+    reason: result.output.includes(POPPLER_PASSWORD_DIAGNOSTIC)
+      ? PDF_PASSWORD_PROTECTED
+      : PDF_TEXT_FAILED,
+  };
 }
 
 /** What every reader below is handed. `bytes` is what the lake holds; `path` is where they are. */
@@ -153,7 +180,7 @@ function readPlainText(_deps: ExtractDeps, input: Document): Extracted {
 async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
   const layer = await pdfTextLayer(deps, input.path);
   if (!layer.ok) {
-    return refused(layer.missing ? extractorMissing("pdftotext") : "pdftotext-failed");
+    return refused(layer.reason);
   }
   if (normalizeText(layer.text).length >= TEXT_LAYER_ROUTING_CHARS) {
     return read("pdf_text", layer.text);
@@ -330,6 +357,10 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * `unsupported-content-type` until now, which is a refusal whose whole point is that it stops
  * being true.
  *
+ * GENERATION 4 IS THE PASSWORD-PROTECTED PDF getting its own name. It re-offers the documents
+ * recorded `pdftotext-failed` so a locked one is relabelled `pdf-password-protected` instead of
+ * staying "possibly corrupt"; a genuinely broken one fails again and keeps its old reason.
+ *
  * BY HAND, AND DELIBERATELY SO. The honest alternative is deriving it -- hashing the binaries
  * and language packs behind these readers into the stamp, which is what the sibling project
  * does, because installing `tesseract-ocr-vie` changes what OCR can read without changing a
@@ -341,7 +372,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 3;
+export const CURRENT_READER_VERSION = 4;
 
 /**
  * One document, read whichever way its type allows.

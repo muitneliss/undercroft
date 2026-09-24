@@ -127,3 +127,4 @@
 ## [2026-09-24] ingest | Runbook Xero Setup
 ## [2026-09-24] ingest | Runbook: Setting the assistant up
 ## [2026-09-24] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-24] ingest | File formats a Gmail or Drive connection can land

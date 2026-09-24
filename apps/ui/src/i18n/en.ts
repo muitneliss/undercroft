@@ -589,6 +589,9 @@ export const en = {
       unsupportedType: "No reader for this file type yet",
       unsupportedTypeNote:
         "The document is offered again by itself once a reader can open it. Nothing to do.",
+      pdfPasswordProtected: "The PDF is password-protected and cannot be read",
+      pdfPasswordProtectedNote:
+        "The original file is kept intact. To read its content, ask the sender for an unlocked copy.",
       pdftotextFailed: "pdftotext failed on this file",
       pdftotextFailedNote: "The PDF may be corrupt. Worth a look if it keeps happening.",
       pdftoppmFailed: "Could not render the PDF page to an image for OCR",

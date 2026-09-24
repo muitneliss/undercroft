@@ -712,6 +712,9 @@ export const vi = {
       unsupportedType: "Chưa có trình đọc cho loại tệp này",
       unsupportedTypeNote:
         "Tài liệu sẽ tự được đọc lại khi có trình đọc phù hợp. Không cần làm gì.",
+      pdfPasswordProtected: "Tệp PDF có mật khẩu mở, không đọc được",
+      pdfPasswordProtectedNote:
+        "Tệp gốc vẫn được lưu nguyên vẹn. Muốn đọc nội dung, hãy xin người gửi bản không đặt mật khẩu.",
       pdftotextFailed: "pdftotext chạy lỗi trên tệp này",
       pdftotextFailedNote: "Tệp PDF có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
       pdftoppmFailed: "Không dựng được trang PDF thành ảnh để OCR",
