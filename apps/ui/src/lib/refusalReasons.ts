@@ -39,6 +39,8 @@ const DOCUMENT_REASONS = [
   "legacy-doc-unsupported",
   "legacy-xls-unsupported",
   "unsupported-content-type",
+  // The sender locked it. The bytes are whole in the lake; nothing here can fix the lock.
+  "pdf-password-protected",
 ] as const;
 
 /** Facts about this deployment. Each one has somebody who can act. */
@@ -166,6 +168,11 @@ function aboutTheDocument(t: TFunction, code: DocumentReason): Words {
       return {
         title: t("journal.reason.unsupportedType"),
         note: t("journal.reason.unsupportedTypeNote"),
+      };
+    case "pdf-password-protected":
+      return {
+        title: t("journal.reason.pdfPasswordProtected"),
+        note: t("journal.reason.pdfPasswordProtectedNote"),
       };
     default: {
       const exhaustive: never = code;

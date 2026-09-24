@@ -55,8 +55,10 @@ reader for it, it is recorded with the refusal `unsupported-content-type`, and t
 
 `pdftotext` reads the text layer. When the whole layer carries fewer than 80 visible
 characters, the PDF is treated as a scan. Its pages are then rasterised and read by OCR, recorded as `pdf_ocr`.
-The refusals are `extractor-missing:pdftotext`, `pdftotext-failed`,
+The refusals are `extractor-missing:pdftotext`, `pdftotext-failed`, `pdf-password-protected`,
 `extractor-missing:pdftoppm`, `pdftoppm-failed` and the OCR refusals under [JPEG](#jpeg-image).
+A PDF locked with an open password is `pdf-password-protected`, not `pdftotext-failed`: its
+bytes are intact in the lake, and reading it needs an unlocked copy from the sender.
 
 ### Word document (.docx)
 

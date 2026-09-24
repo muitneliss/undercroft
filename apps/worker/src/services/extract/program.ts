@@ -87,11 +87,16 @@ export function extractorMissing(program: string): string {
  * which is a fact about this document; a sibling project let a `pdftotext` timeout escape to
  * its caller and lost the whole document from its shard rather than just the text. A reader
  * that added a path around this would put that back.
+ *
+ * A FAILED RUN KEEPS WHAT THE PROGRAM SAID. One exit code covers several causes -- `pdftotext`
+ * exits 1 for a corrupt file and for a password-protected one alike -- so a reader that can
+ * name the cause needs the diagnostic, and one that cannot simply ignores it. A program that
+ * never started said nothing, which is the empty string.
  */
 export async function runProgram(
   deps: ExtractDeps,
   cmd: readonly string[],
-): Promise<{ ok: true; output: string } | { ok: false; missing: boolean }> {
+): Promise<{ ok: true; output: string } | { ok: false; missing: boolean; output: string }> {
   const options: SpawnOptions = {
     cwd: deps.workDir,
     env: deps.env ?? {},
@@ -99,10 +104,10 @@ export async function runProgram(
   };
   try {
     const { exitCode, output } = await deps.spawn(cmd, options);
-    return exitCode === 0 ? { ok: true, output } : { ok: false, missing: false };
+    return exitCode === 0 ? { ok: true, output } : { ok: false, missing: false, output };
   } catch {
     // A spawn that could not start at all. Treated as "the program is not here", which is
     // what it means in practice and what the operator can fix.
-    return { ok: false, missing: true };
+    return { ok: false, missing: true, output: "" };
   }
 }

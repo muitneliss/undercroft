@@ -49,6 +49,15 @@ describe("a refusal reason as a reader meets it", () => {
     expect(unknown.severity).toBe("act");
   });
 
+  it("says a password-protected PDF is locked, not corrupt, and needs no operator", () => {
+    // Regression: the locked PDF used to surface as `pdftotext-failed`, worded "may be
+    // corrupt" and counted as a deployment fault. It is a fact about the document.
+    const locked = presentReason(vi, "pdf-password-protected");
+
+    expect(locked.severity).toBe("benign");
+    expect(locked.title).toBe("Tệp PDF có mật khẩu mở, không đọc được");
+  });
+
   it("marks a known reason as known, so the gap above means something", () => {
     expect(presentReason(en, "ocr-found-nothing").known).toBe(true);
   });

@@ -19,6 +19,7 @@ import {
   LEGACY_DOC,
   MAX_TEXT_CHARS,
   normalizeText,
+  PDF_PASSWORD_PROTECTED,
   TEXT_LAYER_ROUTING_CHARS,
   UNSUPPORTED_TYPE,
 } from "./extractText.ts";
@@ -119,6 +120,21 @@ describe("a binary that is not installed", () => {
     const { spawn } = spawnAnswering("", 1);
 
     expect((await extract(spawn)).reason).toBe("pdftotext-failed");
+  });
+});
+
+describe("a password-protected PDF", () => {
+  it("is refused as locked rather than as possibly corrupt, and is not sent to OCR", async () => {
+    // Regression: six locked email attachments on production were reported `pdftotext-failed`,
+    // which the UI words as "the PDF may be corrupt". Poppler exits 1 for both, so what it
+    // SAYS is the only difference -- this is the line poppler 25.03 prints.
+    const { spawn, calls } = spawnAnswering("\nCommand Line Error: Incorrect password\n", 1);
+
+    const result = await extract(spawn);
+
+    expect(result.reason).toBe(PDF_PASSWORD_PROTECTED);
+    expect(result.method).toBeNull();
+    expect(calls.map((cmd) => cmd[0])).toEqual(["pdftotext"]);
   });
 });
 
