@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/muitneliss/undercroft/compare/v1.25.0...v1.26.0) (2026-09-24)
+
+
+### Features
+
+* **alerts:** post a sync's failure and its recovery to the operators' Lark group ([#173](https://github.com/muitneliss/undercroft/issues/173)) ([ea4b26c](https://github.com/muitneliss/undercroft/commit/ea4b26cb8880ba95f30d631e1717be9015573eed))
+
 ## [1.25.0](https://github.com/muitneliss/undercroft/compare/v1.24.0...v1.25.0) (2026-09-24)
 
 
