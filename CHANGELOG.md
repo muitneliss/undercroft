@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.28.2](https://github.com/muitneliss/undercroft/compare/v1.28.1...v1.28.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* **ui:** a second Drive pick adds folders to the scope, and each can be removed ([#197](https://github.com/muitneliss/undercroft/issues/197)) ([#198](https://github.com/muitneliss/undercroft/issues/198)) ([afa626e](https://github.com/muitneliss/undercroft/commit/afa626e3bbd28df2dc3ce18eda6d17b7303a4809))
+* **worker:** a deploy stops an ingest cleanly, and the run keeps what it landed ([#196](https://github.com/muitneliss/undercroft/issues/196)) ([#200](https://github.com/muitneliss/undercroft/issues/200)) ([df1aed7](https://github.com/muitneliss/undercroft/commit/df1aed77225e8958e22c2aed68b637bbc5ce4cd6))
+
 ## [1.28.1](https://github.com/muitneliss/undercroft/compare/v1.28.0...v1.28.1) (2026-09-24)
 
 
