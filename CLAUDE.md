@@ -220,7 +220,7 @@ through. ADR 0017 supersedes ADR 0012 here and ADR 0022 supersedes ADR 0017;
 
 ## Deploying
 
-One Dokploy raw-compose stack on `lowbit.link`; the control plane is the only public
+One Dokploy compose stack on `lowbit.link`, cloning this repo's compose file from `main` (ADR 0049); the control plane is the only public
 surface — the Reports division inside it is the BI, and Metabase is gone (ADR 0020).
 Merging the release-please PR cuts a tag, which builds the images and deploys them,
 Kestra's flows included — nothing else does. The Dokploy API is the only channel for a

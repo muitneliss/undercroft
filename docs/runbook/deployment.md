@@ -1,6 +1,7 @@
 # Deployment runbook
 
-Undercroft runs on the Dokploy instance at `lowbit.link` as a single raw-compose stack.
+Undercroft runs on the Dokploy instance at `lowbit.link` as a single compose stack that
+clones this repository's `main` on every deploy (ADR 0049).
 
 **Live surface:**
 
@@ -32,11 +33,13 @@ Everything else talks over the compose network and publishes nothing.
 ## The two compose files
 
 `deploy/compose/docker-compose.yml` is for development (it `build:`s the images and binds
-ports to localhost). `docker-compose.server.yml` is what Dokploy holds a copy of. It differs
-in three ways, each a failure that happened once:
+ports to localhost). `docker-compose.server.yml` is the file Dokploy deploys, cloned from
+`main` each time; the panel holds no copy of it. It differs in three ways, each a failure that
+happened once:
 
 1. **Published images**, `ghcr.io/muitneliss/undercroft-{worker,control-plane}:${IMAGE_TAG:-latest}`.
-   Dokploy raw compose has no checkout, so `build:` has no context there.
+   The host's checkout is `main` at deploy time, not the release, so a `build:` there would
+   ship code no release published and no `verify` could prove.
 2. **No host ports.** Only the control plane is reachable, through Dokploy's proxy.
 3. **A unique network alias per service** (`undercroft-postgres`, `undercroft-minio`, …), and
    every reference uses it. A service with a domain is attached to the shared
@@ -80,7 +83,7 @@ export DOKPLOY_API_ENDPOINT=https://lowbit.link/api
 export DOKPLOY_API_KEY=...           # from Dokploy → Settings → API
 export DOKPLOY_COMPOSE_ID=...        # the undercroft compose
 
-task cd:preflight              # panel holds this repo's compose, points at published images
+task cd:preflight              # panel clones main's compose, main carries this checkout's file
 task cd:deploy TAG=v1.2.3      # trigger, then wait for the record THIS run created
 task cd:verify TAG=v1.2.3      # every released container runs that tag's digest
 task cd:smoke                  # defaults to https://undercroft.lowbit.link/api/health
@@ -93,23 +96,33 @@ direct edit on the host is drift the next deploy silently reverts.
 
 ### What `preflight` proves
 
-That the panel holds **this repo's** `deploy/compose/docker-compose.server.yml`, compared
-line for line, and that its stored command still carries `--pull always`, `--wait`,
-`--wait-timeout` and `--remove-orphans`.
+Three things, before anything is queued:
 
-The file here is the source of truth and Dokploy holds a copy; this comparison is what makes
-that a fact rather than an intention. Without it the copy drifted until it ran a service this
-repo had deleted (Metabase, ADR 0020) and lacked the `depends_on` that declares
-`kestra-flows` a job allowed to exit — so three releases in a row failed on the host at
-`--wait`, each after a `preflight` that passed.
+1. **The panel clones the file rather than holding a copy.** Its compose source is `git`,
+   `https://github.com/muitneliss/undercroft.git` at `main`, compose path
+   `deploy/compose/docker-compose.server.yml`, with **auto deploy off** — on, it would roll
+   out every push to `main` while images change only on a release.
+2. **`main` carries the same file as this checkout.** The host clones `main`'s head at deploy
+   time, not the release's commit. A change to the file merged while the release's images
+   were building would otherwise ship beside images that predate it; `preflight` refuses,
+   and the next release carries the change with its own images. Line endings and trailing
+   blank lines are forgiven, nothing else is.
+3. **The stored command** carries `--env-file deploy/compose/.env`,
+   `-f deploy/compose/docker-compose.server.yml`, `--pull always`, `--wait`, `--wait-timeout`
+   and `--remove-orphans`. Dokploy runs it from the clone's root and writes `.env` beside the
+   compose file, which is why both paths are the file's own.
 
-Line endings and trailing blank lines are forgiven; nothing else is, comments included. A
-refusal names the first line that differs. **Repair it by pushing the file to the panel,
-never by editing the file to match the panel** — CI does not write the panel's configuration,
-so a drift is meant to be seen and repaired by a human. A variable the newer file needs must
-be in the panel's environment _before_ that push, or the deploy stops at `set in .env`;
-`compose.update` carries `env` too, but it replaces the blob whole, so build the new value
-from the current one rather than retyping it.
+The panel used to hold a pasted copy, and the copy drifted: once until it ran a service this
+repo had deleted (Metabase, ADR 0020) and three releases failed at `--wait`, and again when a
+merged change to the file was never pasted and v1.26.0 stopped at `preflight`. There is no
+copy now, so there is nothing to push after changing the file — merge it, and the next
+release runs it.
+
+These settings are the panel's, and CI never writes them (ADR 0008). A refusal is repaired in
+the panel or with `compose.update`, by a person, sending only the fields above: its `env`
+field replaces the whole environment blob. A variable a newer file needs must be in the
+panel's environment _before_ the release that carries it, or the deploy stops at
+`set in .env`.
 
 ### What `verify` proves
 
@@ -342,6 +355,11 @@ tag the bundle was built from — paste it into `IMAGE_TAG` verbatim to come bac
 Set `IMAGE_TAG=vX.Y.Z` (a previously published tag) in Dokploy's environment and redeploy.
 The curated layer is a projection rebuilt from the raw lake, so a rollback needs no database
 restore unless the schema changed.
+
+The compose file does **not** roll back with it: the host clones `main`'s file whatever
+`IMAGE_TAG` says (ADR 0049). That is harmless while the file has only gained what older
+images ignore. If the release you are leaving changed the file in a way the older images
+cannot run, revert that change on `main` as well.
 
 **Put `IMAGE_TAG` back to `latest` once the fix ships.** While it is pinned, the host keeps
 serving the pinned release, so the next release's deploy will fail `verify` — the running

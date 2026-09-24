@@ -52,11 +52,35 @@ const COMPLETED_CONDITION = /^\s+condition:\s*service_completed_successfully\s*$
 /** Blank lines at the very end of a file, which YAML does not read and a paste can add. */
 const TRAILING_NEWLINES = /\n+$/u;
 
-/** Flags the stored compose command must carry. Asserted by `preflight`, never written by CI. */
-const REQUIRED_COMMAND_FLAGS = ["--pull always", "--wait", "--wait-timeout", "--remove-orphans"];
-
-/** The file the panel's copy must match, relative to this script. */
+/** The compose file Dokploy deploys, relative to the repo root. */
 const SERVER_COMPOSE = "deploy/compose/docker-compose.server.yml";
+
+/**
+ * Where the panel clones that file from (ADR 0049). The panel holds no copy of it: every
+ * deploy clones this branch, so the file in the repo is the only one there is.
+ */
+const COMPOSE_SOURCE = {
+  url: "https://github.com/muitneliss/undercroft.git",
+  branch: "main",
+} as const;
+
+/** The same file on the same branch, read the way the host is about to read it. */
+const COMPOSE_ON_BRANCH_URL = `https://api.github.com/repos/muitneliss/undercroft/contents/${SERVER_COMPOSE}?ref=${COMPOSE_SOURCE.branch}`;
+
+/**
+ * Flags the stored compose command must carry. Asserted by `preflight`, never written by CI.
+ * Dokploy runs the command from the clone's root and writes `.env` beside the compose file,
+ * so both paths are the file's own; a command still naming `docker-compose.yml` would fail on
+ * the host, after the old stack had already been told to go.
+ */
+const REQUIRED_COMMAND_FLAGS = [
+  "--env-file deploy/compose/.env",
+  `-f ${SERVER_COMPOSE}`,
+  "--pull always",
+  "--wait",
+  "--wait-timeout",
+  "--remove-orphans",
+];
 
 export interface Config {
   readonly endpoint: string;
@@ -236,13 +260,21 @@ export async function deployAndWait(
   }
 }
 
+/**
+ * The fields of `compose.one` this client reads. `composeFile` is deliberately absent: under
+ * a git source it is whatever was last pasted into the panel and is never deployed, so a
+ * reader that trusted it would be verifying a file nobody runs.
+ */
 interface ComposeRecord {
   readonly composeId: string;
   readonly name: string;
   readonly appName: string;
-  readonly composeFile: string;
   readonly command: string;
   readonly sourceType: string;
+  readonly customGitUrl: string | null;
+  readonly customGitBranch: string | null;
+  readonly composePath: string;
+  readonly autoDeploy: boolean | null;
   readonly composeStatus: string;
 }
 
@@ -271,9 +303,8 @@ export function expandEnv(value: string, env: Record<string, string | undefined>
 }
 
 /**
- * Services whose image this repo publishes, read out of the compose file the panel holds.
- * Line-wise rather than through a YAML parser: the panel's copy is the only authority on
- * what is deployed, and adding a parser to read it buys nothing.
+ * Services whose image this repo publishes, read out of the compose file. Line-wise rather
+ * than through a YAML parser: the file is ours and plain, and a parser to read it buys nothing.
  */
 export function releasedServices(
   composeFile: string,
@@ -321,24 +352,48 @@ export function oneShotServices(composeFile: string): Set<string> {
 }
 
 /**
- * How the panel's compose file differs from the one this repo publishes, or `null` when it
- * does not. The returned string is the whole complaint, so the wording has one owner.
+ * What is wrong with where the panel gets its compose file, one line per fault; empty when
+ * nothing is.
  *
- * `.claude/rules/deployment.md` says the file in this repo is the source of truth and
- * Dokploy holds a copy. Nothing checked that until this function existed, and the copy
- * drifted far enough to run a service this repo had deleted (Metabase, ADR 0020) while
- * missing the `depends_on` that declares `kestra-flows` a job allowed to exit -- so three
- * releases in a row failed at `--wait` over a container that had in fact done its work, and
- * every `preflight` before them passed. The two checks either side of this one are about
- * what the panel points at; this one is about whether it is the same file at all.
- *
- * Line endings and trailing blank lines are normalized away first. Neither means anything
- * in YAML, both survive a trip through a browser textarea, and a release refused over an
- * invisible character is how a gate teaches the people it protects to work around it.
- * Everything else compares byte for byte: a comment that drifted is a reason that drifted.
+ * The panel used to hold a pasted copy of the file (a "raw" source). The copy drifted far
+ * enough to run a service this repo had deleted (Metabase, ADR 0020), and later stopped a
+ * release because a merged change to the file had never been pasted. A git source has no
+ * copy to drift: every deploy clones the branch. So the question this answers is not "is the
+ * copy right" but "is there a copy at all", plus the one setting that would make a clone
+ * dangerous -- `autoDeploy`, which rolls out every push to main while images change only on
+ * a release (ADR 0008).
  */
-export function composeDrift(panel: string, expected: string): string | null {
-  const held = normalizeCompose(panel).split("\n");
+function sourceFaults(compose: ComposeRecord): string[] {
+  const expected: [string, unknown, unknown][] = [
+    ["sourceType", compose.sourceType, "git"],
+    ["customGitUrl", compose.customGitUrl, COMPOSE_SOURCE.url],
+    ["customGitBranch", compose.customGitBranch, COMPOSE_SOURCE.branch],
+    ["composePath", compose.composePath, SERVER_COMPOSE],
+    ["autoDeploy", compose.autoDeploy, false],
+  ];
+  return expected
+    .filter(([, held, wanted]) => held !== wanted)
+    .map(
+      ([field, held, wanted]) =>
+        `${field} is ${JSON.stringify(held)}, not ${JSON.stringify(wanted)}`,
+    );
+}
+
+/**
+ * How the file on the branch the host clones differs from the one this checkout carries, or
+ * `null` when it does not. The returned string is the whole complaint, so the wording has
+ * one owner.
+ *
+ * The host clones the branch's head at deploy time, not the release's commit, so a change to
+ * the file merged while a release's images were building would ship beside images that
+ * predate it. That is a pairing nobody tested, and it would deploy green: refuse it here,
+ * where failing is free, and let the next release carry the change with its own images.
+ *
+ * Line endings and trailing blank lines are normalized away first; neither means anything
+ * in YAML. Everything else compares byte for byte.
+ */
+function branchDrift(onBranch: string, expected: string): string | null {
+  const held = normalizeCompose(onBranch).split("\n");
   const published = normalizeCompose(expected).split("\n");
   const longer = held.length >= published.length ? held : published;
   const at = longer.findIndex((_line, index) => held[index] !== published[index]);
@@ -346,13 +401,13 @@ export function composeDrift(panel: string, expected: string): string | null {
     return null;
   }
   return (
-    `the panel's compose file is not ${SERVER_COMPOSE} (first difference at line ${at + 1}, ` +
-    `panel ${held.length} lines, file ${published.length}).\n` +
-    `  panel: ${quoteLine(held[at])}\n` +
-    `  file:  ${quoteLine(published[at])}\n` +
-    "  Push the file to the panel (compose.update) rather than editing the file to match: " +
-    "CI does not write the panel's configuration, so a drift must be seen and repaired by a " +
-    "human."
+    `${SERVER_COMPOSE} on ${COMPOSE_SOURCE.branch} is not the one this checkout carries ` +
+    `(first difference at line ${at + 1}, ${COMPOSE_SOURCE.branch} ${held.length} lines, ` +
+    `checkout ${published.length}).\n` +
+    `  ${COMPOSE_SOURCE.branch}: ${quoteLine(held[at])}\n` +
+    `  checkout: ${quoteLine(published[at])}\n` +
+    `  The host deploys ${COMPOSE_SOURCE.branch}'s file. Cut a release from it, or deploy ` +
+    "from a checkout of it, so the file and the images it names ship together."
   );
 }
 
@@ -366,37 +421,75 @@ function normalizeCompose(text: string): string {
 }
 
 /**
- * The compose file this repo publishes. Read at the entrypoint rather than inside
- * `preflight`, so the comparison stays a value a test can hand in.
+ * The compose file in this checkout. Read at the entrypoint rather than inside `preflight`
+ * and `verify`, so the file stays a value a test can hand in.
  */
 export function publishedCompose(): string {
   return readFileSync(join(import.meta.dirname, "..", SERVER_COMPOSE), "utf8");
 }
 
 /**
- * The gate before anything is queued, when failing is free: the panel must hold the compose
- * file this repo publishes, must be pointed at published images, and must be told to pull
- * them.
+ * The compose file on the branch the host clones, fetched from GitHub's contents API rather
+ * than raw.githubusercontent.com, whose CDN serves a file up to five minutes stale -- long
+ * enough to call a just-merged change absent. The token only lifts the anonymous rate limit;
+ * the repository is public.
+ */
+async function composeOnBranch(deps: Deps, githubToken: string): Promise<string> {
+  const response = await deps.fetch(COMPOSE_ON_BRANCH_URL, {
+    headers: {
+      Accept: "application/vnd.github.raw",
+      "User-Agent": "undercroft-deploy/1.0",
+      ...(githubToken === "" ? {} : { Authorization: `Bearer ${githubToken}` }),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `reading ${SERVER_COMPOSE} on ${COMPOSE_SOURCE.branch}: HTTP ${response.status}`,
+    );
+  }
+  return await response.text();
+}
+
+/**
+ * The gate before anything is queued, when failing is free: the panel must clone this repo's
+ * compose file rather than hold a copy of it, the file it will clone must be the one this
+ * checkout carries, that file must name published images, and the command must pull them.
  *
  * `--pull always` is what makes a moving `latest` fetch the release that was just built;
  * without it the stack restarts on the image it already has and reports success. `--wait`
  * is what stops a crash-looping container from deploying green.
  */
-export async function preflight(cfg: Config, deps: Deps, expected: string): Promise<void> {
+export async function preflight(
+  cfg: Config,
+  deps: Deps,
+  expected: string,
+  githubToken = "",
+): Promise<void> {
   const compose = await composeRecord(cfg, deps);
   deps.log(`compose ${compose.name} (${compose.appName}), source ${compose.sourceType}`);
 
-  const drift = composeDrift(compose.composeFile, expected);
+  const faults = sourceFaults(compose);
+  if (faults.length > 0) {
+    throw new Error(
+      `the panel does not clone ${SERVER_COMPOSE} from ${COMPOSE_SOURCE.url}@${COMPOSE_SOURCE.branch}:\n` +
+        `  ${faults.join("\n  ")}\n` +
+        "  Set it in the panel (or with compose.update) rather than here: CI does not write " +
+        "the panel's configuration. See docs/runbook/deployment.md.",
+    );
+  }
+  deps.log(`  clones ${SERVER_COMPOSE} from ${COMPOSE_SOURCE.branch}, autoDeploy off`);
+
+  const drift = branchDrift(await composeOnBranch(deps, githubToken), expected);
   if (drift !== null) {
     throw new Error(drift);
   }
-  deps.log(`  holds ${SERVER_COMPOSE}`);
+  deps.log(`  ${COMPOSE_SOURCE.branch} carries this checkout's ${SERVER_COMPOSE}`);
 
-  const services = releasedServices(compose.composeFile);
+  const services = releasedServices(expected);
   if (services.length === 0) {
     throw new Error(
-      `the deployed compose file references no ${RELEASED_IMAGE_PREFIX}* image. ` +
-        "Dokploy raw compose has no checkout, so a `build:` context cannot work there.",
+      `${SERVER_COMPOSE} references no ${RELEASED_IMAGE_PREFIX}* image. The host deploys ` +
+        "the images a release published and `verify` proves by digest; it does not build.",
     );
   }
   for (const { service, image } of services) {
@@ -552,19 +645,29 @@ async function verifyService(check: ServiceCheck): Promise<VerifiedService> {
   return { ok: true, digest: expected };
 }
 
+/**
+ * What `verify` checks the host against. `composeFile` is this checkout's file, which
+ * `preflight` proved is the one the host cloned; the panel's own `composeFile` field is a
+ * stale paste under a git source and is never read.
+ */
+export interface Rollout {
+  readonly composeFile: string;
+  readonly ghcrToken: string;
+  readonly releaseTag?: string;
+}
+
 export async function verify(
   cfg: Config,
   deps: Deps,
-  ghcrToken: string,
-  releaseTag = "",
+  { composeFile, ghcrToken, releaseTag = "" }: Rollout,
 ): Promise<void> {
   const compose = await composeRecord(cfg, deps);
   const env = releaseTag === "" ? process.env : { ...process.env, IMAGE_TAG: releaseTag };
-  const services = releasedServices(compose.composeFile, env);
+  const services = releasedServices(composeFile, env);
   if (services.length === 0) {
     throw new Error("nothing to verify: no released images in compose");
   }
-  const oneShot = oneShotServices(compose.composeFile);
+  const oneShot = oneShotServices(composeFile);
 
   const containers = await callApi<Container[]>(cfg, deps, "docker.getContainersByAppNameMatch", {
     query: { appName: compose.appName },
@@ -654,7 +757,7 @@ async function main(): Promise<void> {
 
   switch (command) {
     case "preflight":
-      await preflight(cfg, deps, publishedCompose());
+      await preflight(cfg, deps, publishedCompose(), process.env.GITHUB_TOKEN ?? "");
       return;
     case "deploy": {
       const tag = process.argv[3] ?? process.env.IMAGE_TAG ?? "latest";
@@ -672,7 +775,11 @@ async function main(): Promise<void> {
         githubToken === "" ? "" : Buffer.from(`x-access-token:${githubToken}`).toString("base64");
       // The release being rolled out, which is what the ghcr side is looked up under. Absent
       // by hand, where there is no release to name and `latest` is the honest question.
-      await verify(cfg, deps, basic, process.argv[3] ?? "");
+      await verify(cfg, deps, {
+        composeFile: publishedCompose(),
+        ghcrToken: basic,
+        releaseTag: process.argv[3] ?? "",
+      });
       return;
     }
     case "smoke": {
