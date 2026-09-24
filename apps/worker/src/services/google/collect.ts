@@ -49,6 +49,21 @@
  * the refusal beside the chunk that caused it, rather than three lists a reader has to
  * interleave by hand to see that one attachment is why one message is missing. A pick's
  * refusal still comes last within its pick, because it is a statement about the whole pick.
+ *
+ * ## A stop is honoured between items, and settles nothing it cannot vouch for
+ *
+ * When the process is told to stop (`CollectDeps.stop`, ADR 0051) the walk ends at the next
+ * item boundary, and the ordering above decides what that costs. Records already RELEASED have
+ * their documents down, so the record sink is closed and lands them. Records still PENDING are
+ * dropped rather than released, because releasing them means fetching their attachments first,
+ * which is minutes the container's grace period does not have; nothing marks them, so the next
+ * run reads them again. The document sink's unfetched buffer is abandoned for the same reason.
+ *
+ * And what is only decidable once the whole harvest has been walked is not decided at all.
+ * Drive's tombstone sweep negates the ids this run saw, so running it over a walk that stopped
+ * halfway would report every file it had not reached yet as DELETED; a pick's "matched nothing"
+ * refusal is a statement about a pick that may not have been listed. Both are skipped, and the
+ * run says it stopped rather than closing green on half a source.
  */
 
 import { parseScope, sourceKind } from "@undercroft/contracts";
@@ -62,6 +77,8 @@ import { createDocumentSink } from "../documentSink.ts";
 import {
   CHUNK,
   type DocumentSink,
+  type DocumentSummary,
+  type LandSummary,
   type RecordSink,
   type RefusalWriter,
   type SinkDeps,
@@ -117,11 +134,19 @@ export interface CollectDeps {
   readonly now?: () => Date;
   /** Where this collection narrates itself. Absent means a caller with no run to narrate. */
   readonly journal?: RunJournal;
+  /** The process asking this collection to stop. See `RunDeps.stop` and the module docstring. */
+  readonly stop?: AbortSignal;
 }
 
 export interface CollectResult {
   readonly runId: string;
   readonly source: string;
+  /**
+   * The walk ended because the process asked it to, not because the source was exhausted.
+   * Every count below is still true -- it is what reached the lake -- but it is not the whole
+   * source, and nothing only a whole walk can decide (tombstones, pick refusals) was decided.
+   */
+  readonly stopped: boolean;
   readonly records: {
     landed: number;
     /**
@@ -129,8 +154,11 @@ export interface CollectResult {
      *
      * Reported because in steady state a run lands nothing, and `landed: 0` on its own
      * makes "the mailbox is empty" and "nothing has changed" the same green run.
+     *
+     * `null` on a stopped walk: the count is part of the harvest's summary, which a walk that
+     * did not finish never received, and a `0` here would be a number nobody counted.
      */
-    skipped: number;
+    skipped: number | null;
     loadedCreated: number;
     loadedChanged: number;
     loadedUnchanged: number;
@@ -196,11 +224,30 @@ interface Landing {
  *
  * A manual `next()` loop rather than `for await`, because `for await` discards a generator's
  * return value and the summary IS the return value. Consumed to exhaustion, never broken out
- * of: an abandoned harvest leaves a paged listing half-read, and the symptom is an unrelated
- * "no recorded response" two tests away.
+ * of -- an abandoned harvest leaves a paged listing half-read, and the symptom is an unrelated
+ * "no recorded response" two tests away -- with ONE exception: `stop`. Then it answers `null`,
+ * because there is no summary of a walk that did not finish, and it answers without releasing
+ * what is pending: see "A stop is honoured between items" above. It looks before asking for
+ * the next item and again after, since that `next()` is one paced request and can be the one
+ * the signal arrived during; an item that arrived after a stop is not started on, because
+ * adding its documents can trip a full buffer into landing a chunk of attachments.
  */
-async function drain(harvest: Harvest, at: Landing): Promise<HarvestSummary> {
+async function drain(
+  harvest: Harvest,
+  at: Landing,
+  stop: AbortSignal | undefined,
+): Promise<HarvestSummary | null> {
   const pending: HarvestItem[] = [];
+  function stopped(): boolean {
+    return stop?.aborted === true;
+  }
+  async function next(): Promise<IteratorResult<HarvestItem, HarvestSummary> | null> {
+    if (stopped()) {
+      return null;
+    }
+    const step = await harvest.next();
+    return stopped() ? null : step;
+  }
 
   async function release(): Promise<void> {
     const settled = await at.documents.flush();
@@ -224,16 +271,19 @@ async function drain(harvest: Harvest, at: Landing): Promise<HarvestSummary> {
     }
   }
 
-  let step = await harvest.next();
-  while (!step.done) {
+  let step = await next();
+  while (step !== null && step.done !== true) {
     for (const document of step.value.documents) {
       await at.documents.add(document);
     }
     pending.push(step.value);
-    if (pending.length >= CHUNK) {
+    if (pending.length >= CHUNK && !stopped()) {
       await release();
     }
-    step = await harvest.next();
+    step = await next();
+  }
+  if (step === null) {
+    return null;
   }
   await release();
 
@@ -322,6 +372,37 @@ async function settleDocuments(
   return tombstoned;
 }
 
+/** What a collection landed, once both sinks are closed. */
+interface Closed {
+  readonly records: LandSummary;
+  readonly documents: DocumentSummary;
+  readonly tombstoned: number;
+}
+
+/**
+ * Close both sinks, and settle what only a whole walk may decide -- unless the walk was
+ * stopped, which `summary` being `null` says.
+ *
+ * The record sink is closed either way: what it holds was released, so its documents are
+ * down. On a stop the document buffer is abandoned rather than landed, and the tombstones and
+ * pick refusals are not decided at all; the module docstring's last section says why each.
+ * One function, so the difference between finishing and stopping is written in one place.
+ */
+async function closeCollection(
+  deps: CollectDeps,
+  collection: Collection,
+  at: { entity: string; observedAt: string; scoped: { source: string; tenantId: string } },
+  summary: HarvestSummary | null,
+): Promise<Closed> {
+  const records = await collection.records.close();
+  if (summary === null) {
+    return { records, documents: collection.documents.abandon(), tombstoned: 0 };
+  }
+  const documents = await collection.documents.close();
+  const tombstoned = await settleDocuments(deps, { ...at, refuse: collection.refuse }, summary);
+  return { records, documents, tombstoned };
+}
+
 export async function runGoogleCollect(
   deps: CollectDeps,
   input: { source: string; tenantId: string; runId?: string },
@@ -340,44 +421,31 @@ export async function runGoogleCollect(
   journal.info("entity_started", { entity });
 
   const scoped = { source: input.source, tenantId: input.tenantId };
-  const { harvest, records, documents, refuse, refusals } = openCollection(
-    deps,
-    scope,
-    { ...scoped, runId, entity, observedAt },
-    journal,
-  );
+  const collection = openCollection(deps, scope, { ...scoped, runId, entity, observedAt }, journal);
 
-  const summary = await drain(harvest, { entity, records, documents, refuse });
-  const landedRecords = await records.close();
-  const landedDocuments = await documents.close();
-  const tombstoned = await settleDocuments(deps, { entity, observedAt, scoped, refuse }, summary);
-
-  journal.info("documents_landed", {
-    entity: "documents",
-    created: landedDocuments.created,
-    unchanged: landedDocuments.unchanged,
-    skipped: landedDocuments.skipped,
-    failed: landedDocuments.failed,
-    tombstoned,
-  });
+  const summary = await drain(collection.harvest, { entity, ...collection }, deps.stop);
+  const closed = await closeCollection(deps, collection, { entity, observedAt, scoped }, summary);
+  const documents = {
+    created: closed.documents.created,
+    unchanged: closed.documents.unchanged,
+    skipped: closed.documents.skipped,
+    failed: closed.documents.failed,
+    tombstoned: closed.tombstoned,
+  };
+  journal.info("documents_landed", { entity: "documents", ...documents });
 
   return {
     runId,
     source: input.source,
+    stopped: summary === null,
     records: {
-      landed: landedRecords.landed,
-      skipped: summary.known,
-      loadedCreated: landedRecords.loaded.created,
-      loadedChanged: landedRecords.loaded.changed,
-      loadedUnchanged: landedRecords.loaded.unchanged,
+      landed: closed.records.landed,
+      skipped: summary === null ? null : summary.known,
+      loadedCreated: closed.records.loaded.created,
+      loadedChanged: closed.records.loaded.changed,
+      loadedUnchanged: closed.records.loaded.unchanged,
     },
-    refusals,
-    documents: {
-      created: landedDocuments.created,
-      unchanged: landedDocuments.unchanged,
-      skipped: landedDocuments.skipped,
-      failed: landedDocuments.failed,
-      tombstoned,
-    },
+    refusals: collection.refusals,
+    documents,
   };
 }

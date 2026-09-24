@@ -11,7 +11,7 @@
  */
 
 import type { Fetcher } from "@undercroft/connector-runtime";
-import type { ByteFetcher, Logger } from "@undercroft/core";
+import { type ByteFetcher, type Logger, UndercroftError } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import type { Credential, RunRefusal, RunTrigger } from "@undercroft/db/repos";
 import { ConnectionRegistryError, setStatus } from "@undercroft/db/repos";
@@ -72,6 +72,19 @@ export interface RunDeps {
   readonly transactor?: Transactor;
   /** Where the run's opening, closing and failure are written. Absent means silence. */
   readonly log?: Logger;
+  /**
+   * Aborted when the process has been told to stop -- a deploy recreating the container, an
+   * operator's Ctrl-C. Absent means nothing will ever ask this run to stop early.
+   *
+   * A run that sees it stops at the next boundary where what it has landed is whole: between
+   * two records on the spec path, between two harvest items on the Google path. It then
+   * settles `failed` with {@link RunStopped}'s message and the counts it actually landed,
+   * which is the difference from a kill: a killed run is closed at the next boot with no
+   * counts at all, because nothing lived to write them. It is a SIGNAL rather than a callback
+   * so the decision of when to look stays with the path that knows where its boundaries are.
+   * Wired from `server.ts`, the only module that may know a process exists (`layering.md`).
+   */
+  readonly stop?: AbortSignal;
 }
 
 export interface IngestResult {
@@ -96,7 +109,34 @@ export interface RunOpening {
   readonly triggeredBy?: string;
 }
 
-/** A run for the same (tenant, source) is already in progress. `runId` names it. */
+/**
+ * The ledger's error for a run the worker stopped on purpose.
+ *
+ * It has to say three things, because the person reading it is deciding whether anything was
+ * lost: that nothing about the SOURCE went wrong, that the counts on the run are real rather
+ * than a placeholder, and that pressing Run again is neither needed nor harmful. The boot-time
+ * message for a run that was KILLED is deliberately different (`ledger.ts`): there the counts
+ * are not known, and it must not read as if they were zero.
+ */
+export const RUN_STOPPED =
+  "the worker was shut down while this run was in progress, usually for a deploy; the run " +
+  "stopped at a safe point, the counts on it are what it landed, and that is kept -- the " +
+  "next run carries on from there";
+
+/**
+ * A run stopped because the process was told to, at a point where what it landed is whole.
+ *
+ * Thrown by a run path AFTER it has written what it landed into the {@link Ledger}, so the
+ * settle that catches it records real counts. Declared here rather than beside `RunInProgress`
+ * in `ingest.ts` because `runPaths.ts` throws it, and `ingest.ts` imports `runPaths.ts`.
+ * `status` stays `failed` -- `ops.run` has no third outcome, and a run that did not read its
+ * whole source did not succeed; the message is what tells this apart from a fault. ADR 0051.
+ */
+export class RunStopped extends UndercroftError {
+  constructor() {
+    super(RUN_STOPPED);
+  }
+}
 
 /** What a run has done so far, gathered as it goes so a failure still records the rest. */
 export interface Ledger {

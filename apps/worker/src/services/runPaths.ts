@@ -9,6 +9,11 @@
  * Both paths write into the same `Ledger` as they go and narrate into the same `RunJournal`,
  * so a failure halfway still records what the first half did. That is `connectors.md`'s rule
  * that a failure raises rather than returning an empty stream, kept on the worker's side.
+ *
+ * Both honour `RunDeps.stop` the same way too: stop at a boundary where what landed is whole,
+ * write what landed into the ledger, and only then throw {@link RunStopped} -- so the settle
+ * that catches it records real counts, and nothing a finished read would have written after
+ * (a watermark, a tombstone) is written. ADR 0051.
  */
 
 import { readFileSync } from "node:fs";
@@ -25,11 +30,11 @@ import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
-import { runGoogleCollect } from "./google/collect.ts";
+import { type CollectResult, runGoogleCollect } from "./google/collect.ts";
 import type { LandSummary, RefusalWriter } from "./landing.ts";
 import { createRecordSink } from "./recordSink.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
-import { resolveToken } from "./runTypes.ts";
+import { resolveToken, RunStopped } from "./runTypes.ts";
 import type { RunJournal } from "./runJournal.ts";
 
 /**
@@ -72,11 +77,50 @@ export async function runGoogleIngest(
     minIntervalMs: googleMinIntervalMs(deps.env),
   });
 
-  const result = await runGoogleCollect({ lake: deps.lake, exec: deps.exec, api, journal }, input);
+  const result = await runGoogleCollect(
+    {
+      lake: deps.lake,
+      exec: deps.exec,
+      api,
+      journal,
+      ...(deps.stop === undefined ? {} : { stop: deps.stop }),
+    },
+    input,
+  );
 
   const recordsEntity = sourceKind(input.source) === "gmail" ? "messages" : "files";
+  ledger.entities.push(...entitiesOf(result, recordsEntity));
+  ledger.refusals.push(...result.refusals);
+  for (const entity of ledger.entities) {
+    journal.info("entity_done", {
+      entity: entity.entity,
+      landed: entity.landed,
+      created: entity.loadedCreated,
+      changed: entity.loadedChanged,
+      unchanged: entity.loadedUnchanged,
+      refused: entity.refused,
+      // Only on the RECORD entity, and only when there is one, because it answers a
+      // question only the record entity is asked: in steady state a run lands nothing, and
+      // `landed: 0` alone reads the same whether the mailbox is empty or unchanged. A
+      // document's own `skipped` is a size refusal, which is a different fact with the same
+      // name; it is reported in `documents_landed` and deliberately not conflated here.
+      ...(entity.entity === recordsEntity &&
+      result.records.skipped !== null &&
+      result.records.skipped > 0
+        ? { skipped: result.records.skipped }
+        : {}),
+    });
+  }
+  // After the ledger has the counts, never before: they are the point of stopping gracefully.
+  if (result.stopped) {
+    throw new RunStopped();
+  }
+}
+
+/** A collection as the ledger's two entities: its records, and its documents beside them. */
+function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entities"] {
   const records = result.refusals.filter((r) => r.entity !== "documents").length;
-  ledger.entities.push(
+  return [
     {
       entity: recordsEntity,
       landed: result.records.landed,
@@ -93,26 +137,7 @@ export async function runGoogleIngest(
       loadedUnchanged: result.documents.unchanged,
       refused: result.refusals.length - records,
     },
-  );
-  ledger.refusals.push(...result.refusals);
-  for (const entity of ledger.entities) {
-    journal.info("entity_done", {
-      entity: entity.entity,
-      landed: entity.landed,
-      created: entity.loadedCreated,
-      changed: entity.loadedChanged,
-      unchanged: entity.loadedUnchanged,
-      refused: entity.refused,
-      // Only on the RECORD entity, and only when there is one, because it answers a
-      // question only the record entity is asked: in steady state a run lands nothing, and
-      // `landed: 0` alone reads the same whether the mailbox is empty or unchanged. A
-      // document's own `skipped` is a size refusal, which is a different fact with the same
-      // name; it is reported in `documents_landed` and deliberately not conflated here.
-      ...(entity.entity === recordsEntity && result.records.skipped > 0
-        ? { skipped: result.records.skipped }
-        : {}),
-    });
-  }
+  ];
 }
 
 /** What one spec run needs, gathered once before the first entity is read. */
@@ -220,6 +245,12 @@ function intoLedger(ledger: Ledger): RefusalWriter {
  * records after a mark that records below it never reached -- and on a source that does not
  * order its pages by the incremental field, which is most of them, those records are gone from
  * the raw lake permanently. Not advancing costs a re-read, which is `unchanged` twice over.
+ *
+ * A STOP is the one early exit that is not a throw from inside the loop, and it keeps that
+ * property all the same. It breaks out -- between two records, after the second has gone into
+ * the sink -- so the sink can land what was read and the ledger can count it, and then throws
+ * {@link RunStopped} from above the cursor write. A stopped read is a partial read, and the
+ * paragraph above is exactly why a partial read must not move the mark.
  */
 async function ingestEntity(
   run: EntityRun,
@@ -243,6 +274,7 @@ async function ingestEntity(
 
   let read = 0;
   let mark: string | null = null;
+  let stopped = false;
   for await (const record of readEntity(spec, entity, entityCtx)) {
     await sink.add({
       entity: record.entity,
@@ -257,6 +289,10 @@ async function ingestEntity(
     }
     // Coalesced by the journal: a line per record would be the run written twice.
     journal.progress("records_read", { entity: entity.name, read });
+    if (deps.stop?.aborted === true) {
+      stopped = true;
+      break;
+    }
   }
   const landed = await sink.close();
 
@@ -267,6 +303,9 @@ async function ingestEntity(
   // it. A cursor left behind costs one re-read; evidence never written cannot be recovered.
   recordEntity(run, entity.name, landed);
 
+  if (stopped) {
+    throw new RunStopped();
+  }
   if (incremental !== undefined && mark !== null) {
     await writeSyncCursor(deps.exec, stream, { watermark: mark, format: incremental.format });
   }
@@ -304,6 +343,11 @@ export async function runSpecIngest(
   const idsByEntity = new Map<string, string[]>();
 
   for (const entity of entities) {
+    // Before an entity rather than only inside one, so a stop that arrived while the last
+    // entity's sink was closing does not open the next and read its first page for nothing.
+    if (deps.stop?.aborted === true) {
+      throw new RunStopped();
+    }
     const entityCtx: RunContext =
       entity.request.kind === "batch-from"
         ? { ...ctx, sourceIds: idsByEntity.get(entity.request.entity) ?? [] }

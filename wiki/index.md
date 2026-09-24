@@ -54,6 +54,7 @@
 - [ADR 0048: A file is recognised by its type first, and a signed record is verified before it is read](sources/adr-0048-a-file-is-recognised-by-its-type-first-and-a-signed-record-is-verified-before-it-is-read.md)
 - [ADR 0049: Dokploy clones the compose file from main](sources/adr-0049-dokploy-clones-the-compose-file-from-main.md)
 - [ADR 0050: The raw lake runs a community build of MinIO](sources/adr-0050-the-raw-lake-runs-a-community-build-of-minio.md)
+- [ADR 0051: A deploy stops a run at a safe point, and the run keeps its counts](sources/adr-0051-a-deploy-stops-a-run-at-a-safe-point-and-the-run-keeps-its-counts.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Runbook Deployment](sources/runbook-deployment.md)

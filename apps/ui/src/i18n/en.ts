@@ -659,6 +659,8 @@ export const en = {
       runClosedOk: "Finished successfully.",
       runClosedFailed: "Finished with a failure.",
       runFailed: "The run broke ({{errorType}}). The full reason is under Error above.",
+      runStopped:
+        "Stopped part-way because the worker shut down, usually for a deploy. What it landed is kept: {{created}} new, {{changed}} changed, {{refused}} refused. The next run carries on from here.",
       truncated: "{{at}} lines recorded; from here only warnings and errors are kept.",
       unknown: "Event {{event}}.",
     },

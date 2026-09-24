@@ -128,3 +128,5 @@
 ## [2026-09-24] ingest | Runbook: Setting the assistant up
 ## [2026-09-24] ingest | File formats a Gmail or Drive connection can land
 ## [2026-09-24] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-24] ingest | ADR 0051: A deploy stops a run at a safe point, and the run keeps its counts
+## [2026-09-24] ingest | Runbook Deployment

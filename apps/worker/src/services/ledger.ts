@@ -68,14 +68,32 @@ export async function recordExternal(
 }
 
 /**
+ * What a run closed at boot says for itself.
+ *
+ * Such a run died with the process -- killed, out of memory, or still busy when a graceful stop
+ * ran out of time -- so it never wrote its counts, and the row reads 0 of everything. The old
+ * sentence, "the worker restarted while this run was in progress", sat beside those zeroes and
+ * together they read as "this run landed nothing" whether or not it had -- a run lands and
+ * projects a chunk at a time, so one killed an hour in may have landed thousands -- and an
+ * operator reading the pair concluded a mailbox could never finish (issue #196). So the
+ * sentence now says the one thing the zeroes cannot: they are not a count.
+ * A run the worker stopped ON PURPOSE is not closed here at all; it settles itself, with its
+ * real counts, under `RUN_STOPPED`. ADR 0051.
+ */
+export const RUN_ABANDONED =
+  "the worker stopped abruptly while this run was in progress (it was killed or ran out of " +
+  "memory), so the run could not record its counts; the zeroes are not a count -- anything " +
+  "it landed before then is kept, and the next run does not land it twice";
+
+/**
  * Close every run the previous process left running.
  *
- * A worker that restarts mid-run cannot resume it: the job lived in its memory. Left as
+ * A worker that dies mid-run cannot resume it: the job lived in its memory. Left as
  * `running`, the row would hold `run_one_running` against every later run of the same
  * pair, forever. Closing it `failed` with a reason is the honest record and the release.
  */
 export async function closeAbandonedRuns(exec: SqlExecutor, log?: Logger): Promise<number> {
-  const closed = await closeAbandoned(exec, "the worker restarted while this run was in progress");
+  const closed = await closeAbandoned(exec, RUN_ABANDONED);
   if (closed.length > 0) {
     log?.warn("runs_abandoned", { count: closed.length, runIds: closed });
   }

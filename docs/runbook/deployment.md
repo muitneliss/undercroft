@@ -148,6 +148,21 @@ it keeps: a long-running service must be `running`, while a one-shot job (`db-mi
 `kestra-flows`) must have **exited 0**. Both still have their digest checked — a migration
 that exited 0 on last release's image is still the wrong thing having run.
 
+### A deploy during a run
+
+Recreating the worker sends it SIGTERM. It tells every ingest in flight to stop at the next
+safe point, waits up to 45 seconds for them to settle, and exits; the compose file gives it
+`stop_grace_period: 60s` before Docker sends SIGKILL (ADR 0051). A run stopped this way is
+`failed` in the journal with the message _the worker was shut down while this run was in
+progress…_, and its counts are what it really landed. Nothing needs doing: the next scheduled
+run, or **Run now**, carries on from there and does not land anything twice.
+
+A run the worker could not stop in time — a chunk of attachments mid-fetch, a Gmail listing, a
+dbt build — or one it lost to an OOM kill is closed at the next boot instead, with _the worker
+stopped abruptly…_. Its counts read zero because the process died before writing them, not
+because it landed nothing; the next run is the same safe retry. The worker's `stopped` log line
+says which happened: `drained: false` means something was left for the boot to close.
+
 ## Notifications
 
 The team's Lark group receives a card for each of these, posted by `scripts/notify.ts`

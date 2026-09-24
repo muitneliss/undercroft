@@ -251,6 +251,14 @@ export function eventSentence(
         : t("journal.event.runClosedFailed");
     case "run_failed":
       return t("journal.event.runFailed", { errorType: String(event.detail.errorType ?? "") });
+    // Its own sentence rather than `runFailed`'s, because the reader's question is different:
+    // not "what broke" but "did the deploy lose anything" -- and the counts answer it.
+    case "run_stopped":
+      return t("journal.event.runStopped", {
+        created: n("created"),
+        changed: n("changed"),
+        refused: n("refused"),
+      });
     case "events_truncated":
       return t("journal.event.truncated", { at: n("at") });
     default:

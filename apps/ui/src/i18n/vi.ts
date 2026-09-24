@@ -801,6 +801,8 @@ export const vi = {
       runClosedOk: "Kết thúc, thành công.",
       runClosedFailed: "Kết thúc, thất bại.",
       runFailed: "Lần chạy hỏng ({{errorType}}). Lý do đầy đủ ở phần Lỗi phía trên.",
+      runStopped:
+        "Dừng giữa chừng vì worker tắt, thường do triển khai bản mới. Những gì đã về được giữ lại: {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối. Lần chạy sau tiếp tục từ đây.",
       truncated: "Đã ghi {{at}} dòng; từ đây chỉ ghi cảnh báo và lỗi.",
       unknown: "Sự kiện {{event}}.",
     },
