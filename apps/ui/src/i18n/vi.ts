@@ -528,6 +528,16 @@ export const vi = {
     /** The standing line under the list: what this selection permits, while it is made. */
     echoHead: "Sẽ đọc",
     echoChosen_other: "Tiêu đề thư và tệp đính kèm phù hợp trong {{count, number}} nhãn đã chọn",
+    /**
+     * Every entry ticked: a CLOSED list, the opposite of none ticked, so it gets words of its own
+     * rather than the open sentence or a count a reader would have to check against the list.
+     */
+    echoEveryLabel:
+      "Chỉ tiêu đề thư và tệp đính kèm phù hợp trong các nhãn đang có. Thư không mang nhãn nào trong số đó sẽ không được đọc, và nhãn được tạo sau này không nằm trong lựa chọn này.",
+    echoEveryFileType: "Chỉ các loại tệp trong danh sách. Loại tệp khác sẽ không được đọc.",
+    echoEveryEntity:
+      "Chỉ các loại dữ liệu trong danh sách: {{entities}}. Loại dữ liệu được bổ sung sau này sẽ không được đọc cho đến khi được chọn.",
+    selectAll: "Chọn tất cả",
     clearAll: "Bỏ chọn tất cả",
     pickFromDrive: "Chọn từ Google Drive",
     nothingToChoose: "Chưa có mục nào để chọn.",

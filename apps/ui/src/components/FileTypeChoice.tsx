@@ -4,7 +4,8 @@
  * Empty is a recorded decision, not an absent one: it means every file type, said above the
  * list as a hint and beneath it as the echo that changes with each tick -- the same pattern
  * `LabelIndex` uses for "no label means the whole mailbox", and "Clear all" is the same
- * one-click path to it.
+ * one-click path to it. "Select all" is its opposite, not its synonym: every type ticked is a
+ * closed list, and a type on no list is then not read. `ChoiceEcho` keeps the two apart.
  *
  * A type typed into the free-text field joins the SAME checklist the curated types sit in,
  * rather than a separate list of removable chips: once added it is indistinguishable from a
@@ -17,6 +18,7 @@
 
 import { useTranslation } from "react-i18next";
 
+import { ChoiceEcho } from "@/components/ChoiceEcho.tsx";
 import {
   CURATED_FILE_TYPES,
   describeFileType,
@@ -125,7 +127,13 @@ function CustomFileType({
   );
 }
 
-/** What will be read, said again beneath the list as it is chosen -- same pattern as Gmail's labels. */
+/**
+ * What will be read, said again beneath the list as it is chosen -- same pattern as Gmail's labels.
+ *
+ * "Every" is measured against the curated types alone. A custom type is only ever on screen
+ * while it is ticked -- unticking it takes it off the list -- so the curated types are the only
+ * entries that can be left unticked, and they are all Select all has to add.
+ */
 function FileTypeEcho({
   source,
   fileTypes,
@@ -135,26 +143,23 @@ function FileTypeEcho({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const clearFileTypes = useUiStore((s) => s.clearScopeFileTypes);
+  const selectAllFileTypes = useUiStore((s) => s.selectAllScopeFileTypes);
 
   return (
-    <div className="echo">
-      <span className="label">{t("scopePicker.echoHead")}</span>
-      <p className="note echo__says" role="status">
-        {fileTypes.length === 0
-          ? t("scope.anyFileType")
-          : t("scope.fileTypesChosen", { count: fileTypes.length })}
-      </p>
-      {fileTypes.length > 0 ? (
-        <button
-          type="button"
-          className="plate plate--small"
-          onClick={(): void => {
-            clearFileTypes(source);
-          }}
-        >
-          {t("scopePicker.clearAll")}
-        </button>
-      ) : null}
-    </div>
+    <ChoiceEcho
+      chosen={fileTypes}
+      offered={CURATED_FILE_TYPES}
+      says={{
+        none: t("scope.anyFileType"),
+        some: t("scope.fileTypesChosen", { count: fileTypes.length }),
+        every: t("scopePicker.echoEveryFileType"),
+      }}
+      onSelectAll={(): void => {
+        selectAllFileTypes(source, CURATED_FILE_TYPES);
+      }}
+      onClear={(): void => {
+        clearFileTypes(source);
+      }}
+    />
   );
 }

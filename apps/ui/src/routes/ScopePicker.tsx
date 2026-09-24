@@ -40,6 +40,11 @@
  * afterwards. It carries `role="status"`, so a screen reader is told the same thing at the
  * same moment instead of being left to infer it from a checkbox.
  *
+ * Every label ticked is said in words of its own, never as the whole-mailbox sentence: the
+ * worker queries each chosen label and keeps only mail carrying one of them
+ * (`apps/worker/src/services/google/gmail.ts`), so a full list is closed and a label created
+ * later is not in it. `ChoiceEcho` owns the three states for all three lists.
+ *
  * **Xero** is a third shape: one consent can see several organisations, and the platform
  * must be told which one rather than guess. The list comes through the worker like Gmail's
  * labels; the choice is one organisation and any number of the spec's entities, where none
@@ -51,6 +56,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import type { Connection, Source } from "@/api/types.ts";
+import { ChoiceEcho } from "@/components/ChoiceEcho.tsx";
 import { DriveChoice } from "@/components/DriveChoice.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
@@ -366,34 +372,35 @@ function GmailChoice({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const clearLabels = useUiStore((s) => s.clearScopeLabels);
+  const selectAllLabels = useUiStore((s) => s.selectAllScopeLabels);
 
   if (items.length === 0) {
     return <p className="note">{t("scopePicker.nothingToChoose")}</p>;
   }
 
+  // Every label the mailbox listed, not only those a filter leaves on screen: the control sits
+  // beneath the whole index and says "all", and a filter is a way of looking, not a choice.
+  const offered = items.map((label) => label.name);
+
   return (
     <>
       <LabelIndex source={source} items={items} chosen={chosen} />
 
-      <div className="echo">
-        <span className="label">{t("scopePicker.echoHead")}</span>
-        <p className="note echo__says" role="status">
-          {chosen.length === 0
-            ? t("scope.gmailWholeMailbox")
-            : t("scopePicker.echoChosen", { count: chosen.length })}
-        </p>
-        {chosen.length > 0 ? (
-          <button
-            type="button"
-            className="plate plate--small"
-            onClick={(): void => {
-              clearLabels(source);
-            }}
-          >
-            {t("scopePicker.clearAll")}
-          </button>
-        ) : null}
-      </div>
+      <ChoiceEcho
+        chosen={chosen}
+        offered={offered}
+        says={{
+          none: t("scope.gmailWholeMailbox"),
+          some: t("scopePicker.echoChosen", { count: chosen.length }),
+          every: t("scopePicker.echoEveryLabel"),
+        }}
+        onSelectAll={(): void => {
+          selectAllLabels(source, offered);
+        }}
+        onClear={(): void => {
+          clearLabels(source);
+        }}
+      />
     </>
   );
 }
