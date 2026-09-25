@@ -10,6 +10,8 @@ export const en = {
   },
 
   topics: {
+    account: "Your own account.",
+    accountTokens: "Personal access tokens, for an agent connecting over MCP.",
     auth: "Signing in and out, and your session.",
     bi: "Reports: questions, dashboards and the schema.",
     biQuestions: "Saved questions.",

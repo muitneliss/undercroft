@@ -4,22 +4,19 @@
  *
  * A key is shown ONCE. The server returns the token from `keys.mint` and from nothing else,
  * so this band is the only place a person ever sees it -- which is why the minted token
- * stands in the `.token` face used for a one-time value, selectable, with the copy plate
- * reporting what actually happened rather than assuming it: a clipboard call that fails
- * silently would destroy the only copy. Done clears the mutation, and with it the token.
+ * is shown by `OneTimeSecret`, which a personal access token shares. Done clears the mutation,
+ * and with it the token.
  *
  * No `useState`, per `state.md`. The form is uncontrolled and read as `FormData` on submit;
- * whether a key is being minted, was minted, or could not be, is read off the mutation, and
- * the copy is a mutation of its own for the same reason -- it is the one thing that knows
- * whether it succeeded.
+ * whether a key is being minted, was minted, or could not be, is read off the mutation.
  */
 
-import { useMutation } from "@tanstack/react-query";
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type IngestKey, isSource, SOURCE_LABEL, SOURCES } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
+import { OneTimeSecret } from "@/components/OneTimeSecret.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import {
   Table,
@@ -92,8 +89,10 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
       ) : null}
 
       {mint.isSuccess ? (
-        <MintedKey
+        <OneTimeSecret
           token={mint.data.token}
+          head={t("keys.mintedHead")}
+          note={t("keys.mintedNote")}
           onDone={(): void => {
             mint.reset();
           }}
@@ -175,52 +174,6 @@ function KeyTable({
         ))}
       </TableBody>
     </Table>
-  );
-}
-
-/**
- * The one showing of a token.
- *
- * The clipboard is a mutation because it is the one thing that knows whether the copy
- * happened, and it lives here so that dismissing this panel takes its state with it.
- */
-function MintedKey({ token, onDone }: { token: string; onDone: () => void }): React.JSX.Element {
-  const { t } = useTranslation();
-  const copy = useMutation({
-    mutationFn: (text: string) => navigator.clipboard.writeText(text),
-  });
-
-  return (
-    <div className="hinge stack">
-      <span className="hinge__punch hinge__punch--a" aria-hidden="true" />
-      <span className="hinge__punch hinge__punch--b" aria-hidden="true" />
-      <span className="label">{t("keys.mintedHead")}</span>
-      {/* Selectable, boxed, and read aloud without squinting: this is the only copy. */}
-      <p className="token">{token}</p>
-      <p className="note">{t("keys.mintedNote")}</p>
-      <div className="row">
-        <button
-          className="plate"
-          type="button"
-          onClick={(): void => {
-            copy.mutate(token);
-          }}
-        >
-          {t("keys.copy")}
-        </button>
-        <button className="plate" type="button" onClick={onDone}>
-          {t("keys.done")}
-        </button>
-      </div>
-      {copy.isSuccess ? (
-        <p className="note" role="status">
-          {t("keys.copied")}
-        </p>
-      ) : null}
-      {copy.isError ? (
-        <Errata heading={t("keys.notCopied")} live={true} error={copy.error} />
-      ) : null}
-    </div>
   );
 }
 

@@ -244,6 +244,22 @@ tasks:
       - task: :build:cli
       - node {{.ROOT_DIR}}/apps/cli/dist/undercroft.mjs {{.CLI_ARGS}}
 
+  mcp-smoke:
+    desc: >-
+      Smoke-test a running /mcp with a personal access token: the 401 challenge, the tool list
+      split by effect, and whose token it is. Usage: TOKEN=upat_… task dev:mcp-smoke
+      URL=http://localhost:13000/mcp (mint the token on the account page).
+    requires:
+      vars: [URL, TOKEN]
+    # The token rides the environment end to end when it is given as `TOKEN=… task …` (Task reads
+    # an environment variable as a var): a process list is readable by every user of the machine,
+    # and this is a credential. `task dev:mcp-smoke TOKEN=…` works too, with that one exposure.
+    env:
+      MCP_URL: "{{.URL}}"
+      MCP_TOKEN: "{{.TOKEN}}"
+    cmds:
+      - bun run mcp:smoke
+
   email-preview:
     desc: >-
       Render every email (both languages) to data/email-preview/ and print where. An email

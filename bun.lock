@@ -7,6 +7,7 @@
       "devDependencies": {
         "@ast-grep/cli": "0.45.3",
         "@biomejs/biome": "2.5.14",
+        "@modelcontextprotocol/client": "2.1.0",
         "@types/bun": "1.4.2",
         "@types/geojson": "7946.0.16",
         "@types/topojson-client": "3.1.5",
@@ -44,6 +45,7 @@
       "dependencies": {
         "@ai-sdk/anthropic": "4.0.58",
         "@ai-sdk/provider": "4.0.17",
+        "@modelcontextprotocol/server": "2.1.0",
         "@trpc/server": "11.0.0",
         "@typesafe-ai/sdk": "0.6.0",
         "@undercroft/contracts": "workspace:*",
@@ -59,6 +61,7 @@
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "15.11.7",
+        "@modelcontextprotocol/client": "2.1.0",
       },
     },
     "apps/ui": {
@@ -567,6 +570,12 @@
     "@mattrglobal/jsonld-signatures-bbs": ["@mattrglobal/jsonld-signatures-bbs@1.2.0", "", { "dependencies": { "@mattrglobal/bbs-signatures": "1.2.0", "@mattrglobal/bls12381-key-pair": "1.1.0", "@stablelib/random": "1.0.0", "bs58": "4.0.1", "jsonld": "4.0.1", "jsonld-signatures": "7.0.0" } }, "sha512-iW/kwlUM412a0AkJEqwaYZm/QhFeTCtebI3L9v9ZSm68wfvPdL2Gha8MkpKNnaqK8MIFEDIFUmL1iVk5qxvNYA=="],
 
     "@mattrglobal/node-bbs-signatures": ["@mattrglobal/node-bbs-signatures@0.17.0", "", { "dependencies": { "@mapbox/node-pre-gyp": "1.0.11", "neon-cli": "0.10.1" } }, "sha512-midEd1qGYfAKjILyIdEgyY7tbVwIFR7ozWli8AaxBaiDie2oBaj6O1A2rh/GCOKTpBZ3Thbi+CE0QZntWf+Xzg=="],
+
+    "@modelcontextprotocol/client": ["@modelcontextprotocol/client@2.1.0", "", { "dependencies": { "@modelcontextprotocol/core": "2.1.0", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "jose": "^6.1.3", "pkce-challenge": "^5.0.0", "zod": "^4.2.0" } }, "sha512-mDVhoy5WjDb0U+4dQPzLcciC2erSex/GRVQqnoZdiuMoE3YiTZdiS7ezNcFwX4XEOWOaj7jZr0kLYnILnL8orA=="],
+
+    "@modelcontextprotocol/core": ["@modelcontextprotocol/core@2.1.0", "", { "dependencies": { "zod": "^4.2.0" } }, "sha512-YdFj5gMRHr0gYNAhTbQDgjLHiEJdIAUYxomhKseUNye7ZGlISQmUoLh2sveFFCiQ7j2YMffT1kgSND0FSfIFjQ=="],
+
+    "@modelcontextprotocol/server": ["@modelcontextprotocol/server@2.1.0", "", { "dependencies": { "@modelcontextprotocol/core": "2.1.0", "zod": "^4.2.0" } }, "sha512-FdvwZU5N03O77Suh35JqjAqq5R1ZTEPFtwu6N4BgBq28qrQtrCnpbLL5U2pwYCuE194jAw0xnlOVmIqhfoYuUQ=="],
 
     "@napi-rs/lzma-linux-x64-gnu": ["@napi-rs/lzma-linux-x64-gnu@1.5.1", "", { "os": "linux", "cpu": "x64" }, "sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ=="],
 
@@ -1187,6 +1196,8 @@
     "ethr-did-resolver": ["ethr-did-resolver@4.3.5", "", { "dependencies": { "@ethersproject/abi": "^5.1.0", "@ethersproject/abstract-signer": "^5.1.0", "@ethersproject/address": "^5.1.0", "@ethersproject/basex": "^5.1.0", "@ethersproject/bignumber": "^5.1.0", "@ethersproject/contracts": "^5.1.0", "@ethersproject/providers": "^5.1.0", "@ethersproject/transactions": "^5.1.0", "did-resolver": "^3.1.0", "ethr-did-registry": "^0.0.3", "querystring": "^0.2.1" } }, "sha512-BQO7PQwuqqczK+4AWQhys/sgegDVIFr6+lSoSYXlIbG0oRH0l7PkSuf7VEFKclEJ3JlJ1t9kjDIdj7Ba7euTJg=="],
 
     "event-target-shim": ["event-target-shim@5.0.1", "", {}, "sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ=="],
+
+    "eventsource": ["eventsource@3.0.7", "", { "dependencies": { "eventsource-parser": "^3.0.1" } }, "sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA=="],
 
     "eventsource-parser": ["eventsource-parser@3.1.1", "", {}, "sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ=="],
 
@@ -1881,6 +1892,12 @@
     "@govtechsg/jsonld/cross-fetch": ["cross-fetch@3.2.0", "", { "dependencies": { "node-fetch": "^2.7.0" } }, "sha512-Q+xVJLoGOeIMXZmbUK4HYk+69cQH6LudR0Vu/pRm2YlU/hDV9CiS0gKUMaWY5f2NeUH9C1nV3bsTlCo0FsTV1Q=="],
 
     "@mattrglobal/jsonld-signatures-bbs/jsonld": ["jsonld@4.0.1", "", { "dependencies": { "canonicalize": "^1.0.1", "lru-cache": "^5.1.1", "object.fromentries": "^2.0.2", "rdf-canonize": "^2.0.1", "request": "^2.88.0", "semver": "^6.3.0" } }, "sha512-ltEqMQB37ZxZnsgmI+9rqHYkz1M6PqUykuS1t2aQNuH1oiLrUDYz5nyVkHQDgjFd7CFKTIWeLiNhwdwFrH5o5A=="],
+
+    "@modelcontextprotocol/client/zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
+
+    "@modelcontextprotocol/core/zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
+
+    "@modelcontextprotocol/server/zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
 
     "@noble/curves/@noble/hashes": ["@noble/hashes@1.3.2", "", {}, "sha512-MVC8EAQp7MvEcm30KWENFjgR+Mkmf+D189XJTkFIlwohU5hcBbn1ZkKq7KVTi2Hme3PMGF390DaL52beVrIihQ=="],
 

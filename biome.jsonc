@@ -880,6 +880,7 @@
     {
       "includes": [
         "apps/control-plane/src/handlers/router.ts",
+        "apps/control-plane/src/handlers/accountRouter.ts",
         "apps/control-plane/src/handlers/connectionsRouter.ts",
         "apps/control-plane/src/handlers/answers.ts",
         "apps/control-plane/src/handlers/biRouter.ts",

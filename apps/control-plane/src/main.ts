@@ -352,6 +352,8 @@ if (publicUrl === undefined || (email === undefined && lark === undefined)) {
 // unset serves the API alone. Spread so the optional stays absent rather than `undefined`,
 // which exactOptionalPropertyTypes forbids.
 const uiDist = optional("UNDERCROFT_UI_DIST");
+// The tag the image was built from (telemetry reads it too), which `/mcp` reports as its version.
+const release = optional("UNDERCROFT_RELEASE");
 const app = createServer({
   exec,
   // Not spread conditionally: an empty set is the honest answer for an install that names
@@ -362,6 +364,7 @@ const app = createServer({
   // where sign-in itself is not fully configured yet.
   ...(email === undefined ? {} : { email }),
   ...(publicUrl === undefined ? {} : { publicUrl }),
+  ...(release === undefined ? {} : { release }),
   ...(uiDist === undefined ? {} : { uiDist }),
   ...(googleIngest === undefined ? {} : { googleIngest }),
   ...(xero === undefined ? {} : { xero }),

@@ -79,6 +79,10 @@ export const en = {
       "{{email}} is this customer's only admin. Make someone else an admin first, so the customer is not left with nobody who can manage access.",
     requiresRole: "This action requires the {{role}} role.",
     requiresSuperadmin: "This action requires platform administrator access.",
+    writesDisabled:
+      "This token may only read, so it cannot do this. Mint a token that may write on the Account page if you mean to allow it.",
+    requiresSession:
+      "This can only be done from a signed-in browser (or the CLI), never with a token.",
     tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",
     tenantRoleCollision:
       "The tenant ID {{tenantId}} is too close to another customer's (it differs only in case or punctuation). Choose one that differs in more than that.",
@@ -129,5 +133,24 @@ export const en = {
       "The assistant is not set up for this deployment. Tell whoever administers it.",
     assistantBadRequest: "The question could not be sent. Reload the page and try again.",
     assistantThreadFull: "This conversation has grown too long. Clear it to start a new one.",
+  },
+
+  mcp: {
+    refused: {
+      AUTHENTICATION_REQUIRED: "Sign-in required. The token is no longer valid.",
+      PERMISSION_DENIED: "You do not have permission to do this.",
+      NOT_FOUND: "Not found.",
+      CONFLICT: "The platform's current state does not allow this.",
+      VALIDATION_FAILED: "The input is not valid. The details are in details.issues.",
+      TIMEOUT: "The server did not answer in time.",
+      NETWORK_ERROR: "Too many requests. Try again in a few minutes.",
+      INTERNAL_ERROR:
+        "The server failed. Report it with the trace id (traceId) so an operator can find it.",
+    },
+    unknownTool: "There is no tool named {{tool}} for this token.",
+    rowsClipped:
+      "This text shows {{shown}} of the {{total}} items in {{field}}. The complete result is in structuredContent.",
+    textClipped:
+      "This text was cut at {{kilobytes}} KB. The complete result is in structuredContent.",
   },
 };

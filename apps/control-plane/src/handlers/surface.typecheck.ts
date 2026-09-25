@@ -1,8 +1,8 @@
 /**
  * The compiler's refusals in `surface.ts`, pinned from the side where they fire.
  *
- * The quiet side is the real tables: `EFFECTS`, the two sentence catalogues and
- * `MCP_EXCLUDED` compile, and so do the CLI's calls by name. This file is the other side. Each
+ * The quiet side is the real tables: `EFFECTS`, the two sentence catalogues, `MCP_EXCLUDED`
+ * and `SESSION_ONLY` compile, and so do the CLI's calls by name. This file is the other side. Each
  * fixture below is something a router change would leave behind, and each carries a
  * `@ts-expect-error`; if the mapped types ever stop biting -- `ProcedurePath` widening to
  * `string` after a tRPC upgrade, say -- the error goes away, the directive is unused, and
@@ -50,6 +50,12 @@ export const staleExclusion: ExclusionTable = {
   // @ts-expect-error -- the router has no such procedure
   "runs.retired": "was once excluded",
 };
+
+/** A procedure kept from bearer credentials after the router dropped it. */
+export const staleSessionOnly: readonly ProcedurePath[] = [
+  // @ts-expect-error -- the router has no such procedure
+  "account.retired",
+];
 
 /** A procedure called by name that the router does not have. */
 // @ts-expect-error -- `InputOf` takes only a path the router has
