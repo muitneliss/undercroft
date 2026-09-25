@@ -34,6 +34,12 @@ export const vi = {
      * never reformatted: it is the literal string that rolls the stack back to this build.
      */
     release: "Phiên bản",
+    /**
+     * A tab running a release the server has replaced. "Is now live" rather than "new":
+     * after a rollback the live release is the older one, and the tab is just as stale.
+     */
+    releaseLive: "Phiên bản {{release}} đã được triển khai. Tải lại trang để sử dụng.",
+    reload: "Tải lại",
   },
 
   lang: {

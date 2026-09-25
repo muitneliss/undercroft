@@ -136,3 +136,4 @@
 ## [2026-09-25] ingest | File formats a Gmail or Drive connection can land
 ## [2026-09-25] ingest | ADR 0054: A widened HubSpot object is read in two steps, so no choice of properties is too long
 ## [2026-09-25] ingest | ADR 0054: A widened HubSpot object is read in two steps, so no choice of properties is too long
+## [2026-09-25] ingest | ADR 0055: An open tab learns of a new release from a service worker

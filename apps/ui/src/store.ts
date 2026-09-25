@@ -94,6 +94,14 @@ interface UiState {
   locale: Locale;
   /** Change language. The only writer; `@/i18n` follows this, never the other way round. */
   setLocale: (locale: Locale) => void;
+  /**
+   * The release the server now serves, once this tab has heard it is not the one it runs;
+   * null until then. Written only by `@/lib/releaseWatch`, from what the release beacon
+   * answered (ADR 0055). Client state rather than a query: no endpoint knows which bundle
+   * THIS tab loaded. Not persisted -- a reload is exactly what clears it.
+   */
+  liveRelease: string | null;
+  noticeRelease: (release: string) => void;
   /** The scope selection in progress, or null when nothing is being edited. */
   scopeDraft: ScopeDraft | null;
   setScopeDraft: (draft: ScopeDraft) => void;
@@ -490,6 +498,14 @@ function localeSlice(set: Setter): Pick<UiState, "locale" | "setLocale"> {
   };
 }
 
+/** Which release has replaced the bundle this tab is running. See `liveRelease`. */
+function releaseSlice(set: Setter): Pick<UiState, "liveRelease" | "noticeRelease"> {
+  return {
+    liveRelease: null,
+    noticeRelease: (liveRelease): unknown => set({ liveRelease }),
+  };
+}
+
 /** What an admin is choosing a source may read, before they save it. */
 function scopeSlice(
   set: Setter,
@@ -834,6 +850,7 @@ export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       ...localeSlice(set),
+      ...releaseSlice(set),
       ...accountSlice(set),
       ...scopeSlice(set),
       ...lakeSlice(set),

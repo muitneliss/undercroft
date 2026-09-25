@@ -6,6 +6,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.tsx";
+import { ReleaseNotice } from "./components/ReleaseNotice.tsx";
+import { watchForRelease } from "./lib/releaseWatch.ts";
 import { useUiStore } from "./store.ts";
 import { trpc } from "./trpc.ts";
 // Side-effect import: builds the i18next singleton and starts following the store's locale.
@@ -64,6 +66,12 @@ useUiStore.subscribe((state) => {
   }
 });
 
+// A production build only: the beacon is emitted by `vite build` and does not exist under
+// `vite serve`, where hot reload already keeps the tab on the code in the tree. ADR 0055.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  watchForRelease(navigator.serviceWorker);
+}
+
 const root = document.querySelector("#root");
 if (root !== null) {
   createRoot(root).render(
@@ -82,6 +90,7 @@ if (root !== null) {
            */}
           <BrowserRouter>
             <App />
+            <ReleaseNotice />
           </BrowserRouter>
         </QueryClientProvider>
       </trpc.Provider>
