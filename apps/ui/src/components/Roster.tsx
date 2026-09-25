@@ -48,12 +48,17 @@ function RoleCell({
   if (!isAdmin) {
     return <td>{member.role}</td>;
   }
+  // While this member's change is in flight the select shows the role asked for, not the one
+  // it is leaving: snapping back to the old role would read as the choice having been ignored.
+  // Once the server answers, the value is its role again, refusal or not.
+  const saving = setRole.isPending && setRole.variables.email === member.email;
   return (
     <td>
       <select
         aria-label={t("people.roleFor", { email: member.email })}
+        aria-busy={saving}
         className="input input--select"
-        value={member.role}
+        value={saving ? setRole.variables.role : member.role}
         disabled={setRole.isPending}
         onChange={(event): void => {
           const chosen = event.target.value;
@@ -68,6 +73,11 @@ function RoleCell({
           </option>
         ))}
       </select>
+      {saving ? (
+        <span className="field__hint" role="status">
+          {t("people.roleSaving")}
+        </span>
+      ) : null}
     </td>
   );
 }

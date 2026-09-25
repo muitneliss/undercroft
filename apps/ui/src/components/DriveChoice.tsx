@@ -30,9 +30,10 @@
  * tenant holds two Drive accounts (ADR 0043).
  */
 
+import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { openDrivePicker } from "@/lib/drivePicker.ts";
+import { type GooglePickerConfig, openDrivePicker } from "@/lib/drivePicker.ts";
 import { type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -52,13 +53,22 @@ export function DriveChoice({
   const removeFile = useUiStore((s) => s.removeScopeFile);
   const toggleRecurse = useUiStore((s) => s.toggleScopeRecurse);
   const config = trpc.config.google.useQuery();
+  // A mutation for the same reason the key's clipboard copy is one: it is the thing that knows
+  // whether opening is still under way (two of Google's scripts, then its consent popup) and
+  // whether it failed. Settles once the Picker is on screen or the popup was dismissed.
+  const open = useMutation({
+    mutationFn: (picker: GooglePickerConfig) =>
+      openDrivePicker(picker, { fileTypes: chosen.fileTypes, account }, (picked) => {
+        addFiles(source, picked);
+      }),
+  });
 
   return (
     <>
       <button
         type="button"
         className="plate"
-        disabled={config.data === undefined || config.data === null}
+        disabled={config.data === undefined || config.data === null || open.isPending}
         onClick={(): void => {
           // Null when no ingestion client is configured; the button is disabled then,
           // and this guard is what makes that a type-level fact rather than a habit.
@@ -66,13 +76,16 @@ export function DriveChoice({
           if (picker === undefined || picker === null) {
             return;
           }
-          void openDrivePicker(picker, { fileTypes: chosen.fileTypes, account }, (picked) => {
-            addFiles(source, picked);
-          });
+          open.mutate(picker);
         }}
       >
-        {t("scopePicker.pickFromDrive")}
+        {open.isPending ? t("scopePicker.openingDrive") : t("scopePicker.pickFromDrive")}
       </button>
+      {open.isError ? (
+        <p className="note" role="alert">
+          {t("scopePicker.pickerFailed")}
+        </p>
+      ) : null}
       {config.isError ? (
         <p className="note">{t("scopePicker.pickerUnavailable")}</p>
       ) : (

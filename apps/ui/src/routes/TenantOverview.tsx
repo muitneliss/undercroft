@@ -32,7 +32,7 @@ import { useSearchParams } from "react-router-dom";
 
 import type { Connection } from "@/api/types.ts";
 import { AccountSwitcher } from "@/components/AccountSwitcher.tsx";
-import { ConnectionCard } from "@/components/ConnectionCard.tsx";
+import { ConnectionCard, type GrantPending } from "@/components/ConnectionCard.tsx";
 import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { IngestKeys } from "@/components/IngestKeys.tsx";
@@ -318,9 +318,12 @@ function SourceCards({
 }): React.JSX.Element {
   const { startOAuth, disconnect, runNow, setCadence } = actions;
   // One action at a time, across every card: the list is about to be invalidated and a
-  // second request answers about a schedule that no longer exists.
+  // second request answers about a schedule that no longer exists. A consent that has been
+  // started counts until the browser has left for it (`isSuccess`), not only until the server
+  // answered with its address.
   const busy =
     startOAuth.isPending ||
+    startOAuth.isSuccess ||
     disconnect.isPending ||
     runNow.isPending ||
     setCadence.isPending ||
@@ -384,6 +387,7 @@ function SourceRow({
           }}
           canAdd={canRun}
           busy={busy}
+          adding={pendingFor(actions, group.kind, true) === "connect"}
           // The bare kind, never an account's source: adding is a consent for an account
           // nobody here holds yet, and the server resolves which source it lands under.
           onAdd={(): void => {
@@ -398,6 +402,7 @@ function SourceRow({
         connection={connection}
         canRun={canRun}
         busy={busy}
+        pending={pendingFor(actions, connection.source, false)}
         onConnect={(): void => {
           startOAuth.mutate({ tenantId, source: connection.source });
         }}
@@ -419,4 +424,31 @@ function SourceRow({
       />
     </>
   );
+}
+
+/**
+ * Which of `source`'s actions is in flight, read off the mutations' `variables` -- the request
+ * each one was last called with -- so no second record of "what was clicked" exists to drift
+ * from what was actually sent. A consent counts until the browser has left for it.
+ *
+ * `addAccount` separates the two consents that can name the same source: the first Gmail
+ * account's card and the switcher's "add another" both send `gmail`, and only the one that
+ * was pressed should say it is on its way to Google.
+ */
+function pendingFor(actions: Actions, source: string, addAccount: boolean): GrantPending | null {
+  const { startOAuth, disconnect, runNow, setCadence } = actions;
+  const consent = startOAuth.isPending || startOAuth.isSuccess ? startOAuth.variables : undefined;
+  if (consent?.source === source && (consent.addAccount === true) === addAccount) {
+    return "connect";
+  }
+  if (disconnect.isPending && disconnect.variables.source === source) {
+    return "disconnect";
+  }
+  if (runNow.isPending && runNow.variables.source === source) {
+    return "run";
+  }
+  if (setCadence.isPending && setCadence.variables.source === source) {
+    return "cadence";
+  }
+  return null;
 }

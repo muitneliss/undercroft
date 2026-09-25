@@ -14,6 +14,7 @@ export const en = {
     name: "Undercroft",
     caption: "Undercroft · control plane",
     signOut: "Sign out",
+    signingOut: "Signing out…",
     release: "Version",
   },
 
@@ -59,6 +60,8 @@ export const en = {
     denied:
       "That account does not have access. If you were invited, sign in with the exact address the invitation was sent to.",
     google: "Continue with Google",
+    openingGoogle: "Opening Google…",
+    googleFailed: "Could not open Google sign-in. Try again.",
     emailLabel: "Or sign in with a code",
     emailPlaceholder: "you@example.com",
     notSent: "Not sent",
@@ -139,6 +142,7 @@ export const en = {
     noExpiry: "Never expires",
     revoked: "Revoked",
     revoke: "Revoke",
+    revoking: "Revoking…",
     notRevoked: "Not revoked",
     none: "No keys yet.",
     mintHead: "Mint a key",
@@ -275,6 +279,7 @@ export const en = {
     showPayload: "Show payload",
     noRows: "This stream has no records yet.",
     older: "Older",
+    loadingOlder: "Loading…",
   },
 
   people: {
@@ -289,6 +294,7 @@ export const en = {
     colRole: "Role",
     notLoaded: "The roster for {{tenantId}} could not be loaded. Nothing has been changed.",
     roleFor: "Role of {{email}}",
+    roleSaving: "Saving role…",
     roleChanged: "{{email}} is now {{role}}.",
     roleNotChanged: "Role not changed",
     colRemove: "Access",
@@ -306,6 +312,7 @@ export const en = {
     colExpires: "Expires",
     colWithdraw: "Withdraw",
     withdraw: "Withdraw",
+    withdrawing: "Withdrawing…",
     notWithdrawn: "Not withdrawn",
 
     inviteLabel: "Invite an address",
@@ -338,6 +345,8 @@ export const en = {
     nextRun: "Next run",
     cadenceLabel: "How often to sync",
     runNow: "Run now",
+    starting: "Starting…",
+    cadenceSaving: "Saving schedule…",
     running: "Running…",
     runFailedHead: "The last run failed",
     openInJournal: "Open in the journal",
@@ -347,8 +356,10 @@ export const en = {
     connect: "Connect {{name}}",
     chooseScope: "Choose what to sync",
     reconnect: "Reconnect {{name}}",
+    connecting: "Opening {{name}}…",
     changeScope: "Change what syncs",
     disconnect: "Disconnect",
+    disconnecting: "Disconnecting…",
     connectFailed: "This source could not be connected.",
     connectDeclined: "You cancelled at Google’s screen. Nothing was granted.",
     connectScopeDeclined:
@@ -446,6 +457,8 @@ export const en = {
     selectAll: "Select all",
     clearAll: "Clear all",
     pickFromDrive: "Choose from Google Drive",
+    openingDrive: "Opening Google Drive…",
+    pickerFailed: "Could not open Google Drive. Try again.",
     removePick: "Remove",
     removePickNamed: "Remove {{name}} from the selection",
     nothingToChoose: "There is nothing to choose from yet.",
@@ -564,6 +577,7 @@ export const en = {
     testsFailed_one: "{{countText}} test failed",
     testsFailed_other: "{{countText}} tests failed",
     older: "Older",
+    loadingOlder: "Loading…",
     emptyTitle: "No run yet",
     emptyBody: "The first one runs at {{when}}. Or press Run now under Sources.",
     emptyBodyDueNow:

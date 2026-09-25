@@ -31,12 +31,15 @@ export function GrantWhen({
   connection,
   canEdit,
   busy,
+  saving,
   onCadence,
 }: {
   connection: Connection;
   /** Whether the reader may change the cadence. Courtesy; the server refuses regardless. */
   canEdit: boolean;
   busy: boolean;
+  /** Whether the cadence chosen here is on its way to the server. */
+  saving: boolean;
   onCadence: (cadence: Cadence) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -50,6 +53,7 @@ export function GrantWhen({
       {canEdit ? (
         <select
           aria-label={t("grant.cadenceLabel")}
+          aria-busy={saving}
           className="input input--select"
           defaultValue={connection.cadence}
           disabled={busy}
@@ -70,6 +74,11 @@ export function GrantWhen({
       ) : (
         <span className="datum datum--quiet">{describeCadence(t, connection.cadence)}</span>
       )}
+      {saving ? (
+        <span className="datum datum--quiet" role="status">
+          {t("grant.cadenceSaving")}
+        </span>
+      ) : null}
 
       <span className="label">{t("grant.lastRun")}</span>
       <span className="datum datum--quiet grant__run">

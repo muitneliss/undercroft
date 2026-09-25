@@ -17,7 +17,9 @@
  *     variables it was called with; copying them into state would be a second value that
  *     has to be kept in step with the first.
  *   - **pending and failed** are the mutations' own flags, exactly as `Book.tsx` reads
- *     `signOut.isPending`.
+ *     `signOut.isPending`. A sign-in that reloads the page on success counts `isSuccess` as
+ *     pending too: the mutation has settled but the browser has not left yet, and a plate
+ *     that re-enabled in that gap would invite a second sign-in.
  *   - **going back** is `sendCode.reset()`. One owner, one reset.
  *
  * The two inputs are uncontrolled and read through a `useRef` on submit. A DOM ref is not
@@ -94,11 +96,7 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
             bundle does not contain this button at all -- not merely hide it. */}
         {import.meta.env.DEV ? <DevSignIn /> : null}
 
-        <div className="row">
-          <button className="plate plate--primary" type="button" onClick={signInWithGoogle}>
-            {t("signIn.google")}
-          </button>
-        </div>
+        <GoogleSignIn />
 
         {/*
          * The two steps are KEYED, and the key is the only reason the step change
@@ -141,6 +139,39 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
 }
 
 /**
+ * Google's way in. The server answers with Google's address and the browser follows it, so the
+ * plate stays pending through the answer AND the navigation -- there is no later moment on this
+ * page at which the sign-in is over.
+ */
+function GoogleSignIn(): React.JSX.Element {
+  const { t } = useTranslation();
+  const signIn = useMutation({ mutationFn: signInWithGoogle });
+  const leaving = signIn.isPending || signIn.isSuccess;
+
+  return (
+    <div className="stack stack--tight">
+      <div className="row">
+        <button
+          className="plate plate--primary"
+          type="button"
+          disabled={leaving}
+          onClick={(): void => {
+            signIn.mutate();
+          }}
+        >
+          {leaving ? t("signIn.openingGoogle") : t("signIn.google")}
+        </button>
+      </div>
+      {signIn.isError ? (
+        <Errata heading={t("signIn.notSignedIn")} live={true}>
+          {signIn.error.message}
+        </Errata>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The local stack's way in, `POST /api/auth/sign-in/dev`: one click, and the session is an
  * ordinary Better Auth session for the address the control plane was started with. The server
  * is what decides whether this works -- it has the method only on loopback with
@@ -155,6 +186,7 @@ function DevSignIn(): React.JSX.Element {
       globalThis.location.assign("/");
     },
   });
+  const leaving = signIn.isPending || signIn.isSuccess;
 
   return (
     <div className="stack stack--tight">
@@ -162,12 +194,12 @@ function DevSignIn(): React.JSX.Element {
         <button
           className="plate plate--primary"
           type="button"
-          disabled={signIn.isPending}
+          disabled={leaving}
           onClick={(): void => {
             signIn.mutate();
           }}
         >
-          {signIn.isPending ? t("signIn.signingIn") : t("signIn.dev")}
+          {leaving ? t("signIn.signingIn") : t("signIn.dev")}
         </button>
       </div>
       {signIn.isError ? (
@@ -266,6 +298,7 @@ function CodeForm({
       globalThis.location.assign("/");
     },
   });
+  const leaving = signIn.isPending || signIn.isSuccess;
 
   return (
     <form
@@ -293,7 +326,7 @@ function CodeForm({
           maxLength={6}
           placeholder="000000"
           ref={codeFieldRef}
-          disabled={signIn.isPending}
+          disabled={leaving}
         />
         {/*
          * Honest on purpose. The server will not say whether an address has access,
@@ -310,8 +343,8 @@ function CodeForm({
       ) : null}
 
       <div className="row">
-        <button className="plate plate--primary" type="submit" disabled={signIn.isPending}>
-          {signIn.isPending ? t("signIn.signingIn") : t("signIn.signIn")}
+        <button className="plate plate--primary" type="submit" disabled={leaving}>
+          {leaving ? t("signIn.signingIn") : t("signIn.signIn")}
         </button>
         <button className="plate plate--small" type="button" onClick={onUseAnotherAddress}>
           {t("signIn.useAnotherAddress")}

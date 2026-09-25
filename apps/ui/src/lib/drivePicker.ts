@@ -41,6 +41,7 @@ interface GoogleGlobals {
         scope: string;
         login_hint?: string;
         callback: (response: { access_token?: string }) => void;
+        error_callback?: (error: { type: string }) => void;
       }) => { requestAccessToken: () => void };
     };
   };
@@ -165,6 +166,11 @@ function requestBrowserToken(clientId: string, account: string): Promise<string 
         ...(account === "" ? {} : { login_hint: account }),
         callback: (response) => {
           resolve(response.access_token ?? null);
+        },
+        // A popup the reader closed, or one the browser blocked, is an answer too: without
+        // this the promise never settled and the plate that opened it waited forever.
+        error_callback: () => {
+          resolve(null);
         },
       })
       .requestAccessToken();

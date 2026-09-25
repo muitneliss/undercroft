@@ -28,6 +28,7 @@ export const vi = {
     name: "Undercroft",
     caption: "Undercroft · bảng điều khiển",
     signOut: "Đăng xuất",
+    signingOut: "Đang đăng xuất…",
     /**
      * Labels the build stamp in the colophon. The tag beside it is never translated and
      * never reformatted: it is the literal string that rolls the stack back to this build.
@@ -87,6 +88,8 @@ export const vi = {
     denied:
       "Tài khoản đó không có quyền truy cập. Nếu bạn đã được mời, hãy đăng nhập bằng đúng địa chỉ đã nhận lời mời.",
     google: "Tiếp tục với Google",
+    openingGoogle: "Đang chuyển tới Google…",
+    googleFailed: "Không mở được trang đăng nhập của Google. Hãy thử lại.",
     emailLabel: "Hoặc đăng nhập bằng mã",
     emailPlaceholder: "ban@example.com",
     notSent: "Chưa gửi được",
@@ -184,6 +187,7 @@ export const vi = {
     noExpiry: "Không hết hạn",
     revoked: "Đã thu hồi",
     revoke: "Thu hồi",
+    revoking: "Đang thu hồi…",
     notRevoked: "Chưa thu hồi được",
     none: "Chưa có khoá nào.",
     mintHead: "Tạo khoá mới",
@@ -362,6 +366,7 @@ export const vi = {
     showPayload: "Xem nội dung",
     noRows: "Luồng này chưa có bản ghi nào.",
     older: "Cũ hơn",
+    loadingOlder: "Đang tải…",
   },
 
   people: {
@@ -375,6 +380,7 @@ export const vi = {
     colRole: "Vai trò",
     notLoaded: "Không tải được danh sách người dùng của {{tenantId}}. Không có gì bị thay đổi.",
     roleFor: "Vai trò của {{email}}",
+    roleSaving: "Đang lưu vai trò…",
     roleChanged: "{{email}} giờ có vai trò {{role}}.",
     roleNotChanged: "Chưa đổi được vai trò",
     colRemove: "Quyền truy cập",
@@ -391,6 +397,7 @@ export const vi = {
     colExpires: "Hết hạn",
     colWithdraw: "Thu hồi",
     withdraw: "Thu hồi",
+    withdrawing: "Đang thu hồi…",
     notWithdrawn: "Chưa thu hồi được",
 
     inviteLabel: "Mời một địa chỉ",
@@ -423,6 +430,8 @@ export const vi = {
     nextRun: "Lần chạy kế tiếp",
     cadenceLabel: "Tần suất đồng bộ",
     runNow: "Chạy ngay",
+    starting: "Đang bắt đầu…",
+    cadenceSaving: "Đang lưu tần suất…",
     running: "Đang chạy…",
     runFailedHead: "Lần chạy gần nhất thất bại",
     openInJournal: "Xem trong nhật ký",
@@ -432,8 +441,10 @@ export const vi = {
     connect: "Kết nối {{name}}",
     chooseScope: "Chọn dữ liệu cần đồng bộ",
     reconnect: "Kết nối lại {{name}}",
+    connecting: "Đang chuyển tới {{name}}…",
     changeScope: "Đổi dữ liệu đồng bộ",
     disconnect: "Ngắt kết nối",
+    disconnecting: "Đang ngắt kết nối…",
     connectFailed: "Chưa kết nối được nguồn này.",
     connectDeclined: "Bạn đã huỷ ở màn hình của Google. Không có gì được cấp.",
     /**
@@ -572,6 +583,8 @@ export const vi = {
     selectAll: "Chọn tất cả",
     clearAll: "Bỏ chọn tất cả",
     pickFromDrive: "Chọn từ Google Drive",
+    openingDrive: "Đang mở Google Drive…",
+    pickerFailed: "Không mở được Google Drive. Hãy thử lại.",
     /**
      * Beside each Drive pick. The Picker only ever adds, so this is how one comes off; the
      * named form is its accessible name, so a screen reader hears WHICH pick it removes.
@@ -691,6 +704,7 @@ export const vi = {
     triggerLakeApi: "qua API hồ dữ liệu",
     testsFailed_other: "{{countText}} kiểm tra không đạt",
     older: "Cũ hơn",
+    loadingOlder: "Đang tải…",
     emptyTitle: "Chưa có lần chạy nào",
     emptyBody: "Lần đầu sẽ chạy lúc {{when}}. Hoặc bấm Chạy ngay ở mục Nguồn dữ liệu.",
     emptyBodyDueNow:
