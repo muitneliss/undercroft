@@ -25,9 +25,9 @@
  * offers to open the picker rather than inventing a selection.
  */
 
-import { Cadence } from "@undercroft/contracts";
 import { z } from "zod";
 
+import { CadenceChoice } from "./cadenceChoice.ts";
 import { ConnectionSource } from "./connectionSource.ts";
 
 /**
@@ -269,11 +269,11 @@ export const WRITE_TOOLS = {
   },
   setCadence: {
     description:
-      "Change how often one source is ingested. Paused means it only runs when asked. This is " +
-      "reversible; the previous cadence is not remembered, so name the new one plainly.",
+      "Change how often one source is ingested: a preset, or custom with a cron expression. This " +
+      "is reversible; the previous cadence is not remembered, so name the new one plainly.",
     inputSchema: inTenant.extend({
       source: ConnectionSource,
-      cadence: Cadence,
+      ...CadenceChoice,
     }),
     tier: "write",
     plate: "grants",

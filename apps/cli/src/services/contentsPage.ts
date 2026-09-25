@@ -39,7 +39,8 @@ type Part = "contents" | "appendix";
 /**
  * Where each topic sits, in the order the README walks the pipeline -- sources, runs, the raw
  * lake, the models built on it, their quality, the reports read from them -- then the
- * administration, and last, in the appendix, the CLI's own machinery. Keyed by `TopicKey`, so
+ * administration, and last, in the appendix, the machinery of your own access and of the CLI
+ * itself -- signing in, the session, your account and its tokens, the profiles. Keyed by `TopicKey`, so
  * a namespace the router grows is a `tsc` error here until someone places it.
  */
 const PLACE = {
@@ -56,6 +57,8 @@ const PLACE = {
   keys: "contents",
   auth: "appendix",
   session: "appendix",
+  account: "appendix",
+  accountTokens: "appendix",
   config: "appendix",
 } as const satisfies Record<TopicKey, Part>;
 
@@ -116,14 +119,22 @@ function runningHead(t: Translate, facts: ContentsFacts, inner: number): Line[] 
   return [left, where, who];
 }
 
+/**
+ * A row's last line, led out to its count. A topic whose commands all sit in its sub-topics is
+ * a heading instead: no leader and no count, because a "0" beside it would read as an empty
+ * chapter rather than one that is read further down.
+ */
+function closeRow(line: Line, count: number, inner: number): Line {
+  return count === 0 ? line : leader(line, [plain(String(count).padStart(2))], inner);
+}
+
 function contentsRow(entry: Entry, sentence: string | null, inner: number): Line[] {
   const words = entry.topic.split(":");
   const sub = words.length > 1;
   const label = `${sub ? "  " : ""}${words.at(-1) ?? entry.topic}`;
   const name = sub ? plain(label) : bold(label);
-  const count: Line = [plain(String(entry.count).padStart(2))];
   if (!isWide(inner) || sentence === null) {
-    return [leader([name], count, inner)];
+    return [closeRow([name], entry.count, inner)];
   }
   // The sentence hangs under itself when it wraps, and the leader goes on its last line.
   const first: Line = [name, plain(" ".repeat(Math.max(1, TOPIC_COLUMN - widthOf(label))))];
@@ -131,7 +142,7 @@ function contentsRow(entry: Entry, sentence: string | null, inner: number): Line
   const lines = wrap(sentence, inner - TOPIC_COLUMN - 6);
   return lines.map((text, index) => {
     const line: Line = [...(index === 0 ? first : hang), plain(text)];
-    return index === lines.length - 1 ? leader(line, count, inner) : line;
+    return index === lines.length - 1 ? closeRow(line, entry.count, inner) : line;
   });
 }
 

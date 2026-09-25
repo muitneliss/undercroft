@@ -93,6 +93,9 @@ export type RunEventView = inferRouterOutputs<AppRouter>["runs"]["events"][numbe
 /** One ingest key as `keys.list` returns it. Never the token itself, which is minted once. */
 export type IngestKey = inferRouterOutputs<AppRouter>["keys"]["list"][number];
 
+/** One personal access token as `account.tokens.list` returns it. Never the token itself. */
+export type PersonalToken = inferRouterOutputs<AppRouter>["account"]["tokens"]["list"][number];
+
 /** What has landed, per stream, as `lake.summary` returns it. */
 export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 

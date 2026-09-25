@@ -20,12 +20,17 @@
  * sentence a reader actually sees rather than a key.
  */
 
+import { SCHEDULE_ZONE } from "@undercroft/contracts/cadence";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
 import { MISSING } from "@/lib/money.ts";
 
-const ZONE = "Asia/Singapore";
+/**
+ * The zone a cron is evaluated in, imported rather than restated: a second copy of it here is
+ * how a schedule written for 09:00 would come to be printed at 08:00.
+ */
+const ZONE = SCHEDULE_ZONE;
 
 /**
  * Which CLDR locale formats a date for each of our languages.
@@ -37,6 +42,7 @@ const CLDR: Record<Locale, string> = { vi: "vi-VN", en: "en-SG" };
 
 const DATE = new Map<Locale, Intl.DateTimeFormat>();
 const DATE_TIME = new Map<Locale, Intl.DateTimeFormat>();
+const WEEKDAY_DATE_TIME = new Map<Locale, Intl.DateTimeFormat>();
 const TIME = new Map<Locale, Intl.DateTimeFormat>();
 
 /**
@@ -76,6 +82,31 @@ function dateTimeFormat(locale: Locale): Intl.DateTimeFormat {
     timeZone: ZONE,
   });
   DATE_TIME.set(locale, made);
+  return made;
+}
+
+/**
+ * A date and time led by its weekday, in the fixed zone like everything else here.
+ *
+ * For a cron's upcoming fires, where the weekday is the thing being checked: "1-5" means
+ * Monday to Friday only if the reader can see which days the fires land on.
+ */
+function weekdayDateTimeFormat(locale: Locale): Intl.DateTimeFormat {
+  const held = WEEKDAY_DATE_TIME.get(locale);
+  if (held) {
+    return held;
+  }
+  const made = new Intl.DateTimeFormat(CLDR[locale], {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: ZONE,
+  });
+  WEEKDAY_DATE_TIME.set(locale, made);
   return made;
 }
 
@@ -121,6 +152,11 @@ export function formatDate(iso: string | null | undefined, locale: Locale): stri
 export function formatDateTime(iso: string | null | undefined, locale: Locale): string {
   const date = parse(iso);
   return date ? dateTimeFormat(locale).format(date) : MISSING;
+}
+
+export function formatWeekdayDateTime(iso: string | null | undefined, locale: Locale): string {
+  const date = parse(iso);
+  return date ? weekdayDateTimeFormat(locale).format(date) : MISSING;
 }
 
 export function formatTime(iso: string | null | undefined, locale: Locale): string {

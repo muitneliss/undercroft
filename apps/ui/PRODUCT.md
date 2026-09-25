@@ -57,7 +57,9 @@ own database role, in that customer's own schema.
   sub-folders, of admin-chosen file types), HubSpot CRM (private-app token), Xero Accounting
   (OAuth, one organisation). A customer may connect several Gmail and several Drive accounts,
   each one a source of its own. Ingest runs on a per-source
-  cadence chosen by the customer's admin (hourly, every six hours, daily, paused) or on demand.
+  cadence chosen by the customer's admin (hourly, every six hours, daily, paused, or a custom
+  five-field cron expression in Singapore time, previewed as its next three runs before it is
+  saved; ADR 0059) or on demand.
 - After each successful ingest, the customer's dbt models are built as that customer's role.
   Failing tests land in a per-customer `dq` schema.
 - Times are always shown in Asia/Singapore, in the reader's language. Amounts are never

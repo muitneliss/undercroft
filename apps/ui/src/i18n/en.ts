@@ -169,10 +169,57 @@ export const en = {
     mintedHead: "New key",
     mintedNote:
       "Copy it now: this key will not be shown again. If it is lost, mint another and revoke this one.",
+  },
+
+  secret: {
     copy: "Copy",
     copied: "Copied to the clipboard.",
     notCopied: "Could not copy. Select it and copy by hand.",
     done: "Done",
+  },
+
+  account: {
+    title: "Account",
+    lead: "What belongs to {{email}}, rather than to any one customer.",
+    open: "Open your account page",
+  },
+
+  tokens: {
+    head: "Personal access tokens",
+    lead: "A token lets an agent (Claude Code, Claude Desktop…) work with Undercroft on your behalf over MCP, with exactly the access you have in every customer. Each token is shown once, when it is minted.",
+    notLoaded: "The tokens could not be loaded.",
+    caption_one: "{{count, number}} token",
+    caption_other: "{{count, number}} tokens",
+    colLabel: "Label",
+    colGrant: "Grant",
+    colCreated: "Created",
+    colLastUsed: "Last used",
+    colExpires: "Expires",
+    colRevoke: "Revoke",
+    grantRead: "Read only",
+    grantWrite: "Read and write",
+    revoked: "Revoked",
+    revoke: "Revoke",
+    revoking: "Revoking…",
+    notRevoked: "The token was not revoked",
+    none: "No tokens yet.",
+    mintHead: "Mint a token",
+    labelLabel: "Label",
+    labelPlaceholder: "e.g. Claude Code on my laptop",
+    grantLabel: "Grant",
+    grantReadHint: "The agent can look at data; no tool that changes anything is offered.",
+    grantWriteHint:
+      "The agent can do anything you can, deletion included. Choose it only for an agent you trust.",
+    expiresLabel: "Expires after",
+    expires30: "30 days",
+    expires90: "90 days",
+    expires365: "1 year",
+    mint: "Mint token",
+    minting: "Minting…",
+    notMinted: "The token was not minted",
+    mintedHead: "New token",
+    mintedNote:
+      "Copy it now: this token will not be shown again. If it is lost, mint another and revoke this one.",
   },
 
   lake: {
@@ -360,6 +407,19 @@ export const en = {
     openInJournal: "Open in the journal",
     runNotStarted: "The run could not be started",
     cadenceNotSaved: "The schedule could not be saved",
+    cronLabel: "Cron expression",
+    cronHint:
+      "Five fields: minute, hour, day of month, month, day of week (0 is Sunday). In Singapore time (SGT), no more often than every {{minutes}} minutes.",
+    cronSave: "Save schedule",
+    cronPreview: "The next three runs (Singapore time)",
+    cronZone: "Singapore time (SGT)",
+    cronRefused: {
+      fields: "Five fields are needed, separated by spaces.",
+      invalid: "This expression could not be read.",
+      never: "This expression never comes round.",
+      tooFrequent:
+        "This expression runs more often than every {{minutes}} minutes, faster than the scheduler ticks.",
+    },
     since: "Since",
     connect: "Connect {{name}}",
     chooseScope: "Choose what to sync",
@@ -546,8 +606,9 @@ export const en = {
     every6h: "Every 6 hours",
     daily: "Daily",
     paused: "Paused",
+    custom: "Custom (cron)",
     pausedNoNext: "Not while paused",
-    dueNow: "At the next tick, within 15 minutes",
+    dueNow: "At the next tick, within {{minutes}} minutes",
     neverUsed: "Never used",
   },
 
@@ -1072,6 +1133,8 @@ export const en = {
       struck: "Discarded",
       runIngestNow: "Run an ingest of {{source}} for {{tenantId}} now.",
       setCadence: "Change {{source}}'s ingest cadence to “{{cadence}}”.",
+      setCadenceCron:
+        "Schedule {{source}}'s ingest on the cron expression “{{cron}}”, in Singapore time.",
       invitePerson: "Invite {{email}} to {{tenantId}} as {{role}}.",
     },
     unconfiguredTitle: "The assistant is not ready",

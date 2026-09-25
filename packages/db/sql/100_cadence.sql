@@ -1,5 +1,9 @@
 -- A cadence on every connection: how often it is read, in one of four words.
 --
+-- SUPERSEDED IN PART by 290_connection_cron.sql (ADR 0059): a fifth cadence, `custom`, carries
+-- a cron expression after all. The reasoning below is kept as it was written, because it is
+-- what 290 answers -- the tick still owns firing, and a cron it cannot keep is refused.
+--
 -- Kestra owns the tick and nothing in this database can make a cron expression fire, so a
 -- cron column would be a promise nobody keeps. What the scheduler needs is a lower bound on
 -- the gap between two runs, chosen by a customer's administrator from a short list; what a

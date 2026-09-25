@@ -92,6 +92,12 @@ describe("the lake's console", () => {
   });
 });
 
+describe("the account page", () => {
+  it("opens at its own route rather than falling to the catch-all", () => {
+    expect(opens("/account")).toBe("/account");
+  });
+});
+
 describe("a URL nothing claims", () => {
   it("falls to the catch-all", () => {
     expect(opens("/nowhere/at/all")).toBe("*");

@@ -223,10 +223,65 @@ export const vi = {
     mintedHead: "Khoá mới",
     mintedNote:
       "Sao chép ngay: khoá này sẽ không hiển thị lại. Nếu mất, hãy tạo khoá khác và thu hồi khoá này.",
+  },
+
+  /**
+   * The one showing of a secret the server hands back once -- an ingest key, a personal token.
+   * Shared, because the act is the same whichever secret it is: copy it now or lose it.
+   */
+  secret: {
     copy: "Sao chép",
     copied: "Đã sao chép vào bộ nhớ tạm.",
     notCopied: "Không sao chép được. Hãy chọn và sao chép bằng tay.",
     done: "Xong",
+  },
+
+  /** The account page: what belongs to the person signed in, rather than to a customer. */
+  account: {
+    title: "Tài khoản",
+    lead: "Những gì thuộc về {{email}}, không thuộc riêng khách hàng nào.",
+    open: "Mở trang tài khoản",
+  },
+
+  /**
+   * Personal access tokens (ADR 0060). "Token" stays as the word the operators already use for
+   * it, the way "HubSpot" does: it is what an agent's setup screen will ask them to paste.
+   */
+  tokens: {
+    head: "Token truy cập cá nhân",
+    lead: "Token để một tác tử (Claude Code, Claude Desktop…) làm việc với Undercroft thay mặt bạn qua MCP, với đúng quyền bạn đang có ở mọi khách hàng. Mỗi token chỉ hiển thị một lần, lúc tạo.",
+    notLoaded: "Không tải được danh sách token.",
+    caption_other: "{{count, number}} token",
+    colLabel: "Nhãn",
+    colGrant: "Quyền",
+    colCreated: "Tạo",
+    colLastUsed: "Dùng gần nhất",
+    colExpires: "Hết hạn",
+    colRevoke: "Thu hồi",
+    grantRead: "Chỉ đọc",
+    grantWrite: "Đọc và ghi",
+    revoked: "Đã thu hồi",
+    revoke: "Thu hồi",
+    revoking: "Đang thu hồi…",
+    notRevoked: "Chưa thu hồi được",
+    none: "Chưa có token nào.",
+    mintHead: "Tạo token mới",
+    labelLabel: "Nhãn",
+    labelPlaceholder: "Ví dụ: Claude Code trên máy xách tay",
+    grantLabel: "Quyền",
+    grantReadHint: "Tác tử chỉ xem được dữ liệu; không có công cụ nào làm thay đổi gì.",
+    grantWriteHint:
+      "Tác tử làm được mọi việc bạn làm được, kể cả xoá. Hãy chỉ chọn khi bạn tin tác tử đó.",
+    expiresLabel: "Hết hạn sau",
+    expires30: "30 ngày",
+    expires90: "90 ngày",
+    expires365: "1 năm",
+    mint: "Tạo token",
+    minting: "Đang tạo…",
+    notMinted: "Chưa tạo được token",
+    mintedHead: "Token mới",
+    mintedNote:
+      "Sao chép ngay: token này sẽ không hiển thị lại. Nếu mất, hãy tạo token khác và thu hồi token này.",
   },
 
   lake: {
@@ -454,6 +509,23 @@ export const vi = {
     openInJournal: "Xem trong nhật ký",
     runNotStarted: "Chưa chạy được",
     cadenceNotSaved: "Chưa lưu được tần suất",
+    /** The custom cadence's field. The zone is named every time: see `@/lib/when`. */
+    cronLabel: "Biểu thức cron",
+    cronHint:
+      "5 trường: phút, giờ, ngày trong tháng, tháng, thứ trong tuần (0 là Chủ nhật). Tính theo giờ Singapore (SGT), không dày hơn {{minutes}} phút một lần.",
+    cronSave: "Lưu lịch",
+    /** Heads the next fires. They ARE the confirmation; there is no paraphrase of the cron. */
+    cronPreview: "Ba lần chạy kế tiếp (giờ Singapore)",
+    /** Beside a stored expression on a card a reader cannot edit. */
+    cronZone: "giờ Singapore (SGT)",
+    /** Why Save is off, one per `CronRefusal` in `@undercroft/contracts`. */
+    cronRefused: {
+      fields: "Cần đúng 5 trường, cách nhau bằng dấu cách.",
+      invalid: "Không đọc được biểu thức này.",
+      never: "Biểu thức này không bao giờ đến lượt chạy.",
+      tooFrequent:
+        "Biểu thức này chạy dày hơn {{minutes}} phút một lần, nhanh hơn nhịp của bộ lập lịch.",
+    },
     since: "Từ",
     connect: "Kết nối {{name}}",
     chooseScope: "Chọn dữ liệu cần đồng bộ",
@@ -685,9 +757,10 @@ export const vi = {
     every6h: "Mỗi 6 giờ",
     daily: "Hằng ngày",
     paused: "Tạm dừng",
+    custom: "Tuỳ chỉnh (cron)",
     pausedNoNext: "Không chạy khi đang tạm dừng",
-    /** The scheduler asks every fifteen minutes; a due time already past means its next ask. */
-    dueNow: "Ở lượt kế tiếp, trong vòng 15 phút",
+    /** The scheduler asks every `{{minutes}}`; a due time already past means its next ask. */
+    dueNow: "Ở lượt kế tiếp, trong vòng {{minutes}} phút",
     neverUsed: "Chưa dùng lần nào",
   },
 
@@ -1275,6 +1348,8 @@ export const vi = {
       struck: "Đã bỏ",
       runIngestNow: "Chạy đồng bộ nguồn {{source}} cho khách hàng {{tenantId}} ngay bây giờ.",
       setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",
+      setCadenceCron:
+        "Đặt lịch đồng bộ của nguồn {{source}} theo biểu thức cron “{{cron}}”, tính theo giờ Singapore.",
       invitePerson: "Mời {{email}} vào khách hàng {{tenantId}} với vai trò {{role}}.",
     },
     unconfiguredTitle: "Trợ lý chưa sẵn sàng",

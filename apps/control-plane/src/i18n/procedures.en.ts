@@ -8,6 +8,11 @@ export const procedureSentences: SentenceTable = {
   "session.me": "Who you are on this server.",
   "session.signOut": "End the current session on the server.",
   "session.setLocale": "Remember the language you read, for emails sent while no page is open.",
+  "account.tokens.list":
+    "Your personal access tokens. Callable from a signed-in session only, never with a token.",
+  "account.tokens.mint":
+    "Mint a personal access token, read-only or read and write, expiring within 365 days; the token is returned this once. Signed-in session only.",
+  "account.tokens.revoke": "Revoke one of your personal access tokens. Signed-in session only.",
   "tenants.list": "The customers you have access to.",
   "tenants.get": "One customer, and your role in it.",
   "tenants.create": "Create a customer. Platform superadmins only.",
@@ -20,7 +25,8 @@ export const procedureSentences: SentenceTable = {
   "connections.setScope":
     "Set what a source reads. For HubSpot, the properties chosen for each object are read as well as the standard ones, never instead of them. Admins.",
   "connections.setToken": "Connect a source with a pasted token. Admins.",
-  "connections.setCadence": "Set how often a source is read. Admins.",
+  "connections.setCadence":
+    "Set how often a source is read: hourly, every_6h, daily, paused, or custom with --cron, a five-field cron expression in Singapore time that fires at most every five minutes. Admins.",
   "connections.disconnect": "End a source's grant. Admins.",
   "keys.list": "The customer's ingest keys. Admins.",
   "keys.mint": "Mint an ingest key; its token is returned this once. Admins.",

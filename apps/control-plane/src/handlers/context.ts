@@ -17,6 +17,7 @@
 
 import { type EmailSender, type Locale, type Logger, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
+import { admit, type Grant, isPersonalToken } from "../services/accessTokens.ts";
 import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
@@ -25,7 +26,7 @@ import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
 import type { Auth } from "./auth.ts";
-import type { Context, SessionUser } from "./trpc.ts";
+import type { Context, SessionUser, Via } from "./trpc.ts";
 
 export interface ServerDeps {
   readonly exec: SqlExecutor;
@@ -39,8 +40,17 @@ export interface ServerDeps {
    * invitation is still created and still valid, and the admin is told it was not sent.
    */
   readonly email?: EmailSender;
-  /** The origin to put in an invitation email. Without it, no invitation mail is sent. */
+  /**
+   * `UNDERCROFT_PUBLIC_URL`: the origin to put in an invitation email, and the origin `/mcp`
+   * names in its `WWW-Authenticate` challenge. Without it, no invitation mail is sent, and the
+   * challenge names the origin the request itself arrived on.
+   */
   readonly publicUrl?: string;
+  /**
+   * `UNDERCROFT_RELEASE`, the tag this image was built from, which `/mcp` reports as its
+   * version. Absent on a process started from a checkout, and then it says so.
+   */
+  readonly release?: string;
   /**
    * The addresses from `UNDERCROFT_SUPERADMINS`, which hold `admin` in every tenant.
    *
@@ -119,69 +129,164 @@ async function sendInvitation(
 }
 
 /**
- * Who is calling, in the two steps that sign-in is made of.
- *
- * Better Auth verifies the signed cookie and reads its session row — the database read that
- * makes a revoked session stop working at once. That yields an *authenticated address*.
- * `appUserForEmail` then turns the address into the `app_user` uuid that memberships are
- * keyed by, which is the only id a procedure may act on.
- *
- * An authenticated address with no `app_user` resolves to `null`, not to a session. That is
- * the case where someone's account was removed while they still hold a valid cookie: they
- * are who they say they are, and they are nobody here.
- *
- * Platform authority is decided here too, and only here. It is read off the environment
- * list against the address in the session on **every request**, which is what makes removal
- * from `UNDERCROFT_SUPERADMINS` take effect at the next request rather than whenever a
- * session happens to expire. `superadmin` is false whenever `user` is null -- including for
- * a superadmin whose `app_user` row is missing -- because a caller the platform cannot
- * identify must not carry authority over it.
+ * Which credential a door reads. `/trpc` and the assistant read the session cookie a browser
+ * holds; `/mcp` reads `Authorization: Bearer` and NEVER the cookie, so a page open in the same
+ * browser cannot lend its session to a model-context client, and a bearer cannot ride on one.
  */
-export async function resolveCaller(
-  deps: ServerDeps,
-  headers: Headers,
-): Promise<{ user: SessionUser | null; sessionId: string; superadmin: boolean }> {
-  if (deps.auth === undefined) {
-    return { user: null, sessionId: "", superadmin: false };
-  }
+export type Door = "cookie" | "bearer";
 
-  const resolved = await deps.auth.api.getSession({ headers });
-  if (resolved === null) {
-    return { user: null, sessionId: "", superadmin: false };
-  }
-
-  const appUser = await appUserForEmail(deps.exec, resolved.user.email);
-  if (appUser === null) {
-    return { user: null, sessionId: "", superadmin: false };
-  }
-
-  return {
-    superadmin: isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, appUser.email),
-    user: { userId: appUser.appUserId, email: appUser.email },
-    sessionId: resolved.session.id,
-  };
+/**
+ * An authenticated address and what it presented, before it is anybody here.
+ *
+ * Both doors produce one of these and nothing else, so everything after -- who the address is
+ * on this platform, whether it holds platform authority -- is decided once, in `callerFor`,
+ * for every kind of credential there is and will be.
+ */
+interface Presented {
+  readonly email: string;
+  readonly credentialId: string;
+  readonly grant: Grant;
 }
 
 /**
- * The one context a request gets, whichever transport asked for it.
+ * The cookie door. Better Auth verifies the signed cookie and reads its session row -- the
+ * database read that makes a revoked session stop working at once. A browser session is its
+ * owner at their own screen, so it always holds `write`.
+ */
+async function sessionIdentity(deps: ServerDeps, headers: Headers): Promise<Presented | null> {
+  if (deps.auth === undefined) {
+    return null;
+  }
+  const resolved = await deps.auth.api.getSession({ headers });
+  if (resolved === null) {
+    return null;
+  }
+  return { email: resolved.user.email, credentialId: resolved.session.id, grant: "write" };
+}
+
+/** RFC 6750's `Authorization: Bearer <token>`, the scheme matched case-insensitively. */
+const BEARER = /^Bearer[ \t]+(?<token>\S+)[ \t]*$/iu;
+
+/**
+ * The bearer door: `Authorization: Bearer` and nothing else.
+ *
+ * A personal access token (`upat_…`) is admitted by digest, and holds the grant its owner chose
+ * when minting it. Anything else is not a credential this platform issued, and admits nobody.
+ * That is the one branch ADR 0060's follow-up changes: an OAuth access token -- a JWT a
+ * model-context client obtained by signing its person in -- is verified HERE, beside the
+ * personal token, and yields the same `Presented`, so nothing after this function learns which
+ * kind of bearer it was.
+ */
+async function resolveBearer(deps: ServerDeps, headers: Headers): Promise<Presented | null> {
+  const bearer = BEARER.exec(headers.get("authorization") ?? "")?.groups?.token;
+  if (bearer === undefined) {
+    return null;
+  }
+  if (isPersonalToken(bearer)) {
+    const admitted = await admit(deps.exec, bearer);
+    return admitted === null
+      ? null
+      : { email: admitted.email, credentialId: admitted.id, grant: admitted.grant };
+  }
+  return null;
+}
+
+/** Who is calling, as every door answers it. */
+export interface Caller {
+  readonly user: SessionUser | null;
+  readonly credentialId: string;
+  readonly via: Via;
+  readonly grant: Grant;
+  readonly superadmin: boolean;
+}
+
+/**
+ * The shared tail every credential passes through.
+ *
+ * `appUserForEmail` turns the authenticated address into the `app_user` uuid that memberships
+ * are keyed by, which is the only id a procedure may act on. An address with no `app_user`
+ * resolves to nobody, not to a session: that is the case where someone's account was removed
+ * while they still hold a valid cookie or token -- they are who they say they are, and they
+ * are nobody here. Read on every request, so a removal takes effect at the next one.
+ *
+ * Platform authority is decided here too, and only here, off the environment list against the
+ * address -- so removal from `UNDERCROFT_SUPERADMINS` also takes effect at the next request.
+ * `superadmin` is false whenever `user` is null, because a caller the platform cannot identify
+ * must not carry authority over it.
+ *
+ * Nobody's grant is the door's own: `write` at the cookie door, so an anonymous call to `/trpc`
+ * is refused by `authedProcedure` as UNAUTHORIZED -- what it is -- rather than by the grant
+ * guard as a write it may not make. At the bearer door nobody reaches a procedure at all.
+ */
+async function callerFor(
+  deps: ServerDeps,
+  presented: Presented | null,
+  door: Door,
+): Promise<Caller> {
+  const via: Via = door === "cookie" ? "session" : "token";
+  const nobody: Caller = {
+    user: null,
+    credentialId: "",
+    via,
+    grant: door === "cookie" ? "write" : "read",
+    superadmin: false,
+  };
+  if (presented === null) {
+    return nobody;
+  }
+  const appUser = await appUserForEmail(deps.exec, presented.email);
+  if (appUser === null) {
+    return nobody;
+  }
+  return {
+    user: { userId: appUser.appUserId, email: appUser.email },
+    credentialId: presented.credentialId,
+    via,
+    grant: presented.grant,
+    superadmin: isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, appUser.email),
+  };
+}
+
+/** Who is calling through `door`: its identity step, then the shared tail. */
+export async function resolveCaller(
+  deps: ServerDeps,
+  headers: Headers,
+  door: Door,
+): Promise<Caller> {
+  const presented =
+    door === "cookie" ? await sessionIdentity(deps, headers) : await resolveBearer(deps, headers);
+  return callerFor(deps, presented, door);
+}
+
+/**
+ * The one context a request gets, whichever transport asked for it and whichever credential
+ * it presented at that `door`.
  *
  * Every refusal this request produces and every email it causes to be sent is worded in the
  * locale resolved here -- including the invitation, which goes to somebody whose own language
  * nobody here knows. See `../i18n`.
  */
-export async function createContext(deps: ServerDeps, headers: Headers): Promise<Context> {
-  const { user, sessionId, superadmin } = await resolveCaller(deps, headers);
+export async function createContext(
+  deps: ServerDeps,
+  headers: Headers,
+  door: Door,
+): Promise<Context> {
+  const { user, credentialId, via, grant, superadmin } = await resolveCaller(deps, headers, door);
   const { auth } = deps;
   const locale = negotiateLocale(headers.get("accept-language"));
 
   return {
     exec: deps.exec,
     user,
-    sessionId,
+    credentialId,
+    via,
+    grant,
     superadmin,
     locale,
+    // Only at the cookie door. A bearer request that happened to carry a cookie as well must
+    // not be able to end the browser session it did not authenticate with.
     endSession: async (): Promise<void> => {
-      if (auth !== undefined) {
+      if (auth !== undefined && door === "cookie") {
         await auth.api.signOut({ headers });
       }
     },

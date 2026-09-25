@@ -2,13 +2,19 @@ id: ingest_due
 namespace: undercroft
 
 description: |
-  Every fifteen minutes, ask the worker which (tenant, source) pairs are due and start
+  Every five minutes, ask the worker which (tenant, source) pairs are due and start
   each one.
+
+  The tick is how late a run may start past its time. A preset cadence is a gap since the
+  last run and a custom one is a cron expression (ADR 0059); either way this flow fires
+  nothing by itself, and a cron that could fire more often than this tick is refused
+  before it is stored. `SCHEDULER_TICK_MS` in packages/contracts/src/cadence.ts states the
+  same five minutes; change the two together.
 
   The flow takes no input. Its predecessor took a `tenantId`, which meant one execution
   could read one customer and a schedule could only ever be one customer's -- so it
-  scheduled nobody. The worker owns the schedule (`ops.connection.cadence`, and the rule
-  in packages/contracts/src/cadence.ts); this flow is the tick.
+  scheduled nobody. The worker owns the schedule (`ops.connection.cadence` and `.cron`, and
+  the rule in packages/contracts/src/cadence.ts); this flow is the tick.
 
   Calls the worker's HTTP trigger rather than running containers itself. Kestra therefore
   needs no access to the Docker socket, which on a shared host would make a Kestra
@@ -85,9 +91,9 @@ tasks:
     message: "asked the worker to start {{ fromJson(outputs.due.body).due | length }} due pair(s)"
 
 triggers:
-  - id: every_15_minutes
+  - id: every_5_minutes
     type: io.kestra.plugin.core.trigger.Schedule
-    cron: "*/15 * * * *"
+    cron: "*/5 * * * *"
 
 errors:
   - id: alert

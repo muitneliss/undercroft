@@ -59,13 +59,13 @@ the code):
    ###"""##    ##"""###
    ###   ##    ##   ###
    ###   ##    ##   ###     Ấn bản 1.34.1
-   ###___##____##___###     http://localhost:63979  hồ sơ prod
+   ###___##____##___###     http://localhost:64695  hồ sơ prod
    '##################'     Chưa đăng nhập
 
    Cho tác tử . . . . . . . . . . . . . . . . . . undercroft describe --agent
    In English . . . . . . . . . . . . . . . . . . . . .  undercroft --lang en
 
-┌  Đăng nhập vào http://localhost:63979
+┌  Đăng nhập vào http://localhost:64695
 │
 ◆  Địa chỉ email
 │  _
@@ -111,7 +111,7 @@ error, not first contact, and gets its erratum.
 ### The code
 
 ```text
-┌  Đăng nhập vào http://localhost:63979
+┌  Đăng nhập vào http://localhost:64695
 │
 ◇  Địa chỉ email
 │  operator@example.test
@@ -138,7 +138,7 @@ error, not first contact, and gets its erratum.
 ### A rejected code, then signed in
 
 ```text
-┌  Đăng nhập vào http://localhost:63979
+┌  Đăng nhập vào http://localhost:64695
 │
 ◇  Địa chỉ email
 │  operator@example.test
@@ -159,7 +159,7 @@ error, not first contact, and gets its erratum.
 ◇  Mã sáu chữ số trong email
 │  ******
 │
-└  Đã đăng nhập vào http://localhost:63979 với operator@example.test.
+└  Đã đăng nhập vào http://localhost:64695 với operator@example.test.
 ```
 
 A rejected code does not end the run. The person chooses: a new code to the same address,
@@ -173,7 +173,7 @@ written on the rail, the rail is closed, and the run ends with that failure's ex
 ### Home, signed in: the contents page
 
 ```text
-   #"# UNDERCROFT 1.34.1                         http://localhost:63979  prod
+   #"# UNDERCROFT 1.34.1                         http://localhost:64695  prod
                                                operator@example.test  chỉ đọc
    --------------------------------------------------------------------------
 
@@ -195,6 +195,8 @@ written on the rail, the rail is closed, and the run ends with that failure's ex
 
    auth          Đăng nhập, đăng xuất và phiên của bạn. . . . . . . . . .   3
    session       Phiên hiện tại.  . . . . . . . . . . . . . . . . . . . .   3
+   account       Tài khoản của bạn.
+     tokens      Token truy cập cá nhân, cho tác tử kết nối qua MCP.  . .   3
    config        Hồ sơ môi trường của CLI, và cấu hình công khai của
                  máy chủ. . . . . . . . . . . . . . . . . . . . . . . . .   4
 
@@ -204,7 +206,7 @@ written on the rail, the rail is closed, and the run ends with that failure's ex
 With writes allowed on the profile, only the running head changes:
 
 ```text
-   #"# UNDERCROFT 1.34.1                         http://localhost:63979  prod
+   #"# UNDERCROFT 1.34.1                         http://localhost:64695  prod
                                               operator@example.test  ĐƯỢC GHI
 ```
 
@@ -213,8 +215,11 @@ With writes allowed on the profile, only the running head changes:
 - Write permission is shown by form: "chỉ đọc" plain, "ĐƯỢC GHI" in bold capitals. Never red,
   because allowed writes are not an error.
 - Topics follow the pipeline (sources, runs, the raw lake, models, quality, reports), then
-  administration. The appendix holds the CLI's own machinery. The order is typed against
+  administration. The appendix holds your own access and the CLI's machinery: signing in,
+  the session, your account and its tokens, the profiles. The order is typed against
   `TopicKey`, so a new router namespace is a `tsc` error until someone places it.
+- A topic whose commands all sit in its sub-topics (`account`) is a heading: no leader and
+  no count, because a "0" would read as an empty chapter.
 - The counts are the commands directly under each topic, taken from the command table when
   the CLI runs. Each sentence is the existing `topics.*` string.
 
@@ -225,7 +230,7 @@ In human mode, on stderr:
 ```text
    x ĐÍNH CHÍNH  NOT_FOUND
      Không tìm thấy.
-     Mã truy vết: c00f7c779a525543917ac30f56e3b302 — ghi kèm mã này khi báo
+     Mã truy vết: 41b44321219a4e348f77575454585a52 — ghi kèm mã này khi báo
      lỗi.
 ```
 
@@ -244,7 +249,7 @@ sentences but keeps the leaders and counts. At 50 columns:
    API.
 
    Ấn bản 1.34.1
-   http://localhost:63979  hồ sơ prod
+   http://localhost:64695  hồ sơ prod
    Chưa đăng nhập
 
    Đăng nhập  . . . . . . . undercroft auth login
@@ -255,7 +260,7 @@ sentences but keeps the leaders and counts. At 50 columns:
 
 ```text
    #"# UNDERCROFT 1.34.1
-   http://localhost:63979  prod
+   http://localhost:64695  prod
    operator@example.test  chỉ đọc
    ----------------------------------------------
 
@@ -277,6 +282,8 @@ sentences but keeps the leaders and counts. At 50 columns:
 
    auth . . . . . . . . . . . . . . . . . . .   3
    session  . . . . . . . . . . . . . . . . .   3
+   account
+     tokens . . . . . . . . . . . . . . . . .   3
    config . . . . . . . . . . . . . . . . . .   4
 
    undercroft <chủ đề> --help
@@ -294,13 +301,13 @@ sentences but keeps the leaders and counts. At 50 columns:
    ###"""##    ##"""###
    ###   ##    ##   ###
    ###   ##    ##   ###     Edition 1.34.1
-   ###___##____##___###     http://localhost:63979  profile prod
+   ###___##____##___###     http://localhost:64695  profile prod
    '##################'     Not signed in
 
    For agents . . . . . . . . . . . . . . . . . . undercroft describe --agent
    Tiếng Việt . . . . . . . . . . . . . . . . . . . . .  undercroft --lang vi
 
-┌  Sign in to http://localhost:63979
+┌  Sign in to http://localhost:64695
 │
 ◆  Email address
 │  _
@@ -308,7 +315,7 @@ sentences but keeps the leaders and counts. At 50 columns:
 ```
 
 ```text
-   #"# UNDERCROFT 1.34.1                         http://localhost:63979  prod
+   #"# UNDERCROFT 1.34.1                         http://localhost:64695  prod
                                              operator@example.test  read-only
    --------------------------------------------------------------------------
 
@@ -330,6 +337,9 @@ sentences but keeps the leaders and counts. At 50 columns:
 
    auth          Signing in and out, and your session.  . . . . . . . . .   3
    session       The current session. . . . . . . . . . . . . . . . . . .   3
+   account       Your own account.
+     tokens      Personal access tokens, for an agent connecting over
+                 MCP. . . . . . . . . . . . . . . . . . . . . . . . . . .   3
    config        The CLI's environment profiles, and the server's
                  public configuration.  . . . . . . . . . . . . . . . . .   4
 

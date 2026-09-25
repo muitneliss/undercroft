@@ -25,6 +25,7 @@ import { Book } from "@/components/Book.tsx";
 import { Opened } from "@/components/Opened.tsx";
 import { ScopeRoute } from "@/components/ScopeRoute.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { Account } from "@/routes/Account.tsx";
 import { People } from "@/routes/People.tsx";
 import { TenantOverview } from "@/routes/TenantOverview.tsx";
 import { Tenants } from "@/routes/Tenants.tsx";
@@ -198,6 +199,16 @@ function tenantRoutes(signedInAs: string): RouteObject[] {
       element: (
         <Book tenantId={undefined} current="customers" signedInAs={signedInAs}>
           <Tenants />
+        </Book>
+      ),
+    },
+    {
+      // The person's own page, outside every customer's book as the customer list is. It opens
+      // on the customers' board because it belongs to no division of its own.
+      path: "/account",
+      element: (
+        <Book tenantId={undefined} current="customers" signedInAs={signedInAs}>
+          <Account signedInAs={signedInAs} />
         </Book>
       ),
     },

@@ -35,20 +35,39 @@ import type { SqlExecutor } from "@undercroft/db";
 import { currentTraceId } from "@undercroft/telemetry";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import type { Grant } from "../services/accessTokens.ts";
 import { authorityIn, outranks, type Role } from "../services/authz.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
+import { effectOf, grantAdmits } from "./surface.ts";
 
 export interface SessionUser {
   readonly userId: string;
   readonly email: string;
 }
 
+/**
+ * Which door the caller came through: a person's browser session (the cookie `/trpc` and the
+ * assistant read), or a bearer credential (`/mcp`). A procedure never branches on it except to
+ * refuse -- `sessionProcedure` below -- and the grant is what carries its consequence.
+ */
+export type Via = "session" | "token";
+
 export interface Context {
   readonly exec: SqlExecutor;
   readonly user: SessionUser | null;
-  /** Better Auth's session id, or `""` when unauthenticated. For audit, not for authority. */
-  readonly sessionId: string;
+  /**
+   * What the caller presented, by id: Better Auth's session id, or a personal token's `upat_…`
+   * id. `""` when unauthenticated. For audit and logs, never for authority.
+   */
+  readonly credentialId: string;
+  readonly via: Via;
+  /**
+   * What the caller's credential lets through, which the base procedure below enforces against
+   * each call's effect. A cookie session is always `write` -- it IS the person, at their own
+   * browser -- and a token holds whatever its owner chose when minting it (ADR 0060).
+   */
+  readonly grant: Grant;
   /**
    * Whether the caller is named in `UNDERCROFT_SUPERADMINS`, and therefore holds `admin` in
    * every tenant.
@@ -175,14 +194,68 @@ const t = initTRPC.context<Context>().create({
   },
 });
 
-export const { router } = t;
-export const { procedure: publicProcedure } = t;
+/**
+ * The facts a refusal was built with (see `refusal`), or `null` for one built without any.
+ *
+ * For a door that is not tRPC's own HTTP adapter and so never runs the formatter above -- the
+ * model-context door calls through `createCaller` and words its own answer. The class stays
+ * private: this answers the one question such a door has, and nothing else can mint the cause.
+ */
+export function refusalFacts(error: TRPCError): RefusalFacts | null {
+  return error.cause instanceof Refusal ? error.cause.facts : null;
+}
 
-export const authedProcedure = t.procedure.use(({ ctx, next }) => {
+export const { router } = t;
+
+/**
+ * The grant guard, at the root of every procedure -- the one door every caller shares.
+ *
+ * A `read` grant admits a call only when `surface.ts` classifies it `read`; anything else,
+ * an unclassified path included, is refused here. Here and not in the model-context door that
+ * mints read credentials, because a check in one door binds one door: the assistant, the CLI
+ * and whatever arrives next all reach the router through this middleware, and none of them can
+ * route around it. The door keeps its own check as well (`mcp.ts`), for a refusal worded before
+ * any procedure is resolved -- but this is the one that holds.
+ *
+ * FORBIDDEN, worded, with the facts an agent matches on: the caller is authenticated, and what
+ * they lack is a grant their owner can give them by minting a `write` token.
+ */
+export const publicProcedure = t.procedure.use(({ ctx, path, type, next }) => {
+  if (!grantAdmits(ctx.grant, effectOf({ path, type }))) {
+    throw refusal("FORBIDDEN", messages(ctx.locale)("error.writesDisabled"), {
+      reason: "WRITES_DISABLED",
+      grant: ctx.grant,
+    });
+  }
+  return next();
+});
+
+export const authedProcedure = publicProcedure.use(({ ctx, next }) => {
   if (ctx.user === null) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+/**
+ * A procedure only a person's own browser session may call: never a bearer credential.
+ *
+ * The procedures on it manage credentials. A token that could reach them could mint a token,
+ * and a read token could mint itself a write one, so the grant its owner chose would bind
+ * nothing. `SESSION_ONLY` in `surface.ts` is the list of them a bearer-only door leaves out,
+ * and `procedureManifest` refuses a router whose list and this middleware disagree.
+ *
+ * FORBIDDEN rather than UNAUTHORIZED: the caller IS authenticated, and signing in again with
+ * the same credential would change nothing. The sentence says where the action lives.
+ */
+export const sessionProcedure = authedProcedure.use(({ ctx, next }) => {
+  if (ctx.via !== "session") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: messages(ctx.locale)("error.requiresSession"),
+    });
+  }
+  return next();
 });
 
 /**

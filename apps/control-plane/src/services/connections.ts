@@ -20,7 +20,9 @@
 import {
   type BrowseListing,
   type Cadence,
+  cadenceSetting,
   type ConnectionScope,
+  type CronRefusal,
   needsScope,
   nextRunAt,
   parseScope,
@@ -128,8 +130,14 @@ export interface ConnectionCardView {
    * card prints its outcome, its time and how much it saw; the Journal holds the rest.
    */
   readonly lastRun: LastRun | null;
-  /** How often this source is read, in one of four words. `daily` until an admin says otherwise. */
+  /** How often this source is read: a preset, or `custom`. `daily` until an admin says otherwise. */
   readonly cadence: Cadence;
+  /**
+   * The expression a `custom` cadence fires on, in Singapore time; `null` for every preset.
+   * Shown as written -- the card prints the fires it produces beside it rather than a
+   * paraphrase of it (ADR 0059).
+   */
+  readonly cron: string | null;
   /**
    * When this source is next due, or `null` when nothing will run: disconnected, paused, or
    * waiting for a scope. A value in the past means "at the scheduler's next tick" -- the
@@ -265,6 +273,7 @@ function unconnected(kind: KnownSource): ConnectionCardView {
     expiresAt: null,
     lastRun: null,
     cadence: "daily",
+    cron: null,
     nextRunAt: null,
   };
 }
@@ -284,11 +293,13 @@ function presentCard(kind: KnownSource, row: ConnectionView, now: Date): Connect
     expiresAt: null,
     lastRun: row.lastRun,
     cadence: row.cadence,
+    cron: row.cron,
     nextRunAt: nextRunAt(
       {
         source: row.source,
         status: row.status,
         cadence: row.cadence,
+        cron: row.cron,
         selectionJson: row.selectionJson,
         lastRunStartedAt: row.lastRun?.startedAt ?? null,
       },
@@ -297,17 +308,37 @@ function presentCard(kind: KnownSource, row: ConnectionView, now: Date): Connect
   };
 }
 
-export type SetCadenceOutcome = { ok: true } | { ok: false; reason: "no-connection" };
+export type SetCadenceOutcome =
+  | { ok: true }
+  | { ok: false; reason: "no-connection" | "cron-without-custom" }
+  | { ok: false; reason: "cron-refused"; refusal: CronRefusal };
 
 /**
  * Record how often a source is read. Admin-only at the handler: it changes how often a
  * customer's accounts are opened, which is a decision about their data, not ours.
+ *
+ * The expression is checked HERE, by the rule in `@undercroft/contracts`, rather than by the
+ * procedure's input schema: this is the one door a browser, the CLI and the assistant all come
+ * through, and a refusal returned as a reason is one the handler can word in the reader's
+ * language -- where a schema failure reaches a person as a list of zod issues. The UI runs the
+ * same check before offering Save, so a person at the form never meets this refusal.
  */
 export async function setCadence(
   exec: SqlExecutor,
-  input: { tenantId: string; source: string; cadence: Cadence; actor: string },
+  input: {
+    tenantId: string;
+    source: string;
+    cadence: Cadence;
+    cron?: string | undefined;
+    actor: string;
+  },
 ): Promise<SetCadenceOutcome> {
-  const written = await writeCadence(exec, input.tenantId, input.source, input.cadence);
+  const decided = cadenceSetting(input);
+  if (!decided.ok) {
+    return decided;
+  }
+  const { setting } = decided;
+  const written = await writeCadence(exec, input.tenantId, input.source, setting);
   if (!written) {
     return { ok: false, reason: "no-connection" };
   }
@@ -316,7 +347,13 @@ export async function setCadence(
       tenantId: input.tenantId,
       actor: input.actor,
       action: "connection.cadence_set",
-      detail: JSON.stringify({ source: input.source, cadence: input.cadence }),
+      // The expression is a schedule, not customer data, so the trail carries it whole: "who
+      // made this run at 03:00" is the question an audit of a cadence is asked.
+      detail: JSON.stringify({
+        source: input.source,
+        cadence: setting.cadence,
+        cron: setting.cron,
+      }),
     });
   } catch {
     // Swallowed like every other audit write here: a failed insert must not lose a cadence

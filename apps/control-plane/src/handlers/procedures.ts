@@ -18,8 +18,14 @@ import { ZodType } from "zod";
 import { procedureSentences as en } from "../i18n/procedures.en.ts";
 import { procedureSentences as vi } from "../i18n/procedures.vi.ts";
 import { appRouter } from "./router.ts";
-import { effectOf, type JsonSchema, type ProcedurePath, type ProcedureSpec } from "./surface.ts";
-import { tenantProcedure } from "./trpc.ts";
+import {
+  effectOf,
+  type JsonSchema,
+  type ProcedurePath,
+  type ProcedureSpec,
+  SESSION_ONLY,
+} from "./surface.ts";
+import { sessionProcedure, tenantProcedure } from "./trpc.ts";
 
 export type Caller = ReturnType<typeof appRouter.createCaller>;
 
@@ -105,6 +111,39 @@ function inputsOf(path: string, procedure: unknown): readonly unknown[] {
   return inputs;
 }
 
+/** A procedure's middleware chain, outermost first. Missing is a tRPC upgrade, as above. */
+function middlewaresOf(path: string, procedure: unknown): readonly unknown[] {
+  const def = defOf(procedure);
+  const middlewares: unknown = isRecord(def) ? def.middlewares : undefined;
+  if (!Array.isArray(middlewares)) {
+    throw new Error(`${path}: the procedure has no _def.middlewares; has tRPC changed shape?`);
+  }
+  return middlewares;
+}
+
+/**
+ * The one middleware `sessionProcedure` adds, by identity -- how `tenantScoped` is read below,
+ * for the same reason: a procedure built on it carries that very function in its chain.
+ */
+const SESSION_GUARD: unknown = sessionProcedure._def.middlewares.at(-1);
+
+/**
+ * Whether the router's `sessionProcedure` and `SESSION_ONLY` agree about `path`.
+ *
+ * Two statements of one fact -- the middleware that refuses a bearer, and the list a bearer-only
+ * door reads to leave the procedure out -- so the walk refuses a router where they differ. A
+ * session-only procedure missing from the list would be offered as a tool that always refuses;
+ * a listed one the middleware does not guard would be hidden from a door that could call it.
+ */
+function assertSessionOnlyAgrees(path: ProcedurePath, procedure: unknown): void {
+  const guarded = middlewaresOf(path, procedure).includes(SESSION_GUARD);
+  if (guarded !== SESSION_ONLY.includes(path)) {
+    throw new Error(
+      `${path}: sessionProcedure and SESSION_ONLY in handlers/surface.ts disagree about it`,
+    );
+  }
+}
+
 /** A subscription is refused: no caller built from this manifest has a way to serve one. */
 function typeOf(path: string, procedure: unknown): "query" | "mutation" {
   const def = defOf(procedure);
@@ -160,7 +199,7 @@ function mergeObjects(path: string, schemas: readonly JsonSchema[]): JsonSchema 
  * Throws, naming the procedure, on anything it cannot describe honestly. The tables it joins
  * are typed against the router, so their gaps are `tsc` errors before this ever runs; what is
  * left to refuse here is what only the running router shows -- a subscription, an input that
- * is not zod, a chain that cannot be merged.
+ * is not zod, a chain that cannot be merged, a session-only procedure `SESSION_ONLY` misses.
  */
 export async function procedureManifest(): Promise<ProcedureSpec[]> {
   const [tenantInput] = tenantProcedure._def.inputs;
@@ -169,6 +208,7 @@ export async function procedureManifest(): Promise<ProcedureSpec[]> {
     if (!isProcedurePath(path)) {
       throw new Error(`${path}: not a procedure path; has tRPC changed shape?`);
     }
+    assertSessionOnlyAgrees(path, procedure);
     const inputs = inputsOf(path, procedure);
     const schemas = await Promise.all(inputs.map((parser) => jsonSchemaOf(path, parser)));
     const type = typeOf(path, procedure);

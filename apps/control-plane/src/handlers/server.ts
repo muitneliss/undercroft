@@ -23,6 +23,7 @@ import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
 import { createContext, resolveCaller, type ServerDeps } from "./context.ts";
+import { registerMcpRoute } from "./mcp.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
 import { appRouter } from "./router.ts";
 
@@ -57,7 +58,9 @@ const CONTENT_TYPES: Record<string, string> = {
  */
 function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
   app.all("/trpc/*", async (c) => {
-    const context = await createContext(deps, c.req.raw.headers);
+    // The cookie door, and only the cookie: a bearer is `/mcp`'s, and a browser's own API must
+    // not start answering to one because a header happened to be set.
+    const context = await createContext(deps, c.req.raw.headers, "cookie");
     return await fetchRequestHandler({
       endpoint: "/trpc",
       req: c.req.raw,
@@ -133,7 +136,7 @@ function registerConsentRoute(app: Hono, deps: ServerDeps): void {
     // consent.
     hasAdminAuthority: (tenantId, caller) =>
       isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
-    resolveCaller: async (headers) => (await resolveCaller(deps, headers)).user,
+    resolveCaller: async (headers) => (await resolveCaller(deps, headers, "cookie")).user,
   });
 }
 
@@ -166,11 +169,20 @@ export function createServer(deps: ServerDeps): Hono {
   // the caller's language rather than 404ing into the app shell.
   registerAssistantRoutes(app, {
     exec: deps.exec,
-    createContext: (headers) => createContext(deps, headers),
+    createContext: (headers) => createContext(deps, headers, "cookie"),
     // Not spread conditionally: an absent gate is `unavailableJudge`, which DENIES the write
     // tier, so the route handles a verdict rather than a null. That is the honest default.
     judge: deps.judge ?? unavailableJudge,
     ...(deps.assistant === undefined ? {} : { assistant: deps.assistant }),
+  });
+
+  // The model-context door (ADR 0060): a bearer, never the cookie. Before the catch-all for the
+  // same reason as the two above -- a client's GET here must not be answered with the app shell.
+  registerMcpRoute(app, {
+    createContext: (headers) => createContext(deps, headers, "bearer"),
+    ...(deps.publicUrl === undefined ? {} : { publicUrl: deps.publicUrl }),
+    ...(deps.release === undefined ? {} : { release: deps.release }),
+    ...(deps.log === undefined ? {} : { log: deps.log }),
   });
 
   // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a

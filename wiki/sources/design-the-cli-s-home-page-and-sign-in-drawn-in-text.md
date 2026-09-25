@@ -5,7 +5,7 @@ date: 2026-09-25
 tags: []
 source: docs/design/cli-home-and-sign-in.md
 source_path: docs/design/cli-home-and-sign-in.md
-source_hash: 17d64c43c6bd5b419880b009dbfc3426913071b13f64f4ef4c98aad50d2b6b44
+source_hash: 112df266e9e7ecedb982fce9421fcda0020697ae3ee1675b6df1cfb5344f6f03
 ingested: 2026-09-25
 ---
 
@@ -19,7 +19,7 @@ Five rules hold on every page, stated in `apps/cli/src/services/typeset.ts`: eve
 
 Agent mode draws none of it: a bare piped `undercroft` still prints oclif's help (pinned in `cli.test.ts`), and `home` is a hidden command `main.ts` routes a bare run to in human mode only, so the `undercroft-cli` skill, which always passes `--agent`, sees no change ([[ADR 0044: An agent reaches Undercroft as a caller]]). `--no-input` draws the page and never prompts.
 
-Sign-in at a terminal is one run: email, a six-cell code prompt (paste fills it; only six digits submit; masked once submitted), and a rejected code offers a new code, another address, or quitting. The code-sent line keeps the server's "if ... has access" neutrality and no longer says "run again with --code" in the interactive path. The contents page is drawn only after `session.me` answers, since a session file is not evidence of a session. Topic order is typed against `TopicKey`; counts come from the command table at run time.
+Sign-in at a terminal is one run: email, a six-cell code prompt (paste fills it; only six digits submit; masked once submitted), and a rejected code offers a new code, another address, or quitting. The code-sent line keeps the server's "if ... has access" neutrality and no longer says "run again with --code" in the interactive path. The contents page is drawn only after `session.me` answers, since a session file is not evidence of a session. Topic order is typed against `TopicKey`; counts come from the command table at run time, and a topic whose commands are all in sub-topics (`account`) is a heading with no count.
 
 In human mode every failure on stderr is an erratum: a red `ĐÍNH CHÍNH` / `ERRATUM` label, the error code first (still greppable), the message, details, and the trace id wrapped at the page width. Width is at most 77 columns with a 3-column margin (Clack's text column); under 60 columns the pages stack into one column. Known deviation: Clack's own email and choice prompts mark a Ctrl-C with Clack's red cancel symbol.
 

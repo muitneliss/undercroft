@@ -314,6 +314,41 @@ describe("GET /v1/runs/due", () => {
   });
 });
 
+describe("GET /v1/runs/due for a custom cadence", () => {
+  withDatabase();
+
+  async function seed(sql: string, params: unknown[] = []): Promise<void> {
+    await db.asSuperuser((tx) => tx.query(sql, params));
+  }
+
+  async function due(): Promise<unknown> {
+    const res = await api().request("/v1/runs/due", {
+      headers: { authorization: "Bearer svc-token" },
+    });
+    return res.json();
+  }
+
+  it("starts the pair once a fire has passed since its last run, and not before", async () => {
+    // Noon every day, Singapore time. The same expression on both sides, so what differs is
+    // only whether a fire has come round since the last run started.
+    await seed(
+      "UPDATE ops.connection SET cadence = 'custom', cron = '0 12 * * *' WHERE source = 'demo'",
+    );
+    await seed(
+      `INSERT INTO ops.run (id, tenant_id, source, verb, status, started_at, ended_at)
+       VALUES ('r-old', 'CASE-1', 'demo', 'ingest', 'ok', now() - interval '2 days', now() - interval '2 days')`,
+    );
+    expect(await due()).toEqual({ due: [{ tenantId: "CASE-1", source: "demo" }] });
+
+    // A run that started just now satisfies every fire before it; the next is in the future.
+    await seed(
+      `INSERT INTO ops.run (id, tenant_id, source, verb, status, started_at, ended_at)
+       VALUES ('r-new', 'CASE-1', 'demo', 'ingest', 'ok', now(), now())`,
+    );
+    expect(await due()).toEqual({ due: [] });
+  });
+});
+
 describe("GET /v1/runs/extract-due", () => {
   withDatabase();
 

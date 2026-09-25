@@ -19,7 +19,7 @@ Everything else talks over the compose network and publishes nothing.
 | `minio`                      | compose network only | Raw lake, on the `pgsty/minio` community build (ADR 0050)              |
 | `minio-init`                 | one-shot, exits 0    | Creates the lake's bucket                                              |
 | `postgres`                   | compose network only | Curated + control-plane schema                                         |
-| `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 15 minutes, `extract_due` hourly        |
+| `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 5 minutes, `extract_due` hourly         |
 | `kestra-init`                | one-shot, exits 0    | Hands Kestra's volumes to uid 1000; without it Kestra crash-loops      |
 | `db-migrate`                 | one-shot, exits 0    | Applies `packages/db/sql`, sets the two platform roles' passwords      |
 | `kestra-flows`               | one-shot, exits 0    | Delivers `flows/` to Kestra from the control-plane image, every deploy |
@@ -436,8 +436,9 @@ and the `kestra-flows` one-shot service runs `scripts/kestraFlows.ts` against Ke
 on every deploy — `PUT` per flow, `POST` when it is new — and exits non-zero on a flow Kestra
 rejects, so the worker (which waits on it) never starts against a scheduler holding last
 release's flow. There is nothing to upload by hand; a flow that is only on the server is
-drift the next deploy reverts. There are two flows. `ingest_due` asks the worker every fifteen
-minutes which (customer, source) pairs are due and starts each. `extract_due` asks hourly, at
+drift the next deploy reverts. There are two flows. `ingest_due` asks the worker every five
+minutes which (customer, source) pairs are due — by a preset cadence or a custom cron
+expression read in Singapore time (ADR 0059) — and starts each. `extract_due` asks hourly, at
 :07, which pairs hold landed documents not yet read into `raw.document_text`, and starts an
 extract run for each. A pair already running is a 409 both flows ignore.
 

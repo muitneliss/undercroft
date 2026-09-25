@@ -36,7 +36,9 @@ function caller(user: SessionUser | null, superadmin = false) {
   const ctx: Context = {
     exec: db,
     user,
-    sessionId: "s1",
+    credentialId: "s1",
+    via: "session",
+    grant: "write",
     // Defaulted off, so every test written before platform authority existed still asks the
     // question it was asking: what an ordinary member may do. A superadmin is opted into.
     superadmin,

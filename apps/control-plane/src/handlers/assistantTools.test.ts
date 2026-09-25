@@ -34,7 +34,9 @@ function context(user: SessionUser | null, superadmin = false, exec: SqlExecutor
   return {
     exec,
     user,
-    sessionId: "s1",
+    credentialId: "s1",
+    via: "session",
+    grant: "write",
     superadmin,
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),

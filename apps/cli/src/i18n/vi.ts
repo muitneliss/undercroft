@@ -30,6 +30,8 @@ export const vi = {
    * against the router's namespaces, so a new one with no sentence is a `tsc` error.
    */
   topics: {
+    account: "Tài khoản của bạn.",
+    accountTokens: "Token truy cập cá nhân, cho tác tử kết nối qua MCP.",
     auth: "Đăng nhập, đăng xuất và phiên của bạn.",
     bi: "Báo cáo: câu hỏi, bảng điều khiển và lược đồ.",
     biQuestions: "Các câu hỏi đã lưu.",

@@ -9,6 +9,7 @@ import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
 import { authedProcedure, publicProcedure, requireRole, router, tenantProcedure } from "./trpc.ts";
 
+import { accountRouter } from "./accountRouter.ts";
 import { connectionsRouter } from "./connectionsRouter.ts";
 import { lakeRouter } from "./lakeRouter.ts";
 import { biRouter } from "./biRouter.ts";
@@ -66,6 +67,9 @@ export const appRouter = router({
         return { ok: true };
       }),
   }),
+
+  /** The caller's own credentials. Session-only: see `accountRouter.ts`. */
+  account: accountRouter,
 
   tenants: tenantsRouter,
 

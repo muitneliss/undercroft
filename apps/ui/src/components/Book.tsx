@@ -192,7 +192,11 @@ export function Book({
           ) : null}
 
           <div className="runhead__right">
-            <span className="datum datum--quiet">{signedInAs}</span>
+            {/* The address is the way to the account page: it already answers "who am I here",
+                and what belongs to that person -- their tokens -- is one step further. */}
+            <Link className="datum datum--quiet" to="/account" title={t("account.open")}>
+              {signedInAs}
+            </Link>
             {/* Beside the sign-out plate, not buried in a settings page: changing language
                 is something a reader does in their first seconds, before they know where
                 anything else is. */}

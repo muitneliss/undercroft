@@ -51,7 +51,9 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
   const ctx: Context = {
     exec: db,
     user,
-    sessionId: "s1",
+    credentialId: "s1",
+    via: "session",
+    grant: "write",
     // These tests are about what a tenant `admin` may do. Platform authority is a different
     // axis, exercised in `authz.test.ts`; keeping it off here means every admin in this file
     // is an ordinary one.

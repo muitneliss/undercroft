@@ -93,7 +93,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 700,
   },
   server: {
-    // The control plane serves /trpc and the OAuth redirects; proxy them in dev.
+    // The control plane serves /trpc, the OAuth redirects and /mcp (ADR 0060); proxy them in
+    // dev, so a model-context client pointed at this origin reaches the same door.
     //
     // The port follows `UNDERCROFT_API_PORT`, the same variable `task dev:api` binds the
     // control plane to, because hardcoding 3000 in both places is only correct while 3000
@@ -105,6 +106,7 @@ export default defineConfig({
       "/trpc": apiOrigin,
       "/oauth": apiOrigin,
       "/api": apiOrigin,
+      "/mcp": apiOrigin,
     },
   },
 });

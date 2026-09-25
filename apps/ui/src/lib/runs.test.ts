@@ -53,7 +53,7 @@ describe("nextRunNote", () => {
   it("a due time already past means the scheduler's next tick, not a missed run", () => {
     expect(
       nextRunNote(vi, "vi", { cadence: "hourly", nextRunAt: "2026-09-17T11:00:00Z" }, NOW),
-    ).toBe("Ở lượt kế tiếp, trong vòng 15 phút");
+    ).toBe("Ở lượt kế tiếp, trong vòng 5 phút");
   });
 
   it("paused says so; no due time at all is missing", () => {

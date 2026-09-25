@@ -4,6 +4,7 @@
   "devDependencies": {
     "@ast-grep/cli": "0.45.3",
     "@biomejs/biome": "2.5.14",
+    "@modelcontextprotocol/client": "2.1.0",
     "@types/bun": "1.4.2",
     "@types/geojson": "7946.0.16",
     "@types/topojson-client": "3.1.5",
@@ -38,6 +39,7 @@
     "geo:build": "bun run scripts/geo/world.ts && bun run scripts/geo/vnProvinces.ts",
     "spec:schema": "bun run packages/contracts/scripts/emitSchema.ts",
     "email:preview": "bun run apps/control-plane/scripts/emailPreview.ts",
+    "mcp:smoke": "bun run scripts/mcpSmoke.ts",
     "build:ui": "bun run --filter '@undercroft/ui' build",
     "build:cli": "bun run apps/cli/scripts/build.ts",
     "build:cli-pack": "bun run apps/cli/scripts/pack.ts",
