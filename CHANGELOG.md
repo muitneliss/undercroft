@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.30.0](https://github.com/muitneliss/undercroft/compare/v1.29.0...v1.30.0) (2026-09-25)
+
+
+### Features
+
+* **control-plane:** a local-only Better Auth sign-in method, UNDERCROFT_DEV_SIGN_IN_AS ([#201](https://github.com/muitneliss/undercroft/issues/201)) ([8033c73](https://github.com/muitneliss/undercroft/commit/8033c735f65713e1e7fa808ea4a32b3c78b01070))
+
+
+### Bug Fixes
+
+* **worker:** a Drive ingest counts files as they download, so a long run is not a frozen screen ([#206](https://github.com/muitneliss/undercroft/issues/206)) ([4f42b8b](https://github.com/muitneliss/undercroft/commit/4f42b8b8c09a0b8a2b0fa05fe8f23ac3b4492040))
+
 ## [1.29.0](https://github.com/muitneliss/undercroft/compare/v1.28.2...v1.29.0) (2026-09-25)
 
 
