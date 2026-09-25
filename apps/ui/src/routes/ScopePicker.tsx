@@ -55,7 +55,6 @@
  * properties included) through the worker. `HubspotChoice` says why. ADR 0052.
  */
 
-import { MAX_PROPERTY_QUERY_CHARS, overlongPropertyChoices } from "@undercroft/contracts/scope";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -65,7 +64,7 @@ import { DriveChoice } from "@/components/DriveChoice.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
 import { GmailChoice } from "@/components/GmailChoice.tsx";
-import { HubspotChoice, type Overlong } from "@/components/HubspotChoice.tsx";
+import { HubspotChoice } from "@/components/HubspotChoice.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -167,21 +166,6 @@ function selectionFor(
 }
 
 /**
- * The HubSpot objects whose choice would not fit in one request, by the rule the server applies
- * when it is saved -- asked here too so the reader is told under the list, before pressing Save,
- * rather than by a refusal after it.
- */
-function overlongFor(kind: Source, chosen: Omit<ScopeDraft, "source">): Overlong[] {
-  if (kind !== "hubspot") {
-    return [];
-  }
-  return overlongPropertyChoices({ kind, properties: chosen.properties }).map((over) => ({
-    ...over,
-    limit: MAX_PROPERTY_QUERY_CHARS,
-  }));
-}
-
-/**
  * Record the selection, then go back to the schedule -- showing the account just scoped.
  *
  * For a mailbox added a moment ago that last part matters: without it the schedule would open
@@ -252,10 +236,10 @@ export function ScopePicker({
   }
 
   const chosen = draft?.source === source ? draft : NOTHING_CHOSEN;
-  const overlong = overlongFor(kind, chosen);
-  // Xero cannot be saved without an organisation, nor HubSpot with a choice too long to send:
-  // the server would refuse either, and saying so beforehand is cheaper than the errata after.
-  const unsaveable = (kind === "xero" && chosen.organisation === null) || overlong.length > 0;
+  // Xero cannot be saved without an organisation: the server would refuse it, and saying so
+  // beforehand is cheaper than the errata after. A HubSpot choice of any size can be saved --
+  // its properties travel in a batch read's body, not in a URL (ADR 0054).
+  const unsaveable = kind === "xero" && chosen.organisation === null;
   const account = connections.data.find((c) => c.source === source)?.externalAccountLabel ?? "";
 
   return (
@@ -276,7 +260,6 @@ export function ScopePicker({
           items={labels.data?.items ?? []}
           loadError={labels.isError ? labels.error.message : null}
           chosen={chosen}
-          overlong={overlong}
         />
 
         {setScope.isError ? (
@@ -336,7 +319,6 @@ function SourceChoice({
   items,
   loadError,
   chosen,
-  overlong,
 }: {
   kind: Source;
   source: string;
@@ -345,7 +327,6 @@ function SourceChoice({
   items: readonly ListedItem[];
   loadError: string | null;
   chosen: Omit<ScopeDraft, "source">;
-  overlong: readonly Overlong[];
 }): React.JSX.Element | null {
   const { t } = useTranslation();
 
@@ -357,9 +338,7 @@ function SourceChoice({
     );
   }
   if (kind === "hubspot") {
-    return (
-      <HubspotChoice source={source} items={items} chosen={chosen.properties} overlong={overlong} />
-    );
+    return <HubspotChoice source={source} items={items} chosen={chosen.properties} />;
   }
   const labels = items.filter(isBrowsedLabel);
   if (kind === "xero") {

@@ -1,6 +1,6 @@
 /**
  * A HubSpot scope widens what each CRM object read asks for, and never below the spec. Issue 202,
- * ADR 0052.
+ * ADR 0052; issue 210, ADR 0054 for the widened read's two steps.
  *
  * Driven through `runIngest` over the SHIPPED `specs/connectors/hubspot.yaml` and a recorded
  * fetcher that refuses any request nobody recorded -- so "this is what was asked for" is proved
@@ -9,7 +9,9 @@
  *
  * Three promises are pinned, each a way a widened read could quietly be wrong:
  * - with no scope, every object is asked for the spec's own properties and nothing else;
- * - a choice is ADDED to the spec's list, so the property a cursor is read from cannot be lost;
+ * - a choice is ADDED to the spec's list, so the property a cursor is read from cannot be lost --
+ *   and it is asked for in a batch read's body, so the list's URL stays the spec's however much
+ *   is chosen;
  * - a changed request does not inherit the old one's watermark, and an unchanged one keeps it.
  *   Without the first half, a property chosen today would reach only the companies that happen
  *   to change after it, and the lake would never say which.
@@ -33,6 +35,7 @@ const ENV = { UNDERCROFT_SECRET_KEY: KEY };
 /** The shipped specs, read and never written. */
 const SPECS_DIR = join(import.meta.dirname, "..", "..", "..", "..", "specs", "connectors");
 const ASSOCIATIONS = "https://api.hubapi.com/crm/v4/associations/deals/companies/batch/read";
+const COMPANIES_BATCH = "https://api.hubapi.com/crm/v3/objects/companies/batch/read";
 
 /** The properties the shipped spec reads on one object, as it writes them. */
 function specProperties(object: string): string {
@@ -59,12 +62,15 @@ function company(id: string, modified: string, extra: Record<string, string> = {
 }
 
 /**
- * HubSpot as recorded: `companies` answered at `companiesUrl`, the other two objects and the
- * relation at the URLs the spec has always used. Any other request is refused.
+ * HubSpot as recorded: `companies` listed as the spec declares it, the other two objects and the
+ * relation at the URLs the spec has always used. Any other request is refused -- a widened read
+ * records its batch read on top with {@link batchAnswers}.
  */
-function hubspot(companiesUrl: string, companies: unknown[]): InMemoryFetcher {
+function hubspot(companies: unknown[]): InMemoryFetcher {
   return new InMemoryFetcher()
-    .on("GET", companiesUrl, { body: { results: companies, paging: {} } })
+    .on("GET", listUrl("companies", specProperties("companies")), {
+      body: { results: companies, paging: {} },
+    })
     .on("GET", listUrl("contacts", specProperties("contacts")), {
       body: {
         results: [{ id: "c1", updatedAt: "2026-01-01T00:00:00.000Z", properties: {} }],
@@ -78,6 +84,22 @@ function hubspot(companiesUrl: string, companies: unknown[]): InMemoryFetcher {
       },
     })
     .on("POST", ASSOCIATIONS, { body: { results: [] } });
+}
+
+/** HubSpot's batch read of companies, answering these records whatever it is asked. */
+function batchAnswers(fetcher: InMemoryFetcher, companies: unknown[]): InMemoryFetcher {
+  return fetcher.on("POST", COMPANIES_BATCH, { body: { status: "COMPLETE", results: companies } });
+}
+
+/** What each batch read of companies asked for, as sent. */
+function batchBodies(
+  fetcher: InMemoryFetcher,
+): { inputs: { id: string }[]; properties: string[] }[] {
+  return fetcher.calls
+    .filter((call) => call.url === COMPANIES_BATCH)
+    .map(
+      (call) => JSON.parse(call.body ?? "{}") as { inputs: { id: string }[]; properties: string[] },
+    );
 }
 
 let db: TestDatabase;
@@ -133,9 +155,7 @@ async function payloadOf(id: string): Promise<{ properties: Record<string, unkno
 
 describe("a HubSpot connection nobody has scoped", () => {
   it("asks every object for the spec's own properties, and reads all four entities", async () => {
-    const fetcher = hubspot(listUrl("companies", specProperties("companies")), [
-      company("1", "2026-01-01T00:00:00.000Z"),
-    ]);
+    const fetcher = hubspot([company("1", "2026-01-01T00:00:00.000Z")]);
 
     const result = await ingest(fetcher);
 
@@ -155,37 +175,55 @@ describe("a HubSpot connection nobody has scoped", () => {
 });
 
 describe("a HubSpot scope", () => {
-  it("adds what was chosen to the spec's list, and a name the spec already reads is not sent twice", async () => {
+  it("lists as the spec declares, then batch-reads the page for the spec's properties and what was chosen", async () => {
     // `hs_lastmodifieddate` is the cursor's own property: choosing it changes nothing, and not
-    // choosing it could not remove it. Contacts and deals, with nothing chosen, are asked
-    // exactly what the spec asks -- `hubspot()` records them nowhere else.
+    // choosing it could not remove it. The list's URL is the spec's, whatever is chosen -- which
+    // is why no choice can be too long to send. Contacts and deals, with nothing chosen, are
+    // asked exactly what the spec asks -- `hubspot()` records them nowhere else.
     await choose({ companies: ["x_onboarding_stage", "annualrevenue", "hs_lastmodifieddate"] });
-    const widened = `${specProperties("companies")},annualrevenue,x_onboarding_stage`;
-    const fetcher = hubspot(listUrl("companies", widened), [
-      company("1", "2026-01-01T00:00:00.000Z", { annualrevenue: "1200000" }),
+    const fetcher = batchAnswers(
+      hubspot([company("1", "2026-01-01T00:00:00.000Z"), company("2", "2026-01-02T00:00:00.000Z")]),
+      [
+        company("2", "2026-01-02T00:00:00.000Z", { annualrevenue: "900" }),
+        company("1", "2026-01-01T00:00:00.000Z", { annualrevenue: "1200000" }),
+      ],
+    );
+
+    const result = await ingest(fetcher);
+
+    expect(fetcher.calls.slice(0, 2).map((call) => call.url)).toEqual([
+      listUrl("companies", specProperties("companies")),
+      COMPANIES_BATCH,
     ]);
-
-    await ingest(fetcher);
-
-    expect(fetcher.calls[0]?.url).toBe(listUrl("companies", widened));
+    expect(batchBodies(fetcher)).toEqual([
+      {
+        inputs: [{ id: "1" }, { id: "2" }],
+        properties: [
+          ...specProperties("companies").split(","),
+          "annualrevenue",
+          "x_onboarding_stage",
+        ],
+      },
+    ]);
+    expect(result.entities.find((entity) => entity.entity === "companies")?.landed).toBe(2);
     expect((await payloadOf("1")).properties.annualrevenue).toBe("1200000");
   });
 
   it("a widened read starts from no mark, so a company unchanged since is read with the new property", async () => {
-    const asDeclared = listUrl("companies", specProperties("companies"));
     await ingest(
-      hubspot(asDeclared, [
-        company("1", "2026-01-01T00:00:00.000Z"),
-        company("2", "2026-02-01T00:00:00.000Z"),
-      ]),
+      hubspot([company("1", "2026-01-01T00:00:00.000Z"), company("2", "2026-02-01T00:00:00.000Z")]),
     );
 
     // Company 1 is older than the mark the first run left. Under that mark it would be
-    // filtered out, and its row would never carry the property chosen now.
+    // filtered out of the list, never asked of the batch read, and its row would never carry the
+    // property chosen now.
     await choose({ companies: ["annualrevenue"] });
-    const widened = listUrl("companies", `${specProperties("companies")},annualrevenue`);
+    const both = [
+      company("1", "2026-01-01T00:00:00.000Z"),
+      company("2", "2026-02-01T00:00:00.000Z"),
+    ];
     await ingest(
-      hubspot(widened, [
+      batchAnswers(hubspot(both), [
         company("1", "2026-01-01T00:00:00.000Z", { annualrevenue: "500" }),
         company("2", "2026-02-01T00:00:00.000Z", { annualrevenue: "900" }),
       ]),
@@ -194,28 +232,32 @@ describe("a HubSpot scope", () => {
     expect((await payloadOf("1")).properties.annualrevenue).toBe("500");
   });
 
-  it("an unchanged scope keeps its mark: a company unchanged since is not read again", async () => {
+  it("an unchanged scope keeps its mark: a company unchanged since is not asked for again", async () => {
     // The quiet side of the one above. The request key is a function of the request alone, so
     // saving the same choice again does not throw a watermark away over nothing.
     await choose({ companies: ["annualrevenue"] });
-    const widened = listUrl("companies", `${specProperties("companies")},annualrevenue`);
-    const both = [
+    const listed = [
+      company("1", "2026-01-01T00:00:00.000Z"),
+      company("2", "2026-02-01T00:00:00.000Z"),
+    ];
+    const read = [
       company("1", "2026-01-01T00:00:00.000Z", { annualrevenue: "500" }),
       company("2", "2026-02-01T00:00:00.000Z", { annualrevenue: "900" }),
     ];
-    await ingest(hubspot(widened, both));
+    await ingest(batchAnswers(hubspot(listed), read));
 
-    const again = await ingest(hubspot(widened, both));
+    const fetcher = batchAnswers(hubspot(listed), [read[1]]);
+    const again = await ingest(fetcher);
 
     // Company 2 sits AT the mark and is read again, as every run reads the mark's own records;
-    // company 1 is below it and is not.
+    // company 1 is below it and is not even asked for.
+    expect(batchBodies(fetcher).map((body) => body.inputs)).toEqual([[{ id: "2" }]]);
     expect(again.entities.find((entity) => entity.entity === "companies")?.landed).toBe(1);
   });
 
   it("the truncation guards still hold on a widened read: an empty first read fails", async () => {
     await choose({ companies: ["annualrevenue"] });
-    const widened = listUrl("companies", `${specProperties("companies")},annualrevenue`);
 
-    await expect(ingest(hubspot(widened, []))).rejects.toThrow("failOnEmpty");
+    await expect(ingest(hubspot([]))).rejects.toThrow("failOnEmpty");
   });
 });

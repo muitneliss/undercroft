@@ -114,8 +114,12 @@ const PropertyName = z.string().regex(/^[^\s,]+$/u, "a property name has no comm
  * Internal names only, no labels. The picker lists the labels live from HubSpot every time it
  * opens, and the card speaks in counts, so nothing needs a label at rest; a label is the
  * customer's own words and is kept out of every stored value that does not need it. A name
- * HubSpot no longer has is not an error here: HubSpot answers a list request naming it by
- * leaving it out, and nothing between the answer and the lake fills it in.
+ * HubSpot no longer has is not an error here: HubSpot answers a read naming it by leaving it
+ * out, and nothing between the answer and the lake fills it in.
+ *
+ * No length limit, either, however many names an object carries: the chosen names are read by a
+ * batch read that takes them in its POST body, never in a URL (ADR 0054, which retired the
+ * 10,000-character refusal ADR 0052 put here).
  */
 export const HubspotScope = z.object({
   kind: z.literal("hubspot"),
@@ -134,40 +138,6 @@ export type DriveScope = z.infer<typeof DriveScope>;
 export type XeroScope = z.infer<typeof XeroScope>;
 export type HubspotScope = z.infer<typeof HubspotScope>;
 export type ConnectionScope = z.infer<typeof ConnectionScope>;
-
-/**
- * How long one object's chosen properties may be once written into its request, in characters.
- *
- * HubSpot lists a CRM object with a GET, and the chosen properties travel in its URL -- the
- * page-two link HubSpot hands back carries them again. HubSpot documents no ceiling for that URL;
- * its developers' forum measures one at about 16,000 characters, beyond which the answer is `414
- * Request-URI Too Large`, and a portal's full list of contact properties can be longer than that
- * on its own. Ten thousand leaves the rest of the URL -- the path, the spec's own properties, the
- * page cursor -- well inside the ceiling that was measured rather than documented.
- *
- * A choice over it is REFUSED when it is saved, with the object named, rather than accepted and
- * left to fail every run afterwards as an opaque 414. POSTing the list instead is not open to a
- * list read: HubSpot's only list-by-POST is its search endpoint, which stops at 10,000 records
- * without saying so -- the silent truncation `failOnExactCount` exists to catch. ADR 0052.
- */
-export const MAX_PROPERTY_QUERY_CHARS = 10_000;
-
-/**
- * The objects whose chosen properties would not fit in one request, and how long each would be.
- * Empty when every one fits.
- *
- * Measured as the value is sent -- percent-encoded, so each separating comma costs three
- * characters -- and over what was CHOSEN, whether or not the spec reads a name already, because
- * this is decided where the spec cannot be read: in the control plane, and in the picker.
- */
-export function overlongPropertyChoices(
-  scope: HubspotScope,
-): { readonly entity: string; readonly chars: number }[] {
-  return Object.entries(scope.properties).flatMap(([entity, names]) => {
-    const chars = encodeURIComponent([...new Set(names)].join(",")).length;
-    return chars > MAX_PROPERTY_QUERY_CHARS ? [{ entity, chars }] : [];
-  });
-}
 
 /**
  * Kinds that must be told what to read before a run may read anything.

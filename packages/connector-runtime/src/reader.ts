@@ -1,15 +1,12 @@
 /**
- * The machinery one entity read is made of: pace, fetch, retry, extract, guard.
+ * The machinery one entity read is made of: pace, fetch, retry, extract, key.
  *
  * Split out of `run.ts`, which had grown past what one file may be and held one function
  * doing all six. The split is along the seam that was already there -- a `Reader` is
- * everything a read of one entity needs and holds its running count, and the two request
- * shapes a spec can describe (`batch-from`, and everything else) get one reader each.
- *
- * `readBatch` and `readPages` return `true` when a guard stopped them mid-stream, because
- * `maxRecords` must NOT then run the end-of-entity guards -- `failOnExactCount` fires on a
- * truncated read, and truncating is exactly what `maxRecords` just did. `yield*` carries
- * that value out, so the caller cannot forget to ask.
+ * everything a read of one entity needs and holds its running count. The loops that drive one
+ * -- a page at a time, a relation in chunks, a list read in two steps -- are `reads.ts` and
+ * `batchRead.ts`; this is what every one of them is made of, including how a decoded answer
+ * becomes keyed records.
  *
  * Two concerns that are about a read but not part of one live beside this file rather than in
  * it: `guards.ts` holds what can only be asked once a read is OVER, and `incremental.ts` holds
@@ -32,7 +29,6 @@ import {
 } from "@undercroft/core";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
 import { alreadyRead, checkIncremental, incrementalAt, sinceCarriedIn } from "./incremental.ts";
-import { nextPageUrl, renderBatchBody } from "./paging.ts";
 
 export interface RawRecordOut {
   readonly source: string;
@@ -82,8 +78,6 @@ export interface RunContext {
 }
 
 type Guards = ConnectorSpec["defaults"]["guards"];
-type BatchRequest = Extract<ConnectorEntity["request"], { kind: "batch-from" }>;
-type PagedRequest = Exclude<ConnectorEntity["request"], { kind: "batch-from" }>;
 
 /**
  * Everything a read of one entity needs, plus the count it is up to.
@@ -151,7 +145,7 @@ async function authHeaders(spec: ConnectorSpec, ctx: RunContext): Promise<Record
  * `https://api.xero.com/Contacts`, and the Xero spec had never fetched the right URL.
  * HubSpot's base carries no path, which is why it never showed.
  */
-function buildUrl(baseUrl: string, path: string, query: Record<string, string>): string {
+export function buildUrl(baseUrl: string, path: string, query: Record<string, string>): string {
   const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   const url = new URL(path.startsWith("/") ? path.slice(1) : path, base);
   for (const [key, value] of Object.entries(query)) {
@@ -160,7 +154,11 @@ function buildUrl(baseUrl: string, path: string, query: Record<string, string>):
   return url.toString();
 }
 
-function extractRecords(entity: ConnectorEntity, spec: ConnectorSpec, parsed: unknown): unknown[] {
+export function extractRecords(
+  entity: ConnectorEntity,
+  spec: ConnectorSpec,
+  parsed: unknown,
+): unknown[] {
   const container =
     entity.envelopePath === undefined ? parsed : getPath(parsed, entity.envelopePath);
   if (!Array.isArray(container)) {
@@ -233,32 +231,43 @@ export async function createReader(
   return reader;
 }
 
+/** A record's id, or a refusal: a record with no id cannot be upserted or traced. */
+export function keyOf(reader: Reader, record: unknown): string {
+  const { spec, entity } = reader;
+  const id = getStringPath(record, entity.idPath);
+  if (id === null) {
+    // Fatal per record, never a skip.
+    throw new ConnectorError(
+      spec.id,
+      entity.name,
+      reader.seen,
+      `a record has no value at idPath ${JSON.stringify(entity.idPath)}`,
+    );
+  }
+  return id;
+}
+
+/** One keyed record as the runtime hands it on. */
+export function outOf(reader: Reader, id: string, record: unknown): RawRecordOut {
+  const { spec, entity } = reader;
+  return {
+    source: spec.id,
+    entity: entity.name,
+    sourceRecordId: id,
+    sourceUpdatedAt:
+      entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath),
+    payloadText: canonicalJson(record),
+    incrementalAt: incrementalAt(entity, record),
+  };
+}
+
 /** Turn one decoded page into records, refusing any that cannot be keyed. */
-function* emit(reader: Reader, parsed: unknown): Generator<RawRecordOut> {
+export function* emit(reader: Reader, parsed: unknown): Generator<RawRecordOut> {
   const { spec, entity, since } = reader;
   for (const record of extractRecords(entity, spec, parsed)) {
-    const id = getStringPath(record, entity.idPath);
-    if (id === null) {
-      // A record with no id cannot be upserted or traced; that is fatal per record.
-      throw new ConnectorError(
-        spec.id,
-        entity.name,
-        reader.seen,
-        `a record has no value at idPath ${JSON.stringify(entity.idPath)}`,
-      );
-    }
-    const at = incrementalAt(entity, record);
-    if (!alreadyRead(entity, since, at)) {
-      const updatedAt =
-        entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath);
-      yield {
-        source: spec.id,
-        entity: entity.name,
-        sourceRecordId: id,
-        sourceUpdatedAt: updatedAt,
-        payloadText: canonicalJson(record),
-        incrementalAt: at,
-      };
+    const id = keyOf(reader, record);
+    if (!alreadyRead(entity, since, incrementalAt(entity, record))) {
+      yield outOf(reader, id, record);
     }
     // Counted whether it was yielded or filtered, because `seen` is how far through the
     // SOURCE this read got: it is the number `failed after N` reports, and the number
@@ -270,79 +279,6 @@ function* emit(reader: Reader, parsed: unknown): Generator<RawRecordOut> {
 }
 
 /** True once `maxRecords` has been reached, which stops the read where it stands. */
-function full(reader: Reader): boolean {
+export function full(reader: Reader): boolean {
   return reader.guards.maxRecords !== undefined && reader.seen >= reader.guards.maxRecords;
-}
-
-/**
- * A relation read: ids harvested from another entity, POSTed in chunks.
- *
- * This exists because a relation like HubSpot's deal->company associations is a different
- * route with a different shape, and bending it into the object reader is how a connector
- * becomes hundreds of lines of special cases.
- */
-export async function* readBatch(
-  reader: Reader,
-  request: BatchRequest,
-  ids: readonly string[],
-): AsyncGenerator<RawRecordOut, boolean> {
-  const url = buildUrl(reader.spec.baseUrl, request.path, {});
-
-  for (let offset = 0; offset < ids.length; offset += request.chunkSize) {
-    const chunk = ids.slice(offset, offset + request.chunkSize);
-    const parsed = await reader.fetchJson({
-      url,
-      method: "POST",
-      headers: { ...reader.headers, "content-type": "application/json" },
-      body: renderBatchBody(request.bodyTemplate, chunk),
-    });
-    for (const record of emit(reader, parsed)) {
-      yield record;
-      if (full(reader)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/** The ordinary read: one page at a time until the source says there is no next one. */
-export async function* readPages(
-  reader: Reader,
-  request: PagedRequest,
-): AsyncGenerator<RawRecordOut, boolean> {
-  const { spec, entity } = reader;
-  let url = buildUrl(spec.baseUrl, request.path, {
-    ...request.query,
-    ...sinceCarriedIn("query-param", entity, reader.since),
-  });
-  let pageIndex = 0;
-
-  for (;;) {
-    const currentUrl = url;
-    const parsed = await reader.fetchJson({ url, method: request.method, headers: reader.headers });
-
-    // `emit` advances `seen`, so capture the page size before draining it.
-    const pageSize = extractRecords(entity, spec, parsed).length;
-    for (const record of emit(reader, parsed)) {
-      yield record;
-      if (full(reader)) {
-        return true;
-      }
-    }
-
-    const next = nextPageUrl({
-      entity,
-      spec,
-      parsed,
-      pageIndex,
-      recordsThisPage: pageSize,
-      currentUrl,
-    });
-    pageIndex += 1;
-    if (next === null) {
-      return false;
-    }
-    url = next;
-  }
 }

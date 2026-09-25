@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { type BrowseListing, Cadence, MAX_PROPERTY_QUERY_CHARS } from "@undercroft/contracts";
+import { type BrowseListing, Cadence } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
@@ -69,40 +69,11 @@ function browseRefusal(
   }
 }
 
-/**
- * Why a scope was not saved.
- *
- * A HubSpot choice too long to be sent is worded apart from a selection nobody could read,
- * because its remedy is in the reader's hands -- untick some of one object's properties -- and
- * the facts name that object and both lengths, so an agent can say how many characters to take
- * off rather than retrying the same save.
- */
-function scopeRefusal(
-  locale: Locale,
-  source: string,
-  refused: Exclude<connections.SetScopeOutcome, { ok: true }>,
-): TRPCError {
-  const t = messages(locale);
-  if (refused.reason === "too-many-properties") {
-    return refusal(
-      "BAD_REQUEST",
-      t("error.tooManyProperties", {
-        entity: refused.entity,
-        chars: String(refused.chars),
-        limit: String(MAX_PROPERTY_QUERY_CHARS),
-      }),
-      {
-        source,
-        reason: "too-many-properties",
-        entity: refused.entity,
-        chars: String(refused.chars),
-        limit: String(MAX_PROPERTY_QUERY_CHARS),
-      },
-    );
-  }
+/** Why a scope was not saved: the one refusal left is a selection nobody could read. */
+function scopeRefusal(locale: Locale, source: string): TRPCError {
   return new TRPCError({
     code: "BAD_REQUEST",
-    message: t("error.scopeNotUnderstood", { source }),
+    message: messages(locale)("error.scopeNotUnderstood", { source }),
   });
 }
 
@@ -200,7 +171,7 @@ export const connectionsRouter = router({
         actorId: ctx.user.userId,
       });
       if (!result.ok) {
-        throw scopeRefusal(ctx.locale, input.source, result);
+        throw scopeRefusal(ctx.locale, input.source);
       }
       return { ok: true };
     }),

@@ -12,7 +12,8 @@
  * live and the properties each ALWAYS reads are all read off it, so an object the spec gains later
  * is listed and widened with no change here. What this module adds is the one thing a spec cannot
  * say -- that a person may add to a list the spec wrote. The generic runtime never learns there
- * was a scope: it is handed an entity whose query is already the union. ADR 0052.
+ * was a scope: it is handed an entity whose batch read already asks for the union. ADR 0052, and
+ * ADR 0054 for why the union goes in a batch read's body rather than in the list's URL.
  *
  * ## The spec's list is a floor
  *
@@ -40,6 +41,9 @@ const OBJECT_LIST = /^\/crm\/v3\/objects\/(?<objectType>[^/]+)$/u;
 const PROPERTIES = "properties";
 const SEPARATOR = ",";
 
+/** Where HubSpot reads an object's records by id, below the path it lists them at. */
+const BATCH_READ = "/batch/read";
+
 /**
  * The HubSpot object an entity lists, when a choice of properties can widen its read -- or null.
  *
@@ -66,8 +70,16 @@ function floorOf(entity: ConnectorEntity): string[] {
 }
 
 /**
- * The entity as a HubSpot scope reads it: its spec's properties, then each chosen one the spec
- * does not already read, in a stable order.
+ * The entity as a HubSpot scope reads it: listed exactly as the spec declares it, and each page
+ * then read whole by HubSpot's batch read, asking for the spec's properties followed by each
+ * chosen one the spec does not already read, in a stable order.
+ *
+ * Two steps rather than a longer list URL (ADR 0054, extending ADR 0052). The list's properties
+ * travel in its query string, which has a ceiling, and a portal's full list of contact properties
+ * is longer than that on its own; the batch read takes them in a POST body, which does not. The
+ * list keeps asking for the spec's own properties, so it still carries the cursor's property and
+ * the watermark filters it as before; the batch read asks for those too, so every landed record
+ * carries the cursor it is marked by. It is not the search endpoint, and has no 10,000 cap.
  *
  * Returns the SAME entity when the choice adds nothing -- no scope, an empty choice, or only names
  * the spec already reads -- which is what lets a run tell "read as the spec declares" from "read
@@ -98,7 +110,11 @@ export function withChosenProperties(
     ...entity,
     request: {
       ...request,
-      query: { ...request.query, [PROPERTIES]: [...floor, ...added].join(SEPARATOR) },
+      batchRead: {
+        path: `${request.path}${BATCH_READ}`,
+        bodyTemplate: "hubspot-batch-read",
+        properties: [...floor, ...added],
+      },
     },
   };
 }

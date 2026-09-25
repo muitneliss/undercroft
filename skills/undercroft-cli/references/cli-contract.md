@@ -50,10 +50,8 @@ Failure:
   refusal, verbatim. For example, a refused `connections browse-scope` gives `source`,
   `listing` (`labels`, `organisations`, `folders` or `properties`), `reason` (`unsupported`,
   `scope-insufficient`, `worker-unreachable` or `refused`) and `remedy` (`reconnect`,
-  `retry-later` or `none`). A HubSpot `connections set-scope` whose chosen properties for one
-  object would not fit in one HubSpot request gives `source`, `reason`
-  (`too-many-properties`), `entity`, `chars` and `limit`. Untick some of that object's
-  properties and save again.
+  `retry-later` or `none`). A HubSpot `connections set-scope` has no size limit: every
+  property of every object may be chosen at once.
 
 No envelope ever holds a cookie, a header, an environment value or a stack trace. With
 `--verbose`, diagnostics go to stderr, never stdout.

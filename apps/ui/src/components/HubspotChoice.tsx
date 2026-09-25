@@ -14,9 +14,9 @@
  * unticked -- `@/lib/hubspotProperties` decides all of that; this file gives it words.
  *
  * A portal's contacts can carry five hundred properties, so the lists are indexes, set in the
- * label index's bounded columns, with one filter over all three objects. Which properties would
- * no longer fit in one HubSpot request is decided by the same rule the server applies on save
- * (`overlongPropertyChoices`), and said under the object it concerns before Save is pressed.
+ * label index's bounded columns, with one filter over all three objects. Every one of them can be
+ * ticked and saved -- Select all included: a widened object's properties travel in a batch read's
+ * body rather than in a URL, so no choice is too long to send (ADR 0054).
  */
 
 import { useTranslation } from "react-i18next";
@@ -41,24 +41,15 @@ const RUN_HEAD = {
   gone: "scopePicker.propertiesGone",
 } as const;
 
-/** An object whose chosen properties would not fit in one request, as the contract measures it. */
-export interface Overlong {
-  readonly entity: string;
-  readonly chars: number;
-  readonly limit: number;
-}
-
 export function HubspotChoice({
   source,
   items,
   chosen,
-  overlong,
 }: {
   /** Which connection the draft and the filter belong to. */
   source: string;
   items: readonly ListedItem[];
   chosen: Readonly<Record<string, readonly string[]>>;
-  overlong: readonly Overlong[];
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((s) => s.locale);
@@ -114,7 +105,6 @@ export function HubspotChoice({
           object={object}
           filter={filter}
           chosen={chosen[object.entity] ?? []}
-          overlong={overlong.find((o) => o.entity === object.entity) ?? null}
         />
       ))}
     </>
@@ -127,13 +117,11 @@ function ObjectChoice({
   object,
   filter,
   chosen,
-  overlong,
 }: {
   source: string;
   object: ObjectProperties;
   filter: string;
   chosen: readonly string[];
-  overlong: Overlong | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((s) => s.locale);
@@ -203,16 +191,6 @@ function ObjectChoice({
           clear(source, entity);
         }}
       />
-
-      {overlong === null ? null : (
-        <p className="note" role="alert">
-          {t("scopePicker.propertiesTooLong", {
-            object: named,
-            chars: overlong.chars,
-            limit: overlong.limit,
-          })}
-        </p>
-      )}
     </>
   );
 }

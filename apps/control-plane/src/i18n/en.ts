@@ -104,8 +104,6 @@ export const en = {
     scopeNotUnderstood: "The selection for {{source}} could not be read.",
     propertiesInsufficient:
       "The HubSpot access token does not currently carry enough permission to read the list of properties. In HubSpot, give the private app read access to companies, contacts and deals (crm.objects.companies.read, crm.objects.contacts.read, crm.objects.deals.read), then paste the token again if HubSpot issued a new one.",
-    tooManyProperties:
-      "The properties chosen for {{entity}} come to {{chars}} characters when sent to HubSpot, over the {{limit}} one read may carry. Untick some of the {{entity}} properties and save again.",
     ingestNotConfigured:
       "This deployment is not set up to connect {{provider}} accounts. Tell whoever administers it.",
     sourceNotConnectable: "{{source}} cannot be connected automatically yet.",

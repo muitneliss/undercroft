@@ -11,6 +11,11 @@
 # anybody ticks, which is why each object's incremental property is listed here and must stay:
 # a scope can add to this list and never take from it. With no scope chosen, this list is the
 # read, exactly as before.
+#
+# A widened object is read in two steps (ADR 0054): the list below, exactly as written, names
+# each page's records and carries the cursor, and HubSpot's batch read then fetches that page
+# with the union in its POST body -- a portal's full list of contact properties is longer than
+# any URL HubSpot accepts. The worker adds that step (`request.batchRead`); nothing here does.
 apiVersion: undercroft.dev/v1
 kind: Connector
 id: hubspot
