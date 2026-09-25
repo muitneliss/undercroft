@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.1](https://github.com/muitneliss/undercroft/compare/v1.34.0...v1.34.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **worker:** a Drive run's gauge moves while it lists and skips, not only when it downloads ([#226](https://github.com/muitneliss/undercroft/issues/226)) ([0aaf1a0](https://github.com/muitneliss/undercroft/commit/0aaf1a0af61e85cad3cb6200f4f56d3be1c1342e))
+
 ## [1.34.0](https://github.com/muitneliss/undercroft/compare/v1.33.0...v1.34.0) (2026-09-25)
 
 
