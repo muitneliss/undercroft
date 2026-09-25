@@ -62,11 +62,23 @@ function refuse(path: string): Response {
   );
 }
 
+/** A procedure's refusal as the server words it: PRECONDITION_FAILED carrying `message`. */
+function precondition(message: string): Response {
+  return Response.json(
+    { error: { message, code: -32_012, data: { code: "PRECONDITION_FAILED", httpStatus: 412 } } },
+    { status: 412 },
+  );
+}
+
 /**
  * The page as `role` sees it. A member gets the schedule and no plate that would act on it; an
- * admin's Run now is answered with `trigger`, which the test settles when it chooses.
+ * admin's actions are answered from `answers`, by procedure, which the test settles when it
+ * chooses. Any other procedure is refused.
  */
-function mount(role: "member" | "admin" = "member", trigger?: Promise<Response>): void {
+function mount(
+  role: "member" | "admin" = "member",
+  answers: Readonly<Record<string, Promise<Response>>> = {},
+): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const client = trpc.createClient({
     links: [
@@ -80,10 +92,8 @@ function mount(role: "member" | "admin" = "member", trigger?: Promise<Response>)
           if (path.endsWith("/tenants.get")) {
             return Promise.resolve(answer({ tenantId: TENANT, displayName: "Acme", role }));
           }
-          if (path.endsWith("/runs.trigger") && trigger !== undefined) {
-            return trigger;
-          }
-          return Promise.resolve(refuse(path));
+          const answered = answers[path.slice(path.lastIndexOf("/") + 1)];
+          return answered ?? Promise.resolve(refuse(path));
         },
       }),
     ],
@@ -126,7 +136,7 @@ describe("an admin starting a run", () => {
     const trigger = new Promise<Response>((resolve) => {
       settle = resolve;
     });
-    mount("admin", trigger);
+    mount("admin", { "runs.trigger": trigger });
     const gmail = await screen.findByRole("article", { name: "Gmail" });
 
     fireEvent.click(within(gmail).getByRole("button", { name: "Chạy ngay" }));
@@ -141,5 +151,23 @@ describe("an admin starting a run", () => {
 
     settle?.(answer({ runId: "run-9" }));
     expect(await within(gmail).findByRole("button", { name: "Chạy ngay" })).toBeDefined();
+  });
+});
+
+describe("an admin whose Connect is refused", () => {
+  it("the refusal is headed with the source that was pressed", async () => {
+    // The server's sentence may be about a provider -- Google or Xero -- so a heading reading
+    // only "this source" left the reader to guess which of four it meant (issue 211).
+    const notSetUp = "Bản triển khai này chưa được cấu hình để kết nối tài khoản Xero.";
+    mount("admin", { "connections.startOAuth": Promise.resolve(precondition(notSetUp)) });
+    const xero = await screen.findByRole("article", { name: "Xero" });
+
+    fireEvent.click(within(xero).getByRole("button", { name: "Kết nối Xero" }));
+
+    // By text rather than by `alert`: an admin's page also mounts the ingest keys, whose own
+    // query this fetch refuses, so there is more than one slip on it.
+    expect(await screen.findByText("Chưa kết nối được Xero.")).toBeDefined();
+    expect(screen.getByText(notSetUp)).toBeDefined();
+    expect(screen.queryByText("Chưa kết nối được nguồn này.")).toBeNull();
   });
 });

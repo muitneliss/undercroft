@@ -445,7 +445,15 @@ export const vi = {
     changeScope: "Đổi dữ liệu đồng bộ",
     disconnect: "Ngắt kết nối",
     disconnecting: "Đang ngắt kết nối…",
+    /** Only where the page cannot tell which source it was; see `connectFailedFor`. */
     connectFailed: "Chưa kết nối được nguồn này.",
+    /**
+     * The heading over a failed consent, naming the vendor whose Connect was pressed. The
+     * refusals under it are the server's and may be about a provider -- "not set up to
+     * connect Google accounts" -- so a heading reading only "this source" left the reader to
+     * guess which of four sources it meant (issue 211).
+     */
+    connectFailedFor: "Chưa kết nối được {{name}}.",
     connectDeclined: "Bạn đã huỷ ở màn hình của Google. Không có gì được cấp.",
     /**
      * Distinct from `connectDeclined` because what the reader did was different: they

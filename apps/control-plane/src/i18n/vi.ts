@@ -204,9 +204,13 @@ export const vi = {
      * Points at a person, not at a variable, for the same reason `requiresSuperadmin` does:
      * the administrator reading this cannot fix it from any screen, and naming the
      * environment key would describe our deployment to a customer.
+     *
+     * It does name the provider, `Google` or `Xero`: that is the button the reader pressed,
+     * not a fact about our deployment, and a sentence fixed to one provider told an admin who
+     * pressed Connect Xero that Google was not set up (issue 211).
      */
     ingestNotConfigured:
-      "Bản triển khai này chưa được cấu hình để kết nối tài khoản Google. Hãy báo người quản trị hệ thống.",
+      "Bản triển khai này chưa được cấu hình để kết nối tài khoản {{provider}}. Hãy báo người quản trị hệ thống.",
     sourceNotConnectable: "Nguồn {{source}} chưa kết nối tự động được.",
     /** Names the state rather than a fault: the run the reader wants is already on screen. */
     runInProgress: "Nguồn {{source}} đang được đồng bộ. Hãy đợi lần chạy này xong.",

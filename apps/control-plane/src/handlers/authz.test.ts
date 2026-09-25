@@ -51,7 +51,12 @@ function caller(user: SessionUser | null, superadmin = false) {
     // every caller who gets past the role gate -- which is what makes PRECONDITION_FAILED
     // the proof of authorization here: it is the answer only a caller the gate ADMITTED can
     // receive.
-    startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
+    startConsent: () =>
+      Promise.resolve({
+        ok: false as const,
+        reason: "not-configured" as const,
+        provider: "google" as const,
+      }),
     worker: null,
     googlePicker: null,
   };

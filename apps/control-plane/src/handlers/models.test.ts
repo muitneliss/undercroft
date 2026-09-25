@@ -47,7 +47,12 @@ function caller(
     locale,
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(false),
-    startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
+    startConsent: () =>
+      Promise.resolve({
+        ok: false as const,
+        reason: "not-configured" as const,
+        provider: "google" as const,
+      }),
     worker,
     googlePicker: null,
   };

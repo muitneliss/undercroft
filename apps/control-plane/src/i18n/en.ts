@@ -107,7 +107,7 @@ export const en = {
     tooManyProperties:
       "The properties chosen for {{entity}} come to {{chars}} characters when sent to HubSpot, over the {{limit}} one read may carry. Untick some of the {{entity}} properties and save again.",
     ingestNotConfigured:
-      "This deployment is not set up to connect Google accounts. Tell whoever administers it.",
+      "This deployment is not set up to connect {{provider}} accounts. Tell whoever administers it.",
     sourceNotConnectable: "{{source}} cannot be connected automatically yet.",
     runInProgress: "{{source}} is being synced right now. Wait for that run to finish.",
     runNotStarted:

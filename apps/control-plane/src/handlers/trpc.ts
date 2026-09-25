@@ -35,6 +35,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import { authorityIn, outranks, type Role } from "../services/authz.ts";
+import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 
 export interface SessionUser {
@@ -95,6 +96,8 @@ export interface Context {
    *
    * A refusal carries WHY. The narrower `{ ok: false }` this replaced left the procedure
    * nothing to report, and what it reported instead was a made-up URL -- see `router.ts`.
+   * The service's own outcome type rather than a copy of it, so a refusal that learns a new
+   * fact -- which provider has no client -- reaches the procedure that words it.
    */
   readonly startConsent: (input: {
     tenantId: string;
@@ -102,10 +105,7 @@ export interface Context {
     startedBy: string;
     /** Connect a further account of the source's kind. ADR 0043. */
     addAccount?: boolean;
-  }) => Promise<
-    | { ok: true; authorizeUrl: string }
-    | { ok: false; reason: "not-configured" | "unsupported-source" }
-  >;
+  }) => Promise<StartOutcome>;
   /**
    * The worker, for the two procedures needing a live token. `null` when unconfigured, and
    * the procedures say so rather than failing in a way that reads like an outage.

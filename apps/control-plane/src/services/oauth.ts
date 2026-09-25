@@ -124,9 +124,16 @@ function configFor(deps: OAuthDeps, provider: Provider): ProviderConfig | undefi
   return deps[provider];
 }
 
+/**
+ * A refusal to start says which provider has no client, because the admin reading it pressed
+ * one source's Connect and "not set up" must be about THAT button: a deployment may hold a
+ * Google client and no Xero one, and a sentence fixed to either provider is then false for
+ * the other (issue 211).
+ */
 export type StartOutcome =
   | { ok: true; authorizeUrl: string }
-  | { ok: false; reason: "not-configured" | "unsupported-source" };
+  | { ok: false; reason: "not-configured"; provider: Provider }
+  | { ok: false; reason: "unsupported-source" };
 
 /**
  * The authorize parameters that say WHICH account, for a provider whose consent names one.
@@ -168,7 +175,7 @@ export async function startConsent(
   }
   const config = configFor(deps, provider);
   if (config === undefined) {
-    return { ok: false, reason: "not-configured" };
+    return { ok: false, reason: "not-configured", provider };
   }
   const addAccount = input.addAccount ?? false;
   const target = await consentTarget(deps.exec, { ...input, addAccount });
