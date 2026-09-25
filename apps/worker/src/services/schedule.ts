@@ -1,20 +1,23 @@
 /**
  * What is due: the list the scheduler starts from.
  *
- * Kestra asks every fifteen minutes and starts exactly what comes back, so this is the whole
- * schedule -- a flow that took a tenant as input could only ever run one customer, which is
- * why the old one never fired. The rule for "due" is `isDue` in `@undercroft/contracts`, the
- * same function the card uses to print a next run; this module reads the candidates and
- * applies it, and decides nothing of its own.
+ * Kestra asks every five minutes (`SCHEDULER_TICK_MS`) and starts exactly what comes back, so
+ * this is the whole schedule -- a flow that took a tenant as input could only ever run one
+ * customer, which is why the old one never fired. The rule for "due" is `isDue` in
+ * `@undercroft/contracts`, the same function the card uses to print a next run; this module
+ * reads the candidates and applies it, and decides nothing of its own. That includes a custom
+ * cadence's cron expression (ADR 0059): it is evaluated there, in Singapore time, and a cron is
+ * due at the first fire after the pair's last run started -- which is why the tick, not the
+ * expression, is what bounds how late a run may start.
  *
  * A scoped source with no scope chosen is not due, deliberately: it would fail on every tick
- * and, once alerts exist, email an administrator every fifteen minutes about a choice they
- * have not made yet.
+ * and, once alerts exist, email an administrator at every tick about a choice they have not
+ * made yet.
  *
  * TWO SCHEDULES, ONE MODULE, AND THEY ANSWER DIFFERENT QUESTIONS. An ingest is due by the
- * CLOCK -- a cadence the customer chose, whether or not anything changed at the source. An
- * extract is due by WORK OUTSTANDING: there is no cadence to consult, only "are there
- * documents nobody has read". Giving extract a cadence of its own would mean a tick that
+ * CLOCK -- a cadence or a cron the customer chose, whether or not anything changed at the
+ * source. An extract is due by WORK OUTSTANDING: there is no cadence to consult, only "are
+ * there documents nobody has read". Giving extract a cadence of its own would mean a tick that
  * starts a run over a tenant with nothing to do, every time, forever. ADR 0024 keeps it a
  * separate run from the ingest that landed the documents; this keeps it a separate question.
  */

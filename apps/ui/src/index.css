@@ -1718,8 +1718,22 @@
     flex-wrap: wrap;
   }
 
+  /* A custom cadence's expression and its Save, set against the column's edge like the
+     select above them. Horizontal only: which line the two share is `.row--field`'s. */
+  .grant__cron {
+    justify-content: flex-end;
+  }
+
+  /* A cron's next fires: dates set against the column's edge like every other datum in
+     it, not a bulleted list -- their order is the only structure they have. */
+  .grant__fires {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
   /* A select is an input with a die-cut edge, sized to its words rather than stretched
-     to the column: it is one choice among four, not a field to fill. */
+     to the column: it is one choice among five, not a field to fill. */
   .input--select {
     align-self: flex-end;
     width: auto;

@@ -336,6 +336,84 @@ describe("choosing a cadence", () => {
     });
     expect(result).toEqual({ ok: false, reason: "no-connection" });
   });
+
+  it("a custom expression is kept, printed on the card and in the trail, with its next fire", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    await openRun(db, {
+      id: "r-1",
+      tenantId: TENANT,
+      source: "hubspot",
+      verb: "ingest",
+      trigger: "schedule",
+    });
+    const result = await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "custom",
+      cron: "30 7 * * 1-5",
+      actor: "ada@example.test",
+    });
+    expect(result).toEqual({ ok: true });
+
+    const { rows } = await db.query<{ detail: unknown }>("SELECT detail FROM ops.audit_log");
+    expect(JSON.stringify(rows[0]?.detail)).toContain('"cron":"30 7 * * 1-5"');
+    // The run just opened started "now", so the next fire is the first weekday 07:30 SGT
+    // after it -- whatever day the suite runs on, it is in the future and on a weekday.
+    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    expect(hubspot).toMatchObject({ cadence: "custom", cron: "30 7 * * 1-5" });
+    const next = new Date(hubspot?.nextRunAt ?? "");
+    expect(next.getTime()).toBeGreaterThan(Date.now());
+    expect(next.getUTCHours()).toBe(23);
+    expect(next.getUTCMinutes()).toBe(30);
+    // 23:30Z is 07:30 the next day in Singapore, so a Monday-to-Friday fire is Sunday to
+    // Thursday in UTC.
+    expect([0, 1, 2, 3, 4]).toContain(next.getUTCDay());
+  });
+
+  it("a preset chosen after a custom expression clears it", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    const actor = "ada@example.test";
+    await setCadence(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "custom",
+      cron: "0 9 * * *",
+      actor,
+    });
+    await setCadence(db, { tenantId: TENANT, source: "hubspot", cadence: "daily", actor });
+
+    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    expect(hubspot).toMatchObject({ cadence: "daily", cron: null });
+  });
+
+  it("an expression the scheduler cannot keep is refused, and nothing is written", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    const actor = "ada@example.test";
+
+    expect(
+      await setCadence(db, {
+        tenantId: TENANT,
+        source: "hubspot",
+        cadence: "custom",
+        cron: "* * * * *",
+        actor,
+      }),
+    ).toEqual({ ok: false, reason: "cron-refused", refusal: "too-frequent" });
+    expect(
+      await setCadence(db, {
+        tenantId: TENANT,
+        source: "hubspot",
+        cadence: "hourly",
+        cron: "0 9 * * *",
+        actor,
+      }),
+    ).toEqual({ ok: false, reason: "cron-without-custom" });
+
+    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    expect(hubspot).toMatchObject({ cadence: "daily", cron: null });
+    const { rows } = await db.query("SELECT 1 FROM ops.audit_log");
+    expect(rows).toEqual([]);
+  });
 });
 
 describe("choosing a scope", () => {

@@ -154,6 +154,7 @@ function SourcesBand({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const utils = trpc.useUtils();
+  const dropCronDraft = useUiStore((state) => state.dropCronDraft);
 
   async function invalidate(): Promise<void> {
     await utils.connections.list.invalidate({ tenantId });
@@ -167,7 +168,14 @@ function SourcesBand({
     }),
     disconnect: trpc.connections.disconnect.useMutation({ onSuccess: invalidate }),
     runNow: trpc.runs.trigger.useMutation({ onSuccess: invalidate }),
-    setCadence: trpc.connections.setCadence.useMutation({ onSuccess: invalidate }),
+    setCadence: trpc.connections.setCadence.useMutation({
+      // The list first, then the draft: dropped any earlier, the card would read the old
+      // cadence for as long as the refetch took, and the field would blink shut and open.
+      onSuccess: async (_saved, sent) => {
+        await invalidate();
+        dropCronDraft(tenantId, sent.source);
+      },
+    }),
   };
 
   return (
@@ -374,8 +382,8 @@ function SourceRow({
         onRun={(): void => {
           runNow.mutate({ tenantId, source: connection.source });
         }}
-        onCadence={(cadence): void => {
-          setCadence.mutate({ tenantId, source: connection.source, cadence });
+        onCadence={(choice): void => {
+          setCadence.mutate({ tenantId, source: connection.source, ...choice });
         }}
         tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
       />

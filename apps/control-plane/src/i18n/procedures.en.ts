@@ -20,7 +20,8 @@ export const procedureSentences: SentenceTable = {
   "connections.setScope":
     "Set what a source reads. For HubSpot, the properties chosen for each object are read as well as the standard ones, never instead of them. Admins.",
   "connections.setToken": "Connect a source with a pasted token. Admins.",
-  "connections.setCadence": "Set how often a source is read. Admins.",
+  "connections.setCadence":
+    "Set how often a source is read: hourly, every_6h, daily, paused, or custom with --cron, a five-field cron expression in Singapore time that fires at most every five minutes. Admins.",
   "connections.disconnect": "End a source's grant. Admins.",
   "keys.list": "The customer's ingest keys. Admins.",
   "keys.mint": "Mint an ingest key; its token is returned this once. Admins.",

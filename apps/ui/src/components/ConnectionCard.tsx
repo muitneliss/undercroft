@@ -36,7 +36,7 @@ import { SOURCE_ACCESS, SOURCE_LABEL } from "@/api/types.ts";
 import { GrantWhen } from "@/components/GrantWhen.tsx";
 import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
-import type { Cadence } from "@/lib/cadence.ts";
+import type { CadenceChoice } from "@/lib/cadence.ts";
 import { connectsBy, MARK_LABEL, presentConnection, scopeSummary } from "@/lib/connectionState.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
@@ -71,7 +71,7 @@ export function ConnectionCard({
   /** Start a run by hand. Only offered when `canRun`. */
   onRun: () => void;
   /** Record how often this source is read. Only offered when `canRun`. */
-  onCadence: (cadence: Cadence) => void;
+  onCadence: (choice: CadenceChoice) => void;
   /** Whether the reader is an admin. Courtesy; the server refuses regardless. */
   canRun?: boolean;
   busy?: boolean;
@@ -142,6 +142,7 @@ export function ConnectionCard({
         </div>
 
         <GrantTiming
+          tenantId={tenantId}
           connection={connection}
           card={card}
           canRun={canRun}
@@ -190,6 +191,7 @@ type Card = ReturnType<typeof presentConnection>;
  * The cadence select is only on a granted source, and says so while a change to it is saved.
  */
 function GrantTiming({
+  tenantId,
   connection,
   card,
   canRun,
@@ -197,12 +199,13 @@ function GrantTiming({
   pending,
   onCadence,
 }: {
+  tenantId: string;
   connection: Connection;
   card: Card;
   canRun: boolean;
   busy: boolean;
   pending: GrantPending | null;
-  onCadence: (cadence: Cadence) => void;
+  onCadence: (choice: CadenceChoice) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -210,6 +213,7 @@ function GrantTiming({
     <div className="grant__when stack stack--tight">
       {card.state === "connected" ? (
         <GrantWhen
+          tenantId={tenantId}
           connection={connection}
           canEdit={canRun}
           busy={busy}

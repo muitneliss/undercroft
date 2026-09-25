@@ -23,7 +23,7 @@ description: |
   schedule cheap rather than wasteful, and it is why this flow has no cadence setting of its
   own to drift from the one the customer chose for syncs.
 
-  Hourly rather than every fifteen minutes: a run reads a capped batch (DEFAULT_BATCH, 500
+  Hourly rather than at every ingest tick: a run reads a capped batch (DEFAULT_BATCH, 500
   documents) and a large backlog therefore drains over several ticks. Hourly is frequent
   enough that a document landed by a sync is searchable the same working hour, and slow
   enough that a tenant mid-backlog is not answering a new tick while still finishing the
@@ -103,7 +103,7 @@ tasks:
 triggers:
   - id: hourly
     # :07 rather than :00, so the tick does not land on the same minute as `ingest_due`'s
-    # `*/15`. Both flows drive the same worker process; starting a CPU-bound read in the
+    # `*/5`. Both flows drive the same worker process; starting a CPU-bound read in the
     # minute a batch of syncs is opening connections is a collision with no upside.
     type: io.kestra.plugin.core.trigger.Schedule
     cron: "7 * * * *"

@@ -62,6 +62,7 @@
 - [ADR 0056: A Drive ingest stops within one file, and a run the drain gives up on says it was cut off](sources/adr-0056-a-drive-ingest-stops-within-one-file-and-a-run-the-drain-gives-up-on-says-it-was-cut-off.md)
 - [ADR 0057: A NUL in extracted text is replaced where it stood, and a byte-order mark is believed](sources/adr-0057-a-nul-in-extracted-text-is-replaced-where-it-stood-and-a-byte-order-mark-is-believed.md)
 - [ADR 0058: Every request is traced, into the host's shared otel-lgtm stack](sources/adr-0058-every-request-is-traced-into-the-host-s-shared-otel-lgtm-stack.md)
+- [ADR 0059: A sync may run on a cron expression, beside the four presets](sources/adr-0059-a-sync-may-run-on-a-cron-expression-beside-the-four-presets.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Runbook Deployment](sources/runbook-deployment.md)

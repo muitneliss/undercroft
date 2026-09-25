@@ -18,10 +18,16 @@ import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 // The side effect is the point: `useTranslation` resolves against the module-level i18next
 // singleton, and without it every key renders as itself. See `@/i18n`.
 import "@/i18n/index.ts";
-import type { Cadence } from "@/lib/cadence.ts";
+import type { CadenceChoice } from "@/lib/cadence.ts";
+import { useUiStore } from "@/store.ts";
 import { connection, lastRun } from "@/test/fixtures.ts";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // The store is the real module-level one, so a cron draft left behind would be the next
+  // test's.
+  useUiStore.setState({ cronDraft: null });
+});
 
 /** A handler that records nothing, for the props a test is not about. */
 function noop(): void {
@@ -140,37 +146,93 @@ describe("how a source is connected", () => {
 });
 
 describe("the cadence", () => {
-  it("offers an admin the four presets with the stored one selected, and saves on change", () => {
-    const chosen: Cadence[] = [];
+  /** An admin's card that records every choice it sends. */
+  function adminCard(over: Parameters<typeof connection>[1] = {}): CadenceChoice[] {
+    const chosen: CadenceChoice[] = [];
     render(
-      card(
-        { cadence: "daily" },
-        {
-          canRun: true,
-          onCadence: (c: Cadence): void => {
-            chosen.push(c);
-          },
+      card(over, {
+        canRun: true,
+        onCadence: (choice: CadenceChoice): void => {
+          chosen.push(choice);
         },
-      ),
+      }),
     );
+    return chosen;
+  }
 
-    const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "Tần suất đồng bộ" });
+  function select(): HTMLSelectElement {
+    return screen.getByRole<HTMLSelectElement>("combobox", { name: "Tần suất đồng bộ" });
+  }
+
+  it("offers an admin the presets and custom, with the stored one selected; a preset saves on change", () => {
+    const chosen = adminCard({ cadence: "daily" });
+
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
       "Mỗi giờ",
       "Mỗi 6 giờ",
       "Hằng ngày",
       "Tạm dừng",
+      "Tuỳ chỉnh (cron)",
     ]);
-    expect(select.value).toBe("daily");
+    expect(select().value).toBe("daily");
 
-    fireEvent.change(select, { target: { value: "hourly" } });
+    fireEvent.change(select(), { target: { value: "hourly" } });
 
-    expect(chosen).toEqual(["hourly"]);
+    expect(chosen).toEqual([{ cadence: "hourly" }]);
   });
 
-  it("a viewer reads the cadence as a word", () => {
-    render(card({ cadence: "every_6h" }, { canRun: false }));
+  it("custom saves nothing on selection: it opens the expression, previews its fires and saves on Save", () => {
+    const chosen = adminCard({ cadence: "daily" });
 
+    fireEvent.change(select(), { target: { value: "custom" } });
+    expect(chosen).toEqual([]);
+    expect(select().value).toBe("custom");
+
+    fireEvent.change(screen.getByLabelText("Biểu thức cron"), {
+      target: { value: "30 7 * * 1-5" },
+    });
+
+    // The confirmation is the fires themselves, in Singapore time -- three of them.
+    expect(screen.getByText("Ba lần chạy kế tiếp (giờ Singapore)")).toBeDefined();
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Lưu lịch" }));
+
+    expect(chosen).toEqual([{ cadence: "custom", cron: "30 7 * * 1-5" }]);
+  });
+
+  it("an expression the scheduler cannot keep says why, and Save stays off", () => {
+    adminCard({ cadence: "daily" });
+    fireEvent.change(select(), { target: { value: "custom" } });
+
+    fireEvent.change(screen.getByLabelText("Biểu thức cron"), {
+      target: { value: "* * * * *" },
+    });
+
+    expect(
+      screen.getByText(
+        "Biểu thức này chạy dày hơn 5 phút một lần, nhanh hơn nhịp của bộ lập lịch.",
+      ),
+    ).toBeDefined();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Lưu lịch" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("a stored custom schedule opens holding its expression, with nothing yet to save", () => {
+    adminCard({ cadence: "custom", cron: "0 9 * * *" });
+
+    expect(select().value).toBe("custom");
+    expect(screen.getByLabelText<HTMLInputElement>("Biểu thức cron").value).toBe("0 9 * * *");
+    expect(screen.getByRole("button", { name: "Lưu lịch" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("a viewer reads the cadence as a word, and a custom one with its expression", () => {
+    render(card({ cadence: "every_6h" }, { canRun: false }));
     expect(screen.getByText("Mỗi 6 giờ")).toBeDefined();
+    cleanup();
+
+    render(card({ cadence: "custom", cron: "30 7 * * 1-5" }, { canRun: false }));
+    expect(screen.getByText("Tuỳ chỉnh (cron)")).toBeDefined();
+    expect(screen.getByText("30 7 * * 1-5")).toBeDefined();
+    expect(screen.queryByLabelText("Biểu thức cron")).toBeNull();
   });
 });
