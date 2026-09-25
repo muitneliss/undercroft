@@ -17,6 +17,7 @@ import { Args, Command, Flags, type Interfaces } from "@oclif/core";
 import { PROCEDURES } from "virtual:surface";
 import { type FlagMap, globalFlags, inputFlags } from "./flags.ts";
 import type { Context, ParsedFlags } from "./handlers/context.ts";
+import { home } from "./handlers/home.ts";
 import {
   authLogin,
   authLogout,
@@ -26,8 +27,8 @@ import {
   configUse,
   type Described,
   describeCommands,
-  type Noted,
 } from "./handlers/local.ts";
+import type { Noted } from "./handlers/noted.ts";
 import { runProcedure } from "./handlers/run.ts";
 import type { MessageKey } from "./i18n/index.ts";
 import { commandId, type ProcedureSpec, spoken } from "./manifest.ts";
@@ -42,6 +43,8 @@ interface Definition {
   readonly args: ArgMap;
   /** `false` only for `describe`, whose argument may be several words. */
   readonly strict: boolean;
+  /** Left out of `--help` and `describe`: only `home`, which `main.ts` routes to itself. */
+  readonly hidden?: boolean;
   readonly run: (parsed: {
     readonly flags: ParsedFlags;
     readonly argv: readonly string[];
@@ -68,6 +71,7 @@ function commandClass(ctx: Context, id: string, definition: Definition): Command
     static override flags = definition.flags;
     static override args = definition.args;
     static override strict = definition.strict;
+    static override hidden = definition.hidden ?? false;
 
     override async run(): Promise<Noted> {
       let parsed: { flags: ParsedFlags; argv: readonly unknown[] };
@@ -125,6 +129,7 @@ interface LocalCommand {
   readonly flags?: FlagMap;
   readonly args?: ArgMap;
   readonly strict?: boolean;
+  readonly hidden?: boolean;
   readonly run: Definition["run"];
 }
 
@@ -182,6 +187,14 @@ function localCommands(ctx: Context, catalogue: () => readonly Described[]): Loc
       strict: false,
       run: ({ argv }) => Promise.resolve(describeCommands(ctx, catalogue(), argv)),
     },
+    {
+      // `undercroft` on its own at a terminal. Not a command anyone types, and not on the
+      // surface an agent reads: `main.ts` routes a bare run here in human mode only.
+      id: "home",
+      description: "cli.description",
+      hidden: true,
+      run: ({ flags }) => home(ctx, flags, () => catalogue().map((entry) => entry.command)),
+    },
   ];
 }
 
@@ -222,8 +235,12 @@ export function buildCommands(ctx: Context): Record<string, Command.Class> {
       flags,
       args: local.args ?? {},
       strict: local.strict ?? true,
+      hidden: local.hidden ?? false,
       run: local.run,
     });
+    if (local.hidden === true) {
+      continue;
+    }
     catalogue.push({
       command: spoken(local.id),
       procedure: null,

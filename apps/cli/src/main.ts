@@ -28,12 +28,19 @@ import { fileURLToPath } from "node:url";
 import { run, settings } from "@oclif/core";
 import pkg from "../package.json" with { type: "json" };
 import { buildCommands } from "./commands.ts";
+import { globalFlags } from "./flags.ts";
 import type { Context } from "./handlers/context.ts";
-import type { Noted } from "./handlers/local.ts";
+import type { Noted } from "./handlers/noted.ts";
 import { messages, topicSentence } from "./i18n/index.ts";
 import { spoken, topicsOf } from "./manifest.ts";
-import { localeFromArgv, modeFlagsFromArgv, resolveRuntimeMode } from "./services/mode.ts";
+import {
+  localeFromArgv,
+  modeFlagsFromArgv,
+  namesNoCommand,
+  resolveRuntimeMode,
+} from "./services/mode.ts";
 import { envelope, exitCodeFor, failure, humanText } from "./services/output.ts";
+import { erratum } from "./services/erratum.ts";
 import { cliHome } from "./services/profiles.ts";
 
 const argv = process.argv.slice(2);
@@ -65,7 +72,25 @@ const ctx: Context = {
         process.stderr.write(`${line}\n`);
       }
     : (): void => undefined,
+  version: pkg.version,
+  columns: process.stdout.columns ?? 80,
 };
+
+/** The global flags that take a value, whose value is therefore not a command's name. */
+const VALUE_FLAGS: ReadonlySet<string> = new Set(
+  Object.entries(globalFlags(t)).flatMap(([name, flag]) =>
+    flag.type === "option" ? [`--${name}`] : [],
+  ),
+);
+
+/**
+ * A person running `undercroft` on its own is shown the home page (`handlers/home.ts`); oclif
+ * would print its root help. Only in human mode: an agent's bare run is answered exactly as
+ * before, which is what keeps the agent's contract -- and the skill written against it --
+ * unchanged.
+ */
+const routed =
+  mode.mode === "human" && namesNoCommand(argv, VALUE_FLAGS) ? ["home", ...argv] : argv;
 
 /** Every command, for oclif's explicit strategy. See the module docstring. */
 export const COMMANDS = buildCommands(ctx);
@@ -99,14 +124,15 @@ function finish(result: unknown): void {
   let stream: NodeJS.WriteStream = process.stdout;
   if (mode.mode === "agent") {
     text = JSON.stringify(envelope(outcome));
+  } else if (result.drawn === true) {
+    // The handler wrote the page or the rail itself; there is nothing left to say.
+    process.stdout.write("", () => process.exit(code));
+    return;
   } else if (outcome.ok) {
     text = note ?? humanText(t, outcome.data);
   } else {
     stream = process.stderr;
-    const { details, traceId } = outcome.error;
-    text = `${outcome.error.code}: ${outcome.error.message}${
-      details === undefined ? "" : `\n${JSON.stringify(details, null, 2)}`
-    }${traceId === undefined ? "" : `\n${t("error.traceId", { traceId })}`}`;
+    text = erratum(t, outcome.error, { columns: ctx.columns, color: mode.color }).join("\n");
   }
   // Exiting inside the write callback, not after it: a pipe is written asynchronously, and
   // exiting with the envelope still buffered would hand an agent half a JSON document.
@@ -123,7 +149,7 @@ async function main(): Promise<void> {
   const self = `./${basename(bundle)}`;
   let result: unknown;
   try {
-    result = await run(argv, {
+    result = await run(routed, {
       root: dirname(bundle),
       pjson: {
         name: "undercroft",

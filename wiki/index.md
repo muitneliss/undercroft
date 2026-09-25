@@ -66,6 +66,7 @@
 - [ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds](sources/adr-0060-an-agent-reaches-undercroft-over-mcp-with-a-credential-a-person-holds.md)
 - [ADR 0061: An MCP client signs its person in, and draws two widgets](sources/adr-0061-an-mcp-client-signs-its-person-in-and-draws-two-widgets.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
+- [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Runbook: Connecting an agent over MCP](sources/runbook-connecting-an-agent-over-mcp.md)
 - [Runbook Deployment](sources/runbook-deployment.md)

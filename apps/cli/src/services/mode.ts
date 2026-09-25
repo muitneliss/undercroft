@@ -73,6 +73,30 @@ export function modeFlagsFromArgv(
   };
 }
 
+/** oclif's own: it answers these itself, command or not. */
+const OCLIF_FLAGS: ReadonlySet<string> = new Set(["--help", "-h", "--version", "-v"]);
+
+/**
+ * Whether argv names no command -- only flags, and the values of the flags that take one.
+ *
+ * That is `undercroft` on its own, which a person at a terminal is shown the home page for.
+ * `valueFlags` is passed in rather than listed here so the global flags keep one declaration
+ * (`flags.ts`); `--help` and `--version` stay oclif's to answer.
+ */
+export function namesNoCommand(argv: readonly string[], valueFlags: ReadonlySet<string>): boolean {
+  let isValue = false;
+  for (const arg of flagArgs(argv)) {
+    if (isValue) {
+      isValue = false;
+    } else if (OCLIF_FLAGS.has(arg) || !arg.startsWith("-")) {
+      return false;
+    } else {
+      isValue = valueFlags.has(arg);
+    }
+  }
+  return true;
+}
+
 /**
  * The language asked for with `--lang`, read before oclif parses anything.
  *

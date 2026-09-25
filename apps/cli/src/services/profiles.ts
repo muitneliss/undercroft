@@ -195,6 +195,20 @@ function chosenProfile(
   return fallback === null ? null : { name: fallback, source: "default", projectFile: null };
 }
 
+/**
+ * Whether this run names no server at all -- no URL, no profile from anywhere -- as opposed to
+ * naming one that is wrong. The home page greets the first with the steps to choose one; the
+ * second is a mistake, and gets its erratum like any other.
+ */
+export function namesNoServer(t: Translate, input: TargetInput): boolean {
+  const fromEnv = input.env.UNDERCROFT_URL;
+  return (
+    input.flags.url === undefined &&
+    (fromEnv === undefined || fromEnv === "") &&
+    chosenProfile(t, input) === null
+  );
+}
+
 export function resolveTarget(t: Translate, input: TargetInput): Target | Failure {
   if (input.flags.url !== undefined) {
     return oneOff(t, input.flags.url, "flag");

@@ -42,6 +42,11 @@ task dev:cli -- runs list               # asks which tenant
 task dev:cli -- describe runs.trigger   # one command, with the JSON Schema of its input
 ```
 
+`undercroft` on its own, at a terminal, is the home page: the title page with the sign-in form
+on it while you are signed out, and the contents page (every topic and how many commands it
+has) once you are in. A rejected code offers a new one instead of ending the run. A piped run
+still prints the help. The frames are in `docs/design/cli-home-and-sign-in.md`.
+
 `--allow-writes` can be set only here, at a terminal. An agent that tries it gets
 `HUMAN_REQUIRED`. Use a separate profile per environment, for example `local`, `staging`
 and `prod`. The first profile you write becomes the default, and `config use <name>` changes
