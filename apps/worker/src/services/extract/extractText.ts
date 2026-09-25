@@ -13,6 +13,7 @@
  * instead of a crashed run. The readers below ask for text and get text or a reason.
  */
 
+import { readDoc } from "./doc.ts";
 import { readDocx } from "./docx.ts";
 import { decodeHtmlBytes, htmlToText } from "./html.ts";
 import { mimeToText } from "./mime.ts";
@@ -26,6 +27,7 @@ export type ExtractMethod =
   | "pdf_text"
   | "pdf_ocr"
   | "docx"
+  | "doc"
   | "xlsx"
   | "image_ocr"
   | "txt"
@@ -38,10 +40,18 @@ export type ExtractMethod =
  *
  * The OCR refusals are `ocr.ts`'s, named there beside the decisions that produce them.
  */
+// Since ADR 0053, only a Word file from before Word 97, whose 8-bit text states no codepage.
 export const LEGACY_DOC = "legacy-doc-unsupported";
 export const LEGACY_XLS = "legacy-xls-unsupported";
 export const XLSX_UNREADABLE = "xlsx-unreadable";
 export const DOCX_UNREADABLE = "docx-unreadable";
+export const DOC_UNREADABLE = "doc-unreadable";
+/**
+ * A `.doc` saved with a password. Its own name for the reason `PDF_PASSWORD_PROTECTED` has
+ * one: the bytes are intact and need the sender's password, where an unreadable file is worth
+ * a look.
+ */
+export const DOC_PASSWORD_PROTECTED = "doc-password-protected";
 export const UNSUPPORTED_TYPE = "unsupported-content-type";
 export const EMPTY_SOURCE = "document-has-no-bytes";
 export const PDF_TEXT_FAILED = "pdftotext-failed";
@@ -222,6 +232,23 @@ function readWordDocument(_deps: ExtractDeps, input: Document): Extracted {
   return text === null ? refused(DOCX_UNREADABLE) : read("docx", text);
 }
 
+/**
+ * Read in process too, with no binary: `cfb.ts` opens the container and `doc.ts` argues why
+ * the text of a Word 97 file is the one part of the format simple enough to read exactly.
+ */
+function readLegacyWord(_deps: ExtractDeps, input: Document): Extracted {
+  const document = readDoc(input.bytes);
+  if (document.ok) {
+    return read("doc", document.text);
+  }
+  const reasons = {
+    word95: LEGACY_DOC,
+    encrypted: DOC_PASSWORD_PROTECTED,
+    unreadable: DOC_UNREADABLE,
+  } as const;
+  return refused(reasons[document.why]);
+}
+
 /** A web page's text nodes, in the charset the page declares. `html.ts`. */
 function readHtml(_deps: ExtractDeps, input: Document): Extracted {
   return read("html", htmlToText(decodeHtmlBytes(input.bytes)));
@@ -275,7 +302,7 @@ async function readImage(deps: ExtractDeps, input: Document): Promise<Extracted>
  * was the most complex function in the module, and the cost of the next one was a re-read of
  * all of them.
  *
- * The two `refused` entries are readers too, deliberately. A format we have decided not to
+ * The `refused` entry is a reader too, deliberately. A format we have decided not to
  * support is a decision with a name attached and belongs in the same list as the ones we do --
  * an absent entry means "nobody has thought about this type yet", which is what
  * `UNSUPPORTED_TYPE` says, and the two should not look alike.
@@ -323,14 +350,15 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   // installs with tesseract -- is built with WebP. Where it is not, tesseract exits non-zero
   // and the refusal is `tesseract-failed`, by name.
   ["image/webp", readImage],
-  // The pre-2007 binary workbook. Reading BIFF needs LibreOffice in the image, which is a
-  // container's worth of dependency for two files. Its own reason rather than `LEGACY_DOC`,
-  // because an operator reading the ledger should not have to know that the Word reason was
-  // meant to cover spreadsheets too.
+  // The pre-2007 binary workbook, refused by name so it is visible in the ledger rather than
+  // absent from it. Its container is the one `cfb.ts` now opens for Word, but BIFF's cell
+  // records are a second format entirely, and no reader for them has been written. Its own
+  // reason rather than `LEGACY_DOC`, because an operator reading the ledger should not have
+  // to know that the Word reason was meant to cover spreadsheets too.
   ["application/vnd.ms-excel", (): Extracted => refused(LEGACY_XLS)],
-  // The pre-2007 binary Word format, refused for the same reason and by name, so it is
-  // visible in the ledger rather than absent from it.
-  ["application/msword", (): Extracted => refused(LEGACY_DOC)],
+  // The pre-2007 binary Word format. Only a file older than Word 97 is still refused, as
+  // `LEGACY_DOC`; ADR 0053.
+  ["application/msword", readLegacyWord],
 ]);
 
 /**
@@ -361,6 +389,10 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * recorded `pdftotext-failed` so a locked one is relabelled `pdf-password-protected` instead of
  * staying "possibly corrupt"; a genuinely broken one fails again and keeps its old reason.
  *
+ * GENERATION 5 IS THE LEGACY WORD READER. Every `.doc` was recorded `legacy-doc-unsupported`,
+ * a refusal whose whole point is that it stops being true; the bump re-offers them, and only a
+ * file older than Word 97 comes back with the same reason.
+ *
  * BY HAND, AND DELIBERATELY SO. The honest alternative is deriving it -- hashing the binaries
  * and language packs behind these readers into the stamp, which is what the sibling project
  * does, because installing `tesseract-ocr-vie` changes what OCR can read without changing a
@@ -372,7 +404,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 4;
+export const CURRENT_READER_VERSION = 5;
 
 /**
  * One document, read whichever way its type allows.

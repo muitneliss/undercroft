@@ -749,16 +749,20 @@ export const vi = {
       ocrFoundNothingNote: "Thường là trang trắng hoặc ảnh không chứa chữ. Không cần làm gì.",
       noBytes: "Tài liệu không có nội dung",
       noBytesNote: "Nguồn trả về một tệp rỗng. Không cần làm gì.",
-      legacyDoc: "Định dạng .doc cũ, không đọc",
+      legacyDoc: "Tệp .doc từ Word 95 trở về trước, không đọc",
       legacyDocNote:
-        "Đọc .doc cần thêm LibreOffice vào image — một quyết định đã cân nhắc, không phải lỗi.",
+        "Chữ trong tệp này theo bảng mã của máy đã lưu nó, nên đọc thì chỉ là đoán. Muốn đọc, hãy mở bằng Word và lưu lại thành .docx.",
       legacyXls: "Định dạng .xls cũ, không đọc",
-      legacyXlsNote: "Cùng lý do với .doc: phải thêm LibreOffice vào image mới đọc được.",
+      legacyXlsNote:
+        "Chưa có trình đọc cho bảng tính nhị phân trước 2007 — một quyết định đã cân nhắc, không phải lỗi.",
       unsupportedType: "Chưa có trình đọc cho loại tệp này",
       unsupportedTypeNote:
         "Tài liệu sẽ tự được đọc lại khi có trình đọc phù hợp. Không cần làm gì.",
       pdfPasswordProtected: "Tệp PDF có mật khẩu mở, không đọc được",
       pdfPasswordProtectedNote:
+        "Tệp gốc vẫn được lưu nguyên vẹn. Muốn đọc nội dung, hãy xin người gửi bản không đặt mật khẩu.",
+      docPasswordProtected: "Tài liệu Word có mật khẩu mở, không đọc được",
+      docPasswordProtectedNote:
         "Tệp gốc vẫn được lưu nguyên vẹn. Muốn đọc nội dung, hãy xin người gửi bản không đặt mật khẩu.",
       pdftotextFailed: "pdftotext chạy lỗi trên tệp này",
       pdftotextFailedNote: "Tệp PDF có thể hỏng. Đáng kiểm tra nếu lặp lại nhiều lần.",
@@ -773,6 +777,8 @@ export const vi = {
       xlsxUnreadableNote: "Tệp .xlsx có thể hỏng.",
       docxUnreadable: "Không mở được tài liệu Word",
       docxUnreadableNote: "Tệp .docx có thể hỏng.",
+      docUnreadable: "Không mở được tài liệu Word",
+      docUnreadableNote: "Tệp .doc có thể hỏng.",
       lakeUnreadable: "Hồ dữ liệu không trả về nội dung tệp",
       lakeUnreadableNote:
         "Danh mục nói tệp có, hồ dữ liệu nói không. Đây là sai lệch cần kiểm tra ngay.",

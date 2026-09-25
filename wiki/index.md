@@ -56,6 +56,7 @@
 - [ADR 0050: The raw lake runs a community build of MinIO](sources/adr-0050-the-raw-lake-runs-a-community-build-of-minio.md)
 - [ADR 0051: A deploy stops a run at a safe point, and the run keeps its counts](sources/adr-0051-a-deploy-stops-a-run-at-a-safe-point-and-the-run-keeps-its-counts.md)
 - [ADR 0052: A HubSpot scope adds to the spec's properties, and a widened read starts a new watermark](sources/adr-0052-a-hubspot-scope-adds-to-the-spec-s-properties-and-a-widened-read-starts-a-new-watermark.md)
+- [ADR 0053: A legacy Word document is read in process, and only Word 95 stays refused](sources/adr-0053-a-legacy-word-document-is-read-in-process-and-only-word-95-stays-refused.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Runbook Deployment](sources/runbook-deployment.md)

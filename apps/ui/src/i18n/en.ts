@@ -610,16 +610,20 @@ export const en = {
       ocrFoundNothingNote: "Usually a blank page or an image with no writing on it. Nothing to do.",
       noBytes: "The document has no content",
       noBytesNote: "The source returned an empty file. Nothing to do.",
-      legacyDoc: "Legacy .doc format, not read",
+      legacyDoc: "A .doc from Word 95 or earlier, not read",
       legacyDocNote:
-        "Reading .doc needs LibreOffice in the image — a considered decision, not a fault.",
+        "Its text is in the codepage of whichever machine saved it, so reading it would be a guess. To read it, open it in Word and save it as .docx.",
       legacyXls: "Legacy .xls format, not read",
-      legacyXlsNote: "Same as .doc: it would take LibreOffice in the image to read one.",
+      legacyXlsNote:
+        "No reader has been written for the pre-2007 binary workbook — a considered decision, not a fault.",
       unsupportedType: "No reader for this file type yet",
       unsupportedTypeNote:
         "The document is offered again by itself once a reader can open it. Nothing to do.",
       pdfPasswordProtected: "The PDF is password-protected and cannot be read",
       pdfPasswordProtectedNote:
+        "The original file is kept intact. To read its content, ask the sender for an unlocked copy.",
+      docPasswordProtected: "The Word document is password-protected and cannot be read",
+      docPasswordProtectedNote:
         "The original file is kept intact. To read its content, ask the sender for an unlocked copy.",
       pdftotextFailed: "pdftotext failed on this file",
       pdftotextFailedNote: "The PDF may be corrupt. Worth a look if it keeps happening.",
@@ -634,6 +638,8 @@ export const en = {
       xlsxUnreadableNote: "The .xlsx file may be corrupt.",
       docxUnreadable: "Could not open the Word document",
       docxUnreadableNote: "The .docx file may be corrupt.",
+      docUnreadable: "Could not open the Word document",
+      docUnreadableNote: "The .doc file may be corrupt.",
       lakeUnreadable: "The lake did not return the file's bytes",
       lakeUnreadableNote:
         "The catalogue says the bytes are there and the lake disagrees. Check this now.",

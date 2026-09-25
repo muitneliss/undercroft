@@ -75,10 +75,22 @@ and text boxes. A package it cannot open is refused as `docx-unreadable`.
 - Choice: `application/msword`
 - Extensions: `.doc`
 - Specification: <https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-doc/>
-- Reads: `metadata`
+- Reads: `text`
 
-This is the binary format from before 2007. Reading it would need LibreOffice in the worker
-image, so it is refused as `legacy-doc-unsupported`.
+This is the binary format Word used from Word 97 until 2007. The worker reads it in process,
+with no converter in the image. The reader covers the body, headers, footers, footnotes,
+endnotes, comments and text boxes, and keeps a table's rows as lines with its cells separated.
+The text is recorded as `doc`.
+
+Three kinds of file are refused by name:
+
+- `legacy-doc-unsupported`: the file was saved by Word 95 or earlier. Its text is in the
+  codepage of whichever machine saved it, so reading it would be a guess. To read it, open it
+  in Word and save it as `.docx`.
+- `doc-password-protected`: the file was saved with a password. Its bytes are intact in the
+  lake, and reading it needs an unlocked copy from the sender.
+- `doc-unreadable`: the file is not a Word document that can be read exactly, for example a
+  damaged file or a web page that arrived under the Word type.
 
 ### Google Docs
 
@@ -119,8 +131,9 @@ spellings match.
 - Specification: <https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xls/>
 - Reads: `metadata`
 
-This is the binary workbook format from before 2007. It is refused as `legacy-xls-unsupported`,
-for the reason given for `.doc`.
+This is the binary workbook format from before 2007. It is refused as `legacy-xls-unsupported`:
+it shares its container with `.doc`, but its cells are stored in a second format, BIFF, and no
+reader for that has been written.
 
 ### Google Sheets
 

@@ -14,6 +14,10 @@
  * in two copies is sixty lines that drift -- one suite learns about data descriptors and the
  * other does not.
  *
+ * `docOf`, the legacy Word writer, lives beside this in `docTesting.ts` for length alone: it
+ * writes a compound file, a FIB, a piece table and a page of paragraph properties, which is
+ * more format than this module could hold under the line limit.
+ *
  * NO COMMITTED BINARY FIXTURE, therefore, and nothing to regenerate when a reader changes.
  * That rule is what brings `pdfOf` here rather than a checked-in `.pdf`: `accuracy.ts` scores
  * the shipped readers against documents whose exact text we authored, and a gold document
@@ -108,7 +112,8 @@ function endRecord(count: number, directoryBytes: number, offset: number): Uint8
   return end;
 }
 
-function concat(parts: readonly Uint8Array[]): Uint8Array {
+/** Byte arrays back to back. Shared with `cfbTesting.ts`, which lays out sectors the same way. */
+export function concat(parts: readonly Uint8Array[]): Uint8Array {
   const bytes = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
   let at = 0;
   for (const part of parts) {

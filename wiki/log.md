@@ -132,3 +132,5 @@
 ## [2026-09-24] ingest | Runbook Deployment
 ## [2026-09-25] ingest | ADR 0052: A HubSpot scope adds to the spec's properties, and a widened read starts a new watermark
 ## [2026-09-25] ingest | Runbook Sign-In Setup
+## [2026-09-25] ingest | ADR 0053: A legacy Word document is read in process, and only Word 95 stays refused
+## [2026-09-25] ingest | File formats a Gmail or Drive connection can land
