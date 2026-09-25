@@ -119,36 +119,7 @@ function registerConsentRoute(app: Hono, deps: ServerDeps): void {
   });
 }
 
-/** The hosts a browser on this machine reaches a dev stack on, as `URL#hostname` spells them. */
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-/**
- * Refuse `devSignInAs` anywhere but a local stack.
- *
- * Keyed on `publicUrl` because it is the origin sign-in is already built from: a deployment
- * cannot have a loopback one and still be reached by anybody. Throwing rather than ignoring
- * the setting, so a `.env` copied to a server stops the process at boot with the reason,
- * instead of starting with an open door or quietly without the setting somebody expected.
- */
-function assertDevSignInIsLocal(deps: ServerDeps): void {
-  if (deps.devSignInAs === undefined) {
-    return;
-  }
-  const origin = deps.publicUrl;
-  if (
-    origin === undefined ||
-    !URL.canParse(origin) ||
-    !LOOPBACK_HOSTS.has(new URL(origin).hostname)
-  ) {
-    throw new Error(
-      "UNDERCROFT_DEV_SIGN_IN_AS signs every request in; it is honoured only when " +
-        `UNDERCROFT_PUBLIC_URL is a loopback origin, and it is ${origin ?? "unset"}`,
-    );
-  }
-}
-
 export function createServer(deps: ServerDeps): Hono {
-  assertDevSignInIsLocal(deps);
   const app = new Hono();
 
   app.get("/api/health", (c) => c.json({ ok: true }));

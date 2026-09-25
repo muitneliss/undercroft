@@ -50,51 +50,26 @@
  * It weakens none of them: the address still has to prove it controls the mailbox or the
  * Google account, and three gates reading one list cannot disagree about who is on it.
  * ADR 0013.
+ *
+ * A third method exists on a local stack only: `POST /api/auth/sign-in/dev` signs the browser
+ * in as `UNDERCROFT_DEV_SIGN_IN_AS` without proving the address. It is a Better Auth method
+ * like the other two rather than a bypass around the library, so what it yields is an
+ * ordinary session -- the same cookie, the same row, the same `resolveCaller`, the same
+ * sign-out -- and a first sign-in passes the same provisioning hook. `createAuth` refuses to
+ * build it behind a `baseUrl` that is not loopback. See `devSignIn.ts`.
  */
 
-import {
-  type EmailMessage,
-  type EmailSender,
-  type Locale,
-  negotiateLocale,
-  postEmailLeaf,
-} from "@undercroft/core";
+import { type EmailMessage, type EmailSender, type Locale, postEmailLeaf } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { type BetterAuthOptions, betterAuth } from "better-auth";
+import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins";
 import { messages } from "../i18n/index.ts";
 import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/invite.ts";
 import { setLocale } from "../services/preferences.ts";
 import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
-
-/**
- * Which language to answer a Better Auth hook in.
- *
- * `/trpc` resolves this once per request in `server.ts`; inside these hooks there is no
- * `Context`, because they are called from within the library. Better Auth hands each of them
- * the endpoint context, which carries the originating request -- and therefore the same
- * `Accept-Language` the browser sent, so the answer is the same one arrived at the same way.
- *
- * Structural rather than Better Auth's own `GenericEndpointContext`: the two hooks are given
- * slightly different shapes, and this depends on the one field both actually carry.
- *
- * Everything here is optional in the library's types, because a sign-in driven by something
- * other than an HTTP call has no request at all. That resolves to Vietnamese, which is the
- * product's default and not a guess -- `negotiateLocale` records why.
- */
-interface HookContext {
-  readonly request?: Request | undefined;
-  readonly headers?: Headers | undefined;
-}
-
-function localeOf(context: HookContext | null | undefined): Locale {
-  const asked =
-    context?.request?.headers.get("accept-language") ??
-    context?.headers?.get("accept-language") ??
-    null;
-  return negotiateLocale(asked);
-}
+import { localeOf } from "./authLocale.ts";
+import { devSignIn } from "./devSignIn.ts";
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
@@ -161,7 +136,11 @@ export interface AuthConfig {
   readonly secret: string;
   /** The origin the browser reaches this control plane on, e.g. `https://app.example.test`. */
   readonly baseUrl: string;
-  readonly email: EmailSender;
+  /**
+   * Sends the one-time codes. Absent means there is no sign-in by code; `main.ts` builds no
+   * auth at all without it unless `devSignInAs` is set, so a deployment never lacks it.
+   */
+  readonly email?: EmailSender;
   /**
    * The addresses from `UNDERCROFT_SUPERADMINS`, which are admissible with no invitation.
    *
@@ -173,6 +152,12 @@ export interface AuthConfig {
   readonly superadmins?: Superadmins;
   /** Omitted for an install that signs in by emailed code only. */
   readonly google?: GoogleCredentials;
+  /**
+   * `UNDERCROFT_DEV_SIGN_IN_AS`: adds `POST /api/auth/sign-in/dev`, which signs the caller in
+   * as this address with no proof. Only for a `baseUrl` on loopback; `createAuth` throws
+   * otherwise. The address must still be admissible -- see `devSignIn.ts`.
+   */
+  readonly devSignInAs?: string;
   /** Where a failed OTP send is reported. Sending is not awaited, so this is the only trace. */
   readonly onEmailError?: (error: unknown) => void;
 }
@@ -305,42 +290,60 @@ function authPlugins(
   superadmins: Superadmins,
 ): NonNullable<BetterAuthOptions["plugins"]> {
   return [
-    emailOTP({
-      otpLength: 6,
-      expiresIn: OTP_EXPIRES_SECONDS,
-      allowedAttempts: 3,
-      // Hashed at rest, the same stance app.invitation takes with token_sha256: a
-      // database read must not yield something replayable.
-      storeOTP: "hashed",
-      sendVerificationOTP: async ({ email, otp }, context): Promise<void> => {
-        // Do not put a code in the post for an address that could never use it. Without
-        // this, anyone could make this platform email an arbitrary stranger on demand --
-        // our mail reputation spending itself on someone else's spam.
-        //
-        // It returns normally instead of raising, so the caller cannot tell "not invited"
-        // from "sent". Answering honestly here would turn the sign-in form into an
-        // oracle for which addresses have access, which is the same enumeration argument
-        // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
-        if (!(await isAdmissible(config.exec, email, superadmins))) {
-          // Silent to the caller, not to the operator: the response must not reveal that
-          // this address has no access, but the trail must say so.
-          await recordRefusal(config.exec, { email, via: "email-otp" });
-          return;
-        }
-
-        // In the language the browser asked for. This is the one email whose recipient
-        // IS the person at the keyboard, so their choice of language is known exactly --
-        // `apps/ui/src/auth.ts` sends `accept-language` on this very call.
-        const locale = localeOf(context);
-
-        // Deliberately not awaited: how long the send takes is a signal for whether the
-        // address exists, and the response should not carry it.
-        void config.email
-          .send(signInCodeMessage(email, otp, locale))
-          .catch((error: unknown) => config.onEmailError?.(error));
-      },
-    }),
+    ...(config.email === undefined ? [] : [otpSignIn(config, config.email, superadmins)]),
+    ...(config.devSignInAs === undefined
+      ? []
+      : [
+          devSignIn({
+            exec: config.exec,
+            address: config.devSignInAs,
+            baseUrl: config.baseUrl,
+            superadmins,
+          }),
+        ]),
   ];
+}
+
+function otpSignIn(
+  config: AuthConfig,
+  sender: EmailSender,
+  superadmins: Superadmins,
+): BetterAuthPlugin {
+  return emailOTP({
+    otpLength: 6,
+    expiresIn: OTP_EXPIRES_SECONDS,
+    allowedAttempts: 3,
+    // Hashed at rest, the same stance app.invitation takes with token_sha256: a
+    // database read must not yield something replayable.
+    storeOTP: "hashed",
+    sendVerificationOTP: async ({ email, otp }, context): Promise<void> => {
+      // Do not put a code in the post for an address that could never use it. Without
+      // this, anyone could make this platform email an arbitrary stranger on demand --
+      // our mail reputation spending itself on someone else's spam.
+      //
+      // It returns normally instead of raising, so the caller cannot tell "not invited"
+      // from "sent". Answering honestly here would turn the sign-in form into an
+      // oracle for which addresses have access, which is the same enumeration argument
+      // `trpc.ts` makes for answering 404 rather than 403 to a non-member.
+      if (!(await isAdmissible(config.exec, email, superadmins))) {
+        // Silent to the caller, not to the operator: the response must not reveal that
+        // this address has no access, but the trail must say so.
+        await recordRefusal(config.exec, { email, via: "email-otp" });
+        return;
+      }
+
+      // In the language the browser asked for. This is the one email whose recipient
+      // IS the person at the keyboard, so their choice of language is known exactly --
+      // `apps/ui/src/auth.ts` sends `accept-language` on this very call.
+      const locale = localeOf(context);
+
+      // Deliberately not awaited: how long the send takes is a signal for whether the
+      // address exists, and the response should not carry it.
+      void sender
+        .send(signInCodeMessage(email, otp, locale))
+        .catch((error: unknown) => config.onEmailError?.(error));
+    },
+  });
 }
 
 /** The hooks that admit a platform superadmin on a fresh install. ADR 0013. */

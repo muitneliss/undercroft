@@ -101,6 +101,10 @@ export const vi = {
     /** Shown only when the server refused without saying why. */
     sendFailed: "Không gửi được mã đăng nhập. Hãy thử lại.",
     codeFailed: "Mã đó không dùng được. Hãy yêu cầu mã mới.",
+    /** Local development builds only; see `DevSignIn` in `SignIn.tsx`. */
+    dev: "Đăng nhập cục bộ (môi trường phát triển)",
+    devFailed:
+      "Đăng nhập cục bộ đang tắt. Đặt UNDERCROFT_DEV_SIGN_IN_AS trong deploy/compose/.env rồi chạy lại task dev:run.",
   },
 
   tenants: {

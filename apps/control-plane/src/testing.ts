@@ -41,6 +41,8 @@ export interface ControlPlaneOptions {
   readonly seed?: (db: TestDatabase) => Promise<void>;
   /** Addresses named in `UNDERCROFT_SUPERADMINS`. None by default. */
   readonly superadmins?: ReadonlySet<string>;
+  /** `UNDERCROFT_DEV_SIGN_IN_AS`. Off by default, as it is on every deployment. */
+  readonly devSignInAs?: string;
 }
 
 function isDescriptor(value: unknown): value is PropertyDescriptor {
@@ -119,6 +121,7 @@ export async function startControlPlane(options: ControlPlaneOptions = {}): Prom
     baseUrl: origin,
     email: sender,
     superadmins,
+    ...(options.devSignInAs === undefined ? {} : { devSignInAs: options.devSignInAs }),
   });
   handler = createServer({ exec: db, auth, superadmins, worker }).fetch;
 

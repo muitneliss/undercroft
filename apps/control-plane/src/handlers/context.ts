@@ -80,20 +80,6 @@ export interface ServerDeps {
    * `services/assistant/judge.ts`; a gate that fails open is not a gate.
    */
   readonly judge?: Judge;
-  /**
-   * `UNDERCROFT_DEV_SIGN_IN_AS`: the address a request with no session is treated as having
-   * signed in with, so a local stack opens signed in without Google or a mailed code.
-   *
-   * It supplies an authenticated ADDRESS and nothing more. The address still resolves through
-   * `appUserForEmail`, so it has to have been provisioned -- invited, or named in
-   * `UNDERCROFT_SUPERADMINS` -- and it gets exactly the authority that address would have
-   * after a real sign-in. A real session, when one is presented, wins over it.
-   *
-   * `createServer` refuses to build with it unless `publicUrl` is a loopback origin: this is
-   * the one setting that turns every anonymous request into somebody, and the guard is what
-   * keeps a copied `.env` from doing that on a server.
-   */
-  readonly devSignInAs?: string;
 }
 
 /**
@@ -144,22 +130,21 @@ async function sendInvitation(
  * session happens to expire. `superadmin` is false whenever `user` is null -- including for
  * a superadmin whose `app_user` row is missing -- because a caller the platform cannot
  * identify must not carry authority over it.
- *
- * With `devSignInAs` set, a request that presents no session takes that address in place of
- * the one Better Auth would have yielded, and everything after that step is unchanged.
- * `sessionId` stays empty for it, which is how `endSession` knows there is no row to delete.
  */
 export async function resolveCaller(
   deps: ServerDeps,
   headers: Headers,
 ): Promise<{ user: SessionUser | null; sessionId: string; superadmin: boolean }> {
-  const resolved = deps.auth === undefined ? null : await deps.auth.api.getSession({ headers });
-  const address = resolved?.user.email ?? deps.devSignInAs;
-  if (address === undefined) {
+  if (deps.auth === undefined) {
     return { user: null, sessionId: "", superadmin: false };
   }
 
-  const appUser = await appUserForEmail(deps.exec, address);
+  const resolved = await deps.auth.api.getSession({ headers });
+  if (resolved === null) {
+    return { user: null, sessionId: "", superadmin: false };
+  }
+
+  const appUser = await appUserForEmail(deps.exec, resolved.user.email);
   if (appUser === null) {
     return { user: null, sessionId: "", superadmin: false };
   }
@@ -167,7 +152,7 @@ export async function resolveCaller(
   return {
     superadmin: isSuperadmin(deps.superadmins ?? NO_SUPERADMINS, appUser.email),
     user: { userId: appUser.appUserId, email: appUser.email },
-    sessionId: resolved?.session.id ?? "",
+    sessionId: resolved.session.id,
   };
 }
 
@@ -190,9 +175,7 @@ export async function createContext(deps: ServerDeps, headers: Headers): Promise
     superadmin,
     locale,
     endSession: async (): Promise<void> => {
-      // No session id means the caller is `devSignInAs`: there is no row for Better Auth to
-      // delete, and asking it to sign out a request with no session is an error.
-      if (auth !== undefined && sessionId !== "") {
+      if (auth !== undefined) {
         await auth.api.signOut({ headers });
       }
     },

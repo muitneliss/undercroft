@@ -1,57 +1,96 @@
 /**
- * `devSignInAs`: a local stack opens signed in, and nothing else does.
+ * The local stack's sign-in method, `POST /api/auth/sign-in/dev`.
  *
- * Through the real Hono app and `/trpc/session.me`, which is the SPA's one auth read, so what
- * is asserted is what the browser would be told. No Better Auth: the setting is what makes a
- * stack usable without one, and a request here presents no session at all.
+ * Over HTTP against the real control plane (`startControlPlane`): real Better Auth, PGlite,
+ * nothing mocked. What is asserted is what a browser sees -- a session cookie or none, and
+ * who `/trpc/session.me` then says it is.
  */
 
-import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
-import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { afterEach, beforeEach, expect, test as it } from "bun:test";
+import { InMemoryEmailSender } from "@undercroft/core";
+import type { SqlExecutor } from "@undercroft/db";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { type ControlPlane, startControlPlane } from "../testing.ts";
+import { type AuthConfig, createAuth } from "./auth.ts";
 import { createServer } from "./server.ts";
 
-const LOCAL = "http://localhost:5173";
 const DEV = "dev@example.test";
 
-let db: TestDatabase;
+const noDatabase: SqlExecutor = {
+  query: () => Promise.reject(new Error("this test must not touch the database")),
+  exec: () => Promise.reject(new Error("this test must not touch the database")),
+};
+
+function authConfig(baseUrl: string): AuthConfig {
+  return {
+    database: memoryAdapter({}),
+    exec: noDatabase,
+    transactor: () => Promise.reject(new Error("unused")),
+    secret: "a-test-secret-that-is-long-enough-to-sign",
+    baseUrl,
+    email: new InMemoryEmailSender(),
+  };
+}
+
+let plane: ControlPlane;
 
 beforeEach(async () => {
-  db = await createMigratedTestDatabase();
-  await db.become("undercroft_app");
+  // Invited rather than a superadmin, so a first sign-in has an invitation to redeem.
+  plane = await startControlPlane({
+    devSignInAs: DEV,
+    seed: async (db) => {
+      await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0042')");
+      await db.query(
+        `INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
+         VALUES ('CASE-0042', $1, 'viewer', repeat('a', 64), now() + interval '7 days')`,
+        [DEV],
+      );
+    },
+  });
 });
 
 afterEach(async () => {
-  await db.close();
+  await plane.stop();
 });
 
-async function me(): Promise<Response> {
-  const app = createServer({ exec: db, publicUrl: LOCAL, devSignInAs: DEV });
-  return await app.fetch(new Request(`${LOCAL}/trpc/session.me`));
+async function signInDev(): Promise<Response> {
+  return await Bun.fetch(`${plane.origin}/api/auth/sign-in/dev`, {
+    method: "POST",
+    headers: { origin: plane.origin },
+  });
 }
 
-describe("dev sign-in", () => {
-  it("a request with no session is the dev address's app_user", async () => {
-    const { rows } = await db.query<{ id: string }>(
-      "INSERT INTO app.app_user (email) VALUES ($1) RETURNING id",
-      [DEV],
-    );
+it("signs the configured address in with an ordinary session", async () => {
+  const cookie = (await signInDev()).headers.getSetCookie().join("; ");
+  const me = await Bun.fetch(`${plane.origin}/trpc/session.me`, { headers: { cookie } });
 
-    const response = await me();
+  expect(await me.json()).toMatchObject({ result: { data: { email: DEV, superadmin: false } } });
+});
 
-    expect(await response.json()).toEqual({
-      result: { data: { userId: rows[0]?.id, email: DEV, superadmin: false } },
-    });
+it("refuses an address whose invitation is gone, and sets no session", async () => {
+  await plane.db.query("DELETE FROM app.invitation");
+
+  const response = await signInDev();
+
+  expect({ status: response.status, cookies: response.headers.getSetCookie() }).toEqual({
+    status: 403,
+    cookies: [],
   });
+});
 
-  it("a dev address that was never provisioned is still nobody", async () => {
-    const response = await me();
+it("does not exist on a control plane started without the setting", async () => {
+  const origin = "http://localhost:5173";
+  const app = createServer({ exec: noDatabase, auth: createAuth(authConfig(origin)) });
 
-    expect(response.status).toBe(401);
-  });
+  const response = await app.fetch(
+    new Request(`${origin}/api/auth/sign-in/dev`, { method: "POST", headers: { origin } }),
+  );
 
-  it("refuses to build a server whose public URL is not loopback", () => {
-    expect(() =>
-      createServer({ exec: db, publicUrl: "https://app.example.test", devSignInAs: DEV }),
-    ).toThrow();
-  });
+  expect(response.status).toBe(404);
+});
+
+it("is refused at construction behind an origin that is not loopback", () => {
+  expect(() =>
+    createAuth({ ...authConfig("https://app.example.test"), devSignInAs: DEV }),
+  ).toThrow();
 });
