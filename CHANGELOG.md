@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.1](https://github.com/muitneliss/undercroft/compare/v1.32.0...v1.32.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **connections:** a refresh token the provider refuses marks the connection expired and asks for a reconnect ([#213](https://github.com/muitneliss/undercroft/issues/213)) ([#216](https://github.com/muitneliss/undercroft/issues/216)) ([7ccb97d](https://github.com/muitneliss/undercroft/commit/7ccb97da16a995f6d706b459219fc98d127dbdc0))
+
 ## [1.32.0](https://github.com/muitneliss/undercroft/compare/v1.31.0...v1.32.0) (2026-09-25)
 
 
