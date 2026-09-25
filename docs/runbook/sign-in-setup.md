@@ -307,6 +307,36 @@ refused is the one that would leave the customer with no admin: make someone els
 first. Every role change and removal is written to `ops.audit_log` as `people.setRole` or
 `people.remove`, with who did it, when, and the role the person held before.
 
+## Skip sign-in locally
+
+For Path B only. Steps 1 to 3 are not needed for this: no Google client and no mail key. In
+`deploy/compose/.env`:
+
+```sh
+UNDERCROFT_SUPERADMINS=you@example.test
+UNDERCROFT_DEV_SIGN_IN_AS=you@example.test
+```
+
+Then `task dev:run` and open `http://localhost:5173`. You are already signed in. The boot log
+says so:
+
+```json
+{ "event": "dev_sign_in_active", "variable": "UNDERCROFT_DEV_SIGN_IN_AS" }
+```
+
+How it behaves:
+
+- **It skips proving the address, not the invite-only gate.** The address must be named in
+  `UNDERCROFT_SUPERADMINS` or invited (`task dev:invite`), and it gets exactly the access that
+  address would have after a real sign-in. If it is neither, the log says
+  `dev_sign_in_not_admitted` and every request stays signed out. To see the app as a `viewer`,
+  invite the address with `--role viewer` and leave it out of `UNDERCROFT_SUPERADMINS`.
+- **A real sign-in still wins.** A browser holding a session cookie is that session's person.
+  Signing out returns you to the dev address, not to the sign-in page.
+- **It cannot reach a server.** Only `task dev:api` passes the variable to the control plane,
+  and the control plane refuses to start with it unless `UNDERCROFT_PUBLIC_URL` is `localhost`,
+  `127.0.0.1` or `[::1]`. Path A does not pass it at all.
+
 ---
 
 ## When it does not work

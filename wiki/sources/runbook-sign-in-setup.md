@@ -1,12 +1,12 @@
 ---
 title: Runbook Sign-In Setup
 type: source
-date: 2026-09-24
+date: 2026-09-25
 tags: []
 source: docs/runbook/sign-in-setup.md
 source_path: docs/runbook/sign-in-setup.md
-source_hash: b0d923082db470466b9a6bb4c04f7b792eea9dcb68e093b826ccfe52d5c70b66
-ingested: 2026-09-24
+source_hash: 8d67bbd51f0a7705fa512a57dba06b062b4c0a6bc4c03ebc5b99d09eb63f75ff
+ingested: 2026-09-25
 ---
 
 # Runbook Sign-In Setup
@@ -18,3 +18,5 @@ Two paths, differing only in `UNDERCROFT_PUBLIC_URL` and how things start: Path 
 The steps: generate a session secret; create a Google OAuth client of type *Web application* whose authorized redirect URIs carry Better Auth's non-negotiable `/api/auth/callback/google` path, one line per origin, with scopes left at `openid email profile` and **nothing added**; get a mail API key; write `deploy/compose/.env` from `task dev:env`; start Postgres and `task dev:migrate`, checking `060_auth.sql` is in the applied or skipped list (the migrator prints `skip`/`apply` per file, `state` for the restated `repeatable/010_provision_tenant.sql`, the count applied, then the two platform role passwords it set); start the control plane and read the boot log for `sign_in_configured` with its `methods`. If the schema is behind, sign-in does not degrade but **stops** -- Better Auth answers 500 to every `/api/auth/*` request and logs `Database schema mismatch` while still logging `sign_in_configured`, so "configured" in the log does not mean "working".
 
 Once people are in, **People** is where access is kept current. The roles: a `viewer` looks; a `member` also authors questions and dashboards; an `admin` also connects accounts, runs a sync, edits and builds models, browses and queries the raw lake, and invites and manages people. An admin invites an address at a role, withdraws an invitation nobody has accepted, changes the role of someone who already has access, or removes them. The last two are also `undercroft people set-role` and `undercroft people remove-member`. A removal takes effect on the removed person's next request, even while they are signed in, because authority is read from the membership on every request. The one change refused is the one that would leave a customer with no admin: make someone else an admin first. An admin may step down or leave while another admin remains. Every role change and removal lands in `ops.audit_log` as `people.setRole` or `people.remove`, with the actor, the time and the role held before.
+
+For Path B only, sign-in can be **skipped locally**: set `UNDERCROFT_DEV_SIGN_IN_AS` to an address in `deploy/compose/.env` and every request with no session is treated as that address, so `localhost:5173` opens signed in with no Google client and no mail key. It skips *proving* the address, never the invite-only gate: the address must be named in `UNDERCROFT_SUPERADMINS` or invited (`task dev:invite`), the control plane provisions it at boot as its first real sign-in would, and it gets exactly that address's access -- the boot log says `dev_sign_in_active`, or `dev_sign_in_not_admitted` and every request stays signed out. A real session cookie still wins, and signing out of one returns to the dev address. It cannot reach a server: only `task dev:api` passes the variable, the compose files do not, and the control plane refuses to start with it unless `UNDERCROFT_PUBLIC_URL` is `localhost`, `127.0.0.1` or `[::1]`.

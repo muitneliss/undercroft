@@ -27,6 +27,7 @@ import { createServer } from "./handlers/server.ts";
 import { runAlerts } from "./services/alerts.ts";
 import { createAssistant } from "./services/assistant/agent.ts";
 import { createJudge } from "./services/assistant/judge.ts";
+import { resolveInvitedUser } from "./services/invite.ts";
 import { parseSuperadmins } from "./services/superadmin.ts";
 import { createHttpWorkerClient } from "./services/workerClient.ts";
 
@@ -326,6 +327,14 @@ if (publicUrl === undefined || (email === undefined && lark === undefined)) {
 // unset serves the API alone. Spread so the optional stays absent rather than `undefined`,
 // which exactOptionalPropertyTypes forbids.
 const uiDist = optional("UNDERCROFT_UI_DIST");
+
+/**
+ * Local sign-in without signing in. Set by `task dev:api` from `deploy/compose/.env`, and by
+ * nothing a deployment runs: the compose files do not pass it to this service, and
+ * `createServer` below refuses to start with it behind a public URL that is not loopback.
+ */
+const devSignInAs = optional("UNDERCROFT_DEV_SIGN_IN_AS");
+
 const app = createServer({
   exec,
   // Not spread conditionally: an empty set is the honest answer for an install that names
@@ -342,7 +351,27 @@ const app = createServer({
   ...(worker === undefined ? {} : { worker }),
   ...(assistant === undefined ? {} : { assistant }),
   ...(judge === undefined ? {} : { judge }),
+  ...(devSignInAs === undefined ? {} : { devSignInAs }),
 });
+
+/**
+ * Provision the dev address the way its first real sign-in would, redeeming its invitations,
+ * so a fresh local database opens signed in. After `createServer`, so a refused setting has
+ * stopped the process before anything is written. An address that is neither invited nor a
+ * superadmin gets nothing: this skips proving the address, never the invite-only gate.
+ */
+if (devSignInAs !== undefined) {
+  const provisioned = await withTransaction(pool, (tx) =>
+    resolveInvitedUser(tx, devSignInAs, superadmins.addresses),
+  );
+  if (provisioned === null) {
+    log.warn("dev_sign_in_not_admitted", {
+      hint: "name UNDERCROFT_DEV_SIGN_IN_AS in UNDERCROFT_SUPERADMINS, or task dev:invite it",
+    });
+  } else {
+    log.warn("dev_sign_in_active", { variable: "UNDERCROFT_DEV_SIGN_IN_AS" });
+  }
+}
 
 // parseInt, not Number(): a port, not an amount.
 const port = Number.parseInt(process.env.UNDERCROFT_API_PORT ?? "3000", 10);
