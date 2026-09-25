@@ -17,7 +17,7 @@
  */
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { InMemoryEmailSender } from "@undercroft/core";
+import { InMemoryEmailSender, type Logger } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import type { BetterAuthOptions } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -45,6 +45,11 @@ export interface ControlPlaneOptions {
   readonly superadmins?: ReadonlySet<string>;
   /** `UNDERCROFT_DEV_SIGN_IN_AS`. Off by default, as it is on every deployment. */
   readonly devSignInAs?: string;
+  /**
+   * Where the server logs. None by default. A suite that asserts a line hands in a real
+   * `createLogger` whose `sink` keeps the lines in memory.
+   */
+  readonly log?: Logger;
 }
 
 function isDescriptor(value: unknown): value is PropertyDescriptor {
@@ -151,7 +156,14 @@ export async function startControlPlane(options: ControlPlaneOptions = {}): Prom
   });
   // Built once per test process and shared, as `main.ts` builds them once per server.
   const widgets = await buildWidgets();
-  handler = createServer({ exec: db, auth, superadmins, worker, widgets }).fetch;
+  handler = createServer({
+    exec: db,
+    auth,
+    superadmins,
+    worker,
+    widgets,
+    ...(options.log === undefined ? {} : { log: options.log }),
+  }).fetch;
 
   if (options.seed !== undefined) {
     await options.seed(db);

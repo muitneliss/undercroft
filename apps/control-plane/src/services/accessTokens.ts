@@ -121,17 +121,34 @@ export async function revoke(
 
 /** Who a live token speaks for, and what it may do. */
 export interface Admitted {
+  readonly ok: true;
   readonly id: string;
   readonly email: string;
   readonly grant: Grant;
 }
 
 /**
- * The owner and grant of a presented token, or `null` when it admits nobody: unknown, revoked,
- * or expired. One answer for all three, because the door that asked answers all three with the
- * same 401, and a caller holding a dead token is owed no account of how it died.
+ * Why a presented token admits nobody.
  *
- * What `null` does NOT cover is whether the owner is still anybody here. That is the door's
+ * `unknown` is no row with this digest: never ours, mistyped, or its person's row deleted and
+ * the token with it (`ON DELETE CASCADE`). `id` is the token's id only where a row proved whose
+ * token it is. The `upat_…` prefix of an unknown one is text the caller wrote, so it is not
+ * reported: it would name a real token for a bearer that is not that token.
+ */
+export interface Refused {
+  readonly ok: false;
+  readonly reason: "unknown" | "revoked" | "expired";
+  readonly id?: string;
+}
+
+/**
+ * The owner and grant of a presented token, or why it admits nobody.
+ *
+ * The reason is for the operator's log, never for the caller: the door answers all three with
+ * the same 401, and a caller holding a dead token is owed no account of how it died. It is
+ * what lets "the client stopped working" be told apart from "its person revoked it".
+ *
+ * What this does NOT decide is whether the owner is still anybody here. That is the door's
  * shared tail (`appUserForEmail`, in `handlers/context.ts`), which every credential passes
  * through, so a token cannot outlive its owner's access by a request.
  */
@@ -139,17 +156,21 @@ export async function admit(
   exec: SqlExecutor,
   bearer: string,
   now: Date = new Date(),
-): Promise<Admitted | null> {
+): Promise<Admitted | Refused> {
   if (!isPersonalToken(bearer)) {
-    return null;
+    return { ok: false, reason: "unknown" };
   }
   const token = await findTokenByDigest(exec, hashToken(bearer));
-  if (token === null || token.revokedAt !== null) {
-    return null;
+  if (token === null) {
+    return { ok: false, reason: "unknown" };
+  }
+  // Revoked before expired: a person's deliberate act is the more telling of the two.
+  if (token.revokedAt !== null) {
+    return { ok: false, reason: "revoked", id: token.id };
   }
   if (token.expiresAt.getTime() <= now.getTime()) {
-    return null;
+    return { ok: false, reason: "expired", id: token.id };
   }
   await touchTokenUse(exec, token.id);
-  return { id: token.id, email: token.email, grant: token.grant };
+  return { ok: true, id: token.id, email: token.email, grant: token.grant };
 }

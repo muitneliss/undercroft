@@ -6,7 +6,7 @@
  *   bun run scripts/observe.ts creds
  *   bun run scripts/observe.ts trace <traceId>
  *   bun run scripts/observe.ts logs <traceId|runId|text> [since]
- *   bun run scripts/observe.ts search run=<runId> | kestra=<executionId> | errors [since]
+ *   bun run scripts/observe.ts search run=<runId> | kestra=<executionId> | status=<code> | errors [since]
  *   bun run scripts/observe.ts host-logs <worker|control-plane|kestra> <needle> [since]
  *
  * Every credential is looked up at run time from what this checkout already holds, and none
@@ -44,6 +44,8 @@ const TRACE_ID = /^[0-9a-f]{32}$/u;
 /** What may reach a remote shell: an id, a run id, an event name. Nothing that quotes. */
 const NEEDLE = /^[A-Za-z0-9_.:-]{3,120}$/u;
 const SINCE = /^(?<amount>\d{1,4})(?<unit>[smhd])$/u;
+/** What may reach a TraceQL query as a status: three digits, nothing else. */
+const HTTP_STATUS = /^[1-5]\d\d$/u;
 const SERVICES = new Set(["worker", "control-plane", "kestra"]);
 
 function out(line: string): void {
@@ -115,15 +117,30 @@ async function showLogs(g: Grafana, needle: string, since: string): Promise<void
 
 // --- search -----------------------------------------------------------------
 
+/**
+ * Requests answered with one HTTP status, by their server spans. `errors` cannot find a 401 or
+ * a 403: only a 5xx marks a span failed (`finish` in `@undercroft/telemetry`). So a client
+ * refused at `/mcp`, whose own log never shows the `x-trace-id`, is found here, and its
+ * `mcp_refused` line then says why (ADR 0062). Only a three-digit status reaches the query.
+ */
+function statusQuery(code: string): string {
+  if (!HTTP_STATUS.test(code)) {
+    fail(`status=${code} is not an HTTP status; try status=401`);
+  }
+  return `{ resource.service.name =~ "undercroft.*" && kind = server && span.http.response.status_code = ${code} }`;
+}
+
 async function search(g: Grafana, what: string, since: string): Promise<void> {
   const [kind = "", value = ""] = what.split("=", 2);
   const needle = value.replace(/[^A-Za-z0-9_.:-]/gu, "");
-  const byKind: Record<string, string> = {
-    run: `{ span.undercroft.run_id = "${needle}" }`,
-    kestra: `{ span.kestra.execution_id = "${needle}" }`,
-    errors: `{ resource.service.name =~ "undercroft.*" && status = error }`,
+  const byKind: Record<string, () => string> = {
+    run: () => `{ span.undercroft.run_id = "${needle}" }`,
+    kestra: () => `{ span.kestra.execution_id = "${needle}" }`,
+    errors: () => `{ resource.service.name =~ "undercroft.*" && status = error }`,
+    status: () => statusQuery(value),
   };
-  const traceql = byKind[kind] ?? fail("search needs run=ID, kestra=ID or errors");
+  const query = byKind[kind] ?? fail("search needs run=ID, kestra=ID, status=CODE or errors");
+  const traceql = query();
   const end = Math.floor(Date.now() / 1000);
   const start = end - Math.floor(sinceMs(since) / 1000);
   const params = new URLSearchParams({
@@ -232,7 +249,7 @@ async function main(): Promise<void> {
       return await hostLogs(dokploy(), first, second, third || DEFAULT_SINCE);
     default:
       fail(
-        "usage: observe.ts creds | trace <id> | logs <needle> [since] | search <run=|kestra=|errors> [since] | host-logs <service> <needle> [since]",
+        "usage: observe.ts creds | trace <id> | logs <needle> [since] | search <run=|kestra=|status=|errors> [since] | host-logs <service> <needle> [since]",
       );
   }
 }

@@ -157,5 +157,8 @@
 ## [2026-09-25] ingest | Runbook: The undercroft CLI
 ## [2026-09-25] ingest | Design: The CLI's home page and sign-in, drawn in text
 ## [2026-09-25] ingest | Runbook: The undercroft CLI
+## [2026-09-25] ingest | ADR 0062: A refused bearer is logged with its reason, and an access token lives eight hours
+## [2026-09-25] ingest | Runbook: Connecting an agent over MCP
+## [2026-09-25] ingest | ADR 0062: A refused bearer is logged with its reason, and an access token lives eight hours
 ## [2026-09-25] ingest | Public home and customer index
 ## [2026-09-25] ingest | Public home and customer index

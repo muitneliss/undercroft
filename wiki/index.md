@@ -65,6 +65,7 @@
 - [ADR 0059: A sync may run on a cron expression, beside the four presets](sources/adr-0059-a-sync-may-run-on-a-cron-expression-beside-the-four-presets.md)
 - [ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds](sources/adr-0060-an-agent-reaches-undercroft-over-mcp-with-a-credential-a-person-holds.md)
 - [ADR 0061: An MCP client signs its person in, and draws two widgets](sources/adr-0061-an-mcp-client-signs-its-person-in-and-draws-two-widgets.md)
+- [ADR 0062: A refused bearer is logged with its reason, and an access token lives eight hours](sources/adr-0062-a-refused-bearer-is-logged-with-its-reason-and-an-access-token-lives-eight-hours.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)

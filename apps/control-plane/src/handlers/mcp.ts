@@ -14,7 +14,9 @@
  * - WHAT A CALL ANSWERS, result or refusal: `mcpAnswers.ts`.
  * - WHICH WIDGET draws an answer, and the widgets themselves as resources: `mcpWidgets.ts`.
  * - ONE LOG LINE per call, naming the tool, the credential and the outcome, never the input or
- *   the output -- either may be a customer's data.
+ *   the output -- either may be a customer's data. And one per refused bearer, `mcp_refused`,
+ *   naming WHY (ADR 0062): the challenge a client gets is uniform on purpose, so without this
+ *   line a client failing at the door leaves nothing to find.
  *
  * A FRESH low-level `Server` per request, bound to that request's context, served statelessly.
  * There is no session to hold: the credential is re-read on every request, which is what makes
@@ -37,7 +39,7 @@ import { describeError, type Logger } from "@undercroft/core";
 import type { Hono } from "hono";
 import { messages } from "../i18n/index.ts";
 import { READ_SCOPE } from "../services/connectedApps.ts";
-import type { BearerRefusal } from "./context.ts";
+import type { BearerRefusal, RefusalReason } from "./context.ts";
 import { answered, refused, refusedBy } from "./mcpAnswers.ts";
 import { listTools, toolNamed } from "./mcpTools.ts";
 import { listResources, NO_WIDGETS, readResource, resultMeta, type Widgets } from "./mcpWidgets.ts";
@@ -59,13 +61,29 @@ export interface McpDeps {
 }
 
 /**
+ * What a client is told about a refusal: RFC 6750's error code, and nothing finer.
+ *
+ * `invalid_token` covers everything a new token would fix -- none presented, not ours,
+ * expired, revoked, its person gone -- and is a 401 whose challenge sends a client to sign in
+ * again. `insufficient_scope` is the one case a new token of the SAME kind would not fix: a live
+ * OAuth token its person consented to, holding neither `undercroft:read` nor `undercroft:write`.
+ * It is a 403 naming the scope to ask for, so a client asks for it instead of looping.
+ */
+type ChallengeError = "invalid_token" | "insufficient_scope";
+
+/** The one place a refusal's reason is reduced to what the client may learn of it. */
+function challengeError(reason: RefusalReason): ChallengeError {
+  return reason === "insufficient_scope" ? "insufficient_scope" : "invalid_token";
+}
+
+/**
  * The challenges' descriptions, in ASCII and in no language.
  *
  * A header is a byte string, and a Vietnamese sentence in it is refused by `Headers` outright.
  * This is protocol text beside the RFC 6750 code, read by a client library deciding to start a
  * sign-in -- not a sentence for a person, who is shown their host's own prompt.
  */
-const CHALLENGES: Readonly<Record<BearerRefusal, string>> = {
+const CHALLENGES: Readonly<Record<ChallengeError, string>> = {
   invalid_token:
     "a live personal access token, or an access token from this server's authorization " +
     "server, is required as Authorization: Bearer",
@@ -184,16 +202,36 @@ function serverFor(deps: McpDeps, ctx: Context): Server {
  * a token; a 403 naming `undercroft:read` for a token its person consented to that grants
  * nothing here, so the client asks for the scope rather than for the same token again.
  */
-function challenge(deps: McpDeps, request: Request, refusal: BearerRefusal): Response {
+function challenge(deps: McpDeps, request: Request, error: ChallengeError): Response {
   const { origin } = new URL(deps.publicUrl ?? request.url);
   const code =
-    refusal === "insufficient_scope"
-      ? OAuthErrorCode.InsufficientScope
-      : OAuthErrorCode.InvalidToken;
-  return bearerAuthChallengeResponse(new OAuthError(code, CHALLENGES[refusal]), {
+    error === "insufficient_scope" ? OAuthErrorCode.InsufficientScope : OAuthErrorCode.InvalidToken;
+  return bearerAuthChallengeResponse(new OAuthError(code, CHALLENGES[error]), {
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(new URL("/mcp", origin)),
-    ...(refusal === "insufficient_scope" ? { requiredScopes: [READ_SCOPE] } : {}),
+    ...(error === "insufficient_scope" ? { requiredScopes: [READ_SCOPE] } : {}),
   });
+}
+
+/**
+ * The challenge, and one `mcp_refused` line saying what the challenge does not: the reason, and
+ * whose credential it was when that is proven. Never the token. The trace id comes with the
+ * logger, and is the `x-trace-id` the refusal answered with, so `task obs:search
+ * FOR=status=401` and this line find each other (ADR 0062).
+ *
+ * `missing` is logged at `info`, everything else at `warn`: a missing bearer is also every
+ * OAuth client's first contact -- the challenge IS how it learns to sign in -- and a warning
+ * for each would be a warning nobody reads. A token that has died is a client failing.
+ */
+function refuse(deps: McpDeps, request: Request, refusal: BearerRefusal): Response {
+  const error = challengeError(refusal.reason);
+  const response = challenge(deps, request, error);
+  deps.log?.write(refusal.reason === "missing" ? "info" : "warn", "mcp_refused", {
+    status: response.status,
+    refusal: error,
+    reason: refusal.reason,
+    ...(refusal.credentialId === undefined ? {} : { credential: refusal.credentialId }),
+  });
+  return response;
 }
 
 /**
@@ -204,8 +242,8 @@ function challenge(deps: McpDeps, request: Request, refusal: BearerRefusal): Res
 export function registerMcpRoute(app: Hono, deps: McpDeps): void {
   app.all("/mcp", async (c) => {
     const ctx = await deps.admit(c.req.raw.headers);
-    if (typeof ctx === "string") {
-      return challenge(deps, c.req.raw, ctx);
+    if ("reason" in ctx) {
+      return refuse(deps, c.req.raw, ctx);
     }
     const handler = createMcpHandler(() => serverFor(deps, ctx), {
       legacy: "stateless",
