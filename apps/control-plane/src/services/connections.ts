@@ -23,6 +23,7 @@ import {
   type ConnectionScope,
   needsScope,
   nextRunAt,
+  overlongPropertyChoices,
   parseScope,
   parseSourceInstance,
   sourceKind,
@@ -100,6 +101,11 @@ export interface ConnectionCardView {
     recurse?: boolean;
     entities?: string[];
     fileTypes?: string[];
+    /**
+     * HubSpot: the properties each object reads beyond its spec's own, by internal name --
+     * what the picker re-ticks and the card counts. Absent when nobody has chosen any.
+     */
+    properties?: Record<string, string[]>;
   };
   /**
    * When this GRANT lapses -- the date after which the customer has to consent again.
@@ -187,15 +193,16 @@ const BROWSE_LISTINGS: ReadonlyMap<string, BrowseListing> = new Map<string, Brow
   ["gmail", "labels"],
   ["xero", "organisations"],
   ["drive", "folders"],
+  ["hubspot", "properties"],
 ]);
 
 /**
  * Which listing a source's scope is chosen from, or `null` for a source chosen from none.
  *
- * Decided here rather than by asking the worker and reading its refusal: a HubSpot token has
- * nothing to choose, and "the processing service could not fetch the list" is not true of a
- * list that does not exist. It used to be decided inline as "Xero, else labels", which sent
- * Drive to the worker asking for Gmail labels -- issue 177.
+ * Decided here rather than by asking the worker and reading its refusal: "the processing
+ * service could not fetch the list" is not true of a list that does not exist. It used to be
+ * decided inline as "Xero, else labels", which sent Drive to the worker asking for Gmail labels
+ * -- issue 177. HubSpot had no listing until its properties could be chosen (issue 202).
  */
 export function browseListingFor(source: string): BrowseListing | null {
   return BROWSE_LISTINGS.get(sourceKind(source)) ?? null;
@@ -332,7 +339,14 @@ export function listRaw(exec: SqlExecutor, tenantId: string): Promise<Connection
   return listConnections(exec, tenantId);
 }
 
-export type SetScopeOutcome = { ok: true } | { ok: false; reason: "unsupported-source" };
+export type SetScopeOutcome =
+  | { ok: true }
+  | { ok: false; reason: "unsupported-source" }
+  /**
+   * A HubSpot choice whose properties for `entity` would not fit in the request that reads it.
+   * Nothing was written: saved, it would fail every run afterwards as an opaque 414.
+   */
+  | { ok: false; reason: "too-many-properties"; entity: string; chars: number };
 
 /**
  * Record what an admin chose to share.
@@ -354,6 +368,10 @@ export async function setScope(
   const scope = parseScope(input.source, input.selectionJson);
   if (scope === null) {
     return { ok: false, reason: "unsupported-source" };
+  }
+  const [overlong] = scope.kind === "hubspot" ? overlongPropertyChoices(scope) : [];
+  if (overlong !== undefined) {
+    return { ok: false, reason: "too-many-properties", ...overlong };
   }
 
   // A Xero choice names an organisation. Its id goes where a run reads it, on the
@@ -500,6 +518,8 @@ function chosenCount(scope: ConnectionScope): number {
       return scope.files.length;
     case "xero":
       return scope.entities.length;
+    case "hubspot":
+      return Object.values(scope.properties).reduce((sum, names) => sum + names.length, 0);
     default: {
       const exhaustive: never = scope;
       throw new Error(`unhandled scope ${String(exhaustive)}`);
@@ -520,6 +540,8 @@ function configOf(source: string, selectionJson: string): ConnectionCardView["co
       return { files: scope.files, recurse: scope.recurse, fileTypes: scope.fileTypes };
     case "xero":
       return { entities: scope.entities };
+    case "hubspot":
+      return { properties: scope.properties };
     default: {
       const exhaustive: never = scope;
       throw new Error(`unhandled scope ${String(exhaustive)}`);

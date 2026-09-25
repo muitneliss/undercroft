@@ -132,12 +132,28 @@ describe("which list a source is browsed for", () => {
     expect(worker.browsed.map((asked) => asked.kind)).toEqual(["folders", "folders"]);
   });
 
+  it("HubSpot asks the worker for its properties, and a refused token is worded for a private app", async () => {
+    // Issue 202: HubSpot used to be the source with nothing to choose, refused before the
+    // worker was asked. Its remedy is not Google's either -- there is no consent screen to
+    // leave ticked, there is a private app to grant read access to.
+    const worker = new InMemoryWorkerClient();
+    await callerOf(worker).connections.browseScope({ tenantId: TENANT, source: "hubspot" });
+
+    await expect(
+      callerWith("scope-insufficient").connections.browseScope({
+        tenantId: TENANT,
+        source: "hubspot",
+      }),
+    ).rejects.toThrow(messages(DEFAULT_LOCALE)("error.propertiesInsufficient"));
+    expect(worker.browsed.map((asked) => asked.kind)).toEqual(["properties"]);
+  });
+
   it("a source with nothing to choose is refused as such, and the worker is not asked", async () => {
     const worker = new InMemoryWorkerClient();
 
     await expect(
-      callerOf(worker).connections.browseScope({ tenantId: TENANT, source: "hubspot" }),
-    ).rejects.toThrow(messages(DEFAULT_LOCALE)("error.browseUnsupported", { source: "hubspot" }));
+      callerOf(worker).connections.browseScope({ tenantId: TENANT, source: "shopify" }),
+    ).rejects.toThrow(messages(DEFAULT_LOCALE)("error.browseUnsupported", { source: "shopify" }));
     expect(worker.browsed).toEqual([]);
   });
 });

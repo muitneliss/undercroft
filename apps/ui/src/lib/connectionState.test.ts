@@ -102,6 +102,28 @@ describe("scopeSummary for Xero", () => {
   });
 });
 
+describe("scopeSummary for HubSpot", () => {
+  it("nothing chosen is the standard properties, said in words rather than as a dash", () => {
+    // A HubSpot connection nobody has scoped still reads something -- the spec's own
+    // properties -- so the card may not render it as missing.
+    const hubspot = connection("hubspot", { status: "connected", config: {} });
+
+    expect(scopeSummary(t, hubspot)).toBe("Các trường chuẩn của công ty, liên hệ và giao dịch");
+  });
+
+  it("counts what was chosen across every object", () => {
+    const hubspot = connection("hubspot", {
+      status: "connected",
+      config: { properties: { companies: ["annualrevenue", "city"], deals: ["x_stage"] } },
+    });
+
+    expect(scopeSummary(t, hubspot)).toBe("Các trường chuẩn, cùng 3 trường chọn thêm");
+    expect(scopeSummary(translatorFor("en"), hubspot)).toBe(
+      "The standard properties, and 3 more chosen",
+    );
+  });
+});
+
 describe("connectsBy", () => {
   it("HubSpot connects by a pasted token; every consent source by its provider's screen", () => {
     expect(connectsBy("hubspot")).toBe("token");

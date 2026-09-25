@@ -14,7 +14,8 @@ import {
 } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 import type { Hono } from "hono";
-import { browseScope, revokeConnection, storeCredential } from "../services/connections.ts";
+import { browseScope } from "../services/browseScope.ts";
+import { revokeConnection, storeCredential } from "../services/connections.ts";
 import { serviceTokenOk, tokenFor, UNAUTHENTICATED } from "./bearer.ts";
 import type { LakeApiDeps } from "./lake.ts";
 
@@ -134,13 +135,14 @@ function registerConnectionsBrowseRoute(app: Hono, deps: LakeApiDeps): void {
         exec: deps.exec,
         fetcher: deps.byteFetcher ?? createByteFetcher(),
         token: () => tokenFor(deps, parsed.data),
+        ...(deps.specsDir === undefined ? {} : { specsDir: deps.specsDir }),
       },
       parsed.data,
     );
     if (!outcome.ok) {
       // Two refusals, two codes, because the remedies have nothing in common. A source
       // that cannot be browsed is a request this build will never serve; a credential
-      // Google refused is one reconnect away from working, and the caller can only say so
+      // the provider refused is one reconnect away from working, and the caller can only say so
       // if the status tells it apart from every other 400 this endpoint can answer.
       if (outcome.reason === "scope-insufficient") {
         return c.json(

@@ -6,7 +6,12 @@
 
 import { describe, expect, test as it } from "bun:test";
 
-import { needsScope, parseScope } from "./connectionScope.ts";
+import {
+  MAX_PROPERTY_QUERY_CHARS,
+  needsScope,
+  overlongPropertyChoices,
+  parseScope,
+} from "./connectionScope.ts";
 
 describe("parseScope", () => {
   it("a Gmail selection with no file types recorded defaults to PDF only", () => {
@@ -68,10 +73,54 @@ describe("parseScope", () => {
     expect(parseScope("xero", JSON.stringify({ organisation: "org-1" }))).toBeNull();
   });
 
-  it("a source that takes no scope never parses to one", () => {
+  it("a Xero shape under hubspot is no selection", () => {
     expect(
       parseScope("hubspot", JSON.stringify({ organisation: { id: "x", name: "y" } })),
     ).toBeNull();
+  });
+
+  it("reads a HubSpot selection: the properties each object reads beyond its spec", () => {
+    const scope = parseScope(
+      "hubspot",
+      JSON.stringify({ properties: { companies: ["annualrevenue", "x_onboarding_stage"] } }),
+    );
+    expect(scope).toEqual({
+      kind: "hubspot",
+      properties: { companies: ["annualrevenue", "x_onboarding_stage"] },
+    });
+  });
+
+  it("refuses a HubSpot property name that would carry a second one in with it", () => {
+    // The list endpoint takes ONE comma-separated string; "city,phone" is two properties.
+    expect(
+      parseScope("hubspot", JSON.stringify({ properties: { companies: ["city,phone"] } })),
+    ).toBeNull();
+  });
+});
+
+describe("overlongPropertyChoices", () => {
+  /** `count` distinct names of `width` characters, the width a long custom name reaches. */
+  function names(count: number, width: number): string[] {
+    return Array.from({ length: count }, (_, i) => `p${String(i).padStart(width - 1, "0")}`);
+  }
+
+  it("names the object whose choice would not fit in one request", () => {
+    // 400 names of 30 characters: 12,000 characters, plus three for each encoded comma.
+    const scope = { kind: "hubspot" as const, properties: { contacts: names(400, 30) } };
+
+    const [over] = overlongPropertyChoices(scope);
+
+    expect(over?.entity).toBe("contacts");
+    expect(over?.chars).toBeGreaterThan(MAX_PROPERTY_QUERY_CHARS);
+  });
+
+  it("stays quiet for a choice that fits, however many objects carry one", () => {
+    const scope = {
+      kind: "hubspot" as const,
+      properties: { companies: names(250, 30), contacts: names(250, 30), deals: [] },
+    };
+
+    expect(overlongPropertyChoices(scope)).toEqual([]);
   });
 });
 

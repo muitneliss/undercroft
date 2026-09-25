@@ -143,8 +143,9 @@ export const vi = {
       get: "Một nguồn và trạng thái kết nối của nó.",
       startOAuth: "Bắt đầu cấp quyền OAuth; trả về URL để mở trong trình duyệt. Quản trị.",
       browseScope:
-        "Những gì có thể chọn cho phạm vi đọc: nhãn Gmail, tổ chức Xero, hoặc thư mục Google Drive kèm đường dẫn và các loại tệp đang có. Quản trị.",
-      setScope: "Đặt phạm vi đọc của một nguồn. Quản trị.",
+        "Những gì có thể chọn cho phạm vi đọc: nhãn Gmail, tổ chức Xero, thư mục Google Drive kèm đường dẫn và các loại tệp đang có, hoặc các trường của từng đối tượng HubSpot, kể cả trường do portal tự tạo. Quản trị.",
+      setScope:
+        "Đặt phạm vi đọc của một nguồn. Với HubSpot, các trường chọn thêm cho từng đối tượng được đọc cùng các trường chuẩn, không thay thế chúng. Quản trị.",
       setToken: "Kết nối một nguồn bằng token dán vào. Quản trị.",
       setCadence: "Đặt tần suất đọc một nguồn. Quản trị.",
       disconnect: "Chấm dứt quyền truy cập của một nguồn. Quản trị.",

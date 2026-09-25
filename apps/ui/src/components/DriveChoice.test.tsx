@@ -60,6 +60,7 @@ function emptyDraft(): ScopeDraft {
     entities: [],
     fileTypes: [],
     recurse: false,
+    properties: {},
   };
 }
 
