@@ -19,14 +19,8 @@
 
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
 import { checkGuards } from "./guards.ts";
-import {
-  type RawRecordOut,
-  type Reader,
-  type RunContext,
-  createReader,
-  readBatch,
-  readPages,
-} from "./reader.ts";
+import { type RawRecordOut, type Reader, type RunContext, createReader } from "./reader.ts";
+import { readBatch, readPages } from "./reads.ts";
 
 export type { RawRecordOut, RunContext } from "./reader.ts";
 

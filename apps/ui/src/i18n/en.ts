@@ -421,8 +421,6 @@ export const en = {
     echoPropertiesStandard: "The standard properties only",
     echoEveryProperty:
       "The standard properties and every property there is now. A property created later is not read until it is ticked.",
-    propertiesTooLong:
-      "The properties chosen for {{object}} come to {{chars, number}} characters when sent to HubSpot, over the {{limit, number}} one read may carry. Untick some before saving.",
     xeroEntitiesHint:
       "Choosing no kind of data means every kind. That is a deliberate choice, not an empty one.",
     organisationsHead: "Organisation",

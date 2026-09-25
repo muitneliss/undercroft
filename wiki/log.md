@@ -134,3 +134,5 @@
 ## [2026-09-25] ingest | Runbook Sign-In Setup
 ## [2026-09-25] ingest | ADR 0053: A legacy Word document is read in process, and only Word 95 stays refused
 ## [2026-09-25] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-25] ingest | ADR 0054: A widened HubSpot object is read in two steps, so no choice of properties is too long
+## [2026-09-25] ingest | ADR 0054: A widened HubSpot object is read in two steps, so no choice of properties is too long

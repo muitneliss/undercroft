@@ -23,7 +23,6 @@ import {
   type ConnectionScope,
   needsScope,
   nextRunAt,
-  overlongPropertyChoices,
   parseScope,
   parseSourceInstance,
   sourceKind,
@@ -339,14 +338,11 @@ export function listRaw(exec: SqlExecutor, tenantId: string): Promise<Connection
   return listConnections(exec, tenantId);
 }
 
-export type SetScopeOutcome =
-  | { ok: true }
-  | { ok: false; reason: "unsupported-source" }
-  /**
-   * A HubSpot choice whose properties for `entity` would not fit in the request that reads it.
-   * Nothing was written: saved, it would fail every run afterwards as an opaque 414.
-   */
-  | { ok: false; reason: "too-many-properties"; entity: string; chars: number };
+/**
+ * A HubSpot choice has no length to be refused for: a widened object's properties travel in a
+ * batch read's body, not in a URL (ADR 0054), so any number of them can be saved and read.
+ */
+export type SetScopeOutcome = { ok: true } | { ok: false; reason: "unsupported-source" };
 
 /**
  * Record what an admin chose to share.
@@ -368,10 +364,6 @@ export async function setScope(
   const scope = parseScope(input.source, input.selectionJson);
   if (scope === null) {
     return { ok: false, reason: "unsupported-source" };
-  }
-  const [overlong] = scope.kind === "hubspot" ? overlongPropertyChoices(scope) : [];
-  if (overlong !== undefined) {
-    return { ok: false, reason: "too-many-properties", ...overlong };
   }
 
   // A Xero choice names an organisation. Its id goes where a run reads it, on the

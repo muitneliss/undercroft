@@ -126,6 +126,36 @@ const Incremental = z.object({
   format: z.enum(["iso8601", "epoch-millis", "yyyy-mm-dd"]).default("iso8601"),
 });
 
+/**
+ * A list read in two steps: the list names the records and carries the cursor, and each page's
+ * records are then fetched whole by a batch read that takes their ids -- and what to read of
+ * them -- in a POST body rather than in the URL.
+ *
+ * Exists because a list's URL has a ceiling and what a person may ask to read of a record does
+ * not: HubSpot names the properties it returns in the list's query string, and a portal's full
+ * list of contact properties is longer than any URL it will accept. The batch read answers the
+ * same record the list does -- the same shape, under the same id -- so what lands is still one
+ * record the source sent, never an assembly of two. ADR 0054, extending ADR 0052.
+ *
+ * A record the list named and the batch read reports as gone is not landed: it was deleted in
+ * between, and the read is then exactly the one that would have started a moment later. Any
+ * OTHER shortfall raises -- an id answered by neither a record nor a "not found" is a record lost
+ * without a word.
+ */
+const BatchRead = z.object({
+  path: z.string().min(1),
+  /** Named, never arbitrary, for the reason `batch-from`'s template is. */
+  bodyTemplate: z.enum(["hubspot-batch-read"]),
+  /**
+   * What to read of each record. The list's own query need not name any of these.
+   *
+   * There is no `chunkSize`, unlike `batch-from`: how many ids one request may carry is the
+   * endpoint's limit, not a choice, so the template carries it. That also keeps this block all
+   * strings, which a request key can digest (`canonicalJson` refuses a JavaScript number).
+   */
+  properties: z.array(z.string().min(1)).min(1),
+});
+
 const Request = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("list"),
@@ -133,6 +163,7 @@ const Request = z.discriminatedUnion("kind", [
     path: z.string().min(1),
     query: z.record(z.string(), z.string()).default({}),
     body: z.unknown().optional(),
+    batchRead: BatchRead.optional(),
   }),
   z.object({
     /**

@@ -194,13 +194,6 @@ export const vi = {
     propertiesInsufficient:
       "Mã truy cập HubSpot hiện chưa đủ quyền để đọc danh sách trường. Trong HubSpot, hãy cấp cho private app quyền đọc công ty, liên hệ và giao dịch (crm.objects.companies.read, crm.objects.contacts.read, crm.objects.deals.read), rồi dán lại mã truy cập nếu HubSpot cấp mã mới.",
     /**
-     * A HubSpot choice that would not fit in the request reading it. Names the object and both
-     * lengths, because the remedy is to untick some of that object's properties and the reader
-     * needs to know roughly how many.
-     */
-    tooManyProperties:
-      "Các trường chọn thêm cho {{entity}} dài {{chars}} ký tự khi gửi tới HubSpot, vượt giới hạn {{limit}} ký tự của một lần đọc. Hãy bỏ chọn bớt vài trường của {{entity}} rồi lưu lại.",
-    /**
      * Points at a person, not at a variable, for the same reason `requiresSuperadmin` does:
      * the administrator reading this cannot fix it from any screen, and naming the
      * environment key would describe our deployment to a customer.

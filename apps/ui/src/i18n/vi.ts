@@ -542,12 +542,6 @@ export const vi = {
     echoPropertiesStandard: "Chỉ các trường chuẩn",
     echoEveryProperty:
       "Các trường chuẩn và mọi trường đang có. Trường được tạo sau này sẽ không được đọc cho đến khi được chọn.",
-    /**
-     * A choice too long to send in one HubSpot request, said under the object before Save --
-     * the same rule the server refuses it by.
-     */
-    propertiesTooLong:
-      "Các trường chọn thêm cho {{object}} dài {{chars, number}} ký tự khi gửi tới HubSpot, vượt giới hạn {{limit, number}} ký tự của một lần đọc. Hãy bỏ chọn bớt trước khi lưu.",
     xeroEntitiesHint:
       "Không chọn loại dữ liệu nào nghĩa là đọc tất cả các loại. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
     organisationsHead: "Tổ chức",

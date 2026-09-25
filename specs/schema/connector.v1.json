@@ -396,7 +396,36 @@
                         },
                         "default": {}
                       },
-                      "body": {}
+                      "body": {},
+                      "batchRead": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "bodyTemplate": {
+                            "type": "string",
+                            "enum": [
+                              "hubspot-batch-read"
+                            ]
+                          },
+                          "properties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "minItems": 1
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "bodyTemplate",
+                          "properties"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "required": [
                       "kind",

@@ -449,12 +449,14 @@ describe("choosing a scope", () => {
     });
   });
 
-  it("a HubSpot choice too long for one request is refused naming the object, and not stored", async () => {
-    // Saved, it would fail every run afterwards as an opaque 414 from HubSpot. 500 names of
-    // 30 characters is over 16,000 once written into the URL -- a portal's full contact list.
+  it("a HubSpot choice of every contact property is saved, beside the other objects' choices", async () => {
+    // Issue 210. 525 names of 30 characters is over 16,000 once joined -- a portal's full contact
+    // list, longer than any URL HubSpot accepts. It used to be refused whole, and the companies
+    // choice saved with it went down too. A widened object is read by a batch read whose body
+    // carries the names (ADR 0054), so there is no length left to refuse.
     await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
     const names = Array.from(
-      { length: 500 },
+      { length: 525 },
       (_, i) => `x_property_${String(i).padStart(19, "0")}`,
     );
 
@@ -466,9 +468,9 @@ describe("choosing a scope", () => {
       actorId: "u1",
     });
 
-    expect(result).toMatchObject({ ok: false, reason: "too-many-properties", entity: "contacts" });
+    expect(result.ok).toBe(true);
     const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
-    expect(hubspot?.config.properties).toBeUndefined();
+    expect(hubspot?.config.properties).toEqual({ companies: ["city"], contacts: names });
   });
 
   it("the audit entry counts what was chosen and never names it", async () => {
