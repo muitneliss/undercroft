@@ -68,6 +68,7 @@
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
+- [Public home and customer index](sources/public-home-and-customer-index.md)
 - [Runbook: Connecting an agent over MCP](sources/runbook-connecting-an-agent-over-mcp.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)

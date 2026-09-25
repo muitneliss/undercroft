@@ -1,0 +1,85 @@
+/** The public title page; the sign-in and customer routes remain the working book. */
+import { useId } from "react";
+import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+
+import { Colophon } from "@/components/Colophon.tsx";
+import { ArrowRight } from "@/components/Icon.tsx";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
+import { Mark } from "@/components/Mark.tsx";
+
+import "@/styles/home.css";
+
+const DOCUMENTATION = "https://github.com/muitneliss/undercroft#documentation";
+const STAGES = ["sources", "raw", "models", "reports"] as const;
+
+/** The data's order of travel, expressed as an ordered list rather than a picture. */
+function DataPath(): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <section aria-label={t("landing.pathLabel")}>
+      <ol className="landing-flow">
+        {STAGES.map((stage) => (
+          <li key={stage}>
+            <h2>
+              {t(`landing.${stage}Title`)}
+              {stage === "reports" ? null : <ArrowRight size={18} />}
+            </h2>
+            <p>{t(`landing.${stage}Body`)}</p>
+          </li>
+        ))}
+      </ol>
+      <p className="landing__principle">{t("landing.principle")}</p>
+    </section>
+  );
+}
+
+export function Landing(): React.JSX.Element {
+  const { t } = useTranslation();
+  const contentId = useId();
+  const titleId = useId();
+  const startId = useId();
+  return (
+    <div className="landing">
+      <a className="landing__skip" href={`#${contentId}`}>
+        {t("landing.skip")}
+      </a>
+      <header className="landing__header">
+        <Link className="landing__brand" to="/" aria-label={t("app.name")}>
+          <Mark size={36} />
+          {t("app.name")}
+        </Link>
+        <nav className="landing__nav" aria-label={t("nav.sections")}>
+          <a href={DOCUMENTATION}>{t("landing.docs")}</a>
+          <Link to="/sign-in">{t("signIn.signIn")}</Link>
+          <LanguageSwitcher />
+        </nav>
+      </header>
+      <main id={contentId} className="landing__main">
+        <section className="landing__hero" aria-labelledby={titleId}>
+          <h1 id={titleId}>
+            <span>{t("landing.title")}</span>
+            <span>{t("landing.titleEnd")}</span>
+          </h1>
+          <p className="landing__lead">{t("landing.lead")}</p>
+          <div className="landing__actions">
+            <Link className="plate plate--primary" to="/sign-in">
+              {t("signIn.signIn")}
+            </Link>
+            <a className="landing__docs" href={DOCUMENTATION}>
+              {t("landing.readDocs")}
+            </a>
+          </div>
+          <p className="landing__invitation">{t("landing.invitation")}</p>
+        </section>
+        <DataPath />
+        <section className="landing__start" aria-labelledby={startId}>
+          <h2 id={startId}>{t("landing.startTitle")}</h2>
+          <p>{t("landing.startBody")}</p>
+          <Link to="/sign-in">{t("landing.openWorkspace")}</Link>
+        </section>
+      </main>
+      <Colophon />
+    </div>
+  );
+}

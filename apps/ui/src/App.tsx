@@ -1,8 +1,8 @@
 /**
  * The app shell: is there a session, and if so, the book.
  *
- * Auth is resolved once, at the top, through the tRPC session hook: an error routes to the
- * title page rather than letting every panel render its own. Server state lives in the
+ * Auth is resolved once through the tRPC session hook. The public root can render without
+ * a session; protected URLs and auth callbacks show sign-in when it fails. Server state lives in the
  * React Query cache behind that hook, never in component state -- see .claude/rules/state.md.
  *
  * Which URL opens which division is `@/routeTable`, and it is data rather than JSX for the
@@ -12,10 +12,11 @@
  * solved alpha.
  */
 
-import { useRoutes, useSearchParams } from "react-router-dom";
+import { useLocation, useRoutes, useSearchParams } from "react-router-dom";
 
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { appRoutes } from "@/routeTable.tsx";
+import { Landing } from "@/routes/Landing.tsx";
 import { SignIn } from "@/routes/SignIn.tsx";
 import { trpc } from "@/trpc.ts";
 
@@ -34,6 +35,13 @@ export function App(): React.JSX.Element {
   // errors and the app sits on the title page.
   const session = trpc.session.me.useQuery(undefined, { retry: false });
   const [params] = useSearchParams();
+  const { pathname } = useLocation();
+
+  // The public introduction needs no server data. Auth callbacks still reach sign-in,
+  // and a known session opens the customer index through the existing route table.
+  if (pathname === "/" && !params.has("reason") && !params.has("sig") && !session.isSuccess) {
+    return <Landing />;
+  }
 
   if (session.isPending) {
     return (

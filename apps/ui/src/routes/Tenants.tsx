@@ -29,12 +29,14 @@
 
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 
+import { CustomerIndex } from "@/components/CustomerIndex.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata, type ServerError } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { trpc } from "@/trpc.ts";
+
+import "@/styles/home.css";
 
 /**
  * Creating a customer, which only a platform superadmin may do.
@@ -139,6 +141,7 @@ export function Tenants(): React.JSX.Element {
   const { t } = useTranslation();
   const tenantIdFieldId = useId();
   const tenantNameId = useId();
+  const addCustomerId = useId();
   const utils = trpc.useUtils();
   const idFieldRef = useRef<HTMLInputElement>(null);
   const nameFieldRef = useRef<HTMLInputElement>(null);
@@ -178,43 +181,35 @@ export function Tenants(): React.JSX.Element {
     <div className="sheet">
       <div className="head head--division">{t("nav.customers")}</div>
       <div className="body stack">
-        <h1>{t("tenants.title")}</h1>
-        <p className="prose prose--lead">{t("tenants.lead")}</p>
+        <div className="customer-home__heading">
+          <div className="stack stack--tight">
+            <h1>{t("tenants.title")}</h1>
+            <p className="prose prose--lead">{t("tenants.lead")}</p>
+          </div>
+          {session.data?.superadmin === true ? (
+            <a className="plate plate--primary" href={`#${addCustomerId}`}>
+              {t("tenants.add")}
+            </a>
+          ) : null}
+        </div>
 
         {list.length === 0 ? (
           <EmptyState title={t("tenants.emptyTitle")} body={t("tenants.emptyBody")} />
         ) : (
-          <table className="table">
-            {/* The noun agrees with the count through i18next's plural forms, not through a
-                ternary: "1 customer" and "4 customers" is an English rule, and hard-coding
-                it here would have produced "1 khách hàngs" the moment a second language
-                arrived. */}
-            <caption>{t("tenants.caption", { count: list.length })}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("tenants.colCustomer")}</th>
-                <th scope="col">{t("tenants.colReference")}</th>
-                <th scope="col">{t("tenants.colRole")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((tenant) => (
-                <tr key={tenant.id}>
-                  <td>
-                    <Link to={`/tenants/${tenant.id}`}>{tenant.displayName || tenant.id}</Link>
-                  </td>
-                  <td className="datum datum--quiet">{tenant.id}</td>
-                  <td>{tenant.role}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <CustomerIndex customers={list} />
         )}
       </div>
 
       <div className="band-rule" />
 
-      <div className="head">{t("tenants.addHead")}</div>
+      <div className="head">{t("tenants.guideHead")}</div>
+      <p className="body prose">{t("tenants.guideBody")}</p>
+
+      <div className="band-rule" />
+
+      <div className="customer-home__add head" id={addCustomerId}>
+        {t("tenants.addHead")}
+      </div>
       <div className="body stack">
         <AddTenantPanel
           isSuperadmin={session.data?.superadmin === true}

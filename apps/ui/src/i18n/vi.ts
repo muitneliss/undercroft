@@ -130,9 +130,45 @@ export const vi = {
       "Đăng nhập cục bộ đang tắt. Đặt UNDERCROFT_DEV_SIGN_IN_AS trong deploy/compose/.env rồi chạy lại task dev:run.",
   },
 
+  landing: {
+    skip: "Đến nội dung chính",
+    docs: "Tài liệu",
+    readDocs: "Xem tài liệu",
+    title: "Giữ nguyên dữ liệu.",
+    titleEnd: "Tự định nghĩa câu trả lời.",
+    lead: "Từ tài khoản của bạn đến kho dữ liệu gốc, mô hình SQL và báo cáo.",
+    invitation: "Truy cập theo lời mời.",
+    pathLabel: "Hành trình của dữ liệu",
+    sourcesTitle: "Nguồn dữ liệu",
+    // biome-ignore lint/security/noSecrets: These are the four public source names, separated by line breaks.
+    sourcesBody: "Gmail\nGoogle Drive\nHubSpot\nXero",
+    rawTitle: "Kho dữ liệu gốc",
+    rawBody: "Bản gốc được giữ nguyên.",
+    modelsTitle: "Mô hình SQL",
+    modelsBody: "SQL do bạn viết.",
+    reportsTitle: "Báo cáo",
+    reportsBody: "Kết quả từ mô hình của bạn.",
+    principle: "Dữ liệu gốc là nền tảng. Các lớp phía trên có thể dựng lại.",
+    startTitle: "Một nơi để bắt đầu.",
+    startBody:
+      "Mỗi khách hàng có một không gian riêng cho nguồn dữ liệu, các lần chạy và báo cáo. Đăng nhập để mở những hồ sơ bạn được cấp quyền.",
+    openWorkspace: "Mở không gian làm việc",
+  },
+
   tenants: {
-    title: "Các công ty thành viên",
-    lead: "Dữ liệu của mỗi khách hàng được lưu trữ và truy cập riêng biệt. Mở một khách hàng để cấp, giới hạn hoặc thu hồi quyền truy cập vào tài khoản của họ.",
+    title: "Hồ sơ khách hàng",
+    lead: "Mở một hồ sơ để xem nguồn dữ liệu, nhật ký và báo cáo.",
+    searchLabel: "Tìm khách hàng",
+    searchPlaceholder: "Tìm tên khách hàng hoặc mã hồ sơ",
+    clearSearch: "Xóa tìm kiếm",
+    noMatches:
+      "Không có khách hàng phù hợp. Thử tên hoặc mã khác, hoặc xóa tìm kiếm để xem tất cả.",
+    colAction: "Hành động",
+    open: "Mở",
+    openNamed: "Mở hồ sơ {{name}}",
+    guideHead: "Trong mỗi hồ sơ",
+    guideBody:
+      "Kết nối nguồn, xem dữ liệu đã nhận và mở báo cáo trong các thẻ của hồ sơ. Dữ liệu của mỗi khách hàng được lưu trữ và truy cập riêng biệt.",
     emptyTitle: "Chưa có khách hàng nào",
     emptyBody:
       "Khách hàng là đơn vị mà mọi thứ khác gắn vào: các tài khoản đã kết nối, các bản ghi đã đồng bộ, và những ai được xem chúng.",
