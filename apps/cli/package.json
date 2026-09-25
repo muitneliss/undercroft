@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@clack/core": "1.5.1",
     "@clack/prompts": "1.8.1",
     "@oclif/core": "5.0.0",
     "@undercroft/core": "workspace:*",

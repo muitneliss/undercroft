@@ -99,6 +99,48 @@ export const vi = {
     noRows: "Không có dòng nào.",
   },
 
+  /**
+   * The page `undercroft` draws on its own at a terminal: the title page while signed out,
+   * the contents page once signed in. The words of a fact line are kept one per key, and a
+   * command a person types (`undercroft auth login`) is not translated, only its placeholders.
+   */
+  page: {
+    name: "Undercroft",
+    tagline: "Mọi thao tác của giao diện web, qua cùng một API.",
+    edition: "Ấn bản {{version}}",
+    profile: "hồ sơ {{profile}}",
+    signedOut: "Chưa đăng nhập",
+    noServer: "Chưa chọn máy chủ",
+    chooseServer: "Chọn máy chủ",
+    setProfileCommand: "undercroft config set-profile <tên> --url <url>",
+    signIn: "Đăng nhập",
+    forAgents: "Cho tác tử",
+    everyCommand: "Mọi lệnh",
+    /** Written in the OTHER language, so a reader who cannot read this one still finds it. */
+    otherLanguage: "In English",
+    contents: "MỤC LỤC",
+    appendix: "PHỤ LỤC",
+    commands: "lệnh",
+    readOnly: "chỉ đọc",
+    writesOn: "ĐƯỢC GHI",
+    topicHelp: "undercroft <chủ đề> --help",
+    commandHelp: "undercroft describe <lệnh>",
+    erratum: "ĐÍNH CHÍNH",
+  },
+
+  /** Signing in at a terminal, one step at a time. Agent mode never reaches these. */
+  login: {
+    intro: "Đăng nhập vào {{origin}}",
+    codeSent: "Nếu {{email}} có quyền truy cập, một mã đã được gửi tới đó.",
+    pasteHint: "Dán cả sáu số cũng được.",
+    codeShape: "Mã gồm đúng sáu chữ số.",
+    checking: "Đang kiểm tra mã",
+    next: "Làm gì tiếp?",
+    resend: "Gửi mã mới tới {{email}}",
+    otherEmail: "Dùng email khác",
+    quit: "Thoát",
+  },
+
   error: {
     INVALID_ARGUMENT: "Tham số không hợp lệ cho lệnh {{command}}.",
     inputUnreadable: "Không đọc được đầu vào JSON từ {{source}}.",

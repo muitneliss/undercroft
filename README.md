@@ -109,6 +109,7 @@ Then point it at your server and sign in:
 ```sh
 undercroft config set-profile prod --url https://undercroft.example.test
 undercroft auth login          # the same emailed code as the web sign-in
+undercroft                     # on its own: the home page, which lists every topic
 undercroft runs list           # asks which customer
 ```
 
