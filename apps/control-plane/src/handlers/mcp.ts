@@ -6,11 +6,13 @@
  * role gates, the 404-not-403 boundary, the grant guard and the worded refusals are the
  * router's and cannot drift here. This module is the door itself:
  *
- * - WHO: `Authorization: Bearer` only, resolved by `createContext` at the bearer door. Nobody
- *   there gets a 401 carrying the challenge a model-context client follows to learn how to get
- *   a token -- before any MCP message is read, whatever the method.
+ * - WHO: `Authorization: Bearer` only -- a personal token, or an OAuth access token from this
+ *   control plane's own authorization server (ADR 0061) -- resolved by `bearerContext`. Nobody
+ *   there gets the challenge a model-context client follows to learn how to get a token, before
+ *   any MCP message is read, whatever the method: a 401, or a 403 naming the scope to ask for.
  * - WHICH TOOLS, and what each says about itself: `mcpTools.ts`.
  * - WHAT A CALL ANSWERS, result or refusal: `mcpAnswers.ts`.
+ * - WHICH WIDGET draws an answer, and the widgets themselves as resources: `mcpWidgets.ts`.
  * - ONE LOG LINE per call, naming the tool, the credential and the outcome, never the input or
  *   the output -- either may be a customer's data.
  *
@@ -34,31 +36,41 @@ import { TRPCError } from "@trpc/server";
 import { describeError, type Logger } from "@undercroft/core";
 import type { Hono } from "hono";
 import { messages } from "../i18n/index.ts";
+import { READ_SCOPE } from "../services/connectedApps.ts";
+import type { BearerRefusal } from "./context.ts";
 import { answered, refused, refusedBy } from "./mcpAnswers.ts";
 import { listTools, toolNamed } from "./mcpTools.ts";
+import { listResources, NO_WIDGETS, readResource, resultMeta, type Widgets } from "./mcpWidgets.ts";
 import { resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import { BY_TRPC_CODE, grantAdmits } from "./surface.ts";
 import type { Context } from "./trpc.ts";
 
 export interface McpDeps {
-  /** The bearer door's context: `createContext(deps, headers, "bearer")`. */
-  readonly createContext: (headers: Headers) => Promise<Context>;
-  /** `UNDERCROFT_PUBLIC_URL`, whose origin the 401's challenge names. */
+  /** The bearer door: this request's context, or why it has none (`bearerContext`). */
+  readonly admit: (headers: Headers) => Promise<Context | BearerRefusal>;
+  /** `UNDERCROFT_PUBLIC_URL`, whose origin the challenge names. */
   readonly publicUrl?: string;
   /** `UNDERCROFT_RELEASE`, reported as the server's version. */
   readonly release?: string;
   readonly log?: Logger;
+  /** The widgets built at boot (`widgets.ts`). Absent or empty: answers are drawn by the host. */
+  readonly widgets?: Widgets;
 }
 
 /**
- * The challenge's description, in ASCII and in no language.
+ * The challenges' descriptions, in ASCII and in no language.
  *
  * A header is a byte string, and a Vietnamese sentence in it is refused by `Headers` outright.
- * This is protocol text beside the `invalid_token` code, read by a client library deciding to
- * start a sign-in -- not a sentence for a person, who is shown their host's own prompt.
+ * This is protocol text beside the RFC 6750 code, read by a client library deciding to start a
+ * sign-in -- not a sentence for a person, who is shown their host's own prompt.
  */
-const CHALLENGE = "a live personal access token is required as Authorization: Bearer";
+const CHALLENGES: Readonly<Record<BearerRefusal, string>> = {
+  invalid_token:
+    "a live personal access token, or an access token from this server's authorization " +
+    "server, is required as Authorization: Bearer",
+  insufficient_scope: `this access token grants neither ${READ_SCOPE} nor its write scope`,
+};
 
 /** Long enough for any real tool name; a client's unlisted name is logged no longer than this. */
 const LOGGED_NAME_CHARS = 80;
@@ -105,6 +117,7 @@ async function callTool(
   tool: string,
   args: Record<string, unknown> | undefined,
 ): Promise<CallToolResult> {
+  const widgets = deps.widgets ?? NO_WIDGETS;
   const t = messages(ctx.locale);
   const spec = await toolNamed(tool);
   if (spec === null) {
@@ -126,46 +139,73 @@ async function callTool(
   return procedure(args ?? {}).then(
     (result) => {
       logCall(deps, { ctx, tool, outcome: "ok" });
-      return answered(ctx.locale, result);
+      const meta = resultMeta(spec.path, args, widgets);
+      return { ...answered(ctx.locale, result), ...(meta === undefined ? {} : { _meta: meta }) };
     },
     (error: unknown) => failed(deps, ctx, tool, error),
   );
 }
 
-/** The server one request is answered by, bound to that request's caller and nothing else. */
+/**
+ * The server one request is answered by, bound to that request's caller and nothing else.
+ *
+ * It declares `resources` only when there are widgets to serve, so a host is never told of a
+ * capability that answers nothing.
+ */
 function serverFor(deps: McpDeps, ctx: Context): Server {
+  const widgets = deps.widgets ?? NO_WIDGETS;
   const server = new Server(
     { name: "undercroft", version: deps.release ?? "unreleased" },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {}, ...(widgets.size === 0 ? {} : { resources: {} }) } },
   );
-  server.setRequestHandler("tools/list", async () => ({ tools: await listTools(ctx) }));
+  server.setRequestHandler("tools/list", async () => ({ tools: await listTools(ctx, widgets) }));
   server.setRequestHandler("tools/call", (request) =>
     callTool(deps, ctx, request.params.name, request.params.arguments),
   );
+  if (widgets.size > 0) {
+    server.setRequestHandler("resources/list", () => ({ resources: listResources(widgets) }));
+    server.setRequestHandler("resources/read", (request) => {
+      const read = readResource(request.params.uri, widgets);
+      if (read === null) {
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
+          messages(ctx.locale)("mcp.unknownResource", { uri: request.params.uri }),
+        );
+      }
+      return read;
+    });
+  }
   return server;
 }
 
 /**
- * The 401 a model-context client follows: `WWW-Authenticate: Bearer` naming the RFC 9728
- * metadata document for this resource, at the public origin when one is configured.
+ * What a model-context client follows: `WWW-Authenticate: Bearer` naming the RFC 9728 metadata
+ * document for this resource, at the public origin when one is configured. A 401 to go and get
+ * a token; a 403 naming `undercroft:read` for a token its person consented to that grants
+ * nothing here, so the client asks for the scope rather than for the same token again.
  */
-function challenge(deps: McpDeps, request: Request): Response {
+function challenge(deps: McpDeps, request: Request, refusal: BearerRefusal): Response {
   const { origin } = new URL(deps.publicUrl ?? request.url);
-  return bearerAuthChallengeResponse(new OAuthError(OAuthErrorCode.InvalidToken, CHALLENGE), {
+  const code =
+    refusal === "insufficient_scope"
+      ? OAuthErrorCode.InsufficientScope
+      : OAuthErrorCode.InvalidToken;
+  return bearerAuthChallengeResponse(new OAuthError(code, CHALLENGES[refusal]), {
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(new URL("/mcp", origin)),
+    ...(refusal === "insufficient_scope" ? { requiredScopes: [READ_SCOPE] } : {}),
   });
 }
 
 /**
- * `/mcp`, every method, and the `/.well-known/` its challenge points into. Both registered
- * before the SPA's catch-all, which would otherwise answer a GET for either with the app shell
- * -- a 200 of HTML that a client reads as a broken server.
+ * `/mcp`, every method. Registered before the SPA's catch-all, which would otherwise answer a
+ * GET for it with the app shell -- a 200 of HTML that a client reads as a broken server. The
+ * `/.well-known/` documents its challenge points into are `server.ts`'s, served by Better Auth.
  */
 export function registerMcpRoute(app: Hono, deps: McpDeps): void {
   app.all("/mcp", async (c) => {
-    const ctx = await deps.createContext(c.req.raw.headers);
-    if (ctx.user === null) {
-      return challenge(deps, c.req.raw);
+    const ctx = await deps.admit(c.req.raw.headers);
+    if (typeof ctx === "string") {
+      return challenge(deps, c.req.raw, ctx);
     }
     const handler = createMcpHandler(() => serverFor(deps, ctx), {
       legacy: "stateless",
@@ -180,9 +220,4 @@ export function registerMcpRoute(app: Hono, deps: McpDeps): void {
       await handler.close();
     }
   });
-
-  // The metadata document the challenge names is OAuth sign-in for model-context clients, which
-  // is ADR 0060's follow-up. Until it is served, asking for it is a 404 -- the honest answer,
-  // and one a client handles -- never the app shell.
-  app.all("/.well-known/*", (c) => c.notFound());
 }

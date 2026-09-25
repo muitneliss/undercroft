@@ -60,6 +60,7 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
     superadmin: false,
     locale,
     endSession: () => Promise.resolve(),
+    apps: null,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

@@ -40,6 +40,7 @@ function caller(userId: string, email: string, worker: WorkerClient | null = nul
     superadmin: false,
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
+    apps: null,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

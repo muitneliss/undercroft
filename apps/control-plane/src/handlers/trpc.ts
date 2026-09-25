@@ -36,6 +36,7 @@ import { currentTraceId } from "@undercroft/telemetry";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import type { Grant } from "../services/accessTokens.ts";
+import type { OAuthApps } from "../services/connectedApps.ts";
 import { authorityIn, outranks, type Role } from "../services/authz.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
@@ -99,6 +100,15 @@ export interface Context {
    * leave an admin waiting for someone who was never contacted.
    */
   readonly notifyInvitation: (email: string, tenantId: string) => Promise<boolean>;
+  /**
+   * The model-context apps people have let in by signing in and consenting (ADR 0061), for the
+   * account page. `null` where this control plane is no authorization server -- no sign-in, or
+   * a public URL that cannot carry one -- and then a person has no apps to list.
+   *
+   * The port, not the auth instance, for the reason `endSession` is a closure: a procedure asks
+   * one question of it and never reaches the library.
+   */
+  readonly apps: OAuthApps | null;
   /**
    * The language to answer this request in, negotiated from its `Accept-Language`.
    *

@@ -47,8 +47,8 @@ export const MAX_TOKEN_DAYS = 365;
  * Whether a presented bearer is shaped like one of these tokens at all.
  *
  * The door that reads bearers asks this before admitting, because a bearer that is not ours --
- * an OAuth access token, once ADR 0060's follow-up lands -- is somebody else's to verify, and
- * digesting it and looking it up here would be a query that can only miss.
+ * an OAuth access token (ADR 0061) -- is the authorization server's to verify, and digesting it
+ * and looking it up here would be a query that can only miss.
  */
 export function isPersonalToken(bearer: string): boolean {
   return bearer.startsWith(ID_PREFIX);

@@ -9,8 +9,7 @@
 import { afterEach, beforeEach, expect, test as it } from "bun:test";
 import { InMemoryEmailSender } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { memoryAdapter } from "better-auth/adapters/memory";
-import { type ControlPlane, startControlPlane } from "../testing.ts";
+import { type ControlPlane, inMemoryAuthStore, startControlPlane } from "../testing.ts";
 import { type AuthConfig, createAuth } from "./auth.ts";
 import { createServer } from "./server.ts";
 
@@ -23,7 +22,7 @@ const noDatabase: SqlExecutor = {
 
 function authConfig(baseUrl: string): AuthConfig {
   return {
-    database: memoryAdapter({}),
+    database: inMemoryAuthStore(),
     exec: noDatabase,
     transactor: () => Promise.reject(new Error("unused")),
     secret: "a-test-secret-that-is-long-enough-to-sign",

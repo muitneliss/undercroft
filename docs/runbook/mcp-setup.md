@@ -1,12 +1,71 @@
 # Connecting an agent over MCP
 
 Undercroft answers the Model Context Protocol at `/mcp` on the control plane: every procedure
-the web UI uses, offered as a tool to Claude Code, Claude Desktop or any other MCP client, under
-the same role gates as the browser. ADR 0060 records the decisions; this is how to use it.
+the web UI uses, offered as a tool to claude.ai, Claude Desktop, Claude Code or any other MCP
+client, under the same role gates as the browser. ADR 0060 and ADR 0061 record the decisions;
+this is how to use it.
 
-Today a client connects with a **personal access token**. Signing in with Google from a
-claude.ai connector, without pasting a token, is the follow-up ADR 0060 describes; until it
-lands, a client that has no way to send a header cannot connect.
+A client connects in one of two ways:
+
+- **By signing you in** (OAuth). You give the client the URL and nothing else; it sends you to
+  Undercroft's own sign-in page -- Google or an emailed code, the same invite-only gates as the
+  browser -- and then to a consent page where you choose **read only** or **read and write**.
+  This is how a claude.ai connector connects, and the easiest way for Desktop and Code.
+- **With a personal access token** you mint and paste. For a client that can send a header but
+  not open a browser, or a script.
+
+Both reach exactly what you reach in the browser, both carry a read or write grant, and both
+are revoked on the account page.
+
+## Connecting by signing in
+
+The client needs only the URL (see [The URL](#the-url)). What happens next is the same
+everywhere:
+
+1. The client registers itself with Undercroft (automatic; you see nothing).
+2. A browser opens on Undercroft's sign-in page, with a line saying an app is asking for access.
+   Sign in with Google or with a code, using the address you were invited with.
+3. The consent page names the app, the host it will send you back to, and your address. Choose
+   **Chỉ đọc / Read only** unless you mean the agent to change things, then **Cho phép / Allow**.
+   **Từ chối / Deny** sends the client away with nothing.
+4. The browser returns to the client, which now holds an access token (15 minutes) and a refresh
+   token, and renews it without asking you again.
+
+The app appears on your account page under **Ứng dụng đã kết nối / Connected apps**, with the
+grant you chose. **Revoke** there stops it at its very next call and it cannot renew itself; to
+let it back in, connect again from the client.
+
+### claude.ai
+
+Settings, then **Connectors**, then **Add custom connector**. Name it (`Undercroft`), paste
+`https://<your control plane>/mcp` as the URL, leave the OAuth client fields empty, and add it.
+Click **Connect** on it; the sign-in and consent above open in a new tab.
+
+### Claude Desktop
+
+Settings, then **Connectors**, then **Add custom connector**, with the same URL. Desktop opens
+your browser for the sign-in and consent. (The `mcp-remote` configuration under
+[Claude Desktop with a token](#claude-desktop-with-a-token) still works if you prefer a token.)
+
+### Claude Code
+
+```sh
+claude mcp add --transport http undercroft https://<your control plane>/mcp
+```
+
+Then `/mcp` inside a session, choose `undercroft`, and **Authenticate**; Claude Code opens the
+browser and listens on `localhost` for the return. Add `--scope user` to have it in every
+project.
+
+### When signing in does not connect
+
+| What you see                                                 | Why, and what to do                                                                                                                                   |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "No access" on the sign-in page                              | The address is not invited, exactly as in the browser. Ask an administrator, and sign in with the invited address.                                    |
+| the client reports `invalid_redirect_uri` at registration    | It registered a `http://localhost` callback as a web application. MCP SDK 2.x clients register it as native; update the client.                       |
+| `403` with `insufficient_scope`                              | You (or the client) granted neither read nor write. Revoke the app on the account page and connect again, choosing a grant.                           |
+| no sign-in is offered at all; `/.well-known/…` answers `404` | The control plane's public URL is plain HTTP on a non-loopback address, where MCP does not allow OAuth. Serve it over HTTPS, or use a personal token. |
+| too many registrations, `429`                                | Registration is limited to five a minute per address. Wait a minute.                                                                                  |
 
 ## What a token is
 
@@ -51,7 +110,7 @@ The table below the form lists your tokens with when each was last used (to the 
 | local, the control plane directly    | `http://localhost:3000/mcp`        |
 | local, `task dev:up-all` (Path A)    | `http://localhost:13000/mcp`       |
 
-## Claude Code
+## Claude Code with a token
 
 ```sh
 claude mcp add --transport http undercroft https://<your control plane>/mcp \
@@ -61,7 +120,7 @@ claude mcp add --transport http undercroft https://<your control plane>/mcp \
 `claude mcp list` should show it connected; `/mcp` inside a session lists its tools. Add
 `--scope user` to have it in every project rather than this one.
 
-## Claude Desktop
+## Claude Desktop with a token
 
 Desktop reaches a remote server with a header through `mcp-remote`. In
 `claude_desktop_config.json`:
@@ -109,9 +168,14 @@ token as an environment variable, as above, so it stays off every process's comm
   list and 60 KB, and says when it was cut.
 - **Refusals** carry a `code` -- the CLI's vocabulary -- a sentence, any facts the server named,
   and a `traceId`.
+- **Widgets.** In a host that draws MCP Apps (claude.ai, Claude Desktop), a query result
+  (`lake_query`, `lake_search`, `lake_records`, `lake_documents`, `bi_answer`, `bi_runQuestion`,
+  `bi_questions_answer`) is drawn as a table, up to 500 rows, amounts printed digit for digit;
+  `runs_trigger` and `runs_get` draw the run, followed live until it ends. A host without the
+  extension shows the same answer as text.
 
 Not offered at all: signing out, the health probe, the Google Picker's configuration, and the
-token procedures themselves.
+account procedures themselves (tokens and connected apps).
 
 ## Troubleshooting
 

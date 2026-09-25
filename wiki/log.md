@@ -151,3 +151,5 @@
 ## [2026-09-25] rename | ADR 0059: An agent reaches Undercroft over MCP, with a credential a person holds → ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds
 ## [2026-09-25] ingest | ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds
 ## [2026-09-25] ingest | Runbook: Connecting an agent over MCP
+## [2026-09-25] ingest | ADR 0061: An MCP client signs its person in, and draws two widgets
+## [2026-09-25] ingest | Runbook: Connecting an agent over MCP

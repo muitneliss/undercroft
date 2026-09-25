@@ -48,6 +48,7 @@ function caller(user: SessionUser | null, superadmin = false) {
     endSession: () => Promise.resolve(),
     // No mail in an authorization test: these procedures are being checked for who may
     // call them, and a sender here would be a second thing under test.
+    apps: null,
     notifyInvitation: () => Promise.resolve(false),
     // No Google client and no worker, for the same reason. `startOAuth` therefore refuses
     // every caller who gets past the role gate -- which is what makes PRECONDITION_FAILED

@@ -35,6 +35,14 @@ import { localeOf } from "./authLocale.ts";
 /** The hosts a browser on this machine reaches a local stack on, as `URL#hostname` spells them. */
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+/**
+ * Whether `baseUrl` is served on this machine only. Shared with `mcpAuth.ts`, where the same
+ * question decides whether plain HTTP may carry an OAuth resource.
+ */
+export function isLoopbackOrigin(baseUrl: string): boolean {
+  return LOOPBACK_HOSTS.has(new URL(baseUrl).hostname);
+}
+
 export interface DevSignInConfig {
   readonly exec: SqlExecutor;
   /** `UNDERCROFT_DEV_SIGN_IN_AS`: who every caller of this endpoint becomes. */
@@ -45,7 +53,7 @@ export interface DevSignInConfig {
 }
 
 export function devSignIn(config: DevSignInConfig): BetterAuthPlugin {
-  if (!LOOPBACK_HOSTS.has(new URL(config.baseUrl).hostname)) {
+  if (!isLoopbackOrigin(config.baseUrl)) {
     throw new Error(
       "UNDERCROFT_DEV_SIGN_IN_AS signs in without proof; it is honoured only when " +
         `UNDERCROFT_PUBLIC_URL is a loopback origin, and it is ${config.baseUrl}`,

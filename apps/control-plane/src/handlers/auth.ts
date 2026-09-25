@@ -15,7 +15,8 @@
  *
  * 2. **Every field is mapped.** Better Auth's columns are camelCase and this database is
  *    snake_case. The mapping is mechanical but it is not optional -- a missed entry is a
- *    query against a column that does not exist, at login, in production.
+ *    query against a column that does not exist, at login, in production. It is all in
+ *    `authSchema.ts`, and `authSchema.test.ts` holds it to the migrated schema.
  *
  * 3. **`cookieCache` is deliberately NOT enabled.** It would serve a session out of a
  *    signed cookie without reading the database, which means a revoked session keeps
@@ -69,7 +70,9 @@ import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/inv
 import { setLocale } from "../services/preferences.ts";
 import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 import { localeOf } from "./authLocale.ts";
+import { coreModels, USER_TABLE } from "./authSchema.ts";
 import { devSignIn } from "./devSignIn.ts";
+import { createMcpAuth, type McpAuth, mcpPlugins, oauthIssuer } from "./mcpAuth.ts";
 
 /** How long a code is good for. Long enough to switch to a mail client, not to a new day. */
 const OTP_EXPIRES_SECONDS = 600;
@@ -183,6 +186,12 @@ export interface Auth {
     /** Revoke the caller's session. Better Auth deletes the row rather than flagging it. */
     signOut: (input: { headers: Headers }) => Promise<unknown>;
   };
+  /**
+   * The authorization server for `/mcp` (ADR 0061), or `null` where the public URL cannot carry
+   * one -- plain HTTP off loopback -- and model-context clients connect with personal tokens
+   * only. `handler` serves its endpoints and discovery documents either way.
+   */
+  mcp: McpAuth | null;
 }
 
 /**
@@ -193,12 +202,7 @@ export interface Auth {
  */
 function userModel(config: AuthConfig, superadmins: Superadmins): BetterAuthOptions["user"] {
   return {
-    modelName: "auth_user",
-    fields: {
-      emailVerified: "email_verified",
-      createdAt: "created_at",
-      updatedAt: "updated_at",
-    },
+    ...USER_TABLE,
     /**
      * The identity gate, and the outermost of the three.
      *
@@ -235,51 +239,6 @@ function userModel(config: AuthConfig, superadmins: Superadmins): BetterAuthOpti
   };
 }
 
-/** The three remaining models, mapped onto the snake_case columns `060_auth.sql` created. */
-function authModels(): Pick<BetterAuthOptions, "session" | "account" | "verification"> {
-  return {
-    session: {
-      modelName: "auth_session",
-      fields: {
-        userId: "user_id",
-        expiresAt: "expires_at",
-        ipAddress: "ip_address",
-        userAgent: "user_agent",
-        createdAt: "created_at",
-        updatedAt: "updated_at",
-      },
-    },
-
-    account: {
-      modelName: "auth_account",
-      fields: {
-        userId: "user_id",
-        accountId: "account_id",
-        providerId: "provider_id",
-        accessToken: "access_token",
-        refreshToken: "refresh_token",
-        accessTokenExpiresAt: "access_token_expires_at",
-        refreshTokenExpiresAt: "refresh_token_expires_at",
-        idToken: "id_token",
-        createdAt: "created_at",
-        updatedAt: "updated_at",
-      },
-      // These are login tokens, not ingestion credentials -- but they are still Google
-      // tokens in a database this repo goes to lengths to keep credentials out of.
-      encryptOAuthTokens: true,
-    },
-
-    verification: {
-      modelName: "auth_verification",
-      fields: {
-        expiresAt: "expires_at",
-        createdAt: "created_at",
-        updatedAt: "updated_at",
-      },
-    },
-  };
-}
-
 /**
  * The plugins, which carry the second gate: `sendVerificationOTP` will not put a code in the
  * post for an address that could not use it, so this platform cannot be made to email
@@ -289,7 +248,9 @@ function authPlugins(
   config: AuthConfig,
   superadmins: Superadmins,
 ): NonNullable<BetterAuthOptions["plugins"]> {
+  const issuer = oauthIssuer(config.baseUrl);
   return [
+    ...(issuer === null ? [] : mcpPlugins(issuer)),
     ...(config.email === undefined ? [] : [otpSignIn(config, config.email, superadmins)]),
     ...(config.devSignInAs === undefined
       ? []
@@ -388,11 +349,35 @@ function bootstrapHooks(
   };
 }
 
-export function createAuth(config: AuthConfig): Auth {
+/**
+ * Open client registration is the one endpoint rate-limited here: `/oauth2/register` writes a
+ * row for anyone who asks, so it is held to a few a minute per address.
+ *
+ * Every other path is exempted explicitly, which keeps them exactly as they were. Better Auth's
+ * limiter is on only when `NODE_ENV` is `production` and the deployment sets none, so it has
+ * never run here; turning it on for everything at once would also turn on its sign-in limits,
+ * which key on a forwarded address this change has no way to verify behind the proxy.
+ */
+const RATE_LIMITS: NonNullable<BetterAuthOptions["rateLimit"]> = {
+  enabled: true,
+  customRules: {
+    "/oauth2/register": { window: 60, max: 5 },
+    "/**": false,
+  },
+};
+
+/**
+ * Everything Better Auth is configured with.
+ *
+ * Exported for `authSchema.test.ts`, which walks the tables these options make Better Auth
+ * write against the migrated schema -- so a plugin upgrade that adds a field fails the gate,
+ * not the first sign-in or consent in production.
+ */
+export function authOptions(config: AuthConfig): BetterAuthOptions {
   // Resolved once, so the three gates below cannot end up consulting different lists.
   const superadmins = config.superadmins ?? NO_SUPERADMINS;
 
-  return betterAuth({
+  return {
     database: config.database,
     secret: config.secret,
     baseURL: config.baseUrl,
@@ -404,10 +389,14 @@ export function createAuth(config: AuthConfig): Auth {
     // refused in production and accepted in the gate (ADR 0044) -- and a check the suite does
     // not run is a check nothing proves.
     advanced: { disableOriginCheck: false },
+    // `jwt()`'s session-token endpoint. Nothing here reads a session as a JWT, and a second
+    // kind of token signed with the access tokens' keys is surface for no caller (`mcpAuth.ts`).
+    disabledPaths: ["/token"],
+    rateLimit: RATE_LIMITS,
 
     user: userModel(config, superadmins),
 
-    ...authModels(),
+    ...coreModels(),
 
     ...(config.google === undefined
       ? {}
@@ -427,5 +416,18 @@ export function createAuth(config: AuthConfig): Auth {
     plugins: authPlugins(config, superadmins),
 
     databaseHooks: bootstrapHooks(config, superadmins),
-  });
+  };
+}
+
+export function createAuth(config: AuthConfig): Auth {
+  const instance = betterAuth(authOptions(config));
+  const issuer = oauthIssuer(config.baseUrl);
+  return {
+    handler: (request) => instance.handler(request),
+    api: {
+      getSession: (input) => instance.api.getSession(input),
+      signOut: (input) => instance.api.signOut(input),
+    },
+    mcp: issuer === null ? null : createMcpAuth(instance, issuer),
+  };
 }

@@ -13,6 +13,7 @@
     { "path": "./apps/control-plane" },
     { "path": "./apps/ui" },
     { "path": "./apps/cli" },
+    { "path": "./apps/mcp-widgets" },
     { "path": "./scripts" }
   ]
 }

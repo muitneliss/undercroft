@@ -1,0 +1,18 @@
+{
+  "name": "@undercroft/mcp-widgets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./grid": "./src/grid.ts",
+    "./run": "./src/runStatus.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "2.0.0",
+    "@undercroft/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "15.11.7",
+    "@undercroft/control-plane": "workspace:*"
+  }
+}

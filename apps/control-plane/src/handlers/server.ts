@@ -22,7 +22,7 @@ import { isAdminIn } from "../services/authz.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
-import { createContext, resolveCaller, type ServerDeps } from "./context.ts";
+import { bearerContext, createContext, resolveCaller, type ServerDeps } from "./context.ts";
 import { registerMcpRoute } from "./mcp.ts";
 import { registerOAuthRoutes } from "./oauth.ts";
 import { appRouter } from "./router.ts";
@@ -140,6 +140,31 @@ function registerConsentRoute(app: Hono, deps: ServerDeps): void {
   });
 }
 
+/**
+ * Better Auth's endpoints, and the discovery documents it serves outside them.
+ *
+ * Registered BEFORE the SPA catch-all, and with `all` rather than `get`. Both matter: the
+ * catch-all answers any GET with index.html, so an auth route registered after it would turn
+ * Google's redirect to /api/auth/callback/google into a 200 serving the app shell -- a sign-in
+ * that silently never completes.
+ *
+ * `/.well-known/*` is what a model-context client reads after `/mcp`'s challenge: RFC 9728's
+ * protected-resource metadata, RFC 8414's authorization-server metadata and OpenID's. Better
+ * Auth serves all three from its own handler, whose plugins answer these paths before it checks
+ * its `/api/auth` base path -- and 404s any other, and all of them where there is no MCP
+ * authorization server (`mcpAuth.ts`). Never the app shell: a client reads a 200 of HTML as a
+ * broken server, and a 404 as "no OAuth here".
+ */
+function registerAuthRoutes(app: Hono, deps: ServerDeps): void {
+  const { auth } = deps;
+  if (auth === undefined) {
+    app.all("/.well-known/*", (c) => c.notFound());
+    return;
+  }
+  app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+  app.all("/.well-known/*", (c) => auth.handler(c.req.raw));
+}
+
 export function createServer(deps: ServerDeps): Hono {
   const app = new Hono();
 
@@ -149,14 +174,7 @@ export function createServer(deps: ServerDeps): Hono {
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 
-  // Registered BEFORE the SPA catch-all below, and with `all` rather than `get`. Both
-  // matter: the catch-all answers any GET with index.html, so an auth route registered
-  // after it would turn Google's redirect to /api/auth/callback/google into a 200 serving
-  // the app shell -- a sign-in that silently never completes.
-  if (deps.auth !== undefined) {
-    const { auth } = deps;
-    app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
-  }
+  registerAuthRoutes(app, deps);
 
   // Registered here so it wins over the catch-all at the foot of this function.
   registerConsentRoute(app, deps);
@@ -179,10 +197,11 @@ export function createServer(deps: ServerDeps): Hono {
   // The model-context door (ADR 0060): a bearer, never the cookie. Before the catch-all for the
   // same reason as the two above -- a client's GET here must not be answered with the app shell.
   registerMcpRoute(app, {
-    createContext: (headers) => createContext(deps, headers, "bearer"),
+    admit: (headers) => bearerContext(deps, headers),
     ...(deps.publicUrl === undefined ? {} : { publicUrl: deps.publicUrl }),
     ...(deps.release === undefined ? {} : { release: deps.release }),
     ...(deps.log === undefined ? {} : { log: deps.log }),
+    ...(deps.widgets === undefined ? {} : { widgets: deps.widgets }),
   });
 
   // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a

@@ -48,6 +48,7 @@ function caller(
     superadmin: false,
     locale,
     endSession: () => Promise.resolve(),
+    apps: null,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

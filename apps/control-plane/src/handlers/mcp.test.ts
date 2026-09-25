@@ -242,6 +242,30 @@ describe("a long answer", () => {
   });
 });
 
+describe("an answer a widget draws", () => {
+  it("names its widget in the tool list, and the widget is served as an MCP app page", async () => {
+    const client = await connect(await mint("read"));
+    const { tools } = await client.listTools();
+    const ui = tools.find((tool) => tool.name === "bi_answer")?._meta?.ui as
+      | { resourceUri?: string }
+      | undefined;
+    const uri = ui?.resourceUri ?? "";
+    const { contents } = await client.readResource({ uri });
+    await client.close();
+
+    const [page] = contents;
+    expect({
+      uri,
+      mimeType: page?.mimeType,
+      html: page !== undefined && "text" in page && page.text.startsWith("<!doctype html>"),
+    }).toEqual({
+      uri: "ui://undercroft/grid.html",
+      mimeType: "text/html;profile=mcp-app",
+      html: true,
+    });
+  });
+});
+
 describe("a caller with no live token", () => {
   it("is challenged with where to learn how to get one", async () => {
     const response = await rawList({});

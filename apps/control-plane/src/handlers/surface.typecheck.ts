@@ -1,12 +1,13 @@
 /**
  * The compiler's refusals in `surface.ts`, pinned from the side where they fire.
  *
- * The quiet side is the real tables: `EFFECTS`, the two sentence catalogues, `MCP_EXCLUDED`
- * and `SESSION_ONLY` compile, and so do the CLI's calls by name. This file is the other side. Each
- * fixture below is something a router change would leave behind, and each carries a
- * `@ts-expect-error`; if the mapped types ever stop biting -- `ProcedurePath` widening to
- * `string` after a tRPC upgrade, say -- the error goes away, the directive is unused, and
- * `tsc` fails here. A check that always passes is how a gate dies without anyone noticing.
+ * The quiet side is the real tables: `EFFECTS`, the two sentence catalogues, `MCP_EXCLUDED`,
+ * `MCP_WIDGETS` and `SESSION_ONLY` compile, and so do the CLI's calls by name and the widgets
+ * in `apps/mcp-widgets`, which read each answer as `ToolContentOf` says it arrives. This file is
+ * the other side. Each fixture below is something a router change would leave behind, and
+ * each carries a `@ts-expect-error`; if the mapped types ever stop biting -- `ProcedurePath`
+ * widening to `string` after a tRPC upgrade, say -- the error goes away, the directive is
+ * unused, and `tsc` fails here. A check that always passes is how a gate dies without anyone noticing.
  *
  * Never imported and never run. It is a `.ts` file under `src/`, so the ordinary typecheck
  * (`task ci:typecheck`) compiles it with everything else; that is the whole of its job.
@@ -20,6 +21,8 @@ import type {
   MutationPath,
   ProcedurePath,
   SentenceTable,
+  ToolContentOf,
+  WidgetTable,
 } from "./surface.ts";
 
 declare const EVERY_EFFECT: EffectTable;
@@ -50,6 +53,16 @@ export const staleExclusion: ExclusionTable = {
   // @ts-expect-error -- the router has no such procedure
   "runs.retired": "was once excluded",
 };
+
+/** A widget left drawing a procedure the router dropped. */
+export const staleWidget: WidgetTable = {
+  // @ts-expect-error -- the router has no such procedure
+  "lake.retired": "grid",
+};
+
+/** A widget reading a list's `items` from a procedure that answers an object. */
+// @ts-expect-error -- `runs.get` answers one run, not `{ items }`
+export const wrongContent: ToolContentOf<"runs.get">["items"] = [];
 
 /** A procedure kept from bearer credentials after the router dropped it. */
 export const staleSessionOnly: readonly ProcedurePath[] = [

@@ -57,9 +57,10 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   refreshes and revokes), `SELECT` on `app.connection_detail` (the chosen scope),
   `SELECT` + `UPDATE (last_used_at)` on `app.ingest_key`, and `SELECT` +
   `UPDATE (columns)` on `app.model` (it reads the SQL to build and records the columns a
-  build produced). Nothing on `app.app_user`, the auth tables, `app.access_token` (a person's
-  own tokens for `/mcp`, ADR 0060 -- the worker admits ingest keys, never a person), the
-  questions or the dashboards. A new worker verb that needs a table adds its grant in the migration that
+  build produced). Nothing on `app.app_user`, the auth tables -- the `auth_*` four,
+  `auth_jwks` and the `oauth_*` tables Better Auth keeps as `/mcp`'s authorization server
+  (`310_mcp_oauth.sql`, ADR 0061) -- `app.access_token` (a person's own tokens for `/mcp`, ADR
+  0060 -- the worker admits ingest keys, never a person), the questions or the dashboards. A new worker verb that needs a table adds its grant in the migration that
   creates the table, never in `040_grants.sql`.
 - Every grant is explicit; `PUBLIC` is revoked.
 - **A migration that creates a table must grant that table in the same file.**

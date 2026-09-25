@@ -25,6 +25,7 @@ import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { startTelemetry } from "@undercroft/telemetry";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
+import { buildWidgets } from "./widgets.ts";
 import { runAlerts } from "./services/alerts.ts";
 import { createAssistant } from "./services/assistant/agent.ts";
 import { createJudge } from "./services/assistant/judge.ts";
@@ -371,6 +372,9 @@ const app = createServer({
   ...(worker === undefined ? {} : { worker }),
   ...(assistant === undefined ? {} : { assistant }),
   ...(judge === undefined ? {} : { judge }),
+  // The MCP widgets, bundled into their pages once (ADR 0061). Either outcome is logged inside,
+  // and a failed build is answered with none, so `/mcp` still serves every tool.
+  widgets: await buildWidgets(log),
   log,
 });
 

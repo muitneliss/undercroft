@@ -118,6 +118,9 @@ export const vi = {
     signingIn: "Đang đăng nhập…",
     signIn: "Đăng nhập",
     useAnotherAddress: "Dùng địa chỉ khác",
+    /** A model-context client sent the person here to sign in (ADR 0061). */
+    authorizing:
+      "Một ứng dụng (như Claude) đang xin truy cập Undercroft thay mặt bạn. Hãy đăng nhập; bạn sẽ chọn quyền cho nó ở bước tiếp theo.",
     /** Shown only when the server refused without saying why. */
     sendFailed: "Không gửi được mã đăng nhập. Hãy thử lại.",
     codeFailed: "Mã đó không dùng được. Hãy yêu cầu mã mới.",
@@ -282,6 +285,43 @@ export const vi = {
     mintedHead: "Token mới",
     mintedNote:
       "Sao chép ngay: token này sẽ không hiển thị lại. Nếu mất, hãy tạo token khác và thu hồi token này.",
+  },
+
+  /**
+   * Connected apps (ADR 0061): model-context clients a person let in by signing in and
+   * consenting, rather than with a token. "Claude" is a product's name and stays as it is.
+   */
+  apps: {
+    head: "Ứng dụng đã kết nối",
+    lead: "Những ứng dụng bạn đã cho phép truy cập Undercroft bằng cách đăng nhập qua chúng và đồng ý, như trình kết nối Claude. Thu hồi thì ứng dụng bị chặn ngay từ lần gọi tiếp theo; muốn cho lại, hãy kết nối lại từ ứng dụng.",
+    notLoaded: "Không tải được danh sách ứng dụng.",
+    none: "Chưa có ứng dụng nào được kết nối.",
+    caption_other: "{{count, number}} ứng dụng",
+    colName: "Ứng dụng",
+    colHost: "Trả về tới",
+    colGranted: "Đồng ý lúc",
+    unnamed: "Không tên",
+    grantNone: "Không có quyền nào",
+  },
+
+  /** The consent page a model-context client's authorization lands on (ADR 0061). */
+  consent: {
+    title: "Cho phép truy cập",
+    lead: "{{name}} (trả về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",
+    leadUnnamed:
+      "Một ứng dụng (trả về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",
+    signedInAs: "Đang đăng nhập bằng {{email}}.",
+    grantLabel: "Quyền cho ứng dụng này",
+    readHint:
+      "Ứng dụng chỉ xem được dữ liệu; không có công cụ nào làm thay đổi gì. Nên chọn khi ứng dụng đọc nội dung do người khác viết.",
+    nothingAsked:
+      "Ứng dụng này không xin quyền đọc hay ghi nào của Undercroft, nên cho phép cũng không để nó làm được gì. Hãy từ chối và kết nối lại từ ứng dụng.",
+    allow: "Cho phép",
+    deny: "Từ chối",
+    answering: "Đang trả lời…",
+    notAnswered: "Chưa gửi được câu trả lời",
+    answerFailed: "Không gửi được câu trả lời. Hãy bắt đầu lại từ ứng dụng.",
+    clientFailed: "Không đọc được thông tin ứng dụng.",
   },
 
   lake: {

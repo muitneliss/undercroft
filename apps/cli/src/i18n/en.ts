@@ -12,6 +12,7 @@ export const en = {
   topics: {
     account: "Your own account.",
     accountTokens: "Personal access tokens, for an agent connecting over MCP.",
+    accountApps: "The apps you let in by signing in and consenting, such as a Claude connector.",
     auth: "Signing in and out, and your session.",
     bi: "Reports: questions, dashboards and the schema.",
     biQuestions: "Saved questions.",

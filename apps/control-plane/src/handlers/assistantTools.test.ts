@@ -40,6 +40,7 @@ function context(user: SessionUser | null, superadmin = false, exec: SqlExecutor
     superadmin,
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),
+    apps: null,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

@@ -32,6 +32,8 @@ export const vi = {
   topics: {
     account: "Tài khoản của bạn.",
     accountTokens: "Token truy cập cá nhân, cho tác tử kết nối qua MCP.",
+    accountApps:
+      "Các ứng dụng bạn đã cho phép bằng cách đăng nhập và đồng ý, như trình kết nối Claude.",
     auth: "Đăng nhập, đăng xuất và phiên của bạn.",
     bi: "Báo cáo: câu hỏi, bảng điều khiển và lược đồ.",
     biQuestions: "Các câu hỏi đã lưu.",

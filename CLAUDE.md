@@ -36,21 +36,21 @@ the moment its rule actually bites — the `paths:` frontmatter decides which fi
 Other agents do not — if you are not Claude Code, read the ones matching the files you are
 about to touch.** That is the only reason this index exists.
 
-| Rule file         | Applies to                                                                                  | Governs                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `money.md`        | everywhere                                                                                  | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
-| `raw-lake.md`     | `packages/lake/**`, the worker's `land*.ts` / `loadToRaw.ts`                                | create-only writes, idempotent by content, retention bounded and reported                |
-| `connectors.md`   | `packages/connector-runtime/**`, `specs/**`                                                 | the spec contract; a failure raises, never an empty stream                               |
-| `privileges.md`   | `packages/db/sql/**`                                                                        | the role and grant model; why the BI role cannot read `raw`                              |
-| `tests.md`        | `**/*.test.ts(x)`, `**/testing.ts`                                                          | real in-memory implementations over mocks, a guard needs two tests                       |
-| `state.md`        | `apps/ui/**`                                                                                | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
-| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`, `apps/cli/src/**`, `packages/core/src/locale.ts` | Vietnamese default, English second; no user-facing string written in place               |
-| `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                                      | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
-| `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                                       | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
-| `pii.md`          | `specs/**`, `docs/**`, `**/*.md`, `**/*.test.ts`, `**/fixtures/**`                          | no real customer data in any tracked file                                                |
-| `deployment.md`   | `deploy/**`, `flows/**`, `scripts/dokploy.ts`, deploy workflows                             | the Dokploy API is the only channel, every service declares a memory limit               |
-| `suppressions.md` | every source and test file, `biome.jsonc`, ast-grep rules, GritQL plugins                   | where a lint decision goes; `biome-ignore-all` is banned everywhere, tests included      |
-| `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows                    | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
+| Rule file         | Applies to                                                                                                             | Governs                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `money.md`        | everywhere                                                                                                             | money as a string, `big.js` never `number`, three-valued comparison, missing is not zero |
+| `raw-lake.md`     | `packages/lake/**`, the worker's `land*.ts` / `loadToRaw.ts`                                                           | create-only writes, idempotent by content, retention bounded and reported                |
+| `connectors.md`   | `packages/connector-runtime/**`, `specs/**`                                                                            | the spec contract; a failure raises, never an empty stream                               |
+| `privileges.md`   | `packages/db/sql/**`                                                                                                   | the role and grant model; why the BI role cannot read `raw`                              |
+| `tests.md`        | `**/*.test.ts(x)`, `**/testing.ts`                                                                                     | real in-memory implementations over mocks, a guard needs two tests                       |
+| `state.md`        | `apps/ui/**`                                                                                                           | client state in the Zustand store, server state in tRPC hooks; `useState` is banned      |
+| `i18n.md`         | `apps/ui/**`, `apps/control-plane/src/**`, `apps/cli/src/**`, `apps/mcp-widgets/src/**`, `packages/core/src/locale.ts` | Vietnamese default, English second; no user-facing string written in place               |
+| `layout.md`       | `apps/ui/**/*.tsx`, `apps/ui/**/*.css`                                                                                 | a control sits on the line of the field beside it: `row--field`, never a centred `.row`  |
+| `layering.md`     | `apps/*/src/**`, `packages/db/src/**`                                                                                  | one direction: handler → service → repo; SQL only in repos; dependencies injected        |
+| `pii.md`          | `specs/**`, `docs/**`, `**/*.md`, `**/*.test.ts`, `**/fixtures/**`                                                     | no real customer data in any tracked file                                                |
+| `deployment.md`   | `deploy/**`, `flows/**`, `scripts/dokploy.ts`, deploy workflows                                                        | the Dokploy API is the only channel, every service declares a memory limit               |
+| `suppressions.md` | every source and test file, `biome.jsonc`, ast-grep rules, GritQL plugins                                              | where a lint decision goes; `biome-ignore-all` is banned everywhere, tests included      |
+| `tooling.md`      | `Taskfile.yml`, `.taskfiles/**`, `package.json`, `scripts/**`, workflows                                               | Task is the only entrypoint; bun/scripts stay the implementation, never invoked by hand  |
 
 ## The assistant
 
@@ -70,12 +70,15 @@ things about it are load-bearing enough to state here rather than only in the AD
   DSN, a service token or an in-process caller, and `cli-no-backdoor` fails the gate on one.
   Its guard against injected text is a per-profile `allowWrites` that only a person at a
   terminal can set.
-- **An MCP client uses the same door too, with a person's own token.** `/mcp` (ADR 0060) turns
-  every router procedure into a tool and calls it through `appRouter.createCaller(ctx)`. It reads
-  `Authorization: Bearer` only, never the cookie: a personal access token minted on `/account`,
-  which reaches what its owner reaches and no more. Each credential carries a `read` or `write`
-  grant, and the guard is on the router's base procedure (`grantAdmits` in `surface.ts`), not in
-  the MCP handler; `account.*` is session-only, so no token can mint a token.
+- **An MCP client uses the same door too, with a person's own credential.** `/mcp` (ADR 0060)
+  turns every router procedure into a tool and calls it through `appRouter.createCaller(ctx)`. It
+  reads `Authorization: Bearer` only, never the cookie: a personal access token minted on
+  `/account`, or an OAuth access token a connector got by sending the person through `/sign-in`
+  and `/consent` (ADR 0061, Better Auth as the authorization server). Either reaches what its
+  owner reaches and no more. Each credential carries a `read` or `write` grant, and the guard is
+  on the router's base procedure (`grantAdmits` in `surface.ts`), not in the MCP handler;
+  `account.*` is session-only, so no credential can mint one. An OAuth token's consent is read
+  on every call, so revoking the app on `/account` stops it at the next one.
 
 ## Agents
 

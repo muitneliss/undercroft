@@ -1,5 +1,6 @@
 /**
- * The caller's own account: today, their personal access tokens (ADR 0060).
+ * The caller's own account: their personal access tokens (ADR 0060), and the model-context apps
+ * they let in by signing in and consenting (ADR 0061).
  *
  * Every procedure here is a `sessionProcedure`. They manage credentials, and a credential that
  * could reach them could mint another -- a read token would mint itself a write one -- so only
@@ -14,6 +15,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as accessTokens from "../services/accessTokens.ts";
+import * as connectedApps from "../services/connectedApps.ts";
 import { router, sessionProcedure } from "./trpc.ts";
 
 export const accountRouter = router({
@@ -47,6 +49,33 @@ export const accountRouter = router({
           id: input.id,
           actor: ctx.user.email,
         });
+        if (!revoked) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        return { ok: true };
+      }),
+  }),
+
+  /**
+   * The apps a person let in through the OAuth flow, each with the grant they consented to.
+   * Session-only for the reason tokens are: an app that could list or revoke apps could revoke
+   * the others, and nothing about another app is an app's business.
+   */
+  apps: router({
+    list: sessionProcedure.query(({ ctx }) =>
+      ctx.apps === null ? [] : connectedApps.list(ctx.apps, ctx.user.email),
+    ),
+
+    /** Stops the app at its next call to `/mcp`, and it cannot mint itself a new token. */
+    revoke: sessionProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const revoked =
+          ctx.apps !== null &&
+          (await connectedApps.revoke(ctx.exec, ctx.apps, {
+            email: ctx.user.email,
+            id: input.id,
+          }));
         if (!revoked) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
