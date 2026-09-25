@@ -17,7 +17,12 @@
 
 import { type EmailSender, type Locale, type Logger, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { admit, type Grant, isPersonalToken } from "../services/accessTokens.ts";
+import {
+  admit,
+  type Grant,
+  isPersonalToken,
+  type Refused as TokenRefused,
+} from "../services/accessTokens.ts";
 import { grantFor } from "../services/connectedApps.ts";
 import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
@@ -27,6 +32,7 @@ import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
 import type { Auth } from "./auth.ts";
+import type { OAuthRefused } from "./mcpAccessToken.ts";
 import type { Widgets } from "./mcpWidgets.ts";
 import type { Context, SessionUser, Via } from "./trpc.ts";
 
@@ -176,15 +182,52 @@ async function sessionIdentity(deps: ServerDeps, headers: Headers): Promise<Pres
 const BEARER = /^Bearer[ \t]+(?<token>\S+)[ \t]*$/iu;
 
 /**
- * Why the bearer door let nobody in, in RFC 6750's words, which is what `/mcp` answers with.
+ * Why the bearer door let nobody in -- for the operator's log, never for the client.
  *
- * `invalid_token` covers everything a new token would fix -- none presented, not ours, expired,
- * revoked, its person gone -- and is a 401 whose challenge sends a client to sign in again.
- * `insufficient_scope` is the one case a new token of the SAME kind would not fix: a live OAuth
- * token its person consented to, that holds neither `undercroft:read` nor `undercroft:write`.
- * It is a 403 naming the scope to ask for, so a client asks for it instead of looping.
+ * - `missing`: no `Authorization: Bearer` at all. A client's first contact, before it has
+ *   signed in, is exactly this.
+ * - `malformed`, `unknown`: not a credential this server issued for this door (`OAuthRefused`
+ *   in `mcpAccessToken.ts` and `Refused` in `accessTokens.ts` say which cases each covers).
+ * - `expired`, `revoked`: a real credential that has died, by its clock or by its person.
+ * - `no_person`: a live credential whose person is nobody here any more.
+ * - `insufficient_scope`: a live OAuth token whose person granted neither of our scopes.
+ *
+ * The client is told only what RFC 6750 lets it act on, decided in one place (`mcp.ts`):
+ * `insufficient_scope` is a 403 naming the scope to ask for, and every other reason is the
+ * same 401 -- a caller holding a dead credential is owed no account of how it died.
  */
-export type BearerRefusal = "invalid_token" | "insufficient_scope";
+export type RefusalReason =
+  | "missing"
+  | TokenRefused["reason"]
+  | OAuthRefused["reason"]
+  | "no_person"
+  | "insufficient_scope";
+
+/**
+ * A refused bearer: why, and whose it was when that is proven -- `upat_<id>` for a personal
+ * token whose row was found, `oauth:<clientId>` for a JWT whose signature verified. Never the
+ * token, nor any part of its secret.
+ */
+export interface BearerRefusal {
+  readonly reason: RefusalReason;
+  readonly credentialId?: string;
+}
+
+function refusedAs(reason: RefusalReason, credentialId: string | undefined): BearerRefusal {
+  return credentialId === undefined ? { reason } : { reason, credentialId };
+}
+
+/**
+ * The id an OAuth credential is logged by: its client, not the token. A token is renewed while
+ * the app stays the same app, and which app acted is what an operator follows through the
+ * `mcp_call` and `mcp_refused` lines.
+ */
+function oauthCredential(clientId: string): string {
+  return `oauth:${clientId}`;
+}
+
+/** Nothing to verify a JWT with: no authorization server runs here (plain HTTP off loopback). */
+const NO_ISSUER: OAuthRefused = { ok: false, reason: "unknown" };
 
 /**
  * The bearer door: `Authorization: Bearer` and nothing else.
@@ -199,28 +242,31 @@ export type BearerRefusal = "invalid_token" | "insufficient_scope";
 async function resolveBearer(
   deps: ServerDeps,
   headers: Headers,
-): Promise<Presented | "insufficient_scope" | null> {
+): Promise<Presented | BearerRefusal> {
   const bearer = BEARER.exec(headers.get("authorization") ?? "")?.groups?.token;
   if (bearer === undefined) {
-    return null;
+    return { reason: "missing" };
   }
   if (isPersonalToken(bearer)) {
     const admitted = await admit(deps.exec, bearer);
-    return admitted === null
-      ? null
-      : { email: admitted.email, credentialId: admitted.id, grant: admitted.grant };
+    return admitted.ok
+      ? { email: admitted.email, credentialId: admitted.id, grant: admitted.grant }
+      : refusedAs(admitted.reason, admitted.id);
   }
-  const admission = (await deps.auth?.mcp?.admit(bearer)) ?? null;
-  if (admission === null) {
-    return null;
+  const admission = (await deps.auth?.mcp?.admit(bearer)) ?? NO_ISSUER;
+  if (!admission.ok) {
+    const { clientId } = admission;
+    return refusedAs(
+      admission.reason,
+      clientId === undefined ? undefined : oauthCredential(clientId),
+    );
   }
+  const credentialId = oauthCredential(admission.clientId);
   const grant = grantFor(admission.tokenScopes, admission.consentScopes);
   if (grant === null) {
-    return "insufficient_scope";
+    return { reason: "insufficient_scope", credentialId };
   }
-  // The client, not the token: a token lives fifteen minutes, and what an operator follows
-  // through the `mcp_call` lines is which app acted.
-  return { email: admission.email, credentialId: `oauth:${admission.clientId}`, grant };
+  return { email: admission.email, credentialId, grant };
 }
 
 /** Who is calling, as every door answers it. */
@@ -289,7 +335,7 @@ export async function resolveCaller(
     return callerFor(deps, await sessionIdentity(deps, headers), door);
   }
   const presented = await resolveBearer(deps, headers);
-  return callerFor(deps, presented === "insufficient_scope" ? null : presented, door);
+  return callerFor(deps, "reason" in presented ? null : presented, door);
 }
 
 /**
@@ -310,18 +356,21 @@ export async function createContext(
  *
  * What `/mcp` asks, rather than `createContext`: a model-context client that is nobody is
  * answered before any MCP message is read, and HOW it is answered depends on why -- see
- * {@link BearerRefusal}.
+ * {@link RefusalReason}.
  */
 export async function bearerContext(
   deps: ServerDeps,
   headers: Headers,
 ): Promise<Context | BearerRefusal> {
   const presented = await resolveBearer(deps, headers);
-  if (presented === "insufficient_scope") {
+  if ("reason" in presented) {
     return presented;
   }
   const caller = await callerFor(deps, presented, "bearer");
-  return caller.user === null ? "invalid_token" : contextFor(deps, headers, "bearer", caller);
+  // A live credential, and nobody here: the shared tail found no `app_user` for its address.
+  return caller.user === null
+    ? { reason: "no_person", credentialId: presented.credentialId }
+    : contextFor(deps, headers, "bearer", caller);
 }
 
 /**

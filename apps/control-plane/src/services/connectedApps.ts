@@ -23,8 +23,8 @@ export const WRITE_SCOPE = "undercroft:write";
 /**
  * Every scope the authorization server offers, ours first. The OpenID ones are what a client
  * library adds on its own -- `offline_access` is how it gets a refresh token and so does not
- * send the person through consent every fifteen minutes -- and grant nothing here by
- * themselves.
+ * send the person through consent each time an access token lapses -- and grant nothing here
+ * by themselves.
  */
 export const OFFERED_SCOPES = [
   READ_SCOPE,

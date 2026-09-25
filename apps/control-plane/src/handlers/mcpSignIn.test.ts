@@ -8,7 +8,7 @@
  *
  * What is asserted is what a client and a person see: the discovery documents, the tools a
  * consent to read leaves the client, and that revoking the app on the account page shuts the
- * client out at its next call.
+ * client out at its next call -- with the `mcp_refused` line that says so to an operator.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
@@ -21,6 +21,8 @@ import {
   type StoredOAuthTokens,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
+import { createLogger } from "@undercroft/core";
+import { currentTraceId } from "@undercroft/telemetry";
 import { type ControlPlane, startControlPlane } from "../testing.ts";
 
 const OPERATOR = "operator@example.test";
@@ -29,9 +31,17 @@ const TENANT = "CASE-0042";
 const CALLBACK = "http://localhost:9/callback";
 
 let plane: ControlPlane;
+/** Every line the server logged, as the process's own logger writes it, trace id included. */
+let logged: Record<string, unknown>[] = [];
 
 beforeEach(async () => {
+  logged = [];
   plane = await startControlPlane({
+    log: createLogger({
+      component: "control-plane",
+      sink: (line) => logged.push(JSON.parse(line) as Record<string, unknown>),
+      context: () => ({ traceId: currentTraceId() }),
+    }),
     seed: async (db) => {
       await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
       await db.query(
@@ -177,6 +187,15 @@ async function authorize(
   return { client, cookie };
 }
 
+/** "Revoke" on the account page, for the one app this person has let in. */
+async function revokeTheApp(cookie: string): Promise<{ id: string; grant: string } | undefined> {
+  const apps = await Bun.fetch(`${plane.origin}/trpc/account.apps.list`, { headers: { cookie } });
+  const [app] = ((await apps.json()) as { result: { data: { id: string; grant: string }[] } })
+    .result.data;
+  await post("/trpc/account.apps.revoke", { id: app?.id }, cookie);
+  return app;
+}
+
 /** One JSON-RPC `tools/list` over plain HTTP, for what a client library would hide: the status. */
 function rawList(token: string): Promise<Response> {
   return Bun.fetch(`${plane.origin}/mcp`, {
@@ -224,10 +243,7 @@ describe("a client signed in through OAuth", () => {
     const { tools } = await mcp.listTools();
     await mcp.close();
 
-    const apps = await Bun.fetch(`${plane.origin}/trpc/account.apps.list`, { headers: { cookie } });
-    const [app] = ((await apps.json()) as { result: { data: { id: string; grant: string }[] } })
-      .result.data;
-    await post("/trpc/account.apps.revoke", { id: app?.id }, cookie);
+    const app = await revokeTheApp(cookie);
 
     expect({
       writes: tools.filter((tool) => tool.annotations?.readOnlyHint !== true).length,
@@ -248,5 +264,25 @@ describe("a client signed in through OAuth", () => {
       status: 403,
       challenge: expect.stringContaining('error="insufficient_scope"'),
     });
+  });
+
+  it("once revoked, is logged as revoked, naming the app and never its token", async () => {
+    const { client, cookie } = await authorize((scope) => scope !== "undercroft:write");
+    await revokeTheApp(cookie);
+    const response = await rawList(client.accessToken());
+
+    expect(logged.filter((line) => line.event === "mcp_refused")).toEqual([
+      {
+        at: expect.any(String),
+        level: "warn",
+        component: "control-plane",
+        event: "mcp_refused",
+        traceId: response.headers.get("x-trace-id"),
+        status: 401,
+        refusal: "invalid_token",
+        reason: "revoked",
+        credential: `oauth:${client.clientInformation()?.client_id}`,
+      },
+    ]);
   });
 });

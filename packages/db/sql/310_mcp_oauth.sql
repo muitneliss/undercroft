@@ -124,7 +124,7 @@ CREATE INDEX IF NOT EXISTS oauth_client_resource_resource_id_idx
     ON app.oauth_client_resource (resource_id);
 
 -- -- app.oauth_refresh_token --------------------------------------------------
--- What lets a connector come back after its fifteen-minute access token lapses. Revoking an
+-- What lets a connector come back after its access token lapses (ADR 0062). Revoking an
 -- app on the account page stamps `revoked` on these, so the connector cannot get a new one.
 CREATE TABLE IF NOT EXISTS app.oauth_refresh_token (
     id                         text PRIMARY KEY,

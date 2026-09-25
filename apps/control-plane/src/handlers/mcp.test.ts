@@ -7,12 +7,16 @@
  * session cookie of a signed-in browser, so every test starts from a credential the product
  * itself issued. What is asserted is what a client sees: the tools it is offered, the answer or
  * refusal a call gets, the status of the HTTP exchange -- and, for a write, whether the worker
- * was actually asked to do it.
+ * was actually asked to do it. For a bearer refused at the door, also what the operator is
+ * left to find it by: the one `mcp_refused` line, written by the process's own logger into
+ * memory.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import type { TRPCError } from "@trpc/server";
+import { createLogger } from "@undercroft/core";
+import { currentTraceId } from "@undercroft/telemetry";
 import { type ControlPlane, startControlPlane } from "../testing.ts";
 import { procedureSentences as en } from "../i18n/procedures.en.ts";
 import { createContext } from "./context.ts";
@@ -26,10 +30,18 @@ const OTHER = "CASE-0099";
 
 let plane: ControlPlane;
 let cookie = "";
+/** Every line the server logged, as the process's own logger writes it, trace id included. */
+let logged: Record<string, unknown>[] = [];
 
 beforeEach(async () => {
+  logged = [];
   plane = await startControlPlane({
     devSignInAs: OPERATOR,
+    log: createLogger({
+      component: "control-plane",
+      sink: (line) => logged.push(JSON.parse(line) as Record<string, unknown>),
+      context: () => ({ traceId: currentTraceId() }),
+    }),
     seed: async (db) => {
       await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ($2)", [OWN, OTHER]);
       await db.query(
@@ -311,5 +323,67 @@ describe("a caller with no live token", () => {
     const token = await mint("read");
 
     expect((await rawList({ authorization: `Bearer ${token}` })).status).toBe(200);
+  });
+});
+
+describe("a refused bearer, as an operator finds it", () => {
+  /** Mint a token, revoke it through the account page's own procedure, and present it. */
+  async function presentRevoked(): Promise<{ id: string; response: Response }> {
+    const token = await mint("write");
+    const id = token.slice(0, token.indexOf("."));
+    await Bun.fetch(`${plane.origin}/trpc/account.tokens.revoke`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    return { id, response: await rawList({ authorization: `Bearer ${token}` }) };
+  }
+
+  function refusals(): Record<string, unknown>[] {
+    return logged.filter((line) => line.event === "mcp_refused");
+  }
+
+  // The whole line, so a field that should not be there -- the token, or any part of it --
+  // fails this as surely as a missing one.
+  it("is logged with why, whose, and the trace id the refusal answered with", async () => {
+    const { id, response } = await presentRevoked();
+
+    expect(refusals()).toEqual([
+      {
+        at: expect.any(String),
+        level: "warn",
+        component: "control-plane",
+        event: "mcp_refused",
+        traceId: response.headers.get("x-trace-id"),
+        status: 401,
+        refusal: "invalid_token",
+        reason: "revoked",
+        credential: id,
+      },
+    ]);
+  });
+
+  it("tells the client nothing the reason would add", async () => {
+    const { response } = await presentRevoked();
+    const none = await rawList({});
+
+    expect({
+      challenge: response.headers.get("www-authenticate"),
+      body: await response.text(),
+    }).toEqual({ challenge: none.headers.get("www-authenticate"), body: await none.text() });
+  });
+
+  it("is a client's first contact when no bearer came, logged without a warning", async () => {
+    await rawList({});
+
+    expect(
+      refusals().map(({ level, reason, credential }) => ({ level, reason, credential })),
+    ).toEqual([{ level: "info", reason: "missing", credential: undefined }]);
+  });
+
+  it("is not written for a bearer that was let in", async () => {
+    await rawList({ authorization: `Bearer ${await mint("read")}` });
+
+    expect(refusals()).toEqual([]);
   });
 });

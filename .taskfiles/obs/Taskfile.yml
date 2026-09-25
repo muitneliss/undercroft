@@ -30,7 +30,7 @@ tasks:
       - bun run scripts/observe.ts logs {{.FOR | shellQuote}} {{.SINCE}}
 
   search:
-    desc: "Find traces in Tempo. Usage: task obs:search FOR=run=<runId>|kestra=<executionId>|errors [SINCE=1h]"
+    desc: "Find traces in Tempo. Usage: task obs:search FOR=run=<runId>|kestra=<executionId>|status=<code>|errors [SINCE=1h]. status=401 lists refused requests, which errors (5xx only) does not."
     requires:
       vars: [FOR]
     vars:
