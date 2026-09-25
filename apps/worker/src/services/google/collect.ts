@@ -20,8 +20,8 @@
  * **A RECORD IS HELD BACK UNTIL ITS DOCUMENTS ARE DOWN, AND THEN IT SAYS HOW MANY.** A
  * message whose record landed while its attachment fetch was still failing would be skipped
  * by every run after it, and the attachment would be lost from the one layer that cannot be
- * recomputed -- rule 2 broken by the resume mechanism itself. So a batch's documents are
- * flushed first, and only the records whose documents all reached the lake are added. A crash
+ * recomputed -- rule 2 broken by the resume mechanism itself. So an item's documents are
+ * flushed first, and its record is added only if they all reached the lake. A crash
  * between the two re-does the message, which is idempotent by content, and that is the cheap
  * direction to fail in.
  *
@@ -53,11 +53,22 @@
  * ## A stop is honoured between items, and settles nothing it cannot vouch for
  *
  * When the process is told to stop (`CollectDeps.stop`, ADR 0051) the walk ends at the next
- * item boundary, and the ordering above decides what that costs. Records already RELEASED have
- * their documents down, so the record sink is closed and lands them. Records still PENDING are
- * dropped rather than released, because releasing them means fetching their attachments first,
- * which is minutes the container's grace period does not have; nothing marks them, so the next
- * run reads them again. The document sink's unfetched buffer is abandoned for the same reason.
+ * item boundary, and the ordering above decides what that costs. Each item is SETTLED before
+ * the next is asked for -- its documents fetched and catalogued, then its record released -- so
+ * at that boundary every record this run read is either in the record sink with its documents
+ * down, or refused with why. The record sink is closed and lands them, in seconds; an item that
+ * arrived after the stop is not started on, and nothing marks it, so the next run reads it.
+ *
+ * Settling per item rather than per chunk is what makes the boundary REACHABLE, and Drive is
+ * where it was not (issue #219). Items used to be held back two hundred at a time and their
+ * documents fetched together in one flush that nothing could interrupt. A Drive item is a file
+ * download, so nearly all of a Drive run's time was spent inside that flush -- about six
+ * minutes at the 1.8 s a file production showed -- and a deploy's SIGTERM almost always arrived
+ * there. The walk reached its next boundary long after the 45 s drain had given up, and every
+ * Drive ingest a deploy interrupted was closed at boot with no counts. The longest wait is now
+ * one item's documents: one Drive file, or one message's attachments. What a chunk still
+ * batches is the record sink's lake writes and projection, which were never the slow part.
+ * ADR 0056.
  *
  * And what is only decidable once the whole harvest has been walked is not decided at all.
  * Drive's tombstone sweep negates the ids this run saw, so running it over a walk that stopped
@@ -74,14 +85,13 @@ import type { LakeStore } from "@undercroft/lake";
 
 import { tombstoneMissing } from "../../repos/rawDocuments.ts";
 import { createDocumentSink } from "../documentSink.ts";
-import {
-  CHUNK,
-  type DocumentSink,
-  type DocumentSummary,
-  type LandSummary,
-  type RecordSink,
-  type RefusalWriter,
-  type SinkDeps,
+import type {
+  DocumentSink,
+  DocumentSummary,
+  LandSummary,
+  RecordSink,
+  RefusalWriter,
+  SinkDeps,
 } from "../landing.ts";
 import { createRecordSink } from "../recordSink.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
@@ -208,15 +218,15 @@ interface Landing {
 }
 
 /**
- * Walk a harvest into the two sinks, documents first, and answer with what it said at the end.
+ * Settle one harvested item: its documents into the lake, then its record -- or a refusal.
  *
- * `pending` is the only thing this holds and it is capped at one chunk of records. A record
- * waits in it until `release` has flushed every document added since the last one -- which
- * is what makes a row in `raw.records` mean the message behind it is complete, and therefore
- * what makes skipping it on the next run safe.
+ * The record is added only once every document that could land has, which is what makes a
+ * row in `raw.records` mean the message behind it is complete, and therefore what makes
+ * skipping it on the next run safe. A document whose fetch failed holds its record back, and
+ * the refusal says so.
  *
- * **AND THE RECORD CARRIES THE COUNT OUT WITH IT.** The ordering above is what MAKES a landed
- * record complete; `documentsLanded` is what SAYS SO, and the difference cost a customer every
+ * **AND THE RECORD CARRIES THE COUNT OUT WITH IT.** The ordering is what MAKES a landed record
+ * complete; `documentsLanded` is what SAYS SO, and the difference cost a customer every
  * attachment in a 7,786-message mailbox. Ordering binds the rows the ordering wrote, and the
  * next run reads rows it did not write -- rows from a release where documents came last, and
  * from a run that died between the two. This is the only layer that knows both halves, so it
@@ -224,22 +234,45 @@ interface Landing {
  * down. A size-refused attachment is in neither set and so is counted as what it is, zero,
  * rather than as a message forever one document short of itself. ADR 0035.
  *
+ * One item, never a chunk of them: that is what puts a stop boundary after every download
+ * rather than after every two hundred. See "A stop is honoured between items" above.
+ */
+async function settleItem(item: HarvestItem, at: Landing): Promise<void> {
+  for (const document of item.documents) {
+    await at.documents.add(document);
+  }
+  const settled = await at.documents.flush();
+  if (item.documents.some((document) => settled.unfetched.has(document.documentId))) {
+    await at.refuse([
+      { entity: at.entity, sourceRecordId: item.record.sourceRecordId, reason: DOCUMENT_UNLANDED },
+    ]);
+    return;
+  }
+  await at.records.add({
+    ...item.record,
+    documentsLanded: item.documents.filter((document) => settled.landed.has(document.documentId))
+      .length,
+  });
+}
+
+/**
+ * Walk a harvest into the two sinks, settling each item before asking for the next, and answer
+ * with what the harvest said at the end.
+ *
  * A manual `next()` loop rather than `for await`, because `for await` discards a generator's
  * return value and the summary IS the return value. Consumed to exhaustion, never broken out
  * of -- an abandoned harvest leaves a paged listing half-read, and the symptom is an unrelated
  * "no recorded response" two tests away -- with ONE exception: `stop`. Then it answers `null`,
- * because there is no summary of a walk that did not finish, and it answers without releasing
- * what is pending: see "A stop is honoured between items" above. It looks before asking for
- * the next item and again after, since that `next()` is one paced request and can be the one
- * the signal arrived during; an item that arrived after a stop is not started on, because
- * adding its documents can trip a full buffer into landing a chunk of attachments.
+ * because there is no summary of a walk that did not finish: see "A stop is honoured between
+ * items" above. It looks before asking for the next item and again after, since that `next()`
+ * is one paced request and can be the one the signal arrived during; an item that arrived after
+ * a stop is not started on, because settling it means fetching its documents.
  */
 async function drain(
   harvest: Harvest,
   at: Landing,
   stop: AbortSignal | undefined,
 ): Promise<HarvestSummary | null> {
-  const pending: HarvestItem[] = [];
   function stopped(): boolean {
     return stop?.aborted === true;
   }
@@ -251,45 +284,12 @@ async function drain(
     return stopped() ? null : step;
   }
 
-  async function release(): Promise<void> {
-    const settled = await at.documents.flush();
-    for (const item of pending.splice(0)) {
-      if (item.documents.some((document) => settled.unfetched.has(document.documentId))) {
-        await at.refuse([
-          {
-            entity: at.entity,
-            sourceRecordId: item.record.sourceRecordId,
-            reason: DOCUMENT_UNLANDED,
-          },
-        ]);
-        continue;
-      }
-      await at.records.add({
-        ...item.record,
-        documentsLanded: item.documents.filter((document) =>
-          settled.landed.has(document.documentId),
-        ).length,
-      });
-    }
-  }
-
   let step = await next();
   while (step !== null && step.done !== true) {
-    for (const document of step.value.documents) {
-      await at.documents.add(document);
-    }
-    pending.push(step.value);
-    if (pending.length >= CHUNK && !stopped()) {
-      await release();
-    }
+    await settleItem(step.value, at);
     step = await next();
   }
-  if (step === null) {
-    return null;
-  }
-  await release();
-
-  return step.value;
+  return step === null ? null : step.value;
 }
 
 /** Everything one collection reads through and writes into, wired once. */
@@ -386,8 +386,10 @@ interface Closed {
  * stopped, which `summary` being `null` says.
  *
  * The record sink is closed either way: what it holds was released, so its documents are
- * down. On a stop the document buffer is abandoned rather than landed, and the tombstones and
- * pick refusals are not decided at all; the module docstring's last section says why each.
+ * down. On a stop the document sink is abandoned rather than closed -- its buffer is empty at
+ * every item boundary, so this lands nothing either way, but a stop must never be the thing that
+ * starts a fetch -- and the tombstones and pick refusals are not decided at all; the module
+ * docstring's last section says why each.
  * One function, so the difference between finishing and stopping is written in one place.
  */
 async function closeCollection(

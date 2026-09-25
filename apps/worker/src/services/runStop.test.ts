@@ -27,8 +27,10 @@ import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { readSyncCursor } from "../repos/syncCursor.ts";
 import { runIngest } from "./ingest.ts";
+import { drainJobs, startIngestJob } from "./jobs.ts";
 import { CHUNK } from "./landing.ts";
 import { RUN_STOPPED, type RunDeps, RunStopped } from "./runTypes.ts";
+import { drainJobsBy, RUN_CUT_OFF } from "./shutdown.ts";
 
 const TENANT = "CASE-1";
 const KEY = Buffer.alloc(32, 3).toString("base64");
@@ -211,16 +213,17 @@ describe("a Gmail ingest stopped mid-harvest", () => {
 
   it("settles failed with the stop, counting what reached raw.records, and the next run finishes", async () => {
     // The first chunk is landed and projected; the stop arrives ten messages into the second.
-    // Before this, the run died on SIGTERM, stayed `running` until the next boot, and was
+    // Before ADR 0051 the run died on SIGTERM, stayed `running` until the next boot, and was
     // closed there with 0 of everything beside 200 messages it had in fact kept.
     const ids = Array.from({ length: CHUNK + 50 }, (_, i) => `m${i}`);
+    const settled = CHUNK + 10;
     const recorded = new InMemoryByteFetcher();
     mailbox(recorded, ids);
     await connect("gmail", { labels: [] });
     const stop = new AbortController();
 
     const outcome = await ingest("gmail", {
-      byteFetcher: stoppingAt(recorded, messageUrl(`m${CHUNK + 10}`), stop),
+      byteFetcher: stoppingAt(recorded, messageUrl(`m${settled}`), stop),
       stop: stop.signal,
     });
 
@@ -229,17 +232,21 @@ describe("a Gmail ingest stopped mid-harvest", () => {
     expect(stopped?.status).toBe("failed");
     expect(stopped?.error).toBe(RUN_STOPPED);
     // The counts are the lake's, not a placeholder: every record and document it reports is
-    // one the tables hold.
-    expect(await countOf("raw.records", "gmail")).toBe(CHUNK);
-    expect(await countOf("raw.documents", "gmail")).toBe(CHUNK);
-    expect(await entityCreated(stopped?.id ?? "")).toEqual({ messages: CHUNK, documents: CHUNK });
-    expect(stopped?.created).toBe(CHUNK * 2);
-    // The pending messages' attachments were not fetched on the way out -- that is minutes on a
-    // real mailbox, which a container's grace period does not have.
-    expect(recorded.calls.some((call) => call.url === attachmentUrl(`m${CHUNK + 5}`))).toBe(false);
+    // one the tables hold. Each message before the stop was settled -- attachment down, then
+    // record -- so all of them are kept, not only the whole chunks among them.
+    expect(await countOf("raw.records", "gmail")).toBe(settled);
+    expect(await countOf("raw.documents", "gmail")).toBe(settled);
+    expect(await entityCreated(stopped?.id ?? "")).toEqual({
+      messages: settled,
+      documents: settled,
+    });
+    expect(stopped?.created).toBe(settled * 2);
+    // The message that arrived after the stop was not started on: fetching its attachment on the
+    // way out is time a container's grace period does not have.
+    expect(recorded.calls.some((call) => call.url === attachmentUrl(`m${settled}`))).toBe(false);
     const last = (await eventsFor(db, stopped?.id ?? "")).at(-1);
     expect(last?.event).toBe("run_stopped");
-    expect(last?.detail).toMatchObject({ created: CHUNK * 2 });
+    expect(last?.detail).toMatchObject({ created: settled * 2 });
 
     const next = await ingest("gmail", { byteFetcher: recorded });
 
@@ -252,7 +259,7 @@ describe("a Gmail ingest stopped mid-harvest", () => {
 });
 
 describe("a Drive ingest stopped mid-walk", () => {
-  function listUrl(folderId: string): string {
+  function listUrl(folderId: string, pageToken?: string): string {
     const url = new URL(DRIVE);
     url.searchParams.set(
       "q",
@@ -265,7 +272,14 @@ describe("a Drive ingest stopped mid-walk", () => {
     url.searchParams.set("pageSize", "100");
     url.searchParams.set("supportsAllDrives", "true");
     url.searchParams.set("includeItemsFromAllDrives", "true");
+    if (pageToken !== undefined) {
+      url.searchParams.set("pageToken", pageToken);
+    }
     return url.toString();
+  }
+
+  function mediaUrl(fileId: string): string {
+    return `${DRIVE}/${fileId}?alt=media`;
   }
 
   function file(id: string, parent: string, modifiedTime: string): unknown {
@@ -320,6 +334,152 @@ describe("a Drive ingest stopped mid-walk", () => {
       "SELECT document_id FROM raw.documents WHERE source = 'drive' AND deleted_at IS NOT NULL",
     );
     expect(rows).toEqual([]);
+  });
+
+  it("stops at the file after the one downloading, keeps every file before it, and the next run does not download them again", async () => {
+    // Issue #219. A Drive run spends nearly all its time downloading, and it used to download a
+    // chunk of two hundred files in one flush nothing could interrupt, so a deploy's SIGTERM was
+    // not seen for minutes -- past the 45 s drain -- and every run a deploy caught was closed at
+    // boot as "killed or ran out of memory". Here the stop arrives while a file of the second
+    // chunk is downloading. That download finishes, and nothing after it is asked for: every
+    // later file's bytes are recorded, so a run that downloaded on would not fail, it would
+    // simply finish, and `RunStopped` below is what says it did not.
+    const ids = Array.from({ length: CHUNK + 50 }, (_, i) => `f${i}`);
+    const settled = CHUNK + 11; // f0 to f210: the stop arrives during f210's download.
+    const recorded = new InMemoryByteFetcher();
+    const pages = Math.ceil(ids.length / 100);
+    for (let page = 0; page < pages; page += 1) {
+      recorded.on("GET", listUrl("folder-1", page === 0 ? undefined : `p${page}`), {
+        body: {
+          files: ids
+            .slice(page * 100, (page + 1) * 100)
+            .map((id) => file(id, "folder-1", "2026-09-17T12:00:00.000Z")),
+          ...(page + 1 < pages ? { nextPageToken: `p${page + 1}` } : {}),
+        },
+      });
+    }
+    for (const id of ids) {
+      recorded.on("GET", mediaUrl(id), { body: PDF });
+    }
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    const stop = new AbortController();
+
+    const outcome = await ingest("drive", {
+      byteFetcher: stoppingAt(recorded, mediaUrl(`f${settled - 1}`), stop),
+      stop: stop.signal,
+    });
+
+    expect(outcome).toBeInstanceOf(RunStopped);
+    const [stopped] = await runsOf("drive");
+    expect(stopped?.error).toBe(RUN_STOPPED);
+    expect(await countOf("raw.records", "drive")).toBe(settled);
+    expect(await countOf("raw.documents", "drive")).toBe(settled);
+    expect(await entityCreated(stopped?.id ?? "")).toEqual({ files: settled, documents: settled });
+    expect(recorded.calls.some((call) => call.url === mediaUrl(`f${settled}`))).toBe(false);
+
+    const next = await ingest("drive", { byteFetcher: recorded });
+
+    expect(next).not.toBeInstanceOf(Error);
+    expect((await runsOf("drive")).map((run) => run.status)).toEqual(["failed", "ok"]);
+    expect(await countOf("raw.documents", "drive")).toBe(ids.length);
+    // Resumed rather than restarted: a file the stopped run kept is listed again and skipped on
+    // its unchanged `modifiedTime`, never downloaded twice -- the last one it kept included.
+    for (const id of ["f0", `f${settled - 1}`]) {
+      expect(recorded.calls.filter((call) => call.url === mediaUrl(id))).toHaveLength(1);
+    }
+  });
+});
+
+describe("a run still going when the drain gives up", () => {
+  const PAGE_TWO = `${BASE}/things?page=2`;
+
+  /**
+   * The recorded fetcher, with the named request held until `open` is called.
+   *
+   * Not a mock: the request is still answered by the recording, only later. What it adds is a
+   * run that is provably mid-read when the drain's time runs out, rather than one that might
+   * or might not have reached its safe point yet.
+   */
+  function heldAt<R extends { readonly url: string }, A>(
+    inner: { send: (request: R) => Promise<A> },
+    url: string,
+  ): {
+    fetcher: { send: (request: R) => Promise<A> };
+    reached: Promise<void>;
+    open: () => void;
+  } {
+    const reached = Promise.withResolvers<void>();
+    const gate = Promise.withResolvers<void>();
+    return {
+      fetcher: {
+        send: async (request): Promise<A> => {
+          if (request.url === url) {
+            reached.resolve();
+            await gate.promise;
+          }
+          return inner.send(request);
+        },
+      },
+      reached: reached.promise,
+      open: (): void => gate.resolve(),
+    };
+  }
+
+  function recording(): InMemoryFetcher {
+    return new InMemoryFetcher()
+      .on("GET", `${BASE}/things`, {
+        body: { results: [{ id: "1", changedAt: "400" }], paging: { next: { link: PAGE_TWO } } },
+      })
+      .on("GET", PAGE_TWO, { body: { results: [{ id: "2", changedAt: "700" }] } })
+      .on("GET", `${BASE}/others`, { body: { results: [] } });
+  }
+
+  async function start(
+    fetcher: NonNullable<RunDeps["fetcher"]>,
+    stop: AbortController,
+  ): Promise<void> {
+    await startIngestJob(
+      { lake, exec: db, specsDir, env: ENV, fetcher, stop: stop.signal },
+      { source: "demo", tenantId: TENANT, trigger: "manual", triggeredBy: "", chain: false },
+    );
+  }
+
+  it("is closed by the stopping worker as cut off by the shutdown, not left for the boot to call a kill", async () => {
+    // Issue #219: the process exited on purpose with the run `running`, and the next boot
+    // closed it as "killed or ran out of memory" -- which is what the reporter then believed.
+    const held = heldAt(recording(), PAGE_TWO);
+    const stop = new AbortController();
+    await start(held.fetcher, stop);
+    await held.reached;
+    stop.abort();
+
+    const drained = await drainJobsBy(db, Promise.resolve());
+
+    expect(drained).toBe(false);
+    const [cutOff] = await runsOf("demo");
+    expect(cutOff?.status).toBe("failed");
+    expect(cutOff?.error).toBe(RUN_CUT_OFF);
+
+    held.open();
+    await drainJobs();
+  });
+
+  it("leaves a run that reached its safe point in time with its own stop and its counts", async () => {
+    const held = heldAt(recording(), PAGE_TWO);
+    const stop = new AbortController();
+    await start(held.fetcher, stop);
+    await held.reached;
+    stop.abort();
+    held.open();
+
+    const drained = await drainJobsBy(db, new Promise<never>(() => undefined));
+
+    expect(drained).toBe(true);
+    const [stopped] = await runsOf("demo");
+    expect(stopped?.error).toBe(RUN_STOPPED);
+    expect(stopped?.created).toBe(2);
   });
 });
 

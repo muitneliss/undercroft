@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.33.0](https://github.com/muitneliss/undercroft/compare/v1.32.1...v1.33.0) (2026-09-25)
+
+
+### Features
+
+* **ui:** an open tab is told when a new release is live and offered a reload ([#220](https://github.com/muitneliss/undercroft/issues/220)) ([7b1c505](https://github.com/muitneliss/undercroft/commit/7b1c505c86e6674aa34592a624f38116c4a63a65))
+
+
+### Bug Fixes
+
+* **extract:** a NUL byte in a document no longer fails the batch, and UTF-16 text with a BOM is read as UTF-16 ([#218](https://github.com/muitneliss/undercroft/issues/218)) ([#222](https://github.com/muitneliss/undercroft/issues/222)) ([80159e1](https://github.com/muitneliss/undercroft/commit/80159e1ed118ae2318de7536a5a0d98a212312d1))
+* **worker:** a Drive ingest stops within one file on a deploy, and a run the drain gives up on is closed as cut off, not killed ([#219](https://github.com/muitneliss/undercroft/issues/219)) ([#223](https://github.com/muitneliss/undercroft/issues/223)) ([9427d13](https://github.com/muitneliss/undercroft/commit/9427d13d9e8303d5c5307b921c57f0c17cbfe8e6))
+
 ## [1.32.1](https://github.com/muitneliss/undercroft/compare/v1.32.0...v1.32.1) (2026-09-25)
 
 
