@@ -105,6 +105,7 @@ export async function* harvestDrive(
   // how far a recursive descent went.
   let walked = 0;
   let known = 0;
+  const fileRead = filesReadGauge(journal);
 
   for (const picked of scope.files) {
     if (picked.kind === "folder") {
@@ -117,7 +118,7 @@ export async function* harvestDrive(
       skipped,
     });
 
-    const into: Taking = { api, picked, seen, held };
+    const into: Taking = { api, picked, seen, held, fileRead };
     const batch: DriveFile[] = [];
     let step = await files.next();
     while (!step.done) {
@@ -149,6 +150,23 @@ export async function* harvestDrive(
   return { seenIds: [...seen], skipped, listed: seen.size, known };
 }
 
+/**
+ * The run's `records_read` gauge for Drive: call it once per file whose bytes came back.
+ *
+ * Counted when a download FINISHES, not when a file is handed over. The document sink fetches
+ * a whole chunk at once, so a count of hand-overs leaps two hundred and then sits still for
+ * the minutes those two hundred take -- which is the frozen screen this exists to end: a Drive
+ * run used to say `entity_started` and nothing more until it closed. No total, because the
+ * listing streams and how many files the picks hold is known only at the end of the walk.
+ */
+function filesReadGauge(journal: RunJournal): () => void {
+  let read = 0;
+  return function fileRead(): void {
+    read += 1;
+    journal.progress("records_read", { entity: ENTITY, read });
+  };
+}
+
 /** What one pick's batches are taken against: it outlives them, so it is not per batch. */
 interface Taking {
   readonly api: GoogleApi;
@@ -156,6 +174,8 @@ interface Taking {
   /** Every file id this whole harvest has met. Mutated here; see {@link take}. */
   readonly seen: Set<string>;
   readonly held: AlreadyHeld;
+  /** Told each time a file's bytes have come back from Drive. */
+  readonly fileRead: () => void;
 }
 
 /**
@@ -169,7 +189,7 @@ async function* take(
   batch: readonly DriveFile[],
   into: Taking,
 ): AsyncGenerator<HarvestItem, number> {
-  const { api, picked, seen, held } = into;
+  const { picked, seen, held } = into;
   const fresh: DriveFile[] = [];
   for (const file of batch) {
     if (!seen.has(file.id)) {
@@ -191,7 +211,7 @@ async function* take(
       skippedHere += 1;
       continue;
     }
-    yield { record: toRecord(file), documents: [toDocument(api, file, picked, seen.size)] };
+    yield { record: toRecord(file), documents: [toDocument(into, file, picked, seen.size)] };
   }
   return skippedHere;
 }
@@ -226,7 +246,7 @@ function toRecord(file: DriveFile): RecordToLand {
  * the file was, so the export is never mistaken for an upload.
  */
 function toDocument(
-  api: GoogleApi,
+  { api, fileRead }: Pick<Taking, "api" | "fileRead">,
   file: DriveFile,
   picked: DriveScope["files"][number],
   seen: number,
@@ -252,7 +272,11 @@ function toDocument(
       fileId: file.id,
     },
     sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
-    fetchBytes: () => api.getBytes(url, ENTITY, seen),
+    fetchBytes: async (): Promise<Uint8Array> => {
+      const bytes = await api.getBytes(url, ENTITY, seen);
+      fileRead();
+      return bytes;
+    },
   };
 }
 
