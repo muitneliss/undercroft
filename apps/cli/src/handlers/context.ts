@@ -36,6 +36,10 @@ export interface Context {
   readonly fetch: typeof fetch;
   /** A `--verbose` line on stderr; a no-op otherwise. */
   readonly trace: (line: string) => void;
+  /** This CLI's own version, as the release stamped it. */
+  readonly version: string;
+  /** The terminal's width, which the drawn page is measured against; 80 when it is unknown. */
+  readonly columns: number;
 }
 
 /** oclif's parsed flags, read through the two narrowing helpers below rather than as `any`. */

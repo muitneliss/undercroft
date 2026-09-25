@@ -10,21 +10,13 @@
 
 import type { Effect, JsonSchema } from "../manifest.ts";
 import { forgetCredential, saveCredential } from "../services/credentials.ts";
-import { failure, fromFailure, isFailure, type Outcome, success } from "../services/output.ts";
+import { failure, fromFailure, isFailure, success } from "../services/output.ts";
 import { planProfileChange, resolveTarget, writeConfig } from "../services/profiles.ts";
 import { type Context, connect, loadConfig, type ParsedFlags, stringFlag } from "./context.ts";
+import { type Noted, noted } from "./noted.ts";
 import { askText, CANCELLED } from "./prompts.ts";
 import { callProcedure, requestCode, signIn } from "./remote.ts";
-
-/** A success a person reads as a sentence; the envelope an agent reads is unchanged. */
-export interface Noted {
-  readonly outcome: Outcome;
-  readonly note?: string;
-}
-
-function noted(outcome: Outcome, note?: string): Noted {
-  return note === undefined ? { outcome } : { outcome, note };
-}
+import { signInAtTerminal } from "./terminalSignIn.ts";
 
 function missing(ctx: Context, names: string): Noted {
   return noted(
@@ -50,7 +42,7 @@ async function valueOrAsk(
  *
  * Two invocations in agent mode -- `--email` asks, `--email --code` signs in -- because the
  * code arrives in a person's mailbox, and waiting on stdin for it is what agent mode never
- * does. A person at a terminal is asked for each in turn instead.
+ * does. A person at a terminal is asked for each in turn instead, in `signInAtTerminal`.
  */
 export async function authLogin(ctx: Context, flags: ParsedFlags): Promise<Noted> {
   const connected = connect(ctx, flags);
@@ -58,6 +50,10 @@ export async function authLogin(ctx: Context, flags: ParsedFlags): Promise<Noted
     return noted(connected);
   }
   const { connection } = connected;
+  const code = stringFlag(flags, "code");
+  if (code === undefined && ctx.mode.prompts) {
+    return (await signInAtTerminal(ctx, connection, stringFlag(flags, "email"))).noted;
+  }
   const email = await valueOrAsk(ctx, stringFlag(flags, "email"), ctx.t("prompt.email"));
   if (email === CANCELLED) {
     return noted(failure("CANCELLED", ctx.t("error.CANCELLED")));
@@ -65,24 +61,12 @@ export async function authLogin(ctx: Context, flags: ParsedFlags): Promise<Noted
   if (email === null) {
     return missing(ctx, "--email");
   }
-  let code = stringFlag(flags, "code");
   if (code === undefined) {
     const requested = await requestCode(ctx.t, connection, email);
-    const note = ctx.t("note.codeRequested", { email });
-    if (!(requested.ok && ctx.mode.prompts)) {
-      return noted(
-        requested.ok
-          ? success({ origin: connection.origin, email, codeRequested: true })
-          : requested,
-        note,
-      );
-    }
-    ctx.stderr.write(`${note}\n`);
-    const answer = await askText(ctx, ctx.t("prompt.code"));
-    if (answer === CANCELLED) {
-      return noted(failure("CANCELLED", ctx.t("error.CANCELLED")));
-    }
-    code = answer;
+    return noted(
+      requested.ok ? success({ origin: connection.origin, email, codeRequested: true }) : requested,
+      ctx.t("note.codeRequested", { email }),
+    );
   }
   const signed = await signIn(ctx.t, connection, email, code.trim());
   if (!signed.ok) {

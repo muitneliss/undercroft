@@ -63,6 +63,7 @@
 - [ADR 0057: A NUL in extracted text is replaced where it stood, and a byte-order mark is believed](sources/adr-0057-a-nul-in-extracted-text-is-replaced-where-it-stood-and-a-byte-order-mark-is-believed.md)
 - [ADR 0058: Every request is traced, into the host's shared otel-lgtm stack](sources/adr-0058-every-request-is-traced-into-the-host-s-shared-otel-lgtm-stack.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
+- [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)

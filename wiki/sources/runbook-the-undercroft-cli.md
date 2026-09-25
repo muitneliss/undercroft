@@ -5,9 +5,11 @@ date: 2026-09-25
 tags: []
 source: docs/runbook/cli.md
 source_path: docs/runbook/cli.md
-source_hash: 5c73cd92d7a4c0f624d9b8580aea7a6fbdf4d3397dbe7226e9c7b43bd6204782
+source_hash: ff3745bed154a92f7a8f09934f16c17c9f5ce5cb02ecca7c44343a0f1e3cac2c
 ingested: 2026-09-25
 ---
+
+# Runbook: The undercroft CLI
 
 # Runbook: The undercroft CLI
 
@@ -16,6 +18,8 @@ How to use and change the `undercroft` CLI; the decisions are [[ADR 0044: An age
 An agent gets the CLI with `npx skills add muitneliss/undercroft --skill undercroft-cli`, and the skill installs it. The skill pins its release, since its text documents one release's commands and error codes: before its first command the agent runs `undercroft --version`, installs the pinned release when the CLI is missing, asks the person before replacing a different installed release, and falls back to `npx` on the same pinned URL when a global install is refused. The pinned version is written once, in `v`, because release-please's generic updater rewrites only the first version on a line; the 1.20.0 release left the tarball name at 1.19.1, a 404. `scripts/skill.test.ts` fails when a pinned block in the README or SKILL.md holds more than one version or one other than the release's.
 
 A person creates a profile per environment (`config set-profile local --url http://localhost:3000 --allow-writes`, which only works at a terminal), signs in with `auth login` (email, then the emailed code), and runs commands; a missing tenant is asked for from `tenants list`. The first profile written becomes the default and `config use <name>` changes it; `auth status` reports the session and `auth logout` ends it. `--no-input` never prompts even at a terminal, so a missing argument is refused and a destructive command needs `--yes`; `--quiet` prints less. An agent passes `--agent` (also inferred from a non-TTY stdin/stdout) and gets exactly one JSON envelope on stdout; it signs in in two invocations (`--email`, then `--email --code`). The envelope, codes and exit codes are in `skills/undercroft-cli/references/cli-contract.md`.
+
+`undercroft` on its own at a terminal is the home page: the title page with the sign-in form on it while signed out, the contents page (every topic and its command count) once signed in; a rejected code offers a new one instead of ending the run, and a piped run still prints the help. The frames and rules are in [[Design: The CLI's home page and sign-in, drawn in text]].
 
 Files live in `$UNDERCROFT_CLI_HOME`, else `$XDG_CONFIG_HOME/undercroft`, else `~/.config/undercroft`: `config.json` (profiles) and `credentials.json` (0600, sessions keyed by origin). `undercroft.cli.json` pins a project's profile; `--url`/`UNDERCROFT_URL` is a one-off that never allows writes; `config show` explains which source decided each value and never prints the session.
 

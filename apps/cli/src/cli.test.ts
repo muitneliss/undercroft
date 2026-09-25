@@ -11,7 +11,7 @@
  *
  * Nothing is mocked. The one-time code is read out of the email the server really sent.
  * What is NOT tested here, deliberately: the router's own zod rules (the server's suites own
- * them), Clack's rendering (a real TTY, checked by hand), argv permutations, and i18n key
+ * them), Clack's rendering and the home page's (a real TTY, checked by hand), argv permutations, and i18n key
  * parity (`en: typeof vi` in `i18n/index.ts` is a compile error when one is missing).
  */
 
@@ -171,6 +171,17 @@ describe("an agent reads the platform through the same door as the browser", () 
     expect(entries.flatMap((entry) => entry.procedure ?? []).sort()).toEqual(
       Object.keys(appRouter._def.procedures).sort(),
     );
+  });
+
+  it("a bare run outside a terminal is still the help, never the page a person is shown", async () => {
+    // `undercroft` on its own draws the home page only for a person at a terminal. A piped
+    // run -- an agent's -- must answer exactly as `--help` does, or the contract moved under it.
+    writeProfile("local", plane.origin, false);
+
+    const bare = await undercroft([]);
+
+    expect(bare.exitCode).toBe(0);
+    expect(bare.stdout).toBe((await undercroft(["--help"])).stdout);
   });
 
   it("a browse the grant cannot serve says in error.details what could not be listed, and the fix", async () => {
