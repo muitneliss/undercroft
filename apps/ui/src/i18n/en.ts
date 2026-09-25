@@ -90,9 +90,45 @@ export const en = {
       "Local sign-in is off. Set UNDERCROFT_DEV_SIGN_IN_AS in deploy/compose/.env and restart task dev:run.",
   },
 
+  landing: {
+    skip: "Skip to main content",
+    docs: "Documentation",
+    readDocs: "Read the docs",
+    title: "Keep the original data.",
+    titleEnd: "Define your own answers.",
+    lead: "From your accounts to an immutable raw lake, SQL models and reports.",
+    invitation: "Access by invitation.",
+    pathLabel: "The data journey",
+    sourcesTitle: "Data sources",
+    // biome-ignore lint/security/noSecrets: These are the four public source names, separated by line breaks.
+    sourcesBody: "Gmail\nGoogle Drive\nHubSpot\nXero",
+    rawTitle: "Raw lake",
+    rawBody: "The original data stays intact.",
+    modelsTitle: "SQL models",
+    modelsBody: "SQL you write.",
+    reportsTitle: "Reports",
+    reportsBody: "Answers from your own models.",
+    principle: "Raw data is the foundation. The layers above it can be rebuilt.",
+    startTitle: "One place to begin.",
+    startBody:
+      "Every customer has a separate workspace for sources, runs and reports. Sign in to open the customers you have access to.",
+    openWorkspace: "Open your workspace",
+  },
+
   tenants: {
-    title: "Member companies",
-    lead: "Each customer’s data is stored and accessed separately. Open one to grant, scope or withdraw access to their accounts.",
+    title: "Customer records",
+    lead: "Open a customer to see their data sources, journal and reports.",
+    searchLabel: "Find a customer",
+    searchPlaceholder: "Search by customer name or ID",
+    clearSearch: "Clear search",
+    noMatches:
+      "No matching customers. Try another name or ID, or clear the search to see everyone.",
+    colAction: "Action",
+    open: "Open",
+    openNamed: "Open {{name}}",
+    guideHead: "Inside each record",
+    guideBody:
+      "Connect sources, inspect landed data and open reports through the customer's tabs. Each customer's data is stored and accessed separately.",
     emptyTitle: "No customers yet",
     emptyBody:
       "A customer is the unit everything else hangs off: their connected accounts, their synced records, and who can see them.",

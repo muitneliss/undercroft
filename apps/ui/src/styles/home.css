@@ -1,0 +1,298 @@
+/* The public cover and customer index share the book's stock, faces and controls. */
+@layer undercroft {
+  .landing {
+    min-height: 100vh;
+    background: var(--page);
+    padding-inline: var(--s-7);
+  }
+
+  .landing__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-5);
+    min-height: 6rem;
+    border-bottom: var(--hair) solid var(--rule-strong);
+  }
+
+  .landing__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    color: var(--ink);
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    text-decoration: none;
+  }
+
+  .landing__nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s-5);
+  }
+
+  .landing__nav > a,
+  .landing__docs,
+  .landing__start > a {
+    font-family: var(--face-prose);
+    font-size: 1.125rem;
+    text-underline-offset: 0.2em;
+  }
+
+  .landing__main {
+    max-width: 80rem;
+    margin-inline: auto;
+  }
+
+  .landing__hero {
+    padding: var(--s-8) var(--s-4) var(--s-6);
+    text-align: center;
+  }
+
+  .landing__hero h1 {
+    font-size: 5rem;
+    font-variation-settings: "wdth" 76;
+    line-height: 1.12;
+  }
+
+  .landing__hero h1 span {
+    display: block;
+  }
+
+  .landing__lead {
+    max-width: 54ch;
+    margin: var(--s-5) auto var(--s-6);
+    font-family: var(--face-prose);
+    font-size: 1.5rem;
+    line-height: 1.45;
+  }
+
+  .landing__actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s-5);
+  }
+
+  .landing__actions .plate {
+    padding: var(--s-4) var(--s-7);
+  }
+
+  .landing__invitation,
+  .landing__principle,
+  .landing__start :where(p) {
+    font-family: var(--face-prose);
+    font-size: 1.125rem;
+    color: var(--ink-2);
+  }
+
+  .landing__invitation {
+    margin: var(--s-4) 0 0;
+  }
+
+  .landing-flow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    list-style: none;
+    padding: 0;
+    margin: var(--s-5) 0 0;
+    border-block: var(--hair) solid var(--rule-strong);
+  }
+
+  .landing-flow li {
+    min-width: 0;
+  }
+
+  .landing-flow h2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2);
+    padding: var(--s-4) var(--s-5);
+    font-size: 1rem;
+    letter-spacing: 0.025em;
+    border-bottom: var(--hair) solid var(--rule);
+  }
+
+  .landing-flow p {
+    min-height: 6rem;
+    margin: var(--s-4) 0;
+    padding: var(--s-3) var(--s-5);
+    font-family: var(--face-prose);
+    font-size: 1.25rem;
+    line-height: 1.5;
+    white-space: pre-line;
+  }
+
+  .landing-flow li + li p {
+    border-left: var(--hair) solid var(--rule);
+  }
+
+  .landing__principle {
+    margin: 0;
+    padding: var(--s-4);
+    text-align: center;
+    border-bottom: var(--hair) solid var(--rule);
+  }
+
+  .landing__start {
+    padding: var(--s-7) var(--s-4) var(--s-8);
+    text-align: center;
+  }
+
+  .landing__start :where(p) {
+    max-width: 58ch;
+    margin: var(--s-4) auto;
+  }
+
+  .landing > .colophon {
+    padding-bottom: var(--s-5);
+  }
+
+  .landing__skip {
+    position: absolute;
+    top: var(--s-2);
+    left: var(--s-4);
+    z-index: 10;
+    padding: var(--s-3);
+    background: var(--leaf);
+    transform: translateY(-200%);
+  }
+
+  .landing__skip:focus {
+    transform: translateY(0);
+  }
+
+  .customer-home__heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--s-5);
+    margin-bottom: var(--s-4);
+  }
+
+  .customer-home__heading > .stack {
+    flex: 1 1 24rem;
+  }
+
+  .customer-index .field {
+    flex: 1;
+  }
+
+  .customer-index__scroll {
+    overflow-x: auto;
+  }
+
+  .customer-index__table {
+    min-width: 38rem;
+  }
+
+  .customer-index__table tbody th {
+    font-family: var(--face-prose);
+    font-size: 1.25rem;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    padding-block: var(--s-4);
+    border-bottom: var(--hair) solid var(--rule);
+    overflow-wrap: anywhere;
+    max-width: 28rem;
+  }
+
+  .customer-index__table tbody th a {
+    text-decoration: none;
+  }
+
+  .customer-index__table tbody th a:hover {
+    text-decoration: underline;
+  }
+
+  .customer-index__mobile-id {
+    display: none;
+  }
+
+  .customer-home__add {
+    scroll-margin-top: var(--s-6);
+  }
+
+  @media (max-width: 760px) {
+    .landing {
+      padding-inline: var(--s-4);
+    }
+
+    .landing__header {
+      align-items: flex-start;
+      flex-direction: column;
+      padding-block: var(--s-5);
+      gap: var(--s-4);
+    }
+
+    .landing__nav {
+      width: 100%;
+      justify-content: space-between;
+      gap: var(--s-3);
+    }
+
+    .landing__hero {
+      padding: var(--s-7) 0;
+    }
+
+    .landing__hero h1 {
+      font-size: 2rem;
+      font-variation-settings: "wdth" 72;
+    }
+
+    .landing__lead {
+      font-size: 1.25rem;
+    }
+
+    .landing-flow {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .landing-flow li + li {
+      border-top: var(--hair) solid var(--rule);
+    }
+
+    .landing-flow h2 {
+      padding: var(--s-5) 0 0;
+      border: 0;
+    }
+
+    .landing-flow h2 svg {
+      transform: rotate(90deg);
+    }
+
+    .landing-flow p {
+      min-height: 0;
+      margin: 0;
+      padding: var(--s-3) 0 var(--s-5);
+    }
+
+    .landing-flow li + li p {
+      border: 0;
+    }
+
+    .customer-index__table {
+      min-width: 0;
+    }
+
+    .customer-index__table .customer-index__reference {
+      display: none;
+    }
+
+    .customer-index__mobile-id {
+      display: block;
+      margin-top: var(--s-1);
+    }
+
+    .customer-index__table td,
+    .customer-index__table th {
+      padding-right: var(--s-2);
+    }
+  }
+}

@@ -17,18 +17,22 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpLink } from "@trpc/client";
 import { afterEach, describe, expect, test as it } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import { App } from "@/App.tsx";
 // For its side effect as much as for `translatorFor`: `useTranslation` resolves against the
 // module-level i18next singleton, and without it every key renders as itself. See `@/i18n`.
 import { translatorFor } from "@/i18n/index.ts";
+import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 const SIGNED_IN_AS = "ops@example.test";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useUiStore.getState().setTenantSearch("");
+});
 
 /** The one procedure this suite models, in the envelope tRPC reads. */
 function answerSessionMe(): Response {
@@ -51,7 +55,10 @@ function refuse(path: string): Response {
   );
 }
 
-function renderAt(url: string): void {
+function renderAt(
+  url: string,
+  answers: Readonly<Record<string, Response>> = { "session.me": answerSessionMe() },
+): void {
   const queryClient = new QueryClient({
     // No retries: a refusal is an answer here, and waiting for three of them is only slower.
     defaultOptions: { queries: { retry: false } },
@@ -62,7 +69,9 @@ function renderAt(url: string): void {
         url: "/trpc",
         fetch: (input): Promise<Response> => {
           const path = new URL(String(input), "http://localhost").pathname;
-          return Promise.resolve(path.endsWith("/session.me") ? answerSessionMe() : refuse(path));
+          return Promise.resolve(
+            answers[path.slice(path.lastIndexOf("/") + 1)]?.clone() ?? refuse(path),
+          );
         },
       }),
     ],
@@ -79,9 +88,9 @@ function renderAt(url: string): void {
   );
 }
 
-describe("a reader with a session", () => {
+describe("the public and signed-in home", () => {
   it("is given the book, with the running head naming them", async () => {
-    renderAt("/tenants");
+    renderAt("/");
 
     expect(await screen.findByText(SIGNED_IN_AS)).toBeDefined();
   });
@@ -95,5 +104,62 @@ describe("a reader with a session", () => {
     expect(
       await screen.findByText(translatorFor("vi")("lake.notLoaded", { tenantId: "CASE-0042" })),
     ).toBeDefined();
+  });
+
+  it("finds a customer's record with an unaccented name and restores the list when cleared", async () => {
+    // Public promise: search follows the displayed names, including Vietnamese diacritics.
+    // A filter of IDs alone, or one that forgets Đ, would hide the requested record.
+    renderAt("/tenants", {
+      "session.me": answerSessionMe(),
+      "tenants.list": Response.json({
+        result: {
+          data: [
+            { id: "CASE-0042", displayName: "Hồ sơ Đỏ", role: "admin" },
+            { id: "CASE-0108", displayName: "Hồ sơ Xanh", role: "viewer" },
+          ],
+        },
+      }),
+    });
+    const search = await screen.findByRole("searchbox");
+    fireEvent.change(search, { target: { value: "  HO SO DO  " } });
+    expect(screen.getByRole("link", { name: "Hồ sơ Đỏ" }).getAttribute("href")).toBe(
+      "/tenants/CASE-0042",
+    );
+    expect(screen.queryByRole("link", { name: "Hồ sơ Xanh" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: translatorFor("vi")("tenants.clearSearch") }),
+    );
+    expect(screen.getByRole("link", { name: "Hồ sơ Xanh" }).getAttribute("href")).toBe(
+      "/tenants/CASE-0108",
+    );
+  });
+
+  it("takes a public visitor from the introduction to the sign-in form", async () => {
+    // Public content must remain usable when session.me cannot answer with a session.
+    renderAt("/", {});
+    const t = translatorFor("vi");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      `${t("landing.title")}${t("landing.titleEnd")}`,
+    );
+    fireEvent.click(screen.getByRole("link", { name: t("landing.openWorkspace") }));
+    expect((await screen.findByLabelText(t("signIn.emailLabel"))).getAttribute("type")).toBe(
+      "email",
+    );
+  });
+
+  it("shows an authentication refusal instead of the public introduction", async () => {
+    // A root-only landing check would swallow the existing Google refusal callback.
+    renderAt("/?reason=denied", {});
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      translatorFor("vi")("signIn.denied"),
+    );
+  });
+
+  it("keeps a signed authorization request on the sign-in path", async () => {
+    // A public root must not consume a connector's in-progress authorization request.
+    renderAt("/?sig=synthetic-signature", {});
+    expect(
+      (await screen.findByLabelText(translatorFor("vi")("signIn.emailLabel"))).getAttribute("type"),
+    ).toBe("email");
   });
 });

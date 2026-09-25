@@ -90,6 +90,9 @@ export interface ScopeDraft {
 }
 
 interface UiState {
+  /** A transient filter over the visible customer index; never a second copy of its rows. */
+  tenantSearch: string;
+  setTenantSearch: (search: string) => void;
   /** The language every surface is rendered in, and the one the server is asked to answer in. */
   locale: Locale;
   /** Change language. The only writer; `@/i18n` follows this, never the other way round. */
@@ -897,6 +900,8 @@ function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAcc
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
+      tenantSearch: "",
+      setTenantSearch: (tenantSearch): unknown => set({ tenantSearch }),
       ...localeSlice(set),
       ...releaseSlice(set),
       ...accountSlice(set),
