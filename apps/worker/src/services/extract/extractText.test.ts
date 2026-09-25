@@ -336,6 +336,49 @@ describe("a delimited file", () => {
   });
 });
 
+describe("a text file in UTF-16", () => {
+  const words = "Khách hàng,Tiền thanh toán\nAcme Holdings,1234.10\n";
+
+  /** `words` as UTF-16 code units in the given byte order, optionally led by the mark. */
+  function utf16(order: "le" | "be", withMark: boolean): Uint8Array {
+    const units = [...(withMark ? [0xfe_ff] : []), ...[...words].map((c) => c.charCodeAt(0))];
+    const view = new DataView(new ArrayBuffer(units.length * 2));
+    for (const [i, unit] of units.entries()) {
+      view.setUint16(i * 2, unit, order === "le");
+    }
+    return new Uint8Array(view.buffer);
+  }
+
+  it("is read as UTF-16 when its byte-order mark says so, in either order", async () => {
+    // What Excel's "Unicode Text" export and many bank statements are. Decoded as UTF-8, every
+    // other byte of it is a NUL and the words are unreadable -- issue #218's likeliest source.
+    const { spawn } = spawnAnswering("");
+
+    for (const order of ["le", "be"] as const) {
+      const result = await extract(spawn, { contentType: "text/csv", bytes: utf16(order, true) });
+
+      expect({ order, method: result.method, text: result.text }).toEqual({
+        order,
+        method: "txt",
+        text: words,
+      });
+    }
+  });
+
+  it("is not guessed at when it states no order, and stores no NUL", async () => {
+    // The quiet side. Without a mark the bytes are read as UTF-8, as every other unlabelled
+    // file is -- sniffing for UTF-16 would be a guess -- and each NUL that yields is replaced
+    // where it stood: the text is visibly wrong rather than plausibly right.
+    const { spawn } = spawnAnswering("");
+
+    const result = await extract(spawn, { contentType: "text/plain", bytes: utf16("le", false) });
+
+    expect(result.method).toBe("txt");
+    expect(result.text).not.toContain("\u0000");
+    expect(result.text).toStartWith("K�h�");
+  });
+});
+
 describe("a document with nothing in it", () => {
   it("is refused rather than stored as an empty success", async () => {
     // Zero bytes and "we read it and it was blank" are different facts about a document.

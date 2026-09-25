@@ -135,13 +135,45 @@ function capped(text: string): { text: string; truncated: boolean } {
 }
 
 /**
+ * U+0000, the one character a Postgres `text` column cannot hold.
+ *
+ * Everything a reader produces reaches the table through `read` below, so this is decided
+ * there once rather than in each reader: a NUL is valid UTF-8 and survives the text decode,
+ * and the HTML, MIME, Word and OCR paths can each hand one over too.
+ */
+const NUL = "\u0000";
+
+/**
+ * Where a NUL stood, visibly: the character a non-fatal decode already writes for a byte that
+ * is not text (`readPlainText`).
+ */
+const NOT_TEXT = "�";
+
+/**
+ * The text as a reader found it, cut to the ceiling and made storable.
+ *
+ * A NUL IS REPLACED, NOT DROPPED, AND DOES NOT REFUSE THE DOCUMENT. Issue #218: one arrived in
+ * a batch that is written as a single statement, failed it, and the same batch came back every
+ * run -- a backlog that only grew. Postgres cannot store the character, so something has to
+ * give, and the three options are not equal:
+ *
+ * - Refusing the document costs every readable word in it for one byte, which is exactly what
+ *   the non-fatal decode was chosen to avoid.
+ * - Dropping it is the plausible-looking answer, and that is its defect. A NUL in a text
+ *   document is never a word; it is the trace of a file that is not what it was labelled -- a
+ *   UTF-16 export with no byte-order mark decodes to every other byte a NUL, and dropping them
+ *   would print its ASCII cleanly beside mangled accents, a reading that looks right and is
+ *   not (`CLAUDE.md` rule 2).
+ * - Replacing it with U+FFFD keeps the text, keeps its length and positions, and leaves the
+ *   row saying where something here was not text. That is the choice.
+ *
  * `cutShort` is a reader saying the text it hands over is not the whole document -- a scan
  * stopped at the page cap, say. It joins the ceiling below into one flag because downstream
  * the question is the same one: is this all of it? WHY it is short is the reader's business;
  * THAT it is short is the document's.
  */
 function read(method: ExtractMethod, raw: string, cutShort = false): Extracted {
-  const { text, truncated } = capped(raw);
+  const { text, truncated } = capped(raw.replaceAll(NUL, NOT_TEXT));
   return { method, reason: null, text, truncated: truncated || cutShort };
 }
 
@@ -179,12 +211,39 @@ interface Document {
 type Reader = (deps: ExtractDeps, input: Document) => Extracted | Promise<Extracted>;
 
 /**
- * Decoded non-fatally, so a stray byte in an otherwise readable file costs that byte and not
+ * A file that names no charset, as text: UTF-16 when a byte-order mark says so, UTF-8 otherwise.
+ *
+ * THE MARK IS THE FILE STATING ITS ENCODING, NOT A GUESS AT IT. Excel's "Unicode Text" export
+ * and many a bank's statement are UTF-16 behind `FF FE`, and read as UTF-8 every other byte of
+ * them is a NUL -- issue #218's likeliest source. These are the marks the WHATWG Encoding
+ * Standard's `decode` sniffs, so this reads the file the way a browser opening it would. A UTF-16
+ * file WITHOUT a mark is read as UTF-8 like everything else unlabelled: telling it apart would
+ * mean weighing how many bytes look like zeros, which is a guess, and its NULs then arrive as
+ * U+FFFD (`read`) -- visibly wrong rather than plausibly right. The decoder drops the mark
+ * itself, as it drops UTF-8's.
+ *
+ * Non-fatal either way, so a stray byte in an otherwise readable file costs that byte and not
  * the document. What cannot be decoded at all lands as the replacement character, which is
  * visibly wrong rather than invisibly absent.
  */
+function decodeUnlabelled(bytes: Uint8Array): string {
+  return new TextDecoder(markedEncoding(bytes), { fatal: false }).decode(bytes);
+}
+
+/** The encoding a leading byte-order mark states, or UTF-8 when there is none. */
+function markedEncoding(bytes: Uint8Array): "utf-16le" | "utf-16be" | "utf-8" {
+  const [first, second] = bytes;
+  if (first === 0xff && second === 0xfe) {
+    return "utf-16le";
+  }
+  if (first === 0xfe && second === 0xff) {
+    return "utf-16be";
+  }
+  return "utf-8";
+}
+
 function readPlainText(_deps: ExtractDeps, input: Document): Extracted {
-  return read("txt", new TextDecoder("utf-8", { fatal: false }).decode(input.bytes));
+  return read("txt", decodeUnlabelled(input.bytes));
 }
 
 async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
@@ -269,7 +328,7 @@ function readMime(_deps: ExtractDeps, input: Document): Extracted {
  * A file that is not JSON at all is still text, and is kept as text.
  */
 async function readJson(deps: ExtractDeps, input: Document): Promise<Extracted> {
-  const text = new TextDecoder("utf-8", { fatal: false }).decode(input.bytes);
+  const text = decodeUnlabelled(input.bytes);
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -392,6 +451,12 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * GENERATION 5 IS THE LEGACY WORD READER. Every `.doc` was recorded `legacy-doc-unsupported`,
  * a refusal whose whole point is that it stops being true; the bump re-offers them, and only a
  * file older than Word 97 comes back with the same reason.
+ *
+ * NOT BUMPED FOR ISSUE #218's UTF-16 DECODE AND NUL REPLACEMENT, and that is the rule working
+ * rather than an oversight. A bump re-offers refusals, and neither change turns a refusal into a
+ * reading: the documents they were written for never got a row at all -- their NUL failed the
+ * write that carried them -- so they are still in the backlog, rowless, and the next run reads
+ * them with no bump. Bumping would re-read every refusal on production to change none of them.
  *
  * BY HAND, AND DELIBERATELY SO. The honest alternative is deriving it -- hashing the binaries
  * and language packs behind these readers into the stamp, which is what the sibling project

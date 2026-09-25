@@ -242,6 +242,41 @@ describe("the same bytes catalogued several times", () => {
   });
 });
 
+describe("a document whose text holds a NUL byte", () => {
+  it("is answered, and does not cost the rest of its batch their text (#218)", async () => {
+    // Regression. A NUL is valid UTF-8, so the text reader decoded it into the text, and a
+    // Postgres `text` column cannot hold U+0000. The batch is ONE statement, so the one file
+    // failed the whole write, nothing of the batch was stored, and the next run drew the same
+    // batch and failed the same way -- on production the backlog grew by 1,200 while the
+    // readable count stood still.
+    await landDocument({
+      documentId: "contract",
+      bytes: new TextEncoder().encode("%PDF-1.7\n%%EOF\n"),
+      contentType: "application/pdf",
+    });
+    await landDocument({
+      documentId: "export",
+      bytes: new TextEncoder().encode("Acme Holdings\u0000,1234.10\n"),
+      contentType: "text/plain",
+    });
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result).toMatchObject({ read: 2, refused: 0, unreadable: 0 });
+    const rows = await textRows();
+    expect(rows.find((r) => r.document_id === "contract")?.text).toBe(A_PAGE);
+    // The byte Postgres cannot hold is replaced where it stood, visibly, and not dropped: the
+    // row says something here was not text. `extractText.ts`'s `read` records why.
+    expect(rows.find((r) => r.document_id === "export")).toMatchObject({
+      method: "txt",
+      text: "Acme Holdings�,1234.10\n",
+    });
+    // And the backlog drained, rather than handing the next run the same batch.
+    const second = await extract(spawnAnswering(A_PAGE), "run-extract-2");
+    expect(second).toMatchObject({ read: 0, pendingBefore: 0 });
+  });
+});
+
 describe("a document the lake cannot hand back", () => {
   it("is recorded against the document rather than ending the pass", async () => {
     // One unreadable object must not cost the other 499 their run.
