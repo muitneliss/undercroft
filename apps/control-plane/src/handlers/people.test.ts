@@ -60,6 +60,7 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
     superadmin: false,
     locale,
     endSession: () => Promise.resolve(),
+    apps: null,
     notifyInvitation: () => Promise.resolve(true),
     startConsent: () =>
       Promise.resolve({

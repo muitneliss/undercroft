@@ -12,9 +12,12 @@
  *   it to a person (`.claude/rules/i18n.md`).
  * - Its ANNOTATIONS say what the effect says, and nothing the effect cannot back.
  * - Whether it is LISTED turns on the credential's grant (`grantAdmits`), per request.
+ * - Its `_meta` points a host at the widget that draws its answer, where one does
+ *   (`mcpWidgets.ts`).
  */
 
 import type { JSONObject, JSONValue, Tool, ToolAnnotations } from "@modelcontextprotocol/server";
+import { toolMeta, type Widgets } from "./mcpWidgets.ts";
 import { procedureManifest } from "./procedures.ts";
 import {
   type Effect,
@@ -122,13 +125,17 @@ const ANNOTATIONS: Readonly<Record<Effect, ToolAnnotations>> = {
 };
 
 /** The tools this caller's credential admits, described in this caller's language. */
-export async function listTools(ctx: Context): Promise<Tool[]> {
+export async function listTools(ctx: Context, widgets: Widgets): Promise<Tool[]> {
   return [...(await tools())]
     .filter(([, spec]) => grantAdmits(ctx.grant, spec.effect))
-    .map(([name, spec]) => ({
-      name,
-      description: spec.description[ctx.locale],
-      inputSchema: inputSchemaOf(spec),
-      annotations: ANNOTATIONS[spec.effect],
-    }));
+    .map(([name, spec]) => {
+      const meta = toolMeta(spec.path, widgets);
+      return {
+        name,
+        description: spec.description[ctx.locale],
+        inputSchema: inputSchemaOf(spec),
+        annotations: ANNOTATIONS[spec.effect],
+        ...(meta === undefined ? {} : { _meta: meta }),
+      };
+    });
 }

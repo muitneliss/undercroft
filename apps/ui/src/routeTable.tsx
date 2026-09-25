@@ -26,7 +26,9 @@ import { Opened } from "@/components/Opened.tsx";
 import { ScopeRoute } from "@/components/ScopeRoute.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { Account } from "@/routes/Account.tsx";
+import { Consent } from "@/routes/Consent.tsx";
 import { People } from "@/routes/People.tsx";
+import { SignIn } from "@/routes/SignIn.tsx";
 import { TenantOverview } from "@/routes/TenantOverview.tsx";
 import { Tenants } from "@/routes/Tenants.tsx";
 
@@ -139,7 +141,7 @@ function modelRoutes(signedInAs: string): RouteObject[] {
   ];
 }
 
-/** The reports division, the two pages outside the rail, and the catch-all. */
+/** The reports division, the pages outside the rail, and the catch-all. */
 function tenantRoutes(signedInAs: string): RouteObject[] {
   return [
     {
@@ -212,6 +214,12 @@ function tenantRoutes(signedInAs: string): RouteObject[] {
         </Book>
       ),
     },
+    // A model-context client's authorization (ADR 0061), which Better Auth sends here with
+    // its request signed into the URL. Outside the book: the person is deciding about someone
+    // else's access, not working in a customer. `/sign-in` is here too for a signed-in person
+    // the client asked to sign in again (`prompt=login`); signed out, `App` shows it anywhere.
+    { path: "/consent", element: <Consent signedInAs={signedInAs} /> },
+    { path: "/sign-in", element: <SignIn /> },
     { path: "*", element: <Navigate to="/tenants" replace={true} /> },
   ];
 }

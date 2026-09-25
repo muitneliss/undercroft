@@ -13,6 +13,10 @@ export const procedureSentences: SentenceTable = {
   "account.tokens.mint":
     "Mint a personal access token, read-only or read and write, expiring within 365 days; the token is returned this once. Signed-in session only.",
   "account.tokens.revoke": "Revoke one of your personal access tokens. Signed-in session only.",
+  "account.apps.list":
+    "The apps (such as a Claude connector) you let in by signing in and consenting, with the grant each holds. Signed-in session only.",
+  "account.apps.revoke":
+    "Revoke a connected app; it is refused from its next call. Signed-in session only.",
   "tenants.list": "The customers you have access to.",
   "tenants.get": "One customer, and your role in it.",
   "tenants.create": "Create a customer. Platform superadmins only.",

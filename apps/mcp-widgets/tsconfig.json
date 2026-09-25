@@ -1,0 +1,12 @@
+{
+  "//": "The MCP widgets: browser code, built by the control plane at boot into one self-contained HTML page each (`apps/control-plane/src/widgets.ts`). It references the control plane for TYPES only -- what each tool answers (`ToolContentOf`), so a router change breaks a widget's compile rather than a widget in a customer's chat -- and imports `@undercroft/core` through its browser-safe subpaths, never the root barrel.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun", "@happy-dom/global-registrator"]
+  },
+  "include": ["src/**/*", "package.json"],
+  "references": [{ "path": "../../packages/core" }, { "path": "../control-plane" }]
+}

@@ -47,6 +47,7 @@ function caller(userId: string, email: string, worker: WorkerClient, locale: "vi
     superadmin: false,
     locale,
     endSession: () => Promise.resolve(),
+    apps: null,
     notifyInvitation: () => Promise.resolve(false),
     startConsent: () =>
       Promise.resolve({

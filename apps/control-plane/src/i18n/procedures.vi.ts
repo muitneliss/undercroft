@@ -24,6 +24,10 @@ export const procedureSentences: SentenceTable = {
     "Tạo token truy cập cá nhân, chỉ đọc hoặc đọc và ghi, hết hạn trong tối đa 365 ngày; token chỉ được trả về một lần. Chỉ gọi được từ phiên đăng nhập.",
   "account.tokens.revoke":
     "Thu hồi một token truy cập cá nhân của bạn. Chỉ gọi được từ phiên đăng nhập.",
+  "account.apps.list":
+    "Các ứng dụng (như trình kết nối Claude) bạn đã cho phép truy cập bằng cách đăng nhập và đồng ý, kèm quyền đã cấp. Chỉ gọi được từ phiên đăng nhập.",
+  "account.apps.revoke":
+    "Thu hồi quyền của một ứng dụng đã kết nối; ứng dụng bị chặn ngay từ lần gọi tiếp theo. Chỉ gọi được từ phiên đăng nhập.",
   "tenants.list": "Các khách hàng bạn có quyền truy cập.",
   "tenants.get": "Một khách hàng và vai trò của bạn trong đó.",
   "tenants.create": "Tạo khách hàng mới. Chỉ quản trị nền tảng.",

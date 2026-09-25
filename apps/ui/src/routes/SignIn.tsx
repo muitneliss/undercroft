@@ -33,7 +33,13 @@
 import { useMutation } from "@tanstack/react-query";
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { sendSignInCode, signInForDevelopment, signInWithCode, signInWithGoogle } from "@/auth.ts";
+import {
+  isAuthorizing,
+  sendSignInCode,
+  signInForDevelopment,
+  signInWithCode,
+  signInWithGoogle,
+} from "@/auth.ts";
 import { Colophon } from "@/components/Colophon.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
@@ -79,6 +85,14 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
           <h1>{t("signIn.title")}</h1>
           <p className="prose prose--lead">{t("signIn.lead")}</p>
         </div>
+
+        {/* A model-context client sent this person here (ADR 0061). The page is the same
+            page with the same gates -- invite-only holds -- and says why they are on it. */}
+        {isAuthorizing() ? (
+          <p className="note" role="status">
+            {t("signIn.authorizing")}
+          </p>
+        ) : null}
 
         {reason === "expired" ? (
           <p className="note" role="status">
@@ -181,9 +195,9 @@ function DevSignIn(): React.JSX.Element {
   const { t } = useTranslation();
   const signIn = useMutation({
     mutationFn: signInForDevelopment,
-    onSuccess: () => {
+    onSuccess: (destination) => {
       // A full reload, as after a code: the identity just changed under every cached query.
-      globalThis.location.assign("/");
+      globalThis.location.assign(destination);
     },
   });
   const leaving = signIn.isPending || signIn.isSuccess;
@@ -292,10 +306,11 @@ function CodeForm({
   const signIn = useMutation({
     mutationFn: (variables: { email: string; otp: string }) =>
       signInWithCode(variables.email, variables.otp),
-    onSuccess: () => {
+    onSuccess: (destination) => {
       // A full reload rather than a route change: the identity just changed, and every
-      // cached query was answered for the previous one. The same idiom as signing out.
-      globalThis.location.assign("/");
+      // cached query was answered for the previous one. The same idiom as signing out. Mid-
+      // authorization the destination is the consent step rather than the book.
+      globalThis.location.assign(destination);
     },
   });
   const leaving = signIn.isPending || signIn.isSuccess;

@@ -40,8 +40,9 @@ type Part = "contents" | "appendix";
  * Where each topic sits, in the order the README walks the pipeline -- sources, runs, the raw
  * lake, the models built on it, their quality, the reports read from them -- then the
  * administration, and last, in the appendix, the machinery of your own access and of the CLI
- * itself -- signing in, the session, your account and its tokens, the profiles. Keyed by `TopicKey`, so
- * a namespace the router grows is a `tsc` error here until someone places it.
+ * itself -- signing in, the session, your account, its tokens and connected apps, the
+ * profiles. Keyed by `TopicKey`, so a namespace the router grows is a `tsc` error here until
+ * someone places it.
  */
 const PLACE = {
   connections: "contents",
@@ -59,6 +60,7 @@ const PLACE = {
   session: "appendix",
   account: "appendix",
   accountTokens: "appendix",
+  accountApps: "appendix",
   config: "appendix",
 } as const satisfies Record<TopicKey, Part>;
 

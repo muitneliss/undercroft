@@ -81,6 +81,8 @@ export const en = {
     signingIn: "Signing in…",
     signIn: "Sign in",
     useAnotherAddress: "Use a different address",
+    authorizing:
+      "An app (such as Claude) is asking to use Undercroft on your behalf. Sign in; you will choose what it may do on the next step.",
     sendFailed: "Could not send a sign-in code. Try again.",
     codeFailed: "That code did not work. Ask for a new one.",
     dev: "Sign in locally (development)",
@@ -220,6 +222,39 @@ export const en = {
     mintedHead: "New token",
     mintedNote:
       "Copy it now: this token will not be shown again. If it is lost, mint another and revoke this one.",
+  },
+
+  apps: {
+    head: "Connected apps",
+    lead: "The apps you let into Undercroft by signing in through them and consenting, such as a Claude connector. Revoking one refuses it from its next call; to let it back in, connect again from the app.",
+    notLoaded: "The connected apps could not be loaded.",
+    none: "No apps are connected.",
+    caption_one: "{{count, number}} app",
+    caption_other: "{{count, number}} apps",
+    colName: "App",
+    colHost: "Returns to",
+    colGranted: "Consented",
+    unnamed: "Unnamed",
+    grantNone: "No grant",
+  },
+
+  consent: {
+    title: "Allow access",
+    lead: "{{name}} (returning to {{host}}) is asking to work with Undercroft on your behalf, with exactly the access you have in every customer.",
+    leadUnnamed:
+      "An app (returning to {{host}}) is asking to work with Undercroft on your behalf, with exactly the access you have in every customer.",
+    signedInAs: "Signed in as {{email}}.",
+    grantLabel: "What this app may do",
+    readHint:
+      "The app can look at data; none of its tools changes anything. Choose this when the app reads content other people wrote.",
+    nothingAsked:
+      "This app asked for neither read nor write access to Undercroft, so allowing it would let it do nothing. Deny, and connect again from the app.",
+    allow: "Allow",
+    deny: "Deny",
+    answering: "Answering…",
+    notAnswered: "The answer was not sent",
+    answerFailed: "The answer could not be sent. Start again from the app.",
+    clientFailed: "The app's details could not be read.",
   },
 
   lake: {

@@ -8,7 +8,8 @@
     "./router": "./src/handlers/router.ts",
     "./surface": "./src/handlers/surface.ts",
     "./procedures": "./src/handlers/procedures.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./widgets": "./src/widgets.ts"
   },
   "scripts": {
     "dev": "bun --watch src/main.ts"
@@ -16,6 +17,9 @@
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.58",
     "@ai-sdk/provider": "4.0.17",
+    "@better-auth/mcp": "1.7.5",
+    "@better-auth/oauth-provider": "1.7.5",
+    "@modelcontextprotocol/ext-apps": "2.0.0",
     "@modelcontextprotocol/server": "2.1.0",
     "@trpc/server": "11.0.0",
     "@typesafe-ai/sdk": "0.6.0",
@@ -23,11 +27,13 @@
     "@undercroft/core": "workspace:*",
     "@undercroft/crypto": "workspace:*",
     "@undercroft/db": "workspace:*",
+    "@undercroft/mcp-widgets": "workspace:*",
     "@undercroft/telemetry": "workspace:*",
     "ai": "7.0.107",
     "better-auth": "1.7.5",
     "hono": "4.6.14",
     "i18next": "26.4.2",
+    "jose": "6.2.12",
     "zod": "3.25.76"
   },
   "devDependencies": {

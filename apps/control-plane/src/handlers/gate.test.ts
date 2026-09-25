@@ -24,9 +24,9 @@ import { join } from "node:path";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { memoryAdapter } from "better-auth/adapters/memory";
 import { startConsent } from "../services/oauth.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
+import { inMemoryAuthStore } from "../testing.ts";
 import { createAuth } from "./auth.ts";
 import { createServer } from "./server.ts";
 
@@ -153,12 +153,7 @@ beforeEach(async () => {
     // The keys are the physical table names from `060_auth.sql`, because that is what the
     // `modelName` mapping resolves to. The adapter refuses a model it has no table for,
     // which is itself a small proof that the mapping is wired.
-    database: memoryAdapter({
-      auth_user: [],
-      auth_session: [],
-      auth_account: [],
-      auth_verification: [],
-    }),
+    database: inMemoryAuthStore(),
     exec: db,
     // PGlite is one connection and these tests are sequential, so a transaction adds no
     // isolation here. Real atomicity is `withTransaction` in production; the concurrent

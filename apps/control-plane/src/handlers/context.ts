@@ -18,6 +18,7 @@
 import { type EmailSender, type Locale, type Logger, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { admit, type Grant, isPersonalToken } from "../services/accessTokens.ts";
+import { grantFor } from "../services/connectedApps.ts";
 import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
@@ -26,6 +27,7 @@ import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
 import type { Auth } from "./auth.ts";
+import type { Widgets } from "./mcpWidgets.ts";
 import type { Context, SessionUser, Via } from "./trpc.ts";
 
 export interface ServerDeps {
@@ -90,6 +92,12 @@ export interface ServerDeps {
    * `services/assistant/judge.ts`; a gate that fails open is not a gate.
    */
   readonly judge?: Judge;
+  /**
+   * The model-context door's widgets, built once at boot (`widgets.ts`). Absent -- a build that
+   * failed, or a suite that does not draw -- and `/mcp` answers exactly as before, text and
+   * structured content, which every host shows. ADR 0061.
+   */
+  readonly widgets?: Widgets;
   /**
    * Where a failed procedure is recorded, with the request's trace id. Absent in a suite that
    * does not read it; the process always passes one, because an internal error the browser is
@@ -168,16 +176,30 @@ async function sessionIdentity(deps: ServerDeps, headers: Headers): Promise<Pres
 const BEARER = /^Bearer[ \t]+(?<token>\S+)[ \t]*$/iu;
 
 /**
+ * Why the bearer door let nobody in, in RFC 6750's words, which is what `/mcp` answers with.
+ *
+ * `invalid_token` covers everything a new token would fix -- none presented, not ours, expired,
+ * revoked, its person gone -- and is a 401 whose challenge sends a client to sign in again.
+ * `insufficient_scope` is the one case a new token of the SAME kind would not fix: a live OAuth
+ * token its person consented to, that holds neither `undercroft:read` nor `undercroft:write`.
+ * It is a 403 naming the scope to ask for, so a client asks for it instead of looping.
+ */
+export type BearerRefusal = "invalid_token" | "insufficient_scope";
+
+/**
  * The bearer door: `Authorization: Bearer` and nothing else.
  *
  * A personal access token (`upat_…`) is admitted by digest, and holds the grant its owner chose
- * when minting it. Anything else is not a credential this platform issued, and admits nobody.
- * That is the one branch ADR 0060's follow-up changes: an OAuth access token -- a JWT a
- * model-context client obtained by signing its person in -- is verified HERE, beside the
- * personal token, and yields the same `Presented`, so nothing after this function learns which
- * kind of bearer it was.
+ * when minting it. Anything else is an OAuth access token or nothing: a JWT a model-context
+ * client obtained by signing its person in (ADR 0061), verified by the authorization server
+ * against the consent as it stands NOW, and granted the lesser of what the token and the
+ * consent say (`grantFor`). Both kinds yield the same `Presented`, so nothing after this
+ * function learns which kind of bearer it was.
  */
-async function resolveBearer(deps: ServerDeps, headers: Headers): Promise<Presented | null> {
+async function resolveBearer(
+  deps: ServerDeps,
+  headers: Headers,
+): Promise<Presented | "insufficient_scope" | null> {
   const bearer = BEARER.exec(headers.get("authorization") ?? "")?.groups?.token;
   if (bearer === undefined) {
     return null;
@@ -188,7 +210,17 @@ async function resolveBearer(deps: ServerDeps, headers: Headers): Promise<Presen
       ? null
       : { email: admitted.email, credentialId: admitted.id, grant: admitted.grant };
   }
-  return null;
+  const admission = (await deps.auth?.mcp?.admit(bearer)) ?? null;
+  if (admission === null) {
+    return null;
+  }
+  const grant = grantFor(admission.tokenScopes, admission.consentScopes);
+  if (grant === null) {
+    return "insufficient_scope";
+  }
+  // The client, not the token: a token lives fifteen minutes, and what an operator follows
+  // through the `mcp_call` lines is which app acted.
+  return { email: admission.email, credentialId: `oauth:${admission.clientId}`, grant };
 }
 
 /** Who is calling, as every door answers it. */
@@ -253,25 +285,54 @@ export async function resolveCaller(
   headers: Headers,
   door: Door,
 ): Promise<Caller> {
-  const presented =
-    door === "cookie" ? await sessionIdentity(deps, headers) : await resolveBearer(deps, headers);
-  return callerFor(deps, presented, door);
+  if (door === "cookie") {
+    return callerFor(deps, await sessionIdentity(deps, headers), door);
+  }
+  const presented = await resolveBearer(deps, headers);
+  return callerFor(deps, presented === "insufficient_scope" ? null : presented, door);
 }
 
 /**
  * The one context a request gets, whichever transport asked for it and whichever credential
- * it presented at that `door`.
- *
- * Every refusal this request produces and every email it causes to be sent is worded in the
- * locale resolved here -- including the invitation, which goes to somebody whose own language
- * nobody here knows. See `../i18n`.
+ * it presented at that `door`. A caller who is nobody gets a context too, with `user` null,
+ * and the router's own gates refuse them.
  */
 export async function createContext(
   deps: ServerDeps,
   headers: Headers,
   door: Door,
 ): Promise<Context> {
-  const { user, credentialId, via, grant, superadmin } = await resolveCaller(deps, headers, door);
+  return contextFor(deps, headers, door, await resolveCaller(deps, headers, door));
+}
+
+/**
+ * The bearer door's context, or why there is none.
+ *
+ * What `/mcp` asks, rather than `createContext`: a model-context client that is nobody is
+ * answered before any MCP message is read, and HOW it is answered depends on why -- see
+ * {@link BearerRefusal}.
+ */
+export async function bearerContext(
+  deps: ServerDeps,
+  headers: Headers,
+): Promise<Context | BearerRefusal> {
+  const presented = await resolveBearer(deps, headers);
+  if (presented === "insufficient_scope") {
+    return presented;
+  }
+  const caller = await callerFor(deps, presented, "bearer");
+  return caller.user === null ? "invalid_token" : contextFor(deps, headers, "bearer", caller);
+}
+
+/**
+ * The context for a caller already resolved.
+ *
+ * Every refusal this request produces and every email it causes to be sent is worded in the
+ * locale resolved here -- including the invitation, which goes to somebody whose own language
+ * nobody here knows. See `../i18n`.
+ */
+function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Caller): Context {
+  const { user, credentialId, via, grant, superadmin } = caller;
   const { auth } = deps;
   const locale = negotiateLocale(headers.get("accept-language"));
 
@@ -292,6 +353,7 @@ export async function createContext(
     },
     notifyInvitation: (to, tenantId): Promise<boolean> =>
       sendInvitation(deps, to, tenantId, locale),
+    apps: auth?.mcp ?? null,
     worker: deps.worker ?? null,
     // The id and key only. `clientSecret` is deliberately not spread in here; the
     // browser never needs it and this object is serialised straight to it.

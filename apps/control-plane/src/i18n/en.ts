@@ -148,6 +148,7 @@ export const en = {
         "The server failed. Report it with the trace id (traceId) so an operator can find it.",
     },
     unknownTool: "There is no tool named {{tool}} for this token.",
+    unknownResource: "There is no resource called {{uri}}.",
     rowsClipped:
       "This text shows {{shown}} of the {{total}} items in {{field}}. The complete result is in structuredContent.",
     textClipped:

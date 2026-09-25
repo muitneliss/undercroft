@@ -292,6 +292,7 @@ export const vi = {
         "Máy chủ gặp lỗi. Hãy báo lỗi kèm mã truy vết (traceId) để người vận hành tìm được.",
     },
     unknownTool: "Không có công cụ nào tên {{tool}} cho token này.",
+    unknownResource: "Không có tài nguyên nào tên {{uri}}.",
     /**
      * The model reads a bounded text; the whole answer is still in `structuredContent`.
      * Saying so is the point: rows cut off silently would read as all the rows there are.

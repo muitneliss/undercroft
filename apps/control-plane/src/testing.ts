@@ -19,10 +19,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { InMemoryEmailSender } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import type { BetterAuthOptions } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
 import { InMemoryWorkerClient } from "./services/inMemoryWorkerClient.ts";
+import { buildWidgets } from "./widgets.ts";
 
 export interface ControlPlane {
   /** Where it listens, e.g. `http://localhost:54321`. Also Better Auth's one trusted origin. */
@@ -93,6 +95,36 @@ function liftDom(): () => void {
   };
 }
 
+/**
+ * Better Auth's tables by the physical names `060_auth.sql` and `310_mcp_oauth.sql` created --
+ * which is what each `modelName` in `handlers/authSchema.ts` resolves to -- for the in-memory
+ * adapter, which refuses a model it was not handed. `authSchema.test.ts` holds the real columns
+ * to the same models.
+ */
+const AUTH_TABLES = [
+  "auth_user",
+  "auth_session",
+  "auth_account",
+  "auth_verification",
+  "auth_jwks",
+  "oauth_client",
+  "oauth_resource",
+  "oauth_client_resource",
+  "oauth_refresh_token",
+  "oauth_access_token",
+  "oauth_consent",
+  "oauth_client_assertion",
+] as const;
+
+/**
+ * Better Auth's store for a suite: its in-memory adapter holding every table the control plane's
+ * plugins use, empty. Exported for the suites that build `createAuth` themselves, so a plugin
+ * that adds a table is added here once rather than in each of them.
+ */
+export function inMemoryAuthStore(): BetterAuthOptions["database"] {
+  return memoryAdapter(Object.fromEntries(AUTH_TABLES.map((name) => [name, []])));
+}
+
 export async function startControlPlane(options: ControlPlaneOptions = {}): Promise<ControlPlane> {
   const restoreDom = liftDom();
   const db = await createMigratedTestDatabase();
@@ -107,13 +139,7 @@ export async function startControlPlane(options: ControlPlaneOptions = {}): Prom
   const { origin } = server.url;
 
   const auth = createAuth({
-    // The physical table names from `060_auth.sql`, which is what `modelName` resolves to.
-    database: memoryAdapter({
-      auth_user: [],
-      auth_session: [],
-      auth_account: [],
-      auth_verification: [],
-    }),
+    database: inMemoryAuthStore(),
     exec: db,
     // PGlite is one connection; a transaction adds no isolation to a sequential suite.
     transactor: (fn) => fn(db),
@@ -123,7 +149,9 @@ export async function startControlPlane(options: ControlPlaneOptions = {}): Prom
     superadmins,
     ...(options.devSignInAs === undefined ? {} : { devSignInAs: options.devSignInAs }),
   });
-  handler = createServer({ exec: db, auth, superadmins, worker }).fetch;
+  // Built once per test process and shared, as `main.ts` builds them once per server.
+  const widgets = await buildWidgets();
+  handler = createServer({ exec: db, auth, superadmins, worker, widgets }).fetch;
 
   if (options.seed !== undefined) {
     await options.seed(db);

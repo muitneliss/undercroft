@@ -24,6 +24,12 @@
  * whose failure mode is a quiet sentinel fights that on every line. `big.js` also
  * defaults to ROUND_HALF_UP and serialises to digits rather than an internal object,
  * so an accidental `JSON.stringify` yields a number-shaped string, never a float.
+ *
+ * ## Also exported as `@undercroft/core/money`
+ *
+ * For code that runs in a browser -- the MCP widgets (`apps/mcp-widgets`) -- which must not
+ * import the root barrel, for the reason `locale.ts` gives: the barrel reaches `node:crypto`.
+ * This module imports `big.js` and nothing else, and has to keep it that way.
  */
 
 import Big from "big.js";

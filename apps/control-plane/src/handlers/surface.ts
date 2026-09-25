@@ -11,6 +11,8 @@
  * - its SENTENCE in each language (`../i18n/procedures.{vi,en}.ts`);
  * - whether a door that is not a person's browser should offer it at all (`MCP_EXCLUDED`), and
  *   which procedures only a signed-in browser session may call (`SESSION_ONLY`);
+ * - which of the model-context door's two widgets draws its answer (`MCP_WIDGETS`), and the
+ *   shape that answer arrives in there (`ToolContentOf`), which the widgets are typed against;
  * - what a credential's GRANT lets through, given the effect (`grantAdmits`);
  * - what a refusal means to a caller that is not tRPC's own client (`BY_TRPC_CODE`).
  *
@@ -40,6 +42,11 @@ import type { Grant } from "../services/accessTokens.ts";
 import type { AppRouter } from "./router.ts";
 
 export type { Grant } from "../services/accessTokens.ts";
+/**
+ * The two OAuth scopes a model-context client asks for (ADR 0061), as TYPES: the consent page
+ * in the browser spells them as `typeof READ_SCOPE`, so the two cannot drift.
+ */
+export type { READ_SCOPE, WRITE_SCOPE } from "../services/connectedApps.ts";
 
 type RouterRecord = AppRouter["_def"]["record"];
 
@@ -149,6 +156,8 @@ export const EFFECTS: EffectTable = {
   // anything but minting another, which the person has to go and copy again.
   "account.tokens.mint": "write",
   "account.tokens.revoke": "destructive",
+  // Undone only by the person signing the app in again and consenting afresh.
+  "account.apps.revoke": "destructive",
 };
 
 const LISTED: ReadonlyMap<string, Effect> = new Map(Object.entries(EFFECTS));
@@ -214,7 +223,70 @@ export const SESSION_ONLY: readonly ProcedurePath[] = [
   "account.tokens.list",
   "account.tokens.mint",
   "account.tokens.revoke",
+  "account.apps.list",
+  "account.apps.revoke",
 ];
+
+/**
+ * The model-context door's widgets (ADR 0061): small pages a host that speaks MCP Apps draws
+ * beside a tool's answer. `apps/mcp-widgets` holds their source.
+ *
+ * - `grid` prints a result as a table, cell for cell the way the web UI's `ResultTable` does.
+ * - `run` follows one run until it ends, asking `runs.get` and `runs.events` itself.
+ */
+export type WidgetId = "grid" | "run";
+
+/**
+ * Which procedure's answer each widget draws. A procedure not named here is answered in text and
+ * structured content only, which is what every host gets anyway.
+ *
+ * `as const` so the widgets can be typed against it (`WidgetPaths`): a path added here fails the
+ * widget's `tsc` until it can draw it, and a stale one fails here.
+ */
+export const MCP_WIDGETS = {
+  "lake.query": "grid",
+  "lake.search": "grid",
+  "lake.records": "grid",
+  "lake.documents": "grid",
+  "bi.answer": "grid",
+  "bi.runQuestion": "grid",
+  "bi.questions.answer": "grid",
+  "runs.trigger": "run",
+  "runs.get": "run",
+} as const satisfies WidgetTable;
+
+export type WidgetTable = Readonly<Partial<Record<ProcedurePath, WidgetId>>>;
+
+/** The paths whose answer the widget `W` draws. */
+export type WidgetPaths<W extends WidgetId> = {
+  [P in keyof typeof MCP_WIDGETS]: (typeof MCP_WIDGETS)[P] extends W ? P : never;
+}[keyof typeof MCP_WIDGETS];
+
+/**
+ * The `_meta` key a widget-drawn result carries, saying which procedure answered and for which
+ * tenant (`resultMeta` in `mcpWidgets.ts`). A widget reads it as `typeof WIDGET_CALL_META`, so
+ * the two cannot spell it differently.
+ */
+export const WIDGET_CALL_META = "undercroft/call";
+
+export interface WidgetCall {
+  readonly path: ProcedurePath;
+  /** The tenant the call named, echoed; `null` for a call that named none. */
+  readonly tenantId: string | null;
+}
+
+/**
+ * What a procedure's answer is as a tool's `structuredContent`: the wire form (`OutputOf`), and
+ * because structured content must be an object, a list as `{ items }` and anything else that is
+ * not an object as `{ value }`. `mcpAnswers.ts` does this at run time; this is the same rule for
+ * the compiler, so a widget reading `items` breaks when a procedure stops answering a list.
+ */
+export type ToolContentOf<P extends ProcedurePath> =
+  OutputOf<P> extends readonly unknown[]
+    ? { readonly items: OutputOf<P> }
+    : OutputOf<P> extends object
+      ? OutputOf<P>
+      : { readonly value: OutputOf<P> };
 
 /**
  * What a refusal means to a caller, independent of tRPC's wording.
