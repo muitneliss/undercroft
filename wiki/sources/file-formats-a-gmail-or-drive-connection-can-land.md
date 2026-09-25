@@ -1,13 +1,15 @@
 ---
 title: File formats a Gmail or Drive connection can land
 type: source
-date: 2026-09-24
+date: 2026-09-25
 tags: []
 source: docs/reference/file-formats.md
 source_path: docs/reference/file-formats.md
-source_hash: a6f799e44379345250e5402a63f21fbccde4d76c025f99589773f5105cfdbf4e
-ingested: 2026-09-24
+source_hash: bacd7213c37cc00fd92905086e5084e138f478d4c506a99c0f71637237bf39bf
+ingested: 2026-09-25
 ---
+
+# File formats a Gmail or Drive connection can land
 
 # File formats a Gmail or Drive connection can land
 
@@ -21,9 +23,9 @@ The reference page for every file type the connection picker offers, kept in ste
 
 **Formats.**
 
-* Documents: PDF (text layer, else OCR; refusals `extractor-missing:pdftotext`, `pdftotext-failed`, `pdf-password-protected` (locked with an open password: bytes intact, needs an unlocked copy from the sender), `extractor-missing:pdftoppm`, `pdftoppm-failed`, and the OCR refusals), `.docx` (body, headers, footers, notes, nested tables, text boxes), `.doc` (refused `legacy-doc-unsupported`).
+* Documents: PDF (text layer, else OCR; refusals `extractor-missing:pdftotext`, `pdftotext-failed`, `pdf-password-protected` (locked with an open password: bytes intact, needs an unlocked copy from the sender), `extractor-missing:pdftoppm`, `pdftoppm-failed`, and the OCR refusals), `.docx` (body, headers, footers, notes, nested tables, text boxes), `.doc` (read in process from Word 97 on, every story including text boxes and notes, recorded `doc`; refusals `legacy-doc-unsupported` for Word 95 or earlier, `doc-password-protected`, `doc-unreadable`; see [[ADR 0053: A legacy Word document is read in process, and only Word 95 stays refused]]).
 * Google-native: Google Docs exported to `.docx`, Google Sheets to `.xlsx` (every sheet), Google Slides to plain text.
-* Spreadsheets: `.xlsx`, `.xlsm` (macros never run; Drive's capital-E spelling matches), `.xls` (refused `legacy-xls-unsupported`).
+* Spreadsheets: `.xlsx`, `.xlsm` (macros never run; Drive's capital-E spelling matches), `.xls` (refused `legacy-xls-unsupported`: it shares `.doc`'s container, but its BIFF cells have no reader).
 * Text: CSV (stored as text, not split into rows), plain text, Markdown.
 * Web and mail: HTML (visible text; scripts and styles dropped; declared charset), MHTML (its HTML parts; resources skipped), `.eml` (headers, then text parts; one alternative only; RFC 2047 headers decoded), XML including XBRL (stored with tags, because element names carry the meaning).
 * Structured: JSON (stored as text unless it claims the OpenAttestation schema).

@@ -41,6 +41,7 @@ const DOCUMENT_REASONS = [
   "unsupported-content-type",
   // The sender locked it. The bytes are whole in the lake; nothing here can fix the lock.
   "pdf-password-protected",
+  "doc-password-protected",
 ] as const;
 
 /** Facts about this deployment. Each one has somebody who can act. */
@@ -51,6 +52,7 @@ const DEPLOYMENT_REASONS = [
   "ocr-out-of-time",
   "xlsx-unreadable",
   "docx-unreadable",
+  "doc-unreadable",
   "lake-object-unreadable",
 ] as const;
 
@@ -174,6 +176,11 @@ function aboutTheDocument(t: TFunction, code: DocumentReason): Words {
         title: t("journal.reason.pdfPasswordProtected"),
         note: t("journal.reason.pdfPasswordProtectedNote"),
       };
+    case "doc-password-protected":
+      return {
+        title: t("journal.reason.docPasswordProtected"),
+        note: t("journal.reason.docPasswordProtectedNote"),
+      };
     default: {
       const exhaustive: never = code;
       throw new Error(`unhandled document reason ${String(exhaustive)}`);
@@ -213,6 +220,11 @@ function aboutTheDeployment(t: TFunction, code: DeploymentReason): Words {
       return {
         title: t("journal.reason.docxUnreadable"),
         note: t("journal.reason.docxUnreadableNote"),
+      };
+    case "doc-unreadable":
+      return {
+        title: t("journal.reason.docUnreadable"),
+        note: t("journal.reason.docUnreadableNote"),
       };
     case "lake-object-unreadable":
       return {

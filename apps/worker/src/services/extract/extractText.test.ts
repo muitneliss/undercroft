@@ -16,7 +16,6 @@ import {
   EMPTY_SOURCE,
   extractDocument,
   type Extracted,
-  LEGACY_DOC,
   MAX_TEXT_CHARS,
   normalizeText,
   PDF_PASSWORD_PROTECTED,
@@ -149,12 +148,6 @@ describe("the types that are not PDFs", () => {
     // Vietnamese survives the decode: the operators' own language is the common case here.
     expect(result.text).toBe("điều khoản thanh toán");
     expect(calls).toHaveLength(0);
-  });
-
-  it("refuses the pre-2007 Word format by name rather than silently", async () => {
-    const { spawn } = spawnAnswering("");
-
-    expect((await extract(spawn, { contentType: "application/msword" })).reason).toBe(LEGACY_DOC);
   });
 
   it("refuses a type it has no reader for, and says that is what happened", async () => {

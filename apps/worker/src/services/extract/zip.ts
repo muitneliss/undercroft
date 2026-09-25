@@ -3,8 +3,8 @@
  *
  * WHY THIS EXISTS RATHER THAN A DEPENDENCY OR A BINARY. An `.xlsx` is a zip of XML, and the
  * two other ways to open one both cost more than they save here. A converter is either
- * LibreOffice -- which `extractText.ts` already rejected by name as "a container's worth of
- * dependency for two files" -- or one of `xlsx2csv`/`in2csv`, which are Python, and this repo
+ * LibreOffice -- which ADR 0028 rejected as "a container's worth of dependency for two
+ * files" -- or one of `xlsx2csv`/`in2csv`, which are Python, and this repo
  * authors no Python (`CLAUDE.md`, "Language and runtime"). A npm zip library is a supply-chain
  * surface for the ~120 lines below, in the one process that holds `UNDERCROFT_SECRET_KEY`.
  *

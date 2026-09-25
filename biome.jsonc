@@ -614,6 +614,20 @@
       "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
     },
 
+    // The legacy Word reader. [MS-DOC] packs its fields into bits -- a piece descriptor's
+    // offset shares a word with its `fCompressed` flag, the FIB's flags word carries
+    // `fEncrypted` and `fWhichTblStm`, a property id keeps its operand size in its top three
+    // bits -- and the spec defines each as a mask. `fc & 0x3fffffff` is the field; restating it
+    // as modulo arithmetic would be a second definition of the format to check against the
+    // first. `cfb.ts` needs none, so it is not listed. ADR 0053.
+    {
+      "includes": [
+        "apps/worker/src/services/extract/doc.ts",
+        "apps/worker/src/services/extract/docTables.ts"
+      ],
+      "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
+    },
+
     // `noUnsafeTypeAssertion` is one of the two rules the `types` domain was kept for, and it
     // stays on everywhere. Ten of its findings were real and are fixed -- `isRecord` guards in
     // `getPath`, `canonicalJson`, `connectionScope` and the S3 error shape, `instanceof Error`

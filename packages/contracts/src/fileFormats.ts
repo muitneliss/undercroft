@@ -101,7 +101,7 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     mimeTypes: ["application/msword"],
     extensions: ["doc"],
     spec: "https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-doc/",
-    reads: "metadata",
+    reads: "text",
   },
   {
     id: "googleDoc",

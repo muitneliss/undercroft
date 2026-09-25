@@ -6,10 +6,10 @@
  * as `undercroft_worker`, so a missing grant on the new table fails here rather than at 02:00.
  */
 
+import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { createStampSource, TestClock } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
-import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import type { Spawn } from "../transform.ts";
 import { runExtract } from "./runExtract.ts";
@@ -118,7 +118,7 @@ describe("a pass over landed documents", () => {
     await landDocument({
       documentId: "f2",
       bytes: new TextEncoder().encode("\xd0\xcf\x11\xe0legacy"),
-      contentType: "application/msword",
+      contentType: "application/vnd.ms-excel",
     });
 
     const result = await extract(spawnAnswering(A_PAGE));
@@ -126,11 +126,11 @@ describe("a pass over landed documents", () => {
     expect(result).toMatchObject({ read: 0, refused: 1 });
     const rows = await textRows();
     expect(rows[0]?.method).toBeNull();
-    expect(rows[0]?.reason).toBe("legacy-doc-unsupported");
+    expect(rows[0]?.reason).toBe("legacy-xls-unsupported");
     // And the run hands the same refusal, with its reason, to the ledger -- not only a count.
     // Before that, `ops.run.refused` carried a number with nothing behind it. ADR 0039.
     expect(result.refusals).toEqual([
-      { entity: "documents", sourceRecordId: "f2", reason: "legacy-doc-unsupported" },
+      { entity: "documents", sourceRecordId: "f2", reason: "legacy-xls-unsupported" },
     ]);
   });
 });
@@ -206,14 +206,14 @@ describe("a pass after the readers changed", () => {
     // unchanged bytes is otherwise permanent. `runExtract` must ask and stamp with ONE
     // generation -- asking with an older number than it writes would loop this document for
     // ever, and the reverse would retire it before any reader looked at it.
-    await aged({ documentId: "f2", contentType: "application/msword" });
+    await aged({ documentId: "f2", contentType: "application/vnd.ms-excel" });
 
     const second = await extract(spawnAnswering(A_PAGE), "run-extract-2");
     const third = await extract(spawnAnswering(A_PAGE), "run-extract-3");
 
     expect(second).toMatchObject({ read: 0, refused: 1 });
     expect(third).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
-    expect((await textRows())[0]?.reason).toBe("legacy-doc-unsupported");
+    expect((await textRows())[0]?.reason).toBe("legacy-xls-unsupported");
   });
 });
 
@@ -328,7 +328,7 @@ describe("what a pass hands the ledger", () => {
       await landDocument({
         documentId: id,
         bytes: new TextEncoder().encode(`\xd0\xcf\x11\xe0legacy ${id}`),
-        contentType: "application/msword",
+        contentType: "application/vnd.ms-excel",
       });
     }
     await landDocument({
@@ -340,7 +340,7 @@ describe("what a pass hands the ledger", () => {
     const result = await extract(spawnAnswering(A_PAGE));
 
     expect(result.reasonCounts).toEqual([
-      { entity: "documents", reason: "legacy-doc-unsupported", count: 2 },
+      { entity: "documents", reason: "legacy-xls-unsupported", count: 2 },
       { entity: "documents", reason: "unsupported-content-type", count: 1 },
     ]);
   });
@@ -376,7 +376,7 @@ describe("what a pass hands the ledger", () => {
       await landDocument({
         documentId: id,
         bytes: new TextEncoder().encode("\xd0\xcf\x11\xe0the same legacy bytes"),
-        contentType: "application/msword",
+        contentType: "application/vnd.ms-excel",
       });
     }
 
@@ -384,7 +384,7 @@ describe("what a pass hands the ledger", () => {
 
     expect(result.refused).toBe(3);
     expect(result.reasonCounts).toEqual([
-      { entity: "documents", reason: "legacy-doc-unsupported", count: 3 },
+      { entity: "documents", reason: "legacy-xls-unsupported", count: 3 },
     ]);
     // And the ledger's own list is the distinct FILES, which is why the interface captions it
     // that way rather than claiming a row per document.
