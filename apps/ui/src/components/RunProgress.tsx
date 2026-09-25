@@ -28,7 +28,7 @@
 import type { Locale } from "@undercroft/core/locale";
 import { useTranslation } from "react-i18next";
 
-import { gaugeFigure, gaugeShare, type RunGauge } from "@/lib/runFeed.ts";
+import { gaugeFigure, gaugeShare, gaugeWalk, type RunGauge } from "@/lib/runFeed.ts";
 
 /**
  * The leader between the name and the figure, which is also the measurement.
@@ -53,7 +53,8 @@ function Leader({ share }: { share: number | null }): React.JSX.Element {
 function Gauge({ gauge, locale }: { gauge: RunGauge; locale: Locale }): React.JSX.Element {
   const { t } = useTranslation();
   const figure = gaugeFigure(locale, gauge);
-  const share = gaugeShare(t, locale, gauge);
+  // A share where there is a total; otherwise how far the walk has got, if the source says.
+  const note = gaugeShare(t, locale, gauge) ?? gaugeWalk(t, locale, gauge);
 
   return (
     <div
@@ -68,7 +69,7 @@ function Gauge({ gauge, locale }: { gauge: RunGauge; locale: Locale }): React.JS
       <span className="gauge__name label">{gauge.entity}</span>
       <Leader share={gauge.share} />
       <span className="gauge__figure datum">{figure}</span>
-      <span className="gauge__share datum datum--quiet">{share ?? t("journal.gauge.noTotal")}</span>
+      <span className="gauge__share datum datum--quiet">{note ?? t("journal.gauge.noTotal")}</span>
     </div>
   );
 }

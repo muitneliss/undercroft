@@ -838,6 +838,7 @@ export const vi = {
       head: "Đang đọc",
       share: "{{share}}%",
       noTotal: "chưa biết tổng số",
+      walked: "tìm thấy {{found}}, {{skipped}} đã có sẵn",
       reading: "{{entity}}: đã đọc {{figure}}",
     },
 

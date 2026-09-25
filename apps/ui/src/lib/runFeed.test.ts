@@ -12,6 +12,7 @@ import {
   feedEntries,
   gaugeFigure,
   gaugeShare,
+  gaugeWalk,
   isReading,
   type RunGauge,
   runGauges,
@@ -135,10 +136,28 @@ describe("the dials", () => {
 
     expect(gauge?.share).toBe(1);
   });
+
+  it("a Drive walk's listing counts reach its gauge before anything has downloaded", () => {
+    // The regression: a re-run listed and skipped for minutes before its first download, and
+    // the band said "total not yet known" beside a dash (run-mugrpt3r-cbd13590).
+    const [gauge] = runGauges(RUNNING, [
+      event("entity_started", {}, "files"),
+      event("records_read", { read: 0, found: 1240, skipped: 1180 }, "files", { live: true }),
+    ]);
+
+    expect(gauge).toMatchObject({ read: 0, found: 1240, skipped: 1180, share: null });
+  });
 });
 
 describe("what a gauge says", () => {
-  const reading: RunGauge = { entity: "messages", read: 928, total: 7786, share: 928 / 7786 };
+  const reading: RunGauge = {
+    entity: "messages",
+    read: 928,
+    total: 7786,
+    share: 928 / 7786,
+    found: null,
+    skipped: null,
+  };
 
   it("prints both figures in the reader's own grouping", () => {
     expect(gaugeFigure("vi", reading)).toBe("928 / 7.786");
@@ -146,22 +165,70 @@ describe("what a gauge says", () => {
   });
 
   it("floors the share, so it cannot read whole with work still to do", () => {
-    const nearly: RunGauge = { entity: "messages", read: 999, total: 1000, share: 0.999 };
+    const nearly: RunGauge = {
+      entity: "messages",
+      read: 999,
+      total: 1000,
+      share: 0.999,
+      found: null,
+      skipped: null,
+    };
 
     expect(gaugeShare(en, "en", nearly)).toBe("99%");
     expect(gaugeShare(vi, "vi", nearly)).toBe("99%");
   });
 
   it("has no share to print where there is no total, and prints the count alone", () => {
-    const counting: RunGauge = { entity: "deals", read: 412, total: null, share: null };
+    const counting: RunGauge = {
+      entity: "deals",
+      read: 412,
+      total: null,
+      share: null,
+      found: null,
+      skipped: null,
+    };
 
     expect(gaugeShare(en, "en", counting)).toBeNull();
     expect(gaugeFigure("en", counting)).toBe("412");
   });
 
   it("an absent count is a dash, never a zero", () => {
-    const nothing: RunGauge = { entity: "deals", read: null, total: null, share: null };
+    const nothing: RunGauge = {
+      entity: "deals",
+      read: null,
+      total: null,
+      share: null,
+      found: null,
+      skipped: null,
+    };
 
     expect(gaugeFigure("en", nothing)).toBe(MISSING);
+  });
+
+  it("a walk with no total says what it found and what it already held", () => {
+    const walking: RunGauge = {
+      entity: "files",
+      read: 60,
+      total: null,
+      share: null,
+      found: 1240,
+      skipped: 1180,
+    };
+
+    expect(gaugeWalk(en, "en", walking)).toBe("1,240 found, 1,180 already held");
+    expect(gaugeWalk(vi, "vi", walking)).toBe("tìm thấy 1.240, 1.180 đã có sẵn");
+  });
+
+  it("a reading with no listing count has no walk to report", () => {
+    const counting: RunGauge = {
+      entity: "deals",
+      read: 412,
+      total: null,
+      share: null,
+      found: null,
+      skipped: null,
+    };
+
+    expect(gaugeWalk(en, "en", counting)).toBeNull();
   });
 });
