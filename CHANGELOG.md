@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.0](https://github.com/muitneliss/undercroft/compare/v1.33.0...v1.34.0) (2026-09-25)
+
+
+### Features
+
+* every request is traced into the host's otel-lgtm stack, and a debug-trace skill follows one ([#224](https://github.com/muitneliss/undercroft/issues/224)) ([744d57e](https://github.com/muitneliss/undercroft/commit/744d57e465724d72058c228d3e167987d780be3d))
+
 ## [1.33.0](https://github.com/muitneliss/undercroft/compare/v1.32.1...v1.33.0) (2026-09-25)
 
 

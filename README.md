@@ -99,7 +99,7 @@ That installs the newest release. Run the same line again to upgrade, and run
 <!-- x-release-please-start-version -->
 
 ```sh
-v=1.33.0; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
+v=1.34.0; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
 ```
 
 <!-- x-release-please-end -->
