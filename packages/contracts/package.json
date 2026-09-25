@@ -7,10 +7,12 @@
     ".": "./src/index.ts",
     "./models": "./src/models.ts",
     "./bi": "./src/bi.ts",
+    "./cadence": "./src/cadence.ts",
     "./runs": "./src/runs.ts",
     "./sources": "./src/sourceInstance.ts"
   },
   "dependencies": {
+    "croner": "10.0.1",
     "yaml": "2.6.1",
     "zod": "3.25.76"
   },

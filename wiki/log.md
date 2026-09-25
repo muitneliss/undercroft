@@ -143,3 +143,5 @@
 ## [2026-09-25] ingest | Runbook Deployment
 ## [2026-09-25] ingest | Runbook Deployment
 ## [2026-09-25] ingest | ADR 0058: Every request is traced, into the host's shared otel-lgtm stack
+## [2026-09-25] ingest | ADR 0059: A sync may run on a cron expression, beside the four presets
+## [2026-09-25] ingest | Runbook Deployment

@@ -54,7 +54,11 @@ Failure:
   (`reconnect`, `retry-later` or `none`). `credential-expired` means the stored credential
   could not be refreshed and the connection now reads `expired`: reconnect it, with nothing
   new to grant. A HubSpot `connections set-scope` has no size limit: every
-  property of every object may be chosen at once.
+  property of every object may be chosen at once. A refused `connections set-cadence` gives
+  `source` and `reason`: `cron-fields`, `cron-invalid`, `cron-never` or `cron-too-frequent`
+  for a `--cron` that cannot be kept (five fields, read in Singapore time, no two fires
+  closer than five minutes), or `cron-without-custom` for a `--cron` sent with a cadence
+  other than `custom`.
 - `traceId` is present when a server answered the refusal: the 32-hex trace id of that
   request. It is opaque and never translated. Quote it in a bug report; the operator uses
   it to find the server's side of the failure. A refusal the CLI made by itself, or a

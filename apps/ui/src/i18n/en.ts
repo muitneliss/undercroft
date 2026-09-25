@@ -360,6 +360,19 @@ export const en = {
     openInJournal: "Open in the journal",
     runNotStarted: "The run could not be started",
     cadenceNotSaved: "The schedule could not be saved",
+    cronLabel: "Cron expression",
+    cronHint:
+      "Five fields: minute, hour, day of month, month, day of week (0 is Sunday). In Singapore time (SGT), no more often than every {{minutes}} minutes.",
+    cronSave: "Save schedule",
+    cronPreview: "The next three runs (Singapore time)",
+    cronZone: "Singapore time (SGT)",
+    cronRefused: {
+      fields: "Five fields are needed, separated by spaces.",
+      invalid: "This expression could not be read.",
+      never: "This expression never comes round.",
+      tooFrequent:
+        "This expression runs more often than every {{minutes}} minutes, faster than the scheduler ticks.",
+    },
     since: "Since",
     connect: "Connect {{name}}",
     chooseScope: "Choose what to sync",
@@ -546,8 +559,9 @@ export const en = {
     every6h: "Every 6 hours",
     daily: "Daily",
     paused: "Paused",
+    custom: "Custom (cron)",
     pausedNoNext: "Not while paused",
-    dueNow: "At the next tick, within 15 minutes",
+    dueNow: "At the next tick, within {{minutes}} minutes",
     neverUsed: "Never used",
   },
 
@@ -1072,6 +1086,8 @@ export const en = {
       struck: "Discarded",
       runIngestNow: "Run an ingest of {{source}} for {{tenantId}} now.",
       setCadence: "Change {{source}}'s ingest cadence to “{{cadence}}”.",
+      setCadenceCron:
+        "Schedule {{source}}'s ingest on the cron expression “{{cron}}”, in Singapore time.",
       invitePerson: "Invite {{email}} to {{tenantId}} as {{role}}.",
     },
     unconfiguredTitle: "The assistant is not ready",

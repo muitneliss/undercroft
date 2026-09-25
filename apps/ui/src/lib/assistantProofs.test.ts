@@ -46,6 +46,14 @@ describe("the proof sentence", () => {
     }
   });
 
+  it("a custom cadence prints its expression, not the word custom", () => {
+    expect(
+      proofSentence(t, "setCadence", { source: "gmail", cadence: "custom", cron: "30 7 * * 1-5" }),
+    ).toBe(
+      "Đặt lịch đồng bộ của nguồn gmail theo biểu thức cron “30 7 * * 1-5”, tính theo giờ Singapore.",
+    );
+  });
+
   it("answers null for a tool that declares no sentence, rather than inventing one", () => {
     expect(proofSentence(t, "sourceStatus", {})).toBeNull();
   });

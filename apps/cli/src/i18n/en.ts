@@ -126,7 +126,8 @@ export const en = {
       setScope:
         "Set what a source reads. For HubSpot, the properties chosen for each object are read as well as the standard ones, never instead of them. Admins.",
       setToken: "Connect a source with a pasted token. Admins.",
-      setCadence: "Set how often a source is read. Admins.",
+      setCadence:
+        "Set how often a source is read: hourly, every_6h, daily, paused, or custom with --cron, a five-field cron expression in Singapore time that fires at most every five minutes. Admins.",
       disconnect: "End a source's grant. Admins.",
     },
     keys: {

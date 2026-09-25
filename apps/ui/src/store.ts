@@ -355,6 +355,43 @@ interface UiState {
   selectedAccount: Record<string, string>;
   /** Show this account of `kind`. Also called once a newly added account is scoped. */
   selectAccount: (tenantId: string, kind: string, source: string) => void;
+  /**
+   * A custom cron expression an admin is part-way through writing, and whose card it is on.
+   * Read it through `cronDraftFor`, which is the only other place that knows its shape.
+   *
+   * Its presence is also the choice itself: picking "Custom (cron)" in a card's select holds a
+   * draft, and the select reads "custom" while it does, although the server still holds the
+   * preset. Presets save on selection and need no draft; a cron saves only on Save, so there is
+   * a moment when what is on screen is nobody's but the reader's -- which is what this store is
+   * for, and `useState` is banned besides.
+   *
+   * ONE draft, carrying its tenant and source, for the reason `scopeDraft` carries its source:
+   * an expression typed against one tenant's Gmail must never appear under another's. Starting
+   * a second card's draft drops the first, which is one field in flight at a time. Not
+   * persisted: a schedule half-written last week is not one anybody is still deciding.
+   */
+  cronDraft: CronDraft | null;
+  /** Hold `cron` as the draft for this card, replacing any other card's. */
+  setCronDraft: (tenantId: string, source: string, cron: string) => void;
+  /** Drop the draft if it is this card's; another card's is left alone. */
+  dropCronDraft: (tenantId: string, source: string) => void;
+}
+
+/** See `cronDraft`. */
+interface CronDraft {
+  readonly tenantId: string;
+  readonly source: string;
+  readonly cron: string;
+}
+
+/** The expression being written on this card, or `null` when nobody is writing one here. */
+export function cronDraftFor(
+  state: { readonly cronDraft: CronDraft | null },
+  tenantId: string,
+  source: string,
+): string | null {
+  const held = state.cronDraft;
+  return held !== null && held.tenantId === tenantId && held.source === source ? held.cron : null;
 }
 
 /** One tenant's one kind, as `selectedAccount` is keyed. Nothing outside this file builds it. */
@@ -835,6 +872,17 @@ function assistantSlice(
   };
 }
 
+/** A custom schedule being written. See `cronDraft`. */
+function cronSlice(set: Setter): Pick<UiState, "cronDraft" | "setCronDraft" | "dropCronDraft"> {
+  return {
+    cronDraft: null,
+    setCronDraft: (tenantId, source, cron): unknown =>
+      set({ cronDraft: { tenantId, source, cron } }),
+    dropCronDraft: (tenantId, source): unknown =>
+      set((state) => (cronDraftFor(state, tenantId, source) === null ? {} : { cronDraft: null })),
+  };
+}
+
 /** Which account of each multi-account kind is on show. See `selectedAccount`. */
 function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAccount"> {
   return {
@@ -852,6 +900,7 @@ export const useUiStore = create<UiState>()(
       ...localeSlice(set),
       ...releaseSlice(set),
       ...accountSlice(set),
+      ...cronSlice(set),
       ...scopeSlice(set),
       ...lakeSlice(set),
       ...modelSlice(set),

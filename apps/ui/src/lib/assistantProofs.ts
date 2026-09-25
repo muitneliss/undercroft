@@ -50,10 +50,17 @@ export function proofSentence(t: TFunction, tool: string, input: unknown): strin
         tenantId: pick(values, "tenantId"),
       });
     case "setCadence":
-      return t("assistant.proof.setCadence", {
-        source: pick(values, "source"),
-        cadence: pick(values, "cadence"),
-      });
+      // A custom cadence is its expression; "custom" alone would have the reader strike a
+      // schedule they cannot see.
+      return values.cadence === "custom"
+        ? t("assistant.proof.setCadenceCron", {
+            source: pick(values, "source"),
+            cron: pick(values, "cron"),
+          })
+        : t("assistant.proof.setCadence", {
+            source: pick(values, "source"),
+            cadence: pick(values, "cadence"),
+          });
     case "invitePerson":
       return t("assistant.proof.invitePerson", {
         email: pick(values, "email"),
