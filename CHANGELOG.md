@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/muitneliss/undercroft/compare/v1.35.0...v1.35.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **mcp:** a refused bearer is logged with its reason, and an OAuth access token lives eight hours ([#235](https://github.com/muitneliss/undercroft/issues/235)) ([a01336a](https://github.com/muitneliss/undercroft/commit/a01336ac94799bbdd6b6d88cc1c5c2e17ed47fde))
+
 ## [1.35.0](https://github.com/muitneliss/undercroft/compare/v1.34.1...v1.35.0) (2026-09-25)
 
 
