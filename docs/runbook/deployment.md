@@ -270,6 +270,37 @@ fails in the offline gate, where every suite runs as the role that runs it in pr
 (`db.become(...)` in `@undercroft/db/testing`). Without the two variables `db-migrate`
 refuses to start.
 
+## Tracing
+
+Every request to the control plane or the worker answers with an `x-trace-id`. Every error
+the UI or the CLI shows carries the same id, and every log line written while serving it does
+too (ADR 0058). With `OTEL_EXPORTER_OTLP_ENDPOINT` set, spans and log lines also go to the
+host's shared `otel-lgtm` stack. That stack is the `observability` project in Dokploy, not
+ours, and Grafana for it is at `kanna-grafana.lowbit.link`.
+
+**Turning export on** is one line in Undercroft's Dokploy environment, set by a person like
+every value there (CI never writes the blob):
+
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4318
+```
+
+The worker reaches `otel-lgtm` because the server compose file attaches it to
+`dokploy-network`. The control plane is already on that network for its domain. Unset, or
+empty, means export is off: the ids are still stamped, and nothing leaves the host. Each
+service logs `telemetry_exporting` or `telemetry_export_off` once at boot.
+
+**Reading a trace** goes through `task obs:*`:
+
+- `task obs:trace TRACE=<id>` shows the span tree.
+- `task obs:logs FOR=<id>` shows the Loki lines.
+- `task obs:search FOR=run=<runId>` finds the request that opened a run.
+- `task obs:host-logs SERVICE=worker FOR=<id>` shows the raw container log over read-only SSH.
+
+Each finds its own credentials: the Dokploy key from `DOKPLOY_API_KEY` or `.dokploy.json`,
+Grafana's from the `otel-lgtm` compose, and the SSH host by matching the Dokploy host's IP
+against `~/.ssh/config`. `task obs:creds` checks all three.
+
 ## Applying migrations
 
 **A deploy applies them.** The `db-migrate` service runs `bun run migrate` from the
