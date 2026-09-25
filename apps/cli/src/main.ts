@@ -103,10 +103,10 @@ function finish(result: unknown): void {
     text = note ?? humanText(t, outcome.data);
   } else {
     stream = process.stderr;
-    const { details } = outcome.error;
+    const { details, traceId } = outcome.error;
     text = `${outcome.error.code}: ${outcome.error.message}${
       details === undefined ? "" : `\n${JSON.stringify(details, null, 2)}`
-    }`;
+    }${traceId === undefined ? "" : `\n${t("error.traceId", { traceId })}`}`;
   }
   // Exiting inside the write callback, not after it: a pipe is written asynchronously, and
   // exiting with the envelope still buffered would hand an agent half a JSON document.

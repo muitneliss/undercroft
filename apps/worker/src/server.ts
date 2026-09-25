@@ -18,7 +18,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createByteFetcher, createLogger } from "@undercroft/core";
 import { asExecutor, connectionOf, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
-import { currentTraceId, startTelemetry } from "@undercroft/telemetry";
+import { startTelemetry } from "@undercroft/telemetry";
 import { createLakeApi } from "./handlers/lake.ts";
 import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
@@ -74,19 +74,10 @@ function refreshers(xeroClientOrNone: XeroClient | undefined): Record<string, Re
 // JSONL on stdout, the same shape the control plane writes; the container runtime collects
 // it. Before this the worker's whole output was the startup line, so a run that failed at
 // 02:00 left no evidence anywhere.
-// Before anything logs, so every line -- the boot lines included -- goes wherever the trace
-// export goes. An unset endpoint is export off; the trace ids are stamped either way.
-const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "";
-const telemetry = startTelemetry({
-  service: process.env.OTEL_SERVICE_NAME ?? "undercroft-worker",
-  version: process.env.UNDERCROFT_RELEASE ?? "",
-  ...(otlpEndpoint === "" ? {} : { endpoint: otlpEndpoint }),
-});
-const log = createLogger({
-  component: "worker",
-  sink: telemetry.logSink,
-  context: () => ({ traceId: currentTraceId() }),
-});
+// Before anything logs. An unset OTEL_EXPORTER_OTLP_ENDPOINT is export off; the trace ids are
+// stamped either way (ADR 0058).
+const telemetry = startTelemetry({ service: "undercroft-worker", env: process.env });
+const log = createLogger({ component: "worker", ...telemetry.logging });
 log.info(telemetry.exporting ? "telemetry_exporting" : "telemetry_export_off");
 
 const dsn = required("UNDERCROFT_POSTGRES_DSN");

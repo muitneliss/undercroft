@@ -72,6 +72,17 @@ export const vi = {
   },
 
   /**
+   * The slip that reports a failed request (`Errata` handed an `error`). `internal` stands in
+   * for the bare `internal_error` the server answers an internal failure with; it does not
+   * mention the trace id, because a request outside a trace has none to show.
+   */
+  errata: {
+    internal: "Máy chủ gặp lỗi ngoài dự kiến. Chi tiết đã được ghi lại ở phía máy chủ.",
+    traceLabel: "Mã truy vết",
+    report: "Báo lỗi",
+  },
+
+  /**
    * The edges a reader drags, one key per surface.
    *
    * Each names the MEASURE it moves and the thing it moves it on, because a screen reader

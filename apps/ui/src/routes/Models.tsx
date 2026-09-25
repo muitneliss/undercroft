@@ -176,9 +176,7 @@ function NewModelForm({ tenantId }: { tenantId: string }): React.JSX.Element {
         <p className="field__hint">{t("models.nameHint")}</p>
       </div>
       {create.isError ? (
-        <Errata heading={t("models.notCreated")} live={true}>
-          {create.error.message}
-        </Errata>
+        <Errata heading={t("models.notCreated")} live={true} error={create.error} />
       ) : null}
       <div className="row">
         <button className="plate plate--primary" disabled={create.isPending} type="submit">

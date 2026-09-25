@@ -226,14 +226,10 @@ function EditorBand({
       ) : null}
 
       {save.isError ? (
-        <Errata heading={t("models.notSaved")} live={true}>
-          {save.error.message}
-        </Errata>
+        <Errata heading={t("models.notSaved")} live={true} error={save.error} />
       ) : null}
       {build.isError ? (
-        <Errata heading={t("models.notBuilt")} live={true}>
-          {build.error.message}
-        </Errata>
+        <Errata heading={t("models.notBuilt")} live={true} error={build.error} />
       ) : null}
       {build.isSuccess ? (
         <BuildPanel tenantId={tenantId} result={build.data} locale={locale} />
@@ -288,9 +284,7 @@ function DeleteBand({
               {remove.isPending ? t("models.deleting") : t("models.deleteConfirm", { name })}
             </button>
             {remove.isError ? (
-              <Errata heading={t("models.notDeleted")} live={true}>
-                {remove.error.message}
-              </Errata>
+              <Errata heading={t("models.notDeleted")} live={true} error={remove.error} />
             ) : null}
           </div>
         </details>

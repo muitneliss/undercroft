@@ -81,6 +81,16 @@ body:
         - Not running yet, I am evaluating it
 
   - type: input
+    id: trace-id
+    attributes:
+      label: Trace ID
+      description: |
+        Only if this is about a request that did something unexpected: the `x-trace-id` of
+        that request, from the error box in the Web UI, `error.traceId` in the CLI's
+        `--agent` envelope, or the response header. Leave it empty otherwise.
+      placeholder: 4bf92f3577b34da6a3ce929d0e0e4736
+
+  - type: input
     id: version
     attributes:
       label: Version

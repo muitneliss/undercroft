@@ -88,9 +88,7 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
       )}
 
       {revoke.isError ? (
-        <Errata heading={t("keys.notRevoked")} live={true}>
-          {revoke.error.message}
-        </Errata>
+        <Errata heading={t("keys.notRevoked")} live={true} error={revoke.error} />
       ) : null}
 
       {mint.isSuccess ? (
@@ -220,9 +218,7 @@ function MintedKey({ token, onDone }: { token: string; onDone: () => void }): Re
         </p>
       ) : null}
       {copy.isError ? (
-        <Errata heading={t("keys.notCopied")} live={true}>
-          {copy.error.message}
-        </Errata>
+        <Errata heading={t("keys.notCopied")} live={true} error={copy.error} />
       ) : null}
     </div>
   );
@@ -322,9 +318,7 @@ function MintForm({
       </div>
 
       {mint.isError ? (
-        <Errata heading={t("keys.notMinted")} live={true}>
-          {mint.error.message}
-        </Errata>
+        <Errata heading={t("keys.notMinted")} live={true} error={mint.error} />
       ) : null}
 
       <div className="row">

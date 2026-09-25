@@ -93,9 +93,7 @@ function OpenInvitations({
       )}
 
       {revoke.isError ? (
-        <Errata heading={t("people.notWithdrawn")} live={true}>
-          {revoke.error.message}
-        </Errata>
+        <Errata heading={t("people.notWithdrawn")} live={true} error={revoke.error} />
       ) : null}
     </>
   );
@@ -115,14 +113,12 @@ function InviteOutcome({
   const { t } = useTranslation();
   return (
     <>
+      {/* The server's own words. It composes them in the language this browser
+      asked for -- `main.tsx` sends `accept-language` on every tRPC call --
+      so this renders a Vietnamese sentence for a Vietnamese reader without
+      the UI having to know what went wrong. */}
       {invite.isError ? (
-        <Errata heading={t("people.notInvited")} live={true}>
-          {/* The server's own words. It composes them in the language this browser
-          asked for -- `main.tsx` sends `accept-language` on every tRPC call --
-          so this renders a Vietnamese sentence for a Vietnamese reader without
-          the UI having to know what went wrong. */}
-          {invite.error.message}
-        </Errata>
+        <Errata heading={t("people.notInvited")} live={true} error={invite.error} />
       ) : null}
 
       {/*

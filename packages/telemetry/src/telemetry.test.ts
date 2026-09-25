@@ -3,12 +3,12 @@
  * id a person copies from a response must find the log lines written while serving it.
  */
 
-import { expect, test } from "bun:test";
+import { expect, test as it } from "bun:test";
 import { createLogger } from "@undercroft/core";
 import { Hono } from "hono";
 import { currentTraceId, traceRequests } from "./index.ts";
 
-test("a line logged while serving a request carries the trace id that request answered with", async () => {
+it("a line logged while serving a request carries the trace id that request answered with", async () => {
   const lines: string[] = [];
   const log = createLogger({
     component: "test",

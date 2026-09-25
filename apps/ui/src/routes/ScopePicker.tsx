@@ -61,7 +61,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { Connection, Source } from "@/api/types.ts";
 import { DriveChoice } from "@/components/DriveChoice.tsx";
-import { Errata } from "@/components/Errata.tsx";
+import { Errata, type ServerError } from "@/components/Errata.tsx";
 import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
 import { GmailChoice } from "@/components/GmailChoice.tsx";
 import { HubspotChoice } from "@/components/HubspotChoice.tsx";
@@ -276,14 +276,12 @@ export function ScopePicker({
           source={source}
           account={account}
           items={labels.data?.items ?? []}
-          loadError={labels.isError ? labels.error.message : null}
+          loadError={labels.isError ? labels.error : null}
           chosen={chosen}
         />
 
         {setScope.isError ? (
-          <Errata heading={t("scopePicker.notSaved")} live={true}>
-            {setScope.error.message}
-          </Errata>
+          <Errata heading={t("scopePicker.notSaved")} live={true} error={setScope.error} />
         ) : null}
 
         {kind === "xero" && chosen.organisation === null ? (
@@ -343,17 +341,13 @@ function SourceChoice({
   /** The connection's account address, or `""` when none is recorded. */
   account: string;
   items: readonly ListedItem[];
-  loadError: string | null;
+  loadError: ServerError | null;
   chosen: Omit<ScopeDraft, "source">;
 }): React.JSX.Element | null {
   const { t } = useTranslation();
 
   if (loadError !== null && BROWSED.has(kind)) {
-    return (
-      <Errata heading={t("common.notLoaded")} live={true}>
-        {loadError}
-      </Errata>
-    );
+    return <Errata heading={t("common.notLoaded")} live={true} error={loadError} />;
   }
   if (kind === "hubspot") {
     return <HubspotChoice source={source} items={items} chosen={chosen.properties} />;

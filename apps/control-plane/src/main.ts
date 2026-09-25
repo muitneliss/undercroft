@@ -22,7 +22,7 @@ import {
   postLark,
 } from "@undercroft/core";
 import { asExecutor, createPool, withTransaction } from "@undercroft/db";
-import { currentTraceId, startTelemetry } from "@undercroft/telemetry";
+import { startTelemetry } from "@undercroft/telemetry";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
 import { runAlerts } from "./services/alerts.ts";
@@ -47,20 +47,10 @@ function optional(name: string): string | undefined {
   return value === undefined || value === "" ? undefined : value;
 }
 
-// Before anything logs, so every line -- the boot lines included -- goes wherever the trace
-// export goes. An unset endpoint is export off; the trace ids are stamped either way.
-const otlpEndpoint = optional("OTEL_EXPORTER_OTLP_ENDPOINT");
-const telemetry = startTelemetry({
-  service: optional("OTEL_SERVICE_NAME") ?? "undercroft-control-plane",
-  version: process.env.UNDERCROFT_RELEASE ?? "",
-  ...(otlpEndpoint === undefined ? {} : { endpoint: otlpEndpoint }),
-});
-
-const log = createLogger({
-  component: "control-plane",
-  sink: telemetry.logSink,
-  context: () => ({ traceId: currentTraceId() }),
-});
+// Before anything logs. An unset OTEL_EXPORTER_OTLP_ENDPOINT is export off; the trace ids are
+// stamped either way (ADR 0058).
+const telemetry = startTelemetry({ service: "undercroft-control-plane", env: process.env });
+const log = createLogger({ component: "control-plane", ...telemetry.logging });
 log.info(telemetry.exporting ? "telemetry_exporting" : "telemetry_export_off");
 
 const dsn = required("UNDERCROFT_POSTGRES_DSN");
@@ -381,11 +371,8 @@ const app = createServer({
   log,
 });
 
-// Flush the spans and log lines still buffered; a stop that dropped them would lose exactly
-// the requests that were in flight when the deploy began.
-process.once("SIGTERM", () => {
-  void telemetry.shutdown().finally(() => process.exit(0));
-});
+// Flush what is buffered: a stop that dropped it would lose the requests a deploy cut short.
+process.once("SIGTERM", () => void telemetry.shutdown().finally(() => process.exit(0)));
 
 // parseInt, not Number(): a port, not an amount.
 const port = Number.parseInt(process.env.UNDERCROFT_API_PORT ?? "3000", 10);

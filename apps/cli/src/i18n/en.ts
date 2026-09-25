@@ -102,6 +102,7 @@ export const en = {
     localValidation: "The input does not match the command's schema.",
     CANCELLED: "Cancelled; nothing changed.",
     INTERNAL_ERROR: "The server had an internal error.",
+    traceId: "Trace ID: {{traceId}} -- quote it when you report this.",
   },
 
   procedures: {

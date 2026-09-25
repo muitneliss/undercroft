@@ -47,27 +47,33 @@ import type { MiddlewareHandler } from "hono";
 export const TRACE_HEADER = "x-trace-id";
 
 const TRACER = "undercroft";
+const TRAILING_SLASHES = /\/+$/u;
 
 export interface TelemetryOptions {
-  /** `service.name` in Tempo and Loki, e.g. `undercroft-worker`. */
+  /** `service.name` in Tempo and Loki when `OTEL_SERVICE_NAME` does not say, e.g. `undercroft-worker`. */
   readonly service: string;
-  /** The release tag baked into the image; `""` when the image did not say, and then left off. */
-  readonly version: string;
-  /** The collector's OTLP/HTTP base, e.g. `http://otel-lgtm:4318`. Absent: export off. */
-  readonly endpoint?: string;
-  /** Extra resource attributes, e.g. `deployment.environment`. */
-  readonly attributes?: Attributes;
+  /**
+   * The process environment, passed in by the entrypoint rather than read here. Three values
+   * are read from it: `OTEL_EXPORTER_OTLP_ENDPOINT`, the collector's OTLP/HTTP base (unset or
+   * empty: export off); `OTEL_SERVICE_NAME`; and `UNDERCROFT_RELEASE`, the release tag the image
+   * was built from (`""`: left off the trace rather than guessed).
+   */
+  readonly env: Readonly<Record<string, string | undefined>>;
 }
 
 export interface Telemetry {
   /** Whether spans and log records leave the process. */
   readonly exporting: boolean;
   /**
-   * The sink `createLogger` writes each JSONL line to: stdout as always, and -- when
-   * exporting -- the same line as an OTLP log record, emitted in the active context so the
-   * collector joins it to the request's trace.
+   * What `createLogger` takes to join its lines to the trace. `sink` writes each JSONL line
+   * to stdout as always and -- when exporting -- the same line as an OTLP log record, emitted
+   * in the active context so the collector joins it to the request's trace. `context` puts
+   * the request's `traceId` on every line written inside one.
    */
-  readonly logSink: (line: string) => void;
+  readonly logging: {
+    readonly sink: (line: string) => void;
+    readonly context: () => { readonly traceId: string | null };
+  };
   /** Flush what is buffered. Called once, when the process is stopping. */
   readonly shutdown: () => Promise<void>;
 }
@@ -103,52 +109,76 @@ const SEVERITY: Record<string, SeverityNumber> = {
 };
 
 function emitLine(logger: OtelLogger, line: string): void {
-  // The line is the logger's own JSON, so it always parses; `level` and `event` become
-  // indexable attributes and the whole line stays the body, so `| json` in LogQL reads it.
-  const parsed = JSON.parse(line) as { level?: string; event?: string; component?: string };
+  // The line is the logger's own JSON; `level`, `event` and `component` become indexable
+  // attributes and the whole line stays the body, so `| json` in LogQL reads it.
+  const parsed: unknown = JSON.parse(line);
+  const fields = typeof parsed === "object" && parsed !== null ? parsed : {};
+  function text(key: string): string | undefined {
+    const value: unknown = Reflect.get(fields, key);
+    return typeof value === "string" ? value : undefined;
+  }
+  const level = text("level") ?? "info";
   logger.emit({
-    severityNumber: SEVERITY[parsed.level ?? "info"] ?? SeverityNumber.INFO,
-    severityText: parsed.level ?? "info",
+    severityNumber: SEVERITY[level] ?? SeverityNumber.INFO,
+    severityText: level,
     body: line,
-    attributes: {
-      ...(parsed.event === undefined ? {} : { event: parsed.event }),
-      ...(parsed.component === undefined ? {} : { component: parsed.component }),
-    },
+    attributes: Object.fromEntries(
+      ["event", "component"].flatMap((key) => {
+        const value = text(key);
+        return value === undefined ? [] : [[key, value]];
+      }),
+    ),
   });
 }
 
+function logContext(): { readonly traceId: string | null } {
+  return { traceId: currentTraceId() };
+}
+
 /**
- * Install tracing for this process, exporting to `endpoint` when one is given.
+ * Install tracing for this process, exporting when the environment names a collector.
  *
- * Called once, by the entrypoint, before the server is built.
+ * Called once, by the entrypoint, before anything logs -- so every line, the boot lines
+ * included, goes wherever the trace export goes.
  */
 export function startTelemetry(options: TelemetryOptions): Telemetry {
+  const { env } = options;
+  const version = env.UNDERCROFT_RELEASE ?? "";
+  const named = env.OTEL_SERVICE_NAME ?? "";
   const resource = resourceFromAttributes({
-    "service.name": options.service,
-    ...(options.version === "" ? {} : { "service.version": options.version }),
-    ...options.attributes,
+    "service.name": named === "" ? options.service : named,
+    ...(version === "" ? {} : { "service.version": version }),
   });
-  if (options.endpoint === undefined || options.endpoint === "") {
+  const endpoint = (env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "").replace(TRAILING_SLASHES, "");
+  if (endpoint === "") {
     install(resource, []);
-    return { exporting: false, logSink: writeStdout, shutdown: async () => undefined };
+    return {
+      exporting: false,
+      logging: { sink: writeStdout, context: logContext },
+      shutdown: async () => undefined,
+    };
   }
 
-  const base = options.endpoint.replace(/\/+$/, "");
-  const spans = new BatchSpanProcessor(new OTLPTraceExporter({ url: `${base}/v1/traces` }));
+  const spans = new BatchSpanProcessor(new OTLPTraceExporter({ url: `${endpoint}/v1/traces` }));
   install(resource, [spans]);
   const logs = new LoggerProvider({
     resource,
     processors: [
-      new BatchLogRecordProcessor({ exporter: new OTLPLogExporter({ url: `${base}/v1/logs` }) }),
+      new BatchLogRecordProcessor({
+        exporter: new OTLPLogExporter({ url: `${endpoint}/v1/logs` }),
+      }),
     ],
   });
   const logger = logs.getLogger(TRACER);
 
   return {
     exporting: true,
-    logSink: (line): void => {
-      writeStdout(line);
-      emitLine(logger, line);
+    logging: {
+      sink: (line): void => {
+        writeStdout(line);
+        emitLine(logger, line);
+      },
+      context: logContext,
     },
     shutdown: async (): Promise<void> => {
       await Promise.allSettled([spans.shutdown(), logs.shutdown()]);
@@ -170,10 +200,26 @@ export function currentTraceId(): string | null {
  * The `traceparent` header for a call this request makes to another of our services, so the
  * callee's span joins this trace. Empty outside a request.
  */
-export function traceHeaders(): Record<string, string> {
+function traceHeaders(): Record<string, string> {
   const carrier: Record<string, string> = {};
   propagation.inject(context.active(), carrier);
   return carrier;
+}
+
+/**
+ * A fetch that carries the active request's `traceparent`, for calls between our own
+ * services: one trace from the browser's click to the run it started.
+ */
+export function traced(
+  doFetch: (input: string, init?: RequestInit) => Promise<Response>,
+): (input: string, init?: RequestInit) => Promise<Response> {
+  return (input, init) => {
+    const headers = new Headers(init?.headers);
+    for (const [name, value] of Object.entries(traceHeaders())) {
+      headers.set(name, value);
+    }
+    return doFetch(input, { ...init, headers });
+  };
 }
 
 /**

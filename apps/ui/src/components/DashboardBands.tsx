@@ -103,11 +103,7 @@ export function DashboardHead({
           onEdit={onEdit}
         />
       ) : null}
-      {save.isError ? (
-        <Errata heading={t("bi.notSaved")} live={true}>
-          {save.error.message}
-        </Errata>
-      ) : null}
+      {save.isError ? <Errata heading={t("bi.notSaved")} live={true} error={save.error} /> : null}
     </div>
   );
 }
@@ -287,9 +283,7 @@ export function DeleteBand({
               {remove.isPending ? t("bi.deleting") : t("dashboard.deleteConfirm")}
             </button>
             {remove.isError ? (
-              <Errata heading={t("bi.notDeleted")} live={true}>
-                {remove.error.message}
-              </Errata>
+              <Errata heading={t("bi.notDeleted")} live={true} error={remove.error} />
             ) : null}
           </div>
         </details>

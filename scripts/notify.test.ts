@@ -78,6 +78,21 @@ it("leaves no live Lark tag in an issue's markup, so a mention in its text pages
   expect(markup).not.toContain("<at");
 });
 
+it("puts the trace id a bug report quotes on its card, so the failure is one lookup away", () => {
+  const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+  const body = `### What happened?\n\nIt failed.\n\n### Trace ID\n\n${traceId}\n\n### Error output and logs\n\n_No response_`;
+  const opened = JSON.stringify({
+    action: "opened",
+    sender: { login: "someone" },
+    issue: { ...JSON.parse(ISSUE_OPENED).issue, body },
+  });
+
+  expect(eventNotice("issues", opened).facts).toContainEqual([
+    "Trace",
+    { text: traceId, emphasis: "bold" },
+  ]);
+});
+
 it("renders a release PR's markdown as Lark markdown: emoji, headings, bullets and links", () => {
   const markup = markupContents(larkMessage(eventNotice("pull_request", PR_OPENED))).join("\n");
 

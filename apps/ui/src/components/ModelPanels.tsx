@@ -159,7 +159,7 @@ export function Reference({ tenantId }: { tenantId: string }): React.JSX.Element
         <p className="prose">{t("models.referenceLead")}</p>
         {reference.isPending ? <Skeleton rows={3} /> : null}
         {reference.isError ? (
-          <Errata heading={t("common.notLoaded")}>{reference.error.message}</Errata>
+          <Errata heading={t("common.notLoaded")} error={reference.error} />
         ) : null}
         {reference.isSuccess ? (
           <>

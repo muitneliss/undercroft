@@ -69,6 +69,11 @@ export interface Failure {
   readonly code: ErrorCode;
   readonly message: string;
   readonly details?: unknown;
+  /**
+   * The trace id of the server request that refused, when a server answered. Opaque and never
+   * translated: it is what a person quotes in a bug report and what the operator looks up.
+   */
+  readonly traceId?: string;
 }
 
 export interface Refusal {
@@ -117,7 +122,7 @@ export function envelope(outcome: Outcome): Readonly<Record<string, unknown>> {
       ? { ok: true, data: outcome.data, meta: { count: outcome.data.length } }
       : { ok: true, data: outcome.data };
   }
-  const { code, message, details } = outcome.error;
+  const { code, message, details, traceId } = outcome.error;
   return {
     ok: false,
     error: {
@@ -125,6 +130,7 @@ export function envelope(outcome: Outcome): Readonly<Record<string, unknown>> {
       message,
       recoverable: CODES[code].recoverable,
       ...(details === undefined ? {} : { details }),
+      ...(traceId === undefined ? {} : { traceId }),
     },
   };
 }

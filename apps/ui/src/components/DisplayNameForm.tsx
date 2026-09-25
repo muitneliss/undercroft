@@ -97,9 +97,7 @@ export function DisplayNameForm({
           role, or a name past the length limit -- and restating it locally would be a second
           copy to keep in step with the refusal that actually happened. */}
       {rename.isError ? (
-        <Errata heading={t("tenants.notRenamed")} live={true}>
-          {rename.error.message}
-        </Errata>
+        <Errata heading={t("tenants.notRenamed")} live={true} error={rename.error} />
       ) : null}
 
       {rename.isSuccess ? (

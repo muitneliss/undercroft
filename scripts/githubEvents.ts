@@ -73,6 +73,20 @@ interface WorkflowRunPayload {
   };
 }
 
+/** A W3C trace id: what the issue forms' "Trace ID" field asks for. */
+const TRACE_ID = /\b[0-9a-f]{32}\b/gu;
+const TRACE_SECTION = /^### Trace ID\s*$(?<section>[\s\S]*?)(?=^### |(?![\s\S]))/mu;
+
+/**
+ * The trace ids an issue form's "Trace ID" field holds, so the card leads straight to the
+ * server's record of the failure (ADR 0058). Only well-formed ids, from that section alone:
+ * a form left empty renders `_No response_`, and an id quoted elsewhere is not a claim.
+ */
+function traceIdsOf(body: string | null): string[] {
+  const section = TRACE_SECTION.exec(body ?? "")?.groups?.section ?? "";
+  return [...new Set(section.match(TRACE_ID) ?? [])];
+}
+
 function issueNotice(json: string): Notice {
   const payload: IssuesPayload = JSON.parse(json);
   const { issue } = payload;
@@ -80,6 +94,7 @@ function issueNotice(json: string): Notice {
   const tones: Record<string, Tone> = { opened: "blue", reopened: "orange", closed: "green" };
   const icons: Record<string, string> = { opened: "📌", reopened: "🔁", closed: "✅" };
   const labels = issue.labels.map((label) => label.name).join(", ");
+  const traces = traceIdsOf(issue.body);
   return {
     title: `${notPlanned ? "🚫" : (icons[payload.action] ?? "📋")} Issue #${issue.number} ${notPlanned ? "closed as not planned" : payload.action}: ${issue.title}`,
     tone: notPlanned ? "grey" : (tones[payload.action] ?? "grey"),
@@ -87,6 +102,7 @@ function issueNotice(json: string): Notice {
       ["By", bold(payload.sender.login)],
       ["Author", bold(issue.user.login)],
       ["Labels", labels === "" ? grey("none") : labels],
+      ...(traces.length === 0 ? [] : [["Trace", bold(traces.join(", "))] as const]),
     ],
     body: payload.action === "opened" ? (issue.body ?? "") : "",
     links: [["Open issue", issue.html_url]],

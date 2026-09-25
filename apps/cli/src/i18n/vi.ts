@@ -119,6 +119,7 @@ export const vi = {
     localValidation: "Đầu vào không khớp lược đồ của lệnh.",
     CANCELLED: "Đã huỷ; không có gì thay đổi.",
     INTERNAL_ERROR: "Máy chủ gặp lỗi nội bộ.",
+    traceId: "Mã truy vết: {{traceId}} — ghi kèm mã này khi báo lỗi.",
   },
 
   /**

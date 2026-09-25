@@ -35,6 +35,9 @@ includes:
   notify:
     taskfile: ./.taskfiles/notify/Taskfile.yml
     dir: "{{.ROOT_DIR}}"
+  obs:
+    taskfile: ./.taskfiles/obs/Taskfile.yml
+    dir: "{{.ROOT_DIR}}"
 
 tasks:
   default:

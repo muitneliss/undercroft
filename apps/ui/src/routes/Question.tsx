@@ -184,7 +184,7 @@ function QuestionLeaf({
         schema={schema}
         canAuthor={canAuthor}
         sqlText={sqlText}
-        compileError={compiled.isError ? compiled.error.message : null}
+        compileError={compiled.isError ? compiled.error : null}
       />
 
       <ParamsBand names={names} bound={bound} />
