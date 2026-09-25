@@ -1,12 +1,12 @@
 ---
 title: 'Runbook: The undercroft CLI'
 type: source
-date: 2026-09-24
+date: 2026-09-25
 tags: []
 source: docs/runbook/cli.md
 source_path: docs/runbook/cli.md
-source_hash: a78e1c91ab2c1b0dc08b3c112a3c4539bdd5e27ee1c45baf95479845479fa439
-ingested: 2026-09-24
+source_hash: 5c73cd92d7a4c0f624d9b8580aea7a6fbdf4d3397dbe7226e9c7b43bd6204782
+ingested: 2026-09-25
 ---
 
 # Runbook: The undercroft CLI
@@ -19,4 +19,4 @@ A person creates a profile per environment (`config set-profile local --url http
 
 Files live in `$UNDERCROFT_CLI_HOME`, else `$XDG_CONFIG_HOME/undercroft`, else `~/.config/undercroft`: `config.json` (profiles) and `credentials.json` (0600, sessions keyed by origin). `undercroft.cli.json` pins a project's profile; `--url`/`UNDERCROFT_URL` is a one-off that never allows writes; `config show` explains which source decided each value and never prints the session.
 
-A new procedure needs only a sentence under `procedures` in `apps/cli/src/i18n/{vi,en}.ts`, and a new mutation its effect in `apps/cli/src/procedures.ts`; a new router namespace also needs a sentence under `topics`, and an input property may not share a global flag's name. `task build:cli` refuses each omission and names it. `apps/cli/src/cli.test.ts` builds the bundle into a temp dir and runs it under `node` against `startControlPlane()` from `@undercroft/control-plane/testing`. `task ci:cli-pack-check` runs the packed tarball through `npx`; `task ci:skill-check` (network) checks `npx skills` lists the skill. The `release-cli` job runs `task build:cli-pack` then `task cd:cli-upload TAG=vX.Y.Z`, attaching both names; release-please bumps the version in SKILL.md, README.md and `apps/cli/package.json` with the root. Troubleshooting: `CONFIG_REQUIRED` (no profile or URL, a profile that does not exist, or an unreadable config file), `AUTHENTICATION_REQUIRED` right after signing in (a different origin, e.g. `localhost` vs `127.0.0.1`), `WRITES_DISABLED` (a person must allow writes), `NETWORK_ERROR` (the URL does not answer `/trpc` as tRPC), `EACCES` on `npm install -g` (a system-wide Node; use one you own rather than `sudo`).
+A new procedure needs nothing in the CLI: it needs a sentence in `apps/control-plane/src/i18n/procedures.{vi,en}.ts`, keyed by its dotted path, and a new mutation its effect in `EFFECTS` (`apps/control-plane/src/handlers/surface.ts`); a new router namespace also needs a sentence under `topics` in `apps/cli/src/i18n/{vi,en}.ts`. Those tables are typed against the router, so `task ci:typecheck` names each omission and every entry a renamed or deleted procedure left behind. A procedure the CLI calls by name (`tenants.list`, `session.me`, `session.signOut`) goes through the typed `callProcedure` in `handlers/remote.ts`, so renaming or reshaping it fails the CLI's typecheck. The build (`task build:cli`) refuses only what the compiler cannot see: an input property sharing a global flag's name. `apps/cli/src/cli.test.ts` builds the bundle into a temp dir and runs it under `node` against `startControlPlane()` from `@undercroft/control-plane/testing`. `task ci:cli-pack-check` runs the packed tarball through `npx`; `task ci:skill-check` (network) checks `npx skills` lists the skill. The `release-cli` job runs `task build:cli-pack` then `task cd:cli-upload TAG=vX.Y.Z`, attaching both names; release-please bumps the version in SKILL.md, README.md and `apps/cli/package.json` with the root. Troubleshooting: `CONFIG_REQUIRED` (no profile or URL, a profile that does not exist, or an unreadable config file), `AUTHENTICATION_REQUIRED` right after signing in (a different origin, e.g. `localhost` vs `127.0.0.1`), `WRITES_DISABLED` (a person must allow writes), `NETWORK_ERROR` (the URL does not answer `/trpc` as tRPC), `EACCES` on `npm install -g` (a system-wide Node; use one you own rather than `sudo`).

@@ -1,11 +1,11 @@
 /**
  * The command surface: one oclif command per router procedure, plus the local few.
  *
- * Nothing here is written per procedure. The manifest (`virtual:procedures`) lists every
+ * Nothing here is written per procedure. The manifest (`virtual:surface`) lists every
  * procedure the router has, and each becomes a command by the same rule -- the dotted path
  * is the command (`bi.questions.save` is `undercroft bi questions save`), each top-level
- * scalar of the input is a flag, and the description is the procedure's sentence in the
- * catalogue. The UI's feature list IS the router, so this is the UI's feature list, one to
+ * scalar of the input is a flag, and the description and the effect are the ones the control
+ * plane records beside the router (`handlers/surface.ts`). The UI's feature list IS the router, so this is the UI's feature list, one to
  * one; `cli.test.ts` fails the gate the day the two disagree.
  *
  * oclif's EXPLICIT discovery strategy reads the table this returns, which is what lets the
@@ -14,7 +14,7 @@
 
 import { stripVTControlCharacters } from "node:util";
 import { Args, Command, Flags, type Interfaces } from "@oclif/core";
-import { PROCEDURES } from "virtual:procedures";
+import { PROCEDURES } from "virtual:surface";
 import { type FlagMap, globalFlags, inputFlags } from "./flags.ts";
 import type { Context, ParsedFlags } from "./handlers/context.ts";
 import {
@@ -29,9 +29,8 @@ import {
   type Noted,
 } from "./handlers/local.ts";
 import { runProcedure } from "./handlers/run.ts";
-import { type MessageKey, procedureSentence } from "./i18n/index.ts";
+import type { MessageKey } from "./i18n/index.ts";
 import { commandId, type ProcedureSpec, spoken } from "./manifest.ts";
-import { effectOf } from "./procedures.ts";
 import { flagSpecs } from "./services/input.ts";
 import { failure } from "./services/output.ts";
 
@@ -193,10 +192,7 @@ export function buildCommands(ctx: Context): Record<string, Command.Class> {
 
   for (const spec of PROCEDURES) {
     const id = commandId(spec.path);
-    // The build refuses an unclassified mutation, so `null` cannot reach here; `write` is the
-    // answer that fails safe if it somehow did.
-    const effect = effectOf(spec) ?? "write";
-    const description = procedureSentence(ctx.locale, spec.path) ?? spec.path;
+    const description = spec.description[ctx.locale];
     const flags = procedureFlags(ctx, spec);
     commands[id] = commandClass(ctx, id, {
       description,
@@ -204,14 +200,14 @@ export function buildCommands(ctx: Context): Record<string, Command.Class> {
       args: {},
       strict: true,
       run: async ({ flags: parsed }) => ({
-        outcome: await runProcedure(ctx, { spec, effect, spoken: spoken(id) }, parsed),
+        outcome: await runProcedure(ctx, { spec, spoken: spoken(id) }, parsed),
       }),
     });
     catalogue.push({
       command: spoken(id),
       procedure: spec.path,
       type: spec.type,
-      effect,
+      effect: spec.effect,
       description,
       flags: Object.keys(flags).map((flag) => `--${flag}`),
       input: spec.input,

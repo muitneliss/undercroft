@@ -15,23 +15,22 @@
  */
 
 import type { Translate } from "../i18n/index.ts";
+import type { SurfaceErrorCode } from "../manifest.ts";
 
+/**
+ * The server's refusals, in the words every door shares (`SurfaceErrorCode`, the control
+ * plane's), and the CLI's own. A code the control plane adds is a `tsc` error below until it
+ * has an exit code here and a sentence in the catalogues.
+ */
 export type ErrorCode =
+  | SurfaceErrorCode
   | "INVALID_ARGUMENT"
   | "MISSING_REQUIRED_ARGUMENT"
   | "UNKNOWN_COMMAND"
   | "CONFIG_REQUIRED"
   | "CONFIRMATION_REQUIRED"
-  | "NOT_FOUND"
-  | "CONFLICT"
-  | "AUTHENTICATION_REQUIRED"
-  | "PERMISSION_DENIED"
   | "WRITES_DISABLED"
   | "HUMAN_REQUIRED"
-  | "NETWORK_ERROR"
-  | "TIMEOUT"
-  | "VALIDATION_FAILED"
-  | "INTERNAL_ERROR"
   | "CANCELLED";
 
 /**

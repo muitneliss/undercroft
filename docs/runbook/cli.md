@@ -79,11 +79,19 @@ It never prints the session itself.
 
 ## Changing it
 
-- **A new procedure** needs nothing in the CLI except a sentence in `apps/cli/src/i18n/vi.ts`
-  and `en.ts`, under `procedures`, mirroring the router's nesting. A new mutation also needs
-  its effect in `apps/cli/src/procedures.ts`. A new router namespace also needs a sentence
-  under `topics`, and an input property may not share a global flag's name (`profile`, `url`,
-  `yes` and the rest). The build (`task build:cli`) refuses each of these and names it.
+- **A new procedure** needs nothing in the CLI. It needs a sentence in both
+  `apps/control-plane/src/i18n/procedures.vi.ts` and `procedures.en.ts`, keyed by its dotted
+  path, and a new mutation also needs its effect in `EFFECTS`
+  (`apps/control-plane/src/handlers/surface.ts`). A new router namespace also needs a sentence
+  under `topics` in `apps/cli/src/i18n/vi.ts` and `en.ts`. Each of those tables is typed
+  against the router, so `task ci:typecheck` names what is missing, and names every entry a
+  renamed or deleted procedure left behind. What the compiler cannot see, the build
+  (`task build:cli`) refuses: an input property may not share a global flag's name (`profile`,
+  `url`, `yes` and the rest).
+- **A procedure the CLI calls by name** (`tenants.list` for the tenant prompt, `session.me` and
+  `session.signOut` for `auth`) goes through `callProcedure` in `handlers/remote.ts`, typed with
+  the router's own input and query/mutation kind. Renaming or reshaping one fails the CLI's
+  typecheck.
 - **The gate** is `task ci:verify`, as everywhere. `apps/cli/src/cli.test.ts` builds the bundle
   into a temporary directory and runs it under `node` against `startControlPlane()` from
   `@undercroft/control-plane/testing`.
