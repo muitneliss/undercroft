@@ -105,7 +105,7 @@ export async function* harvestDrive(
   // how far a recursive descent went.
   let walked = 0;
   let known = 0;
-  const fileRead = filesReadGauge(journal);
+  const gauge = filesGauge(journal);
 
   for (const picked of scope.files) {
     if (picked.kind === "folder") {
@@ -118,10 +118,11 @@ export async function* harvestDrive(
       skipped,
     });
 
-    const into: Taking = { api, picked, seen, held, fileRead };
+    const into: Taking = { api, picked, seen, held, gauge };
     const batch: DriveFile[] = [];
     let step = await files.next();
     while (!step.done) {
+      gauge.found();
       batch.push(step.value);
       if (batch.length >= PROBE_BATCH) {
         known += yield* take(batch.splice(0), into);
@@ -150,20 +151,52 @@ export async function* harvestDrive(
   return { seenIds: [...seen], skipped, listed: seen.size, known };
 }
 
+/** The three counts of a Drive walk, each told as it moves. See {@link filesGauge}. */
+interface FilesGauge {
+  /** The listing named one more file. */
+  readonly found: () => void;
+  /** This many of the files just probed are already held unchanged, and will not be read. */
+  readonly held: (count: number) => void;
+  /** One more file's bytes came back from Drive. */
+  readonly read: () => void;
+}
+
 /**
- * The run's `records_read` gauge for Drive: call it once per file whose bytes came back.
+ * The run's `records_read` gauge for Drive: ONE reading carrying every count of the walk.
  *
- * Counted when a download FINISHES, not when a file is handed over. The document sink fetches
- * a whole chunk at once, so a count of hand-overs leaps two hundred and then sits still for
- * the minutes those two hundred take -- which is the frozen screen this exists to end: a Drive
- * run used to say `entity_started` and nothing more until it closed. No total, because the
+ * `read` is counted when a download FINISHES, not when a file is handed over, so the figure
+ * moves with the slow part rather than leaping a batch at a time. But a download is only the
+ * last of three phases, and counting it alone left the first two dark: before its first
+ * download a run lists every picked folder -- a paced request per page, per folder -- and
+ * probes each batch against what the tenant already holds. A re-run over a Drive that earlier
+ * runs mostly landed spends minutes there, skipping, and said `entity_started` and nothing
+ * more (production run-mugrpt3r-cbd13590, 2026-09-25). So `found` counts files as the listing
+ * names them -- a file in two picked folders twice, since the walk has not de-duplicated it
+ * yet -- and `skipped` the ones the probe says are held unchanged.
+ *
+ * One event rather than one per phase, so the whole dial is one row and every reading carries
+ * the others' latest figures: the journal paces readings per event, and a phase's last count
+ * dropped by that pacing is restated by the next reading of any phase. No total, because the
  * listing streams and how many files the picks hold is known only at the end of the walk.
  */
-function filesReadGauge(journal: RunJournal): () => void {
-  let read = 0;
-  return function fileRead(): void {
-    read += 1;
-    journal.progress("records_read", { entity: ENTITY, read });
+function filesGauge(journal: RunJournal): FilesGauge {
+  const counts = { read: 0, found: 0, skipped: 0 };
+  function report(): void {
+    journal.progress("records_read", { entity: ENTITY, ...counts });
+  }
+  return {
+    found(): void {
+      counts.found += 1;
+      report();
+    },
+    held(count: number): void {
+      counts.skipped += count;
+      report();
+    },
+    read(): void {
+      counts.read += 1;
+      report();
+    },
   };
 }
 
@@ -174,8 +207,7 @@ interface Taking {
   /** Every file id this whole harvest has met. Mutated here; see {@link take}. */
   readonly seen: Set<string>;
   readonly held: AlreadyHeld;
-  /** Told each time a file's bytes have come back from Drive. */
-  readonly fileRead: () => void;
+  readonly gauge: FilesGauge;
 }
 
 /**
@@ -204,14 +236,15 @@ async function* take(
       : [{ sourceRecordId: file.id, sourceUpdatedAt: file.modifiedTime }],
   );
   const unchanged = await held(probes);
+  // Told before the first yield rather than after the last: a yield hands over a download,
+  // and a count held back until the batch's downloads are done would sit stale behind them.
+  const skippedHere = fresh.filter((file) => unchanged.has(file.id)).length;
+  into.gauge.held(skippedHere);
 
-  let skippedHere = 0;
   for (const file of fresh) {
-    if (unchanged.has(file.id)) {
-      skippedHere += 1;
-      continue;
+    if (!unchanged.has(file.id)) {
+      yield { record: toRecord(file), documents: [toDocument(into, file, picked, seen.size)] };
     }
-    yield { record: toRecord(file), documents: [toDocument(into, file, picked, seen.size)] };
   }
   return skippedHere;
 }
@@ -246,7 +279,7 @@ function toRecord(file: DriveFile): RecordToLand {
  * the file was, so the export is never mistaken for an upload.
  */
 function toDocument(
-  { api, fileRead }: Pick<Taking, "api" | "fileRead">,
+  { api, gauge }: Pick<Taking, "api" | "gauge">,
   file: DriveFile,
   picked: DriveScope["files"][number],
   seen: number,
@@ -274,7 +307,7 @@ function toDocument(
     sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
     fetchBytes: async (): Promise<Uint8Array> => {
       const bytes = await api.getBytes(url, ENTITY, seen);
-      fileRead();
+      gauge.read();
       return bytes;
     },
   };

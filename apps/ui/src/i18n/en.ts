@@ -682,6 +682,7 @@ export const en = {
       head: "Reading now",
       share: "{{share}}%",
       noTotal: "total not yet known",
+      walked: "{{found}} found, {{skipped}} already held",
       reading: "{{entity}}: read {{figure}}",
     },
 

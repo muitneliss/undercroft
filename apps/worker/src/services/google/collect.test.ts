@@ -6,7 +6,13 @@
  * returning nothing and reading as an empty mailbox.
  */
 
-import { createPacer, createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
+import {
+  type Clock,
+  createPacer,
+  createStampSource,
+  InMemoryByteFetcher,
+  TestClock,
+} from "@undercroft/core";
 import { eventsFor, openRun, writeConnectionDetail } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
@@ -831,6 +837,33 @@ describe("drive", () => {
     expect(rows.map((r) => r.document_id)).toEqual(["f1"]);
   });
 
+  /**
+   * A journal for a fresh run whose clock moves a second every time it is read, so no reading
+   * is paced away: the row left at the end is the last thing the walk said, not the first.
+   */
+  async function journalFor(runId: string): Promise<RunJournal> {
+    await openRun(db, {
+      id: runId,
+      tenantId: TENANT,
+      source: "drive",
+      verb: "ingest",
+      trigger: "manual",
+    });
+    let nowMs = Date.parse("2026-09-25T09:38:12.000Z");
+    const ticking: Clock = {
+      now: (): Date => {
+        nowMs += 1000;
+        return new Date(nowMs);
+      },
+      sleep: (): Promise<void> => Promise.resolve(),
+    };
+    return createRunJournal({ exec: db, runId, clock: ticking });
+  }
+
+  async function readingOf(runId: string): Promise<unknown> {
+    return (await eventsFor(db, runId)).find((e) => e.event === "records_read");
+  }
+
   it("counts files as they download, so a long Drive run is not a frozen screen", async () => {
     // The regression: a Drive walk said `entity_started` and then nothing until it closed, so
     // a run landing 200 files every five minutes for most of an hour read as hung.
@@ -840,20 +873,37 @@ describe("drive", () => {
     fetcher
       .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1")] } })
       .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
-    await openRun(db, {
-      id: "r1",
-      tenantId: TENANT,
-      source: "drive",
-      verb: "ingest",
-      trigger: "manual",
-    });
-    const journal = createRunJournal({ exec: db, runId: "r1", clock: new TestClock() });
+    const journal = await journalFor("r1");
 
     await collect("drive", journal);
     await journal.flush();
 
-    const reading = (await eventsFor(db, "r1")).find((e) => e.event === "records_read");
-    expect(reading).toMatchObject({ entity: "files", live: true, detail: { read: 1 } });
+    expect(await readingOf("r1")).toMatchObject({
+      entity: "files",
+      live: true,
+      detail: { read: 1, found: 1, skipped: 0 },
+    });
+  });
+
+  it("a walk over files already held still moves the gauge, though it downloads nothing", async () => {
+    // The regression after that one: the count moved only on a download, so a re-run over a
+    // Drive that earlier runs had mostly landed listed and skipped for minutes before its
+    // first download, and the page said `entity_started` and nothing more
+    // (run-mugrpt3r-cbd13590).
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1"), file("f2")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF })
+      .on("GET", `${DRIVE}/f2?alt=media`, { body: PDF });
+    await collect("drive");
+    const journal = await journalFor("r2");
+
+    await collect("drive", journal);
+    await journal.flush();
+
+    expect(await readingOf("r2")).toMatchObject({ detail: { read: 0, found: 2, skipped: 2 } });
   });
 
   it("a picked folder that matched nothing says so rather than landing a silent zero", async () => {

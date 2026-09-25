@@ -29,6 +29,13 @@ export interface EntityReading {
   done: boolean;
   read: number | null;
   total: number | null;
+  /**
+   * How many the listing has named, and how many of those are already held unchanged, for a
+   * source whose reading carries them (Drive). The walk before the first download is minutes
+   * of listing and skipping, and `read` alone says nothing about it.
+   */
+  found: number | null;
+  skipped: number | null;
   landed: number | null;
   refused: number | null;
 }
@@ -76,6 +83,8 @@ function applyEntityEvent(acc: EntityAcc, event: RunEventView): void {
   } else if (event.event === "records_read") {
     acc.read = numberField(event.detail, "read") ?? acc.read;
     acc.total = numberField(event.detail, "total") ?? acc.total;
+    acc.found = numberField(event.detail, "found") ?? acc.found;
+    acc.skipped = numberField(event.detail, "skipped") ?? acc.skipped;
   } else if (event.event === "entity_done") {
     acc.started = true;
     acc.done = true;
@@ -109,6 +118,8 @@ export function entityAccumulators(run: RunDetail, events: readonly RunEventView
       done: false,
       read: null,
       total: null,
+      found: null,
+      skipped: null,
       landed: null,
       refused: null,
     };

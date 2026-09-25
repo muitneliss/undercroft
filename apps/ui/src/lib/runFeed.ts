@@ -50,6 +50,9 @@ export interface RunGauge {
   readonly total: number | null;
   /** How far along, 0 to 1, or `null` when there is no total to be a fraction of. */
   readonly share: number | null;
+  /** Named by the listing so far, and of those already held; `null` where the source says neither. */
+  readonly found: number | null;
+  readonly skipped: number | null;
 }
 
 function shareOf(reading: EntityReading): number | null {
@@ -78,6 +81,8 @@ export function runGauges(run: RunDetail, events: readonly RunEventView[]): RunG
       read: acc.read,
       total: acc.total,
       share: shareOf(acc),
+      found: acc.found,
+      skipped: acc.skipped,
     }));
 }
 
@@ -109,4 +114,22 @@ export function gaugeShare(t: TFunction, locale: Locale, gauge: RunGauge): strin
     return null;
   }
   return t("journal.gauge.share", { share: formatCount(Math.floor(gauge.share * 100), locale) });
+}
+
+/**
+ * What a walk with no total has done so far: "1,240 found, 1,180 already held".
+ *
+ * Where there is no share to print, this is what stands in its place, and it is the figure that
+ * moves while a Drive run lists and skips before its first download -- minutes in which `read`
+ * sits at zero and "total not yet known" alone read as a run that had hung. `null` when the
+ * reading carries no listing count, where the band says the total is not known.
+ */
+export function gaugeWalk(t: TFunction, locale: Locale, gauge: RunGauge): string | null {
+  if (gauge.found === null) {
+    return null;
+  }
+  return t("journal.gauge.walked", {
+    found: formatCount(gauge.found, locale),
+    skipped: formatCount(gauge.skipped, locale),
+  });
 }
