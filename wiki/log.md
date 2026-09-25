@@ -138,3 +138,6 @@
 ## [2026-09-25] ingest | ADR 0054: A widened HubSpot object is read in two steps, so no choice of properties is too long
 ## [2026-09-25] ingest | ADR 0055: An open tab learns of a new release from a service worker
 ## [2026-09-25] ingest | ADR 0057: A NUL in extracted text is replaced where it stood, and a byte-order mark is believed
+## [2026-09-25] ingest | ADR 0056: A Drive ingest stops within one file, and a run the drain gives up on says it was cut off
+## [2026-09-25] ingest | ADR 0056: A Drive ingest stops within one file, and a run the drain gives up on says it was cut off
+## [2026-09-25] ingest | Runbook Deployment

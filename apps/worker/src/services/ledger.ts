@@ -70,15 +70,18 @@ export async function recordExternal(
 /**
  * What a run closed at boot says for itself.
  *
- * Such a run died with the process -- killed, out of memory, or still busy when a graceful stop
- * ran out of time -- so it never wrote its counts, and the row reads 0 of everything. The old
- * sentence, "the worker restarted while this run was in progress", sat beside those zeroes and
- * together they read as "this run landed nothing" whether or not it had -- a run lands and
- * projects a chunk at a time, so one killed an hour in may have landed thousands -- and an
- * operator reading the pair concluded a mailbox could never finish (issue #196). So the
- * sentence now says the one thing the zeroes cannot: they are not a count.
- * A run the worker stopped ON PURPOSE is not closed here at all; it settles itself, with its
- * real counts, under `RUN_STOPPED`. ADR 0051.
+ * Such a run died with the process, so it never wrote its counts, and the row reads 0 of
+ * everything. The old sentence, "the worker restarted while this run was in progress", sat
+ * beside those zeroes and together they read as "this run landed nothing" whether or not it
+ * had -- a run lands and projects a chunk at a time, so one killed an hour in may have landed
+ * thousands -- and an operator reading the pair concluded a mailbox could never finish (issue
+ * #196). So the sentence now says the one thing the zeroes cannot: they are not a count.
+ *
+ * It names a kill, and since ADR 0056 a kill is all it can mean. A run the worker stopped ON
+ * PURPOSE settles itself, with its real counts, under `RUN_STOPPED` (ADR 0051); one still busy
+ * when a graceful stop ran out of time is closed by the stopping process, under `RUN_CUT_OFF`
+ * (`shutdown.ts`). What is left for the boot is a process that had no chance to say anything:
+ * SIGKILL, the OOM killer, a crash, or a shutdown that could not reach the database.
  */
 export const RUN_ABANDONED =
   "the worker stopped abruptly while this run was in progress (it was killed or ran out of " +

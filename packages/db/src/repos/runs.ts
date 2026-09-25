@@ -651,8 +651,9 @@ export async function claimRecoveredRuns(exec: SqlExecutor): Promise<RecoveredRu
 
 /**
  * Every run still marked running is one the worker was in the middle of when it stopped.
- * Called once at boot: a row that stayed `running` forever would hold `run_one_running`
- * against every later run of the same pair.
+ * Called at boot, and by a stopping worker whose drain ran out of time, each with its own
+ * sentence for why: a row that stayed `running` forever would hold `run_one_running` against
+ * every later run of the same pair.
  */
 export async function closeAbandoned(exec: SqlExecutor, error: string): Promise<string[]> {
   const { rows } = await exec.query<{ id: string }>(

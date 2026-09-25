@@ -157,11 +157,19 @@ safe point, waits up to 45 seconds for them to settle, and exits; the compose fi
 progress…_, and its counts are what it really landed. Nothing needs doing: the next scheduled
 run, or **Run now**, carries on from there and does not land anything twice.
 
-A run the worker could not stop in time — a chunk of attachments mid-fetch, a Gmail listing, a
-dbt build — or one it lost to an OOM kill is closed at the next boot instead, with _the worker
-stopped abruptly…_. Its counts read zero because the process died before writing them, not
-because it landed nothing; the next run is the same safe retry. The worker's `stopped` log line
-says which happened: `drained: false` means something was left for the boot to close.
+A Google ingest reaches a safe point after every message or Drive file, so it usually stops
+in seconds. A run the worker could not stop in time — a long Gmail or Drive listing, a
+download backing off on a rate limit, a dbt build — is closed by the stopping worker just
+before it exits, with _the worker was shut down (a deploy or a restart) before this run
+reached a point where it could stop safely…_ (ADR 0056). Its log line `stopped` says
+`drained: false`, and `runs_cut_off` names the runs.
+
+Only a run the worker lost with no warning — an OOM kill, a SIGKILL, a crash — is closed at the
+next boot, with _the worker stopped abruptly…_, logged as `runs_abandoned`. So that message
+after a deploy is worth a look at the kernel log and `docker inspect`'s `OOMKilled`, where the
+cut-off message is not. Either way the counts read zero because the process could not write
+them, not because the run landed nothing, and the next run is the same safe retry: it skips
+what the stopped run kept.
 
 ## Notifications
 
