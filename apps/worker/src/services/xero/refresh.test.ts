@@ -1,5 +1,6 @@
 import { describe, expect, test as it } from "bun:test";
 import { InMemoryByteFetcher, TestClock } from "@undercroft/core";
+import { RefreshRefused } from "@undercroft/db/services";
 
 import { XERO_TOKEN_URL, xeroRefresher } from "./refresh.ts";
 
@@ -62,9 +63,11 @@ describe("xeroRefresher", () => {
     await expect(refresh("spent")).rejects.toThrow(/no rotated refresh_token/u);
   });
 
-  it("a revoked grant raises rather than returning a broken credential", async () => {
+  it("a revoked grant is a refused refresh, which the connection reads as expired", async () => {
+    // The same rule as Google's, from the same owner (`oauthRefresh.ts`): a bare HTTP 400 here
+    // read as an outage, and the connection kept saying "connected" (issue 213).
     const { refresh } = refresherWith({ error: "invalid_grant" }, 400);
 
-    await expect(refresh("revoked")).rejects.toThrow();
+    await expect(refresh("revoked")).rejects.toBeInstanceOf(RefreshRefused);
   });
 });

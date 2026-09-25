@@ -8,6 +8,7 @@
  * of those paths need. These tests are what keeps them wired.
  */
 
+import { InMemoryByteFetcher } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import type { Credential } from "@undercroft/db/repos";
@@ -15,6 +16,7 @@ import { readCredential } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
+import { GOOGLE_TOKEN_URL, googleRefresher } from "./google/refresh.ts";
 import { resolveToken } from "./runTypes.ts";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
@@ -166,6 +168,30 @@ describe("resolveToken", () => {
     // The other side of the same judgement. Marking expired here would send a customer to
     // re-consent over a provider hiccup that fixes itself in a minute.
     expect(await statusOf()).toBe("connected");
+  });
+
+  it("a refresh token Google refuses marks the connection expired, and asks for re-consent", async () => {
+    // Issue 213: Google's 400 `invalid_grant` escaped as a bare HTTP error, so every browse and
+    // every run failed as an outage while the card went on reading "connected". The real
+    // refresher, over a token endpoint that refuses; the transient test above is the quiet side.
+    await storeCredential({ accessToken: "stale", refreshToken: "dead", expiresAt: LONG_EXPIRED });
+    const refusing = new InMemoryByteFetcher().on("POST", GOOGLE_TOKEN_URL, {
+      status: 400,
+      body: { error: "invalid_grant" },
+    });
+
+    await expect(
+      resolveToken(
+        {
+          exec: db,
+          env: ENV,
+          transactor,
+          refresher: googleRefresher({ clientId: "c", clientSecret: "s", fetcher: refusing }),
+        },
+        INPUT,
+      ),
+    ).rejects.toThrow(/refused by the provider.*needs re-consent/u);
+    expect(await statusOf()).toBe("expired");
   });
 
   it("a connection with no stored credential says so", async () => {

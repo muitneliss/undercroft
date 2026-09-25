@@ -12,14 +12,14 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import { providerName } from "../services/oauthProviders.ts";
-import type { WorkerFailure } from "../services/workerClient.ts";
+import type { WorkerFailure } from "../services/workerRefusals.ts";
 import { refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
 
 /**
  * Why a browse was refused, and what the person or agent reading it can do about it.
  *
- * Four answers, because the remedies have nothing in common. One message for all of them
+ * Five answers, because the remedies have nothing in common. One message for all of them
  * told an administrator whose Gmail grant Google had refused that "the processing service is
  * not responding" -- on the very screen where the remedy was a reconnect they could do
  * themselves, and about a service that was answering perfectly. The sentence is worded for
@@ -54,6 +54,16 @@ function browseRefusal(
           : t("error.scopeInsufficient", { source: at.source }),
         { ...facts, reason: "scope-insufficient", remedy: "reconnect" },
       );
+    // The credential itself is dead -- lapsed with nothing to refresh it, or its refresh token
+    // refused -- and the connection now reads `expired`. Worded apart from the case above: there
+    // is no permission to tick, only a source to connect again. Worded apart from the catch-all
+    // below, which is what it used to be, and which named no remedy at all (issue 213).
+    case "credential-expired":
+      return refusal("PRECONDITION_FAILED", t("error.credentialExpired", { source: at.source }), {
+        ...facts,
+        reason: "credential-expired",
+        remedy: "reconnect",
+      });
     case "unreachable":
       return refusal("PRECONDITION_FAILED", t("error.workerUnavailable"), {
         ...facts,

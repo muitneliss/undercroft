@@ -29,6 +29,14 @@ import {
   type TableResult,
 } from "@undercroft/contracts";
 
+import {
+  BAD_REQUEST,
+  BROWSE_REFUSALS,
+  CONFLICT,
+  REFUSAL_BY_STATUS,
+  type WorkerFailure,
+} from "./workerRefusals.ts";
+
 /**
  * What a caller sends to run a query.
  *
@@ -46,34 +54,6 @@ export type WorkerOutcome<T> =
       /** The worker's own sentence, for the one refusal an author can act on: a failed query. */
       message?: string;
     };
-
-/**
- * Why a call did not succeed, in the three shapes a caller acts on differently.
- *
- * `unreachable` is worth retrying and means the worker is down; `refused` means the worker
- * answered and said no, which retrying will not fix. Collapsing them would make a
- * misconfigured tenant look like an outage.
- *
- * `scope-insufficient` is split out of `refused` for the same reason one level finer: it is
- * the only one of the three that the administrator reading the screen can fix, by
- * reconnecting the source and granting the permission that was withheld. Worded as an
- * outage -- which is what it was -- it sends them off to wait for a service that is fine.
- */
-export type WorkerFailure =
-  | "unreachable"
-  | "refused"
-  | "scope-insufficient"
-  | "credential-rejected"
-  /** The worker's 409: the tenant already has a run of this kind going. */
-  | "in-progress"
-  /**
-   * The worker's 412: the credential is for a different account than the connection it was
-   * offered to is pinned to. Its own value because its remedy is its own -- add the account as
-   * a connection of its own -- and because the consent flow re-resolves on it. ADR 0043.
-   */
-  | "account-mismatch"
-  /** The author's SQL did not run. The outcome carries Postgres's sentence about it. */
-  | "query-failed";
 
 export interface StoreCredentialInput {
   readonly source: string;
@@ -173,24 +153,14 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 /** A synchronous build: the worker's two-minute deadline, and a little for the rows. */
 const BUILD_DEADLINE_MS = 150_000;
 
-/** The worker's answer for SQL that did not run, whose body names why. */
-const BAD_REQUEST = 400;
-/** The worker's answer for a credential Google refused. Every other status is a refusal. */
-const FORBIDDEN = 403;
-/** The worker's answer for a run already in progress, whose body names it. */
-const CONFLICT = 409;
-/** The worker's answer for a pasted credential the provider turned away. */
-const UNPROCESSABLE = 422;
-/** The worker's answer to a credential for an account its connection is not pinned to. */
-const PRECONDITION_FAILED = 412;
-
-/** The refusals a status alone names. Anything else is `refused`: the worker said no. */
-const REFUSAL_BY_STATUS: ReadonlyMap<number, WorkerFailure> = new Map([
-  [FORBIDDEN, "scope-insufficient"],
-  [UNPROCESSABLE, "credential-rejected"],
-  [CONFLICT, "in-progress"],
-  [PRECONDITION_FAILED, "account-mismatch"],
-]);
+/** How one call is posted; `refusals` is which refusal each status names on that endpoint. */
+interface PostOptions<T> {
+  readonly deadlineMs?: number;
+  readonly schema?: {
+    safeParse: (raw: unknown) => { success: true; data: T } | { success: false };
+  };
+  readonly refusals?: ReadonlyMap<number, WorkerFailure>;
+}
 
 /** Where the worker is and how to reach it. Passed rather than closed over, so the two
  * request helpers below can live at module scope and be read on their own. */
@@ -210,11 +180,11 @@ function postTo(t: WorkerTransport): typeof post {
   async function post<T>(
     path: string,
     body: unknown,
-    deadlineMs: number = t.timeoutMs,
-    schema?: { safeParse: (raw: unknown) => { success: true; data: T } | { success: false } },
+    options: PostOptions<T> = {},
   ): Promise<WorkerOutcome<T>> {
+    const { schema, refusals = REFUSAL_BY_STATUS } = options;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), deadlineMs);
+    const timer = setTimeout(() => controller.abort(), options.deadlineMs ?? t.timeoutMs);
     try {
       const response = await t.doFetch(`${t.baseUrl}${path}`, {
         method: "POST",
@@ -230,7 +200,7 @@ function postTo(t: WorkerTransport): typeof post {
         // can echo a request that carried a live refresh token, and a control-plane log is
         // not where that belongs. The STATUS carries no such payload, which is what makes
         // it the right place to tell a withheld permission from every other refusal.
-        return { ok: false, reason: REFUSAL_BY_STATUS.get(response.status) ?? "refused" };
+        return { ok: false, reason: refusals.get(response.status) ?? "refused" };
       }
       const raw: unknown = await response.json();
       const parsed = schema?.safeParse(raw) ?? { success: true as const, data: raw as T };
@@ -353,12 +323,16 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
 
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
-    browseScope: (input) => post("/v1/connections/browse", input, t.timeoutMs, BrowseScopeResponse),
+    browseScope: (input) =>
+      post("/v1/connections/browse", input, {
+        schema: BrowseScopeResponse,
+        refusals: BROWSE_REFUSALS,
+      }),
     revokeConnection: (input) => post("/v1/connections/revoke", input),
     triggerIngest: trigger,
     // The worker's own build deadline plus room for the rows; the default would cut a
     // build that is legitimately slow and report it as unreachable.
-    buildModel: (input) => post("/v1/models/build", input, BUILD_DEADLINE_MS),
+    buildModel: (input) => post("/v1/models/build", input, { deadlineMs: BUILD_DEADLINE_MS }),
     dqFailures: (input) => post("/v1/dq/failures", input),
     runQuery: (input) => query("/v1/queries/run", input),
     readSchema: (input) => post("/v1/queries/schema", input),

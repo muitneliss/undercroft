@@ -14,6 +14,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
+import { GOOGLE_TOKEN_URL, googleRefresher } from "../services/google/refresh.ts";
 import { noDatabase } from "../testing.ts";
 import { createLakeApi } from "./lake.ts";
 
@@ -314,6 +315,58 @@ describe("browsing what may be shared", () => {
 
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ code: "scope_insufficient" });
+  });
+});
+
+describe("browsing a mailbox whose refresh token is dead", () => {
+  withDatabase();
+
+  const SECOND = "gmail.3fa9c1d2e0ab";
+
+  /** The API as production wires it for Gmail: with the kind's refresher, over `fetcher`. */
+  async function browse(): Promise<Response> {
+    return await createLakeApi({
+      lake,
+      exec: db,
+      serviceToken: "svc-token",
+      env: ENV,
+      byteFetcher: fetcher,
+      refreshers: { gmail: googleRefresher({ clientId: "c", clientSecret: "s", fetcher }) },
+    }).request("/v1/connections/browse", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer svc-token" },
+      body: JSON.stringify({ source: SECOND, tenantId: TENANT, kind: "labels" }),
+    });
+  }
+
+  async function statusOf(source: string): Promise<string | undefined> {
+    const { rows } = await db.query<{ status: string }>(
+      "SELECT status FROM ops.connection WHERE tenant_id = $1 AND source = $2",
+      [TENANT, source],
+    );
+    return rows[0]?.status;
+  }
+
+  it("a refresh Google refuses is a reconnect: 409, and the connection now reads expired", async () => {
+    // Issue 213. Google answers a dead refresh token with 400 `invalid_grant`; that escaped as a
+    // 500, the scope screen said only that the list could not be fetched, and the connection
+    // went on reading "connected". The list itself is never asked for. An outage at the token
+    // endpoint is the quiet side, pinned where it is decided (`google/refresh.test.ts`,
+    // `tokenRefresh.test.ts`).
+    await post("/v1/connections/credential", {
+      ...VALID,
+      source: SECOND,
+      externalAccountId: "208134092834092834",
+      credential: { ...CREDENTIAL, expiresAt: "2020-01-01T00:00:00.000Z" },
+    });
+    fetcher.on("POST", GOOGLE_TOKEN_URL, { status: 400, body: { error: "invalid_grant" } });
+
+    const response = await browse();
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "credential_unusable" });
+    expect(await statusOf(SECOND)).toBe("expired");
+    expect(fetcher.calls.map((call) => call.url)).toEqual([GOOGLE_TOKEN_URL]);
   });
 });
 

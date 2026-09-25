@@ -11,6 +11,7 @@ import { type BrowseListing, type BrowseScopeResponse, sourceKind } from "@under
 import type { ByteFetcher } from "@undercroft/core";
 import { ConnectorError, HttpError } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
+import { ConnectionRegistryError } from "@undercroft/db/repos";
 
 import { createGoogleApi } from "./google/api.ts";
 import { listDriveChoices } from "./google/driveChoices.ts";
@@ -35,9 +36,18 @@ export interface BrowseDeps {
 /** One listing's answer: what may be chosen, and which kinds of it the list is not whole in. */
 type Choices = Pick<BrowseScopeResponse, "items" | "partial">;
 
-export type BrowseOutcome =
-  | ({ ok: true } & Choices)
-  | { ok: false; reason: "unsupported" | "scope-insufficient" };
+/**
+ * Why nothing could be listed, when that is not an outage.
+ *
+ * `credential-expired` is the stored credential being unusable -- it lapsed and cannot be
+ * refreshed, the provider refused its refresh token, or none was ever stored. The connection
+ * already reads `expired` by the time this is answered (`resolveToken` marks it), and the remedy
+ * is a plain reconnect. It is not `scope-insufficient`, whose remedy is to grant a permission
+ * that was withheld: the same "reconnect" in name, but a different thing to tell the reader.
+ */
+export type BrowseRefusal = "unsupported" | "scope-insufficient" | "credential-expired";
+
+export type BrowseOutcome = ({ ok: true } & Choices) | { ok: false; reason: BrowseRefusal };
 
 /**
  * What an admin may choose from: Gmail's labels, the organisations a Xero consent sees,
@@ -67,6 +77,9 @@ export async function browseScope(
   try {
     return { ok: true, ...(await listing()) };
   } catch (error) {
+    if (credentialUnusable(error)) {
+      return { ok: false, reason: "credential-expired" };
+    }
     if (error instanceof GrantTooNarrow || deniedForCredential(error)) {
       return { ok: false, reason: "scope-insufficient" };
     }
@@ -132,20 +145,29 @@ const UNAUTHENTICATED = 401;
 const FORBIDDEN = 403;
 
 /**
- * The HTTP failure inside a collector's wrapper, if that is what it is.
+ * The failure inside a collector's wrapper, or the failure itself.
  *
  * `createGoogleApi` wraps whatever it caught in a `ConnectorError` so the record count
- * survives, which puts the status one level down. Read without unwrapping, every Google
- * refusal looks like a generic connector fault.
+ * survives, which puts the real failure -- an HTTP status, or a token that could not be
+ * resolved -- one level down. Read without unwrapping, every Google refusal looks like a
+ * generic connector fault.
  */
+function unwrapped(error: unknown): unknown {
+  return error instanceof ConnectorError ? error.cause : error;
+}
+
+/** The HTTP failure a listing raised, if that is what it is. */
 function httpCauseOf(error: unknown): HttpError | null {
-  if (error instanceof HttpError) {
-    return error;
-  }
-  if (error instanceof ConnectorError && error.cause instanceof HttpError) {
-    return error.cause;
-  }
-  return null;
+  const cause = unwrapped(error);
+  return cause instanceof HttpError ? cause : null;
+}
+
+/**
+ * Whether no token could be had for this connection at all. Raised by `resolveToken` before
+ * the provider is asked for the list, so it is never the provider's 401 or 403.
+ */
+function credentialUnusable(error: unknown): boolean {
+  return unwrapped(error) instanceof ConnectionRegistryError;
 }
 
 /** Whether a failure is the provider saying no to this credential, rather than a fault. */

@@ -6,7 +6,7 @@
  * rotates, not copied into every caller.
  */
 
-export { accessToken, needsRefresh, REFRESH_SKEW_MS } from "./credentials.ts";
+export { accessToken, needsRefresh, REFRESH_SKEW_MS, RefreshRefused } from "./credentials.ts";
 export {
   MACROS,
   parseRunResults,

@@ -193,6 +193,27 @@ function useSaveScope(
 }
 
 /**
+ * Whether Save must wait. Two things hold it back, and a HubSpot choice of any size is not one
+ * of them -- its properties travel in a batch read's body, not in a URL (ADR 0054).
+ *
+ * A list that did not load: nothing was on screen to choose from, so the draft is not a choice
+ * anybody made. For Gmail it is worse than empty -- no label is a RECORDED decision meaning the
+ * whole mailbox, and one press recorded exactly that from a screen whose only content was an
+ * error (issue 213). A deliberate empty choice from a list that DID load still saves as the
+ * whole mailbox.
+ *
+ * Xero without an organisation: the server would refuse it, and saying so beforehand is cheaper
+ * than the errata after.
+ */
+function saveHeldBack(
+  kind: Source,
+  listFailed: boolean,
+  chosen: Omit<ScopeDraft, "source">,
+): boolean {
+  return (BROWSED.has(kind) && listFailed) || (kind === "xero" && chosen.organisation === null);
+}
+
+/**
  * The picker for one connection.
  *
  * `kind` decides the SHAPE of the choice -- the lead, which picker, what gets recorded -- and
@@ -236,10 +257,7 @@ export function ScopePicker({
   }
 
   const chosen = draft?.source === source ? draft : NOTHING_CHOSEN;
-  // Xero cannot be saved without an organisation: the server would refuse it, and saying so
-  // beforehand is cheaper than the errata after. A HubSpot choice of any size can be saved --
-  // its properties travel in a batch read's body, not in a URL (ADR 0054).
-  const unsaveable = kind === "xero" && chosen.organisation === null;
+  const unsaveable = saveHeldBack(kind, labels.isError, chosen);
   const account = connections.data.find((c) => c.source === source)?.externalAccountLabel ?? "";
 
   return (
