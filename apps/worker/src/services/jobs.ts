@@ -9,10 +9,10 @@
  * The accepted cost is that a restart ENDS what is in flight; ADR 0051 is what keeps it from
  * also erasing it. A stop the process is told about (a deploy's SIGTERM) aborts `RunDeps.stop`,
  * an ingest stops at its next safe boundary and settles with what it landed, and `server.ts`
- * waits for that here, through `drainJobs`, for a bounded time. What is still running when the
- * bound runs out -- a transform mid-build, an ingest mid-way through a chunk of attachments --
- * and whatever a kill takes without warning is closed by `closeAbandonedRuns` at the next
- * boot, saying that its zero counts are not a count.
+ * waits for that, through `drainJobs`, for a bounded time (`shutdown.ts`). What is still running
+ * when the bound runs out -- a transform mid-build, a long listing -- is closed then, by this
+ * process, as cut off by the shutdown (ADR 0056). Only what a kill takes without warning is left
+ * to `closeAbandonedRuns` at the next boot. Both say that their zero counts are not a count.
  *
  * `drainJobs` settles when every job started through here has, and it never throws -- a job's
  * failure is in the ledger and the log, which is where a reader of "what happened" looks.

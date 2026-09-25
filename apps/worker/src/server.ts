@@ -9,7 +9,9 @@
  * SIGINT it tells every run in flight to stop at its next safe boundary and waits, for a
  * bounded time, for them to settle with what they landed. Before this there was no handler at
  * all, so a deploy's SIGTERM killed the worker on the spot and every run it was in the middle
- * of was closed at the next boot with no counts. ADR 0051.
+ * of was closed at the next boot with no counts. ADR 0051. A run that has still not settled
+ * when the bound runs out is closed by this process on its way out, saying the shutdown cut it
+ * off, rather than left for the next boot to call a kill. ADR 0056.
  */
 
 import { join } from "node:path";
@@ -21,9 +23,9 @@ import { LakeStore, S3ObjectStore } from "@undercroft/lake";
 import { createLakeApi } from "./handlers/lake.ts";
 import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
-import { drainJobs } from "./services/jobs.ts";
 import type { Refresher } from "./services/runTypes.ts";
 import { closeAbandonedRuns } from "./services/ledger.ts";
+import { drainJobsBy } from "./services/shutdown.ts";
 import { createTenantSessions } from "./services/tenantSession.ts";
 import { realSpawn } from "./services/transform.ts";
 import { xeroRefresher } from "./services/xero/refresh.ts";
@@ -101,10 +103,10 @@ const xero = xeroClient();
  * before it sends SIGKILL. This must be the smaller number, with room for the exit itself: a
  * wait that outlived the grace period would be cut off by the SIGKILL it exists to avoid, and
  * the run would be closed at boot with no counts -- exactly the outcome of having no handler.
- * An ingest usually stops in seconds (between two records, or between two messages); what does
- * not settle in time -- a chunk of attachments mid-fetch, a Gmail listing, a dbt build -- is
- * left to `closeAbandonedRuns` at the next boot, as everything was before. If one number
- * moves, both do.
+ * An ingest usually stops in seconds (between two records, two messages, or two Drive files);
+ * what does not settle in time -- a Gmail listing, a dbt build -- is closed as cut off by the
+ * shutdown just before the exit (`drainJobsBy`), which is one short statement that has to fit
+ * inside the grace period as well. If one number moves, both do.
  */
 const DRAIN_MS = 45_000;
 
@@ -167,12 +169,9 @@ async function stop(signal: string): Promise<void> {
   }
   log.info("stopping", { signal, drainMs: DRAIN_MS });
   stopping.abort();
-  const drained = await Promise.race([
-    drainJobs().then(() => true),
-    delay(DRAIN_MS).then(() => false),
-  ]);
-  // `drained: false` is the line to grep after a deploy: the runs it left behind are closed at
-  // the next boot rather than settled, and their counts are not on them.
+  // `drained: false` is the line to grep after a deploy: the runs it left behind were closed as
+  // cut off rather than settled, their counts are not on them, and `runs_cut_off` names them.
+  const drained = await drainJobsBy(asExecutor(pool), delay(DRAIN_MS), log);
   log.info("stopped", { signal, drained });
   process.exit(0);
 }
