@@ -80,66 +80,28 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 - **A CLI for people and agents.** `undercroft` does everything the web UI does, one command
   per API procedure, as the person who signed in — never more. Writes stay off for
   each profile until a person turns them on.
+- **An MCP server for any agent.** claude.ai, Claude Desktop, Claude Code and any other MCP
+  client get every procedure as a tool at `/mcp`, signed in with Google or a personal token,
+  with a read or write grant the person chooses. Query results and live runs render as
+  widgets in the chat.
 
-## From a terminal, or from an agent
+## Ways in
 
-The `undercroft` CLI needs Node 22 or newer. Use either of the two ways below to get it.
-Choose by who will type the commands, you or your agent.
+Every way in reaches the same procedures through the same role gates, as the person who
+signed in. This page only says which to choose; each runbook says how.
 
-### Install it yourself
+| Way in                     | Choose it when                                                              | How                                                     |
+| -------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------- |
+| The web UI                 | you are a person at a browser                                               | [sign-in](docs/runbook/sign-in-setup.md)                |
+| The `undercroft` CLI       | you work in a terminal or a script (Node 22+)                               | [the CLI](docs/runbook/cli.md#running-it)               |
+| The `undercroft-cli` skill | your agent can run commands: Claude Code, Codex; the skill installs the CLI | [the CLI, as an agent](docs/runbook/cli.md#as-an-agent) |
+| MCP at `/mcp`              | your agent speaks MCP: claude.ai, Claude Desktop, Claude Code               | [connecting over MCP](docs/runbook/mcp-setup.md)        |
+| The assistant              | you want to ask in plain words inside the web UI                            | [the assistant](docs/runbook/assistant-setup.md)        |
 
-```sh
-npm install -g https://github.com/muitneliss/undercroft/releases/latest/download/undercroft-cli.tgz
-undercroft --help
-```
-
-That installs the newest release. Run the same line again to upgrade, and run
-`npm uninstall -g undercroft-cli` to remove it. To install one exact release instead:
-
-<!-- x-release-please-start-version -->
-
-```sh
-v=1.34.1; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
-```
-
-<!-- x-release-please-end -->
-
-Then point it at your server and sign in:
-
-```sh
-undercroft config set-profile prod --url https://undercroft.example.test
-undercroft auth login          # the same emailed code as the web sign-in
-undercroft                     # on its own: the home page, which lists every topic
-undercroft runs list           # asks which customer
-```
-
-Writes are off for each profile until you turn them on. To allow them, run
-`undercroft config set-profile prod --allow-writes`.
-
-### Let your agent install it
-
-Claude Code, Codex and other agents get the CLI through a skill. You install the skill, and
-the skill installs the CLI:
-
-```sh
-npx skills add muitneliss/undercroft --skill undercroft-cli --agent claude-code -y   # or --agent codex
-```
-
-Then ask for the task in plain words, for example "list the latest runs for CASE-0042". On
-first use the agent checks for `undercroft`. When the CLI is missing, or is a different
-release from the one the skill was written for, the agent installs that release with
-`npm install -g` and tells you. It passes `--agent` to every command, so each answer is one
-JSON envelope it can read.
-
-Two steps stay yours, and the CLI refuses an agent that tries either:
-
-- **Signing in.** The agent asks you for the code that arrives by email.
-- **Allowing writes.** Run `undercroft config set-profile <name> --allow-writes` in your own
-  terminal.
-
-See [docs/runbook/cli.md](docs/runbook/cli.md),
-[ADR 0044](docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md) and
-[ADR 0046](docs/adr/0046-the-cli-installs-once-from-the-latest-release.md).
+Two things stay a person's on every agent path: signing in, and allowing writes. The
+decisions are [ADR 0044](docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md) (the CLI),
+[ADR 0060](docs/adr/0060-an-agent-reaches-undercroft-over-mcp.md) and
+[ADR 0061](docs/adr/0061-an-mcp-client-signs-its-person-in-and-draws-two-widgets.md) (MCP).
 
 ## Design rules
 
@@ -162,41 +124,25 @@ would rather point at it.
 
 ## Development
 
-Every operation goes through [Task](https://taskfile.dev) (`brew install go-task` or see
-[the install docs](https://taskfile.dev/installation)) — never a bare `bun run` typed by
-hand. `task --list-all` enumerates everything; see `.claude/rules/tooling.md` for why.
-
-You need Bun (the version in `.bun-version`), Task, Docker, and Python 3 for the local dbt
-virtualenv. `task dev:env` writes `deploy/compose/.env` from its example; fill in its
-secrets before the first `task dev:run`.
-
-```sh
-bun install
-task ci:verify      # typecheck, lint, rules, format, specs, SPA build, tests -- offline
-task dev:run        # the whole local stack -- Postgres, MinIO, Kestra, the worker, the
-                     # control plane, the UI -- with hot reload, one command
-task dev:cli -- describe   # build the CLI and run it against your local stack
-```
-
-`ci:verify` is the gate and runs with no Docker, no network and no credentials. `task
-ci:itest` adds the Docker-backed integration tier.
-
-Signing in to the control plane is **invite-only**, by Google or a one-time code.
-[docs/runbook/sign-in-setup.md](docs/runbook/sign-in-setup.md) walks through the OAuth client,
-the mail key, the first invitation, and how to check each step actually worked.
+Every operation goes through [Task](https://taskfile.dev), and `task ci:verify` is the gate:
+it runs with no Docker, no network and no credentials. [CONTRIBUTING.md](CONTRIBUTING.md)
+has the setup, the local stack and the checks outside the gate.
 
 ## Documentation
 
+This README is an index. How to do a thing lives in its runbook, why it is that way lives in
+its ADR, and what exactly it accepts lives in a reference page.
+
+- **Runbooks,** one per way in or per thing to set up ([`docs/runbook/`](docs/runbook/)):
+  - Using it: [the CLI](docs/runbook/cli.md), [connecting an agent over MCP](docs/runbook/mcp-setup.md)
+  - Setting it up: [sign-in](docs/runbook/sign-in-setup.md),
+    [the assistant](docs/runbook/assistant-setup.md),
+    [Google ingestion](docs/runbook/google-ingestion-setup.md), [Xero](docs/runbook/xero-setup.md)
+  - Running it: [deployment](docs/runbook/deployment.md)
 - **Decisions:** [`docs/adr/`](docs/adr/). Each ADR records the options that were rejected
   and why.
-- **Runbooks:** [`docs/runbook/`](docs/runbook/):
-  - [sign-in](docs/runbook/sign-in-setup.md)
-  - [Google ingestion](docs/runbook/google-ingestion-setup.md)
-  - [Xero](docs/runbook/xero-setup.md)
-  - [the assistant](docs/runbook/assistant-setup.md)
-  - [the CLI](docs/runbook/cli.md)
-  - [deployment](docs/runbook/deployment.md)
 - **Reference:** [file formats a Gmail or Drive connection can land](docs/reference/file-formats.md).
+- **Design:** [the CLI's home page and sign-in](docs/design/cli-home-and-sign-in.md).
 - **Working on the code:** [CLAUDE.md](CLAUDE.md), also linked as `AGENTS.md`, is the map
   of the conventions. The rules it points to live in `.claude/rules/`.
 - **Changes:** [CHANGELOG.md](CHANGELOG.md), maintained by release-please.

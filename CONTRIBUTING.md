@@ -5,13 +5,22 @@ discuss a direction is welcome before a large PR.
 
 ## Setup
 
-You need Bun (the version in `.bun-version`), [Task](https://taskfile.dev), and, for the local
-stack and the integration tier, Docker and Python 3 (the local dbt virtualenv).
+You need Bun (the version in `.bun-version`), [Task](https://taskfile.dev) (`brew install
+go-task` or [the install docs](https://taskfile.dev/installation)), and, for the local stack
+and the integration tier, Docker and Python 3 (the local dbt virtualenv).
 
 ```sh
 bun install
 task ci:verify    # the gate: typecheck, lint, rules, format, spec validation, SPA build, tests
+task dev:env      # writes deploy/compose/.env from its example; fill in its secrets
+task dev:run      # the whole local stack -- Postgres, MinIO, Kestra, the worker, the
+                  # control plane, the UI -- with hot reload, one command
+task dev:cli -- describe   # build the CLI and run it against your local stack
 ```
+
+Signing in to the local control plane is invite-only, as everywhere:
+[docs/runbook/sign-in-setup.md](docs/runbook/sign-in-setup.md) covers the OAuth client, the
+mail key and the first invitation.
 
 Every operation goes through [Task](https://taskfile.dev) — `task --list-all` enumerates
 them, and `.claude/rules/tooling.md` says why a bare `bun run` is not the way in. `ci:verify`

@@ -32,15 +32,12 @@ it("names itself after its directory, which is the name an install asks for", ()
   expect(typeof description).toBe("string");
 });
 
-// The README shows a person the same pinned install line, for one exact release, and
-// release-please bumps both files (`extra-files`), so both are held to the release.
-it.each([
-  ["skills/undercroft-cli/SKILL.md", SKILL],
-  ["README.md", readFileSync(join(REPO, "README.md"), "utf8")],
-])("%s pins the CLI of the release it ships in", (_file, text) => {
+// release-please bumps the pinned block (`extra-files`), so it is held to the release. The
+// README pins nothing: it is an index, and a person's install lines live in the CLI runbook.
+it("pins the CLI of the release it ships in", () => {
   const pinned =
     /<!-- x-release-please-start-version -->(?<block>[\s\S]*?)<!-- x-release-please-end -->/u.exec(
-      text,
+      SKILL,
     )?.groups?.block;
   const versions = [...(pinned ?? "").matchAll(/\d+\.\d+\.\d+/gu)].map(([version]) => version);
 
