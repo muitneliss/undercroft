@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.0](https://github.com/muitneliss/undercroft/compare/v1.35.1...v1.36.0) (2026-09-25)
+
+
+### Features
+
+* **ui:** add public homepage and searchable customer index ([#237](https://github.com/muitneliss/undercroft/issues/237)) ([d38d358](https://github.com/muitneliss/undercroft/commit/d38d358e53b2bf25dfcf342bec5b9975f33cbebf))
+
 ## [1.35.1](https://github.com/muitneliss/undercroft/compare/v1.35.0...v1.35.1) (2026-09-25)
 
 
