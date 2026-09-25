@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.32.0](https://github.com/muitneliss/undercroft/compare/v1.31.0...v1.32.0) (2026-09-25)
+
+
+### Features
+
+* **connectors:** read a widened HubSpot object in two steps so no choice of properties is too long ([#215](https://github.com/muitneliss/undercroft/issues/215)) ([a4404e1](https://github.com/muitneliss/undercroft/commit/a4404e198c1edccd359179f28d13b8ad6b994998)), closes [#210](https://github.com/muitneliss/undercroft/issues/210)
+
+
+### Bug Fixes
+
+* **control-plane:** a consent that cannot start names the provider that was pressed ([#212](https://github.com/muitneliss/undercroft/issues/212)) ([11715f3](https://github.com/muitneliss/undercroft/commit/11715f3782dcfa7dcc9dcac7579f5fe3176ab129)), closes [#211](https://github.com/muitneliss/undercroft/issues/211)
+
 ## [1.31.0](https://github.com/muitneliss/undercroft/compare/v1.30.0...v1.31.0) (2026-09-25)
 
 
