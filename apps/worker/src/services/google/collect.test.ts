@@ -7,12 +7,13 @@
  */
 
 import { createPacer, createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
-import { writeConnectionDetail } from "@undercroft/db/repos";
+import { eventsFor, openRun, writeConnectionDetail } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { CHUNK } from "../landing.ts";
+import { createRunJournal, type RunJournal } from "../runJournal.ts";
 import { createGoogleApi } from "./api.ts";
 import { DOCUMENT_UNLANDED, runGoogleCollect, ScopeNotChosen } from "./collect.ts";
 import { NOTHING_MATCHED } from "./drive.ts";
@@ -60,7 +61,7 @@ async function connect(source: string, selection: unknown, granted = ""): Promis
   );
 }
 
-function collect(source: "gmail" | "drive") {
+function collect(source: "gmail" | "drive", journal?: RunJournal) {
   const clock = new TestClock();
   const api = createGoogleApi(source, {
     fetcher,
@@ -71,7 +72,10 @@ function collect(source: "gmail" | "drive") {
     // exercised against the clock it needs in `api.test.ts`.
     pacer: createPacer({}, clock),
   });
-  return runGoogleCollect({ lake, exec: db, api }, { source, tenantId: TENANT });
+  return runGoogleCollect(
+    { lake, exec: db, api, ...(journal === undefined ? {} : { journal }) },
+    { source, tenantId: TENANT },
+  );
 }
 
 /**
@@ -825,6 +829,31 @@ describe("drive", () => {
       "SELECT document_id FROM raw.documents",
     );
     expect(rows.map((r) => r.document_id)).toEqual(["f1"]);
+  });
+
+  it("counts files as they download, so a long Drive run is not a frozen screen", async () => {
+    // The regression: a Drive walk said `entity_started` and then nothing until it closed, so
+    // a run landing 200 files every five minutes for most of an hour read as hung.
+    await connect("drive", {
+      files: [{ id: "folder-1", name: "2026 statements", kind: "folder" }],
+    });
+    fetcher
+      .on("GET", listUrlFor("folder-1"), { body: { files: [file("f1")] } })
+      .on("GET", `${DRIVE}/f1?alt=media`, { body: PDF });
+    await openRun(db, {
+      id: "r1",
+      tenantId: TENANT,
+      source: "drive",
+      verb: "ingest",
+      trigger: "manual",
+    });
+    const journal = createRunJournal({ exec: db, runId: "r1", clock: new TestClock() });
+
+    await collect("drive", journal);
+    await journal.flush();
+
+    const reading = (await eventsFor(db, "r1")).find((e) => e.event === "records_read");
+    expect(reading).toMatchObject({ entity: "files", live: true, detail: { read: 1 } });
   });
 
   it("a picked folder that matched nothing says so rather than landing a silent zero", async () => {
