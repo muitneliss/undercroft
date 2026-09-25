@@ -421,6 +421,16 @@ function answeredByRead(
  * texts for one digest would try to write the same document twice in one statement, and
  * Postgres refuses that outright rather than picking a winner -- loud, which is the right
  * failure for "the caller read the same bytes twice and got two answers".
+ *
+ * ONE STATEMENT, SO ONE VALUE POSTGRES CANNOT STORE FAILS THE WHOLE BATCH -- and the batch comes
+ * back next run, because none of it was written. Issue #218 was that: a U+0000 in one text,
+ * which a `text` column refuses, and a backlog that grew every run while nothing was stored.
+ * The character is made impossible where every reading is built (`services/extract/
+ * extractText.ts`, `read`), because what it becomes is a decision about the value and this
+ * module decides nothing. It is the only such value: a JS string reaches Postgres as valid
+ * UTF-8 even with a lone surrogate, which the encoder replaces, and the CHECK and the digest
+ * are the caller's by construction. So the write stays one statement rather than growing a
+ * row-by-row retry for a failure nothing can now produce.
  */
 export async function upsertDocumentText(
   exec: SqlExecutor,
