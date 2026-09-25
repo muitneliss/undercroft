@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.0](https://github.com/muitneliss/undercroft/compare/v1.28.2...v1.29.0) (2026-09-25)
+
+
+### Features
+
+* **connectors:** an admin can choose which HubSpot properties are read ([#202](https://github.com/muitneliss/undercroft/issues/202)) ([#203](https://github.com/muitneliss/undercroft/issues/203)) ([1eeed9f](https://github.com/muitneliss/undercroft/commit/1eeed9f85b2a815cf3233fe4a715b062a3417609))
+
 ## [1.28.2](https://github.com/muitneliss/undercroft/compare/v1.28.1...v1.28.2) (2026-09-24)
 
 
