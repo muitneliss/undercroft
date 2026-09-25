@@ -256,6 +256,13 @@ the `debug-trace` skill, follows an id through Tempo, Loki and the container log
   thing. A constraint with no recorded reason gets "simplified" away by the next reader.
 - Lint rules that fight the codebase get disabled **with a written reason**, not worked
   around file by file.
+- **The README is an index, not a manual.** Each way in (the web UI, the CLI, the skill, MCP)
+  and each thing a person sets up has one runbook in `docs/runbook/` that owns its how-to:
+  commands, versions, steps, troubleshooting. The README says what it is and when to choose
+  it, in a sentence, and links there; it never repeats a command or pins a version. Why a
+  thing is so lives in `docs/adr/`, exactly what it accepts in `docs/reference/`. A new way in
+  ships its runbook, its README row and its line under the README's Documentation in the same
+  change.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).
 
 ## Wiki / Context

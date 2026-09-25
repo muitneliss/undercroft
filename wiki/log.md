@@ -156,3 +156,4 @@
 ## [2026-09-25] ingest | Design: The CLI's home page and sign-in, drawn in text
 ## [2026-09-25] ingest | Runbook: The undercroft CLI
 ## [2026-09-25] ingest | Design: The CLI's home page and sign-in, drawn in text
+## [2026-09-25] ingest | Runbook: The undercroft CLI

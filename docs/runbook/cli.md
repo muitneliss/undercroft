@@ -28,9 +28,9 @@ runs the same pinned URL through `npx` instead.
 
 The version is written ONCE, in `v`, because release-please's generic updater rewrites only
 the first version on a line. The 1.20.0 release bumped the tag in the pinned URL and left the
-tarball's name at 1.19.1, which is a 404. The README and `skills/undercroft-cli/SKILL.md`
-both pin their line this way, and `scripts/skill.test.ts` fails when a pinned block holds more
-than one version or a version other than the release's.
+tarball's name at 1.19.1, which is a 404. `skills/undercroft-cli/SKILL.md` pins its line this
+way, and `scripts/skill.test.ts` fails when its pinned block holds more than one version or a
+version other than the release's. The README pins nothing; it links here.
 
 ## First use, as a person
 
@@ -40,6 +40,16 @@ task dev:cli -- auth login              # asks for the email, then the code it s
 task dev:cli -- tenants list
 task dev:cli -- runs list               # asks which tenant
 task dev:cli -- describe runs.trigger   # one command, with the JSON Schema of its input
+```
+
+Against a deployed server, run the installed `undercroft` instead of `task dev:cli --`, and
+leave writes off until you mean to change something:
+
+```sh
+undercroft config set-profile prod --url https://undercroft.example.test
+undercroft auth login                    # the same emailed code as the web sign-in
+undercroft runs list                     # asks which customer
+undercroft config set-profile prod --allow-writes   # only when you mean it, at your own terminal
 ```
 
 `undercroft` on its own, at a terminal, is the home page: the title page with the sign-in form
@@ -104,7 +114,7 @@ It never prints the session itself.
   through `npx`. **The skill** is checked by `task ci:skill-check`, which needs the network.
 - **A release** attaches the tarball on its own, under both names. The `release-cli` job in
   `release.yml` runs `task build:cli-pack`, then `task cd:cli-upload TAG=vX.Y.Z`.
-  release-please bumps the version in `skills/undercroft-cli/SKILL.md`, `README.md` and
+  release-please bumps the version in `skills/undercroft-cli/SKILL.md` and
   `apps/cli/package.json` along with the root.
 
 ## When it goes wrong
