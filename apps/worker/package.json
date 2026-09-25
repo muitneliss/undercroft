@@ -18,6 +18,7 @@
     "@undercroft/crypto": "workspace:*",
     "@undercroft/db": "workspace:*",
     "@undercroft/lake": "workspace:*",
+    "@undercroft/telemetry": "workspace:*",
     "did-resolver": "4.1.0",
     "hono": "4.6.14"
   },

@@ -15,7 +15,7 @@
  * concurrent requests in two languages must not answer each other's.
  */
 
-import { type EmailSender, type Locale, negotiateLocale } from "@undercroft/core";
+import { type EmailSender, type Locale, type Logger, negotiateLocale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
@@ -80,6 +80,12 @@ export interface ServerDeps {
    * `services/assistant/judge.ts`; a gate that fails open is not a gate.
    */
   readonly judge?: Judge;
+  /**
+   * Where a failed procedure is recorded, with the request's trace id. Absent in a suite that
+   * does not read it; the process always passes one, because an internal error the browser is
+   * only told `internal_error` about has no other trace than this line.
+   */
+  readonly log?: Logger;
 }
 
 /**

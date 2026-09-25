@@ -6,6 +6,7 @@
     { "path": "../../packages/core" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/crypto" },
+    { "path": "../../packages/telemetry" },
     { "path": "../../packages/db" },
     { "path": "../../packages/lake" },
     { "path": "../../packages/connector-runtime" }

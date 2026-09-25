@@ -18,6 +18,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createByteFetcher, createLogger } from "@undercroft/core";
 import { asExecutor, connectionOf, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
+import { currentTraceId, startTelemetry } from "@undercroft/telemetry";
 import { createLakeApi } from "./handlers/lake.ts";
 import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
@@ -73,7 +74,20 @@ function refreshers(xeroClientOrNone: XeroClient | undefined): Record<string, Re
 // JSONL on stdout, the same shape the control plane writes; the container runtime collects
 // it. Before this the worker's whole output was the startup line, so a run that failed at
 // 02:00 left no evidence anywhere.
-const log = createLogger({ component: "worker" });
+// Before anything logs, so every line -- the boot lines included -- goes wherever the trace
+// export goes. An unset endpoint is export off; the trace ids are stamped either way.
+const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "";
+const telemetry = startTelemetry({
+  service: process.env.OTEL_SERVICE_NAME ?? "undercroft-worker",
+  version: process.env.UNDERCROFT_RELEASE ?? "",
+  ...(otlpEndpoint === "" ? {} : { endpoint: otlpEndpoint }),
+});
+const log = createLogger({
+  component: "worker",
+  sink: telemetry.logSink,
+  context: () => ({ traceId: currentTraceId() }),
+});
+log.info(telemetry.exporting ? "telemetry_exporting" : "telemetry_export_off");
 
 const dsn = required("UNDERCROFT_POSTGRES_DSN");
 const pool = createPool(dsn);
@@ -174,6 +188,7 @@ async function stop(signal: string): Promise<void> {
   // `drained: false` is the line to grep after a deploy: the runs it left behind are closed at
   // the next boot rather than settled, and their counts are not on them.
   log.info("stopped", { signal, drained });
+  await telemetry.shutdown();
   process.exit(0);
 }
 process.on("SIGTERM", (signal) => void stop(signal));

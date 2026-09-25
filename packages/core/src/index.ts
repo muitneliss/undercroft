@@ -29,7 +29,7 @@ export {
   raiseForByteStatus,
   type RecordedByteResponse,
 } from "./httpBytes.ts";
-export { newRequestId, newRunId } from "./ids.ts";
+export { newRunId } from "./ids.ts";
 export {
   type LarkConfig,
   type LarkFetch,

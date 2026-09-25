@@ -168,6 +168,9 @@ tasks:
       # Only this task passes it, and the control plane refuses it unless the public URL
       # above is loopback. See "Skip sign-in locally" in docs/runbook/sign-in-setup.md.
       UNDERCROFT_DEV_SIGN_IN_AS: "{{.UNDERCROFT_DEV_SIGN_IN_AS}}"
+      # Empty in `.env` is export off; set, a local run's traces are told apart by the name.
+      OTEL_EXPORTER_OTLP_ENDPOINT: "{{.OTEL_EXPORTER_OTLP_ENDPOINT}}"
+      OTEL_SERVICE_NAME: undercroft-control-plane-dev
     cmds:
       - bun run --filter '@undercroft/control-plane' dev
 
@@ -183,6 +186,8 @@ tasks:
       UNDERCROFT_SECRET_KEY: "{{.UNDERCROFT_SECRET_KEY}}"
       UNDERCROFT_TRIGGER_TOKEN: "{{.UNDERCROFT_TRIGGER_TOKEN}}"
       UNDERCROFT_WORKER_PORT: "{{.WORKER_PORT}}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "{{.OTEL_EXPORTER_OTLP_ENDPOINT}}"
+      OTEL_SERVICE_NAME: undercroft-worker-dev
       UNDERCROFT_GOOGLE_INGEST_CLIENT_ID: "{{.UNDERCROFT_GOOGLE_INGEST_CLIENT_ID}}"
       UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: "{{.UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET}}"
       UNDERCROFT_XERO_CLIENT_ID: "{{.UNDERCROFT_XERO_CLIENT_ID}}"

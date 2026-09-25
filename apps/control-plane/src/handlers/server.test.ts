@@ -121,7 +121,27 @@ describe("a refusal over /trpc names its code and nothing of the server", () => 
     const body = (await response.json()) as { error: { data: Record<string, unknown> } };
 
     expect(response.status).toBe(401);
-    expect(body.error.data).toEqual({ code: "UNAUTHORIZED", httpStatus: 401, path: "session.me" });
+    expect(body.error.data).toEqual({
+      code: "UNAUTHORIZED",
+      httpStatus: 401,
+      path: "session.me",
+      traceId: response.headers.get("x-trace-id"),
+    });
+  });
+
+  it("the refusal names the trace its caller started, the id a person quotes in a report", async () => {
+    const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+    const app = createServer({ exec: noDatabase });
+
+    const response = await app.fetch(
+      new Request("http://c/trpc/session.me", {
+        headers: { traceparent: `00-${traceId}-00f067aa0ba902b7-01` },
+      }),
+    );
+    const body = (await response.json()) as { error: { data: { traceId?: unknown } } };
+
+    expect(response.headers.get("x-trace-id")).toBe(traceId);
+    expect(body.error.data.traceId).toBe(traceId);
   });
 });
 

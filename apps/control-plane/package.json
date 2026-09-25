@@ -21,6 +21,7 @@
     "@undercroft/core": "workspace:*",
     "@undercroft/crypto": "workspace:*",
     "@undercroft/db": "workspace:*",
+    "@undercroft/telemetry": "workspace:*",
     "ai": "7.0.107",
     "better-auth": "1.7.5",
     "hono": "4.6.14",

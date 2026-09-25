@@ -32,6 +32,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
+import { currentTraceId } from "@undercroft/telemetry";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import { authorityIn, outranks, type Role } from "../services/authz.ts";
@@ -158,15 +159,19 @@ const t = initTRPC.context<Context>().create({
   // included -- carries `data.stack`: server paths, line numbers, dependency versions (issue 152).
   isDev: false,
   errorFormatter({ shape, error }) {
+    // Every answer that is an error names the request's trace, which is the one thing a
+    // person can quote back that leads to the server's side of it. An opaque id, never a
+    // payload -- `null` only outside a traced request, which a served request never is.
+    const traced = { ...shape, data: { ...shape.data, traceId: currentTraceId() } };
     // The type, never the detail. Exception text routinely embeds the offending row, and
     // this response goes to a browser.
     if (error.code === "INTERNAL_SERVER_ERROR") {
-      return { ...shape, message: "internal_error" };
+      return { ...traced, message: "internal_error" };
     }
     if (error.cause instanceof Refusal) {
-      return { ...shape, data: { ...shape.data, details: error.cause.facts } };
+      return { ...traced, data: { ...traced.data, details: error.cause.facts } };
     }
-    return shape;
+    return traced;
   },
 });
 

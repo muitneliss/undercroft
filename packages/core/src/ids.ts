@@ -1,5 +1,5 @@
 /**
- * Run and request identifiers.
+ * Run identifiers. A request's identifier is its trace id, from `@undercroft/telemetry`.
  *
  * A run id is generated fresh per run, never cached in the environment. A long-lived
  * worker that reused one id across tenants was a real multi-tenancy defect in the
@@ -11,8 +11,4 @@ import { randomUUID } from "node:crypto";
 
 export function newRunId(): string {
   return `run-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
-}
-
-export function newRequestId(): string {
-  return randomUUID();
 }

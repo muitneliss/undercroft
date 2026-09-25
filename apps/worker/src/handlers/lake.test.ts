@@ -284,15 +284,18 @@ describe("what is answered before the database is asked", () => {
     expect(paths.sort((a, b) => a.localeCompare(b))).toEqual(["records", "runId", "tenantId"]);
   });
 
-  it("a healthy request answers with an x-request-id and writes exactly one request line", async () => {
+  it("a request continues the caller's trace, answers with its id under both headers, and writes exactly one request line", async () => {
+    const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
     const { sink, log } = lines();
-    const res = await api(log).request("/health");
+    const res = await api(log).request("/health", {
+      headers: { traceparent: `00-${traceId}-00f067aa0ba902b7-01` },
+    });
     expect(res.status).toBe(200);
-    const requestId = res.headers.get("x-request-id");
-    expect(requestId).not.toBeNull();
+    expect(res.headers.get("x-trace-id")).toBe(traceId);
+    expect(res.headers.get("x-request-id")).toBe(traceId);
 
     const events = sink.map((line) => JSON.parse(line) as { event: string; requestId?: string });
     expect(events.map((e) => e.event)).toEqual(["request"]);
-    expect(events[0]?.requestId).toBe(requestId ?? "");
+    expect(events[0]?.requestId).toBe(traceId);
   });
 });

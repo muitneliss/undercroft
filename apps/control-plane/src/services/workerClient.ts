@@ -28,6 +28,7 @@ import {
   type StoreCredentialResponse,
   type TableResult,
 } from "@undercroft/contracts";
+import { traceHeaders } from "@undercroft/telemetry";
 
 import {
   BAD_REQUEST,
@@ -310,9 +311,26 @@ function queryOn(t: WorkerTransport): typeof query {
   return query;
 }
 
+/**
+ * The fetch every call to the worker goes through, carrying this request's `traceparent` so
+ * the worker's span joins the same trace: one id from the browser's click to the run it
+ * started. Here, once, rather than in each of the three helpers that build their headers.
+ */
+function traced(
+  doFetch: (input: string, init?: RequestInit) => Promise<Response>,
+): (input: string, init?: RequestInit) => Promise<Response> {
+  return (input, init) => {
+    const headers = new Headers(init?.headers);
+    for (const [name, value] of Object.entries(traceHeaders())) {
+      headers.set(name, value);
+    }
+    return doFetch(input, { ...init, headers });
+  };
+}
+
 export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const t: WorkerTransport = {
-    doFetch: config.fetch ?? globalThis.fetch,
+    doFetch: traced(config.fetch ?? globalThis.fetch),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     baseUrl: config.baseUrl,
     triggerToken: config.triggerToken,
