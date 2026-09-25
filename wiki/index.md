@@ -58,6 +58,7 @@
 - [ADR 0052: A HubSpot scope adds to the spec's properties, and a widened read starts a new watermark](sources/adr-0052-a-hubspot-scope-adds-to-the-spec-s-properties-and-a-widened-read-starts-a-new-watermark.md)
 - [ADR 0053: A legacy Word document is read in process, and only Word 95 stays refused](sources/adr-0053-a-legacy-word-document-is-read-in-process-and-only-word-95-stays-refused.md)
 - [ADR 0054: A widened HubSpot object is read in two steps, so no choice of properties is too long](sources/adr-0054-a-widened-hubspot-object-is-read-in-two-steps-so-no-choice-of-properties-is-too-long.md)
+- [ADR 0055: An open tab learns of a new release from a service worker](sources/adr-0055-an-open-tab-learns-of-a-new-release-from-a-service-worker.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Runbook Deployment](sources/runbook-deployment.md)

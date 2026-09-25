@@ -1882,9 +1882,41 @@
    it just does not arrive from above or land crooked on the way. */
   @media (prefers-reduced-motion: reduce) {
     .errata,
-    .note[role="status"] {
+    .note[role="status"],
+    .release-notice {
       animation: ink-set var(--pass) both;
     }
+  }
+
+  /*
+ * A new printing is out: the slip laid over the page when a deploy has replaced
+ * the bundle this tab runs (`ReleaseNotice`, ADR 0055).
+ *
+ * Laid ON the page, fixed at its foot, rather than set into it: it arrives while
+ * somebody is reading, and a band that pushed the leaf down would move the line
+ * they were on. Ink rules top and bottom like the errata slip, never vermilion --
+ * nothing is wrong, and the colour held for a state that needs a person must not
+ * be spent on a routine one. No shadow either: the one shadow in the system is a
+ * hinged leaf, and a slip is not one.
+ */
+  .release-notice {
+    position: fixed;
+    right: var(--s-5);
+    bottom: var(--s-5);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+    max-width: min(34rem, calc(100vw - 2 * var(--s-5)));
+    padding: var(--s-3) var(--s-4);
+    background: var(--page);
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    animation: slip-tip var(--tip) both;
+  }
+
+  .release-notice .plate {
+    flex: none;
   }
 
   .errata__mark {

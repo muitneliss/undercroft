@@ -26,6 +26,7 @@ beforeAll(async () => {
   dist = await mkdtemp(join(tmpdir(), "undercroft-ui-"));
   await writeFile(join(dist, "index.html"), "<!doctype html><title>Undercroft</title>");
   await writeFile(join(dist, "app.js"), "console.log('bundle');");
+  await writeFile(join(dist, "sw.js"), 'const RELEASE = "v1.0.0";');
 });
 
 afterAll(async () => {
@@ -93,6 +94,19 @@ describe("the SPA is served without shadowing the API", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toContain("connect=failed");
+  });
+});
+
+describe("a deploy reaches a tab that is already open", () => {
+  it("the release beacon is revalidated, not pinned for a year like a hashed bundle", async () => {
+    // Served `immutable`, a cache between the browser and the server may hand back the
+    // previous release's worker indefinitely, and no open tab is ever told to reload.
+    const app = createServer({ exec: noDatabase, uiDist: dist });
+
+    const response = await app.fetch(new Request("http://c/sw.js"));
+
+    expect(response.headers.get("cache-control")).toBe("no-cache");
+    expect(response.headers.get("content-type")).toContain("text/javascript");
   });
 });
 

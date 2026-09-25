@@ -4,7 +4,7 @@ import { fileURLToPath, URL } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin, type Rollup } from "vite";
 
 /**
  * The release tag, stamped into the bundle at build time.
@@ -27,11 +27,53 @@ const release: string = ((): string => {
   return `v${version}`;
 })();
 
+/**
+ * The release beacon: a service worker whose only content is the release it was built from.
+ *
+ * A tab keeps running the bundle it loaded, so after a deploy it is the previous release,
+ * talking to the new server, until somebody reloads it. The browser already re-fetches a
+ * registered worker's script and fires `updatefound` when its bytes change, and this
+ * script's bytes change exactly when the release does -- so the browser's own update check
+ * becomes the tab's "a new release is live" signal (`src/lib/releaseWatch.ts`). ADR 0055.
+ *
+ * Deliberately NO `fetch` listener and no cache. A worker that intercepts requests is a
+ * second copy of the app that can outlive a deploy, which is the very defect this exists to
+ * report; this one is never on the path of a request, `/trpc` and sign-in included.
+ *
+ * `skipWaiting` because the worker holds nothing a running tab depends on. Left waiting, it
+ * would still be waiting after the reload it asked for, and the reloaded tab -- already on
+ * the new release -- could not tell a stale worker from a fresh one.
+ *
+ * It answers any message by posting its release to the port it was sent, which is the whole
+ * protocol: there is nothing else to ask it.
+ *
+ * Emitted at a FIXED name at the root rather than hashed into `assets/`: the worker's URL is
+ * its identity, and a new URL would be a second registration rather than an update. The
+ * control plane serves it with `no-cache` for the same reason (`handlers/server.ts`). Build
+ * only: under `vite serve` there is no release to announce, and `main.tsx` registers nothing.
+ */
+function releaseBeacon(stamp: string): Plugin {
+  const source = [
+    "// Undercroft's release beacon, written by apps/ui/vite.config.ts. ADR 0055.",
+    `const RELEASE = ${JSON.stringify(stamp)};`,
+    `self.addEventListener("install", () => self.skipWaiting());`,
+    `self.addEventListener("message", (event) => event.ports[0]?.postMessage(RELEASE));`,
+    "",
+  ].join("\n");
+  return {
+    name: "undercroft-release-beacon",
+    apply: "build",
+    generateBundle(this: Rollup.PluginContext): void {
+      this.emitFile({ type: "asset", fileName: "sw.js", source });
+    },
+  };
+}
+
 /** Where `task dev:api` put the control plane. Vite runs in Node, so `process.env` is right here. */
 const apiOrigin = `http://localhost:${process.env.UNDERCROFT_API_PORT ?? "3000"}`;
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), releaseBeacon(release)],
   define: {
     __UNDERCROFT_RELEASE__: JSON.stringify(release),
   },

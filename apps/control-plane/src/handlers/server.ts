@@ -74,6 +74,9 @@ function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
   if (deps.uiDist !== undefined) {
     const dist = deps.uiDist;
     const indexHtml = join(dist, "index.html");
+    // The release beacon (`apps/ui/vite.config.ts`, ADR 0055): a worker's URL is its identity,
+    // so it cannot be hashed, and pinned for a year it would announce no release at all.
+    const releaseBeacon = join(dist, "sw.js");
 
     app.get("/*", async (c) => {
       const asset = await resolveAsset(dist, c.req.path);
@@ -82,9 +85,10 @@ function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
       if (!(await file.exists())) {
         return c.notFound();
       }
-      // A hashed asset filename is immutable; index.html must never be, or a deploy ships a
-      // shell that keeps pointing at the previous build's bundles.
-      const immutable = asset !== null && asset !== indexHtml;
+      // A hashed asset filename is immutable; index.html and the beacon must never be, or a
+      // deploy ships a shell that keeps pointing at the previous build's bundles and a tab
+      // that is never told about it.
+      const immutable = asset !== null && asset !== indexHtml && asset !== releaseBeacon;
       return new Response(new Uint8Array(await file.arrayBuffer()), {
         headers: {
           "content-type": CONTENT_TYPES[extname(path)] ?? "application/octet-stream",
