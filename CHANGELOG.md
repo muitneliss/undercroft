@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.31.0](https://github.com/muitneliss/undercroft/compare/v1.30.0...v1.31.0) (2026-09-25)
+
+
+### Features
+
+* **worker:** read legacy Word .doc files in process instead of refusing them ([#207](https://github.com/muitneliss/undercroft/issues/207)) ([0b21288](https://github.com/muitneliss/undercroft/commit/0b212885b9071d60d8b0048542b2488b2e0e842d))
+
+
+### Bug Fixes
+
+* **ui:** say what is happening on every action that calls the server ([#209](https://github.com/muitneliss/undercroft/issues/209)) ([efb4e88](https://github.com/muitneliss/undercroft/commit/efb4e884e8704d0c3a43bd32e58e484e6b397bda))
+
 ## [1.30.0](https://github.com/muitneliss/undercroft/compare/v1.29.0...v1.30.0) (2026-09-25)
 
 
