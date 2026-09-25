@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.35.0](https://github.com/muitneliss/undercroft/compare/v1.34.1...v1.35.0) (2026-09-25)
+
+
+### Features
+
+* a sync may run on a cron expression beside the four presets ([#229](https://github.com/muitneliss/undercroft/issues/229)) ([29f0a58](https://github.com/muitneliss/undercroft/commit/29f0a589ab929e712aa8268d2d2fd0a9e7fb17d6))
+* an agent reaches Undercroft over MCP at /mcp with a person's own read or write token ([#231](https://github.com/muitneliss/undercroft/issues/231)) ([00720de](https://github.com/muitneliss/undercroft/commit/00720dea6d87fc58dcdff4dfbc55065b88de8779))
+* **cli:** `undercroft` on its own is a home page -- the title page with sign-in on it, then the contents ([#232](https://github.com/muitneliss/undercroft/issues/232)) ([be340eb](https://github.com/muitneliss/undercroft/commit/be340eb04d97e62e111d1d0ae3ac8882ca8a5cf0))
+
 ## [1.34.1](https://github.com/muitneliss/undercroft/compare/v1.34.0...v1.34.1) (2026-09-25)
 
 
