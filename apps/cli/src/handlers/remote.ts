@@ -40,15 +40,16 @@
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { Locale } from "@undercroft/core/locale";
+import { BY_TRPC_CODE } from "virtual:surface";
 import type { Translate } from "../i18n/index.ts";
-import type { ProcedureSpec } from "../manifest.ts";
-import {
-  type ErrorCode,
-  failure,
-  type Outcome,
-  type Refusal,
-  success,
-} from "../services/output.ts";
+import type {
+  InputOf,
+  KindOf,
+  ProcedurePath,
+  ProcedureSpec,
+  SurfaceErrorCode,
+} from "../manifest.ts";
+import { failure, type Outcome, type Refusal, success } from "../services/output.ts";
 
 /**
  * How long one request may take. Long enough for a model build, which the server waits on;
@@ -68,25 +69,10 @@ export interface Connection {
 }
 
 /**
- * tRPC's error codes, as the CLI's.
- *
- * `PRECONDITION_FAILED` is the router's "the worker did not answer" and "no rows stored":
- * the request was fine and the platform's state refused it, which is what CONFLICT means to a
- * caller. The server's own sentence says which, and is passed through.
+ * The CLI's code for a tRPC error code, by the control plane's own table (`BY_TRPC_CODE`, baked
+ * in by the build). A code it lacks -- a server newer than this bundle -- is an INTERNAL_ERROR.
  */
-const BY_TRPC_CODE: Readonly<Record<string, ErrorCode>> = {
-  UNAUTHORIZED: "AUTHENTICATION_REQUIRED",
-  FORBIDDEN: "PERMISSION_DENIED",
-  NOT_FOUND: "NOT_FOUND",
-  CONFLICT: "CONFLICT",
-  PRECONDITION_FAILED: "CONFLICT",
-  BAD_REQUEST: "VALIDATION_FAILED",
-  PARSE_ERROR: "VALIDATION_FAILED",
-  PAYLOAD_TOO_LARGE: "VALIDATION_FAILED",
-  UNPROCESSABLE_CONTENT: "VALIDATION_FAILED",
-  TIMEOUT: "TIMEOUT",
-  TOO_MANY_REQUESTS: "NETWORK_ERROR",
-};
+const SURFACE_CODE: ReadonlyMap<string, SurfaceErrorCode> = new Map(Object.entries(BY_TRPC_CODE));
 
 function headersFor(connection: Connection): Record<string, string> {
   return {
@@ -167,7 +153,7 @@ function worded(
   const trpcCode = isRecord(error.data) ? error.data.code : undefined;
   const message = typeof error.message === "string" ? error.message : "";
   const code =
-    (typeof trpcCode === "string" ? BY_TRPC_CODE[trpcCode] : undefined) ?? "INTERNAL_ERROR";
+    (typeof trpcCode === "string" ? SURFACE_CODE.get(trpcCode) : undefined) ?? "INTERNAL_ERROR";
   const issues = code === "VALIDATION_FAILED" ? zodIssues(message) : null;
   if (issues !== null) {
     return failure(code, t("error.VALIDATION_FAILED"), { issues });
@@ -213,8 +199,8 @@ function trpcRequest(
   };
 }
 
-/** Call one procedure by its dotted path and answer with what the server said. */
-export async function callProcedure(
+/** Call the procedure a manifest entry describes, with an input assembled from argv. */
+export async function callSpec(
   t: Translate,
   connection: Connection,
   spec: Pick<ProcedureSpec, "path" | "type">,
@@ -240,6 +226,23 @@ export async function callProcedure(
     return refused(t, connection, body.error);
   }
   return unreachable(t, connection, null);
+}
+
+/**
+ * Call a procedure the CLI's own code names, checked against the router by the compiler.
+ *
+ * The path must be one the router has, `type` must be the one it declares (a query is a GET,
+ * so a procedure that became a mutation would otherwise be sent the wrong way), and `input`
+ * must be what its zod input accepts. A procedure renamed, deleted or reshaped in the router is
+ * therefore a `tsc` error at the call, not a NOT_FOUND somebody meets at a terminal.
+ */
+export function callProcedure<P extends ProcedurePath>(
+  t: Translate,
+  connection: Connection,
+  procedure: { readonly path: P; readonly type: KindOf<P> },
+  input: InputOf<P>,
+): Promise<Outcome> {
+  return callSpec(t, connection, procedure, input);
 }
 
 /** What a sign-in endpoint answered that the CLI reads: the status and the cookies it set. */

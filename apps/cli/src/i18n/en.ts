@@ -2,6 +2,8 @@
  * English, the second language. Answers every key `vi.ts` declares; `index.ts` pins that.
  */
 
+import type { TopicKey } from "../manifest.ts";
+
 export const en = {
   cli: {
     description: "Undercroft from a terminal: everything the web UI does, through the same API.",
@@ -22,7 +24,7 @@ export const en = {
     runs: "Runs.",
     session: "The current session.",
     tenants: "Customers.",
-  },
+  } satisfies Record<TopicKey, string>,
 
   command: {
     authLogin: "Sign in with a one-time code sent to your email, as the web UI does.",
@@ -103,93 +105,5 @@ export const en = {
     CANCELLED: "Cancelled; nothing changed.",
     INTERNAL_ERROR: "The server had an internal error.",
     traceId: "Trace ID: {{traceId}} -- quote it when you report this.",
-  },
-
-  procedures: {
-    session: {
-      me: "Who you are on this server.",
-      signOut: "End the current session on the server.",
-      setLocale: "Remember the language you read, for emails sent while no page is open.",
-    },
-    tenants: {
-      list: "The customers you have access to.",
-      get: "One customer, and your role in it.",
-      create: "Create a customer. Platform superadmins only.",
-      rename: "Correct a customer's display name. Tenant admins.",
-    },
-    connections: {
-      list: "A customer's sources and how each is connected.",
-      get: "One source and how it is connected.",
-      startOAuth: "Begin an OAuth grant; returns the URL to open in a browser. Admins.",
-      browseScope:
-        "What may be chosen for a source's scope: Gmail labels, Xero organisations, Google Drive folders with their paths and the file types present, or each HubSpot object's properties, the portal's own included. Admins.",
-      setScope:
-        "Set what a source reads. For HubSpot, the properties chosen for each object are read as well as the standard ones, never instead of them. Admins.",
-      setToken: "Connect a source with a pasted token. Admins.",
-      setCadence:
-        "Set how often a source is read: hourly, every_6h, daily, paused, or custom with --cron, a five-field cron expression in Singapore time that fires at most every five minutes. Admins.",
-      disconnect: "End a source's grant. Admins.",
-    },
-    keys: {
-      list: "The customer's ingest keys. Admins.",
-      mint: "Mint an ingest key; its token is returned this once. Admins.",
-      revoke: "Revoke an ingest key. Admins.",
-    },
-    people: {
-      members: "Who has access to the customer.",
-      invitations: "The open invitations.",
-      invite: "Invite an address with a role. Admins.",
-      revokeInvitation: "Withdraw an open invitation. Admins.",
-      setRole: "Change the role a member holds; never the last admin's. Admins.",
-      removeMember: "End a member's access; never the last admin's. Admins.",
-    },
-    lake: {
-      summary: "What has landed, per stream: counts and freshness.",
-      records: "An entity's raw records. Admins.",
-      documents: "A source's raw documents. Admins.",
-      query: "Run one SELECT over the raw lake. Admins.",
-      search: "Full-text search over the raw lake. Admins.",
-      querySchema: "The tables and columns lake query can read. Admins.",
-    },
-    models: {
-      list: "The customer's dbt models.",
-      get: "One dbt model and its SQL.",
-      save: "Store a dbt model; runs nothing. Admins.",
-      delete: "Delete a dbt model. Admins.",
-      build: "Build one model with dbt and wait for the answer. Admins.",
-      reference: "Reference material for a model's author.",
-    },
-    bi: {
-      answer: "Answer a question definition. Members and above.",
-      runQuestion: "Run a saved question with parameters.",
-      compile: "Compile a question definition to SQL. Members and above.",
-      schema: "The tables and columns reports can read.",
-      questions: {
-        list: "The saved questions.",
-        get: "One saved question.",
-        answer: "A saved question's answer under parameters.",
-        save: "Save a question. Members and above.",
-        delete: "Delete a question. Members and above.",
-      },
-      dashboards: {
-        list: "The dashboards.",
-        get: "One dashboard.",
-        save: "Save a dashboard. Members and above.",
-        delete: "Delete a dashboard. Members and above.",
-      },
-    },
-    dq: {
-      failures: "The rows a failed data-quality test stored. Admins.",
-    },
-    runs: {
-      list: "The ledger of runs, newest first.",
-      get: "One run, with its refusals and dbt steps.",
-      events: "What the worker is saying about a run.",
-      trigger: "Read a source now. Admins.",
-    },
-    config: {
-      google: "The public half of the Google client, for the Drive picker.",
-    },
-    health: "Whether the server is answering.",
   },
 };

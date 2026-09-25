@@ -16,8 +16,7 @@
 
 import { readFileSync } from "node:fs";
 import type { Readable } from "node:stream";
-import type { ProcedureSpec } from "../manifest.ts";
-import type { Effect } from "../procedures.ts";
+import type { OutputOf, ProcedureSpec } from "../manifest.ts";
 import {
   checkShape,
   type FlagSpec,
@@ -36,7 +35,7 @@ import {
   stringFlag,
 } from "./context.ts";
 import { type Answer, askChoice, askConfirm, askValue, CANCELLED } from "./prompts.ts";
-import { callProcedure } from "./remote.ts";
+import { callProcedure, callSpec } from "./remote.ts";
 
 async function readAll(stream: Readable): Promise<string> {
   const chunks: Buffer[] = [];
@@ -88,6 +87,16 @@ function missingArguments(
   );
 }
 
+/**
+ * The two fields a tenant choice reads off a `tenants.list` row, named through the router's
+ * own output type: a rename there is a `tsc` error here rather than a prompt that quietly
+ * offers nothing. The row is still narrowed at run time, because the answer is JSON off the
+ * wire and a type is not a check.
+ */
+type TenantRow = OutputOf<"tenants.list">[number];
+const TENANT_ID = "id" satisfies keyof TenantRow;
+const TENANT_NAME = "displayName" satisfies keyof TenantRow;
+
 /** The tenants the caller can see, as choices, or the refusal that stopped the listing. */
 async function askTenant(
   ctx: Context,
@@ -104,14 +113,16 @@ async function askTenant(
   }
   const rows = Array.isArray(listed.data) ? listed.data : [];
   const options = rows.flatMap((row: unknown) => {
-    if (typeof row !== "object" || row === null || !("id" in row) || typeof row.id !== "string") {
+    if (typeof row !== "object" || row === null) {
       return [];
     }
-    const label =
-      "displayName" in row && typeof row.displayName === "string"
-        ? `${row.id} -- ${row.displayName}`
-        : row.id;
-    return [{ value: row.id, label }];
+    const id: unknown = Reflect.get(row, TENANT_ID);
+    if (typeof id !== "string") {
+      return [];
+    }
+    const name: unknown = Reflect.get(row, TENANT_NAME);
+    const label = typeof name === "string" ? `${id} -- ${name}` : id;
+    return [{ value: id, label }];
   });
   return { ok: true, value: await askChoice(ctx, ctx.t("prompt.tenant"), options) };
 }
@@ -188,7 +199,6 @@ async function assemble(
 
 export interface ProcedureCommand {
   readonly spec: ProcedureSpec;
-  readonly effect: Effect;
   /** How a person types it, for the sentences that name it: `keys revoke`. */
   readonly spoken: string;
 }
@@ -206,7 +216,7 @@ async function settle(
   const { spec } = command;
   const { target } = input;
   const decision = decide({
-    effect: command.effect,
+    effect: spec.effect,
     canAsk: ctx.mode.prompts,
     profile: target.profile,
     allowWrites: target.allowWrites,
@@ -265,5 +275,5 @@ export async function runProcedure(
   // A procedure that takes no input is sent none, which is what the browser sends it too.
   const input = spec.input.properties === undefined ? undefined : value;
   const settled = await settle(ctx, command, { value: input, target: connected.target, flags });
-  return settled ?? (await callProcedure(ctx.t, connected.connection, spec, input));
+  return settled ?? (await callSpec(ctx.t, connected.connection, spec, input));
 }

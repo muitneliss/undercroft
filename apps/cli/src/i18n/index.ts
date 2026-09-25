@@ -1,5 +1,5 @@
 /**
- * The CLI's catalogue, reachable only through `messages` and `procedureSentence`.
+ * The CLI's catalogue, reachable only through `messages` and `topicSentence`.
  *
  * The same shape as `apps/control-plane/src/i18n` and for the same reasons: its own i18next
  * instance rather than the process singleton, a hand-rolled key type so the compiler checks
@@ -13,6 +13,7 @@
 import { DEFAULT_LOCALE, LOCALES, type Locale } from "@undercroft/core/locale";
 import { createInstance } from "i18next";
 
+import { topicKey } from "../manifest.ts";
 import { en } from "./en.ts";
 import { vi } from "./vi.ts";
 
@@ -45,31 +46,8 @@ export function messages(locale: Locale): Translate {
   return (key, vars): string => t(key, key, vars ?? {});
 }
 
-function isBranch(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null;
-}
-
-/**
- * The sentence that describes one procedure, found by its dotted path, or `null`.
- *
- * Walked by hand rather than asked of i18next, because i18next answers a missing key with
- * the key itself, and `runs.trigger` printed as a description looks like a description.
- * `null` is what lets the build refuse a procedure nobody described.
- */
-export function procedureSentence(locale: Locale, path: string): string | null {
-  let node: unknown = (locale === "en" ? english : vi).procedures;
-  for (const segment of path.split(".")) {
-    node = isBranch(node) ? node[segment] : undefined;
-  }
-  return typeof node === "string" ? node : null;
-}
-
 /** The sentence for a topic by its oclif id (`bi:questions`), or `null`. See `vi.topics`. */
 export function topicSentence(locale: Locale, topic: string): string | null {
-  const key = topic
-    .split(":")
-    .map((word, index) => (index === 0 ? word : `${word.charAt(0).toUpperCase()}${word.slice(1)}`))
-    .join("");
-  const sentence: unknown = Reflect.get((locale === "en" ? english : vi).topics, key);
+  const sentence: unknown = Reflect.get((locale === "en" ? english : vi).topics, topicKey(topic));
   return typeof sentence === "string" ? sentence : null;
 }
