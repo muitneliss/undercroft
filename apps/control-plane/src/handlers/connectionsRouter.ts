@@ -11,6 +11,7 @@ import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
+import { providerName } from "../services/oauthProviders.ts";
 import type { WorkerFailure } from "../services/workerClient.ts";
 import { refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
@@ -144,15 +145,16 @@ export const connectionsRouter = router({
       // PRECONDITION_FAILED for both, as `browseScope` already answers for an absent
       // worker: nothing about the request is wrong, the deployment simply cannot serve
       // it yet. The two reasons are worded apart because the remedies are: one is an
-      // operator's environment, the other is a source this build does not connect.
+      // operator's environment, the other is a source this build does not connect. The
+      // first names the provider the service found without a client, never a fixed one: a
+      // deployment may hold Google's and not Xero's (issue 211).
+      const t = messages(ctx.locale);
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
-        message: messages(ctx.locale)(
+        message:
           started.reason === "not-configured"
-            ? "error.ingestNotConfigured"
-            : "error.sourceNotConnectable",
-          { source: input.source },
-        ),
+            ? t("error.ingestNotConfigured", { provider: providerName(started.provider) })
+            : t("error.sourceNotConnectable", { source: input.source }),
       });
     }),
 

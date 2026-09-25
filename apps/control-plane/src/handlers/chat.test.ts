@@ -59,7 +59,12 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
     locale,
     endSession: () => Promise.resolve(),
     notifyInvitation: () => Promise.resolve(false),
-    startConsent: () => Promise.resolve({ ok: false as const, reason: "not-configured" as const }),
+    startConsent: () =>
+      Promise.resolve({
+        ok: false as const,
+        reason: "not-configured" as const,
+        provider: "google" as const,
+      }),
     worker: null,
     googlePicker: null,
   };

@@ -44,49 +44,15 @@ import {
   offersAccounts,
   selectedFor,
 } from "@/lib/connectionState.ts";
+import {
+  connectFailedHeading,
+  connectFailureKey,
+  type FailedReturn,
+  failedReturnFrom,
+} from "@/lib/consentFailure.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { chosenAccount, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
-
-/**
- * Which sentence a failed consent gets, from the reason the callback redirected with.
- *
- * Three outcomes rather than two. `scope-declined` is not a cancellation: the admin pressed
- * Allow with the one permission that matters unticked, which Google accepts and we refuse.
- * Told only "this source could not be connected", they repeat the exact steps that produced
- * it -- so the case that names the tick to leave alone has to be its own sentence.
- *
- * Two more since a tenant may hold several Google accounts of one kind (ADR 0043), and both
- * are about WHICH account consented rather than whether anybody did. `account-mismatch` is a
- * reconnect finished by somebody else's Google account, or by one already connected under
- * another entry -- most often an admin who meant to add a second mailbox, so its sentence
- * names the plate that does that. `account-unidentified` is Google not saying who consented,
- * and its sentence says the one thing that fixes it.
- *
- * A function rather than a chain inside the JSX, because it is a decision with a name and
- * the compiler checks each key against the catalogue.
- */
-function connectFailureKey(
-  reason: string | null,
-):
-  | "grant.connectDeclined"
-  | "grant.connectScopeDeclined"
-  | "grant.connectAccountMismatch"
-  | "grant.connectAccountUnidentified"
-  | "grant.connectFailed" {
-  switch (reason) {
-    case "declined":
-      return "grant.connectDeclined";
-    case "scope-declined":
-      return "grant.connectScopeDeclined";
-    case "account-mismatch":
-      return "grant.connectAccountMismatch";
-    case "account-unidentified":
-      return "grant.connectAccountUnidentified";
-    default:
-      return "grant.connectFailed";
-  }
-}
 
 /** How often the list re-reads while a run is in progress. A run is minutes; this is not. */
 const RUNNING_POLL_MS = 5000;
@@ -131,8 +97,7 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
         tenantId={tenantId}
         list={connections.data}
         isAdmin={isAdmin}
-        failed={params.get("connect") === "failed"}
-        reason={params.get("reason")}
+        failedReturn={failedReturnFrom(params)}
       />
 
       {/* Keys are minted and revoked by admins; a member or viewer is not shown a band they
@@ -180,14 +145,12 @@ function SourcesBand({
   tenantId,
   list,
   isAdmin,
-  failed,
-  reason,
+  failedReturn,
 }: {
   tenantId: string;
   list: readonly Connection[];
   isAdmin: boolean;
-  failed: boolean;
-  reason: string | null;
+  failedReturn: FailedReturn | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const utils = trpc.useUtils();
@@ -214,7 +177,7 @@ function SourcesBand({
         <p className="prose prose--lead">
           {list.length === 0 ? t("sources.none") : t("sources.count", { count: list.length })}
         </p>
-        <Refusals actions={actions} failed={failed} reason={reason} />
+        <Refusals actions={actions} failedReturn={failedReturn} />
       </div>
 
       <div className="band-rule" />
@@ -240,23 +203,21 @@ function SourcesBand({
  */
 function Refusals({
   actions,
-  failed,
-  reason,
+  failedReturn,
 }: {
   actions: Actions;
-  failed: boolean;
-  reason: string | null;
+  failedReturn: FailedReturn | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { startOAuth, disconnect, runNow, setCadence } = actions;
 
   return (
     <>
-      {failed ? (
-        <Errata heading={t("grant.connectFailed")} live={true}>
-          {t(connectFailureKey(reason))}
+      {failedReturn === null ? null : (
+        <Errata heading={connectFailedHeading(t, failedReturn.source)} live={true}>
+          {t(connectFailureKey(failedReturn.reason))}
         </Errata>
-      ) : null}
+      )}
 
       {/*
         A refusal to START a consent, which the server now words rather than answering with
@@ -264,7 +225,7 @@ function Refusals({
         page sat there looking like a dead button.
       */}
       {startOAuth.isError ? (
-        <Errata heading={t("grant.connectFailed")} live={true}>
+        <Errata heading={connectFailedHeading(t, startOAuth.variables.source)} live={true}>
           {startOAuth.error.message}
         </Errata>
       ) : null}

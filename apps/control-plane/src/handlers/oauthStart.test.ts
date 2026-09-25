@@ -1,16 +1,21 @@
 /**
- * Starting a per-tenant consent: what the authorize URL asks Google for.
+ * Starting a per-tenant consent: what the authorize URL asks the provider for, and what a
+ * consent that cannot start says.
  *
  * Split from `oauth.test.ts`, which covers the other half -- what happens when Google sends
  * the browser back. Two halves, two files: the parameters on the way out and the checks on
  * the way in fail for different reasons and are read at different times.
  */
 
+import { TRPCError } from "@trpc/server";
+import { LOCALES, type Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { startConsent } from "../services/oauth.ts";
+import { appRouter } from "./router.ts";
+import type { Context } from "./trpc.ts";
 
 const TENANT = "CASE-0042";
 const ADMIN = { userId: "", email: "ada@example.test" };
@@ -160,7 +165,7 @@ describe("a consent that cannot start is refused before anything is written", ()
       },
     );
 
-    expect(started).toEqual({ ok: false, reason: "not-configured" });
+    expect(started).toEqual({ ok: false, reason: "not-configured", provider: "google" });
   });
 
   it("an unsupported source is refused", async () => {
@@ -178,6 +183,78 @@ describe("a consent that cannot start is refused before anything is written", ()
       { tenantId: TENANT, source: "xero", startedBy: "" },
     );
 
-    expect(started).toEqual({ ok: false, reason: "not-configured" });
+    expect(started).toEqual({ ok: false, reason: "not-configured", provider: "xero" });
   });
+});
+
+/**
+ * The same refusal as the admin reads it, through the router: the sentence names the provider
+ * of the source that was pressed. It used to name Google whatever was pressed, so a deployment
+ * with Google configured and Xero not told the admin who pressed Connect Xero that Google was
+ * not set up (issue 211). Both languages, because the name is interpolated into each
+ * catalogue's own sentence and either could have kept the old wording.
+ */
+describe("a consent that cannot start names the provider of the source pressed", () => {
+  beforeEach(async () => {
+    db = await createMigratedTestDatabase();
+    await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
+    ADMIN.userId = await seedUser(ADMIN.email, "admin");
+    await db.become("undercroft_app");
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  /** An admin's caller whose deployment holds exactly the clients in `deps`. */
+  function adminCaller(
+    locale: Locale,
+    deps: { google?: typeof google },
+  ): ReturnType<typeof appRouter.createCaller> {
+    const ctx: Context = {
+      exec: db,
+      user: { userId: ADMIN.userId, email: ADMIN.email },
+      sessionId: "s1",
+      superadmin: false,
+      locale,
+      endSession: () => Promise.resolve(),
+      notifyInvitation: () => Promise.resolve(false),
+      startConsent: (start) => startConsent({ exec: db, ...deps }, start),
+      worker: null,
+      googlePicker: null,
+    };
+    return appRouter.createCaller(ctx);
+  }
+
+  async function refusalOf(
+    locale: Locale,
+    deps: { google?: typeof google },
+    source: string,
+  ): Promise<string> {
+    try {
+      await adminCaller(locale, deps).connections.startOAuth({ tenantId: TENANT, source });
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === "PRECONDITION_FAILED") {
+        return error.message;
+      }
+      throw error;
+    }
+    throw new Error("expected the consent to be refused");
+  }
+
+  for (const locale of LOCALES) {
+    it(`xero with only Google configured names Xero, not Google (${locale})`, async () => {
+      const message = await refusalOf(locale, { google }, "xero");
+
+      expect(message).toContain("Xero");
+      expect(message).not.toContain("Google");
+    });
+
+    it(`gmail with nothing configured names Google (${locale})`, async () => {
+      const message = await refusalOf(locale, {}, "gmail");
+
+      expect(message).toContain("Google");
+      expect(message).not.toContain("Xero");
+    });
+  }
 });

@@ -44,6 +44,12 @@ export interface GoogleIngestConfig extends ProviderConfig {
 }
 
 export interface ProviderShape {
+  /**
+   * The provider's own name, as a refusal words it to the admin who pressed its Connect.
+   * A vendor's name is the same in every language, so it lives here beside the rest of what
+   * differs between providers rather than in a catalogue (`.claude/rules/i18n.md`).
+   */
+  readonly name: string;
   readonly authorizeUrl: string;
   readonly tokenUrl: string;
   /** The scopes each of this provider's sources asks for. */
@@ -63,6 +69,7 @@ const TRAILING_SLASHES = /\/+$/u;
 
 export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
   google: {
+    name: "Google",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
     /**
@@ -97,6 +104,7 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
     identity: true,
   },
   xero: {
+    name: "Xero",
     authorizeUrl: "https://login.xero.com/identity/connect/authorize",
     tokenUrl: "https://identity.xero.com/connect/token",
     /**
@@ -128,6 +136,11 @@ const PROVIDER_IDS: readonly Provider[] = ["google", "xero"];
 export function providerOf(source: string): Provider | null {
   const kind = sourceKind(source);
   return PROVIDER_IDS.find((provider) => Object.hasOwn(PROVIDERS[provider].scopes, kind)) ?? null;
+}
+
+/** The name a person knows `provider` by. See `ProviderShape.name`. */
+export function providerName(provider: Provider): string {
+  return PROVIDERS[provider].name;
 }
 
 /** Where a provider is told to come back to. One URI per provider, registered in its console. */
