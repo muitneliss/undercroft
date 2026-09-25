@@ -42,6 +42,13 @@ import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
 import { expiryNote } from "@/lib/when.ts";
 
+/**
+ * Which of this card's own actions is in flight. The card is told rather than asked, because
+ * the mutations belong to the page: one action at a time across the whole schedule (`busy`),
+ * but only the card it was started from says what is happening.
+ */
+export type GrantPending = "connect" | "disconnect" | "run" | "cadence";
+
 export function ConnectionCard({
   tenantId,
   connection,
@@ -52,6 +59,7 @@ export function ConnectionCard({
   onCadence,
   canRun = false,
   busy = false,
+  pending = null,
   tokenForm,
 }: {
   /** Whose book this row is in: where a failed run's slip links into the journal. */
@@ -67,6 +75,8 @@ export function ConnectionCard({
   /** Whether the reader is an admin. Courtesy; the server refuses regardless. */
   canRun?: boolean;
   busy?: boolean;
+  /** This card's action in flight, if any; see `GrantPending`. */
+  pending?: GrantPending | null;
   /**
    * The form a token-connected source opens in its row. A slot rather than a component the
    * card renders itself, so the card stays renderable with no tRPC provider behind it.
@@ -81,12 +91,6 @@ export function ConnectionCard({
 
   const unprinted = card.state === "not_connected";
   const lapsed = card.mark === "lapsed";
-  // A source with no consent screen opens a form in its row instead of sending the browser
-  // away; the same plate wording covers a first connection and a reconnect.
-  const pastes =
-    connectsBy(connection.kind) === "token" &&
-    (card.action?.kind === "connect" || card.action?.kind === "reconnect");
-  const running = connection.lastRun?.status === "running";
   const failedRun = connection.lastRun?.status === "failed" ? connection.lastRun : null;
   const named = connection.externalAccountLabel !== "";
 
@@ -137,30 +141,23 @@ export function ConnectionCard({
           {card.state === "needs_scope" ? <p className="note">{card.detail}</p> : null}
         </div>
 
-        <div className="grant__when stack stack--tight">
-          {card.state === "connected" ? (
-            <GrantWhen connection={connection} canEdit={canRun} busy={busy} onCadence={onCadence} />
-          ) : null}
-
-          {/* How long the data has been standing still. A lapse is not an
-              instant; six days of it is a different conversation from six
-              hours, and the operator is usually on the phone. */}
-          {lapsed && connection.expiresAt ? (
-            <>
-              <span className="label">{t("grant.since")}</span>
-              <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
-            </>
-          ) : null}
-        </div>
+        <GrantTiming
+          connection={connection}
+          card={card}
+          canRun={canRun}
+          busy={busy}
+          pending={pending}
+          onCadence={onCadence}
+        />
 
         <GrantActions
+          connection={connection}
           card={card}
           name={name}
-          pastes={pastes}
           tokenForm={tokenForm}
           canRun={canRun}
           busy={busy}
-          running={running}
+          pending={pending}
           onConnect={onConnect}
           onScope={onScope}
           onDisconnect={onDisconnect}
@@ -188,6 +185,53 @@ export function ConnectionCard({
 type Card = ReturnType<typeof presentConnection>;
 
 /**
+ * When the grant runs, or since when it has lapsed: the row's third column.
+ *
+ * The cadence select is only on a granted source, and says so while a change to it is saved.
+ */
+function GrantTiming({
+  connection,
+  card,
+  canRun,
+  busy,
+  pending,
+  onCadence,
+}: {
+  connection: Connection;
+  card: Card;
+  canRun: boolean;
+  busy: boolean;
+  pending: GrantPending | null;
+  onCadence: (cadence: Cadence) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <div className="grant__when stack stack--tight">
+      {card.state === "connected" ? (
+        <GrantWhen
+          connection={connection}
+          canEdit={canRun}
+          busy={busy}
+          saving={pending === "cadence"}
+          onCadence={onCadence}
+        />
+      ) : null}
+
+      {/* How long the data has been standing still. A lapse is not an
+          instant; six days of it is a different conversation from six
+          hours, and the operator is usually on the phone. */}
+      {card.mark === "lapsed" && connection.expiresAt ? (
+        <>
+          <span className="label">{t("grant.since")}</span>
+          <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The one next action for this state, and the two that are always available once granted.
  *
  * Every state has exactly one primary plate. That is the point of the state machine in
@@ -195,64 +239,50 @@ type Card = ReturnType<typeof presentConnection>;
  * state nobody decided.
  */
 function GrantActions({
+  connection,
   card,
   name,
-  pastes,
   tokenForm,
   canRun,
   busy,
-  running,
+  pending,
   onConnect,
   onScope,
   onDisconnect,
   onRun,
 }: {
+  connection: Connection;
   card: Card;
   name: string;
-  pastes: boolean;
   tokenForm: ReactNode;
   canRun: boolean;
   busy: boolean;
-  running: boolean;
+  pending: GrantPending | null;
   onConnect: () => void;
   onScope: () => void;
   onDisconnect: () => void;
   onRun: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const running = connection.lastRun?.status === "running";
   // Two booleans, and `||` is the operator that combines them; Biome's type inference does
   // not see the default on `busy` and asks for `??`, which would be wrong for `false`.
   const cannotRun = [busy, running].includes(true);
+  const runIdle = pending === "run" ? t("grant.starting") : t("grant.runNow");
+  const runLabel = running ? t("grant.running") : runIdle;
 
   return (
     <div className="grant__actions">
-      {pastes ? (
-        <details className="tokenform">
-          <summary className="plate plate--primary">{t("grant.pasteToken")}</summary>
-          <div className="hinge">{tokenForm}</div>
-        </details>
-      ) : null}
-
-      {card.action?.kind === "connect" && !pastes ? (
-        <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
-          {t("grant.connect", { name })}
-          <ArrowRight size={13} />
-        </button>
-      ) : null}
-
-      {card.action?.kind === "scope" ? (
-        <button type="button" className="plate plate--primary" onClick={onScope} disabled={busy}>
-          {t("grant.chooseScope")}
-          <ArrowRight size={13} />
-        </button>
-      ) : null}
-
-      {card.action?.kind === "reconnect" && !pastes ? (
-        <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
-          {t("grant.reconnect", { name })}
-          <ArrowRight size={13} />
-        </button>
-      ) : null}
+      <PrimaryAction
+        connection={connection}
+        card={card}
+        name={name}
+        tokenForm={tokenForm}
+        busy={busy}
+        connecting={pending === "connect"}
+        onConnect={onConnect}
+        onScope={onScope}
+      />
 
       {/* Run now is a plain plate: the primary action on a granted source is nothing,
           and starting a read by hand is the exception rather than the routine. Disabled
@@ -260,7 +290,7 @@ function GrantActions({
           the card already says so. */}
       {card.state === "connected" && canRun ? (
         <button type="button" className="plate" onClick={onRun} disabled={cannotRun}>
-          {running ? t("grant.running") : t("grant.runNow")}
+          {runLabel}
         </button>
       ) : null}
 
@@ -272,10 +302,69 @@ function GrantActions({
 
       {card.state === "not_connected" ? null : (
         <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
-          {t("grant.disconnect")}
+          {pending === "disconnect" ? t("grant.disconnecting") : t("grant.disconnect")}
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * The state's one primary plate, if it has one: paste a token, go to the consent, or choose
+ * what to read. A consent plate keeps saying where it is going until the browser has left.
+ */
+function PrimaryAction({
+  connection,
+  card,
+  name,
+  tokenForm,
+  busy,
+  connecting,
+  onConnect,
+  onScope,
+}: {
+  connection: Connection;
+  card: Card;
+  name: string;
+  tokenForm: ReactNode;
+  busy: boolean;
+  connecting: boolean;
+  onConnect: () => void;
+  onScope: () => void;
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+  const kind = card.action?.kind;
+  // A source with no consent screen opens a form in its row instead of sending the browser
+  // away; the same plate wording covers a first connection and a reconnect.
+  const pastes =
+    connectsBy(connection.kind) === "token" && (kind === "connect" || kind === "reconnect");
+
+  if (pastes) {
+    return (
+      <details className="tokenform">
+        <summary className="plate plate--primary">{t("grant.pasteToken")}</summary>
+        <div className="hinge">{tokenForm}</div>
+      </details>
+    );
+  }
+  if (kind === "scope") {
+    return (
+      <button type="button" className="plate plate--primary" onClick={onScope} disabled={busy}>
+        {t("grant.chooseScope")}
+        <ArrowRight size={13} />
+      </button>
+    );
+  }
+  if (kind !== "connect" && kind !== "reconnect") {
+    return null;
+  }
+  const idle = kind === "connect" ? t("grant.connect", { name }) : t("grant.reconnect", { name });
+  const label = connecting ? t("grant.connecting", { name }) : idle;
+  return (
+    <button type="button" className="plate plate--primary" onClick={onConnect} disabled={busy}>
+      {label}
+      <ArrowRight size={13} />
+    </button>
   );
 }
 

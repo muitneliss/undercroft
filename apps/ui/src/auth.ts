@@ -48,15 +48,22 @@ const AFTER_SIGN_IN = "/tenants";
 const AFTER_REFUSAL = "/?reason=denied";
 
 /**
- * Hand the browser to Google. Navigates away, so there is nothing to await and no state to
- * hold; a refusal comes back to `AFTER_REFUSAL`, which `App.tsx` reads as `reason=denied`.
+ * Hand the browser to Google. Resolves once the server has answered with Google's address and
+ * the browser is on its way there; a refusal at Google comes back to `AFTER_REFUSAL`, which
+ * `App.tsx` reads as `reason=denied`. Throws if the server would not start the sign-in at all.
  */
-export function signInWithGoogle(): void {
-  void authClient.signIn.social({
-    provider: "google",
-    callbackURL: AFTER_SIGN_IN,
-    errorCallbackURL: AFTER_REFUSAL,
-  });
+export async function signInWithGoogle(): Promise<void> {
+  const { error } = await authClient.signIn.social(
+    {
+      provider: "google",
+      callbackURL: AFTER_SIGN_IN,
+      errorCallbackURL: AFTER_REFUSAL,
+    },
+    { headers: acceptLanguage() },
+  );
+  if (error !== null) {
+    throw new Error(error.message ?? i18next.t("signIn.googleFailed"));
+  }
 }
 
 /**

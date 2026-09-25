@@ -105,7 +105,7 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
                 void runs.fetchNextPage();
               }}
             >
-              {t("journal.older")}
+              {runs.isFetchingNextPage ? t("journal.loadingOlder") : t("journal.older")}
             </button>
           </div>
         ) : null}

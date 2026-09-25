@@ -35,6 +35,7 @@ export function AccountSwitcher({
   onSelect,
   canAdd,
   busy,
+  adding,
   onAdd,
 }: {
   kind: Source;
@@ -46,6 +47,8 @@ export function AccountSwitcher({
   /** Whether the reader may connect another account. Courtesy; the server refuses regardless. */
   canAdd: boolean;
   busy: boolean;
+  /** Whether the consent for a further account is being started, the browser about to leave. */
+  adding: boolean;
   /** Start the consent for a further account of `kind`. */
   onAdd: () => void;
 }): React.JSX.Element {
@@ -86,7 +89,7 @@ export function AccountSwitcher({
 
         {canAdd ? (
           <button type="button" className="plate plate--small" onClick={onAdd} disabled={busy}>
-            {t("grant.addAccount")}
+            {adding ? t("grant.connecting", { name }) : t("grant.addAccount")}
           </button>
         ) : null}
       </div>

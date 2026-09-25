@@ -132,6 +132,9 @@ export function Book({
       globalThis.location.assign("/");
     },
   });
+  // Pending until the reload lands, not until the server answers: in between, the session is
+  // already gone and a live plate would offer to end it a second time.
+  const signingOut = signOut.isPending || signOut.isSuccess;
 
   const assistantOpen = useUiStore((state) => state.assistantOpen);
   /**
@@ -199,9 +202,9 @@ export function Book({
               className="plate plate--small"
               type="button"
               onClick={(): void => signOut.mutate()}
-              disabled={signOut.isPending}
+              disabled={signingOut}
             >
-              {t("app.signOut")}
+              {signingOut ? t("app.signingOut") : t("app.signOut")}
             </button>
           </div>
         </header>

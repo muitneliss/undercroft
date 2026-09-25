@@ -62,8 +62,11 @@ function refuse(path: string): Response {
   );
 }
 
-/** The page as a member sees it: the schedule, no plate that would start a consent. */
-function mount(): void {
+/**
+ * The page as `role` sees it. A member gets the schedule and no plate that would act on it; an
+ * admin's Run now is answered with `trigger`, which the test settles when it chooses.
+ */
+function mount(role: "member" | "admin" = "member", trigger?: Promise<Response>): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const client = trpc.createClient({
     links: [
@@ -75,9 +78,10 @@ function mount(): void {
             return Promise.resolve(answer(SCHEDULE));
           }
           if (path.endsWith("/tenants.get")) {
-            return Promise.resolve(
-              answer({ tenantId: TENANT, displayName: "Acme", role: "member" }),
-            );
+            return Promise.resolve(answer({ tenantId: TENANT, displayName: "Acme", role }));
+          }
+          if (path.endsWith("/runs.trigger") && trigger !== undefined) {
+            return trigger;
           }
           return Promise.resolve(refuse(path));
         },
@@ -113,5 +117,29 @@ describe("a tenant with two Gmail mailboxes", () => {
     const card = screen.getByRole("article", { name: "Gmail" });
     expect(within(card).getByText("sales@acme.test")).toBeDefined();
     expect(within(card).queryByText("ops@acme.test")).toBeNull();
+  });
+});
+
+describe("an admin starting a run", () => {
+  it("the card it was started from says so until the server answers, and the rest wait", async () => {
+    let settle: ((response: Response) => void) | undefined;
+    const trigger = new Promise<Response>((resolve) => {
+      settle = resolve;
+    });
+    mount("admin", trigger);
+    const gmail = await screen.findByRole("article", { name: "Gmail" });
+
+    fireEvent.click(within(gmail).getByRole("button", { name: "Chạy ngay" }));
+
+    const starting = await within(gmail).findByRole("button", { name: "Đang bắt đầu…" });
+    expect(starting.hasAttribute("disabled")).toBe(true);
+    // Every plate waits, but only the pressed card claims the action: Drive's still reads as
+    // what it would do, not as something under way.
+    const drive = screen.getByRole("article", { name: "Google Drive" });
+    const connect = within(drive).getByRole("button", { name: "Kết nối Google Drive" });
+    expect(connect.hasAttribute("disabled")).toBe(true);
+
+    settle?.(answer({ runId: "run-9" }));
+    expect(await within(gmail).findByRole("button", { name: "Chạy ngay" })).toBeDefined();
   });
 });

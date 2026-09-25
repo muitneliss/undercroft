@@ -78,7 +78,11 @@ function OpenInvitations({
                         revoke.mutate({ tenantId, id: invitation.id });
                       }}
                     >
-                      {t("people.withdraw")}
+                      {/* Every plate waits, but only the row being withdrawn says so:
+                          `variables` is which one was asked for. */}
+                      {revoke.isPending && revoke.variables.id === invitation.id
+                        ? t("people.withdrawing")
+                        : t("people.withdraw")}
                     </button>
                   </td>
                 ) : null}

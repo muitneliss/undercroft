@@ -129,7 +129,7 @@ function RecordsTable({
               void rows.fetchNextPage();
             }}
           >
-            {t("lake.older")}
+            {rows.isFetchingNextPage ? t("lake.loadingOlder") : t("lake.older")}
           </button>
         </div>
       ) : null}
@@ -212,7 +212,7 @@ function DocumentsTable({
               void rows.fetchNextPage();
             }}
           >
-            {t("lake.older")}
+            {rows.isFetchingNextPage ? t("lake.loadingOlder") : t("lake.older")}
           </button>
         </div>
       ) : null}

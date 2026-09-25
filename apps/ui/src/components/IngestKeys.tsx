@@ -80,7 +80,7 @@ export function IngestKeys({ tenantId }: { tenantId: string }): React.JSX.Elemen
       ) : (
         <KeyTable
           keys={keys.data}
-          revoking={revoke.isPending}
+          revoking={revoke.isPending ? revoke.variables.id : null}
           onRevoke={(id): void => {
             revoke.mutate({ tenantId, id });
           }}
@@ -114,7 +114,8 @@ function KeyTable({
   onRevoke,
 }: {
   keys: readonly IngestKey[];
-  revoking: boolean;
+  /** The key a revoke is in flight for; every plate waits, and only that row says so. */
+  revoking: string | null;
   onRevoke: (id: string) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -161,12 +162,12 @@ function KeyTable({
                 <button
                   className="plate plate--small"
                   type="button"
-                  disabled={revoking}
+                  disabled={revoking !== null}
                   onClick={(): void => {
                     onRevoke(key.id);
                   }}
                 >
-                  {t("keys.revoke")}
+                  {revoking === key.id ? t("keys.revoking") : t("keys.revoke")}
                 </button>
               ) : (
                 <span className="datum datum--quiet">{t("keys.revoked")}</span>
