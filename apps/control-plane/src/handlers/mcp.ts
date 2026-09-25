@@ -1,5 +1,5 @@
 /**
- * `/mcp`: the router, as model-context tools, for an agent that holds a bearer. ADR 0059.
+ * `/mcp`: the router, as model-context tools, for an agent that holds a bearer. ADR 0060.
  *
  * The third door onto the same procedures, after the browser's `/trpc` and the assistant. It
  * owns nothing a procedure means. Every call goes through `appRouter.createCaller(ctx)`, so the
@@ -182,7 +182,7 @@ export function registerMcpRoute(app: Hono, deps: McpDeps): void {
   });
 
   // The metadata document the challenge names is OAuth sign-in for model-context clients, which
-  // is ADR 0059's follow-up. Until it is served, asking for it is a 404 -- the honest answer,
+  // is ADR 0060's follow-up. Until it is served, asking for it is a 404 -- the honest answer,
   // and one a client handles -- never the app shell.
   app.all("/.well-known/*", (c) => c.notFound());
 }

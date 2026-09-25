@@ -1,4 +1,4 @@
-# 59. An agent reaches Undercroft over MCP, with a credential a person holds
+# 60. An agent reaches Undercroft over MCP, with a credential a person holds
 
 - Status: Accepted
 - Date: 2026-09-25
@@ -49,7 +49,7 @@ drives it with `@modelcontextprotocol/client` 2.1.0 over real HTTP.
 
 ### The credential is a person's own token
 
-`app.access_token` (`290_mcp_access.sql`) holds **personal access tokens**, `upat_<id>.<secret>`,
+`app.access_token` (`300_mcp_access.sql`) holds **personal access tokens**, `upat_<id>.<secret>`,
 following `keys.ts`: the digest is stored, the token is shown once, minting and revoking are
 audited. A person mints one on the new account page (`/account`, reached from their address in
 the running head) with a label, a grant and an expiry of at most a year, which the table's CHECK

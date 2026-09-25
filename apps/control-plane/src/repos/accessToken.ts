@@ -1,5 +1,5 @@
 /**
- * `app.access_token`: a person's personal access tokens. `290_mcp_access.sql` says why they
+ * `app.access_token`: a person's personal access tokens. `300_mcp_access.sql` says why they
  * exist and what the columns promise.
  *
  * Read by DIGEST, never by id, for the reason `@undercroft/db`'s `ingestKeys.ts` gives: the

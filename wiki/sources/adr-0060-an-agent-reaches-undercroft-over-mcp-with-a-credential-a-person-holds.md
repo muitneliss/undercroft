@@ -1,19 +1,19 @@
 ---
 title: >-
-  ADR 0059: An agent reaches Undercroft over MCP, with a credential a person
+  ADR 0060: An agent reaches Undercroft over MCP, with a credential a person
   holds
 type: source
 date: 2026-09-25
 tags: []
-source: docs/adr/0059-an-agent-reaches-undercroft-over-mcp.md
-source_path: docs/adr/0059-an-agent-reaches-undercroft-over-mcp.md
-source_hash: 57764f25163381967afb9c81b214c93d6d29c1fa8ba673e2e9997a18c33dfbeb
+source: docs/adr/0060-an-agent-reaches-undercroft-over-mcp.md
+source_path: docs/adr/0060-an-agent-reaches-undercroft-over-mcp.md
+source_hash: feb9e8902f17f9b359e7d3a64028430b0d4177f09af9fb1c8f62f98ce3e6e159
 ingested: 2026-09-25
 ---
 
-# ADR 0059: An agent reaches Undercroft over MCP, with a credential a person holds
+# ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds
 
-# ADR 0059: An agent reaches Undercroft over MCP, with a credential a person holds
+# ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds
 
 Accepted 2026-09-25. Supersedes two of [[ADR 0044: An agent reaches Undercroft as a caller]]'s rejected options -- "An MCP server" and "Device flow or a bearer token" -- and nothing else of it: its rejection of a service token stands. Extends [[ADR 0029: The assistant is an interleaf, and it acts only through the router]]'s rule that a caller acts only through the router's own procedures to a third door; the OAuth follow-up must keep [[ADR 0010 Invite-Only Sign-In with Better Auth]].
 
@@ -21,7 +21,7 @@ Accepted 2026-09-25. Supersedes two of [[ADR 0044: An agent reaches Undercroft a
 
 **Decision.** `/mcp` is a route in `handlers/server.ts`, before the SPA catch-all; every call goes through `appRouter.createCaller(ctx)`, and each request gets a fresh low-level MCP `Server` bound to its `Context`, served statelessly, so a revoked credential stops at the next call. SDK: `@modelcontextprotocol/server` 2.1.0 (low-level `Server` + `createMcpHandler(factory, { legacy: "stateless" })`, a fetch handler serving both the 2026-07-28 and 2025-era protocols), tested with `@modelcontextprotocol/client` 2.1.0 over real HTTP.
 
-The credential is a **personal access token** in `app.access_token` (`290_mcp_access.sql`): `upat_<id>.<secret>`, digest stored, shown once, minting and revoking audited, minted on the new `/account` page with a label, a grant and an expiry of at most a year (a table CHECK as well as the form). It belongs to a person and reaches what they reach in every tenant through the same role gates; it cascades from `app.app_user` and the owner is re-resolved per request. `handlers/context.ts` has two identity steps -- `sessionIdentity` (cookie, for `/trpc` and the assistant) and `resolveBearer` (`Authorization: Bearer` only, never the cookie, for `/mcp`) -- feeding one shared tail (`appUserForEmail`, superadmin, locale). `/trpc` stays cookie-only; a non-`upat_` bearer admits nobody until the OAuth follow-up.
+The credential is a **personal access token** in `app.access_token` (`300_mcp_access.sql`): `upat_<id>.<secret>`, digest stored, shown once, minting and revoking audited, minted on the new `/account` page with a label, a grant and an expiry of at most a year (a table CHECK as well as the form). It belongs to a person and reaches what they reach in every tenant through the same role gates; it cascades from `app.app_user` and the owner is re-resolved per request. `handlers/context.ts` has two identity steps -- `sessionIdentity` (cookie, for `/trpc` and the assistant) and `resolveBearer` (`Authorization: Bearer` only, never the cookie, for `/mcp`) -- feeding one shared tail (`appUserForEmail`, superadmin, locale). `/trpc` stays cookie-only; a non-`upat_` bearer admits nobody until the OAuth follow-up.
 
 Every credential carries a **grant**, `read` or `write`; a browser session is always `write`. The guard is on the router's base procedure in `handlers/trpc.ts`: a `read` grant is refused any call whose `effectOf` is not `read`, unclassified included (fails closed). `/mcp` lists only admitted tools and re-checks on call to answer `WRITES_DISABLED`. The policy is one function, `grantAdmits`. `account.tokens.*` are built on `sessionProcedure`, which refuses a bearer, so no credential can mint a credential; `SESSION_ONLY` names them and the router walk refuses a router where list and middleware disagree.
 

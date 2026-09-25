@@ -244,7 +244,7 @@ export const vi = {
   },
 
   /**
-   * Personal access tokens (ADR 0059). "Token" stays as the word the operators already use for
+   * Personal access tokens (ADR 0060). "Token" stays as the word the operators already use for
    * it, the way "HubSpot" does: it is what an agent's setup screen will ask them to paste.
    */
   tokens: {
@@ -509,6 +509,23 @@ export const vi = {
     openInJournal: "Xem trong nhật ký",
     runNotStarted: "Chưa chạy được",
     cadenceNotSaved: "Chưa lưu được tần suất",
+    /** The custom cadence's field. The zone is named every time: see `@/lib/when`. */
+    cronLabel: "Biểu thức cron",
+    cronHint:
+      "5 trường: phút, giờ, ngày trong tháng, tháng, thứ trong tuần (0 là Chủ nhật). Tính theo giờ Singapore (SGT), không dày hơn {{minutes}} phút một lần.",
+    cronSave: "Lưu lịch",
+    /** Heads the next fires. They ARE the confirmation; there is no paraphrase of the cron. */
+    cronPreview: "Ba lần chạy kế tiếp (giờ Singapore)",
+    /** Beside a stored expression on a card a reader cannot edit. */
+    cronZone: "giờ Singapore (SGT)",
+    /** Why Save is off, one per `CronRefusal` in `@undercroft/contracts`. */
+    cronRefused: {
+      fields: "Cần đúng 5 trường, cách nhau bằng dấu cách.",
+      invalid: "Không đọc được biểu thức này.",
+      never: "Biểu thức này không bao giờ đến lượt chạy.",
+      tooFrequent:
+        "Biểu thức này chạy dày hơn {{minutes}} phút một lần, nhanh hơn nhịp của bộ lập lịch.",
+    },
     since: "Từ",
     connect: "Kết nối {{name}}",
     chooseScope: "Chọn dữ liệu cần đồng bộ",
@@ -740,9 +757,10 @@ export const vi = {
     every6h: "Mỗi 6 giờ",
     daily: "Hằng ngày",
     paused: "Tạm dừng",
+    custom: "Tuỳ chỉnh (cron)",
     pausedNoNext: "Không chạy khi đang tạm dừng",
-    /** The scheduler asks every fifteen minutes; a due time already past means its next ask. */
-    dueNow: "Ở lượt kế tiếp, trong vòng 15 phút",
+    /** The scheduler asks every `{{minutes}}`; a due time already past means its next ask. */
+    dueNow: "Ở lượt kế tiếp, trong vòng {{minutes}} phút",
     neverUsed: "Chưa dùng lần nào",
   },
 
@@ -1330,6 +1348,8 @@ export const vi = {
       struck: "Đã bỏ",
       runIngestNow: "Chạy đồng bộ nguồn {{source}} cho khách hàng {{tenantId}} ngay bây giờ.",
       setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",
+      setCadenceCron:
+        "Đặt lịch đồng bộ của nguồn {{source}} theo biểu thức cron “{{cron}}”, tính theo giờ Singapore.",
       invitePerson: "Mời {{email}} vào khách hàng {{tenantId}} với vai trò {{role}}.",
     },
     unconfiguredTitle: "Trợ lý chưa sẵn sàng",

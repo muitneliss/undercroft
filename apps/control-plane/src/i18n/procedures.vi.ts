@@ -37,7 +37,8 @@ export const procedureSentences: SentenceTable = {
   "connections.setScope":
     "Đặt phạm vi đọc của một nguồn. Với HubSpot, các trường chọn thêm cho từng đối tượng được đọc cùng các trường chuẩn, không thay thế chúng. Quản trị.",
   "connections.setToken": "Kết nối một nguồn bằng token dán vào. Quản trị.",
-  "connections.setCadence": "Đặt tần suất đọc một nguồn. Quản trị.",
+  "connections.setCadence":
+    "Đặt tần suất đọc một nguồn: hourly, every_6h, daily, paused, hoặc custom kèm --cron, một biểu thức cron 5 trường theo giờ Singapore, không chạy dày hơn 5 phút một lần. Quản trị.",
   "connections.disconnect": "Chấm dứt quyền truy cập của một nguồn. Quản trị.",
   "keys.list": "Các khoá nạp dữ liệu của khách hàng. Quản trị.",
   "keys.mint": "Tạo khoá nạp dữ liệu; token chỉ được trả về một lần. Quản trị.",

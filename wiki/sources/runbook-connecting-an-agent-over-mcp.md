@@ -5,7 +5,7 @@ date: 2026-09-25
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 7fb01cc2fe89a82587baf9750f2691af035b4018ad31d01bfe395443fdff756c
+source_hash: 02d1e3ce68b320a7c27a69a95fcf56d860d91dfe110ba6c8d3d6cd784c22e3af
 ingested: 2026-09-25
 ---
 
@@ -13,7 +13,7 @@ ingested: 2026-09-25
 
 # Runbook: Connecting an agent over MCP
 
-How to connect Claude Code, Claude Desktop or any MCP client to `/mcp` on the control plane; the decisions are [[ADR 0059: An agent reaches Undercroft over MCP, with a credential a person holds]]. Today a client connects with a **personal access token**; Google sign-in from a claude.ai connector without a pasted token is ADR 0059's follow-up, and until it lands a client that cannot send a header cannot connect.
+How to connect Claude Code, Claude Desktop or any MCP client to `/mcp` on the control plane; the decisions are [[ADR 0060: An agent reaches Undercroft over MCP, with a credential a person holds]]. Today a client connects with a **personal access token**; Google sign-in from a claude.ai connector without a pasted token is ADR 0060's follow-up, and until it lands a client that cannot send a header cannot connect.
 
 A token is the person's, not a customer's: it reaches what they reach in every customer they belong to, with their role in each, and dies at the next request once their access is removed. Each carries a grant: `read` (Chỉ đọc) is offered only tools `EFFECTS` in `surface.ts` classifies `read`; `write` (Đọc và ghi) everything the role allows. `lake_query` (admin SQL against the raw lake) is not a read, and every delete/revoke/disconnect is destructive; mint `read` unless the agent is meant to change things. A token lives 30, 90 or 365 days, is shown once, and cannot mint or revoke tokens -- only a browser session or the CLI can.
 

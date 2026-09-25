@@ -1,5 +1,5 @@
 /**
- * The caller's own account: today, their personal access tokens (ADR 0059).
+ * The caller's own account: today, their personal access tokens (ADR 0060).
  *
  * Every procedure here is a `sessionProcedure`. They manage credentials, and a credential that
  * could reach them could mint another -- a read token would mint itself a write one -- so only

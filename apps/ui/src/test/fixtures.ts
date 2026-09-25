@@ -97,6 +97,7 @@ export function connection(source: string, over: Partial<Connection> = {}): Conn
     scopes: [],
     config: {},
     cadence: "daily",
+    cron: null,
     nextRunAt: null,
     lastRun: null,
     expiresAt: null,

@@ -172,7 +172,7 @@ const BEARER = /^Bearer[ \t]+(?<token>\S+)[ \t]*$/iu;
  *
  * A personal access token (`upat_…`) is admitted by digest, and holds the grant its owner chose
  * when minting it. Anything else is not a credential this platform issued, and admits nobody.
- * That is the one branch ADR 0059's follow-up changes: an OAuth access token -- a JWT a
+ * That is the one branch ADR 0060's follow-up changes: an OAuth access token -- a JWT a
  * model-context client obtained by signing its person in -- is verified HERE, beside the
  * personal token, and yields the same `Presented`, so nothing after this function learns which
  * kind of bearer it was.

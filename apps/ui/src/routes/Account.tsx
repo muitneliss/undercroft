@@ -3,7 +3,7 @@
  *
  * Outside every customer's book, like the customer list, and reached from the address in the
  * running head -- the one place that already names who is signed in. Today it holds the
- * person's personal access tokens (ADR 0059); anything else that is theirs rather than a
+ * person's personal access tokens (ADR 0060); anything else that is theirs rather than a
  * customer's belongs here too.
  */
 

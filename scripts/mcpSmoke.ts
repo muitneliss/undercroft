@@ -1,5 +1,5 @@
 /**
- * Smoke-test a deployment's `/mcp` the way a model-context client meets it. ADR 0059.
+ * Smoke-test a deployment's `/mcp` the way a model-context client meets it. ADR 0060.
  *
  * `TOKEN=upat_… task dev:mcp-smoke URL=http://localhost:13000/mcp` -- the token minted on the
  * account page. Three checks, each one a thing a person setting up Claude Code would otherwise

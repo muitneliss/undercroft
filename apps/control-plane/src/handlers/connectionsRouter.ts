@@ -6,7 +6,12 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { type BrowseListing, Cadence } from "@undercroft/contracts";
+import {
+  type BrowseListing,
+  Cadence,
+  type CronRefusal,
+  SCHEDULER_TICK_MINUTES,
+} from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
@@ -85,6 +90,49 @@ function scopeRefusal(locale: Locale, source: string): TRPCError {
     code: "BAD_REQUEST",
     message: messages(locale)("error.scopeNotUnderstood", { source }),
   });
+}
+
+/** The sentence for each way an expression is refused. A record, so a new refusal is a type error. */
+const CRON_REFUSAL_KEY: Readonly<
+  Record<
+    CronRefusal,
+    "error.cronFields" | "error.cronInvalid" | "error.cronNever" | "error.cronTooFrequent"
+  >
+> = {
+  fields: "error.cronFields",
+  invalid: "error.cronInvalid",
+  never: "error.cronNever",
+  "too-frequent": "error.cronTooFrequent",
+};
+
+/**
+ * Why a schedule was not saved. BAD_REQUEST, because in each case the request is what has to
+ * change; the sentence says how, and `details.reason` says which as a code an agent matches.
+ */
+function cadenceRefusal(
+  locale: Locale,
+  at: { source: string; cron: string },
+  outcome: connections.SetCadenceOutcome & { ok: false },
+): TRPCError {
+  const t = messages(locale);
+  switch (outcome.reason) {
+    case "no-connection":
+      return new TRPCError({ code: "NOT_FOUND" });
+    case "cron-without-custom":
+      return refusal("BAD_REQUEST", t("error.cronWithoutCustom"), {
+        source: at.source,
+        reason: "cron-without-custom",
+      });
+    default:
+      return refusal(
+        "BAD_REQUEST",
+        t(CRON_REFUSAL_KEY[outcome.refusal], {
+          cron: at.cron,
+          minutes: String(SCHEDULER_TICK_MINUTES),
+        }),
+        { source: at.source, reason: `cron-${outcome.refusal}` },
+      );
+  }
 }
 
 export const connectionsRouter = router({
@@ -224,18 +272,30 @@ export const connectionsRouter = router({
   /**
    * How often a source is read. Admin-only, like every change to a live grant. A source
    * nobody has connected has nothing to set it on, and says so as NOT_FOUND.
+   *
+   * One flat object rather than a union discriminated on `cadence`: the CLI derives its flags
+   * from this schema and the assistant's tool schema mirrors it, and both need an object with
+   * properties. `cron` is required with `custom` and refused with anything else, which the
+   * service decides and this procedure words.
    */
   setCadence: requireRole("admin")
-    .input(z.object({ source: z.string().min(1), cadence: Cadence }))
+    .input(
+      z.object({
+        source: z.string().min(1),
+        cadence: Cadence,
+        cron: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const result = await connections.setCadence(ctx.exec, {
         tenantId: ctx.tenantId,
         source: input.source,
         cadence: input.cadence,
+        cron: input.cron,
         actor: ctx.user.email,
       });
       if (!result.ok) {
-        throw new TRPCError({ code: "NOT_FOUND" });
+        throw cadenceRefusal(ctx.locale, { source: input.source, cron: input.cron ?? "" }, result);
       }
       return { ok: true };
     }),

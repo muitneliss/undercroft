@@ -176,7 +176,7 @@ export function createServer(deps: ServerDeps): Hono {
     ...(deps.assistant === undefined ? {} : { assistant: deps.assistant }),
   });
 
-  // The model-context door (ADR 0059): a bearer, never the cookie. Before the catch-all for the
+  // The model-context door (ADR 0060): a bearer, never the cookie. Before the catch-all for the
   // same reason as the two above -- a client's GET here must not be answered with the app shell.
   registerMcpRoute(app, {
     createContext: (headers) => createContext(deps, headers, "bearer"),

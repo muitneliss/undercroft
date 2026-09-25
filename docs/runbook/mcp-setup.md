@@ -2,10 +2,10 @@
 
 Undercroft answers the Model Context Protocol at `/mcp` on the control plane: every procedure
 the web UI uses, offered as a tool to Claude Code, Claude Desktop or any other MCP client, under
-the same role gates as the browser. ADR 0059 records the decisions; this is how to use it.
+the same role gates as the browser. ADR 0060 records the decisions; this is how to use it.
 
 Today a client connects with a **personal access token**. Signing in with Google from a
-claude.ai connector, without pasting a token, is the follow-up ADR 0059 describes; until it
+claude.ai connector, without pasting a token, is the follow-up ADR 0060 describes; until it
 lands, a client that has no way to send a header cannot connect.
 
 ## What a token is

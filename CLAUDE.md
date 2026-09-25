@@ -70,7 +70,7 @@ things about it are load-bearing enough to state here rather than only in the AD
   DSN, a service token or an in-process caller, and `cli-no-backdoor` fails the gate on one.
   Its guard against injected text is a per-profile `allowWrites` that only a person at a
   terminal can set.
-- **An MCP client uses the same door too, with a person's own token.** `/mcp` (ADR 0059) turns
+- **An MCP client uses the same door too, with a person's own token.** `/mcp` (ADR 0060) turns
   every router procedure into a tool and calls it through `appRouter.createCaller(ctx)`. It reads
   `Authorization: Bearer` only, never the cookie: a personal access token minted on `/account`,
   which reaches what its owner reaches and no more. Each credential carries a `read` or `write`

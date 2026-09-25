@@ -80,7 +80,7 @@ export type OutputOf<P extends ProcedurePath> = AtPath<inferRouterOutputs<AppRou
  *
  * - `read` goes through on any grant.
  * - `write` needs a grant a person gave: the CLI profile's `allowWrites`, or a personal
- *   token minted `write` (ADR 0059).
+ *   token minted `write` (ADR 0060).
  * - `destructive` needs that AND, where nobody can be asked, an explicit confirmation.
  */
 export type Effect = "read" | "write" | "destructive";

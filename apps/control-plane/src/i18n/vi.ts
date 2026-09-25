@@ -203,6 +203,20 @@ export const vi = {
     browseUnsupported: "Nguồn {{source}} không có danh sách nào để chọn phạm vi đọc.",
     scopeNotUnderstood: "Không đọc được lựa chọn cho nguồn {{source}}.",
     /**
+     * Why a custom schedule was not saved, one sentence per `CronRefusal` in
+     * `@undercroft/contracts`. Each names the fix, because the person reading it is the one
+     * who typed the expression. `{{minutes}}` is the scheduler's tick.
+     */
+    cronFields:
+      "Biểu thức cron phải có đúng 5 trường: phút, giờ, ngày trong tháng, tháng, thứ trong tuần.",
+    cronInvalid: "Không đọc được biểu thức cron “{{cron}}”.",
+    cronNever: "Biểu thức cron “{{cron}}” không bao giờ đến lượt chạy.",
+    cronTooFrequent:
+      "Biểu thức cron “{{cron}}” chạy dày hơn {{minutes}} phút một lần, nhanh hơn nhịp của bộ lập lịch.",
+    /** A preset sent WITH an expression: refused rather than silently dropping the expression. */
+    cronWithoutCustom:
+      "Chỉ lịch tuỳ chỉnh mới nhận biểu thức cron; hãy chọn “custom” hoặc bỏ cron.",
+    /**
      * HubSpot's `scope-insufficient`. Worded apart from Google's because the remedy is: a
      * private app has no consent screen to leave ticked, it has read permissions an admin grants
      * in HubSpot. The permission names stay as HubSpot spells them -- they are what gets searched.

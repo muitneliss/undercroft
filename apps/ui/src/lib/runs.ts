@@ -9,7 +9,7 @@
  *
  * `nextRunNote` words the server's `nextRunAt`, which is the one schedule rule
  * (`@undercroft/contracts`). A value in the past is not a missed run: the scheduler asks
- * every fifteen minutes, so it means "at the next tick", and the note says that rather than
+ * every `SCHEDULER_TICK_MS`, so it means "at the next tick", and the note says that rather than
  * printing a time that already went by.
  */
 
@@ -26,6 +26,7 @@ import {
 } from "@/api/types.ts";
 import type { CardFacts } from "@/lib/connectionState.ts";
 import { formatCount, MISSING } from "@/lib/money.ts";
+import { TICK_MINUTES } from "@/lib/cadence.ts";
 import { formatDateTime } from "@/lib/when.ts";
 
 export type LastRun = NonNullable<Connection["lastRun"]>;
@@ -377,7 +378,7 @@ export function nextRunNote(
     return MISSING;
   }
   if (due.getTime() <= now.getTime()) {
-    return t("when.dueNow");
+    return t("when.dueNow", { minutes: TICK_MINUTES });
   }
   return formatDateTime(connection.nextRunAt, locale);
 }

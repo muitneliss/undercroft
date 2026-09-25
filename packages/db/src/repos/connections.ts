@@ -47,7 +47,7 @@ export interface Credential {
  * How often the source is read. The words and the rule that turns them into a time are in
  * `@undercroft/contracts`; this repo stores the word and decides nothing about it.
  */
-export type Cadence = "hourly" | "every_6h" | "daily" | "paused";
+export type Cadence = "hourly" | "every_6h" | "daily" | "paused" | "custom";
 
 export interface Connection {
   readonly tenantId: string;
@@ -56,6 +56,12 @@ export interface Connection {
   readonly externalAccountId: string | null;
   readonly scope: string;
   readonly cadence: Cadence;
+  /**
+   * The cron expression of a `custom` cadence, `null` for every preset. Stored as text and
+   * never read here: `@undercroft/contracts` checks it before it is written and evaluates it
+   * after, and the table's CHECK keeps one beside every `custom` (290_connection_cron.sql).
+   */
+  readonly cron: string | null;
 }
 
 function credentialToJson(c: Credential): string {
@@ -78,7 +84,7 @@ function credentialFromJson(blob: string): Credential {
 export async function listConnections(exec: SqlExecutor, tenantId: string): Promise<Connection[]> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope, cadence
+            external_account_id AS "externalAccountId", scope, cadence, cron
      FROM ops.connection WHERE tenant_id = $1 ORDER BY source`,
     [tenantId],
   );
@@ -92,25 +98,32 @@ export async function getConnection(
 ): Promise<Connection | null> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope, cadence
+            external_account_id AS "externalAccountId", scope, cadence, cron
      FROM ops.connection WHERE tenant_id = $1 AND source = $2`,
     [tenantId, source],
   );
   return rows[0] ?? null;
 }
 
-/** Record how often a source is read. `false` means there is no such connection to set it on. */
+/**
+ * Record how often a source is read. `false` means there is no such connection to set it on.
+ *
+ * Both columns in one statement, always: a preset writes `cron = NULL`, so choosing "daily"
+ * after a custom expression leaves no expression behind to be read as the schedule. Which
+ * pairs are legal is the table's CHECK, not this function's -- a custom cadence with no
+ * expression fails here as a constraint violation rather than being stored.
+ */
 export async function setCadence(
   exec: SqlExecutor,
   tenantId: string,
   source: string,
-  cadence: Cadence,
+  setting: { readonly cadence: Cadence; readonly cron: string | null },
 ): Promise<boolean> {
   const { rows } = await exec.query<{ source: string }>(
-    `UPDATE ops.connection SET cadence = $3, updated_at = now()
+    `UPDATE ops.connection SET cadence = $3, cron = $4, updated_at = now()
      WHERE tenant_id = $1 AND source = $2
      RETURNING source`,
-    [tenantId, source, cadence],
+    [tenantId, source, setting.cadence, setting.cron],
   );
   return rows.length > 0;
 }
@@ -127,6 +140,7 @@ export interface DueCandidate {
   readonly source: string;
   readonly status: "connected";
   readonly cadence: Cadence;
+  readonly cron: string | null;
   readonly selectionJson: string;
   readonly lastRunStartedAt: string | null;
   readonly lastRunStatus: "running" | "ok" | "failed" | null;
@@ -137,11 +151,12 @@ export async function listDueCandidates(exec: SqlExecutor): Promise<DueCandidate
     tenantId: string;
     source: string;
     cadence: Cadence;
+    cron: string | null;
     selectionJson: string | null;
     lastRunStartedAt: Date | string | null;
     lastRunStatus: DueCandidate["lastRunStatus"];
   }>(
-    `SELECT c.tenant_id AS "tenantId", c.source, c.cadence,
+    `SELECT c.tenant_id AS "tenantId", c.source, c.cadence, c.cron,
             d.selection::text AS "selectionJson",
             r.started_at      AS "lastRunStartedAt",
             r.status          AS "lastRunStatus"
@@ -160,6 +175,7 @@ export async function listDueCandidates(exec: SqlExecutor): Promise<DueCandidate
     source: row.source,
     status: "connected",
     cadence: row.cadence,
+    cron: row.cron,
     selectionJson: row.selectionJson ?? "{}",
     lastRunStartedAt:
       row.lastRunStartedAt === null ? null : new Date(row.lastRunStartedAt).toISOString(),
@@ -514,6 +530,7 @@ export async function listConnectionViews(
     externalAccountId: string | null;
     scope: string;
     cadence: Cadence;
+    cron: string | null;
     accountLabel: string | null;
     selectionJson: string | null;
     chosenAt: Date | string | null;
@@ -527,7 +544,7 @@ export async function listConnectionViews(
     lastRunError: string | null;
   }>(
     `SELECT c.tenant_id AS "tenantId", c.source, c.status,
-            c.external_account_id AS "externalAccountId", c.scope, c.cadence,
+            c.external_account_id AS "externalAccountId", c.scope, c.cadence, c.cron,
             d.account_label       AS "accountLabel",
             d.selection::text     AS "selectionJson",
             d.chosen_at           AS "chosenAt",
@@ -561,6 +578,7 @@ export async function listConnectionViews(
     externalAccountId: row.externalAccountId,
     scope: row.scope,
     cadence: row.cadence,
+    cron: row.cron,
     accountLabel: row.accountLabel ?? "",
     selectionJson: row.selectionJson ?? "{}",
     chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),

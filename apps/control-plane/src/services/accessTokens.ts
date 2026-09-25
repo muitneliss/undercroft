@@ -1,6 +1,6 @@
 /**
  * Personal access tokens: a person's own credential for a door that cannot hold a cookie --
- * a model-context client at `/mcp` (ADR 0059).
+ * a model-context client at `/mcp` (ADR 0060).
  *
  * The pattern is `keys.ts`'s, deliberately: a token is `upat_<8>.<secret>`, stored as the
  * digest of the whole string, returned by `mint` once and by nothing else, and an audit row
@@ -47,7 +47,7 @@ export const MAX_TOKEN_DAYS = 365;
  * Whether a presented bearer is shaped like one of these tokens at all.
  *
  * The door that reads bearers asks this before admitting, because a bearer that is not ours --
- * an OAuth access token, once ADR 0059's follow-up lands -- is somebody else's to verify, and
+ * an OAuth access token, once ADR 0060's follow-up lands -- is somebody else's to verify, and
  * digesting it and looking it up here would be a query that can only miss.
  */
 export function isPersonalToken(bearer: string): boolean {

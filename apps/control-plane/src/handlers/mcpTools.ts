@@ -1,5 +1,5 @@
 /**
- * Which tools `/mcp` offers, and what each one says about itself. ADR 0059.
+ * Which tools `/mcp` offers, and what each one says about itself. ADR 0060.
  *
  * The catalogue is the router, described by `procedureManifest()` -- the same walk the CLI bakes
  * into its bundle -- less `MCP_EXCLUDED` and `SESSION_ONLY`. Nothing here is hand-written per

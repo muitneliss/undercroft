@@ -65,7 +65,7 @@ export interface Context {
   /**
    * What the caller's credential lets through, which the base procedure below enforces against
    * each call's effect. A cookie session is always `write` -- it IS the person, at their own
-   * browser -- and a token holds whatever its owner chose when minting it (ADR 0059).
+   * browser -- and a token holds whatever its owner chose when minting it (ADR 0060).
    */
   readonly grant: Grant;
   /**

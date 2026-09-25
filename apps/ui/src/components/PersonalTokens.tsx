@@ -1,6 +1,6 @@
 /**
  * Personal access tokens, on the account page: the credential a person gives an agent so it can
- * reach Undercroft over MCP on their behalf (ADR 0059).
+ * reach Undercroft over MCP on their behalf (ADR 0060).
  *
  * Modelled on `IngestKeys`, and different from it in the two ways the credential is: a token is
  * the PERSON's, not a customer's, so this band sits on the account page rather than on a

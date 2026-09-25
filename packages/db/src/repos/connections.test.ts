@@ -71,11 +71,38 @@ describe("cadence", () => {
 
   it("a connection reads daily until an admin says otherwise, and the word is stored", async () => {
     expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("daily");
-    expect(await setCadence(db, "CASE-1", "xero", "hourly")).toBe(true);
+    expect(await setCadence(db, "CASE-1", "xero", { cadence: "hourly", cron: null })).toBe(true);
     expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("hourly");
   });
 
+  it("a custom cadence keeps its expression, and a preset chosen after it clears it", async () => {
+    await setCadence(db, "CASE-1", "xero", { cadence: "custom", cron: "30 7 * * 1-5" });
+    expect(await getConnection(db, "CASE-1", "xero")).toMatchObject({
+      cadence: "custom",
+      cron: "30 7 * * 1-5",
+    });
+
+    await setCadence(db, "CASE-1", "xero", { cadence: "daily", cron: null });
+    expect(await getConnection(db, "CASE-1", "xero")).toMatchObject({
+      cadence: "daily",
+      cron: null,
+    });
+  });
+
+  it("the table refuses a custom cadence with no expression, and a preset with one", async () => {
+    // The invariant holds whoever writes: the service refuses first, the CHECK regardless.
+    await expect(
+      setCadence(db, "CASE-1", "xero", { cadence: "custom", cron: null }),
+    ).rejects.toThrow("connection_cron_iff_custom");
+    await expect(
+      setCadence(db, "CASE-1", "xero", { cadence: "daily", cron: "0 9 * * *" }),
+    ).rejects.toThrow("connection_cron_iff_custom");
+    expect((await getConnection(db, "CASE-1", "xero"))?.cadence).toBe("daily");
+  });
+
   it("a source nobody has connected has nothing to set a cadence on", async () => {
-    expect(await setCadence(db, "CASE-1", "hubspot", "hourly")).toBe(false);
+    expect(await setCadence(db, "CASE-1", "hubspot", { cadence: "hourly", cron: null })).toBe(
+      false,
+    );
   });
 });

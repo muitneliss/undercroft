@@ -108,6 +108,14 @@ export const en = {
     browseRefused: "The processing service could not fetch the list for {{source}}.",
     browseUnsupported: "{{source}} has no list to choose what it reads from.",
     scopeNotUnderstood: "The selection for {{source}} could not be read.",
+    cronFields:
+      "A cron expression has exactly five fields: minute, hour, day of month, month, day of week.",
+    cronInvalid: "The cron expression “{{cron}}” could not be read.",
+    cronNever: "The cron expression “{{cron}}” never comes round.",
+    cronTooFrequent:
+      "The cron expression “{{cron}}” runs more often than every {{minutes}} minutes, faster than the scheduler ticks.",
+    cronWithoutCustom:
+      "Only a custom schedule takes a cron expression; choose “custom”, or leave the cron out.",
     propertiesInsufficient:
       "The HubSpot access token does not currently carry enough permission to read the list of properties. In HubSpot, give the private app read access to companies, contacts and deals (crm.objects.companies.read, crm.objects.contacts.read, crm.objects.deals.read), then paste the token again if HubSpot issued a new one.",
     ingestNotConfigured:

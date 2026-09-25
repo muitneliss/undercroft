@@ -1,5 +1,5 @@
 /**
- * What a tool call answers over `/mcp`: a result, or a refusal. ADR 0059.
+ * What a tool call answers over `/mcp`: a result, or a refusal. ADR 0060.
  *
  * A RESULT is the whole answer in `structuredContent`, as it would have crossed `/trpc`, and a
  * JSON text for the model beside it. The text is bounded -- a model's context is not a data

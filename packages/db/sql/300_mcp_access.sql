@@ -1,4 +1,4 @@
--- app.access_token: a person's own credential for a door that cannot hold a cookie. ADR 0059.
+-- app.access_token: a person's own credential for a door that cannot hold a cookie. ADR 0060.
 --
 -- An agent outside the browser -- a model-context client at `/mcp` -- presents
 -- `Authorization: Bearer upat_<id>.<secret>`. The token belongs to a PERSON, not to a tenant
