@@ -18,6 +18,12 @@ export const procedureSentences: SentenceTable = {
   "session.me": "Bạn là ai trên máy chủ này.",
   "session.signOut": "Huỷ phiên hiện tại trên máy chủ.",
   "session.setLocale": "Ghi nhớ ngôn ngữ bạn đọc, cho những email gửi khi bạn không mở trang.",
+  "account.tokens.list":
+    "Các token truy cập cá nhân của bạn. Chỉ gọi được từ phiên đăng nhập, không bằng token.",
+  "account.tokens.mint":
+    "Tạo token truy cập cá nhân, chỉ đọc hoặc đọc và ghi, hết hạn trong tối đa 365 ngày; token chỉ được trả về một lần. Chỉ gọi được từ phiên đăng nhập.",
+  "account.tokens.revoke":
+    "Thu hồi một token truy cập cá nhân của bạn. Chỉ gọi được từ phiên đăng nhập.",
   "tenants.list": "Các khách hàng bạn có quyền truy cập.",
   "tenants.get": "Một khách hàng và vai trò của bạn trong đó.",
   "tenants.create": "Tạo khách hàng mới. Chỉ quản trị nền tảng.",

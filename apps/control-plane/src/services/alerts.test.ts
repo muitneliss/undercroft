@@ -69,7 +69,9 @@ function caller(userId: string, address: string) {
   const ctx: Context = {
     exec: db,
     user: { userId, email: address },
-    sessionId: "s1",
+    credentialId: "s1",
+    via: "session",
+    grant: "write",
     superadmin: false,
     locale: DEFAULT_LOCALE,
     endSession: () => Promise.resolve(),

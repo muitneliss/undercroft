@@ -223,10 +223,65 @@ export const vi = {
     mintedHead: "Khoá mới",
     mintedNote:
       "Sao chép ngay: khoá này sẽ không hiển thị lại. Nếu mất, hãy tạo khoá khác và thu hồi khoá này.",
+  },
+
+  /**
+   * The one showing of a secret the server hands back once -- an ingest key, a personal token.
+   * Shared, because the act is the same whichever secret it is: copy it now or lose it.
+   */
+  secret: {
     copy: "Sao chép",
     copied: "Đã sao chép vào bộ nhớ tạm.",
     notCopied: "Không sao chép được. Hãy chọn và sao chép bằng tay.",
     done: "Xong",
+  },
+
+  /** The account page: what belongs to the person signed in, rather than to a customer. */
+  account: {
+    title: "Tài khoản",
+    lead: "Những gì thuộc về {{email}}, không thuộc riêng khách hàng nào.",
+    open: "Mở trang tài khoản",
+  },
+
+  /**
+   * Personal access tokens (ADR 0059). "Token" stays as the word the operators already use for
+   * it, the way "HubSpot" does: it is what an agent's setup screen will ask them to paste.
+   */
+  tokens: {
+    head: "Token truy cập cá nhân",
+    lead: "Token để một tác tử (Claude Code, Claude Desktop…) làm việc với Undercroft thay mặt bạn qua MCP, với đúng quyền bạn đang có ở mọi khách hàng. Mỗi token chỉ hiển thị một lần, lúc tạo.",
+    notLoaded: "Không tải được danh sách token.",
+    caption_other: "{{count, number}} token",
+    colLabel: "Nhãn",
+    colGrant: "Quyền",
+    colCreated: "Tạo",
+    colLastUsed: "Dùng gần nhất",
+    colExpires: "Hết hạn",
+    colRevoke: "Thu hồi",
+    grantRead: "Chỉ đọc",
+    grantWrite: "Đọc và ghi",
+    revoked: "Đã thu hồi",
+    revoke: "Thu hồi",
+    revoking: "Đang thu hồi…",
+    notRevoked: "Chưa thu hồi được",
+    none: "Chưa có token nào.",
+    mintHead: "Tạo token mới",
+    labelLabel: "Nhãn",
+    labelPlaceholder: "Ví dụ: Claude Code trên máy xách tay",
+    grantLabel: "Quyền",
+    grantReadHint: "Tác tử chỉ xem được dữ liệu; không có công cụ nào làm thay đổi gì.",
+    grantWriteHint:
+      "Tác tử làm được mọi việc bạn làm được, kể cả xoá. Hãy chỉ chọn khi bạn tin tác tử đó.",
+    expiresLabel: "Hết hạn sau",
+    expires30: "30 ngày",
+    expires90: "90 ngày",
+    expires365: "1 năm",
+    mint: "Tạo token",
+    minting: "Đang tạo…",
+    notMinted: "Chưa tạo được token",
+    mintedHead: "Token mới",
+    mintedNote:
+      "Sao chép ngay: token này sẽ không hiển thị lại. Nếu mất, hãy tạo token khác và thu hồi token này.",
   },
 
   lake: {

@@ -54,7 +54,9 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
   return {
     exec: db,
     user,
-    sessionId: "s1",
+    credentialId: "s1",
+    via: "session",
+    grant: "write",
     superadmin: false,
     locale,
     endSession: () => Promise.resolve(),

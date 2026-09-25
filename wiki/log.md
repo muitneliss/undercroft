@@ -144,3 +144,5 @@
 ## [2026-09-25] ingest | Runbook Deployment
 ## [2026-09-25] ingest | ADR 0058: Every request is traced, into the host's shared otel-lgtm stack
 ## [2026-09-25] ingest | Runbook: The undercroft CLI
+## [2026-09-25] ingest | ADR 0059: An agent reaches Undercroft over MCP, with a credential a person holds
+## [2026-09-25] ingest | Runbook: Connecting an agent over MCP

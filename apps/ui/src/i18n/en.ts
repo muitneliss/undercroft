@@ -169,10 +169,57 @@ export const en = {
     mintedHead: "New key",
     mintedNote:
       "Copy it now: this key will not be shown again. If it is lost, mint another and revoke this one.",
+  },
+
+  secret: {
     copy: "Copy",
     copied: "Copied to the clipboard.",
     notCopied: "Could not copy. Select it and copy by hand.",
     done: "Done",
+  },
+
+  account: {
+    title: "Account",
+    lead: "What belongs to {{email}}, rather than to any one customer.",
+    open: "Open your account page",
+  },
+
+  tokens: {
+    head: "Personal access tokens",
+    lead: "A token lets an agent (Claude Code, Claude Desktop…) work with Undercroft on your behalf over MCP, with exactly the access you have in every customer. Each token is shown once, when it is minted.",
+    notLoaded: "The tokens could not be loaded.",
+    caption_one: "{{count, number}} token",
+    caption_other: "{{count, number}} tokens",
+    colLabel: "Label",
+    colGrant: "Grant",
+    colCreated: "Created",
+    colLastUsed: "Last used",
+    colExpires: "Expires",
+    colRevoke: "Revoke",
+    grantRead: "Read only",
+    grantWrite: "Read and write",
+    revoked: "Revoked",
+    revoke: "Revoke",
+    revoking: "Revoking…",
+    notRevoked: "The token was not revoked",
+    none: "No tokens yet.",
+    mintHead: "Mint a token",
+    labelLabel: "Label",
+    labelPlaceholder: "e.g. Claude Code on my laptop",
+    grantLabel: "Grant",
+    grantReadHint: "The agent can look at data; no tool that changes anything is offered.",
+    grantWriteHint:
+      "The agent can do anything you can, deletion included. Choose it only for an agent you trust.",
+    expiresLabel: "Expires after",
+    expires30: "30 days",
+    expires90: "90 days",
+    expires365: "1 year",
+    mint: "Mint token",
+    minting: "Minting…",
+    notMinted: "The token was not minted",
+    mintedHead: "New token",
+    mintedNote:
+      "Copy it now: this token will not be shown again. If it is lost, mint another and revoke this one.",
   },
 
   lake: {

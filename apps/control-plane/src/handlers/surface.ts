@@ -9,7 +9,9 @@
  * - its EFFECT, because tRPC's query/mutation split is about HTTP and not about consequences
  *   (`EFFECTS`);
  * - its SENTENCE in each language (`../i18n/procedures.{vi,en}.ts`);
- * - whether a door that is not a person's browser should offer it at all (`MCP_EXCLUDED`);
+ * - whether a door that is not a person's browser should offer it at all (`MCP_EXCLUDED`), and
+ *   which procedures only a signed-in browser session may call (`SESSION_ONLY`);
+ * - what a credential's GRANT lets through, given the effect (`grantAdmits`);
  * - what a refusal means to a caller that is not tRPC's own client (`BY_TRPC_CODE`).
  *
  * Every table is typed against `AppRouter` itself, so a router change becomes a `tsc` error
@@ -34,7 +36,10 @@ import type {
 } from "@trpc/server";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import type { Locale } from "@undercroft/core/locale";
+import type { Grant } from "../services/accessTokens.ts";
 import type { AppRouter } from "./router.ts";
+
+export type { Grant } from "../services/accessTokens.ts";
 
 type RouterRecord = AppRouter["_def"]["record"];
 
@@ -74,7 +79,8 @@ export type OutputOf<P extends ProcedurePath> = AtPath<inferRouterOutputs<AppRou
  * What a procedure does to the platform, which is what a caller's safety rules turn on.
  *
  * - `read` goes through on any grant.
- * - `write` needs a grant a person gave: the CLI profile's `allowWrites`.
+ * - `write` needs a grant a person gave: the CLI profile's `allowWrites`, or a personal
+ *   token minted `write` (ADR 0059).
  * - `destructive` needs that AND, where nobody can be asked, an explicit confirmation.
  */
 export type Effect = "read" | "write" | "destructive";
@@ -138,6 +144,11 @@ export const EFFECTS: EffectTable = {
   "bi.dashboards.delete": "destructive",
 
   "runs.trigger": "write",
+
+  // A credential that mints credentials is a write; taking one away is not undone by
+  // anything but minting another, which the person has to go and copy again.
+  "account.tokens.mint": "write",
+  "account.tokens.revoke": "destructive",
 };
 
 const LISTED: ReadonlyMap<string, Effect> = new Map(Object.entries(EFFECTS));
@@ -155,6 +166,19 @@ export function effectOf(procedure: {
   readonly type: TRPCProcedureType;
 }): Effect | null {
   return LISTED.get(procedure.path) ?? (procedure.type === "query" ? "read" : null);
+}
+
+/**
+ * Whether a credential holding `grant` may make a call whose effect is `effect`.
+ *
+ * The one statement of the read/write policy, asked by the router's own middleware (`trpc.ts`,
+ * the door every caller goes through) and by the model-context door when it decides which
+ * tools to list. A `read` grant admits only what is classified `read`, so an unclassified path
+ * -- `null` -- is refused: the guard fails closed. A `write` grant admits everything the role
+ * gates admit; it is what a person's own browser session always holds.
+ */
+export function grantAdmits(grant: Grant, effect: Effect | null): boolean {
+  return grant === "write" || effect === "read";
 }
 
 /** One sentence per procedure, per language. The router decides which keys exist. */
@@ -175,6 +199,22 @@ export const MCP_EXCLUDED: ExclusionTable = {
   "config.google":
     "the public halves of the Google client, for the browser's Drive picker and nothing else",
 };
+
+/**
+ * The procedures only a person's own browser session may call: never a bearer credential.
+ *
+ * They manage credentials. A token that could reach them could mint a token, and a READ token
+ * could mint itself a WRITE one -- so the grant a person chose would bind nothing. The router
+ * enforces it (`sessionProcedure` in `trpc.ts`); this list is what a door that only ever holds
+ * a bearer reads to leave them out, and `procedureManifest` refuses to describe a router whose
+ * `sessionProcedure` and this list disagree, so the two cannot drift apart. A stale path is a
+ * `tsc` error. The CLI keeps them: it signs in with the same session cookie the browser does.
+ */
+export const SESSION_ONLY: readonly ProcedurePath[] = [
+  "account.tokens.list",
+  "account.tokens.mint",
+  "account.tokens.revoke",
+];
 
 /**
  * What a refusal means to a caller, independent of tRPC's wording.

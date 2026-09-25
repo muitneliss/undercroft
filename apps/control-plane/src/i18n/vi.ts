@@ -140,6 +140,15 @@ export const vi = {
      * has to -- so the sentence points at a person rather than at a setting.
      */
     requiresSuperadmin: "Thao tác này cần quyền quản trị toàn hệ thống.",
+    /**
+     * A read-only credential asked for something that is not a read. Names the remedy --
+     * a token minted for writing -- because the person who minted this one can mint that one.
+     */
+    writesDisabled:
+      "Token này chỉ được đọc, nên không làm được thao tác này. Hãy tạo một token có quyền ghi ở trang Tài khoản nếu bạn muốn cho phép.",
+    /** A credential-managing procedure reached with a token. Says where it can be done. */
+    requiresSession:
+      "Thao tác này chỉ làm được khi đăng nhập bằng trình duyệt (hoặc CLI), không làm được bằng token.",
     tenantExists: "Mã khách hàng {{tenantId}} đã được dùng cho một khách hàng khác.",
     /**
      * Two references that differ only in case or punctuation fold to one database login.
@@ -243,5 +252,39 @@ export const vi = {
      */
     assistantThreadFull:
       "Cuộc trò chuyện này đã quá dài. Hãy xoá nội dung trò chuyện để bắt đầu lại.",
+  },
+
+  /**
+   * What `/mcp` says to a model-context client -- and through it, to the person who asked.
+   *
+   * A host shows these to people, so they are worded and in the caller's language like every
+   * other refusal. The `code` beside each one is what an agent matches on, and is never
+   * translated (`handlers/surface.ts`, `SurfaceErrorCode`).
+   */
+  mcp: {
+    /**
+     * A refusal the router did not word itself. UNAUTHORIZED and NOT_FOUND are deliberately
+     * unworded on the server so they confirm nothing (`trpc.ts`); these confirm nothing either.
+     */
+    refused: {
+      AUTHENTICATION_REQUIRED: "Cần đăng nhập. Token không còn hiệu lực.",
+      PERMISSION_DENIED: "Bạn không có quyền làm thao tác này.",
+      NOT_FOUND: "Không tìm thấy.",
+      CONFLICT: "Trạng thái hiện tại không cho phép thao tác này.",
+      VALIDATION_FAILED: "Đầu vào không hợp lệ. Chi tiết nằm trong details.issues.",
+      TIMEOUT: "Máy chủ không trả lời kịp.",
+      NETWORK_ERROR: "Có quá nhiều yêu cầu. Hãy thử lại sau ít phút.",
+      INTERNAL_ERROR:
+        "Máy chủ gặp lỗi. Hãy báo lỗi kèm mã truy vết (traceId) để người vận hành tìm được.",
+    },
+    unknownTool: "Không có công cụ nào tên {{tool}} cho token này.",
+    /**
+     * The model reads a bounded text; the whole answer is still in `structuredContent`.
+     * Saying so is the point: rows cut off silently would read as all the rows there are.
+     */
+    rowsClipped:
+      "Chỉ hiện {{shown}} trên {{total}} mục của {{field}} trong văn bản này. Toàn bộ kết quả nằm trong structuredContent.",
+    textClipped:
+      "Văn bản đã bị cắt ở {{kilobytes}} KB. Toàn bộ kết quả nằm trong structuredContent.",
   },
 };
