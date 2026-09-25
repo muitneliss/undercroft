@@ -20,9 +20,10 @@
  *
  * 2. **A token is verified in process, against the key set read through Better Auth's own
  *    `getJwks`**, checking signature, issuer, audience (the `/mcp` resource, never the base URL)
- *    and expiry with `jose`. Not an HTTP call to our own `/jwks`, which would be a request to
- *    ourselves on every tool call; and not `verifyJWT`, which only accepts the base URL as the
- *    audience and so would take a token issued for anything this server signs.
+ *    and expiry with `jose`, in `mcpAccessToken.ts`. Not an HTTP call to our own `/jwks`, which
+ *    would be a request to ourselves on every tool call; and not `verifyJWT`, which only
+ *    accepts the base URL as the audience and so would take a token issued for anything this
+ *    server signs.
  *
  * 3. **The consent row is read on EVERY request.** A JWT cannot be withdrawn before it expires;
  *    the consent can. Deleting it ("Revoke" on the account page) stops the client at its next
@@ -37,26 +38,36 @@
 import { mcp } from "@better-auth/mcp";
 import type { AuthContext, BetterAuthPlugin } from "better-auth";
 import { jwt } from "better-auth/plugins";
-import { createLocalJWKSet, errors, type JSONWebKeySet, type JWTPayload, jwtVerify } from "jose";
 import { type AuthorizedApp, OFFERED_SCOPES, type OAuthApps } from "../services/connectedApps.ts";
 import { JWKS_TABLE, OAUTH_TABLES } from "./authSchema.ts";
 import { isLoopbackOrigin } from "./devSignIn.ts";
+import {
+  type KeySet,
+  type OAuthRefused,
+  type VerifiedToken,
+  verifyAccessToken,
+} from "./mcpAccessToken.ts";
 
 /**
- * How long an access token lives. Short because it is a bearer: whoever copies it out of a
- * client holds it until it expires. Revocation does not wait for it (decision 3); a refresh
- * token is what keeps a connector from sending its person through consent every quarter hour.
+ * How long an access token lives: eight hours. ADR 0062.
+ *
+ * Not short, because shortness buys nothing here: revocation never waits for expiry. The
+ * consent row and the person are read on every request (decision 3), so revoking the app on
+ * `/account` stops it at its next call whatever the token's `exp` says. What fifteen minutes DID
+ * do was break every client that reads its bearer once and does not refresh mid-session: each
+ * call a 401 a quarter of an hour in. Eight hours is what Anthropic's own MCP authorization
+ * server issues. The cost, stated: a token copied out of a client works for up to eight hours,
+ * for as long as its consent and its person stand. A refresh token still carries a connector
+ * past that without sending its person through consent again.
  */
-const ACCESS_TOKEN_SECONDS = 15 * 60;
-
-/** RFC 9068's `typ` for a JWT access token, which is what the provider signs them with. */
-const ACCESS_TOKEN_TYPE = "at+jwt";
+const ACCESS_TOKEN_SECONDS = 8 * 60 * 60;
 
 /** The path `/mcp` answers on, which is the resource every access token is bound to. */
 const MCP_PATH = "/mcp";
 
 /** What a live access token for `/mcp` says, once the consent behind it has been read. */
 export interface OAuthAdmission {
+  readonly ok: true;
   /** The person's address: the join to `app.app_user`, decided in `handlers/context.ts`. */
   readonly email: string;
   readonly clientId: string;
@@ -71,11 +82,11 @@ export interface McpAuth extends OAuthApps {
   /** `<public origin>/mcp`: the resource every access token here is bound to. */
   readonly resource: string;
   /**
-   * The person and scopes behind an access token, or `null` for anything that is not a live
-   * JWT issued here for `/mcp` whose consent still stands and whose person still exists. One
-   * answer for all of them: the door answers each with the same 401.
+   * The person and scopes behind a live JWT issued here for `/mcp` whose consent still stands
+   * and whose person still exists, or why the token is not one. The door answers every refusal
+   * with the same 401; the reason is for its log.
    */
-  readonly admit: (token: string) => Promise<OAuthAdmission | null>;
+  readonly admit: (token: string) => Promise<OAuthAdmission | OAuthRefused>;
 }
 
 /**
@@ -156,9 +167,6 @@ export interface Issuing {
 /** Better Auth's own storage, which knows the model mapping in `authSchema.ts`. */
 type Store = Pick<AuthContext, "adapter" | "internalAdapter">;
 
-/** Reads the key set the access tokens are signed with. */
-type KeySet = () => Promise<JSONWebKeySet>;
-
 /** A consent as the adapter answers it: the fields read here, typed as what they must be. */
 interface StoredConsent {
   readonly id: string;
@@ -198,46 +206,12 @@ function hasJwks(api: object): api is { getJwks: KeySet } {
   return "getJwks" in api && typeof api.getJwks === "function";
 }
 
-/** A token's scopes, from the space-separated claim the provider writes. */
-function scopesOf(claims: JWTPayload): string[] {
-  return typeof claims.scope === "string" ? claims.scope.split(" ").filter((s) => s !== "") : [];
-}
-
-/**
- * The claims of a genuine, unexpired access token issued by `issuer` for `resource`, or `null`.
- * A JOSE failure is a token that is not one; anything else -- the key set could not be read --
- * is the server's failure and is thrown, never answered as "not a token".
- */
-async function verified(
-  keys: KeySet,
-  token: string,
-  expected: { issuer: string; resource: string },
-): Promise<JWTPayload | null> {
-  try {
-    const { payload } = await jwtVerify(token, createLocalJWKSet(await keys()), {
-      issuer: expected.issuer,
-      audience: expected.resource,
-      typ: ACCESS_TOKEN_TYPE,
-      requiredClaims: ["exp", "sub"],
-    });
-    return payload;
-  } catch (error) {
-    if (error instanceof errors.JOSEError) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-/** The person and scopes behind verified `claims`, read against the consent as it stands. */
-async function admitted(store: Store, claims: JWTPayload): Promise<OAuthAdmission | null> {
-  const clientId = claims.client_id ?? claims.azp;
-  // A `cnf` claim binds the token to a DPoP key whose proof this door does not check, so
-  // honouring it as a plain bearer would undo the binding the client asked for.
-  if (typeof clientId !== "string" || claims.cnf !== undefined) {
-    return null;
-  }
-  const userId = String(claims.sub);
+/** The person and scopes behind a verified token, read against the consent as it stands. */
+async function admitted(
+  store: Store,
+  token: VerifiedToken,
+): Promise<OAuthAdmission | OAuthRefused> {
+  const { clientId, userId } = token;
   const [consent, user] = await Promise.all([
     store.adapter.findOne<StoredConsent>({
       model: "oauthConsent",
@@ -248,13 +222,19 @@ async function admitted(store: Store, claims: JWTPayload): Promise<OAuthAdmissio
     }),
     store.internalAdapter.findUserById(userId),
   ]);
-  if (consent === null || user === null) {
-    return null;
+  // The person first: when they are gone their consent usually went with them, and "revoked"
+  // would then name the consequence rather than the cause.
+  if (user === null) {
+    return { ok: false, reason: "no_person", clientId };
+  }
+  if (consent === null) {
+    return { ok: false, reason: "revoked", clientId };
   }
   return {
+    ok: true,
     email: user.email,
     clientId,
-    tokenScopes: scopesOf(claims),
+    tokenScopes: token.scopes,
     consentScopes: strings(consent.scopes),
   };
 }
@@ -328,9 +308,9 @@ export function createMcpAuth(issuing: Issuing, issuer: string): McpAuth {
   const resource = `${issuer}${MCP_PATH}`;
   return {
     resource,
-    admit: async (token: string): Promise<OAuthAdmission | null> => {
-      const claims = await verified(keys, token, { issuer, resource });
-      return claims === null ? null : admitted(await issuing.$context, claims);
+    admit: async (token: string): Promise<OAuthAdmission | OAuthRefused> => {
+      const verified = await verifyAccessToken(keys, token, { issuer, resource });
+      return verified.ok ? admitted(await issuing.$context, verified) : verified;
     },
     listFor: async (email: string): Promise<AuthorizedApp[]> =>
       appsOf(await issuing.$context, email),

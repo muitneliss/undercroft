@@ -33,6 +33,8 @@ names the missing piece, for example "no Host in ~/.ssh/config has HostName …"
 | `task obs:trace TRACE=<id>`                           | What did this request do? Prints the span tree: service, route, status, duration, `✗` on failed spans, the run id or Kestra execution it touched. |
 | `task obs:logs FOR=<id> SINCE=6h`                     | Every Loki line containing the id, oldest first. `FOR` can be a trace id, a run id or an event name.                                              |
 | `task obs:search FOR=run=<runId> SINCE=2d`            | Which trace opened this run? (`kestra=<executionId>` and `errors` also work.)                                                                     |
+| `task obs:search FOR=status=401 SINCE=6h`             | Which requests were answered with this status? `errors` lists only 5xx, so a refused request (401, 403) is found here and nowhere else.           |
+| `task obs:logs FOR=mcp_refused SINCE=6h`              | Every bearer `/mcp` refused, with its `reason` and, when proven, the `credential`. What the refused client itself was never told.                 |
 | `task obs:host-logs SERVICE=worker FOR=<id> SINCE=6h` | The raw container log on the host, filtered to the id. `SERVICE` is `worker`, `control-plane` or `kestra`.                                        |
 
 `SINCE` takes `30m`, `6h` or `2d`, and defaults to `1h`. When a search comes back empty,
@@ -48,6 +50,17 @@ widen it before you conclude anything. An empty window is not an absence.
    - A Kestra execution: `task obs:search FOR=kestra=<id>`.
    - Only a symptom ("the sync failed last night"): `task obs:search FOR=errors SINCE=1d`
      lists recent failed traces. Pick the one whose time and route match.
+   - A client says it failed but nothing is in the logs, typically an MCP client "failing after
+     it worked for a while": the door refused it, which is a 401 or 403, never an error span,
+     and the client rarely shows the `x-trace-id` it got.
+     `task obs:search FOR=status=401 SINCE=6h` lists the refused requests, and
+     `task obs:logs FOR=mcp_refused SINCE=6h` says why each one was refused. `reason` is `expired` (the token ran out and the client did not
+     renew it), `revoked` (the person revoked the token or the app), `no_person` (their access
+     was removed), `missing` (no bearer at all, which is also every OAuth client's first
+     contact), `malformed` or `unknown` (not a credential this server issued for `/mcp`), or
+     `insufficient_scope` (a 403: the person granted neither read nor write). `credential` is
+     the `upat_…` id or `oauth:<clientId>` when one was proven, the same id the client's
+     `mcp_call` lines carry, so `task obs:logs FOR=<credential>` shows when it last worked.
 2. **Read the trace**: `task obs:trace TRACE=<id>`. The `✗` spans are where it failed, and
    `error.type` is the exception class. The deepest failed span is usually the cause and
    the ones above it are the consequence.

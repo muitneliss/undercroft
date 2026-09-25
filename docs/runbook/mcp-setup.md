@@ -28,7 +28,7 @@ everywhere:
 3. The consent page names the app, the host it will send you back to, and your address. Choose
    **Chỉ đọc / Read only** unless you mean the agent to change things, then **Cho phép / Allow**.
    **Từ chối / Deny** sends the client away with nothing.
-4. The browser returns to the client, which now holds an access token (15 minutes) and a refresh
+4. The browser returns to the client, which now holds an access token (8 hours) and a refresh
    token, and renews it without asking you again.
 
 The app appears on your account page under **Ứng dụng đã kết nối / Connected apps**, with the
@@ -179,15 +179,40 @@ account procedures themselves (tokens and connected apps).
 
 ## Troubleshooting
 
-| What you see                            | Why, and what to do                                                                                                                                                                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401` on every call                     | The token is revoked, expired or mistyped, or your access was removed. Check the account page; mint a new one. A browser cookie is never enough: `/mcp` reads only `Authorization: Bearer`. |
-| a tool the UI has is missing            | A `read` token is not offered writes. Mint a `write` token if you mean to allow them.                                                                                                       |
-| `WRITES_DISABLED`                       | The same, for a client that called a write it was not offered.                                                                                                                              |
-| `NOT_FOUND` for a customer you can name | You are not a member of it -- the same answer the browser gives, so it confirms nothing.                                                                                                    |
-| `PERMISSION_DENIED`                     | You are a member, without the role. The sentence names the role needed.                                                                                                                     |
-| `INTERNAL_ERROR` with a `traceId`       | Follow it: `task obs:trace TRACE=<id>`, or hand the id to the `debug-trace` skill. The server logs one `mcp_call` line per call, with the tool, the token's id and the outcome.             |
-| a `-32602` error naming the tool        | The name is not a tool this server offers: a typo, or a procedure that is not offered at all.                                                                                               |
+| What you see                               | Why, and what to do                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401` on every call                        | The token is revoked, expired or mistyped, or your access was removed. Check the account page; mint a new one. A browser cookie is never enough: `/mcp` reads only `Authorization: Bearer`.                                                                                                                                      |
+| the client fails after working for a while | Usually its access token expired and the client did not renew it. An operator finds the refused requests with `task obs:search FOR=status=401 SINCE=6h` and why each was refused with `task obs:logs FOR=mcp_refused SINCE=6h`; see [Why a bearer was refused](#why-a-bearer-was-refused). The client itself is told only `401`. |
+| a tool the UI has is missing               | A `read` token is not offered writes. Mint a `write` token if you mean to allow them.                                                                                                                                                                                                                                            |
+| `WRITES_DISABLED`                          | The same, for a client that called a write it was not offered.                                                                                                                                                                                                                                                                   |
+| `NOT_FOUND` for a customer you can name    | You are not a member of it -- the same answer the browser gives, so it confirms nothing.                                                                                                                                                                                                                                         |
+| `PERMISSION_DENIED`                        | You are a member, without the role. The sentence names the role needed.                                                                                                                                                                                                                                                          |
+| `INTERNAL_ERROR` with a `traceId`          | Follow it: `task obs:trace TRACE=<id>`, or hand the id to the `debug-trace` skill. The server logs one `mcp_call` line per call, with the tool, the token's id and the outcome.                                                                                                                                                  |
+| a `-32602` error naming the tool           | The name is not a tool this server offers: a typo, or a procedure that is not offered at all.                                                                                                                                                                                                                                    |
 
 Every call is logged as `mcp_call { tool, via, credential, outcome }`: the token's `upat_…` id,
 never the token, and never the arguments or the result.
+
+### Why a bearer was refused
+
+A client refused at the door gets the same `401` whatever the cause, or a `403` for
+`insufficient_scope`, by design (ADR 0062): a caller holding a dead token is not told how it
+died. The server logs the cause instead, one line per refusal:
+`mcp_refused { status, refusal, reason, credential }`, with the request's `traceId`.
+`credential` is the `upat_…` id or `oauth:<clientId>` when one was proven, the same id the
+client's `mcp_call` lines carry, and never the token.
+
+| `reason`             | What happened, and what to do                                                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `expired`            | The token ran out. A personal token: mint a new one. An OAuth client should renew its access token by itself; one that does not needs fixing. |
+| `revoked`            | The token was revoked, or the app on the account page. Mint a new token, or connect the client again.                                         |
+| `no_person`          | The credential is fine, but its person no longer has access. An administrator invites them again.                                             |
+| `missing`            | No `Authorization: Bearer` at all. Every OAuth client's first contact looks like this, so it is logged at `info`, not `warn`.                 |
+| `malformed`          | Not a token this server could read: usually a truncated or mangled header value.                                                              |
+| `unknown`            | Not a token this server issued for `/mcp`: mistyped, from another server, or for another resource.                                            |
+| `insufficient_scope` | The person granted neither read nor write. Revoke the app and connect again, choosing a grant.                                                |
+
+To find them: `task obs:search FOR=status=401 SINCE=6h` lists the refused requests with their
+trace ids, `task obs:logs FOR=mcp_refused SINCE=6h` lists the reasons, and
+`task obs:logs FOR=<credential>` shows when that credential last worked. The `debug-trace`
+skill walks through it.
