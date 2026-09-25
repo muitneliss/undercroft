@@ -9,7 +9,12 @@
  * on the day they are saved and part the day something new turns up, so they are never allowed
  * to share a sentence; a reader must be able to tell them apart without counting ticks. The
  * caller supplies the words for each state, because only it knows what its list reads, and this
- * module decides which state holds -- once, rather than in each of three pickers.
+ * module decides which state holds -- once, rather than in each of four pickers.
+ *
+ * HubSpot's properties are the one list whose empty end is NARROW: nothing ticked reads the
+ * spec's own properties alone, and a tick only ever adds (ADR 0052). The full end is closed as
+ * everywhere else. Nothing here changes for that -- the three states are the same three -- which
+ * is exactly why the words belong to the caller.
  *
  * Select all hides when there is nothing left for it to add -- every offered entry ticked, or a
  * list that offers none, such as a mailbox with no labels -- the same way Clear all hides when
@@ -43,7 +48,10 @@ export function ChoiceEcho({
   chosen: readonly string[];
   /** Every entry the list on screen offers to tick; what Select all adds. */
   offered: readonly string[];
-  /** What will be read, in each state. `none` is the open reading and `every` the closed one. */
+  /**
+   * What will be read, in each state. `none` is nothing ticked -- the open reading for every
+   * list but HubSpot's, where it is the spec's floor -- and `every` the closed one.
+   */
   says: Readonly<Record<Coverage, string>>;
   onSelectAll: () => void;
   onClear: () => void;

@@ -43,42 +43,48 @@
  * Every label ticked is said in words of its own, never as the whole-mailbox sentence: the
  * worker queries each chosen label and keeps only mail carrying one of them
  * (`apps/worker/src/services/google/gmail.ts`), so a full list is closed and a label created
- * later is not in it. `ChoiceEcho` owns the three states for all three lists.
+ * later is not in it. `ChoiceEcho` owns the three states for every list.
  *
  * **Xero** is a third shape: one consent can see several organisations, and the platform
  * must be told which one rather than guess. The list comes through the worker like Gmail's
  * labels; the choice is one organisation and any number of the spec's entities, where none
  * means all of them, as with Gmail.
+ *
+ * **HubSpot** is a fourth, and the one whose empty choice is the NARROW reading: per CRM object,
+ * the further properties to read beyond the spec's own, listed live from the portal (its own
+ * properties included) through the worker. `HubspotChoice` says why. ADR 0052.
  */
 
+import { MAX_PROPERTY_QUERY_CHARS, overlongPropertyChoices } from "@undercroft/contracts/scope";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import type { Connection, Source } from "@/api/types.ts";
-import { ChoiceEcho } from "@/components/ChoiceEcho.tsx";
 import { DriveChoice } from "@/components/DriveChoice.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
-import { LabelIndex } from "@/components/LabelIndex.tsx";
+import { GmailChoice } from "@/components/GmailChoice.tsx";
+import { HubspotChoice, type Overlong } from "@/components/HubspotChoice.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import { type BrowsedLabel, isBrowsedLabel } from "@/lib/labelIndex.ts";
+import type { ListedItem } from "@/lib/hubspotProperties.ts";
+import { isBrowsedLabel } from "@/lib/labelIndex.ts";
 import { sourceLabel } from "@/lib/runs.ts";
 import { type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
-/** Which lead each source's picker opens with. HubSpot never reaches this leaf. */
+/** Which lead each source's picker opens with. */
 const LEAD_KEY = {
   gmail: "scopePicker.leadGmail",
   drive: "scopePicker.leadDrive",
   xero: "scopePicker.leadXero",
-  hubspot: "scopePicker.leadNone",
+  hubspot: "scopePicker.leadHubspot",
 } as const;
 
 /** Sources whose choices are listed by the worker, because listing needs a live token. */
-const BROWSED: ReadonlySet<Source> = new Set<Source>(["gmail", "xero"]);
+const BROWSED: ReadonlySet<Source> = new Set<Source>(["gmail", "xero", "hubspot"]);
 
 /** An empty choice, for a source whose draft has not been made yet. */
 const NOTHING_CHOSEN: Omit<ScopeDraft, "source"> = {
@@ -88,6 +94,7 @@ const NOTHING_CHOSEN: Omit<ScopeDraft, "source"> = {
   entities: [],
   fileTypes: [],
   recurse: false,
+  properties: {},
 };
 
 /**
@@ -123,6 +130,9 @@ function useStoredScope(source: string, connections: readonly Connection[] | und
       // A selection saved before sub-folders could be asked for read one level, and keeps
       // reading one level until somebody here says otherwise. ADR 0031.
       recurse: current.config.recurse ?? false,
+      // A HubSpot connection nobody has scoped reads the spec's properties alone, which is
+      // exactly what an empty choice here means.
+      properties: current.config.properties ?? {},
     });
   }, [current, source, setDraft]);
 }
@@ -150,7 +160,25 @@ function selectionFor(
   if (kind === "xero") {
     return { organisation: chosen.organisation, entities: chosen.entities };
   }
+  if (kind === "hubspot") {
+    return { properties: chosen.properties };
+  }
   return { files: chosen.files, fileTypes: chosen.fileTypes, recurse: chosen.recurse };
+}
+
+/**
+ * The HubSpot objects whose choice would not fit in one request, by the rule the server applies
+ * when it is saved -- asked here too so the reader is told under the list, before pressing Save,
+ * rather than by a refusal after it.
+ */
+function overlongFor(kind: Source, chosen: Omit<ScopeDraft, "source">): Overlong[] {
+  if (kind !== "hubspot") {
+    return [];
+  }
+  return overlongPropertyChoices({ kind, properties: chosen.properties }).map((over) => ({
+    ...over,
+    limit: MAX_PROPERTY_QUERY_CHARS,
+  }));
 }
 
 /**
@@ -224,9 +252,10 @@ export function ScopePicker({
   }
 
   const chosen = draft?.source === source ? draft : NOTHING_CHOSEN;
-  // Xero cannot be saved without an organisation: the server would refuse it, and the
-  // plate saying so beforehand is cheaper than the errata afterwards.
-  const unsaveable = kind === "xero" && chosen.organisation === null;
+  const overlong = overlongFor(kind, chosen);
+  // Xero cannot be saved without an organisation, nor HubSpot with a choice too long to send:
+  // the server would refuse either, and saying so beforehand is cheaper than the errata after.
+  const unsaveable = (kind === "xero" && chosen.organisation === null) || overlong.length > 0;
   const account = connections.data.find((c) => c.source === source)?.externalAccountLabel ?? "";
 
   return (
@@ -244,9 +273,10 @@ export function ScopePicker({
           kind={kind}
           source={source}
           account={account}
-          items={(labels.data?.items ?? []).filter(isBrowsedLabel)}
+          items={labels.data?.items ?? []}
           loadError={labels.isError ? labels.error.message : null}
           chosen={chosen}
+          overlong={overlong}
         />
 
         {setScope.isError ? (
@@ -255,7 +285,9 @@ export function ScopePicker({
           </Errata>
         ) : null}
 
-        {unsaveable ? <p className="note">{t("scopePicker.chooseOrganisation")}</p> : null}
+        {kind === "xero" && chosen.organisation === null ? (
+          <p className="note">{t("scopePicker.chooseOrganisation")}</p>
+        ) : null}
 
         <button
           type="button"
@@ -287,16 +319,15 @@ function ScopeLead({ kind }: { kind: Source }): React.JSX.Element {
 
       {kind === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
       {kind === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
+      {kind === "hubspot" ? <p className="note">{t("scopePicker.hubspotStandardHint")}</p> : null}
     </div>
   );
 }
 
 /**
- * Which picker this source gets. Three shapes, for the three reasons the file header gives.
+ * Which picker this source gets. Four shapes, for the four reasons the file header gives.
  *
- * HubSpot never reaches this leaf -- it has nothing to choose -- and renders nothing rather
- * than an empty frame that reads as a list which failed to load. Drive is never listed by the
- * worker, so a browse error is not its error to report.
+ * Drive is never listed by the worker, so a browse error is not its error to report.
  */
 function SourceChoice({
   kind,
@@ -305,14 +336,16 @@ function SourceChoice({
   items,
   loadError,
   chosen,
+  overlong,
 }: {
   kind: Source;
   source: string;
   /** The connection's account address, or `""` when none is recorded. */
   account: string;
-  items: readonly BrowsedLabel[];
+  items: readonly ListedItem[];
   loadError: string | null;
   chosen: Omit<ScopeDraft, "source">;
+  overlong: readonly Overlong[];
 }): React.JSX.Element | null {
   const { t } = useTranslation();
 
@@ -323,11 +356,17 @@ function SourceChoice({
       </Errata>
     );
   }
+  if (kind === "hubspot") {
+    return (
+      <HubspotChoice source={source} items={items} chosen={chosen.properties} overlong={overlong} />
+    );
+  }
+  const labels = items.filter(isBrowsedLabel);
   if (kind === "xero") {
     return (
       <XeroChoice
         source={source}
-        organisations={items}
+        organisations={labels}
         organisation={chosen.organisation}
         entities={chosen.entities}
       />
@@ -336,7 +375,7 @@ function SourceChoice({
   if (kind === "gmail") {
     return (
       <>
-        <GmailChoice source={source} items={items} chosen={chosen.labels} />
+        <GmailChoice source={source} items={labels} chosen={chosen.labels} />
         <FileTypeChoice source={source} fileTypes={chosen.fileTypes} />
       </>
     );
@@ -350,57 +389,4 @@ function SourceChoice({
     );
   }
   return null;
-}
-
-/**
- * Gmail's choice: which labels, and what choosing none means said as it is chosen.
- *
- * "Choosing no label means the whole mailbox" is printed above the list, and a hint above a
- * long list is read once and then scrolled away from. So the consequence also stands beneath
- * the control, as a line that changes as the ticks change, in the consent card's own
- * sentence -- and it carries `role="status"`, so a screen reader is told the same thing at
- * the same moment instead of being left to infer it from a checkbox.
- */
-function GmailChoice({
-  source,
-  items,
-  chosen,
-}: {
-  source: string;
-  items: readonly BrowsedLabel[];
-  chosen: readonly string[];
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const clearLabels = useUiStore((s) => s.clearScopeLabels);
-  const selectAllLabels = useUiStore((s) => s.selectAllScopeLabels);
-
-  if (items.length === 0) {
-    return <p className="note">{t("scopePicker.nothingToChoose")}</p>;
-  }
-
-  // Every label the mailbox listed, not only those a filter leaves on screen: the control sits
-  // beneath the whole index and says "all", and a filter is a way of looking, not a choice.
-  const offered = items.map((label) => label.name);
-
-  return (
-    <>
-      <LabelIndex source={source} items={items} chosen={chosen} />
-
-      <ChoiceEcho
-        chosen={chosen}
-        offered={offered}
-        says={{
-          none: t("scope.gmailWholeMailbox"),
-          some: t("scopePicker.echoChosen", { count: chosen.length }),
-          every: t("scopePicker.echoEveryLabel"),
-        }}
-        onSelectAll={(): void => {
-          selectAllLabels(source, offered);
-        }}
-        onClear={(): void => {
-          clearLabels(source);
-        }}
-      />
-    </>
-  );
 }

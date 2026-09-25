@@ -8,6 +8,7 @@
     "./models": "./src/models.ts",
     "./bi": "./src/bi.ts",
     "./runs": "./src/runs.ts",
+    "./scope": "./src/connectionScope.ts",
     "./sources": "./src/sourceInstance.ts"
   },
   "dependencies": {

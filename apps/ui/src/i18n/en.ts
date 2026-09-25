@@ -392,7 +392,25 @@ export const en = {
       "Choose the folders or documents to read. Google permits us to read exactly what you pick here and nothing else.",
     leadXero:
       "Choose the Xero organisation to read, and which kinds of data. One consent can see several organisations; only the one you choose here is read.",
-    leadNone: "This source needs no scope.",
+    leadHubspot:
+      "Choose which further HubSpot properties are read for each object, your portal’s own included. A choice here only adds to the standard properties; it never takes one away.",
+    hubspotStandardHint:
+      "Choosing no property means only the standard properties are read, as they always have been. The standard properties are read whatever is chosen.",
+    propertiesAlways: "Always read: {{properties}}",
+    propertiesMine: "Your portal’s properties",
+    propertiesHubspot: "HubSpot’s own properties",
+    propertiesGone: "No longer in HubSpot",
+    filterPropertiesLabel: "Filter the property list",
+    filterPropertiesTotal_one: "{{count, number}} property",
+    filterPropertiesTotal_other: "{{count, number}} properties",
+    filterPropertiesTallyRead: "Showing {{shown, number}} of {{total, number}} properties",
+    noPropertyMatch: "No property matches what you typed.",
+    noProperties: "HubSpot listed no properties to choose from.",
+    echoPropertiesStandard: "The standard properties only",
+    echoEveryProperty:
+      "The standard properties and every property there is now. A property created later is not read until it is ticked.",
+    propertiesTooLong:
+      "The properties chosen for {{object}} come to {{chars, number}} characters when sent to HubSpot, over the {{limit, number}} one read may carry. Untick some before saving.",
     xeroEntitiesHint:
       "Choosing no kind of data means every kind. That is a deliberate choice, not an empty one.",
     organisationsHead: "Organisation",
@@ -461,6 +479,12 @@ export const en = {
     xeroCreditNotes: "Credit notes",
     xeroAll: "Every kind of data: contacts, invoices, payments, credit notes",
     xeroEntities: "{{entities}}",
+    hubspotCompanies: "Companies",
+    hubspotContacts: "Contacts",
+    hubspotDeals: "Deals",
+    hubspotStandard: "The standard properties of companies, contacts and deals",
+    hubspotChosen_one: "The standard properties, and {{count, number}} more chosen",
+    hubspotChosen_other: "The standard properties, and {{count, number}} more chosen",
     gmailWholeMailbox: "Headers and matching attachments, whole mailbox",
     gmailLabels: "Headers and matching attachments in {{labels}}",
     anyFileType: "Any file type",
@@ -973,7 +997,7 @@ export const en = {
   source: {
     readOnly: "Nothing. Read-only access, and you can disconnect at any time.",
     hubspotReads:
-      "Companies, contacts and deals from your CRM, and which companies each deal belongs to. HubSpot keeps no change time on that link, so its source-side change time is always empty.",
+      "Companies, contacts and deals from your CRM, with their standard properties and any further ones you choose, and which companies each deal belongs to. HubSpot keeps no change time on that link, so its source-side change time is always empty.",
     xeroReads: "Invoices, payments, credit notes and contacts from one organisation you choose.",
     gmailReads: "Message headers and the attachment types you allow, from the mailbox you connect.",
     driveReads:

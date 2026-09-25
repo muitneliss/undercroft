@@ -1,15 +1,17 @@
 /**
- * The Xero half of the connection verbs: which organisations a consent can see, and what
- * disconnecting tells Xero.
+ * The Xero and HubSpot halves of the connection verbs: which organisations a Xero consent can
+ * see, which properties a HubSpot portal's objects have, and what disconnecting tells Xero.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { join } from "node:path";
 import { InMemoryByteFetcher } from "@undercroft/core";
 import { readCredential, upsertConnection, writeCredential } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { noDatabase } from "../testing.ts";
-import { browseScope, revokeConnection, XERO_REVOKE_URL } from "./connections.ts";
+import { browseScope } from "./browseScope.ts";
+import { revokeConnection, XERO_REVOKE_URL } from "./connections.ts";
 import { XERO_CONNECTIONS_URL } from "./xero/organisations.ts";
 
 const ENV = { UNDERCROFT_SECRET_KEY: Buffer.alloc(32, 4).toString("base64") };
@@ -55,6 +57,70 @@ describe("browsing a Xero consent's organisations", () => {
         { source: "xero", tenantId: "CASE-1", kind: "labels" },
       ),
     ).toEqual({ ok: false, reason: "unsupported" });
+  });
+});
+
+describe("browsing a HubSpot portal's properties", () => {
+  /** The shipped specs, read and never written: the objects listed are the ones the spec reads. */
+  const specsDir = join(import.meta.dirname, "..", "..", "..", "..", "specs", "connectors");
+  const PROPERTIES = "https://api.hubapi.com/crm/v3/properties";
+
+  function portal(): InMemoryByteFetcher {
+    return new InMemoryByteFetcher()
+      .on("GET", `${PROPERTIES}/companies`, {
+        body: {
+          results: [
+            { name: "name", label: "Company name", hubspotDefined: true },
+            { name: "annualrevenue", label: "Annual Revenue", hubspotDefined: true },
+            // Made in the portal: HubSpot does not mark it as one of its own.
+            { name: "x_onboarding_stage", label: "Onboarding stage" },
+          ],
+        },
+      })
+      .on("GET", `${PROPERTIES}/contacts`, {
+        body: { results: [{ name: "lastmodifieddate", label: "Last Modified Date" }] },
+      })
+      .on("GET", `${PROPERTIES}/deals`, { body: { results: [] } });
+  }
+
+  it("lists every object's properties, the portal's own among them, and marks what is always read", async () => {
+    // Three objects, three requests: the associations relation has no properties to list, and
+    // the recorded fetcher refuses a fourth request nobody recorded.
+    const outcome = await browseScope(
+      { exec: noDatabase, fetcher: portal(), token: () => Promise.resolve("t"), specsDir },
+      { source: "hubspot", tenantId: "CASE-1", kind: "properties" },
+    );
+
+    expect(outcome).toEqual({
+      ok: true,
+      items: [
+        { id: "name", name: "Company name", kind: "system", entity: "companies", always: true },
+        { id: "annualrevenue", name: "Annual Revenue", kind: "system", entity: "companies" },
+        { id: "x_onboarding_stage", name: "Onboarding stage", kind: "user", entity: "companies" },
+        {
+          id: "lastmodifieddate",
+          name: "Last Modified Date",
+          kind: "user",
+          entity: "contacts",
+          always: true,
+        },
+      ],
+      partial: [],
+    });
+  });
+
+  it("a token whose private app may not read an object is a reconnect, not an outage", async () => {
+    const fetcher = new InMemoryByteFetcher().on("GET", `${PROPERTIES}/companies`, {
+      status: 403,
+      body: { category: "MISSING_SCOPES" },
+    });
+
+    expect(
+      await browseScope(
+        { exec: noDatabase, fetcher, token: () => Promise.resolve("t"), specsDir },
+        { source: "hubspot", tenantId: "CASE-1", kind: "properties" },
+      ),
+    ).toEqual({ ok: false, reason: "scope-insufficient" });
   });
 });
 

@@ -4,6 +4,13 @@
 # pagination; client-side incremental on each object's last-modified property.
 #
 # A whole connector as configuration: no code per source.
+#
+# Each object's `properties:` is a FLOOR, not the whole read. An admin may choose more of a
+# portal's properties -- its own custom ones included -- through the connection's scope, and a
+# run asks for the union of the two (ADR 0052). So a property listed here is read whatever
+# anybody ticks, which is why each object's incremental property is listed here and must stay:
+# a scope can add to this list and never take from it. With no scope chosen, this list is the
+# read, exactly as before.
 apiVersion: undercroft.dev/v1
 kind: Connector
 id: hubspot

@@ -130,4 +130,5 @@
 ## [2026-09-24] ingest | File formats a Gmail or Drive connection can land
 ## [2026-09-24] ingest | ADR 0051: A deploy stops a run at a safe point, and the run keeps its counts
 ## [2026-09-24] ingest | Runbook Deployment
+## [2026-09-25] ingest | ADR 0052: A HubSpot scope adds to the spec's properties, and a widened read starts a new watermark
 ## [2026-09-25] ingest | Runbook Sign-In Setup

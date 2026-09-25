@@ -31,9 +31,7 @@
  * error is what says nothing went wrong with it. ADR 0051.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { needsScope, parseSourceInstance, parseSpec } from "@undercroft/contracts";
+import { needsScope, parseSourceInstance } from "@undercroft/contracts";
 import { describeError, newRunId, UndercroftError } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -48,6 +46,7 @@ import {
 } from "@undercroft/db/repos";
 import { isGoogleSource, ScopeNotChosen } from "./google/collect.ts";
 import { runGoogleIngest, runSpecIngest } from "./runPaths.ts";
+import { readSpec } from "./specs.ts";
 import {
   type IngestResult,
   type Ledger,
@@ -218,11 +217,8 @@ async function requireUsableConnection(
   deps: Pick<RunDeps, "exec" | "specsDir">,
   input: { source: string; tenantId: string },
 ): Promise<void> {
-  if (!isGoogleSource(input.source)) {
-    const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
-    if (spec.auth.kind === "none") {
-      return;
-    }
+  if (!isGoogleSource(input.source) && readSpec(deps.specsDir, input.source).auth.kind === "none") {
+    return;
   }
   const connection = await getConnection(deps.exec, input.tenantId, input.source);
   if (connection === null || connection.status !== "connected") {

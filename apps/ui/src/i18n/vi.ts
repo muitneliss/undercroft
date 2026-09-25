@@ -500,7 +500,35 @@ export const vi = {
       "Chọn thư mục hoặc tài liệu cần đọc. Google chỉ cho phép đọc đúng những gì bạn chọn ở đây.",
     leadXero:
       "Chọn tổ chức Xero cần đọc, và những loại dữ liệu nào. Một lần cấp quyền có thể thấy nhiều tổ chức; chỉ tổ chức bạn chọn ở đây được đọc.",
-    leadNone: "Nguồn này không cần chọn phạm vi.",
+    leadHubspot:
+      "Chọn thêm những trường HubSpot cần đọc cho từng đối tượng, kể cả trường do chính portal của bạn tạo. Lựa chọn ở đây chỉ thêm vào các trường chuẩn, không bớt đi trường nào.",
+    /**
+     * HubSpot's empty choice is the NARROW reading, the opposite of every other list here, so
+     * it is said in as many words as theirs are.
+     */
+    hubspotStandardHint:
+      "Không chọn trường nào nghĩa là chỉ đọc các trường chuẩn, đúng như trước nay. Các trường chuẩn luôn được đọc, dù chọn gì.",
+    /** Above each object's list: the spec's own properties, read whatever is ticked. */
+    propertiesAlways: "Luôn đọc: {{properties}}",
+    /** The runs of a property list. HubSpot reports whose a property is; nothing here infers it. */
+    propertiesMine: "Trường do portal của bạn tạo",
+    propertiesHubspot: "Trường sẵn có của HubSpot",
+    /** A property the saved choice holds that HubSpot no longer lists. Shown so it can be unticked. */
+    propertiesGone: "Không còn trong HubSpot",
+    filterPropertiesLabel: "Lọc danh sách trường",
+    filterPropertiesTotal_other: "{{count, number}} trường",
+    filterPropertiesTallyRead: "Đang hiện {{shown, number}} trong {{total, number}} trường",
+    noPropertyMatch: "Không có trường nào khớp với từ đã gõ.",
+    noProperties: "HubSpot chưa liệt kê trường nào để chọn.",
+    echoPropertiesStandard: "Chỉ các trường chuẩn",
+    echoEveryProperty:
+      "Các trường chuẩn và mọi trường đang có. Trường được tạo sau này sẽ không được đọc cho đến khi được chọn.",
+    /**
+     * A choice too long to send in one HubSpot request, said under the object before Save --
+     * the same rule the server refuses it by.
+     */
+    propertiesTooLong:
+      "Các trường chọn thêm cho {{object}} dài {{chars, number}} ký tự khi gửi tới HubSpot, vượt giới hạn {{limit, number}} ký tự của một lần đọc. Hãy bỏ chọn bớt trước khi lưu.",
     xeroEntitiesHint:
       "Không chọn loại dữ liệu nào nghĩa là đọc tất cả các loại. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
     organisationsHead: "Tổ chức",
@@ -581,6 +609,13 @@ export const vi = {
     xeroCreditNotes: "Giấy báo có",
     xeroAll: "Mọi loại dữ liệu: liên hệ, hóa đơn, thanh toán, giấy báo có",
     xeroEntities: "{{entities}}",
+    /** HubSpot's objects, by the spec's ids. The ids are recorded; these are the words. */
+    hubspotCompanies: "Công ty",
+    hubspotContacts: "Liên hệ",
+    hubspotDeals: "Giao dịch",
+    /** Nothing chosen: the spec's own properties, which is what HubSpot has always read. */
+    hubspotStandard: "Các trường chuẩn của công ty, liên hệ và giao dịch",
+    hubspotChosen_other: "Các trường chuẩn, cùng {{count, number}} trường chọn thêm",
     anyFileType: "Mọi loại tệp",
     fileTypesChosen_other: "Đã chọn {{count, number}} loại tệp",
     fileTypePdf: "PDF",
@@ -1123,7 +1158,7 @@ export const vi = {
   source: {
     readOnly: "Không gì cả. Quyền chỉ đọc, và bạn có thể ngắt kết nối bất cứ lúc nào.",
     hubspotReads:
-      "Công ty, liên hệ và giao dịch từ CRM của bạn, cùng việc mỗi giao dịch thuộc công ty nào. HubSpot không lưu thời điểm sửa cho liên kết đó, nên thời điểm sửa phía nguồn của nó luôn để trống.",
+      "Công ty, liên hệ và giao dịch từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm, và việc mỗi giao dịch thuộc công ty nào. HubSpot không lưu thời điểm sửa cho liên kết đó, nên thời điểm sửa phía nguồn của nó luôn để trống.",
     xeroReads: "Hóa đơn, thanh toán, giấy báo có và liên hệ từ một tổ chức bạn chọn.",
     gmailReads: "Tiêu đề thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
     driveReads:

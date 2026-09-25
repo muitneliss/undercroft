@@ -73,8 +73,11 @@ export {
   ConnectionScope,
   DriveScope,
   GmailScope,
+  HubspotScope,
   isScopedSource,
+  MAX_PROPERTY_QUERY_CHARS,
   needsScope,
+  overlongPropertyChoices,
   parseScope,
   XeroScope,
 } from "./connectionScope.ts";
