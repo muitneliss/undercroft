@@ -17,7 +17,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { messages } from "../i18n/index.ts";
-import type { WorkerFailure } from "../services/workerClient.ts";
+import type { WorkerFailure } from "../services/workerRefusals.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
@@ -72,12 +72,16 @@ function callerOf(worker: InMemoryWorkerClient) {
   return appRouter.createCaller(ctx);
 }
 
-async function refusalOf(failure: WorkerFailure): Promise<{ code: string; message: string }> {
+async function refusalOf(
+  failure: WorkerFailure,
+): Promise<{ code: string; message: string; facts: unknown }> {
   try {
     await callerWith(failure).connections.browseScope({ tenantId: TENANT, source: "gmail" });
   } catch (error) {
     if (error instanceof TRPCError) {
-      return { code: error.code, message: error.message };
+      // The verdict rides as the cause's `facts`, which the formatter publishes as `details`.
+      const facts = (error.cause as { facts?: unknown } | undefined)?.facts;
+      return { code: error.code, message: error.message, facts };
     }
     throw error;
   }
@@ -92,6 +96,24 @@ describe("a scope picker that cannot list anything", () => {
       messages(DEFAULT_LOCALE)("error.scopeInsufficient", { source: "gmail" }),
     );
     expect(refusal.code).toBe("PRECONDITION_FAILED");
+  });
+
+  it("a credential that can no longer be refreshed asks for a reconnect, and says so as a verdict", async () => {
+    // Issue 213: a mailbox whose refresh token Google refused was worded as the catch-all
+    // below, with remedy "none" -- and nothing on the screen said the fix was a reconnect.
+    // Not `scope-insufficient` either: no permission was withheld, so none is to be ticked.
+    const refusal = await refusalOf("credential-expired");
+
+    expect(refusal.message).toBe(
+      messages(DEFAULT_LOCALE)("error.credentialExpired", { source: "gmail" }),
+    );
+    expect(refusal.code).toBe("PRECONDITION_FAILED");
+    expect(refusal.facts).toEqual({
+      source: "gmail",
+      listing: "labels",
+      reason: "credential-expired",
+      remedy: "reconnect",
+    });
   });
 
   it("a worker that is actually down still says so", async () => {

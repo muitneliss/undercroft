@@ -24,9 +24,9 @@ import type {
   StoreCredentialInput,
   TriggerOutcome,
   WorkerClient,
-  WorkerFailure,
   WorkerOutcome,
 } from "./workerClient.ts";
+import type { WorkerFailure } from "./workerRefusals.ts";
 
 /**
  * A worker that answers from memory.

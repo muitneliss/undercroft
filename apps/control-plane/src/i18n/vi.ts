@@ -181,6 +181,13 @@ export const vi = {
      */
     scopeInsufficient:
       "Kết nối {{source}} hiện chưa đủ quyền để đọc danh sách này. Hãy kết nối lại nguồn này và giữ nguyên dấu tích ở mọi quyền được hỏi trên màn hình cấp quyền.",
+    /**
+     * The stored credential cannot be used any more: it lapsed and could not be refreshed, or
+     * the provider refused its refresh token (a revoked grant, a changed password). Names the
+     * one remedy, a reconnect, and nothing about permissions -- none was withheld.
+     */
+    credentialExpired:
+      "Quyền truy cập của kết nối {{source}} đã hết hạn hoặc đã bị thu hồi, nên không lấy được danh sách. Hãy kết nối lại nguồn này rồi mở lại màn hình này.",
     /** The worker answered and said no, for a reason retrying will not change. */
     browseRefused: "Dịch vụ xử lý không lấy được danh sách cho nguồn {{source}}.",
     /** A source whose scope is not chosen from a list at all -- not a fault anywhere. */

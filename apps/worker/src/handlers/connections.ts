@@ -140,10 +140,24 @@ function registerConnectionsBrowseRoute(app: Hono, deps: LakeApiDeps): void {
       parsed.data,
     );
     if (!outcome.ok) {
-      // Two refusals, two codes, because the remedies have nothing in common. A source
-      // that cannot be browsed is a request this build will never serve; a credential
-      // the provider refused is one reconnect away from working, and the caller can only say so
-      // if the status tells it apart from every other 400 this endpoint can answer.
+      // Three refusals, three statuses, because the remedies have nothing in common. A source
+      // that cannot be browsed is a request this build will never serve; a grant the provider
+      // refused is one reconnect away from working, with the withheld permission ticked; a
+      // credential that cannot be refreshed is one plain reconnect away. The control plane
+      // reads the STATUS alone, never a refusal's body, so each needs a status of its own.
+      if (outcome.reason === "credential-expired") {
+        // 409 and `credential_unusable`, as `failureOf` answers a run for the same cause: the
+        // connection's state, not the request, is what refuses it. This endpoint has no other
+        // 409, which is what lets the status alone carry it.
+        return c.json(
+          {
+            code: "credential_unusable",
+            message: `the ${parsed.data.source} credential has expired and cannot be refreshed; reconnect it`,
+            details: [],
+          },
+          409,
+        );
+      }
       if (outcome.reason === "scope-insufficient") {
         return c.json(
           {

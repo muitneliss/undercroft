@@ -35,6 +35,25 @@ describe("reading a worker refusal", () => {
     expect(outcome).toEqual({ ok: false, reason: "scope-insufficient" });
   });
 
+  it("409 from the browse is the credential, and 409 elsewhere is still a run in progress", async () => {
+    // A browse starts no run, so its 409 is the stored credential that could not be refreshed
+    // (issue 213) -- read from the status, like every refusal here. The other side: the map is
+    // the browse's own, and a build's 409 still means the tenant is busy.
+    const browsed = await answering(409).browseScope({
+      source: "gmail.3fa9c1d2e0ab",
+      tenantId: "CASE-0042",
+      kind: "labels",
+    });
+    const built = await answering(409).buildModel({
+      tenantId: "CASE-0042",
+      model: "orders",
+      triggeredBy: "u-1",
+    });
+
+    expect(browsed).toEqual({ ok: false, reason: "credential-expired" });
+    expect(built).toEqual({ ok: false, reason: "in-progress" });
+  });
+
   it("any other refusal stays a plain refusal", async () => {
     // The quiet side. A guard that answered `scope-insufficient` to everything would tell
     // an operator to reconnect a credential that was never the problem.

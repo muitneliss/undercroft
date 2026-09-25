@@ -1,4 +1,5 @@
-import { InMemoryByteFetcher, TestClock } from "@undercroft/core";
+import { HttpError, InMemoryByteFetcher, TestClock } from "@undercroft/core";
+import { RefreshRefused } from "@undercroft/db/services";
 import { describe, expect, test as it } from "bun:test";
 
 import { GOOGLE_TOKEN_URL, googleRefresher } from "./refresh.ts";
@@ -62,10 +63,34 @@ describe("googleRefresher", () => {
     expect(sent.get("client_id")).toBe("client.apps.googleusercontent.test");
   });
 
-  it("a revoked grant raises rather than returning a broken credential", async () => {
-    const { refresh } = refresherWith({ error: "invalid_grant" }, 400);
+  it("a revoked grant is a refused refresh, and the refusal's body is not carried", async () => {
+    // Google answers a revoked or lapsed refresh token with 400 `invalid_grant`. As a bare
+    // HttpError it read as an outage, and the connection kept saying "connected" while every
+    // run and every browse failed on it (issue 213).
+    const { refresh } = refresherWith(
+      { error: "invalid_grant", error_description: "Token has been expired or revoked." },
+      400,
+    );
 
-    await expect(refresh("revoked")).rejects.toThrow();
+    const refused = await refresh("revoked").catch((error: unknown) => error);
+
+    expect(refused).toBeInstanceOf(RefreshRefused);
+    expect((refused as RefreshRefused).status).toBe(400);
+    expect((refused as RefreshRefused).message).not.toContain("invalid_grant");
+  });
+
+  it("an outage at the token endpoint, or a refusal of our own client, is not a refused grant", async () => {
+    // The quiet side. A 5xx passes; a 401 is `invalid_client`, the deployment's secret, which
+    // no customer's reconnect repairs. Reading either as a dead grant would send every
+    // connection to re-consent over something that is not theirs.
+    for (const status of [503, 401]) {
+      const { refresh } = refresherWith({ error: "backend_error" }, status);
+
+      const failure = await refresh("stored").catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(HttpError);
+      expect(failure).not.toBeInstanceOf(RefreshRefused);
+    }
   });
 
   it("a 200 carrying no access_token is refused", async () => {

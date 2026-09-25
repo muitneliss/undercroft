@@ -30,8 +30,8 @@ import { seal, unseal } from "@undercroft/crypto";
 import type { SqlExecutor } from "../executor.ts";
 
 export class ConnectionRegistryError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
     this.name = "ConnectionRegistryError";
   }
 }
