@@ -134,6 +134,7 @@ surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
 | `cd:*`     | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` attaches the CLI to a release                                                                                                                                     |
 | `db:*`     | `.taskfiles/db/`        | DSN-parameterised migrate/invite and `db:extract-accuracy`, for a database that isn't the local one                                                                                                                              |
 | `notify:*` | `.taskfiles/notify/`    | `scripts/notify.ts`: the Lark cards CI posts for deploys, failed releases, issues, PRs and a red `ci` on main; `notify:test` proves the webhook                                                                                  |
+| `obs:*`    | `.taskfiles/obs/`       | `scripts/observe.ts`: read a trace from Tempo, its lines from Loki and a container's log over read-only SSH, credentials looked up at run time; the `debug-trace` skill drives it                                                |
 
 Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —
 Task is the mandated way to invoke it, never a second place that redefines what it does. A
@@ -231,6 +232,10 @@ rollout landed rather than trusting Dokploy's `done`. A manual deploy or rollbac
 `task cd:release TAG=vX.Y.Z`, never a `bun run scripts/dokploy.ts` typed by hand. See
 `.claude/rules/deployment.md`, `.claude/rules/tooling.md`, `docs/runbook/deployment.md`, and
 ADR 0008.
+
+Every request is traced and answers with an `x-trace-id`, exported to the host's shared
+`otel-lgtm` stack when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (ADR 0058). `task obs:*`, driven by
+the `debug-trace` skill, follows an id through Tempo, Loki and the container log.
 
 ## Conventions
 

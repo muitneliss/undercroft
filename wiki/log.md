@@ -141,3 +141,5 @@
 ## [2026-09-25] ingest | ADR 0056: A Drive ingest stops within one file, and a run the drain gives up on says it was cut off
 ## [2026-09-25] ingest | ADR 0056: A Drive ingest stops within one file, and a run the drain gives up on says it was cut off
 ## [2026-09-25] ingest | Runbook Deployment
+## [2026-09-25] ingest | Runbook Deployment
+## [2026-09-25] ingest | ADR 0058: Every request is traced, into the host's shared otel-lgtm stack

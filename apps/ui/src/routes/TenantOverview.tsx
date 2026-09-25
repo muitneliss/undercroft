@@ -225,15 +225,15 @@ function Refusals({
         page sat there looking like a dead button.
       */}
       {startOAuth.isError ? (
-        <Errata heading={connectFailedHeading(t, startOAuth.variables.source)} live={true}>
-          {startOAuth.error.message}
-        </Errata>
+        <Errata
+          heading={connectFailedHeading(t, startOAuth.variables.source)}
+          live={true}
+          error={startOAuth.error}
+        />
       ) : null}
 
       {disconnect.isError ? (
-        <Errata heading={t("grant.disconnectFailed")} live={true}>
-          {disconnect.error.message}
-        </Errata>
+        <Errata heading={t("grant.disconnectFailed")} live={true} error={disconnect.error} />
       ) : null}
 
       {disconnect.isSuccess && !disconnect.data.revokedUpstream ? (
@@ -245,15 +245,11 @@ function Refusals({
       ) : null}
 
       {runNow.isError ? (
-        <Errata heading={t("grant.runNotStarted")} live={true}>
-          {runNow.error.message}
-        </Errata>
+        <Errata heading={t("grant.runNotStarted")} live={true} error={runNow.error} />
       ) : null}
 
       {setCadence.isError ? (
-        <Errata heading={t("grant.cadenceNotSaved")} live={true}>
-          {setCadence.error.message}
-        </Errata>
+        <Errata heading={t("grant.cadenceNotSaved")} live={true} error={setCadence.error} />
       ) : null}
     </>
   );

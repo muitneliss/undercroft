@@ -36,6 +36,9 @@ tasks:
     method: GET
     headers:
       Authorization: "Bearer {{ envs.trigger_token }}"
+      # The worker tags this request's trace with it, so a failed execution leads to
+      # the server's side of it. ADR 0058.
+      x-kestra-execution-id: "{{ execution.id }}"
     options:
       # Kestra 2.x nests the two timeouts under `timeout`; they were flat in 1.x and the
       # server rejects the old spelling outright (422, "Unrecognized field").
@@ -65,6 +68,9 @@ tasks:
         body: "{{ item.value }}"
         headers:
           Authorization: "Bearer {{ envs.trigger_token }}"
+          # The worker tags this request's trace with it, so a failed execution leads to
+          # the server's side of it. ADR 0058.
+          x-kestra-execution-id: "{{ execution.id }}"
         options:
           # A 409 is a pair already running -- the worker's own guard -- and is not a
           # failure of this flow. In 2.x `allowFailed` is an HTTP option, not a task

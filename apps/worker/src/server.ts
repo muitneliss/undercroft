@@ -20,6 +20,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createByteFetcher, createLogger } from "@undercroft/core";
 import { asExecutor, connectionOf, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
+import { startTelemetry } from "@undercroft/telemetry";
 import { createLakeApi } from "./handlers/lake.ts";
 import type { XeroClient } from "./services/connections.ts";
 import { googleRefresher } from "./services/google/refresh.ts";
@@ -75,7 +76,11 @@ function refreshers(xeroClientOrNone: XeroClient | undefined): Record<string, Re
 // JSONL on stdout, the same shape the control plane writes; the container runtime collects
 // it. Before this the worker's whole output was the startup line, so a run that failed at
 // 02:00 left no evidence anywhere.
-const log = createLogger({ component: "worker" });
+// Before anything logs. An unset OTEL_EXPORTER_OTLP_ENDPOINT is export off; the trace ids are
+// stamped either way (ADR 0058).
+const telemetry = startTelemetry({ service: "undercroft-worker", env: process.env });
+const log = createLogger({ component: "worker", ...telemetry.logging });
+log.info(telemetry.exporting ? "telemetry_exporting" : "telemetry_export_off");
 
 const dsn = required("UNDERCROFT_POSTGRES_DSN");
 const pool = createPool(dsn);
@@ -173,6 +178,7 @@ async function stop(signal: string): Promise<void> {
   // cut off rather than settled, their counts are not on them, and `runs_cut_off` names them.
   const drained = await drainJobsBy(asExecutor(pool), delay(DRAIN_MS), log);
   log.info("stopped", { signal, drained });
+  await telemetry.shutdown();
   process.exit(0);
 }
 process.on("SIGTERM", (signal) => void stop(signal));

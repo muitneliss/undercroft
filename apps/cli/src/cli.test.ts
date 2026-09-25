@@ -38,6 +38,7 @@ interface Envelope {
     readonly message: string;
     readonly recoverable: boolean;
     readonly details?: unknown;
+    readonly traceId?: string;
   };
 }
 
@@ -208,6 +209,15 @@ describe("an agent reads the platform through the same door as the browser", () 
 
     expect(refused.exitCode).toBe(3);
     expect(envelope(refused).error?.code).toBe("NOT_FOUND");
+  });
+
+  it("a refusal names the server's trace id, the handle a bug report quotes", async () => {
+    writeProfile("local", plane.origin, false);
+    await signIn();
+
+    const refused = await undercroft(["runs", "list", "--tenant-id", OTHER, "--agent"]);
+
+    expect(envelope(refused).error?.traceId).toMatch(/^[0-9a-f]{32}$/u);
   });
 
   it("a missing argument fails at once, even with stdin left open", async () => {

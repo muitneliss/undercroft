@@ -141,8 +141,25 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** tRPC's `{ error: { message, data: { code } } }`, as the CLI's refusal. */
+/**
+ * The refusal, carrying the trace id the server named for the request (`data.traceId`, set by
+ * the control plane's error formatter) -- the one handle that leads from this answer to the
+ * server's record of it. Absent when the server did not name one.
+ */
 function refused(
+  t: Translate,
+  connection: Connection,
+  error: Readonly<Record<string, unknown>>,
+): Refusal {
+  const refusal = worded(t, connection, error);
+  const traceId = isRecord(error.data) ? error.data.traceId : undefined;
+  return typeof traceId === "string" && traceId !== ""
+    ? { ok: false, error: { ...refusal.error, traceId } }
+    : refusal;
+}
+
+/** tRPC's `{ error: { message, data: { code } } }`, as the CLI's refusal. */
+function worded(
   t: Translate,
   connection: Connection,
   error: Readonly<Record<string, unknown>>,
@@ -159,12 +176,12 @@ function refused(
   // the CLI's sentence. UNAUTHORIZED and NOT_FOUND are deliberately unworded on the server,
   // so that they confirm nothing; the CLI's sentence for them confirms nothing either.
   // INTERNAL_SERVER_ERROR arrives already stripped to `internal_error` (`trpc.ts`).
-  const worded =
+  const isWorded =
     code !== "INTERNAL_ERROR" &&
     code !== "AUTHENTICATION_REQUIRED" &&
     message !== "" &&
     message !== trpcCode;
-  if (worded) {
+  if (isWorded) {
     // With the facts the router named beside its sentence, when it named any: which listing
     // could not be had and what fixes it (`refusal` in the control plane's `trpc.ts`). Passed
     // through verbatim -- re-deriving them here would mean parsing a sentence in whatever

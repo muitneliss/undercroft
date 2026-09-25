@@ -273,10 +273,22 @@ services:
       # dbt runs as a subprocess in this image (ADR 0007) as each TENANT'S OWN login (ADR
       # 0018). The worker points the generated profile at the server its own DSN names and
       # mints the login's password right before a build; no variable here carries one.
+      # Traces and log lines to the host's shared otel-lgtm collector (ADR 0058). Set in
+      # Dokploy's environment by a person, like every value here; unset is export OFF, and
+      # the trace ids are still stamped on every response and log line.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: undercroft-worker
     networks:
       default:
         aliases:
           - undercroft-worker
+      # For one reason only: the otel-lgtm collector lives on the shared network, as
+      # `otel-lgtm`, and this is the one way to reach it without leaving the host. Nothing
+      # here resolves a name on it -- every reference above is an `undercroft-` alias on
+      # `default` -- and compose also names this service plain `worker` there, a name no
+      # other project on the host used when this was added. Every verb still needs the
+      # bearer token. ADR 0058.
+      dokploy-network: {}
     deploy:
       resources:
         limits:
@@ -429,6 +441,11 @@ services:
       # removing an address and redeploying withdraws it at the next request, and a database
       # restore can never disagree with it. ADR 0013.
       UNDERCROFT_SUPERADMINS: ${UNDERCROFT_SUPERADMINS:-}
+      # Traces and log lines to the host's shared otel-lgtm collector (ADR 0058), reached
+      # over dokploy-network, which Dokploy attaches this service to for its domain. Unset
+      # is export OFF; the trace ids are stamped either way.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: undercroft-control-plane
     networks:
       default:
         aliases:
@@ -437,6 +454,12 @@ services:
       resources:
         limits:
           memory: 512m
+
+networks:
+  # Dokploy's shared network, which it creates; declared so the worker can join it to reach
+  # the otel-lgtm collector. See the worker's `networks`.
+  dokploy-network:
+    external: true
 
 volumes:
   minio-data:

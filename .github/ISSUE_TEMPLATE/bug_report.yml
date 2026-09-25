@@ -161,14 +161,30 @@ body:
     validations:
       required: false
 
+  - type: input
+    id: trace-id
+    attributes:
+      label: Trace ID
+      description: |
+        The 32-character id of the request that failed. It is the fastest way for us to find
+        what the server did, so paste it whenever you have one. Where to find it:
+        - **Web UI:** the error box shows it under "Trace ID", and its "Report this problem"
+          link fills this field in for you.
+        - **CLI:** `error.traceId` in the `--agent` envelope, or the "Trace ID" line under the
+          error in a terminal.
+        - **Browser Network tab or any HTTP client:** the `x-trace-id` response header of the
+          failing request (the worker's lake API sends it as `x-request-id` too).
+        Leave it empty if there is none; several are fine, one per failing request.
+      placeholder: 4bf92f3577b34da6a3ce929d0e0e4736
+
   - type: textarea
     id: logs
     attributes:
       label: Error output and logs
       description: |
         Paste as text, not a screenshot, and redact as above. Useful places to look:
-        - **CLI:** re-run with `--agent` and paste the JSON envelope; it carries the error code.
-        - **Web UI:** the browser console, and in the Network tab the failing `/trpc` request's response.
+        - **CLI:** re-run with `--agent` and paste the JSON envelope; it carries the error code and the trace id.
+        - **Web UI:** the browser console, and in the Network tab the failing `/trpc` request's response and its `x-trace-id` header.
         - **A run:** the run's id from Journal, and the Kestra execution id if you have it.
         - **Server:** the `control-plane` or `worker` service log around the time (locally, the `task dev:run` terminal, since `task dev:logs` covers only Postgres, MinIO and Kestra; on a server, the service's log in Dokploy).
       render: shell

@@ -138,7 +138,7 @@ export function QuestionCard({
         ) : answer.isPending ? (
           <Skeleton rows={3} />
         ) : answer.isError ? (
-          <Errata heading={t("bi.notRun")}>{answer.error.message}</Errata>
+          <Errata heading={t("bi.notRun")} error={answer.error} />
         ) : (
           <Suspense fallback={<Skeleton rows={3} />}>
             <ChartFrame result={answer.data} chart={question.chart} locale={locale} />

@@ -15,6 +15,8 @@
 
 import { extname, join, normalize, sep } from "node:path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { describeError } from "@undercroft/core";
+import { traceRequests } from "@undercroft/telemetry";
 import { Hono } from "hono";
 import { isAdminIn } from "../services/authz.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
@@ -61,6 +63,18 @@ function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
       req: c.req.raw,
       router: appRouter,
       createContext: () => context,
+      // The code and the procedure, and the error's type -- never its message, which the
+      // formatter keeps from the browser for the same reason it is kept from this line.
+      // The trace id comes with the logger, so the line and the answer share one handle.
+      onError: ({ error, path }) => {
+        if (error.code === "INTERNAL_SERVER_ERROR") {
+          deps.log?.error("trpc_failed", {
+            path: path ?? "",
+            code: error.code,
+            errorType: describeError(error.cause ?? error).errorType,
+          });
+        }
+      },
     });
   });
 }
@@ -125,6 +139,10 @@ function registerConsentRoute(app: Hono, deps: ServerDeps): void {
 
 export function createServer(deps: ServerDeps): Hono {
   const app = new Hono();
+
+  // First, so every route below -- sign-in, tRPC, the assistant, the SPA -- answers with an
+  // `x-trace-id`, and whatever it logs carries the same id. ADR 0058.
+  app.use("*", traceRequests());
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 

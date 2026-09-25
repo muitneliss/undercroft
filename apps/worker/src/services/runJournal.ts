@@ -42,6 +42,7 @@
 import { type Clock, describeError, type Logger, systemClock } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { recordEvents, type RunEvent } from "@undercroft/db/repos";
+import { annotate } from "@undercroft/telemetry";
 
 /**
  * The fields of one event. `entity` becomes its own column; everything else is `detail`,
@@ -186,6 +187,10 @@ function createPacing(clock: Clock): (event: string, entity: string | undefined)
 }
 
 export function createRunJournal(deps: RunJournalDeps): RunJournal {
+  // Every run opens its journal inside the request that started it, so tagging that request's
+  // span is what lets Tempo find a trace by run id. The run's own lines already carry the
+  // trace id, through the logger. ADR 0058.
+  annotate({ "undercroft.run_id": deps.runId });
   const clock = deps.clock ?? systemClock;
   const buffer = createEventBuffer(deps);
   const due = createPacing(clock);

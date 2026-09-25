@@ -17,7 +17,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
 import type { SchemaView } from "@/api/types.ts";
-import { Errata } from "@/components/Errata.tsx";
+import { Errata, type ServerError } from "@/components/Errata.tsx";
 import { QuestionBuilder } from "@/components/QuestionBuilder.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
@@ -110,7 +110,7 @@ export function DefinitionBand({
   schema: SchemaView;
   canAuthor: boolean;
   sqlText: string;
-  compileError: string | null;
+  compileError: ServerError | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const setQuestionSql = useUiStore((state) => state.setQuestionSql);
@@ -165,7 +165,7 @@ function VisualDefinitionBand({
   schema: SchemaView;
   visual: Extract<QuestionDraft["definition"], { kind: "visual" }>;
   sqlText: string;
-  compileError: string | null;
+  compileError: ServerError | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const patchQuestionVisual = useUiStore((state) => state.patchQuestionVisual);
@@ -197,7 +197,7 @@ function VisualDefinitionBand({
       {compileError === null ? (
         <pre className="payload__text">{sqlText}</pre>
       ) : (
-        <Errata heading={t("common.notLoaded")}>{compileError}</Errata>
+        <Errata heading={t("common.notLoaded")} error={compileError} />
       )}
       <div className="row">
         <button
@@ -324,9 +324,7 @@ export function DeleteBand({
               {remove.isPending ? t("bi.deleting") : t("bi.deleteConfirm")}
             </button>
             {remove.isError ? (
-              <Errata heading={t("bi.notDeleted")} live={true}>
-                {remove.error.message}
-              </Errata>
+              <Errata heading={t("bi.notDeleted")} live={true} error={remove.error} />
             ) : null}
           </div>
         </details>

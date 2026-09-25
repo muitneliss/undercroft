@@ -98,15 +98,9 @@ export function ResultBand({
           ) : null}
         </div>
         {runError === null || runError === undefined ? null : (
-          <Errata heading={t("bi.notRun")} live={true}>
-            {runError.message}
-          </Errata>
+          <Errata heading={t("bi.notRun")} live={true} error={runError} />
         )}
-        {save.isError ? (
-          <Errata heading={t("bi.notSaved")} live={true}>
-            {save.error.message}
-          </Errata>
-        ) : null}
+        {save.isError ? <Errata heading={t("bi.notSaved")} live={true} error={save.error} /> : null}
         {result === undefined ? null : (
           <>
             {canAuthor ? (

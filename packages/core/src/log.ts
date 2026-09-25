@@ -39,6 +39,12 @@ export interface LoggerOptions {
   readonly fields?: LogFields;
   readonly clock?: Clock;
   readonly sink?: (line: string) => void;
+  /**
+   * Fields read at the moment each line is written -- the trace id of the request the line
+   * is written inside. Read per line, not per logger, because one logger outlives every
+   * request it narrates. A field it returns as `null` is left off the line.
+   */
+  readonly context?: () => LogFields;
 }
 
 /**
@@ -54,6 +60,13 @@ function describeError(value: unknown): LogFields {
   return { errorType: typeof value };
 }
 
+function present(fields: LogFields | undefined): LogFields {
+  if (fields === undefined) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== null));
+}
+
 export function createLogger(options: LoggerOptions): Logger {
   const clock = options.clock ?? systemClock;
   const sink = options.sink ?? ((line: string): boolean => process.stdout.write(`${line}\n`));
@@ -67,6 +80,7 @@ export function createLogger(options: LoggerOptions): Logger {
           level,
           component: options.component,
           event,
+          ...present(options.context?.()),
           ...fields,
           ...extra,
         };

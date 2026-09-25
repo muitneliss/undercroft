@@ -28,6 +28,7 @@ import {
   type StoreCredentialResponse,
   type TableResult,
 } from "@undercroft/contracts";
+import { traced } from "@undercroft/telemetry";
 
 import {
   BAD_REQUEST,
@@ -312,7 +313,8 @@ function queryOn(t: WorkerTransport): typeof query {
 
 export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const t: WorkerTransport = {
-    doFetch: config.fetch ?? globalThis.fetch,
+    // Carrying this request's `traceparent`, so the worker's span joins the same trace.
+    doFetch: traced(config.fetch ?? globalThis.fetch),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     baseUrl: config.baseUrl,
     triggerToken: config.triggerToken,

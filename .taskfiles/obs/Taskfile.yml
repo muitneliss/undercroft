@@ -1,0 +1,48 @@
+# scripts/observe.ts, one task per subcommand: follow a failure through the host's shared
+# otel-lgtm stack (Tempo, Loki) and, read-only over SSH, the container's own log. The
+# `debug-trace` skill drives these. ADR 0058.
+#
+# Credentials are looked up at run time and never stored: the Dokploy key from
+# DOKPLOY_API_ENDPOINT/DOKPLOY_API_KEY or the gitignored .dokploy.json, Grafana's from the
+# `otel-lgtm` compose's own Dokploy entry, the SSH host from ~/.ssh/config by the host's IP.
+version: "3"
+
+tasks:
+  creds:
+    desc: Resolve and check access to Dokploy, Grafana and the host over SSH, printing no secret.
+    cmds:
+      - bun run scripts/observe.ts creds
+
+  trace:
+    desc: "The span tree of one trace from Tempo. Usage: task obs:trace TRACE=<32-hex id>"
+    requires:
+      vars: [TRACE]
+    cmds:
+      - bun run scripts/observe.ts trace {{.TRACE}}
+
+  logs:
+    desc: "Log lines in Loki containing an id or text. Usage: task obs:logs FOR=<traceId|runId|event> [SINCE=1h]"
+    requires:
+      vars: [FOR]
+    vars:
+      SINCE: '{{.SINCE | default "1h"}}'
+    cmds:
+      - bun run scripts/observe.ts logs {{.FOR | shellQuote}} {{.SINCE}}
+
+  search:
+    desc: "Find traces in Tempo. Usage: task obs:search FOR=run=<runId>|kestra=<executionId>|errors [SINCE=1h]"
+    requires:
+      vars: [FOR]
+    vars:
+      SINCE: '{{.SINCE | default "1h"}}'
+    cmds:
+      - bun run scripts/observe.ts search {{.FOR | shellQuote}} {{.SINCE}}
+
+  host-logs:
+    desc: "A container's own log on the host, read-only over SSH, filtered to one id. Usage: task obs:host-logs SERVICE=worker|control-plane|kestra FOR=<id> [SINCE=1h]"
+    requires:
+      vars: [SERVICE, FOR]
+    vars:
+      SINCE: '{{.SINCE | default "1h"}}'
+    cmds:
+      - bun run scripts/observe.ts host-logs {{.SERVICE}} {{.FOR | shellQuote}} {{.SINCE}}

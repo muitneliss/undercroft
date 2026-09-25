@@ -1940,6 +1940,22 @@
     color: var(--ink);
   }
 
+  /* The request's signature under the correction: label, trace id, report link, on one
+   baseline like the colophon. The id selects whole on one click, because the only thing
+   anybody does with it is paste it somewhere else, and a drag that misses one hex digit
+   hands the server a trace that does not exist. */
+  .errata__trace {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+  }
+
+  .errata__trace code {
+    user-select: all;
+    overflow-wrap: anywhere;
+  }
+
   .errata--inline {
     margin: var(--s-3) 0 0;
     padding: var(--s-3) var(--s-4);

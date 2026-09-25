@@ -33,7 +33,8 @@ Failure:
     "code": "WRITES_DISABLED",
     "message": "Profile “prod” does not allow writes. …",
     "recoverable": false,
-    "details": {}
+    "details": {},
+    "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
   }
 }
 ```
@@ -54,6 +55,10 @@ Failure:
   could not be refreshed and the connection now reads `expired`: reconnect it, with nothing
   new to grant. A HubSpot `connections set-scope` has no size limit: every
   property of every object may be chosen at once.
+- `traceId` is present when a server answered the refusal: the 32-hex trace id of that
+  request. It is opaque and never translated. Quote it in a bug report; the operator uses
+  it to find the server's side of the failure. A refusal the CLI made by itself, or a
+  server it could not reach, has none.
 
 No envelope ever holds a cookie, a header, an environment value or a stack trace. With
 `--verbose`, diagnostics go to stderr, never stdout.

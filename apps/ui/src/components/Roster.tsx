@@ -137,9 +137,7 @@ function MembershipOutcome({
   return (
     <>
       {setRole.isError ? (
-        <Errata heading={t("people.roleNotChanged")} live={true}>
-          {setRole.error.message}
-        </Errata>
+        <Errata heading={t("people.roleNotChanged")} live={true} error={setRole.error} />
       ) : null}
       {setRole.isSuccess ? (
         <p className="note" role="status">
@@ -147,9 +145,7 @@ function MembershipOutcome({
         </p>
       ) : null}
       {remove.isError ? (
-        <Errata heading={t("people.notRemoved")} live={true}>
-          {remove.error.message}
-        </Errata>
+        <Errata heading={t("people.notRemoved")} live={true} error={remove.error} />
       ) : null}
       {remove.isSuccess ? (
         <p className="note" role="status">

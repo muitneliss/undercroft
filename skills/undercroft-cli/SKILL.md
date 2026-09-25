@@ -129,7 +129,9 @@ person
    `CLI in agent mode (Claude Code, Codex or another agent)`.
 3. **Collect the facts; do not guess them.** You need the exact command you ran, the whole
    failure envelope, `undercroft --version`, `node --version`, the operating system, and
-   the server's host from `undercroft config show --agent`. For the server's version and
+   the server's host from `undercroft config show --agent`. The envelope's `error.traceId`,
+   when present, goes in the form's **Trace ID** field as well as in the envelope: it is
+   what the operator looks the failure up by. For the server's version and
    the person's role, ask the person. If a fact is not known, write "unknown".
 4. **Redact.** The repository is public. Replace real tenant IDs, e-mail addresses, names
    and record contents with `CASE-0042` and `acme@example.test`. Never include a sign-in
@@ -143,7 +145,7 @@ person
    empty. Put the envelope in a fenced block.
 6. **If `gh` is missing or not signed in,** give the person a link to the form with the
    title and the text fields filled in, and let them submit it:
-   `https://github.com/muitneliss/undercroft/issues/new?template=bug_report.yml&title=<title>&what-happened=<text>&expected=<text>&steps=<text>&logs=<envelope>`.
+   `https://github.com/muitneliss/undercroft/issues/new?template=bug_report.yml&title=<title>&what-happened=<text>&expected=<text>&steps=<text>&trace-id=<traceId>&logs=<envelope>`.
    URL-encode each value.
 
 Then tell the person the issue's URL. If a workaround exists, carry on with the task. If

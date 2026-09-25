@@ -9,9 +9,10 @@
 
 import { LandRecordsRequest, MAX_BATCH_BYTES } from "@undercroft/contracts";
 import type { Fetcher } from "@undercroft/connector-runtime";
-import { type ByteFetcher, describeError, type Logger, newRequestId } from "@undercroft/core";
+import { type ByteFetcher, describeError, type Logger } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
+import { annotate, currentTraceId, traceRequests } from "@undercroft/telemetry";
 import { type Context, Hono } from "hono";
 import { UNAUTHENTICATED, bearerOf, jobDepsFor, serviceTokenOk } from "./bearer.ts";
 import { registerAnalyticsRoutes } from "./analytics.ts";
@@ -70,22 +71,34 @@ export interface LakeApiDeps {
   readonly stop?: AbortSignal;
 }
 
+/** Sent by the Kestra flows with `{{ execution.id }}`, so a failed execution leads to its trace. */
+const KESTRA_EXECUTION_HEADER = "x-kestra-execution-id";
+
 export function createLakeApi(deps: LakeApiDeps): Hono {
   const app = new Hono();
 
   /**
-   * One line per request, and an id the caller can quote back.
+   * One trace per request, one line per request, and an id the caller can quote back.
    *
    * Method, path, status and duration -- never a body. The body of a credential verb
    * carries a live refresh token and the body of a records verb carries source payloads,
    * and a request log is a far less controlled surface than the tables those belong in.
-   * The id is set before the handler runs so it rides on the response whichever way the
-   * request ends, including through the error boundary below.
+   *
+   * The id is the request's trace id (ADR 0058): `x-trace-id`, and `x-request-id` for the
+   * lake API's callers who already read that header -- one id under two names, not two ids.
+   * Both are set before the handler runs, so they ride on the response whichever way the
+   * request ends, including through the error boundary below. A Kestra execution names
+   * itself in a header, and the trace is tagged with it so a failed execution leads here.
    */
+  app.use("*", traceRequests());
   app.use("*", async (c, next) => {
-    const requestId = newRequestId();
+    const requestId = currentTraceId() ?? "";
     const startedAt = Date.now();
     c.header("x-request-id", requestId);
+    const execution = c.req.header(KESTRA_EXECUTION_HEADER);
+    if (execution !== undefined) {
+      annotate({ "kestra.execution_id": execution });
+    }
     await next();
     deps.log?.info("request", {
       requestId,

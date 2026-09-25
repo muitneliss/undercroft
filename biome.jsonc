@@ -679,6 +679,10 @@
         "packages/lake/src/store.ts",
         "scripts/dokploy.ts",
         "scripts/geo/vnProvinces.ts",
+        // Dokploy's, Tempo's and Loki's answers, every field optional and read through `?.`
+        // and `?? []`, so a shape that is not there reads as "found nothing", never a crash.
+        "scripts/observe.ts",
+        "scripts/observeAccess.ts",
         "scripts/wikiCoverage.ts"
       ],
       "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }

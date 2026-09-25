@@ -47,6 +47,12 @@ export const en = {
     nothingToShow: "Nothing to show.",
   },
 
+  errata: {
+    internal: "The server hit an unexpected error. The details were recorded on the server's side.",
+    traceLabel: "Trace ID",
+    report: "Report this problem",
+  },
+
   grip: {
     railWidth: "Reference width",
     paneHeight: "Query pane height",

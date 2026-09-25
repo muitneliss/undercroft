@@ -32,7 +32,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
-import { Errata } from "@/components/Errata.tsx";
+import { Errata, type ServerError } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { trpc } from "@/trpc.ts";
 
@@ -54,8 +54,7 @@ function AddTenantPanel({
   isSuperadmin: boolean;
   addTenant: {
     isPending: boolean;
-    isError: boolean;
-    error: { message: string } | null;
+    error: ServerError | null;
     mutate: (input: { tenantId: string; displayName: string }) => void;
   };
   idFieldRef: React.RefObject<HTMLInputElement | null>;
@@ -125,11 +124,9 @@ function AddTenantPanel({
             operator can act on, and it arrives worded in their language from
             `error.tenantExists` -- restating it here would be a second copy to keep in
             step with the refusal that actually happened. */}
-          {addTenant.isError ? (
-            <Errata heading={t("tenants.notAdded")} live={true}>
-              {addTenant.error?.message ?? ""}
-            </Errata>
-          ) : null}
+          {addTenant.error === null ? null : (
+            <Errata heading={t("tenants.notAdded")} live={true} error={addTenant.error} />
+          )}
         </>
       ) : (
         <p className="note">{t("tenants.addNote")}</p>

@@ -30,6 +30,12 @@ WORKDIR /app
 # started with nothing but a database URL still serves the site.
 ENV UNDERCROFT_UI_DIST=/app/apps/ui/dist
 
+# Which release this image is: the `service.version` on every trace it exports. Filled by the
+# same CI build arg the worker's image takes; `""` from a local build, and then left off the
+# trace rather than guessed.
+ARG UNDERCROFT_RELEASE=""
+ENV UNDERCROFT_RELEASE=${UNDERCROFT_RELEASE}
+
 COPY package.json bun.lock ./
 COPY packages ./packages
 COPY apps ./apps

@@ -68,9 +68,7 @@ export function TokenForm({
       </div>
 
       {setToken.isError ? (
-        <Errata heading={t("grant.tokenRejected")} live={true}>
-          {setToken.error.message}
-        </Errata>
+        <Errata heading={t("grant.tokenRejected")} live={true} error={setToken.error} />
       ) : null}
 
       <div className="row">

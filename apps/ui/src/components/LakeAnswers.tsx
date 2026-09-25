@@ -225,11 +225,7 @@ function StatementPane({
 
   function shown(): React.JSX.Element {
     if (ask.isError) {
-      return (
-        <Errata heading={t("lake.consoleRefused")} live={true}>
-          {ask.error.message}
-        </Errata>
-      );
+      return <Errata heading={t("lake.consoleRefused")} live={true} error={ask.error} />;
     }
     if (ask.data === undefined) {
       return <p className="note workbench__idle">{t("lake.consoleWaiting")}</p>;
