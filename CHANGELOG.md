@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/muitneliss/undercroft/compare/v1.36.0...v1.36.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **ci:** allow real server tests time to clean up ([#239](https://github.com/muitneliss/undercroft/issues/239)) ([7de9800](https://github.com/muitneliss/undercroft/commit/7de9800f7f741794a94fb0ecaacc2b8c2ec0a561))
+
 ## [1.36.0](https://github.com/muitneliss/undercroft/compare/v1.35.1...v1.36.0) (2026-09-25)
 
 
