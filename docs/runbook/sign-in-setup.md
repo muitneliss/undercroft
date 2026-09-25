@@ -8,6 +8,9 @@ existing account. Two ways in, and they are not symmetric:
   settings absent the control plane comes up with no way in at all, Google included.
 - **Google** — needs an OAuth client, and is added on top of the code-by-email path.
 
+On a local stack there is a third, which needs neither: see
+[Skip sign-in locally](#skip-sign-in-locally).
+
 The decisions behind all this are in [ADR 0010](../adr/0010-invite-only-sign-in-with-better-auth.md);
 the production-specific parts are in [deployment.md](./deployment.md). This page is the
 walkthrough.
@@ -78,7 +81,8 @@ Testing** with your invitees added as test users.
 **Not optional, even if you only want Google.** `UNDERCROFT_EMAIL_API_KEY` and
 `UNDERCROFT_EMAIL_FROM` are both required before sign-in is wired up at all: with either one
 absent the control plane logs `sign_in_unconfigured` and offers no way in, the Google button
-included. They carry the invitation emails too.
+included. They carry the invitation emails too. The one exception is a local stack signed in
+with `UNDERCROFT_DEV_SIGN_IN_AS`; see [Skip sign-in locally](#skip-sign-in-locally).
 
 With Resend: create an API key, and use `onboarding@resend.dev` as the from-address until you
 have verified a domain of your own.
@@ -306,6 +310,39 @@ on that person's next request, even if they are signed in at the time. The one c
 refused is the one that would leave the customer with no admin: make someone else an admin
 first. Every role change and removal is written to `ops.audit_log` as `people.setRole` or
 `people.remove`, with who did it, when, and the role the person held before.
+
+## Skip sign-in locally
+
+For Path B only. You need no Google client and no mail key, only a session secret (step 1)
+and an address. In `deploy/compose/.env`:
+
+```sh
+UNDERCROFT_SESSION_SECRET=<openssl rand -base64 32>
+UNDERCROFT_SUPERADMINS=you@example.test
+UNDERCROFT_DEV_SIGN_IN_AS=you@example.test
+```
+
+Then run `task dev:run`, open `http://localhost:5173` and click **Sign in locally (development)**.
+The boot log names the method, at `warn` so it is never missed:
+
+```json
+{ "event": "sign_in_configured", "methods": "dev" }
+```
+
+This is a third Better Auth sign-in method, `POST /api/auth/sign-in/dev`. It is not a way
+around Better Auth, so what you get is an ordinary session: the same cookie, the same session
+row, the same sign-out, and it lasts as long as any other session.
+
+- **It skips proving the address, not the invite-only gate.** The address must be named in
+  `UNDERCROFT_SUPERADMINS` or invited (`task dev:invite`). A first sign-in goes through the
+  same provisioning hook as a real one, so its invitations are redeemed, and it gets exactly
+  that address's access. Otherwise the button answers "That address has not been invited". To
+  see the app as a `viewer`, invite the address with `--role viewer` and leave it out of
+  `UNDERCROFT_SUPERADMINS`.
+- **The server chooses the address, not the browser.** The endpoint takes no input.
+- **It cannot reach a server.** Only `task dev:api` passes the variable, and neither compose
+  file does. The control plane refuses to start with it unless `UNDERCROFT_PUBLIC_URL` is
+  `localhost`, `127.0.0.1` or `[::1]`. The button is compiled only into the Vite dev build.
 
 ---
 

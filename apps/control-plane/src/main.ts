@@ -203,8 +203,22 @@ const email: EmailSender | undefined =
           : { endpoint: required("UNDERCROFT_EMAIL_API_URL") }),
       });
 
+/**
+ * Sign-in without proof, for a local stack. Set by `task dev:api` and by nothing a deployment
+ * runs -- the compose files do not pass it -- and `createAuth` refuses it unless the public
+ * URL is loopback. It stands in for mail as the one method sign-in cannot be built without,
+ * because on a laptop with no mail key it is the only way in.
+ */
+const devSignInAs = optional("UNDERCROFT_DEV_SIGN_IN_AS");
+const google =
+  googleClientId === undefined || googleClientSecret === undefined
+    ? undefined
+    : { clientId: googleClientId, clientSecret: googleClientSecret };
+
 const auth =
-  publicUrl === undefined || sessionSecret === undefined || email === undefined
+  publicUrl === undefined ||
+  sessionSecret === undefined ||
+  (email === undefined && devSignInAs === undefined)
     ? undefined
     : createAuth({
         database: authPool,
@@ -212,11 +226,10 @@ const auth =
         transactor: (fn) => withTransaction(pool, fn),
         secret: sessionSecret,
         baseUrl: publicUrl,
-        email,
         superadmins: superadmins.addresses,
-        ...(googleClientId === undefined || googleClientSecret === undefined
-          ? {}
-          : { google: { clientId: googleClientId, clientSecret: googleClientSecret } }),
+        ...(email === undefined ? {} : { email }),
+        ...(google === undefined ? {} : { google }),
+        ...(devSignInAs === undefined ? {} : { devSignInAs }),
         onEmailError: (error): void =>
           log.error("otp_send_failed", {
             errorMessage: error instanceof Error ? error.message : String(error),
@@ -229,12 +242,20 @@ if (auth === undefined) {
     publicUrl: publicUrl !== undefined,
     sessionSecret: sessionSecret !== undefined,
     email: email !== undefined,
-    google: googleClientId !== undefined && googleClientSecret !== undefined,
+    google: google !== undefined,
   });
-} else if (googleClientId === undefined) {
-  log.info("sign_in_configured", { methods: "email-otp" });
 } else {
-  log.info("sign_in_configured", { methods: "google,email-otp" });
+  const methods = [
+    ...(google === undefined ? [] : ["google"]),
+    ...(email === undefined ? [] : ["email-otp"]),
+    ...(devSignInAs === undefined ? [] : ["dev"]),
+  ].join(",");
+  if (devSignInAs === undefined) {
+    log.info("sign_in_configured", { methods });
+  } else {
+    // `warn`, so the method that proves nothing is never a line nobody reads.
+    log.warn("sign_in_configured", { methods });
+  }
 }
 
 /**

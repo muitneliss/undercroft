@@ -85,3 +85,21 @@ export async function signInWithCode(email: string, otp: string): Promise<void> 
     throw new Error(error.message ?? i18next.t("signIn.codeFailed"));
   }
 }
+
+/**
+ * Sign in on a local stack as the address the control plane was started with
+ * (`UNDERCROFT_DEV_SIGN_IN_AS`). The server chooses who, never this call. A server without the
+ * method answers 404, which is the case `signIn.devFailed` explains.
+ */
+export async function signInForDevelopment(): Promise<void> {
+  const { error } = await authClient.$fetch("/sign-in/dev", {
+    method: "POST",
+    headers: acceptLanguage(),
+  });
+  if (error !== null) {
+    // A 404 is the method being off, whatever words the router put on it; anything else is
+    // the server's own refusal, worded in the language this call asked for.
+    const refusal = error.status === 404 ? undefined : error.message;
+    throw new Error(refusal ?? i18next.t("signIn.devFailed"));
+  }
+}

@@ -31,7 +31,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { sendSignInCode, signInWithCode, signInWithGoogle } from "@/auth.ts";
+import { sendSignInCode, signInForDevelopment, signInWithCode, signInWithGoogle } from "@/auth.ts";
 import { Colophon } from "@/components/Colophon.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
@@ -90,6 +90,10 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
           </Errata>
         ) : null}
 
+        {/* `import.meta.env.DEV` is a constant Vite folds at build time, so a production
+            bundle does not contain this button at all -- not merely hide it. */}
+        {import.meta.env.DEV ? <DevSignIn /> : null}
+
         <div className="row">
           <button className="plate plate--primary" type="button" onClick={signInWithGoogle}>
             {t("signIn.google")}
@@ -133,6 +137,45 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
         <Colophon />
       </div>
     </main>
+  );
+}
+
+/**
+ * The local stack's way in, `POST /api/auth/sign-in/dev`: one click, and the session is an
+ * ordinary Better Auth session for the address the control plane was started with. The server
+ * is what decides whether this works -- it has the method only on loopback with
+ * `UNDERCROFT_DEV_SIGN_IN_AS` set -- and the error says how to turn it on when it does not.
+ */
+function DevSignIn(): React.JSX.Element {
+  const { t } = useTranslation();
+  const signIn = useMutation({
+    mutationFn: signInForDevelopment,
+    onSuccess: () => {
+      // A full reload, as after a code: the identity just changed under every cached query.
+      globalThis.location.assign("/");
+    },
+  });
+
+  return (
+    <div className="stack stack--tight">
+      <div className="row">
+        <button
+          className="plate plate--primary"
+          type="button"
+          disabled={signIn.isPending}
+          onClick={(): void => {
+            signIn.mutate();
+          }}
+        >
+          {signIn.isPending ? t("signIn.signingIn") : t("signIn.dev")}
+        </button>
+      </div>
+      {signIn.isError ? (
+        <Errata heading={t("signIn.notSignedIn")} live={true}>
+          {signIn.error.message}
+        </Errata>
+      ) : null}
+    </div>
   );
 }
 

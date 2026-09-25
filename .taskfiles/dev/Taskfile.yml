@@ -165,6 +165,9 @@ tasks:
       UNDERCROFT_EMAIL_FROM: "{{.UNDERCROFT_EMAIL_FROM}}"
       UNDERCROFT_EMAIL_API_URL: "{{.UNDERCROFT_EMAIL_API_URL}}"
       UNDERCROFT_SUPERADMINS: "{{.UNDERCROFT_SUPERADMINS}}"
+      # Only this task passes it, and the control plane refuses it unless the public URL
+      # above is loopback. See "Skip sign-in locally" in docs/runbook/sign-in-setup.md.
+      UNDERCROFT_DEV_SIGN_IN_AS: "{{.UNDERCROFT_DEV_SIGN_IN_AS}}"
     cmds:
       - bun run --filter '@undercroft/control-plane' dev
 
