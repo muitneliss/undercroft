@@ -121,8 +121,9 @@ export const en = {
       get: "One source and how it is connected.",
       startOAuth: "Begin an OAuth grant; returns the URL to open in a browser. Admins.",
       browseScope:
-        "What may be chosen for a source's scope: Gmail labels, Xero organisations, or Google Drive folders with their paths and the file types present. Admins.",
-      setScope: "Set what a source reads. Admins.",
+        "What may be chosen for a source's scope: Gmail labels, Xero organisations, Google Drive folders with their paths and the file types present, or each HubSpot object's properties, the portal's own included. Admins.",
+      setScope:
+        "Set what a source reads. For HubSpot, the properties chosen for each object are read as well as the standard ones, never instead of them. Admins.",
       setToken: "Connect a source with a pasted token. Admins.",
       setCadence: "Set how often a source is read. Admins.",
       disconnect: "End a source's grant. Admins.",

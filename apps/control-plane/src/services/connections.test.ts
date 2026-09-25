@@ -428,6 +428,49 @@ describe("choosing a scope", () => {
     expect(xero?.config.entities).toEqual(["invoices", "contacts"]);
   });
 
+  it("a HubSpot choice is stored and read back by internal name, and the card stays connected", async () => {
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+
+    const result = await setScope(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      selectionJson: JSON.stringify({
+        properties: { companies: ["annualrevenue", "x_onboarding_stage"] },
+      }),
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    expect(result.ok).toBe(true);
+    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    expect(hubspot?.status).toBe("connected");
+    expect(hubspot?.config.properties).toEqual({
+      companies: ["annualrevenue", "x_onboarding_stage"],
+    });
+  });
+
+  it("a HubSpot choice too long for one request is refused naming the object, and not stored", async () => {
+    // Saved, it would fail every run afterwards as an opaque 414 from HubSpot. 500 names of
+    // 30 characters is over 16,000 once written into the URL -- a portal's full contact list.
+    await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
+    const names = Array.from(
+      { length: 500 },
+      (_, i) => `x_property_${String(i).padStart(19, "0")}`,
+    );
+
+    const result = await setScope(db, {
+      tenantId: TENANT,
+      source: "hubspot",
+      selectionJson: JSON.stringify({ properties: { companies: ["city"], contacts: names } }),
+      actor: "ada@example.test",
+      actorId: "u1",
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "too-many-properties", entity: "contacts" });
+    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    expect(hubspot?.config.properties).toBeUndefined();
+  });
+
   it("the audit entry counts what was chosen and never names it", async () => {
     // `ops.audit_log` has a wider readership than `app.connection_detail`. What was decided
     // and by whom belongs in a trail; which folders a customer picked is their data.

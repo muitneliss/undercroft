@@ -224,8 +224,17 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
             entities: entities.map((entity) => describeXeroEntity(t, entity)).join(", "),
           });
 
-    case "hubspot":
-      return entities.length === 0 ? null : entities.join(", ");
+    case "hubspot": {
+      // Nothing chosen is a reading, not an absence: the spec's own properties, which is what a
+      // HubSpot connection has always read. It gets words rather than a dash for that reason.
+      const chosen = Object.values(connection.config.properties ?? {}).reduce(
+        (count, names) => count + names.length,
+        0,
+      );
+      return chosen === 0
+        ? t("scope.hubspotStandard")
+        : t("scope.hubspotChosen", { count: chosen });
+    }
 
     default: {
       const exhaustive: never = connection.kind;

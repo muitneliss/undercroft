@@ -28,6 +28,8 @@ import { runIngest } from "./ingest.ts";
 
 const BASE = "https://demo.test";
 const STREAM = { source: "demo", tenantId: "CASE-1", entity: "things" } as const;
+/** How an entity read exactly as its spec declares it keeps its mark: no scope touched it. */
+const AS_DECLARED = { format: "epoch-millis", requestKey: "" } as const;
 
 // `auth: none`, so the run needs no connection and no sealed credential: what is under test
 // is the cursor, and a token would be a second harness to keep working.
@@ -94,7 +96,7 @@ describe("a watermark advances only by getting to the end", () => {
 
     await ingest(fetcher);
 
-    expect(await readSyncCursor(db, STREAM, "epoch-millis")).toBe("900");
+    expect(await readSyncCursor(db, STREAM, AS_DECLARED)).toBe("900");
   });
 
   it("does not advance when the entity throws partway", async () => {
@@ -109,11 +111,11 @@ describe("a watermark advances only by getting to the end", () => {
 
     await expect(ingest(fetcher)).rejects.toThrow();
 
-    expect(await readSyncCursor(db, STREAM, "epoch-millis")).toBeNull();
+    expect(await readSyncCursor(db, STREAM, AS_DECLARED)).toBeNull();
   });
 
   it("stays where it was when an incremental read finds nothing new", async () => {
-    await writeSyncCursor(db, STREAM, { watermark: "900", format: "epoch-millis" });
+    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "900" });
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things?updatedAfter=900`, {
       body: { results: [], paging: {} },
     });
@@ -122,7 +124,7 @@ describe("a watermark advances only by getting to the end", () => {
     const result = await ingest(fetcher);
 
     expect(result.entities[0]?.landed).toBe(0);
-    expect(await readSyncCursor(db, STREAM, "epoch-millis")).toBe("900");
+    expect(await readSyncCursor(db, STREAM, AS_DECLARED)).toBe("900");
   });
 });
 
@@ -142,7 +144,7 @@ describe("the second run asks the source for less", () => {
 
     expect(second.calls.map((call) => call.url)).toEqual([`${BASE}/things?updatedAfter=400`]);
     expect(result.entities[0]?.landed).toBe(1);
-    expect(await readSyncCursor(db, STREAM, "epoch-millis")).toBe("800");
+    expect(await readSyncCursor(db, STREAM, AS_DECLARED)).toBe("800");
 
     const { rows } = await db.query<{ id: string }>(
       "SELECT source_record_id AS id FROM raw.records WHERE source = 'demo' ORDER BY source_record_id",
@@ -157,8 +159,8 @@ describe("a watermark is only ever handed back under the format it was written i
     // and being silently wrong about which is later. The quiet side -- the same format answers
     // the stored value -- is "stays where it was when an incremental read finds nothing new",
     // which writes this cursor and reads it back through a whole run.
-    await writeSyncCursor(db, STREAM, { watermark: "900", format: "epoch-millis" });
+    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "900" });
 
-    expect(await readSyncCursor(db, STREAM, "iso8601")).toBeNull();
+    expect(await readSyncCursor(db, STREAM, { ...AS_DECLARED, format: "iso8601" })).toBeNull();
   });
 });

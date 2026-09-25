@@ -361,7 +361,7 @@ describe("a spec ingest stopped mid-entity", () => {
       await readSyncCursor(
         db,
         { source: "demo", tenantId: TENANT, entity: "things" },
-        "epoch-millis",
+        { format: "epoch-millis", requestKey: "" },
       ),
     ).toBeNull();
     expect(recorded.calls.map((call) => call.url)).toEqual([

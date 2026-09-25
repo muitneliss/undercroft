@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { type BrowseListing, Cadence } from "@undercroft/contracts";
+import { type BrowseListing, Cadence, MAX_PROPERTY_QUERY_CHARS } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
@@ -43,13 +43,16 @@ function browseRefusal(
       });
     // Google refused the grant, or the recorded grant lacks the scope -- a Drive grant from
     // before ADR 0047 is `drive.file`, which Google answers with an empty list rather than a
-    // refusal, so the worker refuses it by the recorded scope instead.
+    // refusal, so the worker refuses it by the recorded scope instead. HubSpot's token is a
+    // private app's, and its remedy is worded for that: there is no consent screen to tick.
     case "scope-insufficient":
-      return refusal("PRECONDITION_FAILED", t("error.scopeInsufficient", { source: at.source }), {
-        ...facts,
-        reason: "scope-insufficient",
-        remedy: "reconnect",
-      });
+      return refusal(
+        "PRECONDITION_FAILED",
+        at.listing === "properties"
+          ? t("error.propertiesInsufficient")
+          : t("error.scopeInsufficient", { source: at.source }),
+        { ...facts, reason: "scope-insufficient", remedy: "reconnect" },
+      );
     case "unreachable":
       return refusal("PRECONDITION_FAILED", t("error.workerUnavailable"), {
         ...facts,
@@ -63,6 +66,43 @@ function browseRefusal(
         remedy: "none",
       });
   }
+}
+
+/**
+ * Why a scope was not saved.
+ *
+ * A HubSpot choice too long to be sent is worded apart from a selection nobody could read,
+ * because its remedy is in the reader's hands -- untick some of one object's properties -- and
+ * the facts name that object and both lengths, so an agent can say how many characters to take
+ * off rather than retrying the same save.
+ */
+function scopeRefusal(
+  locale: Locale,
+  source: string,
+  refused: Exclude<connections.SetScopeOutcome, { ok: true }>,
+): TRPCError {
+  const t = messages(locale);
+  if (refused.reason === "too-many-properties") {
+    return refusal(
+      "BAD_REQUEST",
+      t("error.tooManyProperties", {
+        entity: refused.entity,
+        chars: String(refused.chars),
+        limit: String(MAX_PROPERTY_QUERY_CHARS),
+      }),
+      {
+        source,
+        reason: "too-many-properties",
+        entity: refused.entity,
+        chars: String(refused.chars),
+        limit: String(MAX_PROPERTY_QUERY_CHARS),
+      },
+    );
+  }
+  return new TRPCError({
+    code: "BAD_REQUEST",
+    message: t("error.scopeNotUnderstood", { source }),
+  });
 }
 
 export const connectionsRouter = router({
@@ -118,8 +158,9 @@ export const connectionsRouter = router({
 
   /**
    * What an admin may choose from, for the scope picker or an agent at the CLI: Gmail's
-   * labels, the organisations a Xero consent can see, or Drive's folders -- each with its
-   * path -- and the file types across the grant. ADR 0047.
+   * labels, the organisations a Xero consent can see, Drive's folders -- each with its
+   * path -- and the file types across the grant (ADR 0047), or the properties of each
+   * HubSpot CRM object, the portal's own included (ADR 0052).
    *
    * Proxied to the worker because it needs a live token, which only the worker can open.
    * Every refusal names, in `details`, which listing could not be had and what would fix it.
@@ -157,10 +198,7 @@ export const connectionsRouter = router({
         actorId: ctx.user.userId,
       });
       if (!result.ok) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: messages(ctx.locale)("error.scopeNotUnderstood", { source: input.source }),
-        });
+        throw scopeRefusal(ctx.locale, input.source, result);
       }
       return { ok: true };
     }),

@@ -66,7 +66,7 @@
  * run says it stopped rather than closing green on half a source.
  */
 
-import { parseScope, sourceKind } from "@undercroft/contracts";
+import { type DriveScope, type GmailScope, parseScope, sourceKind } from "@undercroft/contracts";
 import { newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { readConnectionDetail, type RunRefusal } from "@undercroft/db/repos";
@@ -182,16 +182,18 @@ export interface CollectResult {
 /**
  * The scope an admin chose, or a refusal.
  *
- * A Google source parses to a Google scope or to nothing; the third shape belongs to another
- * collector and would mean a row written under the wrong source.
+ * A Google source parses to a Google scope or to nothing; any other shape belongs to another
+ * source and would mean a row written under the wrong one. Asked as "is it Gmail's or
+ * Drive's" rather than "is it not Xero's", so a scope kind added later is refused here rather
+ * than waved through as a Google one.
  */
 async function googleScope(
   deps: CollectDeps,
   input: { source: string; tenantId: string },
-): Promise<Exclude<NonNullable<ReturnType<typeof parseScope>>, { kind: "xero" }>> {
+): Promise<GmailScope | DriveScope> {
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
-  if (scope === null || scope.kind === "xero") {
+  if (scope?.kind !== "gmail" && scope?.kind !== "drive") {
     throw new ScopeNotChosen(input.source, input.tenantId);
   }
   return scope;

@@ -81,6 +81,12 @@ export interface ScopeDraft {
    * existed means. ADR 0031.
    */
   readonly recurse: boolean;
+  /**
+   * HubSpot: per object, the properties read beyond the spec's own, by internal name. An object
+   * with none -- or absent -- reads the spec's properties alone, which is the NARROW reading, not
+   * the open one every other empty list here means. ADR 0052.
+   */
+  readonly properties: Readonly<Record<string, string[]>>;
 }
 
 interface UiState {
@@ -138,6 +144,16 @@ interface UiState {
   selectAllScopeFileTypes: (source: string, offered: readonly string[]) => void;
   /** Drive: turn reading sub-folders on or off. ADR 0031. */
   toggleScopeRecurse: (source: string) => void;
+  /** HubSpot: add or remove one property of one object. None chosen is the spec's own alone. */
+  toggleScopeProperty: (source: string, entity: string, property: string) => void;
+  /** HubSpot: take every chosen property off one object, back to the spec's own alone. */
+  clearScopeProperties: (source: string, entity: string) => void;
+  /**
+   * HubSpot: tick every property one object offers, keeping any held that it does not list. A
+   * union like the other `selectAll*` verbs, and closed like them: a property created later is
+   * not read until it is ticked.
+   */
+  selectAllScopeProperties: (source: string, entity: string, offered: readonly string[]) => void;
   /**
    * Drive: add what one Picker session chose to what is already chosen.
    *
@@ -366,6 +382,7 @@ function draftFor(held: ScopeDraft | null, source: string): ScopeDraft {
     entities: [],
     fileTypes: [],
     recurse: false,
+    properties: {},
   };
 }
 
@@ -398,6 +415,11 @@ function itself(entry: string): string {
 /** How a slice writes: Zustand's partial setter, narrowed to this store. */
 type Setter = (partial: Partial<UiState> | ((state: UiState) => Partial<UiState>)) => void;
 
+/** One entry in or out of a tick-list, keeping the order the rest were ticked in. */
+function toggled(held: readonly string[], entry: string): string[] {
+  return held.includes(entry) ? held.filter((e) => e !== entry) : [...held, entry];
+}
+
 /**
  * The three verbs every scope tick-list answers -- one entry, none, every offered one -- written
  * once for all three lists.
@@ -424,13 +446,39 @@ function tickList(
   }
 
   return {
-    toggle: (source, entry): unknown =>
-      rewrite(source, (held) =>
-        held.includes(entry) ? held.filter((e) => e !== entry) : [...held, entry],
-      ),
+    toggle: (source, entry): unknown => rewrite(source, (held) => toggled(held, entry)),
     clear: (source): unknown => rewrite(source, () => []),
     selectAll: (source, offered): unknown =>
       rewrite(source, (held) => withEvery(held, offered, itself)),
+  };
+}
+
+/**
+ * The same three verbs over HubSpot's choice, which is one tick-list PER OBJECT rather than one
+ * list: the rules are `tickList`'s -- `draftFor` checks the source, select all is a union -- and
+ * only where the list lives differs.
+ */
+function propertyLists(
+  set: Setter,
+): Pick<UiState, "toggleScopeProperty" | "clearScopeProperties" | "selectAllScopeProperties"> {
+  function rewrite(
+    source: string,
+    entity: string,
+    next: (held: readonly string[]) => string[],
+  ): unknown {
+    return set((state) => {
+      const draft = draftFor(state.scopeDraft, source);
+      const properties = { ...draft.properties, [entity]: next(draft.properties[entity] ?? []) };
+      return { scopeDraft: { ...draft, properties } };
+    });
+  }
+
+  return {
+    toggleScopeProperty: (source, entity, property): unknown =>
+      rewrite(source, entity, (held) => toggled(held, property)),
+    clearScopeProperties: (source, entity): unknown => rewrite(source, entity, () => []),
+    selectAllScopeProperties: (source, entity, offered): unknown =>
+      rewrite(source, entity, (held) => withEvery(held, offered, itself)),
   };
 }
 
@@ -460,6 +508,9 @@ function scopeSlice(
   | "clearScopeFileTypes"
   | "selectAllScopeFileTypes"
   | "toggleScopeRecurse"
+  | "toggleScopeProperty"
+  | "clearScopeProperties"
+  | "selectAllScopeProperties"
   | "addScopeFiles"
   | "removeScopeFile"
   | "fileTypeInput"
@@ -490,6 +541,7 @@ function scopeSlice(
         const draft = draftFor(state.scopeDraft, source);
         return { scopeDraft: { ...draft, recurse: !draft.recurse } };
       }),
+    ...propertyLists(set),
     addScopeFiles: (source, picked): unknown =>
       set((state) => {
         const draft = draftFor(state.scopeDraft, source);

@@ -59,9 +59,10 @@ export const StoreCredentialResponse = z.object({
  * `labels` is Gmail's; `organisations` is Xero's -- the organisations one consent can see,
  * of which the platform must be told one rather than guess; `folders` is Drive's, and carries
  * the file types found across the grant beside them, because a Drive scope is chosen as both.
- * ADR 0047.
+ * ADR 0047. `properties` is HubSpot's: every property each CRM object in the spec has in the
+ * portal, the portal's own included, fetched live because a portal adds them. ADR 0052.
  */
-export const BrowseListing = z.enum(["labels", "organisations", "folders"]);
+export const BrowseListing = z.enum(["labels", "organisations", "folders", "properties"]);
 
 /** Listing what an admin may choose from. Needs a live token, so it lives in the worker. */
 export const BrowseScopeRequest = z.object({
@@ -70,15 +71,16 @@ export const BrowseScopeRequest = z.object({
   kind: BrowseListing,
 });
 
-/** The item kinds a listing can be cut short in. Labels and organisations never are. */
+/** The item kinds a listing can be cut short in. Labels, organisations and properties never are. */
 const Bounded = z.enum(["folder", "file-type"]);
 
 export const BrowseScopeResponse = z.object({
   items: z.array(
     z.object({
       /**
-       * What a scope records for this item: a label or organisation id, a Drive folder id, or
-       * -- for a `file-type` -- the MIME type itself, which is what `fileTypes` takes.
+       * What a scope records for this item: a label or organisation id, a Drive folder id,
+       * -- for a `file-type` -- the MIME type itself, which is what `fileTypes` takes, or a
+       * HubSpot property's internal name.
        */
       id: z.string(),
       name: z.string(),
@@ -86,7 +88,9 @@ export const BrowseScopeResponse = z.object({
        * What sort of choice this is.
        *
        * For a label, who owns it, as the provider reports it: `system` for the set Gmail
-       * ships (INBOX, SENT, the CATEGORY_* group) and `user` for one somebody made. For Drive,
+       * ships (INBOX, SENT, the CATEGORY_* group) and `user` for one somebody made. For a
+       * HubSpot property the same question: `system` for one HubSpot defines (its
+       * `hubspotDefined` flag), `user` for one the portal created. For Drive,
        * `folder` -- spelled as a Drive pick spells it, so `{ id, name, kind }` pastes into a
        * `DriveScope`'s `files` unchanged -- or `file-type`, a MIME type present in the grant.
        *
@@ -107,6 +111,17 @@ export const BrowseScopeResponse = z.object({
        * with the account from somebody else's drive is that folder itself.
        */
       path: z.array(z.string()).optional(),
+      /**
+       * For a HubSpot property, the spec entity it is read on: the key a `HubspotScope` records
+       * it under. Absent for anything that is not a property.
+       */
+      entity: z.string().optional(),
+      /**
+       * For a HubSpot property, `true` when the spec reads it whatever is chosen -- the floor
+       * a choice can only add to. Absent otherwise, which for a property means it is read only
+       * if it is chosen.
+       */
+      always: z.boolean().optional(),
     }),
   ),
   /**

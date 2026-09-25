@@ -16,17 +16,9 @@
  * (a watermark, a tombstone) is written. ADR 0051.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import {
-  createFetcher,
-  laterStamp,
-  readEntity,
-  type RunContext,
-} from "@undercroft/connector-runtime";
-import { type ConnectorSpec, parseScope, parseSpec, sourceKind } from "@undercroft/contracts";
+import { laterStamp, readEntity, type RunContext } from "@undercroft/connector-runtime";
+import { type ConnectorSpec, sourceKind } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
-import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
@@ -36,23 +28,7 @@ import { createRecordSink } from "./recordSink.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken, RunStopped } from "./runTypes.ts";
 import type { RunJournal } from "./runJournal.ts";
-
-/**
- * What a spec run reads, as the connection records it: the provider's account id, and the
- * entities the admin chose. `null` for each means "the spec decides" -- a source with no
- * organisation to name, or a choice that named no entities and so means all of them.
- */
-export async function chosenFor(
-  deps: Pick<RunDeps, "exec">,
-  input: { source: string; tenantId: string },
-): Promise<{ accountId: string | null; entities: string[] | null }> {
-  const connection = await getConnection(deps.exec, input.tenantId, input.source);
-  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
-  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
-  const entities = scope?.kind === "xero" && scope.entities.length > 0 ? scope.entities : null;
-  const accountId = connection?.externalAccountId ?? null;
-  return { accountId: accountId === "" ? null : accountId, entities };
-}
+import { type EntityRead, openSpecRun } from "./specRun.ts";
 
 /**
  * The Google path, reported in the same shape as a spec run.
@@ -140,47 +116,6 @@ function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entit
   ];
 }
 
-/** What one spec run needs, gathered once before the first entity is read. */
-interface SpecRun {
-  readonly spec: ConnectorSpec;
-  readonly ctx: RunContext;
-  readonly entities: ConnectorSpec["entities"];
-}
-
-/**
- * Open a spec run: the spec, the request context, and which entities the admin chose.
- *
- * Spec ORDER is kept through the filter, because a `batch-from` relation reads against ids
- * harvested from an entity declared before it; the spec schema refuses an unknown reference,
- * and a reordered list would turn that check into a run that silently read nothing.
- */
-async function openSpecRun(
-  deps: RunDeps,
-  input: { source: string; tenantId: string },
-): Promise<SpecRun> {
-  const spec = parseSpec(readFileSync(join(deps.specsDir, `${input.source}.yaml`), "utf8"));
-  const chosen = await chosenFor(deps, input);
-
-  const ctx: RunContext = {
-    fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),
-    // Only attach a token resolver when the connector authenticates. Under
-    // exactOptionalPropertyTypes an explicit `undefined` is not the same as omitting it.
-    ...(spec.auth.kind === "none"
-      ? {}
-      : { token: (): Promise<string> => resolveToken(deps, input) }),
-    // The provider's account id -- the Xero organisation chosen after consent -- for the
-    // header the spec names. The runtime refuses to send a request without it.
-    ...(chosen.accountId === null ? {} : { accountId: chosen.accountId }),
-  };
-
-  const entities =
-    chosen.entities === null
-      ? spec.entities
-      : spec.entities.filter((entity) => chosen.entities?.includes(entity.name) === true);
-
-  return { spec, ctx, entities };
-}
-
 /** Everything one entity's read reports to, held together so it is three arguments not six. */
 interface EntityRun {
   readonly deps: RunDeps;
@@ -254,7 +189,7 @@ function intoLedger(ledger: Ledger): RefusalWriter {
  */
 async function ingestEntity(
   run: EntityRun,
-  entity: ConnectorSpec["entities"][number],
+  { entity, requestKey }: EntityRead,
   ctx: RunContext,
   ids: string[] | null,
 ): Promise<void> {
@@ -264,7 +199,9 @@ async function ingestEntity(
   const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
   const { incremental } = entity;
   const since =
-    incremental === undefined ? null : await readSyncCursor(deps.exec, stream, incremental.format);
+    incremental === undefined
+      ? null
+      : await readSyncCursor(deps.exec, stream, { format: incremental.format, requestKey });
 
   const sink = createRecordSink(
     { lake: deps.lake, exec: deps.exec, refuse: intoLedger(run.ledger) },
@@ -307,7 +244,11 @@ async function ingestEntity(
     throw new RunStopped();
   }
   if (incremental !== undefined && mark !== null) {
-    await writeSyncCursor(deps.exec, stream, { watermark: mark, format: incremental.format });
+    await writeSyncCursor(deps.exec, stream, {
+      watermark: mark,
+      format: incremental.format,
+      requestKey,
+    });
   }
 }
 
@@ -320,9 +261,9 @@ async function ingestEntity(
  * references one entity out of four -- and it grew with the source, which is the shape this
  * whole change exists to remove.
  */
-function referencedEntities(entities: ConnectorSpec["entities"]): ReadonlySet<string> {
+function referencedEntities(reads: readonly EntityRead[]): ReadonlySet<string> {
   return new Set(
-    entities.flatMap((entity) =>
+    reads.flatMap(({ entity }) =>
       entity.request.kind === "batch-from" ? [entity.request.entity] : [],
     ),
   );
@@ -334,15 +275,16 @@ export async function runSpecIngest(
   ledger: Ledger,
   journal: RunJournal,
 ): Promise<void> {
-  const { spec, ctx, entities } = await openSpecRun(deps, input);
+  const { spec, ctx, reads } = await openSpecRun(deps, input);
   const run: EntityRun = { deps, input, spec, ledger, journal };
 
-  const referenced = referencedEntities(entities);
+  const referenced = referencedEntities(reads);
   // Ids per entity, so a `batch-from` relation can read against the entity it references --
   // and ONLY for the entities one does.
   const idsByEntity = new Map<string, string[]>();
 
-  for (const entity of entities) {
+  for (const read of reads) {
+    const { entity } = read;
     // Before an entity rather than only inside one, so a stop that arrived while the last
     // entity's sink was closing does not open the next and read its first page for nothing.
     if (deps.stop?.aborted === true) {
@@ -356,6 +298,6 @@ export async function runSpecIngest(
     if (ids !== null) {
       idsByEntity.set(entity.name, ids);
     }
-    await ingestEntity(run, entity, entityCtx, ids);
+    await ingestEntity(run, read, entityCtx, ids);
   }
 }
