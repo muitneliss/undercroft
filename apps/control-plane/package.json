@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/handlers/server.ts",
     "./router": "./src/handlers/router.ts",
-    "./trpc": "./src/handlers/trpc.ts",
+    "./surface": "./src/handlers/surface.ts",
+    "./procedures": "./src/handlers/procedures.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {

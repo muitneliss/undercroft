@@ -8,8 +8,7 @@
  * mirrors the router one to one; these are the names a person looks for first.
  */
 
-import type { JsonSchema } from "../manifest.ts";
-import type { Effect } from "../procedures.ts";
+import type { Effect, JsonSchema } from "../manifest.ts";
 import { forgetCredential, saveCredential } from "../services/credentials.ts";
 import { failure, fromFailure, isFailure, type Outcome, success } from "../services/output.ts";
 import { planProfileChange, resolveTarget, writeConfig } from "../services/profiles.ts";

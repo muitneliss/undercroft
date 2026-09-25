@@ -18,63 +18,18 @@
  *
  * WHY A DOTTED PATH RATHER THAN A FUNCTION REFERENCE. The catalogue is a service and may not
  * import `@trpc/*` (`layer-service-no-upward`), so it names its procedure as a string and this
- * file resolves it. That is a real risk -- a renamed procedure would become a runtime failure
- * at somebody's first question -- so `assistantTools.test.ts` asserts every path in the
- * catalogue resolves, which turns it back into a gate failure.
+ * file resolves it through `procedures.ts`, the walk every caller outside the browser shares.
+ * That is a real risk -- a renamed procedure would become a runtime failure at somebody's first
+ * question -- so `assistantTools.test.ts` asserts every path in the catalogue resolves, which
+ * turns it back into a gate failure.
  */
 
 import { TRPCError } from "@trpc/server";
 import { tool, type ToolSet } from "ai";
 import { type Tier, TOOLS } from "../services/assistant/catalogue.ts";
+import { PROCEDURE_PATHS, resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
-
-type Caller = ReturnType<typeof appRouter.createCaller>;
-
-/**
- * Every procedure the router actually has, by dotted path.
- *
- * Read from the router's own definition rather than probed on a caller, and that distinction
- * cost a debugging round worth recording: `createCaller` returns a PROXY, so `"list" in caller.tenants`
- * is false for a procedure that exists, and `Reflect.get` returns a truthy proxy for one that
- * does not. Neither can answer "does this exist" -- only `_def.procedures` can.
- */
-const PROCEDURE_PATHS: ReadonlySet<string> = new Set(Object.keys(appRouter._def.procedures));
-
-type Procedure = (input: unknown) => Promise<unknown>;
-
-/**
- * A type PREDICATE, not an assertion.
- *
- * The difference matters at this particular boundary: what comes back from walking a proxy is
- * genuinely unknown, and `as Procedure` would be a promise about it that nothing checked.
- * Narrowing instead means the callable is checked once, here, and a path that resolved to
- * something else is a refusal rather than a call into a non-function.
- */
-function isProcedure(value: unknown): value is Procedure {
-  return typeof value === "function";
-}
-
-/**
- * Walk a dotted path on a caller to the callable it names.
- *
- * Existence is `PROCEDURE_PATHS`' job, not this function's -- see above. This only descends the
- * proxy, which is what it is good at.
- */
-function resolveProcedure(caller: Caller, path: string): Procedure | null {
-  let node: unknown = caller;
-  for (const segment of path.split(".")) {
-    // `function` as well as `object`, and that is not defensive padding: tRPC builds the caller
-    // from a RECURSIVE CALLABLE proxy, so `caller.tenants` is itself a function rather than a
-    // plain object. Descending only through `object` rejected every nested procedure while
-    // `PROCEDURE_PATHS` said it existed -- which reads exactly like a catalogue typo.
-    if (node === null || (typeof node !== "object" && typeof node !== "function")) {
-      return null;
-    }
-    node = Reflect.get(node, segment);
-  }
-  return isProcedure(node) ? node : null;
-}
 
 /** Every path the catalogue names that the router does not have. Empty is the only pass. */
 export function unresolvedProcedures(): readonly string[] {
@@ -133,9 +88,7 @@ export function bindTools(ctx: Context, options: BindOptions): ToolSet {
       continue;
     }
 
-    const procedure = PROCEDURE_PATHS.has(spec.procedure)
-      ? resolveProcedure(caller, spec.procedure)
-      : null;
+    const procedure = resolveProcedure(caller, spec.procedure);
     if (procedure === null) {
       // Refusing to build is deliberate. A tool set missing one verb would answer most
       // questions and fail one, which is the hardest kind of breakage to notice.

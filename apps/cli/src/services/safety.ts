@@ -20,7 +20,7 @@
  * promise about retries that nothing behind it keeps.
  */
 
-import type { Effect } from "../procedures.ts";
+import type { Effect } from "../manifest.ts";
 
 export type Decision =
   | { readonly verdict: "call" }

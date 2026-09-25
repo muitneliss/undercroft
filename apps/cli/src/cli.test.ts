@@ -5,7 +5,7 @@
  * The public seam of a CLI is its process -- argv in; stdout, stderr and an exit code out --
  * so that is what every test here drives. `beforeAll` builds the bundle into a temporary
  * directory with the same `buildCli` the release uses, so nothing is written into the repo and
- * the bundle under test is the bundle that ships, `virtual:procedures` and all. Each test gets
+ * the bundle under test is the bundle that ships, `virtual:surface` and all. Each test gets
  * a fresh `startControlPlane()` -- real Better Auth, real tRPC, PGlite, the in-memory mailbox
  * and worker -- and its own `UNDERCROFT_CLI_HOME`, so no test can see another's session.
  *
