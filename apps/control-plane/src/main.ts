@@ -25,6 +25,7 @@ import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { startTelemetry } from "@undercroft/telemetry";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
+import { loadSkills } from "./skills.ts";
 import { buildWidgets } from "./widgets.ts";
 import { runAlerts } from "./services/alerts.ts";
 import { createAssistant } from "./services/assistant/agent.ts";
@@ -349,9 +350,8 @@ if (publicUrl === undefined || (email === undefined && lark === undefined)) {
   });
 }
 
-// The image bakes the built SPA in and points here; a bare `bun run` with the variable
-// unset serves the API alone. Spread so the optional stays absent rather than `undefined`,
-// which exactOptionalPropertyTypes forbids.
+// The image bakes the built SPA in and points here; unset, a bare `bun run` serves the API
+// alone. Spread so the optional stays absent, not `undefined` (exactOptionalPropertyTypes).
 const uiDist = optional("UNDERCROFT_UI_DIST");
 // The tag the image was built from (telemetry reads it too), which `/mcp` reports as its version.
 const release = optional("UNDERCROFT_RELEASE");
@@ -372,9 +372,9 @@ const app = createServer({
   ...(worker === undefined ? {} : { worker }),
   ...(assistant === undefined ? {} : { assistant }),
   ...(judge === undefined ? {} : { judge }),
-  // The MCP widgets, bundled into their pages once (ADR 0061). Either outcome is logged inside,
-  // and a failed build is answered with none, so `/mcp` still serves every tool.
+  // `/mcp`'s widgets (ADR 0061) and skills (ADR 0066): a failure is logged and serves none.
   widgets: await buildWidgets(log),
+  skills: loadSkills(log),
   log,
 });
 

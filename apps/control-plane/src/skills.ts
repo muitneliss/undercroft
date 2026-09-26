@@ -31,6 +31,10 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, sep } from "node:path";
 import { describeError, type Logger } from "@undercroft/core";
 import { parse } from "yaml";
+import type { Skill, SkillContent, SkillFile } from "./handlers/mcpSkills.ts";
+
+/** `skills/` at the repository root: where the image carries it, and where a checkout has it. */
+export const SKILLS_ROOT = join(import.meta.dir, "..", "..", "..", "skills");
 
 /** The most files and bytes one skill may hold: what every host must accept (SEP-2640). */
 export const SKILL_FILE_LIMIT = 512;
@@ -47,27 +51,6 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   ".yml": "application/yaml",
   ".txt": "text/plain",
 };
-
-/** Exactly the two shapes a resource's contents may take, so it spreads into one. */
-export type SkillContent = { readonly text: string } | { readonly blob: string };
-
-export interface SkillFile {
-  readonly uri: string;
-  readonly mimeType: string;
-  readonly digest: `sha256:${string}`;
-  readonly size: number;
-  readonly content: SkillContent;
-}
-
-export interface Skill {
-  readonly name: string;
-  /** Its `SKILL.md`, which is how a host names the skill. */
-  readonly uri: string;
-  /** Every field the frontmatter holds, unchanged. */
-  readonly frontmatter: Readonly<Record<string, unknown>>;
-  /** `SKILL.md` first, then every other file by path. */
-  readonly files: readonly SkillFile[];
-}
 
 /** A tree with something wrong in it; every problem is listed, not the first alone. */
 export class SkillsRefused extends Error {
@@ -185,13 +168,8 @@ export function readSkills(root: string): Skill[] {
   return readings.flatMap((reading) => ("skill" in reading ? [reading.skill] : []));
 }
 
-/** A skill's files, by URI: the only files `/mcp` will read, whatever URI it is asked for. */
-export function skillFiles(skills: readonly Skill[]): ReadonlyMap<string, SkillFile> {
-  return new Map(skills.flatMap((skill) => skill.files.map((file) => [file.uri, file] as const)));
-}
-
 /** The skills under `root`, or none -- logged either way -- so `/mcp` never fails to boot. */
-export function loadSkills(root: string, log?: Logger): readonly Skill[] {
+export function loadSkills(log?: Logger, root = SKILLS_ROOT): readonly Skill[] {
   try {
     const skills = readSkills(root);
     log?.info("mcp_skills_loaded", { skills: skills.map((skill) => skill.name).join(",") });

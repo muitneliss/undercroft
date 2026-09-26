@@ -51,6 +51,10 @@ COPY --from=ui /app/apps/ui/dist ./apps/ui/dist
 COPY flows ./flows
 COPY scripts/kestraFlows.ts ./scripts/kestraFlows.ts
 
+# The published skills, which `/mcp` serves through the MCP Skills extension (ADR 0066). The
+# same files `npx skills add` installs, carried here so a release serves the skills it tagged.
+COPY skills ./skills
+
 EXPOSE 3000
 
 CMD ["bun", "run", "apps/control-plane/src/main.ts"]

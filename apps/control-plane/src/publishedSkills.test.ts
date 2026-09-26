@@ -20,15 +20,14 @@
  */
 
 import { describe, expect, test as it } from "bun:test";
-import { join } from "node:path";
 
 import { checkModel } from "@undercroft/db/services";
 
 import { PROCEDURE_PATHS } from "./handlers/procedures.ts";
 import { MCP_EXCLUDED, SESSION_ONLY } from "./handlers/surface.ts";
-import { readSkills, type Skill } from "./skills.ts";
+import type { Skill } from "./handlers/mcpSkills.ts";
+import { readSkills, SKILLS_ROOT } from "./skills.ts";
 
-const SKILLS_ROOT = join(import.meta.dir, "..", "..", "..", "skills");
 const ENTRY = "undercroft";
 
 /** The CLI's spelling of a path segment -- `apps/cli/src/manifest.ts`, whose suite pins it. */

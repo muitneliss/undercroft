@@ -13,13 +13,19 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
+import { createHash } from "node:crypto";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { ProtocolErrorCode } from "@modelcontextprotocol/server";
 import type { TRPCError } from "@trpc/server";
 import { createLogger } from "@undercroft/core";
+import type { TestDatabase } from "@undercroft/db/testing";
 import { currentTraceId } from "@undercroft/telemetry";
 import { type ControlPlane, startControlPlane } from "../testing.ts";
 import { procedureSentences as en } from "../i18n/procedures.en.ts";
+import { z } from "zod";
+import { readSkills, SKILLS_ROOT } from "../skills.ts";
 import { createContext } from "./context.ts";
+import { SKILLS_EXTENSION } from "./mcpSkills.ts";
 import { appRouter } from "./router.ts";
 import { MCP_EXCLUDED, SESSION_ONLY } from "./surface.ts";
 
@@ -33,6 +39,25 @@ let cookie = "";
 /** Every line the server logged, as the process's own logger writes it, trace id included. */
 let logged: Record<string, unknown>[] = [];
 
+/** The two tenants, and the operator's invitation to their own. */
+async function seed(db: TestDatabase): Promise<void> {
+  await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ($2)", [OWN, OTHER]);
+  await db.query(
+    `INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
+     VALUES ($1, $2, 'admin', repeat('a', 64), now() + interval '7 days')`,
+    [OWN, OPERATOR],
+  );
+}
+
+/** A browser session for the operator, as the dev sign-in gives one. */
+async function signIn(): Promise<string> {
+  const signedIn = await Bun.fetch(`${plane.origin}/api/auth/sign-in/dev`, {
+    method: "POST",
+    headers: { origin: plane.origin },
+  });
+  return signedIn.headers.getSetCookie().join("; ");
+}
+
 beforeEach(async () => {
   logged = [];
   plane = await startControlPlane({
@@ -42,20 +67,9 @@ beforeEach(async () => {
       sink: (line) => logged.push(JSON.parse(line) as Record<string, unknown>),
       context: () => ({ traceId: currentTraceId() }),
     }),
-    seed: async (db) => {
-      await db.query("INSERT INTO ops.tenant (id) VALUES ($1), ($2)", [OWN, OTHER]);
-      await db.query(
-        `INSERT INTO app.invitation (tenant_id, email, role, token_sha256, expires_at)
-         VALUES ($1, $2, 'admin', repeat('a', 64), now() + interval '7 days')`,
-        [OWN, OPERATOR],
-      );
-    },
+    seed,
   });
-  const signedIn = await Bun.fetch(`${plane.origin}/api/auth/sign-in/dev`, {
-    method: "POST",
-    headers: { origin: plane.origin },
-  });
-  cookie = signedIn.headers.getSetCookie().join("; ");
+  cookie = await signIn();
 });
 
 afterEach(async () => {
@@ -275,6 +289,155 @@ describe("an answer a widget draws", () => {
       mimeType: "text/html;profile=mcp-app",
       html: true,
     });
+  });
+});
+
+describe("the skills, over the MCP Skills extension", () => {
+  const Entry = z.object({
+    uri: z.string(),
+    frontmatter: z.record(z.unknown()),
+    resources: z.array(z.object({ uri: z.string(), digest: z.string(), size: z.number() })),
+  });
+  // `resultType` is envelope: the client consumes it before a result schema sees the rest,
+  // so it is asserted on the wire below, where a client library cannot hide it.
+  const Cached = { ttlMs: z.number(), cacheScope: z.string() };
+  const Listed = z.object({ ...Cached, skills: z.array(Entry) });
+  const Got = z.object({ ...Cached, skill: Entry });
+
+  function listSkills(client: Client) {
+    return client.request({ method: "skills/list", params: {} }, Listed);
+  }
+
+  it("is declared, with resources, and lists every skill in the repository", async () => {
+    const client = await connect(await mint("read"));
+    const capabilities = client.getServerCapabilities();
+    const { skills } = await listSkills(client);
+    await client.close();
+
+    expect(capabilities?.extensions?.[SKILLS_EXTENSION]).toEqual({});
+    expect(capabilities?.resources).toBeDefined();
+    expect(skills.map((skill) => skill.uri)).toEqual(
+      readSkills(SKILLS_ROOT).map((skill) => `skill://${skill.name}/SKILL.md`),
+    );
+  });
+
+  it("serves every file with the digest and size its manifest promised", async () => {
+    const client = await connect(await mint("read"));
+    const { skills } = await listSkills(client);
+    const mismatched: string[] = [];
+    for (const { resources } of skills) {
+      for (const { uri, digest, size } of resources) {
+        const [file] = (await client.readResource({ uri })).contents;
+        const bytes = new TextEncoder().encode(
+          file !== undefined && "text" in file ? file.text : "",
+        );
+        const actual = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+        if (actual !== digest || bytes.byteLength !== size) {
+          mismatched.push(uri);
+        }
+      }
+    }
+    await client.close();
+    expect(mismatched).toEqual([]);
+  });
+
+  it("gives each SKILL.md the frontmatter its listing advertised", async () => {
+    const client = await connect(await mint("read"));
+    const { skills } = await listSkills(client);
+    const entry = skills.find((skill) => skill.uri === "skill://undercroft/SKILL.md");
+    const [file] = (await client.readResource({ uri: entry?.uri ?? "" })).contents;
+    await client.close();
+
+    const text = file !== undefined && "text" in file ? file.text : "";
+    expect(entry?.frontmatter.name).toBe("undercroft");
+    expect(text.startsWith("---\nname: undercroft\n")).toBe(true);
+    expect(file?.mimeType).toBe("text/markdown");
+  });
+
+  it("says on the wire that each answer is complete, and how long it may be kept", async () => {
+    const response = await Bun.fetch(`${plane.origin}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${await mint("read")}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "mcp-protocol-version": "2026-07-28",
+        "mcp-method": "skills/list",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "skills/list",
+        params: {
+          _meta: {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": { name: "mcp.test", version: "0" },
+            "io.modelcontextprotocol/clientCapabilities": {},
+          },
+        },
+      }),
+    });
+    const { result } = (await response.json()) as { result: Record<string, unknown> };
+    expect({
+      resultType: result.resultType,
+      ttlMs: result.ttlMs,
+      cacheScope: result.cacheScope,
+    }).toEqual({ resultType: "complete", ttlMs: 300_000, cacheScope: "public" });
+  });
+
+  it("answers skills/get for a skill by its URI", async () => {
+    const client = await connect(await mint("read"));
+    const got = await client.request(
+      { method: "skills/get", params: { uri: "skill://undercroft-model-builder/SKILL.md" } },
+      Got,
+    );
+    await client.close();
+    expect(got.skill.frontmatter.name).toBe("undercroft-model-builder");
+  });
+
+  it("refuses an unknown skill, an unknown file and a path that climbs out, as invalid params", async () => {
+    const client = await connect(await mint("read"));
+    const codes: unknown[] = [];
+    const attempts = [
+      () => client.request({ method: "skills/get", params: { uri: "skill://nope/SKILL.md" } }, Got),
+      () => client.readResource({ uri: "skill://undercroft/references/nope.md" }),
+      () => client.readResource({ uri: "skill://undercroft/../../package.json" }),
+    ];
+    for (const attempt of attempts) {
+      try {
+        await attempt();
+        codes.push("answered");
+      } catch (error) {
+        codes.push(error instanceof Error && "code" in error ? error.code : "thrown");
+      }
+    }
+    await client.close();
+    const invalid = ProtocolErrorCode.InvalidParams;
+    expect(codes).toEqual([invalid, invalid, invalid]);
+  });
+
+  it("keeps the widgets readable beside the skills, and out of each other's way", async () => {
+    const client = await connect(await mint("read"));
+    const { resources } = await client.listResources();
+    await client.close();
+    expect(resources.map((resource) => resource.uri).every((uri) => uri.startsWith("ui://"))).toBe(
+      true,
+    );
+  });
+});
+
+describe("a control plane with no skills to serve", () => {
+  it("does not declare the extension, and serves every tool as before", async () => {
+    await plane.stop();
+    plane = await startControlPlane({ devSignInAs: OPERATOR, seed, skills: [] });
+    cookie = await signIn();
+    const client = await connect(await mint("read"));
+    const capabilities = client.getServerCapabilities();
+    const { tools } = await client.listTools();
+    await client.close();
+
+    expect(capabilities?.extensions?.[SKILLS_EXTENSION]).toBeUndefined();
+    expect(tools.length).toBeGreaterThan(0);
   });
 });
 
