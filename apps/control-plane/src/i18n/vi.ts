@@ -269,6 +269,54 @@ export const vi = {
   },
 
   /**
+   * What `models.check` says about a model's SQL (`packages/db/src/services/modelCheck.ts`).
+   *
+   * An agent relays these to the person whose model it is, so each says what is wrong and
+   * what to write instead. `{{subject}}` is what the finding is about -- a keyword, a model,
+   * a column -- and is left out of the sentences whose finding names nothing.
+   */
+  modelCheck: {
+    finding: {
+      empty: "Mô hình chưa có câu SQL nào.",
+      semicolon:
+        "Bỏ dấu chấm phẩy. dbt bọc mô hình trong CREATE TABLE ... AS, nên dấu chấm phẩy làm câu lệnh kết thúc sớm và bản dựng thất bại.",
+      "not-select":
+        "Mô hình phải là một câu truy vấn bắt đầu bằng select, with hoặc values. dbt tự tạo bảng từ kết quả của nó.",
+      "write-statement":
+        "Mô hình không được ghi dữ liệu: bỏ {{subject}}. Mô hình chỉ đọc; dbt tạo bảng từ câu select.",
+      "select-into":
+        "Bỏ select ... into. dbt tự tạo bảng cho mô hình; into sẽ tạo một bảng thứ hai ngoài tầm dbt.",
+      "raw-direct":
+        "Đọc raw.{{subject}} qua hàm source() của dbt, với nguồn undercroft, thay vì gọi thẳng -- để dbt biết mô hình phụ thuộc vào đâu.",
+      "analytics-direct":
+        "Đọc {{subject}} qua hàm ref() của dbt thay vì gọi thẳng theo schema, để dbt dựng mô hình kia trước mô hình này.",
+      "unknown-source": "Không có nguồn {{subject}}. Các nguồn có sẵn nằm trong models.reference.",
+      "unknown-ref": "Khách hàng này không có mô hình nào tên {{subject}}.",
+      "self-ref": "Mô hình không thể đọc chính nó.",
+      "no-tombstone-filter":
+        "Mô hình đọc records nhưng không nhắc đến deleted_at. Nếu không lọc deleted_at is null, bản ghi đã xoá ở nguồn sẽ hiện như còn sống.",
+      "zero-default":
+        "coalesce(…, 0) biến một giá trị thiếu thành số 0 trông như thật. Hãy để NULL, trừ khi 0 thực sự đúng nghĩa.",
+      "top-level-limit":
+        "limit ở ngoài cùng khiến mô hình chỉ lưu một phần dữ liệu. Chỉ giữ nếu thực sự muốn vậy.",
+      "unknown-macro":
+        "{{subject}} không phải macro dự án này có, cũng không phải hàm của dbt. Các macro có sẵn nằm trong models.reference.",
+      "dynamic-reference":
+        "Tên truyền vào {{subject}} không được viết thẳng ra, nên không kiểm tra được nó có tồn tại không.",
+      "test-column-unmentioned":
+        "Có kiểm thử cho cột {{subject}} nhưng câu SQL không nhắc đến cột đó.",
+    },
+    unverified: {
+      compiles: "Câu SQL có biên dịch và chạy được không: chỉ bản dựng mới biết.",
+      "payload-keys": "Các khoá đọc từ payload có thật sự tồn tại trong dữ liệu không.",
+      "column-types": "Mỗi cột ra kiểu gì, và phép ép kiểu có đúng với mọi dòng không.",
+      "tests-pass": "Các kiểm thử có qua không: chỉ bản dựng mới chạy chúng.",
+      "function-effects":
+        "Các hàm được gọi làm gì: quyền của tài khoản dbt của khách hàng quyết định điều đó.",
+    },
+  },
+
+  /**
    * What `/mcp` says to a model-context client -- and through it, to the person who asked.
    *
    * A host shows these to people, so they are worded and in the caller's language like every

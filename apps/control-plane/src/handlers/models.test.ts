@@ -37,14 +37,17 @@ function caller(
   userId: string,
   email: string,
   locale: "vi" | "en" = "vi",
-  worker: WorkerClient | null = null,
+  {
+    worker = null,
+    grant = "write",
+  }: { worker?: WorkerClient | null; grant?: Context["grant"] } = {},
 ) {
   const ctx: Context = {
     exec: db,
     user: { userId, email },
     credentialId: "s1",
     via: "session",
-    grant: "write",
+    grant,
     superadmin: false,
     locale,
     endSession: () => Promise.resolve(),
@@ -137,14 +140,14 @@ describe("models.build", () => {
     const worker = new InMemoryWorkerClient();
 
     const got = await refusal(() =>
-      caller(member, "m@example.test", "vi", worker).models.build({
+      caller(member, "m@example.test", "vi", { worker }).models.build({
         tenantId: TENANT,
         name: "stg_deals",
       }),
     );
     expect(got.code).toBe("FORBIDDEN");
 
-    const built = await caller(admin, "a@example.test", "vi", worker).models.build({
+    const built = await caller(admin, "a@example.test", "vi", { worker }).models.build({
       tenantId: TENANT,
       name: "stg_deals",
     });
@@ -161,7 +164,7 @@ describe("models.build", () => {
     const admin = await seedMember("a@example.test", "admin");
     const worker = new InMemoryWorkerClient().failing("in-progress");
     const got = await refusal(() =>
-      caller(admin, "a@example.test", "en", worker).models.build({
+      caller(admin, "a@example.test", "en", { worker }).models.build({
         tenantId: TENANT,
         name: "stg_deals",
       }),
@@ -190,14 +193,78 @@ describe("dq.failures", () => {
     const input = { tenantId: TENANT, runId: "r-1", uniqueId: "test.undercroft.x.a1" };
 
     const got = await refusal(() =>
-      caller(member, "m@example.test", "vi", worker).dq.failures(input),
+      caller(member, "m@example.test", "vi", { worker }).dq.failures(input),
     );
     expect(got.code).toBe("FORBIDDEN");
-    expect(await caller(admin, "a@example.test", "vi", worker).dq.failures(input)).toEqual({
+    expect(await caller(admin, "a@example.test", "vi", { worker }).dq.failures(input)).toEqual({
       columns: [],
       rows: [],
       truncated: false,
     });
+  });
+});
+
+describe("models.check", () => {
+  const RECORDS = "select source_record_id from {{ source('undercroft', 'records') }}";
+
+  it("any member may check, and hears each finding in their own language", async () => {
+    const viewer = await seedMember("v@example.test", "viewer");
+    const checked = await caller(viewer, "v@example.test", "en").models.check({
+      tenantId: TENANT,
+      name: "stg_deals",
+      sql: `${RECORDS};`,
+      tests: { columns: {} },
+    });
+
+    expect(checked.findings.map((f) => [f.code, f.severity, f.line])).toEqual([
+      ["semicolon", "error", 1],
+      ["no-tombstone-filter", "warning", null],
+    ]);
+    expect(checked.findings[0]?.message).toContain("semicolon");
+    expect(checked.unverified.map((u) => u.code)).toContain("compiles");
+    expect(checked.unverified[0]?.message.length).toBeGreaterThan(0);
+  });
+
+  it("Vietnamese by default, and never the English sentence", async () => {
+    const viewer = await seedMember("v@example.test", "viewer");
+    const input = { tenantId: TENANT, name: "stg_deals", sql: "select 1;", tests: { columns: {} } };
+    const vi = await caller(viewer, "v@example.test").models.check(input);
+    const en = await caller(viewer, "v@example.test", "en").models.check(input);
+
+    expect(vi.findings[0]?.message).not.toBe(en.findings[0]?.message);
+  });
+
+  it("a ref is checked against the tenant's own models", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test");
+    await api.models.save({ ...DRAFT, create: true });
+    function check(sql: string) {
+      return api.models.check({ tenantId: TENANT, name: "fct_deals", sql, tests: { columns: {} } });
+    }
+
+    expect((await check("select * from {{ ref('stg_deals') }}")).findings).toEqual([]);
+    expect((await check("select * from {{ ref('stg_gone') }}")).findings).toContainEqual(
+      expect.objectContaining({ code: "unknown-ref", subject: "stg_gone" }),
+    );
+  });
+
+  it("a read-only credential may check: it changes nothing", async () => {
+    const viewer = await seedMember("v@example.test", "viewer");
+    const checked = await caller(viewer, "v@example.test", "vi", { grant: "read" }).models.check({
+      tenantId: TENANT,
+      name: "stg_deals",
+      sql: "select 1 as one",
+      tests: { columns: {} },
+    });
+    expect(checked.findings).toEqual([]);
+  });
+
+  it("a read-only credential still may not save", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const got = await refusal(() =>
+      caller(admin, "a@example.test", "vi", { grant: "read" }).models.save(DRAFT),
+    );
+    expect(got.code).toBe("FORBIDDEN");
   });
 });
 

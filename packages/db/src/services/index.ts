@@ -17,3 +17,12 @@ export {
   SOURCES_YML,
 } from "./dbtProject.ts";
 export { grantExpiryFor } from "./grantExpiry.ts";
+export {
+  checkModel,
+  type Finding,
+  type FindingCode,
+  type ModelCheck,
+  type ModelCheckInput,
+  type Severity,
+  type UnverifiedCode,
+} from "./modelCheck.ts";

@@ -53,6 +53,8 @@ export const procedureSentences: SentenceTable = {
   "models.delete": "Delete a dbt model. Admins.",
   "models.build": "Build one model with dbt and wait for the answer. Admins.",
   "models.reference": "Reference material for a model's author.",
+  "models.check":
+    "Check a model's SQL before saving it, running nothing: certain errors, suspicions, and what could not be checked.",
   "bi.answer": "Answer a question definition. Members and above.",
   "bi.runQuestion": "Run a saved question with parameters.",
   "bi.compile": "Compile a question definition to SQL. Members and above.",

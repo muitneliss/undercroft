@@ -66,6 +66,8 @@ export const procedureSentences: SentenceTable = {
   "models.delete": "Xoá một mô hình dbt. Quản trị.",
   "models.build": "Chạy dbt cho một mô hình và chờ kết quả. Quản trị.",
   "models.reference": "Tài liệu tham khảo cho người viết mô hình.",
+  "models.check":
+    "Kiểm tra SQL của một mô hình trước khi lưu, không chạy gì: lỗi chắc chắn, điều đáng ngờ, và những gì không kiểm được.",
   "bi.answer": "Trả lời một định nghĩa câu hỏi. Thành viên trở lên.",
   "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số.",
   "bi.compile": "Dịch một định nghĩa câu hỏi thành SQL. Thành viên trở lên.",
