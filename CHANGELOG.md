@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.1](https://github.com/muitneliss/undercroft/compare/v1.41.0...v1.41.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **skills:** keep the repo's own skills out of npx skills add ([#257](https://github.com/muitneliss/undercroft/issues/257)) ([4a89869](https://github.com/muitneliss/undercroft/commit/4a89869223bb623fb4ea205f2e1a1ee66613010b))
+
 ## [1.41.0](https://github.com/muitneliss/undercroft/compare/v1.40.0...v1.41.0) (2026-09-26)
 
 
