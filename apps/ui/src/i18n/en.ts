@@ -122,8 +122,6 @@ export const en = {
     stepModelBody: "Your SQL, run as your own role.",
     stepAskTitle: "Ask",
     stepAskBody: "Questions, charts and dashboards.",
-    vaultHint: "Move to read any record. Press the flow to run it.",
-    vaultHintTouch: "Tap the flow to run it.",
     vaultRefused: "Refused · reason recorded",
     vaultEcho: "Already held · not copied",
     agentTitle: "Your data, where your agent works.",

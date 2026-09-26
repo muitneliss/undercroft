@@ -162,8 +162,6 @@ export const vi = {
     stepModelBody: "SQL của bạn, chạy bằng vai trò riêng của bạn.",
     stepAskTitle: "Đặt câu hỏi",
     stepAskBody: "Câu hỏi, biểu đồ và bảng điều khiển.",
-    vaultHint: "Di chuột để soi từng bản ghi. Bấm vào dòng chảy để chạy.",
-    vaultHintTouch: "Chạm vào dòng chảy để chạy.",
     vaultRefused: "Bị từ chối · đã ghi lý do",
     vaultEcho: "Đã có · không chép lại",
     agentTitle: "Dữ liệu của bạn, nơi tác tử làm việc.",

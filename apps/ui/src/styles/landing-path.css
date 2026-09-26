@@ -135,11 +135,6 @@
   }
 
   .flow__foot {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: var(--s-3) var(--s-6);
     margin-top: var(--s-5);
     padding-top: var(--s-4);
     border-top: var(--hair) solid var(--rule);
@@ -150,32 +145,6 @@
     font-family: var(--face-prose);
     font-size: 1.125rem;
     color: var(--ink-2);
-  }
-
-  .flow__hint {
-    margin: 0;
-    font-family: var(--face-display);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    font-variation-settings: "wdth" 82;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--ink-2);
-  }
-
-  /* A hand that hovers is told it can read a record; a finger is only told it can run one. */
-  .flow__hint--touch {
-    display: none;
-  }
-
-  @media (hover: none) {
-    .flow__hint--pointer {
-      display: none;
-    }
-
-    .flow__hint--touch {
-      display: block;
-    }
   }
 
   /* On a wide band the vault letters each source beside its emitter, so the list is read

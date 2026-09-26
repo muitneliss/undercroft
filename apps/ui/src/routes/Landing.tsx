@@ -66,8 +66,6 @@ function DataPath({ refs }: { refs: VaultRefs }): React.JSX.Element {
       </ol>
       <div className="flow__foot">
         <p className="flow__note">{t("landing.principle")}</p>
-        <p className="flow__hint flow__hint--pointer">{t("landing.vaultHint")}</p>
-        <p className="flow__hint flow__hint--touch">{t("landing.vaultHintTouch")}</p>
       </div>
     </section>
   );
