@@ -9,11 +9,18 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
 
 import "@/styles/landing-agent.css";
+import "@/styles/landing-workflow.css";
 import "@/styles/home.css";
 
 const DOCUMENTATION = "https://github.com/muitneliss/undercroft#documentation";
 const MCP_SETUP = "https://github.com/muitneliss/undercroft/blob/main/docs/runbook/mcp-setup.md";
 const STAGES = ["sources", "raw", "models", "reports"] as const;
+const WORKFLOW_STEPS = [
+  { title: "landing.workflowConnectTitle", body: "landing.workflowConnectBody" },
+  { title: "landing.workflowAskTitle", body: "landing.workflowAskBody" },
+  { title: "landing.workflowCheckTitle", body: "landing.workflowCheckBody" },
+  { title: "landing.workflowDecideTitle", body: "landing.workflowDecideBody" },
+] as const;
 
 /** The data's order of travel, expressed as an ordered list rather than a picture. */
 function DataPath(): React.JSX.Element {
@@ -32,6 +39,28 @@ function DataPath(): React.JSX.Element {
         ))}
       </ol>
       <p className="landing__principle">{t("landing.principle")}</p>
+    </section>
+  );
+}
+
+/** A read-only customer-call example shows how MCP uses the existing product surface. */
+function McpWorkflow(): React.JSX.Element {
+  const { t } = useTranslation();
+  const titleId = useId();
+  return (
+    <section className="landing__workflow" aria-labelledby={titleId}>
+      <div className="landing__workflow-heading">
+        <h2 id={titleId}>{t("landing.workflowTitle")}</h2>
+        <p>{t("landing.workflowLead")}</p>
+      </div>
+      <ol className="landing__workflow-steps">
+        {WORKFLOW_STEPS.map((step) => (
+          <li key={step.title}>
+            <h3>{t(step.title)}</h3>
+            <p>{t(step.body)}</p>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -84,6 +113,7 @@ export function Landing(): React.JSX.Element {
             <a href={MCP_SETUP}>{t("landing.agentDocs")}</a>
           </div>
         </section>
+        <McpWorkflow />
         <section className="landing__start" aria-labelledby={startId}>
           <h2 id={startId}>{t("landing.startTitle")}</h2>
           <p>{t("landing.startBody")}</p>

@@ -1,0 +1,75 @@
+/* A customer-call example makes the MCP access path concrete without inventing a new one. */
+@layer undercroft {
+  .landing__workflow {
+    padding: var(--s-7) var(--s-4);
+    border-bottom: var(--hair) solid var(--rule-strong);
+  }
+
+  .landing__workflow-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr);
+    gap: var(--s-7);
+    align-items: start;
+  }
+
+  .landing__workflow h2,
+  .landing__workflow h3 {
+    margin: 0;
+  }
+
+  .landing__workflow h2 {
+    font-size: 1.75rem;
+  }
+
+  .landing__workflow-heading p,
+  .landing__workflow-steps p {
+    max-width: 58ch;
+    margin: 0;
+    font-family: var(--face-prose);
+    font-size: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .landing__workflow-steps {
+    list-style: none;
+    padding: 0;
+    margin: var(--s-6) 0 0;
+    border-top: var(--hair) solid var(--rule-strong);
+  }
+
+  .landing__workflow-steps li {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr);
+    gap: var(--s-7);
+    padding: var(--s-5) 0;
+    border-bottom: var(--hair) solid var(--rule);
+  }
+
+  .landing__workflow h3 {
+    font-size: 1.25rem;
+  }
+
+  .landing__workflow-steps p {
+    margin-top: var(--s-2);
+    color: var(--ink-2);
+  }
+
+  @media (max-width: 760px) {
+    .landing__workflow {
+      padding-inline: 0;
+    }
+
+    .landing__workflow-heading,
+    .landing__workflow-steps li {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .landing__workflow-heading {
+      gap: var(--s-4);
+    }
+
+    .landing__workflow-steps li {
+      gap: var(--s-2);
+    }
+  }
+}
