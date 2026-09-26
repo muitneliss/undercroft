@@ -109,6 +109,12 @@ export const en = {
     reportsTitle: "Reports",
     reportsBody: "Answers from your own models.",
     principle: "Raw data is the foundation. The layers above it can be rebuilt.",
+    agentTitle: "Your data, where your agent works.",
+    agentBody:
+      "Claude and other MCP clients can use Undercroft on your behalf, with the same customer access and permission boundaries as your workspace.",
+    agentDetail:
+      "Connect through OAuth or a personal token on your account page. Choose read-only or read-and-write access, and revoke access whenever you need to.",
+    agentDocs: "Connect an agent over MCP",
     startTitle: "One place to begin.",
     startBody:
       "Every customer has a separate workspace for sources, runs and reports. Sign in to open the customers you have access to.",

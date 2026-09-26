@@ -1,0 +1,44 @@
+/* MCP stays a public access path, not a stage in the data's journey. */
+@layer undercroft {
+  .landing__agent {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr);
+    gap: var(--s-7);
+    padding: var(--s-7) var(--s-4);
+    border-bottom: var(--hair) solid var(--rule-strong);
+  }
+
+  .landing__agent h2 {
+    margin: 0;
+    font-size: 1.75rem;
+  }
+
+  .landing__agent p {
+    max-width: 58ch;
+    margin: 0;
+    font-family: var(--face-prose);
+    font-size: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .landing__agent p + p {
+    margin-top: var(--s-4);
+    color: var(--ink-2);
+  }
+
+  .landing__agent a {
+    display: inline-block;
+    margin-top: var(--s-5);
+    font-family: var(--face-prose);
+    font-size: 1.125rem;
+    text-underline-offset: 0.2em;
+  }
+
+  @media (max-width: 760px) {
+    .landing__agent {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-4);
+      padding-inline: 0;
+    }
+  }
+}
