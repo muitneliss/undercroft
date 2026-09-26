@@ -89,7 +89,13 @@ A workflow is named for what a person wants, not for a tool: `undercroft-model-b
    - a link to a file the skill does not hold;
    - a workflow the entry skill does not name;
    - an `sql` example `models.check` finds anything in.
-5. Run `task ci:skill-check` (it needs the network) to see `npx skills` list it.
+5. Run `task ci:skill-check` (it needs the network) to see `npx skills` list it. It fails
+   on a skill it lists that is not under `skills/`, too.
+
+A skill for working on this repository, not for its users, goes in `.claude/skills/` instead,
+and its frontmatter carries `metadata: { internal: true }`. `npx skills` scans that directory
+as well and hides only what is marked internal; `scripts/skills.test.ts` fails on a tracked
+`SKILL.md` outside `skills/` that is not.
 
 A change to the router that renames a procedure a skill uses fails `task ci:verify` until the
 skill follows. That is the point: a skill that names a missing operation sends every agent

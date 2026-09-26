@@ -5,7 +5,7 @@ date: 2026-09-26
 tags: []
 source: docs/runbook/agent-skills.md
 source_path: docs/runbook/agent-skills.md
-source_hash: 7d5adf0dbd5192a5938819205b20818c026b1a778e6492c42125dd5250b25c67
+source_hash: 3122e6512e3a062ead555d3ca8b670ec9ac8eaa707092f0a125c0dfc95e929f6
 ingested: 2026-09-26
 ---
 
@@ -21,6 +21,6 @@ How to install, use and add Undercroft's published Agent Skills; the decisions a
 
 **Over MCP.** `/mcp` serves the same skills through the MCP Skills extension (`skills/list`, files at `skill://<name>/<path>`), declared only when it has skills to serve. As of September 2026 no Claude host reads them and ChatGPT reads a static snapshot, so Claude Code and Codex install with `npx skills`. `npx @modelcontextprotocol/inspector --cli <url>/mcp --transport http --header "Authorization: Bearer upat_…" --method skills/list --verify` checks a server: exit 0 conforms, 7 is a violation.
 
-**Adding a workflow skill.** Name it for what a person wants, not a tool. Create `skills/<name>/SKILL.md` (`name` = directory, lowercase single-hyphen words; `description` at most 1024 chars saying when to use it); name every operation by procedure path in backticks; put occasional detail in `references/`; add it to the entry skill's `## Workflows`. `task ci:verify` fails on an operation the router lacks, a broken link, a workflow the entry skill does not name, or an `sql` example `models.check` flags; `task ci:skill-check` (network) shows `npx skills` lists it. A router rename fails the gate until the skill follows.
+**Adding a workflow skill.** Name it for what a person wants, not a tool. Create `skills/<name>/SKILL.md` (`name` = directory, lowercase single-hyphen words; `description` at most 1024 chars saying when to use it); name every operation by procedure path in backticks; put occasional detail in `references/`; add it to the entry skill's `## Workflows`. `task ci:verify` fails on an operation the router lacks, a broken link, a workflow the entry skill does not name, or an `sql` example `models.check` flags; `task ci:skill-check` (network) shows `npx skills` lists it, and fails on a listed skill not under `skills/`. A router rename fails the gate until the skill follows. A skill for working on this repository goes in `.claude/skills/` with `metadata.internal: true` in its frontmatter, because `npx skills` scans that directory too and hides only what is marked internal; `scripts/skills.test.ts` fails on an unmarked tracked `SKILL.md` outside `skills/`.
 
 **When it goes wrong.** `npx skills add` lists nothing: invalid frontmatter or a name that differs from its directory (`task ci:verify` names which). No door: neither MCP tools nor a shell. `skills/list` unknown: the control plane serves no skills, and `mcp_skills_unloaded` at boot says why. The model builder stops at `WRITES_DISABLED` or `PERMISSION_DENIED`: by design, saving and building need `admin` and a write grant or a profile that allows writes.

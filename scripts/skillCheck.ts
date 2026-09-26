@@ -5,7 +5,10 @@
  * which reaches the platform over MCP or through the pinned CLI release, and each workflow
  * skill beside it. A frontmatter mistake does not fail any compiler; the skill is simply not
  * offered. This runs the real `skills` CLI over the working tree, as a user's would run over
- * GitHub, and expects every directory under `skills/` to be listed by its own name.
+ * GitHub, and expects every directory under `skills/` to be listed by its own name -- and
+ * nothing else. The skills this repo keeps for working on itself (`.claude/skills/`) are in
+ * directories the CLI also scans; each carries `metadata.internal` so it stays unlisted, and
+ * a listing that grows past `skills/` means one has leaked to users.
  *
  * The `skills` version is pinned (the latest on the day this was written), so a new release
  * of it cannot change what passes here without a change here. It needs the network to fetch
@@ -39,10 +42,17 @@ const text = stripVTControlCharacters(`${listed.stdout.toString()}${listed.stder
 const names = text.split("\n").map((line) => line.replace(GUTTER, "").trim());
 
 const missing = SKILLS.filter((skill) => !names.includes(skill));
+// The listing's skill lines are the ones naming a skill; a name that is not ours is a leak.
+const LISTED = /^(?<name>[a-z0-9]+(?:-[a-z0-9]+)*)$/u;
+const extra = names
+  .map((line) => LISTED.exec(line)?.groups?.name)
+  .filter((name): name is string => name !== undefined && !SKILLS.includes(name));
 
-if (listed.exitCode === 0 && SKILLS.length > 0 && missing.length === 0) {
+if (listed.exitCode === 0 && SKILLS.length > 0 && missing.length === 0 && extra.length === 0) {
   process.stdout.write(`skill-check: ${SKILLS_CLI} lists ${SKILLS.join(", ")}\n`);
 } else {
-  process.stderr.write(`skill-check: ${SKILLS_CLI} did not list ${missing.join(", ")}\n${text}\n`);
+  process.stderr.write(
+    `skill-check: ${SKILLS_CLI} missing [${missing.join(", ")}], unpublished [${extra.join(", ")}]\n${text}\n`,
+  );
   process.exitCode = 1;
 }

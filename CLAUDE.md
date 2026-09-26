@@ -114,7 +114,10 @@ Codex reads this file as `AGENTS.md`, and everything else it gets is a pointer i
 
 A new skill or agent therefore needs its Codex pointer in the same change, and
 `scripts/agentConfig.test.ts` fails the gate until it has one. Codex loads `.codex/` only for
-a project it trusts.
+a project it trusts. A new skill here also needs `metadata: { internal: true }` in its
+frontmatter: `npx skills add muitneliss/undercroft` scans `.claude/skills/` too, and without
+the mark it installs this repo's working skills into users' agents. `scripts/skills.test.ts`
+fails the gate until it has it.
 
 `skills/` at the root is a different thing: the skills this repo PUBLISHES for its users'
 agents, installed with `npx skills add muitneliss/undercroft --skill <name>` and served by

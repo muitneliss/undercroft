@@ -1,6 +1,10 @@
 ---
 name: layered-architecture
 description: How backend code is organised in Undercroft - one direction, handler → service → repo, with SQL confined to repos and every dependency injected. Use this skill whenever you are about to add or change anything under apps/*/src or packages/db/src - a tRPC procedure, an HTTP route, a SQL statement, a new table, a worker verb, a Better Auth hook - or whenever you are deciding where a piece of code belongs, or a `layer-*` ast-grep rule failed in `bun run lint:rules` or `bun run verify`. Reach for it even when the change looks too small to need architecture, because the rules are a hard gate and a misplaced query fails the build rather than the review.
+# For working on this repository, not for its users: the skills CLI hides an internal
+# skill from `npx skills add muitneliss/undercroft` (docs/runbook/agent-skills.md).
+metadata:
+  internal: true
 ---
 
 # One direction: handler → service → repo
