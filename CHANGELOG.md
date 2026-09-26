@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.0](https://github.com/muitneliss/undercroft/compare/v1.37.0...v1.38.0) (2026-09-26)
+
+
+### Features
+
+* **ui:** add MCP workflow example ([#243](https://github.com/muitneliss/undercroft/issues/243)) ([241cf22](https://github.com/muitneliss/undercroft/commit/241cf229ab775b027813454e09013046b282b243))
+
 ## [1.37.0](https://github.com/muitneliss/undercroft/compare/v1.36.1...v1.37.0) (2026-09-26)
 
 
