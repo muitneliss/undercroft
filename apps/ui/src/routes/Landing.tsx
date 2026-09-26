@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { Colophon } from "@/components/Colophon.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
+import { usePageLamp } from "@/components/usePageLamp.ts";
 import { useVaultFilm, type VaultRefs } from "@/components/useVaultFilm.ts";
 import { STAGES, STEPS, type StepId } from "@/lib/vault/model.ts";
 import type { VaultWords } from "@/lib/vault/runtime.ts";
@@ -100,6 +101,7 @@ export function Landing(): React.JSX.Element {
   const titleId = useId();
   const agentId = useId();
   const startId = useId();
+  const pageRef = useRef<HTMLDivElement>(null);
   const coverRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
@@ -123,8 +125,9 @@ export function Landing(): React.JSX.Element {
     [sourceNames, refused, echo],
   );
   useVaultFilm(refs, words);
+  usePageLamp(pageRef);
   return (
-    <div className="landing">
+    <div className="landing" ref={pageRef}>
       <a className="landing__skip" href={`#${contentId}`}>
         {t("landing.skip")}
       </a>

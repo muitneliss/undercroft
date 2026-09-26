@@ -21,6 +21,29 @@
     --ground: var(--ink);
     --lamp-ink: color-mix(in srgb, var(--hue-chrome) 55%, var(--ink));
     --cover-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --lamp-x: 50%;
+    --lamp-y: 0;
+    --lamp-strength: 0;
+    --lamp-core: color-mix(in srgb, var(--hue-chrome) 15%, transparent);
+    --lamp-wash: color-mix(in srgb, var(--hue-chrome) 10%, transparent);
+
+    position: relative;
+    isolation: isolate;
+  }
+
+  /* The lamp outside the vault (ADR 0065): a warm core and a wide wash where the pointer is,
+     written by `@/lib/vault/lamp.ts`. It sits under every section, so the header and the sheet
+     catch the light; the cover's film paints an opaque ground over it and draws its own lamp. */
+  .landing::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: var(--lamp-strength);
+    background:
+      radial-gradient(circle 12rem at var(--lamp-x) var(--lamp-y), var(--lamp-core), transparent),
+      radial-gradient(circle 42rem at var(--lamp-x) var(--lamp-y), var(--lamp-wash), transparent);
   }
 
   .landing ::selection {
@@ -29,6 +52,9 @@
 
   @media (prefers-color-scheme: dark) {
     .landing {
+      --lamp-core: color-mix(in srgb, var(--hue-chrome) 20%, transparent);
+      --lamp-wash: color-mix(in srgb, var(--hue-chrome) 8%, transparent);
+
       background: var(--ground);
     }
 

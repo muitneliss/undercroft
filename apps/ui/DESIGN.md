@@ -403,6 +403,9 @@ The vault's vanishing point swings away from it, the ribs can be read only near 
 around it, the column under it takes its division's hue lifted toward Bone, and the record under
 it shows a proof slip with its content address.
 
+- **The lamp beyond the cover** (ADR 0065): the same light follows the pointer over the header
+  and the sheet, a warm core and a wide wash of Chrome under every section. Nothing on the sheet
+  moves; only the light does.
 - **Lamp colour:** `--lamp-ink`: Chrome at night, Chrome mixed 55% toward Ink by day, for the
   headline's second line and the reached step.
 - **Cover ease:** `--cover-ease` (`cubic-bezier(0.16, 1, 0.3, 1)`), for the small states the
