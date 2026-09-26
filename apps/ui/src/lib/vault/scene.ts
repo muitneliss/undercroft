@@ -15,17 +15,7 @@ import {
   trayPoint,
   travellers,
 } from "@/lib/vault/band.ts";
-import {
-  BONE,
-  CHROME,
-  type Frame,
-  hole,
-  INK,
-  mapper,
-  PEOPLE_TONE,
-  type Pixel,
-  since,
-} from "@/lib/vault/frame.ts";
+import { type Frame, hole, line, mapper, type Pixel, rgba, since } from "@/lib/vault/frame.ts";
 import {
   LAYOUT,
   type Point,
@@ -43,8 +33,8 @@ const LABELLED_BAND = 640;
 
 /** Ink, warmed where the lamp is. */
 function ground(frame: Frame): void {
-  const { ctx, width, height, lamp } = frame;
-  ctx.fillStyle = INK;
+  const { ctx, width, height, lamp, palette } = frame;
+  ctx.fillStyle = frame.palette.ground;
   ctx.fillRect(0, 0, width, height);
   const glow = ctx.createRadialGradient(
     lamp.x,
@@ -54,9 +44,9 @@ function ground(frame: Frame): void {
     lamp.y,
     Math.max(width, height) * 0.55,
   );
-  glow.addColorStop(0, "rgba(237, 166, 0, 0.2)");
-  glow.addColorStop(0.35, "rgba(237, 166, 0, 0.06)");
-  glow.addColorStop(1, "rgba(237, 166, 0, 0)");
+  glow.addColorStop(0, rgba(palette.glow, palette.glowAlpha));
+  glow.addColorStop(0.35, rgba(palette.glow, palette.glowAlpha * 0.3));
+  glow.addColorStop(1, rgba(palette.glow, 0));
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
 }
@@ -88,9 +78,9 @@ function vaultRibs(frame: Frame): void {
     lamp.y,
     Math.max(width, height) * 0.62,
   );
-  light.addColorStop(0, "rgba(239, 233, 217, 0.9)");
-  light.addColorStop(0.4, "rgba(239, 233, 217, 0.26)");
-  light.addColorStop(1, "rgba(239, 233, 217, 0.05)");
+  light.addColorStop(0, line(frame, 0.9));
+  light.addColorStop(0.4, line(frame, 0.26));
+  light.addColorStop(1, line(frame, 0.05));
   ctx.strokeStyle = light;
   const phase = frame.walk % 1;
   for (let arch = ARCHES - 1; arch >= 0; arch -= 1) {
@@ -142,7 +132,7 @@ function thread(frame: Frame, from: Pixel, step: StepId, flare: number): void {
   const { ctx } = frame;
   const to = mapper(frame)(stepTarget(frame, step));
   const bend = { x: from.x, y: (from.y + to.y) / 2 };
-  const colour = step === "invite" ? PEOPLE_TONE : CHROME;
+  const colour = step === "invite" ? frame.palette.people : frame.palette.accent;
   ctx.strokeStyle = colour;
   ctx.fillStyle = colour;
   ctx.globalAlpha = flare * 0.85;
@@ -166,13 +156,13 @@ function readerTrack(frame: Frame): void {
   const { ctx, track, vault } = frame;
   const readerU = Math.min(1, Math.max(0, vault.reader.u));
   ctx.lineWidth = 1;
-  ctx.strokeStyle = "rgba(239, 233, 217, 0.35)";
+  ctx.strokeStyle = line(frame, 0.35);
   ctx.beginPath();
   ctx.moveTo(track.x, track.y);
   ctx.lineTo(track.x + track.w, track.y);
   ctx.stroke();
   ctx.lineWidth = 2;
-  ctx.strokeStyle = CHROME;
+  ctx.strokeStyle = frame.palette.accent;
   ctx.beginPath();
   ctx.moveTo(track.x, track.y);
   ctx.lineTo(track.x + readerU * track.w, track.y);
@@ -180,8 +170,8 @@ function readerTrack(frame: Frame): void {
   for (const step of STEPS) {
     const tick = { x: track.x + stepU(step) * track.w, y: track.y };
     const reached = readerU >= stepU(step);
-    ctx.fillStyle = reached ? CHROME : INK;
-    ctx.strokeStyle = reached ? CHROME : "rgba(239, 233, 217, 0.6)";
+    ctx.fillStyle = reached ? frame.palette.accent : frame.palette.ground;
+    ctx.strokeStyle = reached ? frame.palette.accent : line(frame, 0.6);
     ctx.lineWidth = 1.5;
     hole(ctx, tick, 4);
     ctx.fill();
@@ -198,12 +188,12 @@ function readerMark(frame: Frame): void {
   const { ctx, track, vault } = frame;
   const at = { x: track.x + Math.min(1, Math.max(0, vault.reader.u)) * track.w, y: track.y };
   const pulse = frame.still ? 0 : 0.5 + 0.5 * Math.sin(vault.time * 4);
-  ctx.fillStyle = "rgba(237, 166, 0, 0.2)";
+  ctx.fillStyle = rgba(frame.palette.glow, 0.2);
   hole(ctx, at, 12 + pulse * 5);
   ctx.fill();
   ctx.lineWidth = 2;
-  ctx.strokeStyle = vault.reader.signedIn ? CHROME : BONE;
-  ctx.fillStyle = vault.reader.signedIn ? CHROME : INK;
+  ctx.strokeStyle = vault.reader.signedIn ? frame.palette.accent : frame.palette.ink;
+  ctx.fillStyle = vault.reader.signedIn ? frame.palette.accent : frame.palette.ground;
   hole(ctx, at, 7);
   ctx.fill();
   ctx.stroke();
@@ -264,21 +254,21 @@ function proofSlip(frame: Frame, item: Hovered): void {
   const flip = item.at.x + 24 + w > width - 8;
   const x = flip ? item.at.x - 24 - w : item.at.x + 24;
   const y = item.at.y - 34 - h / 2;
-  ctx.strokeStyle = CHROME;
+  ctx.strokeStyle = frame.palette.accent;
   ctx.lineWidth = 1;
   hole(ctx, item.at, 9);
   ctx.moveTo(item.at.x + (flip ? -7 : 7), item.at.y - 7);
   ctx.lineTo(flip ? x + w : x, y + h / 2);
   ctx.stroke();
-  ctx.fillStyle = INK;
+  ctx.fillStyle = frame.palette.ground;
   ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = BONE;
+  ctx.strokeStyle = frame.palette.ink;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   ctx.textBaseline = "middle";
-  ctx.fillStyle = BONE;
+  ctx.fillStyle = frame.palette.ink;
   ctx.fillText(first, x + 10, y + 13);
   if (second !== "") {
-    ctx.fillStyle = CHROME;
+    ctx.fillStyle = frame.palette.accent;
     ctx.font = "700 10px 'Archivo', ui-sans-serif, sans-serif";
     ctx.fillText(second, x + 10, y + 31);
   }

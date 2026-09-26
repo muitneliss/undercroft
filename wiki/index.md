@@ -67,6 +67,7 @@
 - [ADR 0061: An MCP client signs its person in, and draws two widgets](sources/adr-0061-an-mcp-client-signs-its-person-in-and-draws-two-widgets.md)
 - [ADR 0062: A refused bearer is logged with its reason, and an access token lives eight hours](sources/adr-0062-a-refused-bearer-is-logged-with-its-reason-and-an-access-token-lives-eight-hours.md)
 - [ADR 0063 The Public Cover Moves Continuously](sources/adr-0063-the-public-cover-moves-continuously.md)
+- [ADR 0064 The Public Home Follows the Reader's Colour Scheme](sources/adr-0064-the-public-home-follows-the-reader-s-colour-scheme.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
