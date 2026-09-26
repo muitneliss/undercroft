@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.40.0](https://github.com/muitneliss/undercroft/compare/v1.39.0...v1.40.0) (2026-09-26)
+
+
+### Features
+
+* **ui:** the lamp lights the whole public home, not only the cover ([#252](https://github.com/muitneliss/undercroft/issues/252)) ([7a3beb8](https://github.com/muitneliss/undercroft/commit/7a3beb88d548697fd5b9205905288f6fb3637dd5))
+* **ui:** the public home follows the reader's light or dark colour scheme ([#250](https://github.com/muitneliss/undercroft/issues/250)) ([4598762](https://github.com/muitneliss/undercroft/commit/459876204718c2bc055b2565ae1b7164baac1356))
+
+
+### Bug Fixes
+
+* **ui:** drop the vault's hint line from the public home ([#253](https://github.com/muitneliss/undercroft/issues/253)) ([aa6693d](https://github.com/muitneliss/undercroft/commit/aa6693dfdad6854e3dbefb6e139f4a143c66acbd))
+* **ui:** the public home is one ground, one light and one vault, with no seam at the cover ([#254](https://github.com/muitneliss/undercroft/issues/254)) ([1d7e4a9](https://github.com/muitneliss/undercroft/commit/1d7e4a983f32d426f1847d4f771dcb58f2b6923d))
+
 ## [1.39.0](https://github.com/muitneliss/undercroft/compare/v1.38.0...v1.39.0) (2026-09-26)
 
 
