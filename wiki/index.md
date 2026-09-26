@@ -79,6 +79,7 @@
 - [Runbook: Connecting an agent over MCP](sources/runbook-connecting-an-agent-over-mcp.md)
 - [Runbook Deployment](sources/runbook-deployment.md)
 - [Runbook Google Ingestion Setup](sources/runbook-google-ingestion-setup.md)
+- [Runbook: Onboarding a new person](sources/runbook-onboarding-a-new-person.md)
 - [Runbook: Setting the assistant up](sources/runbook-setting-the-assistant-up.md)
 - [Runbook Sign-In Setup](sources/runbook-sign-in-setup.md)
 - [Runbook: The undercroft CLI](sources/runbook-the-undercroft-cli.md)

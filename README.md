@@ -92,6 +92,8 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 
 Every way in reaches the same procedures through the same role gates, as the person who
 signed in. This page only says which to choose; each runbook says how.
+Bringing a new person in, from invitation to their first session with an agent, is
+[onboarding](docs/runbook/onboarding.md), in Vietnamese and English.
 
 | Way in                  | Choose it when                                                                | How                                              |
 | ----------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -137,6 +139,7 @@ This README is an index. How to do a thing lives in its runbook, why it is that 
 its ADR, and what exactly it accepts lives in a reference page.
 
 - **Runbooks,** one per way in or per thing to set up ([`docs/runbook/`](docs/runbook/)):
+  - Getting started: [onboarding a new person](docs/runbook/onboarding.md)
   - Using it: [the CLI](docs/runbook/cli.md), [connecting an agent over MCP](docs/runbook/mcp-setup.md),
     [agent skills](docs/runbook/agent-skills.md)
   - Setting it up: [sign-in](docs/runbook/sign-in-setup.md),
