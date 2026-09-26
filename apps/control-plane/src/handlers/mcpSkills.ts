@@ -1,5 +1,5 @@
 /**
- * The repository's skills, served over `/mcp` by the MCP Skills extension. ADR 0066.
+ * The repository's skills, served over `/mcp` by the MCP Skills extension. ADR 0067.
  *
  * `io.modelcontextprotocol/skills` (SEP-2640) lets a host discover a server's Agent Skills and
  * read them: `skills/list` and `skills/get` answer each skill's `SKILL.md` URI, its frontmatter

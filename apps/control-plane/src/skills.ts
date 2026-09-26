@@ -1,5 +1,5 @@
 /**
- * The repository's published skills, read once per process, for `/mcp` to serve. ADR 0066.
+ * The repository's published skills, read once per process, for `/mcp` to serve. ADR 0067.
  *
  * `skills/` at the repository root is the one copy of every skill: `npx skills add` installs
  * it from GitHub, and `/mcp` serves it to a host that speaks the MCP Skills extension

@@ -1,12 +1,12 @@
 ---
 title: 'Runbook: Connecting an agent over MCP'
 type: source
-date: 2026-09-25
+date: 2026-09-26
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 90f2596377316180c9f91bf13cb4b70570084f9349dd8e947a9e557494d1187e
-ingested: 2026-09-25
+source_hash: 3beef86314ed6f263c8ad1fd15fe846e69a07de7cc9e99d6d36545221078508a
+ingested: 2026-09-26
 ---
 
 # Runbook: Connecting an agent over MCP
@@ -28,3 +28,5 @@ How a person connects claude.ai, Claude Desktop, Claude Code or any MCP client t
 **Troubleshooting.** OAuth: "No access" = not invited; `invalid_redirect_uri` = a loopback callback registered as a web app (update the client); 403 `insufficient_scope` = neither grant chosen (revoke and reconnect); `/.well-known` 404 = public URL is plain HTTP off loopback; 429 = five registrations a minute. Tokens: 401 = revoked/expired/mistyped or access removed (a cookie never works); a client that fails after working for a while usually let its access token expire without renewing it; missing tools or `WRITES_DISABLED` = read token; `NOT_FOUND` = not a member; `PERMISSION_DENIED` = role; `INTERNAL_ERROR` = follow the traceId with `task obs:trace`; `-32602` = unknown tool. Every call logs `mcp_call { tool, via, credential, outcome }`, never arguments or results.
 
 **Why a bearer was refused.** The client gets the same 401 whatever the cause (403 for `insufficient_scope`); the server logs `mcp_refused { status, refusal, reason, credential }` with the request's `traceId`, `credential` being the `upat_…` id or `oauth:<clientId>` when proven, never the token. Reasons: `expired` (mint a new token; an OAuth client should renew by itself), `revoked` (token or app revoked), `no_person` (access removed; re-invite), `missing` (no bearer; every OAuth client's first contact, logged at info), `malformed` (unreadable), `unknown` (not issued by this server for `/mcp`), `insufficient_scope` (neither grant). Find them with `task obs:search FOR=status=401 SINCE=6h`, then `task obs:logs FOR=mcp_refused SINCE=6h`, and `task obs:logs FOR=<credential>` for when it last worked; the `debug-trace` skill walks through it.
+
+**Skills.** Besides tools and widgets, `/mcp` serves Undercroft's own Agent Skills through the MCP Skills extension (`skills/list`, `skills/get`, files at `skill://<name>/<path>`), the same files `npx skills add` installs; a host that supports the extension needs nothing installed, and Claude Code and Codex install them with `npx skills` ([[Runbook: Agent skills]], [[ADR 0067: The published skills are one family, installed by npx skills and served by /mcp]]).

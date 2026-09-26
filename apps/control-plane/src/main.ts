@@ -372,7 +372,7 @@ const app = createServer({
   ...(worker === undefined ? {} : { worker }),
   ...(assistant === undefined ? {} : { assistant }),
   ...(judge === undefined ? {} : { judge }),
-  // `/mcp`'s widgets (ADR 0061) and skills (ADR 0066): a failure is logged and serves none.
+  // `/mcp`'s widgets (ADR 0061) and skills (ADR 0067): a failure is logged and serves none.
   widgets: await buildWidgets(log),
   skills: loadSkills(log),
   log,

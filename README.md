@@ -25,7 +25,7 @@
 [![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=black)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-only-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![CLI: Node 22+](https://img.shields.io/badge/CLI-Node%2022%2B-5fa04e?logo=nodedotjs&logoColor=white)](docs/runbook/cli.md)
-[![Agent skill](https://img.shields.io/badge/npx%20skills-undercroft--cli-000000)](skills/undercroft-cli/SKILL.md)
+[![Agent skills](https://img.shields.io/badge/npx%20skills-undercroft-000000)](docs/runbook/agent-skills.md)
 
 > An immutable raw lake, declarative connectors, and a schema you define yourself.
 
@@ -84,19 +84,22 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
   client get every procedure as a tool at `/mcp`, signed in with Google or a personal token,
   with a read or write grant the person chooses. Query results and live runs render as
   widgets in the chat.
+- **Skills that teach an agent the workflows.** One family, installed with `npx skills` or
+  served by `/mcp` itself, works over either door. The model builder interviews the person,
+  checks the SQL before it saves, and asks before it builds.
 
 ## Ways in
 
 Every way in reaches the same procedures through the same role gates, as the person who
 signed in. This page only says which to choose; each runbook says how.
 
-| Way in                     | Choose it when                                                              | How                                                     |
-| -------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------- |
-| The web UI                 | you are a person at a browser                                               | [sign-in](docs/runbook/sign-in-setup.md)                |
-| The `undercroft` CLI       | you work in a terminal or a script (Node 22+)                               | [the CLI](docs/runbook/cli.md#running-it)               |
-| The `undercroft-cli` skill | your agent can run commands: Claude Code, Codex; the skill installs the CLI | [the CLI, as an agent](docs/runbook/cli.md#as-an-agent) |
-| MCP at `/mcp`              | your agent speaks MCP: claude.ai, Claude Desktop, Claude Code               | [connecting over MCP](docs/runbook/mcp-setup.md)        |
-| The assistant              | you want to ask in plain words inside the web UI                            | [the assistant](docs/runbook/assistant-setup.md)        |
+| Way in                  | Choose it when                                                                | How                                              |
+| ----------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| The web UI              | you are a person at a browser                                                 | [sign-in](docs/runbook/sign-in-setup.md)         |
+| The `undercroft` CLI    | you work in a terminal or a script (Node 22+)                                 | [the CLI](docs/runbook/cli.md#running-it)        |
+| The `undercroft` skills | your agent should know the workflows, not just the tools: over MCP or the CLI | [agent skills](docs/runbook/agent-skills.md)     |
+| MCP at `/mcp`           | your agent speaks MCP: claude.ai, Claude Desktop, Claude Code                 | [connecting over MCP](docs/runbook/mcp-setup.md) |
+| The assistant           | you want to ask in plain words inside the web UI                              | [the assistant](docs/runbook/assistant-setup.md) |
 
 Two things stay a person's on every agent path: signing in, and allowing writes. The
 decisions are [ADR 0044](docs/adr/0044-an-agent-reaches-undercroft-as-a-caller.md) (the CLI),
@@ -134,7 +137,8 @@ This README is an index. How to do a thing lives in its runbook, why it is that 
 its ADR, and what exactly it accepts lives in a reference page.
 
 - **Runbooks,** one per way in or per thing to set up ([`docs/runbook/`](docs/runbook/)):
-  - Using it: [the CLI](docs/runbook/cli.md), [connecting an agent over MCP](docs/runbook/mcp-setup.md)
+  - Using it: [the CLI](docs/runbook/cli.md), [connecting an agent over MCP](docs/runbook/mcp-setup.md),
+    [agent skills](docs/runbook/agent-skills.md)
   - Setting it up: [sign-in](docs/runbook/sign-in-setup.md),
     [the assistant](docs/runbook/assistant-setup.md),
     [Google ingestion](docs/runbook/google-ingestion-setup.md), [Xero](docs/runbook/xero-setup.md)

@@ -78,7 +78,9 @@ things about it are load-bearing enough to state here rather than only in the AD
   owner reaches and no more. Each credential carries a `read` or `write` grant, and the guard is
   on the router's base procedure (`grantAdmits` in `surface.ts`), not in the MCP handler;
   `account.*` is session-only, so no credential can mint one. An OAuth token's consent is read
-  on every call, so revoking the app on `/account` stops it at the next one.
+  on every call, so revoking the app on `/account` stops it at the next one. `/mcp` also serves
+  the repository's own `skills/` through the MCP Skills extension (ADR 0067), from the files
+  the image carries -- never a second copy.
 
 ## Agents
 
@@ -115,10 +117,13 @@ A new skill or agent therefore needs its Codex pointer in the same change, and
 a project it trusts.
 
 `skills/` at the root is a different thing: the skills this repo PUBLISHES for its users'
-agents, installed with `npx skills add muitneliss/undercroft --skill <name>`. They are not
-instructions for working on this repo, so they get no `.claude/` or Codex pointer.
-`skills/undercroft-cli` is the CLI's, and `scripts/skill.test.ts` keeps its pinned version in
-step with the release.
+agents, installed with `npx skills add muitneliss/undercroft --skill <name>` and served by
+`/mcp` through the MCP Skills extension (ADR 0067). They are not instructions for working on
+this repo, so they get no `.claude/` or Codex pointer. `skills/undercroft` is the entry, over
+MCP or the CLI; each workflow, such as `skills/undercroft-model-builder`, is its own skill.
+`apps/control-plane/src/publishedSkills.test.ts` fails the gate when a skill names a
+procedure, command or tool the router lacks, and `scripts/skills.test.ts` keeps the CLI's
+pinned version in step with the release.
 
 ## Language and runtime
 
