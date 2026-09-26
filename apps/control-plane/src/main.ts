@@ -296,9 +296,7 @@ if (superadmins.addresses.size === 0) {
  * The operators' Lark group, where a sync's failure and its recovery are posted as cards.
  *
  * The webhook URL is the credential -- anyone holding it can post into the group -- so it is
- * read here and never logged. The secret is Lark's optional signature check. A different
- * variable from CI's `LARK_WEBHOOK_URL` on purpose: that one is a GitHub secret, this one is
- * the deployment's environment, and the two may name different groups.
+ * read here and never logged. The secret is Lark's optional signature check.
  */
 const larkUrl = optional("UNDERCROFT_LARK_WEBHOOK_URL");
 const lark =

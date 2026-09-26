@@ -173,52 +173,12 @@ what the stopped run kept.
 
 ## Notifications
 
-The team's Lark group receives a card for each of these, posted by `scripts/notify.ts`
-through `task notify:*`:
-
-| Card                                               | Posted by                            |
-| -------------------------------------------------- | ------------------------------------ |
-| a deploy's result, the step that stopped it, links | `deploy.yml`, job `notify`           |
-| a release that failed before its deploy started    | `release.yml`, job `notify`          |
-| an issue opened, closed or reopened                | `notify.yml` (`issues`)              |
-| a pull request opened, merged, closed or reopened  | `notify.yml` (`pull_request_target`) |
-| a failed `ci` run on a push to `main`              | `notify.yml` (`workflow_run`)        |
-
-A failed deploy posts once, from `deploy.yml`, which is why `release.yml`'s notice leaves the
-deploy job out of its `needs`. A card that cannot be posted turns its own `notify` job red and
-never changes the result of the deploy or the release it reports on.
-
-| Where                        | Name                  | Value                                                        |
-| ---------------------------- | --------------------- | ------------------------------------------------------------ |
-| Settings → Actions → Secrets | `LARK_WEBHOOK_URL`    | the custom bot's webhook URL — required                      |
-| Settings → Actions → Secrets | `LARK_WEBHOOK_SECRET` | the bot's signing secret — set it when signing is on in Lark |
-
-**The webhook URL is the credential**: anyone holding it can post into the group. It lives
-only in the secret and is never printed. For a second factor, turn on **Signature
-verification** in the bot's security settings in Lark and store the secret it shows as
-`LARK_WEBHOOK_SECRET`, both at once — Lark refuses an unsigned card once signing is on, and
-the notify job reports that refusal (`code 19021`) instead of calling it sent. If you add
-**Custom keywords** instead, every card title must contain one of them.
-
-To rotate the webhook, replace the secret, then prove it from a terminal. The URL is read
-from your shell and never goes into a file:
-
-```bash
-gh secret set LARK_WEBHOOK_URL          # paste the new URL at the prompt
-LARK_WEBHOOK_URL=... task notify:test   # posts a test card, exits non-zero if Lark refuses it
-```
-
-A card renders an issue or pull-request body as Lark markdown (headings as bold lines,
-lists, links, GitHub emoji shortcodes) and colours a pull request's `+`/`−` line counts.
-Every tag in quoted text is escaped, never obeyed, because an issue titled
-`<at id=all></at>` would otherwise mention the whole group; titles stay plain text.
-`notify.yml` runs on `pull_request_target` so that a fork's pull request can use the
-secret too. That is safe only because it checks out the default branch and never runs the
-pull request's code, so never add a checkout of the pull request's head to that file.
+CI posts nothing to Lark: a deploy, a release, an issue or a pull request reports itself in
+GitHub only. The platform's own sync status is the one thing posted to a Lark group.
 
 ### Sync status
 
-The control plane posts to a Lark group too, from its alert tick
+The control plane posts to a Lark group from its alert tick
 (`apps/control-plane/src/services/alerts.ts`), once a minute:
 
 | Card                                               | When                                                                                         |
@@ -235,9 +195,7 @@ replicas tick. A card Lark refuses is logged as `alert_post_failed` and not retr
 | Dokploy environment | `UNDERCROFT_LARK_WEBHOOK_URL`    | the custom bot's webhook URL — unset means email only        |
 | Dokploy environment | `UNDERCROFT_LARK_WEBHOOK_SECRET` | the bot's signing secret — set it when signing is on in Lark |
 
-These are not CI's `LARK_WEBHOOK_URL`: that one is a GitHub secret and this one is the
-deployment's environment, so the two may name the same group or different ones. Set them in
-Dokploy by hand and redeploy; the control plane's boot line `alerts_configured` then reports
+Set them in Dokploy by hand and redeploy; the control plane's boot line `alerts_configured` then reports
 `lark: true`. The tick also needs `UNDERCROFT_PUBLIC_URL` for its links, and with Lark set it
 runs even where email is not configured.
 

@@ -1,20 +1,18 @@
 /**
  * Lark's custom-bot webhook: what a card looks like on the wire, and posting one.
  *
- * Two callers decide what a card says -- `scripts/notify.ts` for what happened in the
- * repository, the control plane's alert tick for a sync that failed or recovered -- and this
- * module is the only place that knows Lark's shape, so a change of card schema or signing
- * scheme is one file.
+ * The control plane's alert tick decides what a card says, for a sync that failed or
+ * recovered; this module is the only place that knows Lark's shape, so a change of card schema
+ * or signing scheme is one file.
  *
- * The webhook URL IS the credential -- anyone holding it can post into the group -- so each
- * caller reads it from its own environment (a GitHub secret in CI, the compose environment for
- * the control plane) and it is never printed. The secret is Lark's optional signature check;
- * with it set, a leaked URL alone is no longer enough to post.
+ * The webhook URL IS the credential -- anyone holding it can post into the group -- so the
+ * caller reads it from the compose environment and it is never printed. The secret is Lark's
+ * optional signature check; with it set, a leaked URL alone is no longer enough to post.
  *
  * Two things here look like over-caution and are not:
  *
  *   - No string a notice carries reaches Lark as markup. Notices quote what people outside
- *     this repo wrote -- an issue title, a PR body, the error a vendor answered a sync with -- and
+ *     this repo wrote -- the error a vendor answered a sync with -- and
  *     Lark reads `<at id=all></at>` inside markdown as a mention, so text written that way
  *     would page the whole group. The title
  *     is `plain_text`; a fact is `larkLiteral` inside the emphasis this module adds; the body
@@ -35,22 +33,6 @@ export type Emphasis = "bold" | "green" | "red" | "grey";
 
 /** A run of a fact's value. Its text is always shown exactly as written. */
 export type Span = string | { readonly text: string; readonly emphasis: Emphasis };
-
-export function bold(text: string): Span {
-  return { text, emphasis: "bold" };
-}
-
-export function green(text: string): Span {
-  return { text, emphasis: "green" };
-}
-
-export function red(text: string): Span {
-  return { text, emphasis: "red" };
-}
-
-export function grey(text: string): Span {
-  return { text, emphasis: "grey" };
-}
 
 /** What a card says, before it is Lark's shape. */
 export interface LarkNotice {
