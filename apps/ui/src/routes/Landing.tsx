@@ -8,9 +8,11 @@ import { ArrowRight } from "@/components/Icon.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
 
+import "@/styles/landing-agent.css";
 import "@/styles/home.css";
 
 const DOCUMENTATION = "https://github.com/muitneliss/undercroft#documentation";
+const MCP_SETUP = "https://github.com/muitneliss/undercroft/blob/main/docs/runbook/mcp-setup.md";
 const STAGES = ["sources", "raw", "models", "reports"] as const;
 
 /** The data's order of travel, expressed as an ordered list rather than a picture. */
@@ -38,6 +40,7 @@ export function Landing(): React.JSX.Element {
   const { t } = useTranslation();
   const contentId = useId();
   const titleId = useId();
+  const agentId = useId();
   const startId = useId();
   return (
     <div className="landing">
@@ -73,6 +76,14 @@ export function Landing(): React.JSX.Element {
           <p className="landing__invitation">{t("landing.invitation")}</p>
         </section>
         <DataPath />
+        <section className="landing__agent" aria-labelledby={agentId}>
+          <h2 id={agentId}>{t("landing.agentTitle")}</h2>
+          <div>
+            <p>{t("landing.agentBody")}</p>
+            <p>{t("landing.agentDetail")}</p>
+            <a href={MCP_SETUP}>{t("landing.agentDocs")}</a>
+          </div>
+        </section>
         <section className="landing__start" aria-labelledby={startId}>
           <h2 id={startId}>{t("landing.startTitle")}</h2>
           <p>{t("landing.startBody")}</p>

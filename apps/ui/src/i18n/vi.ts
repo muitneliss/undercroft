@@ -149,6 +149,12 @@ export const vi = {
     reportsTitle: "Báo cáo",
     reportsBody: "Kết quả từ mô hình của bạn.",
     principle: "Dữ liệu gốc là nền tảng. Các lớp phía trên có thể dựng lại.",
+    agentTitle: "Dữ liệu của bạn, nơi tác tử làm việc.",
+    agentBody:
+      "Claude và các máy khách MCP khác có thể dùng Undercroft thay mặt bạn, với cùng quyền truy cập hồ sơ và giới hạn quyền như trong không gian làm việc.",
+    agentDetail:
+      "Kết nối qua OAuth hoặc token cá nhân trên trang tài khoản. Bạn chọn quyền chỉ đọc hoặc đọc và ghi, và có thể thu hồi quyền bất cứ lúc nào.",
+    agentDocs: "Kết nối tác tử qua MCP",
     startTitle: "Một nơi để bắt đầu.",
     startBody:
       "Mỗi khách hàng có một không gian riêng cho nguồn dữ liệu, các lần chạy và báo cáo. Đăng nhập để mở những hồ sơ bạn được cấp quyền.",
