@@ -127,10 +127,12 @@ identity.
 | Contract                  | `adapters.test.ts` -- each adapter against a stand-in that reproduces the behaviour it defends against (ask.py's 60-character clip, the 200-row named-query cap, the lake's 50-row pages, Gmail page tokens, header case, rate-limit 403) | nothing                   |
 | Integration / E2E offline | `gmailSuite.test.ts` -- the whole Gmail suite over an invented world held by the stand-ins                                                                                                                                                | nothing                   |
 | Regression                | `regression.test.ts` -- one case per historical finding, pinned from both sides                                                                                                                                                           | nothing                   |
-| Live reconciliation       | `bun run scripts/reconcile/cli.ts --config <file>`                                                                                                                                                                                        | credentials, local config |
+| Live reconciliation       | `scripts/reconcile/live/records.live.ts` (one test per real record), or `bun run scripts/reconcile/cli.ts --config <file>`                                                                                                                | credentials, local config |
 
-The offline groups run in `bun run test` with no network and no credential. The live mode is not
-part of CI: without its config it cannot start, and a run that cannot decide exits 2.
+The offline groups run in `bun run test` with no network and no credential. The real-data checks
+sit in their own folder, `scripts/reconcile/live/`, named `*.live.ts` so `bun test`'s default
+pattern never collects them: they are not part of CI, run only when named by path with
+`UNDERCROFT_LIVE=1`, and cannot start without the local config. A run that cannot decide exits 2.
 
 ## Read-only by construction
 

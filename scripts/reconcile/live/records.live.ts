@@ -1,7 +1,13 @@
 /**
  * The live reconciliation as a test run: one test per real record, mapped 1:1.
  *
- *   UNDERCROFT_LIVE=1 bun test scripts/reconcile/live.test.ts
+ *   UNDERCROFT_LIVE=1 bun test ./scripts/reconcile/live/records.live.ts
+ *
+ * This folder holds the checks that read REAL data, kept apart from the framework's offline
+ * tests one level up. The `.live.ts` suffix is outside `bun test`'s default pattern, so neither
+ * `bun run test` nor CI ever collects it: it runs only when named by path, by someone holding
+ * the local configuration and read credentials. The sources are read only through their APIs
+ * and the Undercroft CLI -- never a database.
  *
  * "Email A has data, so the lake must have it" is literally one test here: for every client in
  * the local configuration, every message its scope query finds, every deal linked to its
@@ -13,8 +19,8 @@
  *
  * The configuration and every real value stay local: the config is read from `fixtures/live/`
  * (git-ignored) or `UNDERCROFT_LIVE_CONFIG`, and evidence goes to its `outDir`, outside the
- * repository. Without `UNDERCROFT_LIVE=1` the file registers one skipped test, so the offline
- * gate (`bun run verify`) never needs a credential. Portal- and mailbox-wide legs (tens of
+ * repository. `UNDERCROFT_LIVE=1` is a second, explicit consent: named without it, the file
+ * registers one `todo` and reads nothing. Portal- and mailbox-wide legs (tens of
  * thousands of records) are reported as one test each with their counts; the per-record tests
  * are the client-scoped legs.
  */
@@ -22,10 +28,10 @@ import { describe, expect, it } from "bun:test";
 import { join, resolve } from "node:path";
 import process from "node:process";
 
-import { execute } from "./cli.ts";
-import type { RecordResult, TestResult } from "./model.ts";
+import { execute } from "../cli.ts";
+import type { RecordResult, TestResult } from "../model.ts";
 
-const REPO = resolve(import.meta.dirname, "..", "..");
+const REPO = resolve(import.meta.dirname, "..", "..", "..");
 const LIVE = process.env.UNDERCROFT_LIVE === "1";
 const CONFIG =
   process.env.UNDERCROFT_LIVE_CONFIG ?? join(REPO, "fixtures", "live", "reconcile.config.json");
@@ -95,6 +101,7 @@ if (LIVE) {
   });
 }
 
-describe.skipIf(LIVE)("live reconciliation (offline run)", () => {
-  it.skipIf(!LIVE)("needs UNDERCROFT_LIVE=1 and a local config in fixtures/live/", () => undefined);
-});
+if (!LIVE) {
+  it.todo("live reconciliation: needs UNDERCROFT_LIVE=1 and a local config in fixtures/live/", () =>
+    undefined);
+}

@@ -61,15 +61,20 @@ through 50-row CLI pages; expect tens of minutes. The cache is for repeated runs
 ### As a test run, one test per record
 
 ```sh
-UNDERCROFT_LIVE=1 bun test scripts/reconcile/live.test.ts
-UNDERCROFT_LIVE=1 UNDERCROFT_LIVE_SOURCES=drive bun test scripts/reconcile/live.test.ts
+UNDERCROFT_LIVE=1 bun test ./scripts/reconcile/live/records.live.ts
+UNDERCROFT_LIVE=1 UNDERCROFT_LIVE_SOURCES=drive bun test ./scripts/reconcile/live/records.live.ts
 ```
 
 Every message, deal and file of the configured clients becomes its own test, named by its id:
 `pass` present with equal fields, `fail` missing / extra / duplicated / different, `todo`
 newer than the lake's last completed run (PENDING, never a pass), `skip` outside the confirmed
 scope with the rule named. Progress lines (`[hh:mm:ss] <case>: N record(s) judged`) go to
-stderr while the run reads. Without `UNDERCROFT_LIVE=1` the file registers one skipped test.
+stderr while the run reads. Without `UNDERCROFT_LIVE=1` the file registers one `todo` and reads
+nothing.
+
+The real-data checks live in their own folder, `scripts/reconcile/live/`, apart from the offline
+tests. Their `.live.ts` suffix is outside `bun test`'s default pattern, so `bun run test` and CI
+never collect them; they run only when named by path.
 
 ### Exit codes
 

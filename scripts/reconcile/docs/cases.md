@@ -1,7 +1,8 @@
 # Test case matrix: live reconciliation
 
 Every case the suite can report, the requirement it answers, and the contract it is judged
-against. Offline cases run in `bun test scripts/reconcile`; live cases run in
+against. Offline cases run in `bun test scripts/reconcile`; live cases read real
+data and run from their own folder, `scripts/reconcile/live/`, or through
 `bun run scripts/reconcile/cli.ts` (see [the runbook](runbook.md)). `{C}` is a client label
 (CASE-ID), `{M}` a mailbox (`primary`, `secondary`), `{S}` a lake source, `{R}` a Drive root role.
 

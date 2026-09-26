@@ -925,8 +925,12 @@
     // config: the rules fire in a `.ts` twin, stay quiet in the `.test.ts` fixture, and a
     // money violation in that same fixture is still reported -- so this is an override, not
     // Biome quietly skipping the suite.
+    //
+    // `*.live.ts` is a test file too: `scripts/reconcile/live/` holds the checks that read
+    // real data, named outside `bun test`'s default pattern so CI never collects them. They
+    // run under the same runner and are the same kind of file.
     {
-      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.live.ts"],
       "linter": {
         "rules": {
           "complexity": {
