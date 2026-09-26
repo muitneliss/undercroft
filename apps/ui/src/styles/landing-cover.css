@@ -92,9 +92,10 @@
     overflow: hidden;
   }
 
-  /* Behind everything, and never in the way of a click: the lamp is tracked on the cover. */
+  /* The vault: fixed to the viewport under every section, so its lines run the whole length of
+     the page, and never in the way of a click -- the lamp is tracked on the page (ADR 0066). */
   .landing__vault {
-    position: absolute;
+    position: fixed;
     inset: 0;
     z-index: -1;
     pointer-events: none;

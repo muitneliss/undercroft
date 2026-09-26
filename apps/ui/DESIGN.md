@@ -403,10 +403,11 @@ The vault's vanishing point swings away from it, the ribs can be read only near 
 around it, the column under it takes its division's hue lifted toward Bone, and the record under
 it shows a proof slip with its content address.
 
-- **One ground, one light** (ADRs 0065, 0066): the film is drawn on a transparent canvas, so
-  the page's own ground runs unbroken from header to footer. The only glow is the page lamp, a
-  warm core and a wide wash of Chrome under every section, the cover included. Nothing on the
-  sheet moves; only the light does.
+- **One ground, one light, one vault** (ADRs 0065, 0066): the film is drawn on a transparent
+  canvas fixed to the viewport under every section, so the vault's arches run the whole length
+  of the page and the page's own ground runs unbroken from header to footer. The only glow is
+  the page lamp, a warm core and a wide wash of Chrome, the cover included. Nothing on the
+  sheet moves; the page scrolls over the vault, and only the light follows the hand.
 - **Lamp colour:** `--lamp-ink`: Chrome at night, Chrome mixed 55% toward Ink by day, for the
   headline's second line and the reached step.
 - **Cover ease:** `--cover-ease` (`cubic-bezier(0.16, 1, 0.3, 1)`), for the small states the

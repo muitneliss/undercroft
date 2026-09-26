@@ -1,5 +1,5 @@
 /**
- * Runs the cover's vault in a page: one animation loop that advances the film and paints it,
+ * Runs the vault behind the public home: one animation loop that advances the film and paints it,
  * and the pointer that holds the lamp.
  *
  * NOTHING HERE IS REACT STATE. Sixty frames a second of pointer position and simulation would
@@ -8,7 +8,9 @@
  * the only thing it writes to the document is a `data-` attribute on the stage and step the
  * lamp is over, and only when that changes.
  *
- * It stops when the cover is scrolled away or the tab is hidden, and under
+ * The canvas is fixed to the viewport under every section, so the vault's lines run the length
+ * of the page (ADR 0066); the band and the track are re-measured each frame as the page scrolls.
+ * It stops when the tab is hidden, and under
  * `prefers-reduced-motion` it never loops: it paints one settled frame and repaints it when the
  * pointer moves, so the lamp and the proof slips still answer the hand while nothing travels
  * (ADR 0063).
@@ -16,13 +18,15 @@
 
 import { type Lamp, type Palette, type Pixel, paletteFor, type Rect } from "@/lib/vault/frame.ts";
 import { createVault, type StageId, STEP_STAGE, stageAt, type Vault } from "@/lib/vault/model.ts";
+import { vaultAim } from "@/lib/vault/lamp.ts";
 import { markPath, tintStages } from "@/lib/vault/marks.ts";
 import { advance, trigger } from "@/lib/vault/reader.ts";
 import { paint } from "@/lib/vault/scene.ts";
 
 export interface VaultElements {
-  /** The dark cover the canvas fills and the pointer is tracked over. */
-  readonly cover: HTMLElement;
+  /** The whole home: the pointer is tracked over all of it. */
+  readonly page: HTMLElement;
+  /** Fixed to the viewport, under every section, so the vault runs the length of the page. */
   readonly canvas: HTMLCanvasElement;
   /** The empty band the data path is drawn into. */
   readonly band: HTMLElement;
@@ -72,7 +76,6 @@ export class VaultFilm {
   private drift = 0;
   private frame = 0;
   private last = 0;
-  private visible = true;
   private readonly elements: VaultElements;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly words: VaultWords;
@@ -97,20 +100,16 @@ export class VaultFilm {
   }
 
   private run(): () => void {
-    const { cover, band } = this.elements;
+    const { page, canvas, band } = this.elements;
     tintStages(this.elements.stages, this.palette());
     const resize = new ResizeObserver(() => this.measure());
-    resize.observe(cover);
+    resize.observe(canvas);
     resize.observe(band);
-    const seen = new IntersectionObserver(([entry]) => {
-      this.visible = entry?.isIntersecting ?? true;
-      this.resume();
-    });
-    seen.observe(cover);
     const listeners: [EventTarget, string, (event: Event) => void][] = [
-      [cover, "pointermove", (event): void => this.move(event)],
-      [cover, "pointerdown", (event): void => this.press(event)],
-      [cover, "pointerleave", (): void => this.leave()],
+      [page, "pointermove", (event): void => this.move(event)],
+      [page, "pointerdown", (event): void => this.press(event)],
+      [page, "pointerleave", (): void => this.leave()],
+      [globalThis, "scroll", (): void => this.scrolled()],
       [document, "visibilitychange", (): void => this.resume()],
       [this.still, "change", (): void => this.resume()],
       [this.dark, "change", (): void => this.recolour()],
@@ -124,7 +123,6 @@ export class VaultFilm {
     return (): void => {
       this.halt();
       resize.disconnect();
-      seen.disconnect();
       for (const [target, type, listener] of listeners) {
         target.removeEventListener(type, listener);
       }
@@ -143,12 +141,12 @@ export class VaultFilm {
     }
   }
 
-  /** Loops when the cover can be seen and motion is welcome; otherwise paints one still frame. */
+  /** Loops while the tab is shown and motion is welcome; otherwise paints one still frame. */
   private resume(): void {
     this.halt();
     if (this.still.matches) {
       this.settle();
-    } else if (this.visible && !document.hidden) {
+    } else if (!document.hidden) {
       this.last = 0;
       this.frame = requestAnimationFrame((now) => this.tick(now));
     }
@@ -169,17 +167,31 @@ export class VaultFilm {
     this.draw(performance.now());
   }
 
+  /** Where the band and the track are on the fixed canvas; they move whenever the page scrolls. */
+  private place(): void {
+    const box = this.elements.canvas.getBoundingClientRect();
+    this.band = relative(this.elements.band, box);
+    this.track = relative(this.elements.steps, box);
+  }
+
+  /** Scrolling moves the band under the fixed vault; a looping film re-places it every frame. */
+  private scrolled(): void {
+    if (this.frame === 0) {
+      this.place();
+      this.draw(performance.now());
+    }
+  }
+
   private measure(): void {
-    const { cover, canvas, band, steps } = this.elements;
-    const box = cover.getBoundingClientRect();
+    const { canvas } = this.elements;
+    const box = canvas.getBoundingClientRect();
     const ratio = Math.min(2, globalThis.devicePixelRatio || 1);
     this.size.width = box.width;
     this.size.height = box.height;
     canvas.width = Math.round(box.width * ratio);
     canvas.height = Math.round(box.height * ratio);
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    this.band = relative(band, box);
-    this.track = relative(steps, box);
+    this.place();
     if (this.lamp.x === 0 && this.lamp.y === 0) {
       this.lamp.x = box.width * 0.5;
       this.lamp.y = box.height * 0.45;
@@ -203,14 +215,19 @@ export class VaultFilm {
       : STEP_STAGE[this.vault.reader.step ?? "invite"];
   }
 
-  /** The lamp follows the hand, or the reader when nobody is holding it. */
+  /** The lamp follows its target; the vault leans with it. */
   private aim(now: number, dt: number): void {
-    const { lamp, pointer, band, track, vault, size } = this;
+    const { lamp, size } = this;
     lamp.held = this.held(now);
-    const aimX = lamp.held ? pointer.x : track.x + clampUnit(vault.reader.u) * track.w;
-    const aimY = lamp.held
-      ? pointer.y
-      : band.y + band.h * (0.5 + Math.sin(vault.time * 0.6) * 0.28);
+    const { pointer, band, track, vault } = this;
+    const { x: aimX, y: aimY } = vaultAim({
+      held: lamp.held ? pointer : null,
+      band,
+      track,
+      readerU: vault.reader.u,
+      time: vault.time,
+      view: size,
+    });
     const follow = 1 - Math.exp(-dt * LAMP_FOLLOW);
     lamp.x += (aimX - lamp.x) * follow;
     lamp.y += (aimY - lamp.y) * follow;
@@ -222,6 +239,7 @@ export class VaultFilm {
   private tick(now: number): void {
     const dt = this.last === 0 ? 0 : Math.min(LONGEST_FRAME, (now - this.last) / 1000);
     this.last = now;
+    this.place();
     this.aim(now, dt);
     this.drift += dt * DRIFT_RATE;
     advance(this.vault, dt, this.lamp.held ? clampUnit(this.pathU(this.pointer.x)) : null);
@@ -255,7 +273,7 @@ export class VaultFilm {
     if (!(event instanceof PointerEvent)) {
       return;
     }
-    const box = this.elements.cover.getBoundingClientRect();
+    const box = this.elements.canvas.getBoundingClientRect();
     const { pointer, lamp } = this;
     pointer.x = event.clientX - box.left;
     pointer.y = event.clientY - box.top;
@@ -284,6 +302,7 @@ export class VaultFilm {
       return;
     }
     this.move(event);
+    this.place();
     const { y } = this.pointer;
     if (y >= this.band.y - 24 && y <= this.track.y + this.track.h) {
       trigger(this.vault, "run");

@@ -69,7 +69,7 @@
 - [ADR 0063 The Public Cover Moves Continuously](sources/adr-0063-the-public-cover-moves-continuously.md)
 - [ADR 0064 The Public Home Follows the Reader's Colour Scheme](sources/adr-0064-the-public-home-follows-the-reader-s-colour-scheme.md)
 - [ADR 0065 The Lamp Lights the Whole Public Home](sources/adr-0065-the-lamp-lights-the-whole-public-home.md)
-- [ADR 0066 One Ground and One Light for the Public Home](sources/adr-0066-one-ground-and-one-light-for-the-public-home.md)
+- [ADR 0066 One Ground, One Light and One Vault for the Public Home](sources/adr-0066-one-ground-one-light-and-one-vault-for-the-public-home.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)

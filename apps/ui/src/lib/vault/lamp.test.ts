@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { DARK_GLOW, followGlow, type Glow, settled } from "@/lib/vault/lamp.ts";
+import { DARK_GLOW, followGlow, type Glow, settled, vaultAim } from "@/lib/vault/lamp.ts";
 
 const FRAME = 1 / 60;
 
@@ -53,5 +53,36 @@ describe("the page lamp", () => {
 
   it("starts dark, so nothing glows before a pointer has been seen", () => {
     expect(DARK_GLOW.strength).toBe(0);
+  });
+});
+
+describe("where the vault's lamp goes", () => {
+  const view = { width: 1440, height: 900 };
+  const band = { x: 80, y: 500, w: 1280, h: 320 };
+  const track = { x: 80, y: 860, w: 1280, h: 90 };
+
+  it("goes to the hand while one is held over the page", () => {
+    const aim = vaultAim({ held: { x: 300, y: 1200 }, band, track, readerU: 0.5, time: 3, view });
+    expect(aim).toEqual({ x: 300, y: 1200 });
+  });
+
+  it("follows the reader along the track while the band is in view", () => {
+    const aim = vaultAim({ held: null, band, track, readerU: 0.5, time: 0, view });
+    expect(aim.x).toBe(track.x + 0.5 * track.w);
+    expect(aim.y).toBe(band.y + band.h * 0.5);
+  });
+
+  it("wanders the viewport once the band is scrolled away, so the lines stay lit", () => {
+    const away = { ...band, y: -900 };
+    const seen = [0, 5, 10, 15].map((time) =>
+      vaultAim({ held: null, band: away, track: { ...track, y: -500 }, readerU: 0.5, time, view }),
+    );
+    for (const aim of seen) {
+      expect(aim.x).toBeGreaterThanOrEqual(0);
+      expect(aim.x).toBeLessThanOrEqual(view.width);
+      expect(aim.y).toBeGreaterThanOrEqual(0);
+      expect(aim.y).toBeLessThanOrEqual(view.height);
+    }
+    expect(new Set(seen.map((aim) => Math.round(aim.x))).size).toBeGreaterThan(1);
   });
 });

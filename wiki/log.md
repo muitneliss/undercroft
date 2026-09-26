@@ -169,3 +169,5 @@
 ## [2026-09-26] ingest | ADR 0065 The Lamp Lights the Whole Public Home
 ## [2026-09-26] ingest | Public home and customer index
 ## [2026-09-26] ingest | ADR 0066 One Ground and One Light for the Public Home
+## [2026-09-26] ingest | ADR 0066 One Ground, One Light and One Vault for the Public Home
+## [2026-09-26] ingest | Public home and customer index
