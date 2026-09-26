@@ -31,24 +31,14 @@ const ARCH_GAP = 0.62;
 const HOVER_RADIUS = 34;
 const LABELLED_BAND = 640;
 
-/** Ink, warmed where the lamp is. */
-function ground(frame: Frame): void {
-  const { ctx, width, height, lamp, palette } = frame;
-  ctx.fillStyle = frame.palette.ground;
-  ctx.fillRect(0, 0, width, height);
-  const glow = ctx.createRadialGradient(
-    lamp.x,
-    lamp.y,
-    0,
-    lamp.x,
-    lamp.y,
-    Math.max(width, height) * 0.55,
-  );
-  glow.addColorStop(0, rgba(palette.glow, palette.glowAlpha));
-  glow.addColorStop(0.35, rgba(palette.glow, palette.glowAlpha * 0.3));
-  glow.addColorStop(1, rgba(palette.glow, 0));
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, height);
+/**
+ * Nothing: the film is drawn on glass. The page's own ground shows through, and the page's own
+ * lamp (`lamp.ts`) is the only glow, so the cover and the sheet below it are one surface with
+ * no edge between them (ADR 0066). A ground or a glow painted here stops at the canvas's edge,
+ * and that edge is exactly the seam this refuses.
+ */
+function clear(frame: Frame): void {
+  frame.ctx.clearRect(0, 0, frame.width, frame.height);
 }
 
 /** Where the corridor recedes to: away from the lamp, so the vault turns with the hand. */
@@ -276,7 +266,7 @@ function proofSlip(frame: Frame, item: Hovered): void {
 
 /** One whole frame, back to front. */
 export function paint(frame: Frame): void {
-  ground(frame);
+  clear(frame);
   vaultRibs(frame);
   columns(frame);
   emitters(frame, frame.band.w >= LABELLED_BAND);

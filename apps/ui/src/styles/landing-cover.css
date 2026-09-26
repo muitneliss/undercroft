@@ -31,9 +31,9 @@
     isolation: isolate;
   }
 
-  /* The lamp outside the vault (ADR 0065): a warm core and a wide wash where the pointer is,
-     written by `@/lib/vault/lamp.ts`. It sits under every section, so the header and the sheet
-     catch the light; the cover's film paints an opaque ground over it and draws its own lamp. */
+  /* The lamp (ADR 0065): a warm core and a wide wash where the pointer is, written by
+     `@/lib/vault/lamp.ts`. It sits under every section, the cover included -- the film is drawn
+     on a transparent canvas -- so the whole home is one ground under one light (ADR 0066). */
   .landing::before {
     content: "";
     position: absolute;

@@ -14,28 +14,18 @@ import {
   since,
   tone,
 } from "@/lib/vault/frame.ts";
-import {
-  LAYOUT,
-  positionOf,
-  SOURCE_COUNT,
-  STAGES,
-  slotPoint,
-  type Traveller,
-} from "@/lib/vault/model.ts";
+import { LAYOUT, positionOf, SOURCE_COUNT, slotPoint, type Traveller } from "@/lib/vault/model.ts";
 
 const PART_RADIUS = 120;
 const PART_PUSH = 30;
 
-/** The lit column's faint wash, and the rules between the columns the gate's wall is not. */
+/**
+ * The rules between the columns the gate's wall is not. The lit column is told by its data's
+ * hue, not by a wash behind it: a filled column is a second ground with an edge (ADR 0066).
+ */
 export function columns(frame: Frame): void {
-  const { ctx, band } = frame;
+  const { ctx } = frame;
   const at = mapper(frame);
-  const left = at({ u: STAGES.indexOf(frame.lit) * 0.25, v: 0 });
-  const wash = ctx.createLinearGradient(0, band.y, 0, band.y + band.h);
-  wash.addColorStop(0, line(frame, 0.035));
-  wash.addColorStop(1, line(frame, 0));
-  ctx.fillStyle = wash;
-  ctx.fillRect(left.x, band.y - 8, band.w * 0.25, band.h + 16);
   ctx.strokeStyle = line(frame, 0.16);
   ctx.lineWidth = 1;
   for (const u of [0.5, 0.75]) {

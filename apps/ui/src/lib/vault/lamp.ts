@@ -1,8 +1,8 @@
 /**
  * The lamp outside the vault: the same light the cover's film is drawn in, carried over the
  * rest of the public home, so the header and the sections under the cover answer the pointer
- * too (ADR 0065). Inside the cover the film paints its own lamp over an opaque ground, so this
- * one only shows where the film does not.
+ * too (ADR 0065). It is the ONLY glow on the page, the cover included: the film is drawn on a
+ * transparent canvas over it, so the light has no edge to stop at (ADR 0066).
  *
  * It is a glow, not a picture. The page writes three custom properties (`--lamp-x`,
  * `--lamp-y`, `--lamp-strength`) onto `.landing`, and `landing-cover.css` draws the light from
