@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.0](https://github.com/muitneliss/undercroft/compare/v1.40.0...v1.41.0) (2026-09-26)
+
+
+### Features
+
+* **skills:** one skill family over MCP and the CLI, a model builder, and models.check ([#255](https://github.com/muitneliss/undercroft/issues/255)) ([f1a70c6](https://github.com/muitneliss/undercroft/commit/f1a70c6dcb6b8a83e4520354bbb1fcf3cae14803))
+
 ## [1.40.0](https://github.com/muitneliss/undercroft/compare/v1.39.0...v1.40.0) (2026-09-26)
 
 
