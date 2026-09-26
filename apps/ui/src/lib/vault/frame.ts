@@ -53,9 +53,8 @@ export interface Palette {
   readonly ink: string;
   /** The lamp's colour where it marks something: a gate passing, a fresh block, the reader. */
   readonly accent: string;
-  /** `r, g, b` of the lamp's warmth on the ground, and how strongly it warms. */
+  /** `r, g, b` of the lamp's warmth, for the halo around the reader. The page draws the glow. */
   readonly glow: string;
-  readonly glowAlpha: number;
   /** `r, g, b` of every rule, rib and hairline; alphas are chosen where each is drawn. */
   readonly line: string;
   readonly lineStrength: number;
@@ -69,7 +68,6 @@ export const NIGHT: Palette = {
   ink: BONE,
   accent: CHROME,
   glow: "237, 166, 0",
-  glowAlpha: 0.2,
   line: "239, 233, 217",
   lineStrength: 1,
   tones: {
@@ -86,7 +84,6 @@ export const DAY: Palette = {
   ink: INK,
   accent: mix(CHROME, INK, 0.45),
   glow: "237, 166, 0",
-  glowAlpha: 0.16,
   line: "22, 21, 15",
   lineStrength: 0.7,
   tones: {

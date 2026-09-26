@@ -100,14 +100,13 @@ export function Landing(): React.JSX.Element {
   const agentId = useId();
   const startId = useId();
   const pageRef = useRef<HTMLDivElement>(null);
-  const coverRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bandRef = useRef<HTMLDivElement>(null);
   const stagesRef = useRef<HTMLOListElement>(null);
   const stepsRef = useRef<HTMLOListElement>(null);
   const refs = useMemo<VaultRefs>(
     () => ({
-      cover: coverRef,
+      page: pageRef,
       canvas: canvasRef,
       band: bandRef,
       stages: stagesRef,
@@ -126,6 +125,9 @@ export function Landing(): React.JSX.Element {
   usePageLamp(pageRef);
   return (
     <div className="landing" ref={pageRef}>
+      <div className="landing__vault" aria-hidden="true">
+        <canvas ref={canvasRef} />
+      </div>
       <a className="landing__skip" href={`#${contentId}`}>
         {t("landing.skip")}
       </a>
@@ -141,10 +143,7 @@ export function Landing(): React.JSX.Element {
         </nav>
       </header>
       <main id={contentId}>
-        <div className="landing__cover" ref={coverRef}>
-          <div className="landing__vault" aria-hidden="true">
-            <canvas ref={canvasRef} />
-          </div>
+        <div className="landing__cover">
           <section className="landing__hero" aria-labelledby={titleId}>
             <h1 id={titleId}>
               <span>{t("landing.title")}</span>

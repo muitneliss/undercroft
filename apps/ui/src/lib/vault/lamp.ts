@@ -1,8 +1,8 @@
 /**
  * The lamp outside the vault: the same light the cover's film is drawn in, carried over the
  * rest of the public home, so the header and the sections under the cover answer the pointer
- * too (ADR 0065). Inside the cover the film paints its own lamp over an opaque ground, so this
- * one only shows where the film does not.
+ * too (ADR 0065). It is the ONLY glow on the page, the cover included: the film is drawn on a
+ * transparent canvas over it, so the light has no edge to stop at (ADR 0066).
  *
  * It is a glow, not a picture. The page writes three custom properties (`--lamp-x`,
  * `--lamp-y`, `--lamp-strength`) onto `.landing`, and `landing-cover.css` draws the light from
@@ -64,6 +64,49 @@ export function settled(glow: Glow, aim: Aim): boolean {
     return faded;
   }
   return faded && Math.abs(glow.x - aim.x) < NEAR_PX && Math.abs(glow.y - aim.y) < NEAR_PX;
+}
+
+interface Spot {
+  readonly x: number;
+  readonly y: number;
+}
+
+interface Box extends Spot {
+  readonly w: number;
+  readonly h: number;
+}
+
+/** What the vault's lamp needs to know to decide where to go, in the canvas's pixels. */
+export interface VaultScene {
+  /** The pointer, when one is held over the page. */
+  readonly held: Spot | null;
+  readonly band: Box;
+  readonly track: Box;
+  readonly readerU: number;
+  readonly time: number;
+  readonly view: { readonly width: number; readonly height: number };
+}
+
+/**
+ * Where the vault's lamp goes: to the hand; else along the track with the reader while the band
+ * is in view; else wandering the viewport, so the vault's lines stay lit wherever the page is
+ * scrolled (ADR 0066).
+ */
+export function vaultAim(scene: VaultScene): Spot {
+  const { held, band, track, readerU, time, view } = scene;
+  if (held !== null) {
+    return held;
+  }
+  if (band.y + band.h > 0 && band.y < view.height) {
+    return {
+      x: track.x + Math.min(1, Math.max(0, readerU)) * track.w,
+      y: band.y + band.h * (0.5 + Math.sin(time * 0.6) * 0.28),
+    };
+  }
+  return {
+    x: view.width * (0.5 + Math.sin(time * 0.23) * 0.3),
+    y: view.height * (0.45 + Math.sin(time * 0.31) * 0.25),
+  };
 }
 
 /** Lights `page` from the pointer until the returned function is called. */
