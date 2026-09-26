@@ -3,7 +3,6 @@
   .landing {
     min-height: 100vh;
     background: var(--page);
-    padding-inline: var(--s-7);
   }
 
   .landing__header {
@@ -12,6 +11,7 @@
     justify-content: space-between;
     gap: var(--s-5);
     min-height: 6rem;
+    padding-inline: var(--s-7);
     border-bottom: var(--hair) solid var(--rule-strong);
   }
 
@@ -41,101 +41,10 @@
     text-underline-offset: 0.2em;
   }
 
-  .landing__main {
-    max-width: 80rem;
+  .landing__sheet {
+    max-width: calc(80rem + 2 * var(--s-7));
     margin-inline: auto;
-  }
-
-  .landing__hero {
-    padding: var(--s-8) var(--s-4) var(--s-6);
-    text-align: center;
-  }
-
-  .landing__hero h1 {
-    font-size: 5rem;
-    font-variation-settings: "wdth" 76;
-    line-height: 1.12;
-  }
-
-  .landing__hero h1 span {
-    display: block;
-  }
-
-  .landing__lead {
-    max-width: 54ch;
-    margin: var(--s-5) auto var(--s-6);
-    font-family: var(--face-prose);
-    font-size: 1.5rem;
-    line-height: 1.45;
-  }
-
-  .landing__actions {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--s-5);
-  }
-
-  .landing__actions .plate {
-    padding: var(--s-4) var(--s-7);
-  }
-
-  .landing__invitation,
-  .landing__principle,
-  .landing__start :where(p) {
-    font-family: var(--face-prose);
-    font-size: 1.125rem;
-    color: var(--ink-2);
-  }
-
-  .landing__invitation {
-    margin: var(--s-4) 0 0;
-  }
-
-  .landing-flow {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    list-style: none;
-    padding: 0;
-    margin: var(--s-5) 0 0;
-    border-block: var(--hair) solid var(--rule-strong);
-  }
-
-  .landing-flow li {
-    min-width: 0;
-  }
-
-  .landing-flow h2 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s-2);
-    padding: var(--s-4) var(--s-5);
-    font-size: 1rem;
-    letter-spacing: 0.025em;
-    border-bottom: var(--hair) solid var(--rule);
-  }
-
-  .landing-flow p {
-    min-height: 6rem;
-    margin: var(--s-4) 0;
-    padding: var(--s-3) var(--s-5);
-    font-family: var(--face-prose);
-    font-size: 1.25rem;
-    line-height: 1.5;
-    white-space: pre-line;
-  }
-
-  .landing-flow li + li p {
-    border-left: var(--hair) solid var(--rule);
-  }
-
-  .landing__principle {
-    margin: 0;
-    padding: var(--s-4);
-    text-align: center;
-    border-bottom: var(--hair) solid var(--rule);
+    padding-inline: var(--s-7);
   }
 
   .landing__start {
@@ -146,10 +55,14 @@
   .landing__start :where(p) {
     max-width: 58ch;
     margin: var(--s-4) auto;
+    font-family: var(--face-prose);
+    font-size: 1.125rem;
+    color: var(--ink-2);
   }
 
   .landing > .colophon {
-    padding-bottom: var(--s-5);
+    max-width: none;
+    padding: var(--s-4) var(--s-7) var(--s-5);
   }
 
   .landing__skip {
@@ -220,14 +133,10 @@
   }
 
   @media (max-width: 760px) {
-    .landing {
-      padding-inline: var(--s-4);
-    }
-
     .landing__header {
       align-items: flex-start;
       flex-direction: column;
-      padding-block: var(--s-5);
+      padding: var(--s-5) var(--s-4);
       gap: var(--s-4);
     }
 
@@ -237,44 +146,12 @@
       gap: var(--s-3);
     }
 
-    .landing__hero {
-      padding: var(--s-7) 0;
+    .landing__sheet {
+      padding-inline: var(--s-4);
     }
 
-    .landing__hero h1 {
-      font-size: 2rem;
-      font-variation-settings: "wdth" 72;
-    }
-
-    .landing__lead {
-      font-size: 1.25rem;
-    }
-
-    .landing-flow {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .landing-flow li + li {
-      border-top: var(--hair) solid var(--rule);
-    }
-
-    .landing-flow h2 {
-      padding: var(--s-5) 0 0;
-      border: 0;
-    }
-
-    .landing-flow h2 svg {
-      transform: rotate(90deg);
-    }
-
-    .landing-flow p {
-      min-height: 0;
-      margin: 0;
-      padding: var(--s-3) 0 var(--s-5);
-    }
-
-    .landing-flow li + li p {
-      border: 0;
+    .landing > .colophon {
+      padding-inline: var(--s-4);
     }
 
     .customer-index__table {

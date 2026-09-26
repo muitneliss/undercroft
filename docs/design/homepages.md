@@ -19,15 +19,24 @@ the path from sources to original data, user-authored models and reports.
 
 OWN-WORLD: The existing paper, Archivo, Garamond, mono data, ruled rows and division
 tabs remain authoritative. No new illustration, palette or font is introduced.
-The public cover uses local composition sizes: a 5rem desktop / 2rem phone heading,
-a 1.5rem desktop / 1.25rem phone lead, and 1rem stage titles. These do not change the
-operating UI's type ramp in `apps/ui/DESIGN.md`.
+The public cover uses local composition sizes: a 4.5rem desktop / 3.75rem narrow /
+2rem phone heading, a 1.5rem desktop / 1.25rem phone lead, and 1rem stage titles. These do
+not change the operating UI's type ramp in `apps/ui/DESIGN.md`.
+
+MOTION: The cover is the book seen from below, on Ink, and the one surface that moves
+continuously (ADR 0063). A canvas film draws the data path as the platform's own rules: one
+gate, a create-only content-addressed lake, refusals kept struck, and models feeding a report.
+It also draws the reader's six steps, from an invitation to a question, each threaded to the
+data it moved. The pointer is a lamp. It turns the vault, lights what is near it, tints the
+column under it in that division's hue, and reads out a record's content address. Pressing the
+flow is a run. The two ordered lists, stages and steps, are the content; the film is their
+picture. Reduced motion holds one settled frame that still answers the lamp.
 
 STORY: A visitor understands the platform and signs in with an invitation. A
 returning operator finds a customer and opens its book.
 
 FIRST VIEWPORT: A centered two-line public headline sits above sign-in, documentation
-and a four-column data path. The app has a margin heading, search, a ruled customer
+and a four-column data path drawn live in the vault, with the reader's six-step path under it. The app has a margin heading, search, a ruled customer
 table and a platform administrator's creation shortcut. On phones the public path
 stacks; customer IDs move under their names so roles and the Open action stay visible.
 

@@ -597,6 +597,14 @@
       }
     },
 
+    // The public cover inverts the book onto Ink, so it re-themes `::selection` the way
+    // `index.css` themes it for the paper: without this a selection on the cover is Bone
+    // lettering on the Chrome ground, 1.9:1. Where `::selection` is unsupported the browser's
+    // own selection shows instead; nothing on the cover is told by a selection.
+    {
+      "includes": ["apps/ui/src/styles/landing-cover.css"],
+      "linter": { "rules": { "nursery": { "useBaseline": "off" } } }
+    },
     // Same parameter-property reasoning for the one error class here.
     {
       "includes": ["packages/contracts/src/loadSpec.ts"],

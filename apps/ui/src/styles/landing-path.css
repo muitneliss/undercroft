@@ -1,0 +1,253 @@
+/*
+ * The data's path and the reader's, over and under the band the vault film draws into. The
+ * tokens they are coloured by, and why a transition here may ease, are in `landing-cover.css`.
+ */
+@layer undercroft {
+  .flow {
+    width: 100%;
+    max-width: 80rem;
+    margin: auto auto 0;
+  }
+
+  .flow__stages {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: var(--hair) solid var(--rule-strong);
+  }
+
+  .flow__stage {
+    --tone: var(--ink);
+
+    min-width: 0;
+    padding: var(--s-4) var(--s-5) 0;
+  }
+
+  .flow__stage + .flow__stage {
+    border-left: var(--hair) solid var(--rule);
+  }
+
+  .flow__stage h2 {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    font-size: 1rem;
+    letter-spacing: 0.025em;
+  }
+
+  /* The punched hole: the book's own mark for "this one", in the division's hue when lit.
+     `--tone` is the painter's `STAGE_TONE` for the column, set on each stage by the film, so
+     the hole and the column it lights are one colour with one owner. */
+  .flow__stage h2::before {
+    content: "";
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid var(--ink);
+    border-radius: 50%;
+    transition:
+      background 320ms var(--cover-ease),
+      border-color 320ms var(--cover-ease),
+      transform 320ms var(--cover-ease);
+  }
+
+  .flow__stage p {
+    margin: var(--s-2) 0 0;
+    font-family: var(--face-prose);
+    font-size: 1.125rem;
+    line-height: 1.45;
+    color: var(--ink-2);
+    white-space: pre-line;
+    transition: color 320ms var(--cover-ease);
+  }
+
+  .flow__stage[data-lit="true"] p {
+    color: var(--ink);
+  }
+
+  .flow__stage[data-lit="true"] h2::before {
+    background: var(--tone);
+    border-color: var(--tone);
+    transform: scale(1.3);
+  }
+
+  /* The film is drawn here. A cursor that says the flow can be pressed. */
+  .flow__band {
+    height: 20rem;
+    cursor: crosshair;
+  }
+
+  .flow__path-title {
+    margin: var(--s-3) 0 var(--s-2);
+    font-size: 0.6875rem;
+    font-variation-settings: "wdth" 82;
+    letter-spacing: 0.15em;
+    color: var(--ink-2);
+  }
+
+  .flow__steps {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--s-4);
+    margin: 0;
+    padding: var(--s-5) 0 0;
+    list-style: none;
+    text-align: center;
+  }
+
+  .flow__step {
+    display: grid;
+    gap: var(--s-1);
+    align-content: start;
+    min-width: 0;
+  }
+
+  .flow__step strong {
+    font-family: var(--face-display);
+    font-size: 0.8125rem;
+    font-variation-settings: "wdth" 84;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    transition: color 320ms var(--cover-ease);
+  }
+
+  .flow__step span {
+    font-family: var(--face-prose);
+    font-size: 1rem;
+    line-height: 1.4;
+    color: var(--ink-2);
+    transition: color 320ms var(--cover-ease);
+  }
+
+  .flow__step[data-state="done"] strong {
+    color: var(--ink);
+  }
+
+  .flow__step[data-state="current"] strong {
+    color: var(--hue-chrome);
+  }
+
+  .flow__step[data-state="current"] span {
+    color: var(--ink);
+  }
+
+  .flow__foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--s-3) var(--s-6);
+    margin-top: var(--s-5);
+    padding-top: var(--s-4);
+    border-top: var(--hair) solid var(--rule);
+  }
+
+  .flow__note {
+    margin: 0;
+    font-family: var(--face-prose);
+    font-size: 1.125rem;
+    color: var(--ink-2);
+  }
+
+  .flow__hint {
+    margin: 0;
+    font-family: var(--face-display);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    font-variation-settings: "wdth" 82;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  /* A hand that hovers is told it can read a record; a finger is only told it can run one. */
+  .flow__hint--touch {
+    display: none;
+  }
+
+  @media (hover: none) {
+    .flow__hint--pointer {
+      display: none;
+    }
+
+    .flow__hint--touch {
+      display: block;
+    }
+  }
+
+  /* On a wide band the vault letters each source beside its emitter, so the list is read
+     aloud rather than printed twice. On a phone the band is too narrow to letter. */
+  @media (min-width: 761px) {
+    .flow__stage:first-child p {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .flow__stages {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .flow__stage {
+      padding: var(--s-4) var(--s-3) 0 0;
+    }
+
+    .flow__stage + .flow__stage {
+      border-left: 0;
+    }
+
+    .flow__stage h2 {
+      font-size: 0.875rem;
+    }
+
+    .flow__stage p {
+      font-size: 1rem;
+    }
+
+    .flow__band {
+      height: 15rem;
+    }
+
+    /* Six titles fit a phone; six sentences do not. The reached step's sentence is shown
+       beneath the row, in one place, and the others stay in the list for a screen reader. */
+    .flow__steps {
+      position: relative;
+      gap: var(--s-1);
+      padding-bottom: 3.5rem;
+    }
+
+    .flow__step strong {
+      font-size: 0.625rem;
+      letter-spacing: 0.06em;
+      overflow-wrap: anywhere;
+    }
+
+    .flow__step span {
+      position: absolute;
+      inset: auto 0 0;
+      opacity: 0;
+      transition: opacity 320ms var(--cover-ease);
+    }
+
+    .flow__step[data-state="current"] span {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow__stage h2::before,
+    .flow__stage p,
+    .flow__step strong,
+    .flow__step span {
+      transition: none;
+    }
+  }
+}

@@ -1,0 +1,146 @@
+/*
+ * The public cover: the undercroft beneath the page, lit by the visitor's lamp.
+ *
+ * THE COVER IS THE BOOK INVERTED, NOT A SECOND THEME. The header and the cover redefine the
+ * book's own tokens -- Ink becomes the bone lettering, Leaf becomes the ink ground -- so every
+ * plate, link, focus ring and the language pair inside them invert by the rules they already
+ * follow, and nothing here re-draws a control. The paper sheet below the cover is untouched.
+ *
+ * This is also the one place in the interface where a transition may ease. ADR 0063 draws the
+ * boundary: continuous motion belongs to the cover's film, and to the small state changes the
+ * film drives (a stage lit, a step reached) so they move at the film's pace. Everything below
+ * the cover, and every surface behind sign-in, stays stepped (ADR 0014).
+ */
+@layer undercroft {
+  /* Captured before the cover remaps --ink, so the ground keeps the page's ink. */
+  .landing {
+    --ground: var(--ink);
+  }
+
+  .landing__header,
+  .landing__cover {
+    --ink: var(--bone);
+    --ink-2: color-mix(in srgb, var(--bone) 80%, var(--ground));
+    --ink-3: color-mix(in srgb, var(--bone) 70%, var(--ground));
+    --leaf: var(--ground);
+    --rule: color-mix(in srgb, var(--bone) 18%, transparent);
+    --rule-strong: color-mix(in srgb, var(--bone) 42%, transparent);
+    --cover-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+    background: var(--ground);
+    color: var(--ink);
+  }
+
+  .landing__header ::selection,
+  .landing__cover ::selection {
+    color: var(--ground);
+  }
+
+  .landing__cover .plate--primary,
+  .landing__cover .plate--primary:hover:not(:disabled) {
+    color: var(--ground);
+  }
+
+  .landing__cover .plate--primary:hover:not(:disabled) {
+    background: var(--ink);
+  }
+
+  .landing__cover {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100svh - 6rem);
+    padding: 0 var(--s-7) var(--s-5);
+    overflow: hidden;
+  }
+
+  /* Behind everything, and never in the way of a click: the lamp is tracked on the cover. */
+  .landing__vault {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .landing__vault canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .landing__hero {
+    padding: var(--s-7) var(--s-4) var(--s-6);
+    text-align: center;
+  }
+
+  .landing__hero h1 {
+    font-size: 4.5rem;
+    font-variation-settings: "wdth" 76;
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+  }
+
+  .landing__hero h1 span {
+    display: block;
+  }
+
+  /* The second line is the promise; it is set in the lamp's colour. */
+  .landing__hero h1 span + span {
+    color: var(--hue-chrome);
+  }
+
+  .landing__lead {
+    max-width: 54ch;
+    margin: var(--s-4) auto var(--s-5);
+    font-family: var(--face-prose);
+    font-size: 1.5rem;
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+
+  .landing__actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s-5);
+  }
+
+  .landing__actions .plate {
+    padding: var(--s-4) var(--s-7);
+  }
+
+  .landing__invitation {
+    margin: var(--s-4) 0 0;
+    font-family: var(--face-prose);
+    font-size: 1.125rem;
+    color: var(--ink-2);
+  }
+
+  @media (max-width: 1100px) {
+    .landing__hero h1 {
+      font-size: 3.75rem;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .landing__cover {
+      min-height: 0;
+      padding: 0 var(--s-4) var(--s-5);
+    }
+
+    .landing__hero {
+      padding: var(--s-7) 0 var(--s-5);
+    }
+
+    .landing__hero h1 {
+      font-size: 2rem;
+      font-variation-settings: "wdth" 72;
+    }
+
+    .landing__lead {
+      font-size: 1.25rem;
+    }
+  }
+}
