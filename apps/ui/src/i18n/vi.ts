@@ -155,6 +155,20 @@ export const vi = {
     agentDetail:
       "Kết nối qua OAuth hoặc token cá nhân trên trang tài khoản. Bạn chọn quyền chỉ đọc hoặc đọc và ghi, và có thể thu hồi quyền bất cứ lúc nào.",
     agentDocs: "Kết nối tác tử qua MCP",
+    workflowTitle: "Một quy trình, từ đầu đến cuối.",
+    workflowLead:
+      "Trước cuộc gọi với khách hàng, hãy dùng tác tử chỉ đọc để trả lời một câu hỏi về dữ liệu mà không rời khỏi cuộc trò chuyện.",
+    workflowConnectTitle: "Kết nối Claude",
+    workflowConnectBody:
+      "Thêm Undercroft bằng OAuth và chọn quyền chỉ đọc. Tác tử chỉ thấy các hồ sơ mà bạn được phép mở.",
+    workflowAskTitle: "Đặt câu hỏi thật",
+    workflowAskBody: "Hỏi: “Hóa đơn Xero mới nhất đã có trong báo cáo chưa?”",
+    workflowCheckTitle: "Kiểm tra bằng chứng",
+    workflowCheckBody:
+      "Tác tử đọc nhật ký chạy, kho dữ liệu gốc và báo cáo bằng chính các công cụ bạn có thể dùng trong không gian làm việc.",
+    workflowDecideTitle: "Quyết định bước tiếp theo",
+    workflowDecideBody:
+      "Bạn nhận được kết quả có dữ liệu để kiểm tra, hoặc câu trả lời rõ ràng rằng chưa có bằng chứng. Nếu cần thay đổi, hãy cấp quyền đọc và ghi riêng.",
     startTitle: "Một nơi để bắt đầu.",
     startBody:
       "Mỗi khách hàng có một không gian riêng cho nguồn dữ liệu, các lần chạy và báo cáo. Đăng nhập để mở những hồ sơ bạn được cấp quyền.",

@@ -115,6 +115,20 @@ export const en = {
     agentDetail:
       "Connect through OAuth or a personal token on your account page. Choose read-only or read-and-write access, and revoke access whenever you need to.",
     agentDocs: "Connect an agent over MCP",
+    workflowTitle: "One workflow, end to end.",
+    workflowLead:
+      "Before a customer call, use a read-only agent to answer a data question without leaving the conversation.",
+    workflowConnectTitle: "Connect Claude",
+    workflowConnectBody:
+      "Add Undercroft through OAuth and choose read-only access. The agent sees only the customer records you may open.",
+    workflowAskTitle: "Ask a real question",
+    workflowAskBody: "Ask: “Has the latest Xero invoice made it into the report?”",
+    workflowCheckTitle: "Check the evidence",
+    workflowCheckBody:
+      "The agent reads the run journal, raw lake and reports with the same tools available in your workspace.",
+    workflowDecideTitle: "Choose the next step",
+    workflowDecideBody:
+      "You receive data to inspect, or a clear answer that there is no evidence yet. If a change is needed, grant read-and-write access separately.",
     startTitle: "One place to begin.",
     startBody:
       "Every customer has a separate workspace for sources, runs and reports. Sign in to open the customers you have access to.",
