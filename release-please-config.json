@@ -6,7 +6,7 @@
       "release-type": "node",
       "package-name": "undercroft",
       "extra-files": [
-        { "type": "generic", "path": "skills/undercroft-cli/SKILL.md" },
+        { "type": "generic", "path": "skills/undercroft/references/cli.md" },
         { "type": "json", "path": "apps/cli/package.json", "jsonpath": "$.version" }
       ]
     }

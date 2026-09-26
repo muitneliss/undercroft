@@ -293,6 +293,8 @@ export const vi = {
       "unknown-source": "Không có nguồn {{subject}}. Các nguồn có sẵn nằm trong models.reference.",
       "unknown-ref": "Khách hàng này không có mô hình nào tên {{subject}}.",
       "self-ref": "Mô hình không thể đọc chính nó.",
+      "report-parameter":
+        "{{subject}} là tham số của một câu hỏi báo cáo. Mô hình không có tham số: dbt sẽ thay nó bằng chuỗi rỗng và bộ lọc biến mất mà không báo lỗi. Hãy thay bằng một giá trị cố định, hoặc bỏ bộ lọc đó.",
       "no-tombstone-filter":
         "Mô hình đọc records nhưng không nhắc đến deleted_at. Nếu không lọc deleted_at is null, bản ghi đã xoá ở nguồn sẽ hiện như còn sống.",
       "zero-default":

@@ -31,6 +31,12 @@ export interface JinjaReading {
   /** The SQL with every block blanked, newlines kept. */
   readonly text: string;
   readonly calls: readonly JinjaCall[];
+  /**
+   * Each `{{ name }}` expression that is a name and nothing else -- `{{ this }}`,
+   * `{{ target.schema }}`, or a report question's `{{ date_from }}` left behind -- by its
+   * first segment.
+   */
+  readonly names: readonly JinjaCall[];
   readonly references: readonly JinjaReference[];
   /** Names a `{% set %}` or `{% for %}` binds, which a later block may call. */
   readonly bound: ReadonlySet<string>;
@@ -90,6 +96,7 @@ const CALL = /(?<![|.]\s*)(?<!\w)(?<name>[A-Za-z_]\w*)(?:\.[A-Za-z_]\w*)*\s*\(/g
 const STRING = /'[^']*'|"[^"]*"/gu;
 const BINDING = /\b(?:set|for)\s+(?<names>[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)/gu;
 const REFERENCE = /(?<![\w.])(?<fn>ref|source)\s*\(/gu;
+const BARE_NAME = /^\s*(?<name>[A-Za-z_]\w*)(?:\.[A-Za-z_]\w*)*\s*$/u;
 const LITERAL = /^\s*(?<q>['"])(?<value>[^'"]*)\k<q>\s*$/u;
 
 /** How a character moves the parenthesis depth. */
@@ -142,6 +149,7 @@ function callsIn(body: string, line: number): JinjaCall[] {
 
 export function readJinja(sql: string): JinjaReading {
   const calls: JinjaCall[] = [];
+  const names: JinjaCall[] = [];
   const references: JinjaReference[] = [];
   const bound = new Set<string>();
   const text = sql.replace(BLOCK, (block: string, offset: number) => {
@@ -153,6 +161,10 @@ export function readJinja(sql: string): JinjaReading {
     const line = linesIn(sql.slice(0, offset)) + 1;
     calls.push(...callsIn(body, line));
     references.push(...referencesIn(body, line));
+    const bare = block.startsWith("{{") ? BARE_NAME.exec(body)?.groups?.name : undefined;
+    if (bare !== undefined) {
+      names.push({ name: bare, line });
+    }
     for (const match of body.matchAll(BINDING)) {
       for (const name of (match.groups?.names ?? "").split(",")) {
         bound.add(name.trim());
@@ -160,5 +172,5 @@ export function readJinja(sql: string): JinjaReading {
     }
     return block.startsWith("{{") ? `${JINJA_MARK}${newlines}` : ` ${newlines}`;
   });
-  return { text, calls, references, bound };
+  return { text, calls, names, references, bound };
 }

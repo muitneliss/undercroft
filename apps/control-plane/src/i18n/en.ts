@@ -153,6 +153,8 @@ export const en = {
       "unknown-source": "There is no source {{subject}}. models.reference lists the sources.",
       "unknown-ref": "This customer has no model named {{subject}}.",
       "self-ref": "A model cannot read itself.",
+      "report-parameter":
+        "{{subject}} is a report question's parameter. A model has none: dbt would render it as an empty string and the filter would vanish without an error. Replace it with a fixed value, or drop that filter.",
       "no-tombstone-filter":
         "The model reads records but never mentions deleted_at. Without deleted_at is null, a record deleted at its source shows as live.",
       "zero-default":

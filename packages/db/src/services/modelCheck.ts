@@ -20,9 +20,11 @@
  *   security boundary and does not try to be.
  *
  * `jinja.ts` reads the Jinja out first and `sqlLexer.ts` tokenises what is left; both report
- * facts, and every decision is here. `source()` and `ref()` are checked against what exists:
- * the sources `SOURCES_YML` declares, read from that text so the two cannot drift, and the
- * tenant's own models, which the caller passes in.
+ * facts and decide nothing. `sqlChecks.ts` decides what the SQL's tokens say, this module
+ * what the Jinja says, both in the words of `modelFindings.ts`. `source()` and `ref()` are
+ * checked against what exists: the sources `SOURCES_YML` declares (`dbtSources.ts`, read
+ * from that text so the two cannot drift), and the tenant's own models, which the caller
+ * passes in.
  *
  * `raw.document_text` is granted to dbt but is not a declared source, so reading it directly
  * is the only way there is; `raw-direct` fires only for a table a source declares.
@@ -31,49 +33,17 @@
 import { MACROS } from "./dbtProject.ts";
 import { SOURCES } from "./dbtSources.ts";
 import { DBT_CONTEXT, type JinjaReading, readJinja } from "./jinja.ts";
-import { callArguments, isName, lex, type Token } from "./sqlLexer.ts";
+import { type Finding, finding, type ModelCheck, UNVERIFIED } from "./modelFindings.ts";
+import { bareModelFindings, namesIn, sqlFindings } from "./sqlChecks.ts";
+import { lex, type Token } from "./sqlLexer.ts";
 
-export type FindingCode =
-  | "empty"
-  | "semicolon"
-  | "not-select"
-  | "write-statement"
-  | "select-into"
-  | "raw-direct"
-  | "analytics-direct"
-  | "unknown-source"
-  | "unknown-ref"
-  | "self-ref"
-  | "no-tombstone-filter"
-  | "zero-default"
-  | "top-level-limit"
-  | "unknown-macro"
-  | "dynamic-reference"
-  | "test-column-unmentioned";
-
-export type Severity = "error" | "warning";
-
-export interface Finding {
-  readonly code: FindingCode;
-  readonly severity: Severity;
-  /** 1-based, the author's own line; `null` for a finding about the model as a whole. */
-  readonly line: number | null;
-  /** What the finding is about -- a keyword, a model, a column -- when it names one. */
-  readonly subject: string | null;
-}
-
-/** What text alone cannot show, in the order an author would run into it. */
-export type UnverifiedCode =
-  | "compiles"
-  | "payload-keys"
-  | "column-types"
-  | "tests-pass"
-  | "function-effects";
-
-export interface ModelCheck {
-  readonly findings: readonly Finding[];
-  readonly unverified: readonly UnverifiedCode[];
-}
+export type {
+  Finding,
+  FindingCode,
+  ModelCheck,
+  Severity,
+  UnverifiedCode,
+} from "./modelFindings.ts";
 
 export interface ModelCheckInput {
   readonly name: string;
@@ -83,66 +53,29 @@ export interface ModelCheckInput {
   readonly existingModels: readonly string[];
 }
 
-const SEVERITY: Readonly<Record<FindingCode, Severity>> = {
-  empty: "error",
-  semicolon: "error",
-  "not-select": "error",
-  "write-statement": "error",
-  "select-into": "error",
-  "raw-direct": "error",
-  "analytics-direct": "error",
-  "unknown-source": "error",
-  "unknown-ref": "error",
-  "self-ref": "error",
-  "no-tombstone-filter": "warning",
-  "zero-default": "warning",
-  "top-level-limit": "warning",
-  "unknown-macro": "warning",
-  "dynamic-reference": "warning",
-  "test-column-unmentioned": "warning",
-};
-
-const UNVERIFIED: readonly UnverifiedCode[] = [
-  "compiles",
-  "payload-keys",
-  "column-types",
-  "tests-pass",
-  "function-effects",
-];
-
-/** Words that make a statement a write, wherever they stand -- a CTE included. */
-const WRITE_WORDS: ReadonlySet<string> = new Set([
-  "insert",
-  "update",
-  "delete",
-  "merge",
-  "drop",
-  "alter",
-  "create",
-  "truncate",
-  "grant",
-  "revoke",
-  "copy",
-  "call",
-  "vacuum",
-]);
-
-const QUERY_STARTS: ReadonlySet<string> = new Set(["select", "with", "values"]);
-
-const ZERO = /^(?:0+(?:\.0*)?|\.0+)$/u;
-
-function finding(code: FindingCode, line: number | null, subject: string | null): Finding {
-  return { code, severity: SEVERITY[code], line, subject };
-}
-
 // ---------------------------------------------------------------------------------------
 // Jinja
 
-function macroFindings(jinja: JinjaReading): Finding[] {
-  const macros = new Set(MACROS.map((macro) => macro.name));
-  return jinja.calls
-    .filter(({ name }) => !(DBT_CONTEXT.has(name) || macros.has(name) || jinja.bound.has(name)))
-    .map(({ name, line }) => finding("unknown-macro", line, name));
+const MACRO_NAMES: ReadonlySet<string> = new Set(MACROS.map((macro) => macro.name));
+
+function known(jinja: JinjaReading, name: string): boolean {
+  return DBT_CONTEXT.has(name) || MACRO_NAMES.has(name) || jinja.bound.has(name);
+}
+
+/**
+ * A call to something the project does not ship is a warning; a bare `{{ name }}` nothing
+ * binds is an error. A report question writes its parameters exactly so, and dbt renders an
+ * unknown name as an empty string -- the filter would vanish from a build that succeeds.
+ */
+function nameFindings(jinja: JinjaReading): Finding[] {
+  return [
+    ...jinja.calls
+      .filter(({ name }) => !known(jinja, name))
+      .map(({ name, line }) => finding("unknown-macro", line, name)),
+    ...jinja.names
+      .filter(({ name }) => !known(jinja, name))
+      .map(({ name, line }) => finding("report-parameter", line, name)),
+  ];
 }
 
 function referenceFindings(jinja: JinjaReading, input: ModelCheckInput): Finding[] {
@@ -154,8 +87,8 @@ function referenceFindings(jinja: JinjaReading, input: ModelCheckInput): Finding
     if (fn === "source") {
       const [name = "", table = ""] = args;
       const declared = SOURCES.find((source) => source.name === name);
-      const known = args.length === 2 && declared?.tables.includes(table) === true;
-      return known ? [] : [finding("unknown-source", line, `${name}.${table}`)];
+      const declaredTable = args.length === 2 && declared?.tables.includes(table) === true;
+      return declaredTable ? [] : [finding("unknown-source", line, `${name}.${table}`)];
     }
     // `ref('model')` or `ref('package', 'model')`: the model is the last argument.
     const model = args.at(-1) ?? "";
@@ -172,98 +105,6 @@ function readsRecordsThroughSource(jinja: JinjaReading): boolean {
       fn === "source" &&
       SOURCES.some((source) => source.name === args?.[0] && source.tables.includes("records")) &&
       args?.[1] === "records",
-  );
-}
-
-// ---------------------------------------------------------------------------------------
-// SQL, one token at a time
-
-/** A check of the token at `index`, answering a finding or nothing. */
-type TokenRule = (tokens: readonly Token[], index: number) => Finding | null;
-
-function semicolon(tokens: readonly Token[], index: number): Finding | null {
-  const token = tokens[index];
-  return token?.kind === "punct" && token.text === ";"
-    ? finding("semicolon", token.line, null)
-    : null;
-}
-
-function writeWord(tokens: readonly Token[], index: number): Finding | null {
-  const token = tokens[index];
-  return token?.kind === "word" && WRITE_WORDS.has(token.text)
-    ? finding("write-statement", token.line, token.text)
-    : null;
-}
-
-function selectInto(tokens: readonly Token[], index: number): Finding | null {
-  const token = tokens[index];
-  const previous = tokens[index - 1];
-  const intoATable = !(isName(previous, "insert") || isName(previous, "merge"));
-  return token !== undefined && isName(token, "into") && intoATable
-    ? finding("select-into", token.line, null)
-    : null;
-}
-
-function topLevelLimit(tokens: readonly Token[], index: number): Finding | null {
-  const token = tokens[index];
-  return token !== undefined && isName(token, "limit") && token.depth === 0
-    ? finding("top-level-limit", token.line, null)
-    : null;
-}
-
-/** `0`, `0.00`, `'0'`, optionally cast: the literal a missing value must not become. */
-function isZero(argument: readonly Token[]): boolean {
-  const [first, second] = argument;
-  const literal = first?.kind === "number" || first?.kind === "string";
-  return literal && ZERO.test(first.text.trim()) && (second === undefined || second.text === "::");
-}
-
-function zeroDefault(tokens: readonly Token[], index: number): Finding | null {
-  const token = tokens[index];
-  if (token === undefined || !isName(token, "coalesce") || tokens[index + 1]?.text !== "(") {
-    return null;
-  }
-  return isZero(callArguments(tokens, index + 1).at(-1) ?? [])
-    ? finding("zero-default", token.line, null)
-    : null;
-}
-
-/** `schema.table` where the schema is one a model must reach through dbt instead. */
-function qualified(tokens: readonly Token[], index: number): Finding | null {
-  const [schema, dot, table] = [tokens[index], tokens[index + 1], tokens[index + 2]];
-  const named = schema?.kind === "word" || schema?.kind === "quoted";
-  if (schema === undefined || !named || dot?.kind !== "punct" || dot.text !== "." || !table) {
-    return null;
-  }
-  const declared = SOURCES.some(
-    (source) => source.schema === schema.text && source.tables.some((t) => isName(table, t)),
-  );
-  if (declared) {
-    return finding("raw-direct", schema.line, table.text);
-  }
-  return schema.text.startsWith("analytics_")
-    ? finding("analytics-direct", schema.line, `${schema.text}.${table.text}`)
-    : null;
-}
-
-const TOKEN_RULES: readonly TokenRule[] = [
-  semicolon,
-  writeWord,
-  selectInto,
-  topLevelLimit,
-  zeroDefault,
-  qualified,
-];
-
-function tokenFindings(tokens: readonly Token[]): Finding[] {
-  return tokens.flatMap((_, index) =>
-    TOKEN_RULES.map((rule) => rule(tokens, index)).filter((found) => found !== null),
-  );
-}
-
-function namesIn(tokens: readonly Token[]): ReadonlySet<string> {
-  return new Set(
-    tokens.filter((token) => token.kind === "word" || token.kind === "quoted").map((t) => t.text),
   );
 }
 
@@ -285,15 +126,6 @@ function wholeModelFindings(
   return [...tombstones, ...untested];
 }
 
-function sqlFindings(tokens: readonly Token[]): Finding[] {
-  const first = tokens.find((token) => token.kind !== "jinja");
-  if (first === undefined) {
-    return [finding("empty", null, null)];
-  }
-  const query = QUERY_STARTS.has(first.kind === "word" ? first.text : "") || first.text === "(";
-  return [...(query ? [] : [finding("not-select", first.line, null)]), ...tokenFindings(tokens)];
-}
-
 /** Deduplicated by what a reader would see: the same code, line and subject once. */
 function distinct(findings: readonly Finding[]): Finding[] {
   const seen = new Set<string>();
@@ -312,13 +144,13 @@ function distinct(findings: readonly Finding[]): Finding[] {
 export function checkModel(input: ModelCheckInput): ModelCheck {
   const jinja = readJinja(input.sql);
   const tokens = lex(jinja.text);
-  const sql = sqlFindings(tokens);
+  const sql = [...sqlFindings(tokens), ...bareModelFindings(tokens, new Set(input.existingModels))];
   const whole = sql.some((found) => found.code === "empty")
     ? []
     : wholeModelFindings(tokens, sql, jinja, input);
   return {
     findings: distinct([
-      ...macroFindings(jinja),
+      ...nameFindings(jinja),
       ...referenceFindings(jinja, input),
       ...sql,
       ...whole,

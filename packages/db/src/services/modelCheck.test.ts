@@ -157,6 +157,22 @@ describe("errors", () => {
     );
   });
 
+  it("analytics-direct: fires on another model read by its bare name, as a report writes it", () => {
+    const result = check(`select * from "stg_deals" d join stg_owners o on o.id = d.owner`, {
+      name: "fct_deals",
+      existing: ["stg_deals", "stg_owners"],
+    });
+    expect(result.findings.filter((f) => f.code === "analytics-direct")).toEqual([
+      { code: "analytics-direct", severity: "error", line: 1, subject: "stg_deals" },
+      { code: "analytics-direct", severity: "error", line: 1, subject: "stg_owners" },
+    ]);
+  });
+
+  it("analytics-direct: stays quiet on a CTE that shares a model's name", () => {
+    const sql = "with stg_deals as (select 1 as id) select * from stg_deals";
+    expect(codes(check(sql, { name: "fct_deals", existing: ["stg_deals"] }))).toEqual([]);
+  });
+
   it("analytics-direct: stays quiet on ref()", () => {
     const sql = "select * from {{ ref('stg_deals') }}";
     expect(codes(check(sql, { name: "fct_deals", existing: ["stg_deals"] }))).not.toContain(
@@ -192,6 +208,24 @@ describe("errors", () => {
   it("unknown-ref: stays quiet on one it has, the two-argument form included", () => {
     const sql = "select * from {{ ref('undercroft', 'stg_deals') }}";
     expect(codes(check(sql, { name: "fct_deals", existing: ["stg_deals"] }))).toEqual([]);
+  });
+
+  it("report-parameter: fires on a report question's {{ name }} left in the SQL", () => {
+    // A question's parameter and a Jinja variable are spelled alike. dbt renders an unknown
+    // name as an empty string, so the filter would vanish from a build that succeeds.
+    const sql = "select * from t where closed_at >= {{ date_from }}";
+    expect(check(sql).findings).toContainEqual({
+      code: "report-parameter",
+      severity: "error",
+      line: 1,
+      subject: "date_from",
+    });
+  });
+
+  it("report-parameter: stays quiet on dbt's own names and a name the model binds", () => {
+    const sql = `{% set cutoff = '2026-01-01' %}
+select '{{ this }}' as me, '{{ target.schema }}' as s from t where x >= '{{ cutoff }}'`;
+    expect(codes(check(sql))).not.toContain("report-parameter");
   });
 
   it("self-ref: fires on a model that reads itself", () => {

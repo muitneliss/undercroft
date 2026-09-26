@@ -12,7 +12,7 @@
 #
 # release-please reads `release-please-config.json` and `.release-please-manifest.json` rather
 # than inputs here, because the release now carries two files the `node` strategy alone would
-# not bump: the CLI skill's pinned version (`skills/undercroft-cli/SKILL.md`) and the CLI
+# not bump: the CLI skill's pinned version (`skills/undercroft/references/cli.md`) and the CLI
 # package's (`apps/cli/package.json`) -- `extra-files`. The one package is still the root, and
 # `include-component-in-tag: false` keeps tags `vX.Y.Z`, so `tag_name` feeds the image and
 # deploy jobs below exactly as before. ADR 0044.

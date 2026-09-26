@@ -110,7 +110,7 @@ tasks:
 
   skill-check:
     desc: >-
-      Assert `npx skills add . --list` finds the undercroft-cli skill. Needs the network (it
+      Assert `npx skills add . --list` finds every skill under skills/. Needs the network (it
       fetches the skills CLI), so it is NOT part of ci:verify.
     cmds:
       - bun run skill:check

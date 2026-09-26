@@ -1,7 +1,68 @@
-# The `undercroft` CLI contract
+# The `undercroft` CLI
 
-What an agent can rely on. The CLI's source decides this, in
-`apps/cli/src/services/output.ts`, and this page states it for a reader.
+The door for an agent that can run commands. What an agent can rely on is decided by the
+CLI's source, in `apps/cli/src/services/output.ts`; this page states it for a reader.
+
+## Install it
+
+This file is written for one release of the CLI, and this line installs it:
+
+<!-- x-release-please-start-version -->
+
+```sh
+v=1.40.0; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"
+```
+
+<!-- x-release-please-end -->
+
+Before your first command in a session, run `undercroft --version`. It prints
+`undercroft/<version> <platform> <node>`.
+
+- **It prints the version in the line above.** The CLI is ready.
+- **The command is not found.** Tell the person you are installing the Undercroft CLI, then
+  run the line above.
+- **It prints a different version.** The person installed another release. Ask them before
+  you replace it with the line above, because this file's commands and error codes are the
+  ones that release has.
+- **`npm install -g` fails with `EACCES`.** Do not use `sudo`. Run each command through `npx`
+  from the same URL instead:
+  `npx -y --package="<the URL above, with the version filled in>" undercroft <command> --agent`.
+
+The CLI needs Node 22 or newer. When `node --version` is older, stop and tell the person.
+
+## Run it
+
+Always pass `--agent`. It makes stdout hold exactly one JSON envelope, never prompts, and
+never uses colour. Parse stdout as JSON and branch on `ok`, then on `error.code`. The exit
+code agrees with the code.
+
+- **Find the command.** `undercroft describe --agent` lists every command with its
+  `effect`: `read`, `write`, `destructive` or `local`. Before a command you have not used in
+  this session, run `undercroft describe <command> --agent` and read its `input` JSON Schema
+  and its `flags`.
+- **Dry-run every write.** Run a `write` or `destructive` command with `--dry-run` first.
+  The dry run checks the input's shape locally and echoes what would be sent, making no
+  server call. The server can still refuse the real call; the dry run cannot tell you it will
+  not.
+- **Pass `--yes` only when the person asked for that exact destructive act.** Without it a
+  destructive command returns `CONFIRMATION_REQUIRED`. That is the question to ask the
+  person, not an obstacle to remove.
+- **Pass large or nested input as JSON.** Scalar fields are flags (`--tenant-id`,
+  `--source`, `--limit`). Anything nested, such as a model's SQL and tests, a dashboard or a
+  scope selection, goes through `--input -` (stdin), `--input <file>` or
+  `--input-json '<json>'`. A typed flag overrides the same field in the JSON.
+
+## Sign in, and allow writes
+
+- **Sign in.** Run `undercroft auth login --email <address> --agent` to have a code emailed.
+  The person reads the code from their inbox and runs the second step, or tells you the code:
+  `undercroft auth login --email <address> --code <code> --agent`.
+- **Allow writes.** Each environment profile has `allowWrites`, off by default, and only a
+  person at a terminal can turn it on. When you get `WRITES_DISABLED`, tell the person which
+  profile it named. Never try to change the profile yourself: in agent mode that returns
+  `HUMAN_REQUIRED`, by design.
+- **Choose the environment.** Pass `--profile <name>` to choose a named profile. `--url
+<url>` is for one-off reads only: it never allows writes.
 
 ## The envelope
 
