@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.0](https://github.com/muitneliss/undercroft/compare/v1.36.1...v1.37.0) (2026-09-26)
+
+
+### Features
+
+* **ui:** introduce MCP on home page ([#241](https://github.com/muitneliss/undercroft/issues/241)) ([5761872](https://github.com/muitneliss/undercroft/commit/5761872573b2b29cd04ceb41a4eb5c231507a0ca))
+
 ## [1.36.1](https://github.com/muitneliss/undercroft/compare/v1.36.0...v1.36.1) (2026-09-25)
 
 
