@@ -178,3 +178,5 @@
 ## [2026-09-26] ingest | ADR 0067 and Runbook: Agent skills; re-ingested the CLI, MCP and CLI-design pages
 ## [2026-09-26] ingest | Runbook: Agent skills
 ## [2026-09-26] ingest | Runbook: Agent skills (internal skills are marked and not published)
+## [2026-09-26] ingest | Runbook: Onboarding a new person
+## [2026-09-26] ingest | Runbook: Onboarding a new person
