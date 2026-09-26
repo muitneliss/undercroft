@@ -1,0 +1,51 @@
+{
+  "tenantId": "your-tenant",
+  "ostwinRoot": "/path/to/legacy-warehouse-repository",
+  "outDir": "/path/outside/this/repository/reconcile-runs",
+  "hubspotEnvFile": "/path/to/hubspot.env",
+  "mailboxes": {
+    "primary": {
+      "address": "first-mailbox@example.test",
+      "tokenFile": "/path/to/first-mailbox-token.json",
+      "undercroftSource": "gmail"
+    },
+    "secondary": {
+      "address": "second-mailbox@example.test",
+      "tokenFile": "/path/to/second-mailbox-token.json",
+      "undercroftSource": "gmail.second"
+    }
+  },
+  "driveRoots": [
+    {
+      "role": "incorp-shared",
+      "readAs": "primary",
+      "undercroftSource": "drive",
+      "ostwinScans": false
+    },
+    {
+      "role": "incorp-mydrive",
+      "readAs": "primary",
+      "undercroftSource": null,
+      "ostwinScans": true
+    },
+    {
+      "role": "bookkeeping",
+      "readAs": "secondary",
+      "undercroftSource": "drive.second",
+      "ostwinScans": true
+    }
+  ],
+  "clients": [
+    {
+      "label": "CASE-00",
+      "caseId": "CASE-00",
+      "clientId": "client-0000",
+      "hubspotCompanyIds": ["1000000000"],
+      "driveFolders": [
+        { "role": "incorp-shared", "folderId": "shared-drive-folder-id" },
+        { "role": "incorp-mydrive", "folderId": "my-drive-folder-id" },
+        { "role": "bookkeeping", "folderId": "bookkeeping-folder-id" }
+      ]
+    }
+  ]
+}
