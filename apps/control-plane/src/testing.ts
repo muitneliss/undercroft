@@ -24,6 +24,8 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
 import { InMemoryWorkerClient } from "./services/inMemoryWorkerClient.ts";
+import type { Skill } from "./handlers/mcpSkills.ts";
+import { readSkills, SKILLS_ROOT } from "./skills.ts";
 import { buildWidgets } from "./widgets.ts";
 
 export interface ControlPlane {
@@ -41,6 +43,8 @@ export interface ControlPlane {
 export interface ControlPlaneOptions {
   /** Fixtures, planted as the superuser before the database becomes `undercroft_app`. */
   readonly seed?: (db: TestDatabase) => Promise<void>;
+  /** The skills `/mcp` serves. The repository's own by default; `[]` serves none. */
+  readonly skills?: readonly Skill[];
   /** Addresses named in `UNDERCROFT_SUPERADMINS`. None by default. */
   readonly superadmins?: ReadonlySet<string>;
   /** `UNDERCROFT_DEV_SIGN_IN_AS`. Off by default, as it is on every deployment. */
@@ -162,6 +166,9 @@ export async function startControlPlane(options: ControlPlaneOptions = {}): Prom
     superadmins,
     worker,
     widgets,
+    // The repository's own skills, read the way `main.ts` reads them, unless a suite says
+    // otherwise. `readSkills` rather than `loadSkills`: a tree that fails should fail the suite.
+    skills: options.skills ?? readSkills(SKILLS_ROOT),
     ...(options.log === undefined ? {} : { log: options.log }),
   }).fetch;
 

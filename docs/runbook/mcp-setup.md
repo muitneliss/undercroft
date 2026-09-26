@@ -173,6 +173,11 @@ token as an environment variable, as above, so it stays off every process's comm
   `bi_questions_answer`) is drawn as a table, up to 500 rows, amounts printed digit for digit;
   `runs_trigger` and `runs_get` draw the run, followed live until it ends. A host without the
   extension shows the same answer as text.
+- **Skills.** The server also serves Undercroft's own Agent Skills through the MCP Skills
+  extension (`skills/list`, `skills/get`, files at `skill://<name>/<path>`): the workflows that
+  teach an agent which tools to use in what order, such as building a dbt model. A host that
+  supports the extension needs nothing installed; for Claude Code and Codex, install them with
+  `npx skills`. [Agent skills](agent-skills.md) has both.
 
 Not offered at all: signing out, the health probe, the Google Picker's configuration, and the
 account procedures themselves (tokens and connected apps).

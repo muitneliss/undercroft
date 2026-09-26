@@ -202,6 +202,7 @@ export function createServer(deps: ServerDeps): Hono {
     ...(deps.release === undefined ? {} : { release: deps.release }),
     ...(deps.log === undefined ? {} : { log: deps.log }),
     ...(deps.widgets === undefined ? {} : { widgets: deps.widgets }),
+    ...(deps.skills === undefined ? {} : { skills: deps.skills }),
   });
 
   // Registered LAST, so /api and /trpc above always win over the catch-all. A request for a

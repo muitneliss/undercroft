@@ -137,6 +137,9 @@ export const EFFECTS: EffectTable = {
   // opt-in a write does.
   "lake.query": "write",
 
+  // A POST because a model's SQL does not fit a query string, like `bi.answer`. It reads the
+  // tenant's model names and changes nothing, so a read-only credential may use it.
+  "models.check": "read",
   "models.save": "write",
   "models.build": "write",
   "models.delete": "destructive",

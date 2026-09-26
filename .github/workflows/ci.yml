@@ -45,7 +45,7 @@ jobs:
       - name: the packed CLI runs through npx
         run: task ci:cli-pack-check
       # Needs the network (it fetches the `skills` CLI), which is why it is not in ci:verify.
-      - name: npx skills finds the undercroft-cli skill
+      - name: npx skills finds every published skill
         run: task ci:skill-check
 
   compose:

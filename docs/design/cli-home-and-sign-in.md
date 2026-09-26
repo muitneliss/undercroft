@@ -38,7 +38,7 @@ the code):
 - **Agent mode draws none of this.** `--agent`, `--json` or a piped stream get exactly the
   output they got before: a bare piped `undercroft` still prints oclif's help, and
   `cli.test.ts` pins that. `home` is a hidden command that `main.ts` routes a bare run to in
-  human mode only; an agent that names it gets `UNKNOWN_COMMAND`. The `undercroft-cli`
+  human mode only; an agent that names it gets `UNKNOWN_COMMAND`. The `undercroft`
   skill always passes `--agent`, so it sees no difference.
 - `--no-input` still draws the page, and never prompts.
 - `--help`, `--version`, `describe`, every procedure command and the exit codes are as they
@@ -420,4 +420,4 @@ The words are in `apps/cli/src/i18n/{vi,en}.ts`, under `page` and `login`.
    are two spaces.
 5. **The error label.** "ĐÍNH CHÍNH" / "ERRATUM", the manual's own word.
 
-None of the five changes agent mode, so none changes what the `undercroft-cli` skill sees.
+None of the five changes agent mode, so none changes what the `undercroft` skill sees.

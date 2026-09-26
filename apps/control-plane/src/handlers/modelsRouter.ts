@@ -102,6 +102,40 @@ export const modelsRouter = router({
       return outcome.value;
     }),
 
+  /**
+   * Check a model's SQL, running nothing. Any member may: it tells an author about a mistake
+   * while it is still text, and the model-builder skill runs it before every save. Advisory,
+   * never a gate on `save` -- the editor's promise is that a saved mistake is a row, not a
+   * broken table. Each finding and each thing it could not verify comes back worded.
+   */
+  check: tenantProcedure
+    .input(
+      z.object({
+        name: ModelName,
+        sql: z.string().max(MAX_MODEL_SQL_BYTES),
+        tests: ModelTests,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const t = messages(ctx.locale);
+      const checked = await models.check(ctx.exec, {
+        tenantId: ctx.tenantId,
+        name: input.name,
+        sql: input.sql,
+        tests: input.tests,
+      });
+      return {
+        findings: checked.findings.map((finding) => ({
+          ...finding,
+          message: t(`modelCheck.finding.${finding.code}`, { subject: finding.subject ?? "" }),
+        })),
+        unverified: checked.unverified.map((code) => ({
+          code,
+          message: t(`modelCheck.unverified.${code}`),
+        })),
+      };
+    }),
+
   /** The sources and macros every project carries, for the editor's reference panel. */
   reference: tenantProcedure.query(() => models.reference()),
 });

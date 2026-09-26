@@ -7,7 +7,7 @@
  * or formatted JSON on stdout, and a sentence on stderr when it failed.
  *
  * The error codes and their exit codes are the contract an agent programs against, and they
- * live in `CODES` and nowhere else. `skills/undercroft-cli/references/cli-contract.md` states
+ * live in `CODES` and nowhere else. `skills/undercroft/references/cli.md` states
  * the same table for a reader; this is the one that decides.
  *
  * What an envelope never carries: a cookie, a header, an environment value or a stack. The

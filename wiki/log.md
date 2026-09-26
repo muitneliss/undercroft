@@ -171,3 +171,8 @@
 ## [2026-09-26] ingest | ADR 0066 One Ground and One Light for the Public Home
 ## [2026-09-26] ingest | ADR 0066 One Ground, One Light and One Vault for the Public Home
 ## [2026-09-26] ingest | Public home and customer index
+## [2026-09-26] ingest | ADR 0067 and Runbook: Agent skills; re-ingested the CLI, MCP and CLI-design pages
+## [2026-09-26] ingest | ADR 0067: The published skills are one family, installed by npx skills and served by /mcp
+## [2026-09-26] ingest | Runbook: Agent skills
+## [2026-09-26] ingest | Runbook: Connecting an agent over MCP
+## [2026-09-26] ingest | ADR 0067 and Runbook: Agent skills; re-ingested the CLI, MCP and CLI-design pages

@@ -31,7 +31,7 @@ import {
   type Model,
   saveModel,
 } from "@undercroft/db/repos";
-import { MACROS, SOURCES_YML } from "@undercroft/db/services";
+import { checkModel, MACROS, type ModelCheck, SOURCES_YML } from "@undercroft/db/services";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
@@ -145,6 +145,24 @@ export async function build(
     });
   }
   return outcome;
+}
+
+/**
+ * What can be said about a model's SQL before it is saved or built, against the tenant's own
+ * model names. Reads, stores nothing, and is not the security boundary: the tenant's dbt
+ * login's grants are (`modelCheck.ts`).
+ */
+export async function check(
+  exec: SqlExecutor,
+  input: { tenantId: string; name: string; sql: string; tests: ModelTests },
+): Promise<ModelCheck> {
+  const existing = await listModels(exec, input.tenantId);
+  return checkModel({
+    name: input.name,
+    sql: input.sql,
+    tests: input.tests,
+    existingModels: existing.map((model) => model.name),
+  });
 }
 
 /** What the platform ships into every project, for the editor's reference panel. */

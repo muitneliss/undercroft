@@ -55,9 +55,11 @@ tasks:
       One file or filter, for a focused TDD loop.
       Usage: task ci:test-one -- apps/worker/src/services/google/collect.test.ts
     cmds:
-      # The same `bun test` `ci:test` runs, narrowed by a filter -- not a second definition
-      # of the suite. `ci:test` stays the one that runs all of it.
-      - bun test {{.CLI_ARGS}}
+      # The same `test` script `ci:test` runs, narrowed by a filter -- not a second definition
+      # of the suite. It was a bare `bun test`, and without `--parallel` the process-wide
+      # happy-dom preload leaves a `window` behind that makes every tRPC handler suite refuse
+      # to load ("@trpc/server in a non-server environment").
+      - bun run test {{.CLI_ARGS}}
 
   verify:
     desc: >-
@@ -108,7 +110,7 @@ tasks:
 
   skill-check:
     desc: >-
-      Assert `npx skills add . --list` finds the undercroft-cli skill. Needs the network (it
+      Assert `npx skills add . --list` finds every skill under skills/. Needs the network (it
       fetches the skills CLI), so it is NOT part of ci:verify.
     cmds:
       - bun run skill:check

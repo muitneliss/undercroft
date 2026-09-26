@@ -13,6 +13,7 @@
  * - WHICH TOOLS, and what each says about itself: `mcpTools.ts`.
  * - WHAT A CALL ANSWERS, result or refusal: `mcpAnswers.ts`.
  * - WHICH WIDGET draws an answer, and the widgets themselves as resources: `mcpWidgets.ts`.
+ * - THE SKILLS, the repository's own, through the MCP Skills extension: `mcpSkills.ts`.
  * - ONE LOG LINE per call, naming the tool, the credential and the outcome, never the input or
  *   the output -- either may be a customer's data. And one per refused bearer, `mcp_refused`,
  *   naming WHY (ADR 0062): the challenge a client gets is uniform on purpose, so without this
@@ -41,6 +42,13 @@ import { messages } from "../i18n/index.ts";
 import { READ_SCOPE } from "../services/connectedApps.ts";
 import type { BearerRefusal, RefusalReason } from "./context.ts";
 import { answered, refused, refusedBy } from "./mcpAnswers.ts";
+import {
+  NO_SKILLS,
+  readSkillFile,
+  registerSkills,
+  type Skill,
+  skillCapabilities,
+} from "./mcpSkills.ts";
 import { listTools, toolNamed } from "./mcpTools.ts";
 import { listResources, NO_WIDGETS, readResource, resultMeta, type Widgets } from "./mcpWidgets.ts";
 import { resolveProcedure } from "./procedures.ts";
@@ -58,6 +66,8 @@ export interface McpDeps {
   readonly log?: Logger;
   /** The widgets built at boot (`widgets.ts`). Absent or empty: answers are drawn by the host. */
   readonly widgets?: Widgets;
+  /** The skills read at boot (`skills.ts`). Absent or empty: the extension is not declared. */
+  readonly skills?: readonly Skill[];
 }
 
 /**
@@ -167,27 +177,39 @@ async function callTool(
 /**
  * The server one request is answered by, bound to that request's caller and nothing else.
  *
- * It declares `resources` only when there are widgets to serve, so a host is never told of a
- * capability that answers nothing.
+ * It declares `resources` only when there is something to read -- a widget or a skill's file --
+ * and the skills extension only when there is a skill, so a host is never told of a capability
+ * that answers nothing. `resources/list` lists the widgets alone: a skill's files are found
+ * through its manifest, and the extension forbids treating a URI's scheme as what makes a skill.
  */
 function serverFor(deps: McpDeps, ctx: Context): Server {
   const widgets = deps.widgets ?? NO_WIDGETS;
+  const skills = deps.skills ?? NO_SKILLS;
+  const readable = widgets.size > 0 || skills.length > 0;
   const server = new Server(
     { name: "undercroft", version: deps.release ?? "unreleased" },
-    { capabilities: { tools: {}, ...(widgets.size === 0 ? {} : { resources: {} }) } },
+    {
+      capabilities: {
+        tools: {},
+        ...(readable ? { resources: {} } : {}),
+        ...skillCapabilities(skills),
+      },
+    },
   );
   server.setRequestHandler("tools/list", async () => ({ tools: await listTools(ctx, widgets) }));
   server.setRequestHandler("tools/call", (request) =>
     callTool(deps, ctx, request.params.name, request.params.arguments),
   );
-  if (widgets.size > 0) {
+  registerSkills(server, skills, ctx.locale);
+  if (readable) {
     server.setRequestHandler("resources/list", () => ({ resources: listResources(widgets) }));
     server.setRequestHandler("resources/read", (request) => {
-      const read = readResource(request.params.uri, widgets);
+      const { uri } = request.params;
+      const read = readSkillFile(uri, skills) ?? readResource(uri, widgets);
       if (read === null) {
         throw new ProtocolError(
           ProtocolErrorCode.InvalidParams,
-          messages(ctx.locale)("mcp.unknownResource", { uri: request.params.uri }),
+          messages(ctx.locale)("mcp.unknownResource", { uri }),
         );
       }
       return read;

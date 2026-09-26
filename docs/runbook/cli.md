@@ -6,12 +6,12 @@ how to change it.
 
 ## Running it
 
-| Where                        | Command                                                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| In this repo                 | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                                |
-| Anywhere, the newest release | `npm install -g https://github.com/muitneliss/undercroft/releases/latest/download/undercroft-cli.tgz`                    |
-| Anywhere, one exact release  | `v=X.Y.Z; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"`         |
-| For an agent, via a skill    | `npx skills add muitneliss/undercroft --skill undercroft-cli [--agent claude-code\|codex] -y`, and the skill installs it |
+| Where                        | Command                                                                                                              |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| In this repo                 | `task dev:cli -- <command>`: builds the bundle, then runs it under `node`                                            |
+| Anywhere, the newest release | `npm install -g https://github.com/muitneliss/undercroft/releases/latest/download/undercroft-cli.tgz`                |
+| Anywhere, one exact release  | `v=X.Y.Z; npm install -g "https://github.com/muitneliss/undercroft/releases/download/v$v/undercroft-cli-$v.tgz"`     |
+| For an agent, via a skill    | `npx skills add muitneliss/undercroft --skill undercroft [--agent claude-code\|codex] -y`, and the skill installs it |
 
 It needs Node 22 or newer. `npm uninstall -g undercroft-cli` removes it.
 
@@ -28,8 +28,8 @@ runs the same pinned URL through `npx` instead.
 
 The version is written ONCE, in `v`, because release-please's generic updater rewrites only
 the first version on a line. The 1.20.0 release bumped the tag in the pinned URL and left the
-tarball's name at 1.19.1, which is a 404. `skills/undercroft-cli/SKILL.md` pins its line this
-way, and `scripts/skill.test.ts` fails when its pinned block holds more than one version or a
+tarball's name at 1.19.1, which is a 404. `skills/undercroft/references/cli.md` pins its line
+this way, and `scripts/skills.test.ts` fails when its pinned block holds more than one version or a
 version other than the release's. The README pins nothing; it links here.
 
 ## First use, as a person
@@ -70,8 +70,9 @@ destructive command needs `--yes`. `--quiet` prints less.
 
 Pass `--agent`. Agent mode is also inferred whenever stdin or stdout is not a terminal. In
 agent mode, stdout holds exactly one JSON envelope and the exit code agrees with it; nothing
-ever prompts. `skills/undercroft-cli/references/cli-contract.md` has the envelope, every error
-code and every exit code.
+ever prompts. `skills/undercroft/references/cli.md` has the envelope, every error code and
+every exit code. The `undercroft` skill, and the workflow skills beside it, teach an agent
+when to use which command; [agent skills](agent-skills.md) covers installing them.
 
 Signing in takes two steps, because the code arrives in a person's inbox:
 
@@ -114,7 +115,7 @@ It never prints the session itself.
   through `npx`. **The skill** is checked by `task ci:skill-check`, which needs the network.
 - **A release** attaches the tarball on its own, under both names. The `release-cli` job in
   `release.yml` runs `task build:cli-pack`, then `task cd:cli-upload TAG=vX.Y.Z`.
-  release-please bumps the version in `skills/undercroft-cli/SKILL.md` and
+  release-please bumps the version in `skills/undercroft/references/cli.md` and
   `apps/cli/package.json` along with the root.
 
 ## When it goes wrong

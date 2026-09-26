@@ -97,6 +97,7 @@ body:
         - Web UI – the assistant
         - CLI, typed by a person
         - CLI in agent mode (Claude Code, Codex or another agent)
+        - MCP (claude.ai, Claude Desktop, Claude Code or another client)
         - The REST lake API, from a script or orchestrator
         - A scheduled run (Kestra flow or the worker)
         - An alert (email or the Lark group)
