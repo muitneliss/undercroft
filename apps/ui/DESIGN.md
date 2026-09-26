@@ -136,7 +136,7 @@ about one customer and reads down a column of sources the way they read any ledg
 state gets the height it deserves: a granted source is one line, a source awaiting its scope
 is half-hinged off its binding edge, a lapsed grant tips in a correction slip. Motion is the
 movement of printed leaves — stepped, never eased — and the number of frames says what size of
-thing just moved.
+thing just moved. The one exception is the public cover at `/`, below.
 
 The system rejects the generated-interface vocabulary on purpose: no rounded cards in a grid,
 no coloured side-tab accents, no gradient pills, no spinners, no modals, no easing curves.
@@ -384,6 +384,30 @@ fails.
 Lines of type being set — a stepped stripe animating in six frames — not a spinner; the shape
 of what is coming keeps the leaf from jumping when it lands.
 
+## The Public Cover
+
+The page at `/` is the book seen from below: the undercroft, lit by the visitor's lamp. The
+header and the cover remap the book's own tokens onto Ink (Ink becomes Bone lettering, Leaf
+becomes the Ink ground), so plates, links, focus rings and the language pair invert by their
+existing rules and nothing is re-drawn. The paper sections under the cover are the ordinary
+book.
+
+It is the one surface where motion is continuous (ADR 0063). A canvas film behind the headline
+draws the data path as the platform's rules: one gate admitting records one at a time, a lake
+that lays each new hash once and echoes a repeat onto its original, refusals kept struck in a
+tray, and models feeding a report. It also draws the reader's six steps, from an invitation to
+a question, each one threaded to the part of the data it moved. The pointer is the only light.
+The vault's vanishing point swings away from it, the ribs can be read only near it, records part
+around it, the column under it takes its division's hue lifted toward Bone, and the record under
+it shows a proof slip with its content address.
+
+- **Cover ease:** `--cover-ease` (`cubic-bezier(0.16, 1, 0.3, 1)`), for the small states the
+  film drives (a stage lit, a step reached), and nowhere else.
+- **Reduced motion:** one settled frame, repainted as the pointer moves. The lamp and the proof
+  slips still answer, nothing travels.
+- **Cover sizes:** a 4.5rem headline (3.75rem under 1100px, 2rem on a phone) and a 1.5rem lead.
+  These are local to the cover, not steps of the operating type ramp.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -404,7 +428,8 @@ of what is coming keeps the leaf from jumping when it lands.
 
 ### Don't:
 
-- **Don't** use an easing curve anywhere; every transition is `steps(n, end)`.
+- **Don't** use an easing curve anywhere but the public cover; every other transition is
+  `steps(n, end)`.
 - **Don't** put vermilion on anything but an errata slip or a lapsed mark.
 - **Don't** use a wheel hue as an accent, badge, chart colour or button inside a page.
 - **Don't** lay out a list as a grid of equal cards, add a coloured side-tab bar, a gradient

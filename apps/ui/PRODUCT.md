@@ -96,7 +96,9 @@ own database role, in that customer's own schema.
 - The interface is a **book**: a leaf lying open on a section board, divisions cut as tabs
   across the head, each division carrying one hue of a seven-hue wheel; vermilion is held out
   of the wheel for corrections only.
-- Motion is stepped, never eased; the number of frames is the size of the thing that moved.
+- Motion is stepped, never eased; the number of frames is the size of the thing that moved. The
+  public cover at `/` is the one exception: a continuous, pointer-lit film of the data path
+  (ADR 0063).
 - Vendor names (HubSpot, Xero, Gmail, Google Drive) and role values are never translated.
 
 ## Evidence on Hand

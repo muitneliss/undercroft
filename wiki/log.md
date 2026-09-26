@@ -162,3 +162,5 @@
 ## [2026-09-25] ingest | ADR 0062: A refused bearer is logged with its reason, and an access token lives eight hours
 ## [2026-09-25] ingest | Public home and customer index
 ## [2026-09-25] ingest | Public home and customer index
+## [2026-09-26] ingest | ADR 0063 The Public Cover Moves Continuously
+## [2026-09-26] ingest | Public home and customer index
