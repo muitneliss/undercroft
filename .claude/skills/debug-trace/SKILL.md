@@ -1,6 +1,10 @@
 ---
 name: debug-trace
 description: Debug a production problem in a deployed Undercroft by following it through the host's observability stack. It reads the trace from Tempo, its log lines from Loki, and the container's own log over read-only SSH to the Dokploy host, looking up every credential at run time from this checkout. Use this skill whenever someone hands you a trace id (32 hex characters, an `x-trace-id`, the "Trace ID" in a GitHub issue or the UI's error box, `error.traceId` in a CLI envelope), a run id (`run-…`) that failed, or a Kestra execution id. Also use it when they ask why something failed, errored, hung or showed `internal_error` in production or on the server, or what happened to a request, a sync or an ingest, even if they never say "trace" or "Grafana". Use it before guessing at a cause from the code alone.
+# For working on this repository, not for its users: the skills CLI hides an internal
+# skill from `npx skills add muitneliss/undercroft` (docs/runbook/agent-skills.md).
+metadata:
+  internal: true
 ---
 
 # Follow a failure through the running system

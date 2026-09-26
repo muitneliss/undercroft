@@ -16,6 +16,7 @@
  */
 
 import { expect, test as it } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -71,4 +72,28 @@ it("reports bugs through form fields and options that exist", () => {
 
 it("builds its tarball under the release's version", () => {
   expect(versionOf("apps/cli/package.json")).toBe(versionOf("package.json"));
+});
+
+// `npx skills add muitneliss/undercroft` scans far more than `skills/`: `.claude/skills/`,
+// `.agents/skills/` and a dozen other agent directories. The skills this repo keeps for
+// working on ITSELF live there, and every one of them was installed into users' agents
+// beside the published ones until they were marked internal -- the skills CLI's own
+// `metadata.internal`, which hides a skill unless `INSTALL_INTERNAL_SKILLS=1`. Every tracked
+// SKILL.md outside `skills/` is therefore internal, whichever directory it sits in.
+it("marks every skill outside skills/ internal, so npx skills does not publish it", () => {
+  const tracked = spawnSync("git", ["ls-files", "-z", "--", ":(glob)**/SKILL.md"], {
+    cwd: REPO,
+    encoding: "utf8",
+  }).stdout.split("\0");
+  const unmarked = tracked
+    .filter((path) => path !== "" && !path.startsWith("skills/"))
+    .filter((path) => {
+      const text = readFileSync(join(REPO, path), "utf8");
+      const frontmatter = /^---\n(?<yaml>[\s\S]*?)\n---\n/u.exec(text)?.groups?.yaml ?? "";
+      const { metadata } = (parse(frontmatter) ?? {}) as { metadata?: { internal?: unknown } };
+      return metadata?.internal !== true;
+    });
+
+  expect(tracked.some((path) => path.startsWith(".claude/skills/"))).toBe(true);
+  expect(unmarked).toEqual([]);
 });
