@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.0](https://github.com/muitneliss/undercroft/compare/v1.38.0...v1.39.0) (2026-09-26)
+
+
+### Features
+
+* **ui:** the public cover is a lamp-lit vault that animates the data path and the reader's ([#247](https://github.com/muitneliss/undercroft/issues/247)) ([a93d892](https://github.com/muitneliss/undercroft/commit/a93d8920437bc97b99bb34daef8aca536bbe904a))
+
 ## [1.38.0](https://github.com/muitneliss/undercroft/compare/v1.37.0...v1.38.0) (2026-09-26)
 
 
