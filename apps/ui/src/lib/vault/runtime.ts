@@ -14,17 +14,9 @@
  * (ADR 0063).
  */
 
-import { type Lamp, type Pixel, type Rect, STAGE_TONE } from "@/lib/vault/frame.ts";
-import {
-  createVault,
-  STAGES,
-  type StageId,
-  STEP_STAGE,
-  STEPS,
-  stageAt,
-  stepU,
-  type Vault,
-} from "@/lib/vault/model.ts";
+import { type Lamp, type Palette, type Pixel, paletteFor, type Rect } from "@/lib/vault/frame.ts";
+import { createVault, type StageId, STEP_STAGE, stageAt, type Vault } from "@/lib/vault/model.ts";
+import { markPath, tintStages } from "@/lib/vault/marks.ts";
 import { advance, trigger } from "@/lib/vault/reader.ts";
 import { paint } from "@/lib/vault/scene.ts";
 
@@ -63,12 +55,6 @@ function relative(element: Element, to: DOMRect): Rect {
   return { x: rect.left - to.left, y: rect.top - to.top, w: rect.width, h: rect.height };
 }
 
-function setWhenChanged(element: Element, name: string, value: string): void {
-  if (element.getAttribute(name) !== value) {
-    element.setAttribute(name, value);
-  }
-}
-
 function clampUnit(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
@@ -80,6 +66,7 @@ export class VaultFilm {
   private readonly lamp: Lamp = { x: 0, y: 0, tiltX: 0, tiltY: 0, held: false };
   private readonly size = { width: 0, height: 0 };
   private readonly still = globalThis.matchMedia("(prefers-reduced-motion: reduce)");
+  private readonly dark = globalThis.matchMedia("(prefers-color-scheme: dark)");
   private band: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private track: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private drift = 0;
@@ -110,13 +97,8 @@ export class VaultFilm {
   }
 
   private run(): () => void {
-    const { cover, band, stages } = this.elements;
-    // The hole a lit stage punches is the column's own lifted hue, from the painter's table.
-    for (const [index, item] of Array.from(stages.children).entries()) {
-      if (item instanceof HTMLElement) {
-        item.style.setProperty("--tone", STAGE_TONE[STAGES[index] ?? "sources"]);
-      }
-    }
+    const { cover, band } = this.elements;
+    tintStages(this.elements.stages, this.palette());
     const resize = new ResizeObserver(() => this.measure());
     resize.observe(cover);
     resize.observe(band);
@@ -131,6 +113,7 @@ export class VaultFilm {
       [cover, "pointerleave", (): void => this.leave()],
       [document, "visibilitychange", (): void => this.resume()],
       [this.still, "change", (): void => this.resume()],
+      [this.dark, "change", (): void => this.recolour()],
     ];
     for (const [target, type, listener] of listeners) {
       target.addEventListener(type, listener);
@@ -146,6 +129,18 @@ export class VaultFilm {
         target.removeEventListener(type, listener);
       }
     };
+  }
+
+  private palette(): Palette {
+    return paletteFor(this.dark.matches);
+  }
+
+  /** The reader switched between light and dark: the film changes palette where it stands. */
+  private recolour(): void {
+    tintStages(this.elements.stages, this.palette());
+    if (this.frame === 0) {
+      this.draw(performance.now());
+    }
   }
 
   /** Loops when the cover can be seen and motion is welcome; otherwise paints one still frame. */
@@ -245,6 +240,7 @@ export class VaultFilm {
       lamp: this.lamp,
       vault: this.vault,
       lit,
+      palette: this.palette(),
       sourceNames: this.words.sourceNames,
       refusedWord: this.words.refused,
       echoWord: this.words.echo,
@@ -252,20 +248,7 @@ export class VaultFilm {
       still: this.still.matches,
       trails: this.trails,
     });
-    this.mark(lit);
-  }
-
-  /** The stage the lamp is over and the step the reader has reached, as `data-` attributes. */
-  private mark(lit: StageId): void {
-    const { reader } = this.vault;
-    for (const [index, item] of Array.from(this.elements.stages.children).entries()) {
-      setWhenChanged(item, "data-lit", String(stageAt((index + 0.5) / 4) === lit));
-    }
-    for (const [index, item] of Array.from(this.elements.steps.children).entries()) {
-      const step = STEPS[index] ?? "ask";
-      const passed = reader.u >= stepU(step) ? "done" : "ahead";
-      setWhenChanged(item, "data-state", step === reader.step ? "current" : passed);
-    }
+    markPath(this.elements.stages, this.elements.steps, lit, this.vault.reader);
   }
 
   private move(event: Event): void {

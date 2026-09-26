@@ -386,11 +386,13 @@ of what is coming keeps the leaf from jumping when it lands.
 
 ## The Public Cover
 
-The page at `/` is the book seen from below: the undercroft, lit by the visitor's lamp. The
-header and the cover remap the book's own tokens onto Ink (Ink becomes Bone lettering, Leaf
-becomes the Ink ground), so plates, links, focus rings and the language pair invert by their
-existing rules and nothing is re-drawn. The paper sections under the cover are the ordinary
-book.
+The page at `/` is the undercroft beneath the book, lit by the visitor's lamp, and it follows the
+reader's colour scheme (ADR 0064). In light it is the book as printed: the page stock and the
+book's tokens from header to footer, the vault drawn in Ink. In dark the whole page is the book
+inverted: every child of `.landing` remaps the book's own tokens onto Ink (Ink becomes Bone
+lettering, Leaf becomes the Ink ground), so plates, links, focus rings and the language pair
+invert by their existing rules and nothing is re-drawn. The vault's painter has a palette for
+each scheme, and a test holds both to WCAG contrast on their own ground.
 
 It is the one surface where motion is continuous (ADR 0063). A canvas film behind the headline
 draws the data path as the platform's rules: one gate admitting records one at a time, a lake
@@ -401,6 +403,8 @@ The vault's vanishing point swings away from it, the ribs can be read only near 
 around it, the column under it takes its division's hue lifted toward Bone, and the record under
 it shows a proof slip with its content address.
 
+- **Lamp colour:** `--lamp-ink`: Chrome at night, Chrome mixed 55% toward Ink by day, for the
+  headline's second line and the reached step.
 - **Cover ease:** `--cover-ease` (`cubic-bezier(0.16, 1, 0.3, 1)`), for the small states the
   film drives (a stage lit, a step reached), and nowhere else.
 - **Reduced motion:** one settled frame, repainted as the pointer moves. The lamp and the proof

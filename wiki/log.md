@@ -164,3 +164,5 @@
 ## [2026-09-25] ingest | Public home and customer index
 ## [2026-09-26] ingest | ADR 0063 The Public Cover Moves Continuously
 ## [2026-09-26] ingest | Public home and customer index
+## [2026-09-26] ingest | ADR 0064 The Public Home Follows the Reader's Colour Scheme
+## [2026-09-26] ingest | Public home and customer index

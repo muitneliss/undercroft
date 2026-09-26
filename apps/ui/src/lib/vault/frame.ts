@@ -8,42 +8,104 @@
  * the way water parts around a finger. Nothing is lit that the lamp is not near, which is what
  * makes the cover read as high contrast rather than as a dark theme.
  *
- * Colour: the ground is Ink and the data is Bone, the two ends of the palette. A division's
- * hue appears only on the column the lamp is over -- the column whose tab the visitor will
- * open after signing in -- lifted toward Bone so it holds contrast on Ink.
+ * Colour follows the reader's colour scheme (ADR 0064). At night the ground is Ink and the data
+ * is Bone, the palette's two ends; by day the ground is the Page stock and the data is Ink, the
+ * book as printed. In both, a division's hue appears only on the column the lamp is over -- the
+ * column whose tab the visitor will open after signing in -- lifted toward Bone at night so it
+ * holds contrast on Ink, and darkened toward Ink by day where the wheel's own value is too pale.
+ * `frame.test.ts` holds both palettes to WCAG contrast on their own ground.
  *
  * This is the one place in the interface where motion is continuous rather than stepped. The
  * reasoning, and the boundary that keeps it here, is ADR 0063.
  */
 
+import { parseHex, toHex } from "@/lib/acetate.ts";
 import { type Point, type StageId, stageAt, type Vault } from "@/lib/vault/model.ts";
 
-/** The palette's two ends and its lamp. DESIGN.md owns the values; these are its hexes. */
-export const INK = "#16150f";
-export const BONE = "#efe9d9";
-export const CHROME = "#eda600";
+/** The book's stock, ink and wheel. DESIGN.md owns the values; these are its hexes. */
+const INK = "#16150f";
+const BONE = "#efe9d9";
+const PAGE = "#f7f3e7";
+const CHROME = "#eda600";
+const TEAL = "#0f7673";
+const VIOLET = "#634cb0";
+const SIENNA = "#7f4023";
+const ULTRAMARINE = "#234c9e";
 
-/** A hex colour mixed toward Bone by `amount` (0..1), as `rgb()`. */
-export function lift(hex: string, amount: number): string {
-  function channel(from: string, at: number): number {
-    return Number.parseInt(from.slice(at, at + 2), 16);
+/** `from` mixed toward `to` by `amount` (0..1), as hex. Refuses a colour it cannot read. */
+export function mix(from: string, to: string, amount: number): string {
+  const a = parseHex(from);
+  const b = parseHex(to);
+  if (a === null || b === null) {
+    throw new Error(`not a hex colour: ${from} / ${to}`);
   }
-  function mix(at: number): number {
-    return Math.round(channel(hex, at) + (channel(BONE, at) - channel(hex, at)) * amount);
-  }
-  return `rgb(${mix(1)}, ${mix(3)}, ${mix(5)})`;
+  return toHex({
+    r: a.r + (b.r - a.r) * amount,
+    g: a.g + (b.g - a.g) * amount,
+    b: a.b + (b.b - a.b) * amount,
+  });
 }
 
-/** Each column's division hue from the wheel, lifted to read on Ink. */
-export const STAGE_TONE: Record<StageId, string> = {
-  sources: lift(CHROME, 0.05),
-  raw: lift("#0f7673", 0.42),
-  models: lift("#634cb0", 0.45),
-  reports: lift("#7f4023", 0.5),
+/** Everything the painter colours with, for one colour scheme. */
+export interface Palette {
+  readonly ground: string;
+  /** The data, the rules' colour at full strength, and the proof slip's lettering. */
+  readonly ink: string;
+  /** The lamp's colour where it marks something: a gate passing, a fresh block, the reader. */
+  readonly accent: string;
+  /** `r, g, b` of the lamp's warmth on the ground, and how strongly it warms. */
+  readonly glow: string;
+  readonly glowAlpha: number;
+  /** `r, g, b` of every rule, rib and hairline; alphas are chosen where each is drawn. */
+  readonly line: string;
+  readonly lineStrength: number;
+  readonly tones: Readonly<Record<StageId, string>>;
+  /** People's hue: the invitation is the People division's act. */
+  readonly people: string;
+}
+
+export const NIGHT: Palette = {
+  ground: INK,
+  ink: BONE,
+  accent: CHROME,
+  glow: "237, 166, 0",
+  glowAlpha: 0.2,
+  line: "239, 233, 217",
+  lineStrength: 1,
+  tones: {
+    sources: mix(CHROME, BONE, 0.05),
+    raw: mix(TEAL, BONE, 0.42),
+    models: mix(VIOLET, BONE, 0.45),
+    reports: mix(SIENNA, BONE, 0.5),
+  },
+  people: mix(ULTRAMARINE, BONE, 0.5),
 };
 
-/** People's hue: the invitation is the People division's act. */
-export const PEOPLE_TONE = lift("#234c9e", 0.5);
+export const DAY: Palette = {
+  ground: PAGE,
+  ink: INK,
+  accent: mix(CHROME, INK, 0.45),
+  glow: "237, 166, 0",
+  glowAlpha: 0.16,
+  line: "22, 21, 15",
+  lineStrength: 0.7,
+  tones: {
+    sources: mix(CHROME, INK, 0.45),
+    raw: TEAL,
+    models: VIOLET,
+    reports: SIENNA,
+  },
+  people: ULTRAMARINE,
+};
+
+export function paletteFor(dark: boolean): Palette {
+  return dark ? NIGHT : DAY;
+}
+
+/** A palette's `r, g, b` at an alpha, as a canvas colour. */
+export function rgba(rgb: string, alpha: number): string {
+  return `rgba(${rgb}, ${alpha})`;
+}
 
 export interface Rect {
   x: number;
@@ -78,6 +140,7 @@ export interface Frame {
   readonly lamp: Lamp;
   readonly vault: Vault;
   readonly lit: StageId;
+  readonly palette: Palette;
   /** Source names, and the words a hovered item carries: the catalogue's, never written here. */
   readonly sourceNames: readonly string[];
   readonly refusedWord: string;
@@ -111,10 +174,15 @@ export function since(frame: Frame, at: number, over: number): number {
   return age < 0 || age > over ? 0 : 1 - age / over;
 }
 
-/** Bone, or the lit column's hue when `u` is in the column the lamp is over. */
+/** The data's ink, or the lit column's hue when `u` is in the column the lamp is over. */
 export function tone(frame: Frame, u: number): string {
   const stage = stageAt(u);
-  return stage === frame.lit ? STAGE_TONE[stage] : BONE;
+  return stage === frame.lit ? frame.palette.tones[stage] : frame.palette.ink;
+}
+
+/** A rule or rib in the palette's line colour, scaled to how strongly this scheme draws lines. */
+export function line(frame: Frame, alpha: number): string {
+  return rgba(frame.palette.line, alpha * frame.palette.lineStrength);
 }
 
 /** A small filled or stroked circle; the book's punched hole, at canvas scale. */

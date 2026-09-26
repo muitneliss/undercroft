@@ -1,48 +1,59 @@
 /*
- * The public cover: the undercroft beneath the page, lit by the visitor's lamp.
+ * The public home: the undercroft beneath the page, lit by the visitor's lamp.
  *
- * THE COVER IS THE BOOK INVERTED, NOT A SECOND THEME. The header and the cover redefine the
- * book's own tokens -- Ink becomes the bone lettering, Leaf becomes the ink ground -- so every
- * plate, link, focus ring and the language pair inside them invert by the rules they already
- * follow, and nothing here re-draws a control. The paper sheet below the cover is untouched.
+ * IT FOLLOWS THE READER'S COLOUR SCHEME (ADR 0064). By day it is the book as printed, on the
+ * page stock with the book's own tokens. At night the whole page is the book INVERTED, not a
+ * second theme: every child of `.landing` redefines the book's own tokens -- Ink becomes the
+ * bone lettering, Leaf becomes the ink ground -- so every plate, link, focus ring and the
+ * language pair invert by the rules they already follow, and nothing here re-draws a control.
+ * The vault behind the cover takes the matching palette from `@/lib/vault/frame.ts`.
  *
  * This is also the one place in the interface where a transition may ease. ADR 0063 draws the
  * boundary: continuous motion belongs to the cover's film, and to the small state changes the
- * film drives (a stage lit, a step reached) so they move at the film's pace. Everything below
- * the cover, and every surface behind sign-in, stays stepped (ADR 0014).
+ * film drives (a stage lit, a step reached) so they move at the film's pace. Every surface
+ * behind sign-in stays stepped (ADR 0014).
  */
 @layer undercroft {
-  /* Captured before the cover remaps --ink, so the ground keeps the page's ink. */
+  /* Captured here, before a child remaps --ink, so the night ground keeps the page's ink. The
+     lamp's colour is darkened toward Ink by day, where Chrome on the page stock would letter
+     the headline at 1.9:1; at night it is Chrome itself. */
   .landing {
     --ground: var(--ink);
-  }
-
-  .landing__header,
-  .landing__cover {
-    --ink: var(--bone);
-    --ink-2: color-mix(in srgb, var(--bone) 80%, var(--ground));
-    --ink-3: color-mix(in srgb, var(--bone) 70%, var(--ground));
-    --leaf: var(--ground);
-    --rule: color-mix(in srgb, var(--bone) 18%, transparent);
-    --rule-strong: color-mix(in srgb, var(--bone) 42%, transparent);
+    --lamp-ink: color-mix(in srgb, var(--hue-chrome) 55%, var(--ink));
     --cover-ease: cubic-bezier(0.16, 1, 0.3, 1);
-
-    background: var(--ground);
-    color: var(--ink);
   }
 
-  .landing__header ::selection,
-  .landing__cover ::selection {
+  .landing ::selection {
     color: var(--ground);
   }
 
-  .landing__cover .plate--primary,
-  .landing__cover .plate--primary:hover:not(:disabled) {
-    color: var(--ground);
-  }
+  @media (prefers-color-scheme: dark) {
+    .landing {
+      background: var(--ground);
+    }
 
-  .landing__cover .plate--primary:hover:not(:disabled) {
-    background: var(--ink);
+    .landing > * {
+      --ink: var(--bone);
+      --ink-2: color-mix(in srgb, var(--bone) 80%, var(--ground));
+      --ink-3: color-mix(in srgb, var(--bone) 70%, var(--ground));
+      --leaf: var(--ground);
+      --rule: color-mix(in srgb, var(--bone) 18%, transparent);
+      --rule-strong: color-mix(in srgb, var(--bone) 42%, transparent);
+      --lamp-ink: var(--hue-chrome);
+
+      color: var(--ink);
+    }
+
+    /* The primary plate keeps Ink lettering on Chrome, and inverts to Bone rather than to the
+       ground it would vanish into. */
+    .landing .plate--primary,
+    .landing .plate--primary:hover:not(:disabled) {
+      color: var(--ground);
+    }
+
+    .landing .plate--primary:hover:not(:disabled) {
+      background: var(--ink);
+    }
   }
 
   .landing__cover {
@@ -87,7 +98,7 @@
 
   /* The second line is the promise; it is set in the lamp's colour. */
   .landing__hero h1 span + span {
-    color: var(--hue-chrome);
+    color: var(--lamp-ink);
   }
 
   .landing__lead {

@@ -5,7 +5,7 @@ date: 2026-09-26
 tags: []
 source: docs/design/homepages.md
 source_path: docs/design/homepages.md
-source_hash: 377556d085ec0dc815bf1bfad19fc65fb0aa451f5871b8d7ef8021a7022eab76
+source_hash: 031a6ce58fbbebd55f8d2696da3b63c678ba446f0d820cbaf89025f0475ddb90
 ingested: 2026-09-26
 ---
 
@@ -19,4 +19,4 @@ The customer index searches the server-authorized list by name or ID using accen
 
 The selected Case Index composition reuses Undercroft's paper, typography, controls and book shell. Public-cover type sizes (a 4.5rem / 3.75rem / 2rem heading and a 1.5rem / 1.25rem lead) are local composition choices; the operating UI type ramp remains unchanged. It adds no operational statistics or sample customer data to the product.
 
-The cover is the book seen from below, on Ink, and the one continuously moving surface ([[adr-0063-the-public-cover-moves-continuously]]). A canvas film draws the data path as the platform's rules (one gate, a create-only content-addressed lake, refusals kept struck, models feeding a report) and the reader's six steps from invitation to question, each threaded to the data it moved. The pointer is a lamp that turns the vault, lights what is near, tints the column under it and reads out a record's content address; pressing the flow runs it. The two ordered lists are the content; reduced motion holds one settled frame that still answers the lamp.
+The cover is the book seen from below and the one continuously moving surface ([[adr-0063-the-public-cover-moves-continuously]]). The whole home follows the reader's colour scheme ([[adr-0064-the-public-home-follows-the-reader-s-colour-scheme]]): light is the book as printed on the page stock, dark is the book inverted onto Ink from header to footer. A canvas film draws the data path as the platform's rules (one gate, a create-only content-addressed lake, refusals kept struck, models feeding a report) and the reader's six steps from invitation to question, each threaded to the data it moved. The pointer is a lamp that turns the vault, lights what is near, tints the column under it and reads out a record's content address; pressing the flow runs it. The two ordered lists are the content; reduced motion holds one settled frame that still answers the lamp.

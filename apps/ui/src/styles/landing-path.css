@@ -127,7 +127,7 @@
   }
 
   .flow__step[data-state="current"] strong {
-    color: var(--hue-chrome);
+    color: var(--lamp-ink);
   }
 
   .flow__step[data-state="current"] span {

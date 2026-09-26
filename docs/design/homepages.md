@@ -23,8 +23,9 @@ The public cover uses local composition sizes: a 4.5rem desktop / 3.75rem narrow
 2rem phone heading, a 1.5rem desktop / 1.25rem phone lead, and 1rem stage titles. These do
 not change the operating UI's type ramp in `apps/ui/DESIGN.md`.
 
-MOTION: The cover is the book seen from below, on Ink, and the one surface that moves
-continuously (ADR 0063). A canvas film draws the data path as the platform's own rules: one
+MOTION: The cover is the book seen from below and the one surface that moves continuously
+(ADR 0063). The whole home follows the reader's colour scheme (ADR 0064). Light is the book as
+printed, on the page stock. Dark is the book inverted onto Ink from header to footer. A canvas film draws the data path as the platform's own rules: one
 gate, a create-only content-addressed lake, refusals kept struck, and models feeding a report.
 It also draws the reader's six steps, from an invitation to a question, each threaded to the
 data it moved. The pointer is a lamp. It turns the vault, lights what is near it, tints the
