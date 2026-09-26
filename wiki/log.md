@@ -166,3 +166,5 @@
 ## [2026-09-26] ingest | Public home and customer index
 ## [2026-09-26] ingest | ADR 0064 The Public Home Follows the Reader's Colour Scheme
 ## [2026-09-26] ingest | Public home and customer index
+## [2026-09-26] ingest | ADR 0065 The Lamp Lights the Whole Public Home
+## [2026-09-26] ingest | Public home and customer index
