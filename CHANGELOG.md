@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.4](https://github.com/muitneliss/undercroft/compare/v1.41.3...v1.41.4) (2026-09-27)
+
+
+### Bug Fixes
+
+* **connector-runtime:** name page one on a page-number read's first request ([#269](https://github.com/muitneliss/undercroft/issues/269)) ([5bbe95d](https://github.com/muitneliss/undercroft/commit/5bbe95da9b1324fa2571cbed4cd16f6fb7c05d41)), closes [#268](https://github.com/muitneliss/undercroft/issues/268)
+
 ## [1.41.3](https://github.com/muitneliss/undercroft/compare/v1.41.2...v1.41.3) (2026-09-27)
 
 
