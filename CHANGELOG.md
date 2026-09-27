@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.0](https://github.com/muitneliss/undercroft/compare/v1.41.4...v1.42.0) (2026-09-27)
+
+
+### Features
+
+* **xero:** read every record list the granular read scopes reach ([#272](https://github.com/muitneliss/undercroft/issues/272)) ([749190b](https://github.com/muitneliss/undercroft/commit/749190bb4e69291fb5ee1d64871095bb99014256))
+
 ## [1.41.4](https://github.com/muitneliss/undercroft/compare/v1.41.3...v1.41.4) (2026-09-27)
 
 
