@@ -184,3 +184,5 @@
 ## [2026-09-27] ingest | Runbook: Onboarding a new person
 ## [2026-09-27] ingest | Runbook Xero Setup
 ## [2026-09-27] ingest | ADR 0068 A Watermark Is Sent in the Dialect the Filter Reads
+## [2026-09-27] ingest | ADR 0069 Xero Reads Every List Its Granular Scopes Reach
+## [2026-09-27] ingest | Runbook Xero Setup

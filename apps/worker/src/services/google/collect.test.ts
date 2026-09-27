@@ -23,7 +23,7 @@ import { createRunJournal, type RunJournal } from "../runJournal.ts";
 import { createGoogleApi } from "./api.ts";
 import { DOCUMENT_UNLANDED, runGoogleCollect, ScopeNotChosen } from "./collect.ts";
 import { NOTHING_MATCHED } from "./drive.ts";
-import { GrantTooNarrow } from "./grant.ts";
+import { GrantTooNarrow } from "../grant.ts";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const DRIVE = "https://www.googleapis.com/drive/v3/files";

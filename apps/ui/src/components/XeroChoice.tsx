@@ -18,7 +18,7 @@
 import { useTranslation } from "react-i18next";
 
 import { ChoiceEcho } from "@/components/ChoiceEcho.tsx";
-import { describeXeroEntity, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
+import { describeXeroEntity, nameXeroEntities, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
 import { useUiStore } from "@/store.ts";
 
 /**
@@ -45,10 +45,6 @@ export function XeroChoice({
   const toggleEntity = useUiStore((s) => s.toggleScopeEntity);
   const clearEntities = useUiStore((s) => s.clearScopeEntities);
   const selectAllEntities = useUiStore((s) => s.selectAllScopeEntities);
-
-  function named(ids: readonly string[]): string {
-    return ids.map((entity) => describeXeroEntity(t, entity)).join(", ");
-  }
 
   if (organisations.length === 0) {
     return <p className="note">{t("scopePicker.noOrganisations")}</p>;
@@ -103,9 +99,11 @@ export function XeroChoice({
         chosen={entities}
         offered={XERO_ENTITIES}
         says={{
-          none: t("scope.xeroAll"),
-          some: t("scope.xeroEntities", { entities: named(entities) }),
-          every: t("scopePicker.echoEveryEntity", { entities: named(XERO_ENTITIES) }),
+          none: t("scope.xeroAll", { entities: nameXeroEntities(t, XERO_ENTITIES) }),
+          some: t("scope.xeroEntities", { entities: nameXeroEntities(t, entities) }),
+          every: t("scopePicker.echoEveryEntity", {
+            entities: nameXeroEntities(t, XERO_ENTITIES),
+          }),
         }}
         onSelectAll={(): void => {
           selectAllEntities(source, XERO_ENTITIES);

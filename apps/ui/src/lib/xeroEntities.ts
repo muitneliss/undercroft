@@ -4,37 +4,45 @@
  *
  * The list mirrors `specs/connectors/xero.yaml` by hand: the interface does not read specs,
  * and an entity offered here that the spec does not declare would be a tick that reads
- * nothing. The ids stay as the spec names them -- they are what the choice records -- and
- * only the words a person sees are translated.
+ * nothing. `xeroEntities.test.ts` holds the two to one list, in one order. The ids stay as the
+ * spec names them -- they are what the choice records -- and only the words a person sees are
+ * translated.
  */
 
 import type { TFunction } from "i18next";
 
-export type XeroEntity = "contacts" | "invoices" | "payments" | "credit_notes";
-
-/** In the spec's order, which is the order the picker offers them. */
-export const XERO_ENTITIES: readonly XeroEntity[] = [
-  "contacts",
-  "invoices",
-  "payments",
-  "credit_notes",
-];
-
-const ENTITY_KEY: Record<
-  XeroEntity,
-  "scope.xeroContacts" | "scope.xeroInvoices" | "scope.xeroPayments" | "scope.xeroCreditNotes"
-> = {
+/** Each entity, and the catalogue key its name is under. In the spec's order. */
+const ENTITY_KEY = {
   contacts: "scope.xeroContacts",
   invoices: "scope.xeroInvoices",
   payments: "scope.xeroPayments",
   credit_notes: "scope.xeroCreditNotes",
-};
+  quotes: "scope.xeroQuotes",
+  purchase_orders: "scope.xeroPurchaseOrders",
+  repeating_invoices: "scope.xeroRepeatingInvoices",
+  linked_transactions: "scope.xeroLinkedTransactions",
+  items: "scope.xeroItems",
+  overpayments: "scope.xeroOverpayments",
+  prepayments: "scope.xeroPrepayments",
+  batch_payments: "scope.xeroBatchPayments",
+  contact_groups: "scope.xeroContactGroups",
+} as const;
+
+export type XeroEntity = keyof typeof ENTITY_KEY;
 
 function isXeroEntity(value: string): value is XeroEntity {
-  return XERO_ENTITIES.some((entity) => entity === value);
+  return Object.hasOwn(ENTITY_KEY, value);
 }
+
+/** In the spec's order, which is the order the picker offers them. */
+export const XERO_ENTITIES: readonly XeroEntity[] = Object.keys(ENTITY_KEY).filter(isXeroEntity);
 
 /** An entity's name for a reader; an id this build has no word for keeps its id. */
 export function describeXeroEntity(t: TFunction, entity: string): string {
   return isXeroEntity(entity) ? t(ENTITY_KEY[entity]) : entity;
+}
+
+/** Several entities' names, as one list a sentence interpolates. */
+export function nameXeroEntities(t: TFunction, entities: readonly string[]): string {
+  return entities.map((entity) => describeXeroEntity(t, entity)).join(", ");
 }

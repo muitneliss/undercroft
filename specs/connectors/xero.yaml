@@ -18,8 +18,15 @@ auth:
   # SELECT ... FOR UPDATE before refreshing: two concurrent refreshes do not race, they
   # destroy the connection.
   rotatesRefreshToken: true
-  # Granular scopes: invoices covers /Invoices and /CreditNotes, payments covers /Payments.
-  # Xero no longer grants the broad accounting.transactions to a new app.
+  # Granular scopes, and every entity below is read under one of these three -- none needs a new
+  # consent. Per Xero's granular scope table:
+  #   accounting.invoices.read  /Invoices /CreditNotes /Quotes /PurchaseOrders /RepeatingInvoices
+  #                             /LinkedTransactions /Items
+  #   accounting.payments.read  /Payments /Overpayments /Prepayments /BatchPayments
+  #   accounting.contacts.read  /Contacts /ContactGroups
+  # Xero no longer grants the broad accounting.transactions to a new app. An entity needing a
+  # scope not listed here is a new consent for every connection: add it here and in
+  # `oauthProviders.ts`, and a grant recorded without it is refused before its run opens.
   scopes:
     [offline_access, accounting.invoices.read, accounting.payments.read, accounting.contacts.read]
   # THEIR organisation id, from ops.connection.external_account_id. It is not our
@@ -112,3 +119,121 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+
+  # The lists below are the rest of what the three scopes above reach (issue 271). They do not all
+  # read like the four above, and each difference is Xero's OpenAPI document's, not a choice:
+  #
+  # - `pagination: none` where Xero takes no `page`: /RepeatingInvoices, /Items, /BatchPayments,
+  #   /ContactGroups answer every record at once. Paged as the default pages, each would answer
+  #   page two with page one again and never with the empty page the read stops on.
+  # - No `pageSize` where Xero takes none: /Quotes and /LinkedTransactions page at 100.
+  # - No `incremental` where Xero takes no `If-Modified-Since`: those lists are read whole every
+  #   run, which costs nothing in the lake, where an unchanged record lands as unchanged.
+  # - No `updatedAtPath` where the record carries no `UpdatedDateUTC`: absent is honest.
+  #
+  # `failOnEmpty: false` on every one, because an organisation with no quotes, no purchase orders
+  # or no contact groups is ordinary, and the run must not fail on it -- for an unpaged or
+  # non-incremental list, every run would. The guard exists for "failed after 0", which is what a
+  # credential problem looks like, and on Xero that arrives as a 401 or 403, which raises; a grant
+  # without a scope the spec declares is refused before the run opens. An empty 200 from Xero is
+  # Xero's own word that there is nothing.
+  - name: quotes
+    request: { kind: list, path: /Quotes }
+    envelopePath: Quotes
+    idPath: QuoteID
+    updatedAtPath: UpdatedDateUTC
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: purchase_orders
+    request: { kind: list, path: /PurchaseOrders, query: { pageSize: "100" } }
+    envelopePath: PurchaseOrders
+    idPath: PurchaseOrderID
+    updatedAtPath: UpdatedDateUTC
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: repeating_invoices
+    request: { kind: list, path: /RepeatingInvoices }
+    envelopePath: RepeatingInvoices
+    idPath: RepeatingInvoiceID
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+
+  - name: linked_transactions
+    request: { kind: list, path: /LinkedTransactions }
+    envelopePath: LinkedTransactions
+    idPath: LinkedTransactionID
+    updatedAtPath: UpdatedDateUTC
+    guards: { failOnEmpty: false }
+
+  - name: items
+    request: { kind: list, path: /Items }
+    envelopePath: Items
+    idPath: ItemID
+    updatedAtPath: UpdatedDateUTC
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: overpayments
+    request: { kind: list, path: /Overpayments, query: { pageSize: "100" } }
+    envelopePath: Overpayments
+    idPath: OverpaymentID
+    updatedAtPath: UpdatedDateUTC
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: prepayments
+    request: { kind: list, path: /Prepayments, query: { pageSize: "100" } }
+    envelopePath: Prepayments
+    idPath: PrepaymentID
+    updatedAtPath: UpdatedDateUTC
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: batch_payments
+    request: { kind: list, path: /BatchPayments }
+    envelopePath: BatchPayments
+    idPath: BatchPaymentID
+    updatedAtPath: UpdatedDateUTC
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: contact_groups
+    request: { kind: list, path: /ContactGroups }
+    envelopePath: ContactGroups
+    idPath: ContactGroupID
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }

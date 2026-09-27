@@ -98,7 +98,7 @@ import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
 import { harvestGmail } from "./gmail.ts";
-import { requireReadGrant } from "./grant.ts";
+import { requireReadGrant } from "../grant.ts";
 import { type Harvest, type HarvestItem, type HarvestSummary, heldBy } from "./harvest.ts";
 
 export const GOOGLE_KINDS = ["gmail", "drive"] as const;

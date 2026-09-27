@@ -44,7 +44,7 @@ import { MULTI_ACCOUNT_KINDS } from "@undercroft/contracts/sources";
 import type { TFunction } from "i18next";
 
 import type { Connection, Source } from "@/api/types.ts";
-import { describeXeroEntity } from "@/lib/xeroEntities.ts";
+import { nameXeroEntities, XERO_ENTITIES } from "@/lib/xeroEntities.ts";
 
 export type CardState = "not_connected" | "connected" | "needs_scope" | "needs_reconnect";
 
@@ -219,10 +219,8 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
       // An empty list is a recorded decision -- every entity the spec declares -- and the
       // words say so rather than leaving a dash that reads as "nothing chosen".
       return entities.length === 0
-        ? t("scope.xeroAll")
-        : t("scope.xeroEntities", {
-            entities: entities.map((entity) => describeXeroEntity(t, entity)).join(", "),
-          });
+        ? t("scope.xeroAll", { entities: nameXeroEntities(t, XERO_ENTITIES) })
+        : t("scope.xeroEntities", { entities: nameXeroEntities(t, entities) });
 
     case "hubspot": {
       // Nothing chosen is a reading, not an absence: the spec's own properties, which is what a

@@ -663,7 +663,16 @@ export const en = {
     xeroInvoices: "Invoices",
     xeroPayments: "Payments",
     xeroCreditNotes: "Credit notes",
-    xeroAll: "Every kind of data: contacts, invoices, payments, credit notes",
+    xeroQuotes: "Quotes",
+    xeroPurchaseOrders: "Purchase orders",
+    xeroRepeatingInvoices: "Repeating invoices",
+    xeroLinkedTransactions: "Linked transactions",
+    xeroItems: "Items",
+    xeroOverpayments: "Overpayments",
+    xeroPrepayments: "Prepayments",
+    xeroBatchPayments: "Batch payments",
+    xeroContactGroups: "Contact groups",
+    xeroAll: "Every kind of data: {{entities}}",
     xeroEntities: "{{entities}}",
     hubspotCompanies: "Companies",
     hubspotContacts: "Contacts",
@@ -1193,7 +1202,8 @@ export const en = {
     readOnly: "Nothing. Read-only access, and you can disconnect at any time.",
     hubspotReads:
       "Companies, contacts and deals from your CRM, with their standard properties and any further ones you choose, and which companies each deal belongs to. HubSpot keeps no change time on that link, so its source-side change time is always empty.",
-    xeroReads: "Invoices, payments, credit notes and contacts from one organisation you choose.",
+    xeroReads:
+      "Contacts, invoices, credit notes, quotes, purchase orders, items and payments from one organisation you choose.",
     gmailReads: "Message headers and the attachment types you allow, from the mailbox you connect.",
     driveReads:
       "The documents inside the folders you select, in the file types you allow. No other folder is read.",
