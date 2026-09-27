@@ -28,6 +28,8 @@ auth:
 
 defaults:
   headers: { Accept: application/json }
+  # `page=1` goes on the FIRST request too. Asked with no `page`, Xero answers with every record
+  # in a summary that drops invoices' and credit notes' line items (#268).
   pagination:
     kind: page-number
     param: page

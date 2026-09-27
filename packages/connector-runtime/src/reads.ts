@@ -17,7 +17,7 @@ import type { ConnectorEntity } from "@undercroft/contracts";
 import { rereadPage } from "./batchRead.ts";
 import { sinceCarriedIn } from "./incremental.ts";
 import { buildUrl, emit, extractRecords, full, type RawRecordOut, type Reader } from "./reader.ts";
-import { nextPageUrl, renderBatchBody } from "./paging.ts";
+import { firstPageQuery, nextPageUrl, renderBatchBody } from "./paging.ts";
 
 type BatchRequest = Extract<ConnectorEntity["request"], { kind: "batch-from" }>;
 type PagedRequest = Exclude<ConnectorEntity["request"], { kind: "batch-from" }>;
@@ -70,6 +70,7 @@ export async function* readPages(
   const { spec, entity } = reader;
   let url = buildUrl(spec.baseUrl, request.path, {
     ...request.query,
+    ...firstPageQuery(entity, spec),
     ...sinceCarriedIn("query-param", spec, entity, reader.since),
   });
   let pageIndex = 0;

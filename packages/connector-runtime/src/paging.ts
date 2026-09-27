@@ -1,9 +1,10 @@
 /**
  * Where the next page is, and what a request body looks like.
  *
- * Split out of `run.ts`, which had grown past what one file may be. These are the two pure
- * decisions in the read loop: given a parsed page, what URL comes next, and given a list of
- * ids, what body asks for them. Both are values in, values out -- no fetching, no clock --
+ * Split out of `run.ts`, which had grown past what one file may be. These are the pure
+ * decisions in the read loop: what the first page's URL names, given a parsed page what URL
+ * comes next, and given a list of ids what body asks for them. All are values in, values out
+ * -- no fetching, no clock --
  * which is what lets the five pagination kinds be exercised without a server.
  */
 
@@ -42,6 +43,25 @@ export interface PageCursor {
   readonly pageIndex: number;
   readonly recordsThisPage: number;
   readonly currentUrl: string;
+}
+
+/**
+ * What the FIRST page's URL carries for its pagination, before any page has been read.
+ *
+ * A page-number read names its first page, `startAt`, and {@link nextPageUrl} counts on from
+ * it. Leaving it off is not "page one" to every source: Xero answers a list with no `page` with
+ * EVERY record, in a summary that drops invoices' and credit notes' line items. The first
+ * hundred records then only ever landed in summary, everything after them was read twice, and
+ * an incremental read landed the summary over a full record already held (#268).
+ */
+export function firstPageQuery(
+  entity: ConnectorEntity,
+  spec: ConnectorSpec,
+): Record<string, string> {
+  const pagination = entity.pagination ?? spec.defaults.pagination;
+  return pagination.kind === "page-number"
+    ? { [pagination.param]: String(pagination.startAt) }
+    : {};
 }
 
 /** Advance to the next page's URL, or null when the source signals it is done. */
