@@ -124,3 +124,33 @@ describe("loadStreamToRaw", () => {
     expect(await readCursor(db, IDENTITY)).toBe((await stamps()).at(-1) ?? "");
   });
 });
+
+describe("a manifest's sourceUpdatedAt reaches a timestamptz column", () => {
+  async function stampedAt(): Promise<Record<string, string | null>> {
+    const { rows } = await db.query<{ id: string; at: string | null }>(
+      "SELECT source_record_id AS id, source_updated_at::text AS at FROM raw.records ORDER BY id",
+    );
+    return Object.fromEntries(rows.map((row) => [row.id, row.at]));
+  }
+
+  it("reads a Microsoft JSON date that a manifest already carries", async () => {
+    // What Xero's first run landed before #265 was fixed. The lake is create-only, so those
+    // manifests stay as written, and re-landing the same bytes is `unchanged` -- it writes no
+    // new one. Every pass that meets them has to read them.
+    await land([{ ...record("xero"), sourceUpdatedAt: "/Date(1573755038314+0000)/" }]);
+
+    await loadStreamToRaw(db, lake, IDENTITY);
+
+    expect(await stampedAt()).toEqual({ xero: "2019-11-14 18:10:38.314+00" });
+  });
+
+  it("projects one that names no instant as NULL rather than stopping the stream", async () => {
+    // One bad value held a whole stream's projection back for ever: the cursor never passed
+    // the batch that carried it.
+    await land([{ ...record("garbled"), sourceUpdatedAt: "last Tuesday" }, record("fine")]);
+
+    await loadStreamToRaw(db, lake, IDENTITY);
+
+    expect(await stampedAt()).toEqual({ fine: "2026-09-21 09:00:00+00", garbled: null });
+  });
+});

@@ -157,6 +157,27 @@ describe("client-filter skips a record; it never stops the read", () => {
     expect(records.map((r) => r.sourceRecordId)).toEqual(["unreadable", "absent"]);
   });
 
+  it("a Microsoft JSON date is ordered by the instant it counts to", async () => {
+    // Compared as text, `/Date(99` sorts after `/Date(2` and the older record would land.
+    const connector = spec(`    incremental:
+      strategy: client-filter
+      sourcePath: changedAt
+      format: ms-json-date`);
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
+      body: {
+        results: [
+          { id: "old", changedAt: "/Date(99+0000)/" },
+          { id: "new", changedAt: "/Date(300+0000)/" },
+        ],
+        paging: {},
+      },
+    });
+
+    const records = await read(connector, ctx(fetcher, "/Date(200+0000)/"));
+
+    expect(records.map((r) => r.sourceRecordId)).toEqual(["new"]);
+  });
+
   it("with no watermark yet, nothing is filtered", async () => {
     const connector = spec(CLIENT_FILTER);
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
@@ -220,6 +241,41 @@ describe("the watermark reaches the source", () => {
       "2026-09-01T00:00:00Z",
       "2026-09-01T00:00:00Z",
     ]);
+  });
+
+  it("rfc3339-seconds sends the instant the watermark names, rounded down to the second", async () => {
+    // Xero writes `/Date(...)/` in its records and reads RFC 3339 in `If-Modified-Since`, so
+    // the string it wrote is not one it accepts back. Rounding DOWN asks for slightly more,
+    // never less: the records in that second land again as `unchanged` rows.
+    const connector = spec(`    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: changedAt
+      format: ms-json-date
+      send: rfc3339-seconds`);
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
+      body: { results: [{ id: "new", changedAt: "/Date(1573755099000+0000)/" }], paging: {} },
+    });
+
+    await read(connector, ctx(fetcher, "/Date(1573755038314+0000)/"));
+
+    expect(fetcher.calls[0]?.headers?.["If-Modified-Since"]).toBe("2019-11-14T18:10:38Z");
+  });
+
+  it("a watermark rfc3339-seconds cannot render raises rather than sending nothing", async () => {
+    // Sending nothing would be a full read with `failOnEmpty` relaxed by the watermark.
+    const connector = spec(`    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: changedAt
+      format: ms-json-date
+      send: rfc3339-seconds`);
+    const fetcher = new InMemoryFetcher();
+
+    await expect(read(connector, ctx(fetcher, "/Date(99999999999999999999)/"))).rejects.toThrow(
+      ConnectorError,
+    );
+    expect(fetcher.calls).toEqual([]);
   });
 
   it("header sends none on a first read", async () => {

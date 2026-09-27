@@ -38,6 +38,7 @@
  */
 
 import { streamOf } from "@undercroft/contracts";
+import { isoInstant } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import type { LakeStore } from "@undercroft/lake";
 import { type RawRecordRow, readCursor, upsertRecords, writeCursor } from "../repos/rawRecords.ts";
@@ -52,6 +53,19 @@ export interface LoadResult {
 }
 
 const BATCH = 500;
+
+/**
+ * A manifest's `sourceUpdatedAt` as a value its `timestamptz` column accepts, or `null`.
+ *
+ * Read again here, not trusted, because a manifest is immutable and outlives whatever wrote
+ * it. Xero's first run landed `/Date(...)/` text before the runtime learned to read it (#265),
+ * and re-landing the same bytes writes no new manifest, so those stay in the journal. A value
+ * Postgres refuses fails the batch, and the cursor never gets past it: one bad stamp would
+ * hold the stream's projection back for ever.
+ */
+function updatedAtOf(value: unknown): string | null {
+  return typeof value === "string" ? isoInstant(value) : null;
+}
 
 export async function loadStreamToRaw(
   exec: SqlExecutor,
@@ -97,7 +111,7 @@ export async function loadStreamToRaw(
       sourceRecordId: entry.sourceKey.slice(stream.length + 1),
       payloadText: decoder.decode(bytes),
       contentSha256: entry.sha256,
-      sourceUpdatedAt: (manifest.sourceUpdatedAt as string | null | undefined) ?? null,
+      sourceUpdatedAt: updatedAtOf(manifest.sourceUpdatedAt),
       observedAt: String(manifest.observedAt),
       lakeKey: entry.sourceKey,
       lakeStamp: entry.stamp,

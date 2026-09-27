@@ -22,6 +22,7 @@ import {
   createPacer,
   getPath,
   getStringPath,
+  isoInstant,
   parseLossless,
   type RetryPolicy,
   systemClock,
@@ -209,7 +210,10 @@ export async function createReader(
     guards: entity.guards ?? spec.defaults.guards,
     // Xero's `If-Modified-Since` rides beside the auth headers, because from every request's
     // point of view it is just one more header the spec said to send.
-    headers: { ...(await authHeaders(spec, ctx)), ...sinceCarriedIn("header", entity, since) },
+    headers: {
+      ...(await authHeaders(spec, ctx)),
+      ...sinceCarriedIn("header", spec, entity, since),
+    },
     since,
     seen: 0,
     fetchJson: async (request: HttpRequest): Promise<unknown> =>
@@ -247,15 +251,23 @@ export function keyOf(reader: Reader, record: unknown): string {
   return id;
 }
 
-/** One keyed record as the runtime hands it on. */
+/**
+ * One keyed record as the runtime hands it on.
+ *
+ * `sourceUpdatedAt` is the instant the value at `updatedAtPath` names, and not the text itself:
+ * it becomes a `timestamptz` column, and Xero writes `/Date(1573755038314+0000)/`, which
+ * Postgres refuses, taking the whole run with it (#265). Text that names no instant is `null`
+ * and the record still lands. The payload keeps the value exactly as the source wrote it.
+ */
 export function outOf(reader: Reader, id: string, record: unknown): RawRecordOut {
   const { spec, entity } = reader;
+  const updatedAt =
+    entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath);
   return {
     source: spec.id,
     entity: entity.name,
     sourceRecordId: id,
-    sourceUpdatedAt:
-      entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath),
+    sourceUpdatedAt: updatedAt === null ? null : isoInstant(updatedAt),
     payloadText: canonicalJson(record),
     incrementalAt: incrementalAt(entity, record),
   };

@@ -93,6 +93,26 @@ describe("pagination and extraction", () => {
     const [record] = await collect(readEntity(spec(), spec().entities[0]!, ctx(fetcher)));
     expect(record!.sourceUpdatedAt).toBe("2026-01-01T00:00:00Z");
   });
+
+  it("renders a Microsoft JSON date at the updatedAt path as the instant it names", async () => {
+    // Xero's `UpdatedDateUTC`. Handed on verbatim it reached a `timestamptz` cast and took the
+    // whole run down on its first page (#265). The payload still carries it as Xero wrote it.
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
+      body: { results: [{ id: "1", updatedAt: "/Date(1573755038314+0000)/" }], paging: {} },
+    });
+    const [record] = await collect(readEntity(spec(), spec().entities[0]!, ctx(fetcher)));
+    expect(record!.sourceUpdatedAt).toBe("2019-11-14T18:10:38.314Z");
+    expect(record!.payloadText).toContain("/Date(1573755038314+0000)/");
+  });
+
+  it("an updatedAt that names no instant is null, and the record still lands", async () => {
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things`, {
+      body: { results: [{ id: "1", updatedAt: "last Tuesday" }], paging: {} },
+    });
+    const [record] = await collect(readEntity(spec(), spec().entities[0]!, ctx(fetcher)));
+    expect(record!.sourceRecordId).toBe("1");
+    expect(record!.sourceUpdatedAt).toBeNull();
+  });
 });
 
 describe("a record with no id is fatal, not skipped", () => {

@@ -8,12 +8,17 @@
  * before the URL is built, a `header` before the first request, a `client-filter` after a
  * record has been decoded.
  *
- * ## A watermark is stored and sent VERBATIM
+ * ## A watermark is stored VERBATIM, and sent verbatim unless the spec says otherwise
  *
- * As the provider rendered it. HubSpot's is epoch milliseconds, Xero's `If-Modified-Since` is
- * a datetime. Re-rendering one through a timestamp type hands a provider back a string it
- * never said, which is a guess wearing the shape of a fact -- so the only thing done to these
- * strings is compare two of them, and that needs the declared `format` to know how.
+ * Stored as the provider rendered it, and compared under the declared `format`. HubSpot's is
+ * epoch milliseconds, and is handed back exactly as it arrived: re-rendering it would hand a
+ * provider a string it never said, which is a guess wearing the shape of a fact.
+ *
+ * Xero is the exception that `send: rfc3339-seconds` exists for. It writes `UpdatedDateUTC`
+ * as `/Date(1573755038314+0000)/` and reads `If-Modified-Since` as RFC 3339, so the only
+ * string it would accept back is one it never wrote. There the instant is rendered, at the
+ * moment of sending and rounded down to the second, and the stored text is still Xero's own.
+ * ADR 0068, which supersedes the "sent back verbatim" half of ADR 0034.
  *
  * ## Unreadable is never a skip, and never an advance
  *
@@ -33,7 +38,7 @@
  */
 
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
-import { ConnectorError, getStringPath } from "@undercroft/core";
+import { ConnectorError, getStringPath, isoFromMillis, msJsonDateMillis } from "@undercroft/core";
 
 /** An entity's `incremental` block, once the spec has been parsed. */
 export type Incremental = NonNullable<ConnectorEntity["incremental"]>;
@@ -58,11 +63,15 @@ const CARRIER: Record<Incremental["strategy"], "param" | "header" | null> = {
  *
  * `bigint` rather than `number` for `epoch-millis`, which is the spelling
  * `.claude/rules/money.md` requires anywhere a digit string becomes a value: `Number` and
- * `parseFloat` are banned repo-wide and the money plugin fails the gate on either. The other
- * two formats go through `Date.parse`, whose answer is a whole number of milliseconds, so all
- * three land on the same scale and one comparison serves them.
+ * `parseFloat` are banned repo-wide and the money plugin fails the gate on either.
+ * `ms-json-date` is the same count inside `/Date(...)/`. The other two formats go through
+ * `Date.parse`, whose answer is a whole number of milliseconds, so every format lands on the
+ * same scale and one comparison serves them.
  */
 function stampKey(format: IncrementalFormat, text: string): bigint | null {
+  if (format === "ms-json-date") {
+    return msJsonDateMillis(text);
+  }
   if (format === "epoch-millis") {
     try {
       return BigInt(text.trim());
@@ -119,6 +128,7 @@ export function checkIncremental(spec: ConnectorSpec, entity: ConnectorEntity): 
  */
 export function sinceCarriedIn(
   kind: "header" | "query-param",
+  spec: ConnectorSpec,
   entity: ConnectorEntity,
   since: string | null,
 ): Record<string, string> {
@@ -128,7 +138,49 @@ export function sinceCarriedIn(
   }
   const carrier = CARRIER[kind];
   const name = carrier === null ? undefined : incremental[carrier];
-  return name === undefined || name === "" ? {} : { [name]: since };
+  return name === undefined || name === ""
+    ? {}
+    : { [name]: sent(spec, entity, incremental, since) };
+}
+
+const MS_PER_SECOND = 1000n;
+
+/** Toward the past on both sides of the epoch: `%` keeps the sign of a negative count. */
+function floorToSecond(ms: bigint): bigint {
+  const within = ms % MS_PER_SECOND;
+  return within < 0n ? ms - within - MS_PER_SECOND : ms - within;
+}
+
+/**
+ * The watermark as `send` says to write it.
+ *
+ * A watermark `rfc3339-seconds` cannot render raises rather than sending nothing. Sending
+ * nothing would be a full read, and a run carrying a watermark has `failOnEmpty` relaxed --
+ * the combination {@link checkIncremental} refuses, because it hides a credential problem. The
+ * cursor only ever holds a value its format could read, so what is left to reach this is a
+ * count past the year 275760.
+ */
+function sent(
+  spec: ConnectorSpec,
+  entity: ConnectorEntity,
+  incremental: Incremental,
+  since: string,
+): string {
+  if (incremental.send === "verbatim") {
+    return since;
+  }
+  const ms = stampKey(incremental.format, since);
+  const iso = ms === null ? null : isoFromMillis(floorToSecond(ms));
+  if (iso === null) {
+    throw new ConnectorError(
+      spec.id,
+      entity.name,
+      0,
+      `the watermark ${JSON.stringify(since)} names no instant to send as ${incremental.send}`,
+    );
+  }
+  // `toISOString` always writes `.000` for a whole second; the fraction is dropped, not rounded.
+  return `${iso.slice(0, "YYYY-MM-DDTHH:MM:SS".length)}Z`;
 }
 
 /** The value at this entity's `incremental.sourcePath`, or null when it declares none. */

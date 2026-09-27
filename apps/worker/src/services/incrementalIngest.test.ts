@@ -153,6 +153,86 @@ describe("the second run asks the source for less", () => {
   });
 });
 
+describe("a source that writes Microsoft JSON dates, as Xero does", () => {
+  // Shaped as `specs/connectors/xero.yaml` declares its entities, minus the OAuth a real Xero
+  // read needs. Issue #265: the first run died on its first page, and the watermark never moved.
+  const XERO_SHAPED = `
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: ledger
+displayName: Ledger
+baseUrl: ${BASE}
+auth: { kind: none }
+defaults:
+  pagination: { kind: json-link, nextPath: paging.next.link }
+entities:
+  - name: contacts
+    request: { kind: list, path: /Contacts }
+    envelopePath: Contacts
+    idPath: ContactID
+    updatedAtPath: UpdatedDateUTC
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+`;
+  const LEDGER = { source: "ledger", tenantId: "CASE-1", entity: "contacts" } as const;
+  const LEDGER_MARK = { format: "ms-json-date", requestKey: "" } as const;
+
+  beforeEach(async () => {
+    writeFileSync(join(specsDir, "ledger.yaml"), XERO_SHAPED);
+    await db.asSuperuser((tx) =>
+      tx.query("CREATE TABLE raw.records_ledger PARTITION OF raw.records FOR VALUES IN ('ledger')"),
+    );
+  });
+
+  function ingestLedger(fetcher: InMemoryFetcher): ReturnType<typeof runIngest> {
+    return runIngest(
+      { lake, exec: db, specsDir, fetcher },
+      { source: "ledger", tenantId: "CASE-1" },
+    );
+  }
+
+  it("lands the first read, stamps each row, and keeps the latest value as written", async () => {
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/Contacts`, {
+      body: {
+        Contacts: [
+          { ContactID: "a", UpdatedDateUTC: "/Date(1573755038314+0000)/" },
+          { ContactID: "b", UpdatedDateUTC: "/Date(999+0000)/" },
+        ],
+        paging: {},
+      },
+    });
+
+    const result = await ingestLedger(fetcher);
+
+    expect(result.entities[0]?.landed).toBe(2);
+    const { rows } = await db.query<{ id: string; at: string }>(
+      "SELECT source_record_id AS id, source_updated_at::text AS at FROM raw.records WHERE source = 'ledger' ORDER BY id",
+    );
+    expect(rows).toEqual([
+      { id: "a", at: "2019-11-14 18:10:38.314+00" },
+      { id: "b", at: "1970-01-01 00:00:00.999+00" },
+    ]);
+    expect(await readSyncCursor(db, LEDGER, LEDGER_MARK)).toBe("/Date(1573755038314+0000)/");
+  });
+
+  it("asks the second read for what changed since, in the dialect the header reads", async () => {
+    await writeSyncCursor(db, LEDGER, { ...LEDGER_MARK, watermark: "/Date(1573755038314+0000)/" });
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/Contacts`, {
+      body: { Contacts: [], paging: {} },
+    });
+
+    await ingestLedger(fetcher);
+
+    expect(fetcher.calls.map((call) => call.headers?.["If-Modified-Since"])).toEqual([
+      "2019-11-14T18:10:38Z",
+    ]);
+  });
+});
+
 describe("a watermark is only ever handed back under the format it was written in", () => {
   it("answers nothing when the spec has changed format under it", async () => {
     // One honest full read, rather than comparing two incompatible renderings of an instant
