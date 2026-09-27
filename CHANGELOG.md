@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.2](https://github.com/muitneliss/undercroft/compare/v1.41.1...v1.41.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **xero:** ask for Xero's granular scopes, not the retired accounting.transactions ([#263](https://github.com/muitneliss/undercroft/issues/263)) ([f8e411a](https://github.com/muitneliss/undercroft/commit/f8e411ab890e25c06bd8d77682b6fd65a4e4a989)), closes [#261](https://github.com/muitneliss/undercroft/issues/261)
+
 ## [1.41.1](https://github.com/muitneliss/undercroft/compare/v1.41.0...v1.41.1) (2026-09-26)
 
 
