@@ -20,6 +20,19 @@ khách hàng, bằng đúng địa chỉ email họ sẽ dùng, và chọn vai t
 Người muốn dựng model cần vai trò `admin`. Nếu hệ thống chưa có ai để mời người đầu tiên, xem
 [Bootstrap the first admin](sign-in-setup.md#7-bootstrap-the-first-admin).
 
+Ba từ gặp ngay trong trang Báo cáo:
+
+- **Model**: một câu `SELECT` (dbt) trên dữ liệu thô, được dựng thành một bảng. Logic nằm ở
+  đây: nối bảng, gộp trùng, múi giờ, định nghĩa một chỉ số. Model chỉ đổi khi được dựng lại,
+  tức là sau mỗi lần đồng bộ thành công hoặc khi admin bấm dựng.
+- **Câu hỏi**: một truy vấn đã lưu trên các model đã dựng, dựng bằng biểu mẫu hoặc viết SQL,
+  kèm cách vẽ nó thành bảng hay biểu đồ. Các công cụ BI khác gọi nó là _saved query_, _chart_
+  hay _Look_; tên "câu hỏi" (_question_) được giữ từ Metabase, BI mà Undercroft dùng trước
+  khi tự làm. Câu hỏi chạy mỗi lần được mở, nên mới đúng bằng lần dựng model gần nhất, không
+  mới hơn. Nên giữ câu hỏi mỏng: chọn, lọc, gom nhóm, sắp xếp trên một model. Logic mà câu hỏi
+  thứ hai sẽ phải chép lại thì thuộc về model.
+- **Bảng điều khiển** (dashboard): nhiều câu hỏi đặt trên một lưới, dùng chung bộ lọc.
+
 ### 2. Người đó đăng nhập một lần trên web
 
 Họ mở trang Undercroft và đăng nhập bằng Google hoặc mã gửi qua email. Làm vậy để chắc rằng lời
@@ -73,6 +86,19 @@ the exact email address they will use, and picks a role:
 
 Building models needs `admin`. If nobody can invite the first person yet, see
 [Bootstrap the first admin](sign-in-setup.md#7-bootstrap-the-first-admin).
+
+Three words they meet on the Reports page:
+
+- **Model**: a dbt `SELECT` over the raw data, built into a table. The logic lives here:
+  joins, deduplication, time zones, what a metric means. A model changes only when it is
+  built, which is after each successful sync or when an admin builds it.
+- **Question**: a saved query over the built models, made with the form or written as SQL,
+  together with how to draw it as a table or a chart. Other BI tools call it a saved query, a
+  chart or a Look; the name comes from Metabase, the BI Undercroft used before its own. A
+  question runs each time it is opened, so it is as fresh as the model's last build and no
+  fresher. Keep it thin: pick, filter, group and sort one model. Logic a second question
+  would have to copy belongs in a model.
+- **Dashboard**: saved questions on a grid, under shared filters.
 
 ### 2. They sign in once on the web
 
