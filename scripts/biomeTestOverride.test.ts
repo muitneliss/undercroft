@@ -85,6 +85,8 @@ export const total = Number(row.amount);
 
 const TWIN = "src/probe.ts";
 const SUITE = "src/probe.test.ts";
+/** A real-data check (`scripts/live/`): a test file under another name, so the same override. */
+const LIVE = "src/probe.live.ts";
 
 /** The eight rules this fixture is written to trip, each one named by the override. */
 const OVERRIDDEN: readonly string[] = [
@@ -126,6 +128,7 @@ beforeAll(async () => {
   mkdirSync(join(project, "src"), { recursive: true });
   writeFileSync(join(project, TWIN), BODY);
   writeFileSync(join(project, SUITE), BODY);
+  writeFileSync(join(project, LIVE), BODY);
 
   // Exit status is non-zero whenever anything matched, which is the expected case here.
   const scan = Bun.spawn([BIOME, "lint", "--reporter=json", "--vcs-enabled=false", "."], {
@@ -165,5 +168,14 @@ describe("the test-file override", () => {
 
   it("still lints the suite -- money that became a float is reported there too", () => {
     expect(rulesOn(SUITE)).toContain("plugin");
+  });
+
+  it("treats a real-data check the same: silenced, and still linted for money", () => {
+    const reported = rulesOn(LIVE);
+    for (const rule of OVERRIDDEN) {
+      expect(reported).not.toContain(rule);
+    }
+    expect(reported).toContain("lint/correctness/noUndeclaredVariables");
+    expect(reported).toContain("plugin");
   });
 });
