@@ -75,6 +75,15 @@ tasks:
       - docker compose -f {{.COMPOSE_FILE}} up -d --wait postgres
       - UNDERCROFT_ITEST=1 bun test integration
 
+  reconcile-drive-live:
+    desc: >-
+      The Drive reconciliation over REAL data, one test per Drive file against the lake
+      (scripts/reconcile/live/). Needs the undercroft CLI on PATH, a read-only profile, Drive
+      tokens and a local config in fixtures/live/ (or UNDERCROFT_LIVE_CONFIG); NOT part of
+      ci:verify.
+    cmds:
+      - UNDERCROFT_LIVE=1 bun test --timeout 60000 ./scripts/reconcile/live/drive.live.ts
+
   compose-check:
     desc: Assert every compose service (dev + server variant) declares a memory limit.
     cmds:

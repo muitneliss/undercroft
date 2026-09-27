@@ -1,0 +1,11 @@
+{
+  "tenantId": "CASE-0042",
+  "profile": "read-only-profile",
+  "outDir": "/path/outside/the/repository/drive-reconcile",
+  "connections": [
+    { "source": "drive", "tokenFile": "/path/to/authorized-user-token.json" },
+    { "source": "drive.example", "tokenFile": "/path/to/second-authorized-user-token.json" }
+  ],
+  "hashSample": 300,
+  "concurrency": 8
+}
