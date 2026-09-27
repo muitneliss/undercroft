@@ -183,3 +183,4 @@
 ## [2026-09-26] ingest | Runbook Deployment
 ## [2026-09-27] ingest | Runbook: Onboarding a new person
 ## [2026-09-27] ingest | Runbook Xero Setup
+## [2026-09-27] ingest | ADR 0068 A Watermark Is Sent in the Dialect the Filter Reads

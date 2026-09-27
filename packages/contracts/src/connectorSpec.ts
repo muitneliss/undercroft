@@ -123,7 +123,18 @@ const Incremental = z.object({
    * wrong name yields a cursor that never advances.
    */
   sourcePath: JsonPath,
-  format: z.enum(["iso8601", "epoch-millis", "yyyy-mm-dd"]).default("iso8601"),
+  /** `ms-json-date` is `/Date(1573755038314+0000)/`, which Xero writes in every date field. */
+  format: z.enum(["iso8601", "epoch-millis", "yyyy-mm-dd", "ms-json-date"]).default("iso8601"),
+  /**
+   * How the watermark is written into the `param` or `header`. The stored watermark is the
+   * source's own text either way; this only changes what is sent.
+   *
+   * `verbatim` sends that text back. `rfc3339-seconds` sends the instant it names as UTC
+   * RFC 3339, rounded down to the second, for a source whose filter reads a different
+   * dialect from the one its records are written in: Xero writes `/Date(...)/` and reads
+   * `If-Modified-Since` as RFC 3339. Rounding down can only ask for more. ADR 0068.
+   */
+  send: z.enum(["verbatim", "rfc3339-seconds"]).default("verbatim"),
 });
 
 /**

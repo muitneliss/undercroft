@@ -18,13 +18,14 @@ CREATE TABLE IF NOT EXISTS raw.sync_cursor (
     source     text        NOT NULL,
     tenant_id  text        NOT NULL,
     entity     text        NOT NULL,
-    -- TEXT, VERBATIM, as the source rendered it -- never `timestamptz`. The value is handed
-    -- straight back to the provider in the provider's own dialect: Xero's `If-Modified-Since`
-    -- is a datetime string, HubSpot's is epoch milliseconds. Round-tripping it through a
-    -- timestamp type re-renders it, and sending a provider a string it never said is a guess
-    -- dressed as a fact.
+    -- TEXT, VERBATIM, as the source rendered it -- never `timestamptz`. HubSpot's is epoch
+    -- milliseconds and is handed straight back. Round-tripping it through a timestamp type
+    -- re-renders it, and sending a provider a string it never said is a guess dressed as a
+    -- fact. Xero writes `/Date(...)/` but reads RFC 3339, so its spec says `send:
+    -- rfc3339-seconds` and the runtime renders the instant when it SENDS it; what is stored
+    -- here is still Xero's own text (ADR 0068).
     watermark  text        NOT NULL,
-    -- Which dialect the line above is in: iso8601 | epoch-millis | yyyy-mm-dd. Stored so a
+    -- Which dialect the line above is in: iso8601 | epoch-millis | yyyy-mm-dd | ms-json-date. Stored so a
     -- spec that CHANGES its format invalidates its own cursor -- the reader asks for the
     -- format it is about to use and is told nothing, which costs one honest full read.
     -- Without it, two incompatible renderings of an instant would be compared as if they

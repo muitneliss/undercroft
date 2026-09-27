@@ -70,7 +70,7 @@ export async function* readPages(
   const { spec, entity } = reader;
   let url = buildUrl(spec.baseUrl, request.path, {
     ...request.query,
-    ...sinceCarriedIn("query-param", entity, reader.since),
+    ...sinceCarriedIn("query-param", spec, entity, reader.since),
   });
   let pageIndex = 0;
 

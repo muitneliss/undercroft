@@ -634,9 +634,18 @@
                     "enum": [
                       "iso8601",
                       "epoch-millis",
-                      "yyyy-mm-dd"
+                      "yyyy-mm-dd",
+                      "ms-json-date"
                     ],
                     "default": "iso8601"
+                  },
+                  "send": {
+                    "type": "string",
+                    "enum": [
+                      "verbatim",
+                      "rfc3339-seconds"
+                    ],
+                    "default": "verbatim"
                   }
                 },
                 "required": [

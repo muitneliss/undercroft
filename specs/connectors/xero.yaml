@@ -53,10 +53,13 @@ defaults:
 # would page the whole ledger to throw most of it away, and at 1100ms a request that is the
 # expensive half of the run.
 #
-# The watermark is stored and sent back exactly as `UpdatedDateUTC` arrived -- never
-# re-rendered -- so what Xero is asked for is a string Xero itself wrote. A rendering the
-# runtime cannot order simply never advances the cursor, and the run stays the full read it is
-# today; see `packages/connector-runtime/src/incremental.ts`.
+# Xero writes every date as a Microsoft JSON date, `/Date(1573755038314+0000)/`, and reads
+# `If-Modified-Since` as RFC 3339. So the watermark is STORED exactly as `UpdatedDateUTC`
+# arrived and ordered as `ms-json-date`, and SENT as the instant it names, in UTC and rounded
+# down to the second (`send: rfc3339-seconds`). Rounding down asks for slightly more, never
+# less. Sent verbatim, it would be a string Xero never accepts; ADR 0068. `updatedAtPath` is
+# read the same way into `source_updated_at`, where the raw text once failed the whole run
+# (#265). See `packages/connector-runtime/src/incremental.ts`.
 entities:
   - name: contacts
     request: { kind: list, path: /Contacts, query: { pageSize: "100" } }
@@ -67,6 +70,8 @@ entities:
       strategy: header
       header: If-Modified-Since
       sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
 
   - name: invoices
     request: { kind: list, path: /Invoices, query: { pageSize: "100" } }
@@ -77,6 +82,8 @@ entities:
       strategy: header
       header: If-Modified-Since
       sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
 
   - name: payments
     request: { kind: list, path: /Payments, query: { pageSize: "100" } }
@@ -87,6 +94,8 @@ entities:
       strategy: header
       header: If-Modified-Since
       sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
 
   # Each entity names its own id field. A single hardcoded "InvoiceID" would silently key
   # credit notes on nothing.
@@ -99,3 +108,5 @@ entities:
       strategy: header
       header: If-Modified-Since
       sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
