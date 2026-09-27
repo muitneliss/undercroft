@@ -70,7 +70,9 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 - **Search the whole lake.** One box over both payloads and document text, folded so that
   Vietnamese matches with or without tone marks, and stemmed for English.
 - **The BI is first-party.** Questions and dashboards live in the Reports division, and
-  every one runs as the tenant's own read-only login — not as the web process.
+  every one runs as the tenant's own read-only login — not as the web process. A question
+  is a saved query over the built models plus how to draw it, what other BI tools call a
+  saved query or a chart; [onboarding](docs/runbook/onboarding.md) defines the words.
 - **It says when a sync breaks.** A failed run, a grant about to lapse and an ingest key
   about to expire are emailed to the tenant's admins. A failure, and the run that next
   succeeds, can also post to the operators' Lark group.

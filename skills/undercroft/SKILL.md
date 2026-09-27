@@ -12,6 +12,23 @@ dashboards read the tables the models build.
 Everything the web UI does, you can do too, as the person who signed in and never as more.
 Every role check and every refusal the web UI has applies to you unchanged.
 
+## Words the platform uses
+
+- **Model**: a dbt `SELECT` over the raw lake, built into a table in the tenant's analytics
+  schema. The logic lives here: joins, deduplication, time zones, what a metric means. A
+  model changes only when it is built -- after each successful ingest, or by
+  `models.build`.
+- **Question** (_câu hỏi_ in Vietnamese): a saved query over the built models, either a
+  visual definition or SQL, together with how to draw it as a table or a chart. It is what
+  other BI tools call a saved query, a chart or a Look; the name comes from Metabase, the BI
+  Undercroft used before its own. A question runs when it is read (`bi.questions.answer`),
+  so it is as fresh as the model's last build, never fresher. Keep it thin: pick, filter,
+  group and sort one model. Logic a second question would repeat belongs in a model.
+- **Dashboard**: saved questions on a grid, under shared filters.
+
+When a person finds the word "question" odd, tell them what it is. Do not rename it in
+what you save.
+
 ## Choose a door
 
 There are two doors onto the same operations. Use whichever this session has.
