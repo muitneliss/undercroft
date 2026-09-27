@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.3](https://github.com/muitneliss/undercroft/compare/v1.41.2...v1.41.3) (2026-09-27)
+
+
+### Bug Fixes
+
+* **xero:** read /Date(...)/ timestamps so the first ingest lands and the watermark advances ([#266](https://github.com/muitneliss/undercroft/issues/266)) ([faf596b](https://github.com/muitneliss/undercroft/commit/faf596b83104844713d22e913697b1c123f2f1e5)), closes [#265](https://github.com/muitneliss/undercroft/issues/265)
+
 ## [1.41.2](https://github.com/muitneliss/undercroft/compare/v1.41.1...v1.41.2) (2026-09-27)
 
 
