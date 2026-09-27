@@ -455,6 +455,8 @@
         "apps/ui/src/routes/Lake.tsx",
         "apps/ui/src/routes/ModelEditor.tsx",
         "apps/ui/src/routes/Question.tsx",
+        // Its subject is a `React.lazy` page failing inside `Suspense`, so it takes both.
+        "apps/ui/src/components/StaleChunkBoundary.test.tsx",
         "packages/db/src/pool.ts",
         // `@tradetrust-tt/dnsprove` declares `"types": "dist/ts"`, a directory, which `tsc`
         // resolves to its `index.d.ts` and Biome reports as "found directory without index".
@@ -757,6 +759,15 @@
     {
       "includes": ["apps/ui/src/components/LanguageSwitcher.tsx"],
       "linter": { "rules": { "a11y": { "useSemanticElements": "off" } } }
+    },
+
+    // The one class component in the UI, because an error boundary has no function form in
+    // React 19. The rule exempts a class that implements `componentDidCatch`; this one needs
+    // only `getDerivedStateFromError`, which chooses its fallback, and an empty
+    // `componentDidCatch` written to satisfy the rule would be code that says nothing. ADR 0070.
+    {
+      "includes": ["apps/ui/src/components/StaleChunkBoundary.tsx"],
+      "linter": { "rules": { "style": { "useReactFunctionComponents": "off" } } }
     },
 
     // `MonacoEnvironment` is declared on `Window` by monaco-editor's own types and nowhere

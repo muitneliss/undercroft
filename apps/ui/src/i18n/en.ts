@@ -18,6 +18,9 @@ export const en = {
     release: "Version",
     releaseLive: "Version {{release}} is now live. Reload the page to use it.",
     reload: "Reload",
+    staleChunk: "This page belongs to a newer release",
+    staleChunkBody:
+      "Undercroft was updated after this tab was opened. Save anything you are still writing, then reload the page.",
   },
 
   lang: {

@@ -8,7 +8,8 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.tsx";
 import { ReleaseNotice } from "./components/ReleaseNotice.tsx";
 import { watchForRelease } from "./lib/releaseWatch.ts";
-import { useUiStore } from "./store.ts";
+import { recoverFromStaleChunks } from "./lib/staleChunk.ts";
+import { holdsUnsavedWork, useUiStore } from "./store.ts";
 import { trpc } from "./trpc.ts";
 // Side-effect import: builds the i18next singleton and starts following the store's locale.
 // It must be imported before anything renders, or the first paint is unlocalised.
@@ -71,6 +72,21 @@ useUiStore.subscribe((state) => {
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   watchForRelease(navigator.serviceWorker);
 }
+
+// The notice above arrives within minutes of a deploy; a tab can ask for a chunk the deploy
+// removed before then. Reloaded when that loses nothing, otherwise answered by
+// `StaleChunkBoundary`. ADR 0070.
+recoverFromStaleChunks(globalThis, {
+  hasUnsavedWork: () => holdsUnsavedWork(useUiStore.getState()),
+  // Reached through on each call rather than captured: reading the global itself throws in a
+  // browser that refuses storage, and that refusal belongs inside the recovery's own guard.
+  storage: {
+    getItem: (key) => sessionStorage.getItem(key),
+    setItem: (key, value) => sessionStorage.setItem(key, value),
+  },
+  now: () => Date.now(),
+  reload: () => globalThis.location.reload(),
+});
 
 const root = document.querySelector("#root");
 if (root !== null) {

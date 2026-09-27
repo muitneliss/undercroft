@@ -9,7 +9,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test as it } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SqlExecutor } from "@undercroft/db";
@@ -27,6 +27,8 @@ beforeAll(async () => {
   await writeFile(join(dist, "index.html"), "<!doctype html><title>Undercroft</title>");
   await writeFile(join(dist, "app.js"), "console.log('bundle');");
   await writeFile(join(dist, "sw.js"), 'const RELEASE = "v1.0.0";');
+  await mkdir(join(dist, "assets"));
+  await writeFile(join(dist, "assets", "Models-gACDMnXB.js"), "export const Models = 1;");
 });
 
 afterAll(async () => {
@@ -107,6 +109,27 @@ describe("a deploy reaches a tab that is already open", () => {
 
     expect(response.headers.get("cache-control")).toBe("no-cache");
     expect(response.headers.get("content-type")).toContain("text/javascript");
+  });
+
+  it("a hashed chunk the previous release had is a 404, not the app shell", async () => {
+    // The tab still names the chunk its own build emitted. Answered with index.html, the
+    // browser reports a MIME-type refusal that reads like a broken server rather than a
+    // stale tab, and a cache between may keep a page of HTML under a JavaScript URL.
+    const app = createServer({ exec: noDatabase, uiDist: dist });
+
+    const response = await app.fetch(new Request("http://c/assets/Models-DLhr83qc.js"));
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain("Undercroft");
+  });
+
+  it("a chunk this release did emit is still served", async () => {
+    const app = createServer({ exec: noDatabase, uiDist: dist });
+
+    const response = await app.fetch(new Request("http://c/assets/Models-gACDMnXB.js"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("immutable");
   });
 });
 

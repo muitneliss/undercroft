@@ -38,6 +38,9 @@ export type { ServerDeps } from "./context.ts";
 /** Any run of leading `../` (or `..\`) segments, which is how a path escapes `dist`. */
 const LEADING_PARENT_SEGMENTS = /^(?:\.\.(?:\/|\\|$))+/u;
 
+/** Where Vite writes every hashed file (`build.assetsDir`, left at its default). */
+const BUILD_ASSETS = "/assets/";
+
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -85,7 +88,8 @@ function registerTrpcRoute(app: Hono, deps: ServerDeps): void {
 /**
  * The built SPA, registered LAST so /api and /trpc always win over the catch-all. A real
  * built asset gets that file; anything else gets index.html, because a 404 is a blank page
- * and a deep link like /tenants/42 is the SPA's to resolve.
+ * and a deep link like /tenants/42 is the SPA's to resolve. The one exception is a miss under
+ * `/assets/`, which is never a route and is answered 404.
  */
 function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
   if (deps.uiDist !== undefined) {
@@ -97,6 +101,13 @@ function registerSpaRoutes(app: Hono, deps: ServerDeps): void {
 
     app.get("/*", async (c) => {
       const asset = await resolveAsset(dist, c.req.path);
+      // `assets/` is the build's own directory, and nothing under it is a route: a miss there
+      // is a tab from a previous release asking for a chunk this one did not emit. The shell
+      // in its place is a 200 of HTML under a script URL, which the browser refuses as a MIME
+      // type and a cache may keep. ADR 0070.
+      if (asset === null && c.req.path.startsWith(BUILD_ASSETS)) {
+        return c.notFound();
+      }
       const path = asset ?? indexHtml;
       const file = Bun.file(path);
       if (!(await file.exists())) {
