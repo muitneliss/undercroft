@@ -96,8 +96,12 @@ describe("scopeSummary for Xero", () => {
   it("no entity chosen is every entity, said in words rather than as a dash", () => {
     const xero = connection("xero", { status: "connected", config: { entities: [] } });
 
+    // Every entity the picker offers, named -- not a sentence that listed four and went on
+    // saying four after the spec declared thirteen.
     expect(scopeSummary(t, xero)).toBe(
-      "Mọi loại dữ liệu: liên hệ, hóa đơn, thanh toán, giấy báo có",
+      "Mọi loại dữ liệu: Liên hệ, Hóa đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, " +
+        "Hóa đơn định kỳ, Giao dịch liên kết, Mặt hàng, Khoản trả thừa, Khoản trả trước, " +
+        "Thanh toán theo lô, Nhóm liên hệ",
     );
   });
 });

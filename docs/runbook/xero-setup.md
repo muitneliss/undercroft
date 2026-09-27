@@ -62,15 +62,26 @@ up as **Connect Xero** being refused (section 5). Both compose files already pas
 
 The consent asks for the scopes `specs/connectors/xero.yaml` declares under `auth.scopes`,
 kept in step by hand in `apps/control-plane/src/services/oauthProviders.ts`, and
-`oauthProviders.test.ts` fails the gate when the two differ. A consent narrower than the spec
-fails every run with a 403 far from here. If you add an entity that needs a new scope, add it
-in both places.
+`oauthProviders.test.ts` fails the gate when the two differ, or when the spec reads a list
+under a scope neither asks for. A connection whose recorded grant lacks a scope the spec
+declares reads **reconnect** on its card, and its runs are refused before they open, naming
+the scope. If you add an entity that needs a new scope, add it in both places and in the
+test's path-to-scope table. Every existing connection then has to reconnect.
 
-The scopes are Xero's **granular** ones: `offline_access`, `accounting.invoices.read` (invoices
-and credit notes), `accounting.payments.read` and `accounting.contacts.read`. Xero grants the
-broad `accounting.transactions` to no app created on or after 2 March 2026, and to no app at
-all after September 2027, so never add a broad scope back. Nothing needs registering on the
-Xero app for them; a web app is granted what the consent asks for.
+The scopes are Xero's **granular** ones, and the lists each one reads:
+
+| Scope                      | Lists                                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| `offline_access`           | none: it makes Xero issue a refresh token                                                       |
+| `accounting.invoices.read` | invoices, credit notes, quotes, purchase orders, repeating invoices, linked transactions, items |
+| `accounting.payments.read` | payments, overpayments, prepayments, batch payments                                             |
+| `accounting.contacts.read` | contacts, contact groups                                                                        |
+
+Xero grants the broad `accounting.transactions` to no app created on or after 2 March 2026,
+and to no app at all after September 2027, so never add a broad scope back. Nothing needs
+registering on the Xero app for them; a web app is granted what the consent asks for.
+[ADR 0069](../adr/0069-xero-reads-every-list-its-granular-scopes-reach.md) records why each
+list reads the way it does.
 
 ## 4. Connect a customer, and verify each step
 
@@ -81,9 +92,11 @@ Xero app for them; a web app is granted what the consent asks for.
 3. The card now names the organisation and reads **connected**. `ops.connection` holds the
    organisation id in `external_account_id`; the name is in `app.connection_detail`, where BI
    cannot read it.
-4. Press **Run now**. The journal shows the run and its counts per entity. A `403` on every entity
-   is a scope problem (step 3); a `401` naming the organisation is the wrong organisation
-   chosen, or a lapsed grant.
+4. Press **Run now**. The journal shows the run and its counts per entity. An organisation with
+   no quotes, purchase orders or batch payments reads `0` for those lists, which is not a
+   failure; an empty first read of contacts, invoices, payments or credit notes is. A `403` on
+   every entity is a scope problem (step 3); a `401` naming the organisation is the wrong
+   organisation chosen, or a lapsed grant.
 5. Disconnect. Xero is told to revoke the refresh token; the card says whether it could be.
 
 ## 5. What each failure looks like
@@ -96,3 +109,4 @@ Xero app for them; a web app is granted what the consent asks for.
 | The scope page lists no organisation             | The Xero user has access to none                                                      | Consent from a user who does    |
 | Every run fails after 0 records with 401         | A refresh failed, or the grant lapsed                                                 | Reconnect; check the worker log |
 | Runs fail with "needs the provider's account id" | No organisation was chosen                                                            | Choose one on the scope page    |
+| Runs are refused as "granted without" a scope    | The grant predates a scope the spec now declares                                      | Reconnect                       |

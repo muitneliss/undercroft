@@ -822,7 +822,16 @@ export const vi = {
     xeroInvoices: "Hóa đơn",
     xeroPayments: "Thanh toán",
     xeroCreditNotes: "Giấy báo có",
-    xeroAll: "Mọi loại dữ liệu: liên hệ, hóa đơn, thanh toán, giấy báo có",
+    xeroQuotes: "Báo giá",
+    xeroPurchaseOrders: "Đơn đặt hàng",
+    xeroRepeatingInvoices: "Hóa đơn định kỳ",
+    xeroLinkedTransactions: "Giao dịch liên kết",
+    xeroItems: "Mặt hàng",
+    xeroOverpayments: "Khoản trả thừa",
+    xeroPrepayments: "Khoản trả trước",
+    xeroBatchPayments: "Thanh toán theo lô",
+    xeroContactGroups: "Nhóm liên hệ",
+    xeroAll: "Mọi loại dữ liệu: {{entities}}",
     xeroEntities: "{{entities}}",
     /** HubSpot's objects, by the spec's ids. The ids are recorded; these are the words. */
     hubspotCompanies: "Công ty",
@@ -1383,7 +1392,8 @@ export const vi = {
     readOnly: "Không gì cả. Quyền chỉ đọc, và bạn có thể ngắt kết nối bất cứ lúc nào.",
     hubspotReads:
       "Công ty, liên hệ và giao dịch từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm, và việc mỗi giao dịch thuộc công ty nào. HubSpot không lưu thời điểm sửa cho liên kết đó, nên thời điểm sửa phía nguồn của nó luôn để trống.",
-    xeroReads: "Hóa đơn, thanh toán, giấy báo có và liên hệ từ một tổ chức bạn chọn.",
+    xeroReads:
+      "Liên hệ, hóa đơn, giấy báo có, báo giá, đơn đặt hàng, mặt hàng và các khoản thanh toán từ một tổ chức bạn chọn.",
     gmailReads: "Tiêu đề thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
     driveReads:
       "Tài liệu trong các thư mục bạn chọn, theo loại tệp bạn cho phép. Không thư mục nào khác được đọc.",

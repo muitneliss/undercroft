@@ -16,7 +16,7 @@ import { ConnectionRegistryError } from "@undercroft/db/repos";
 import { createGoogleApi } from "./google/api.ts";
 import { listDriveChoices } from "./google/driveChoices.ts";
 import { listLabels } from "./google/gmail.ts";
-import { GrantTooNarrow, requireReadGrant } from "./google/grant.ts";
+import { GrantTooNarrow, requireReadGrant } from "./grant.ts";
 import { listProperties } from "./hubspot/properties.ts";
 import { readSpec } from "./specs.ts";
 import { listOrganisations } from "./xero/organisations.ts";

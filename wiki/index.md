@@ -72,6 +72,7 @@
 - [ADR 0066 One Ground, One Light and One Vault for the Public Home](sources/adr-0066-one-ground-one-light-and-one-vault-for-the-public-home.md)
 - [ADR 0067: The published skills are one family, installed by npx skills and served by /mcp](sources/adr-0067-the-published-skills-are-one-family-installed-by-npx-skills-and-served-by-mcp.md)
 - [ADR 0068 A Watermark Is Sent in the Dialect the Filter Reads](sources/adr-0068-a-watermark-is-sent-in-the-dialect-the-filter-reads.md)
+- [ADR 0069 Xero Reads Every List Its Granular Scopes Reach](sources/adr-0069-xero-reads-every-list-its-granular-scopes-reach.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)

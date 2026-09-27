@@ -19,7 +19,7 @@ import type { ApiError } from "@undercroft/contracts";
 import { ConnectorError, HttpError } from "@undercroft/core";
 
 import { ScopeNotChosen } from "../services/google/collect.ts";
-import { GrantTooNarrow } from "../services/google/grant.ts";
+import { GrantTooNarrow } from "../services/grant.ts";
 import {
   ConnectionUnusable,
   RunInProgress,

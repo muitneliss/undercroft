@@ -20,6 +20,10 @@ import { useUiStore } from "@/store.ts";
 
 const SOURCE = "xero";
 const ORGANISATION = { id: "org-1", name: "Example Trading" };
+/** Every kind the shipped spec declares, as a Vietnamese reader sees them, in its order. */
+const EVERY_KIND =
+  "Liên hệ, Hóa đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, Hóa đơn định kỳ, " +
+  "Giao dịch liên kết, Mặt hàng, Khoản trả thừa, Khoản trả trước, Thanh toán theo lô, Nhóm liên hệ";
 
 /** What `mount` subscribed to the store, stopped after each test. */
 const subscriptions: (() => void)[] = [];
@@ -67,17 +71,15 @@ describe("kinds of data", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Chọn tất cả" }));
 
-    expect(ticked()).toEqual([true, true, true, true]);
+    expect(ticked()).toEqual(Array.from({ length: 13 }, () => true));
     expect(screen.queryByRole("button", { name: "Chọn tất cả" })).toBeNull();
     expect(screen.getByRole("status").textContent).toBe(
-      "Chỉ các loại dữ liệu trong danh sách: Liên hệ, Hóa đơn, Thanh toán, Giấy báo có. Loại dữ liệu được bổ sung sau này sẽ không được đọc cho đến khi được chọn.",
+      `Chỉ các loại dữ liệu trong danh sách: ${EVERY_KIND}. Loại dữ liệu được bổ sung sau này sẽ không được đọc cho đến khi được chọn.`,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Bỏ chọn tất cả" }));
 
-    expect(ticked()).toEqual([false, false, false, false]);
-    expect(screen.getByRole("status").textContent).toBe(
-      "Mọi loại dữ liệu: liên hệ, hóa đơn, thanh toán, giấy báo có",
-    );
+    expect(ticked()).toEqual(Array.from({ length: 13 }, () => false));
+    expect(screen.getByRole("status").textContent).toBe(`Mọi loại dữ liệu: ${EVERY_KIND}`);
   });
 });
