@@ -18,7 +18,10 @@ auth:
   # SELECT ... FOR UPDATE before refreshing: two concurrent refreshes do not race, they
   # destroy the connection.
   rotatesRefreshToken: true
-  scopes: [offline_access, accounting.transactions.read, accounting.contacts.read]
+  # Granular scopes: invoices covers /Invoices and /CreditNotes, payments covers /Payments.
+  # Xero no longer grants the broad accounting.transactions to a new app.
+  scopes:
+    [offline_access, accounting.invoices.read, accounting.payments.read, accounting.contacts.read]
   # THEIR organisation id, from ops.connection.external_account_id. It is not our
   # tenant_id, and sending ours here is a 401 at best and the wrong org's books at worst.
   accountHeader: xero-tenant-id

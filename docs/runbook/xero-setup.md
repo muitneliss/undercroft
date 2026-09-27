@@ -23,8 +23,10 @@ Three things, each of which the code handles and each of which you will meet whi
   forward; runs stopping is what lets it arrive. The platform warns the customer's
   administrators a week before, and the card says "reconnect" once it has passed.
 
-The whole surface is gated on `UNDERCROFT_XERO_CLIENT_ID`. With it unset, Xero reads "not
-connected" and its button says the deployment is not set up for it.
+The whole surface is gated on `UNDERCROFT_XERO_CLIENT_ID`, `UNDERCROFT_XERO_CLIENT_SECRET` and
+`UNDERCROFT_PUBLIC_URL`; an empty value counts as unset. With any of them unset, Xero reads
+"not connected" and **Connect Xero** still shows: only pressing it says the deployment is not
+set up for Xero.
 
 ## 1. Create the Xero app
 
@@ -36,7 +38,8 @@ authorization code). Register exactly one redirect URI:
 ```
 
 `UNDERCROFT_PUBLIC_URL` is the origin the browser uses. Xero matches the URI exactly, path
-included. The Google consent has its own callback at `/oauth/google/callback`; the two are
+included: production is `https://undercroft.lowbit.link/oauth/xero/callback`, the local stack
+`http://localhost:13000/oauth/xero/callback`. One Xero app may register both. The Google consent has its own callback at `/oauth/google/callback`; the two are
 registered in two consoles and never share one.
 
 Copy the client id and generate a client secret.
@@ -58,9 +61,16 @@ up as **Connect Xero** being refused (section 5). Both compose files already pas
 ## 3. Check the scopes agree
 
 The consent asks for the scopes `specs/connectors/xero.yaml` declares under `auth.scopes`,
-kept in step by hand in `apps/control-plane/src/services/oauthProviders.ts`. A consent narrower
-than the spec fails every run with a 403 far from here. If you add an entity that needs a new
-scope, add it in both places.
+kept in step by hand in `apps/control-plane/src/services/oauthProviders.ts`, and
+`oauthProviders.test.ts` fails the gate when the two differ. A consent narrower than the spec
+fails every run with a 403 far from here. If you add an entity that needs a new scope, add it
+in both places.
+
+The scopes are Xero's **granular** ones: `offline_access`, `accounting.invoices.read` (invoices
+and credit notes), `accounting.payments.read` and `accounting.contacts.read`. Xero grants the
+broad `accounting.transactions` to no app created on or after 2 March 2026, and to no app at
+all after September 2027, so never add a broad scope back. Nothing needs registering on the
+Xero app for them; a web app is granted what the consent asks for.
 
 ## 4. Connect a customer, and verify each step
 

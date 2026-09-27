@@ -71,7 +71,8 @@ const xero = {
           access_token: "xat",
           refresh_token: "xrt",
           expires_in: 1800,
-          scope: "offline_access accounting.transactions.read accounting.contacts.read",
+          scope:
+            "offline_access accounting.invoices.read accounting.payments.read accounting.contacts.read",
         }),
         { status: 200 },
       ),

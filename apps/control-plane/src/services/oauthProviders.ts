@@ -112,9 +112,18 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
      * by hand: the control plane does not read specs, and a consent narrower than the spec
      * would fail every run with a 403 far from here. `offline_access` is what makes Xero
      * issue a refresh token at all.
+     *
+     * Granular, never the broad `accounting.transactions`: Xero grants that to no app created
+     * on or after 2 March 2026 and to none at all after September 2027, and a consent asking
+     * for it is refused before the administrator reaches an organisation.
      */
     scopes: {
-      xero: ["offline_access", "accounting.transactions.read", "accounting.contacts.read"],
+      xero: [
+        "offline_access",
+        "accounting.invoices.read",
+        "accounting.payments.read",
+        "accounting.contacts.read",
+      ],
     },
     // A confidential client with a secret: Xero takes it in a Basic header at the token
     // endpoint and reserves PKCE for clients that have none.
