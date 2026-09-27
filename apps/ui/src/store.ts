@@ -41,9 +41,14 @@ import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import type { DashboardDraft } from "@/lib/dashboardDraft.ts";
-import type { ModelDraft } from "@/lib/modelDraft.ts";
-import { patchVisual, type QuestionDraft, switchToSql } from "@/lib/questionDraft.ts";
+import { type DashboardDraft, isDashboardDirty } from "@/lib/dashboardDraft.ts";
+import { isDirty, type ModelDraft } from "@/lib/modelDraft.ts";
+import {
+  isQuestionDirty,
+  patchVisual,
+  type QuestionDraft,
+  switchToSql,
+} from "@/lib/questionDraft.ts";
 import { type LakeRun, planRun } from "@/lib/statements.ts";
 
 /** One item an admin picked, as both the picker and the card need to see it. */
@@ -395,6 +400,38 @@ export function cronDraftFor(
 ): string | null {
   const held = state.cronDraft;
   return held !== null && held.tenantId === tenantId && held.source === source ? held.cron : null;
+}
+
+/**
+ * Whether a reload would discard something the reader wrote and the server does not hold.
+ *
+ * Asked before a tab reloads itself (`@/lib/staleChunk`, ADR 0070), and answered on the side
+ * of keeping: a draft that carries its saved copy counts only when it differs from it, but the
+ * scope selection and the lake console are seeded from the server and the stream without one,
+ * so holding either at all counts. A tab that keeps is shown a Reload; one that reloads when
+ * it should not has lost the work.
+ */
+export function holdsUnsavedWork(
+  state: Pick<
+    UiState,
+    | "modelDraft"
+    | "questionDraft"
+    | "dashboardDraft"
+    | "assistantDraft"
+    | "cronDraft"
+    | "scopeDraft"
+    | "lakeSql"
+  >,
+): boolean {
+  return (
+    (state.modelDraft !== null && isDirty(state.modelDraft)) ||
+    (state.questionDraft !== null && isQuestionDirty(state.questionDraft)) ||
+    (state.dashboardDraft !== null && isDashboardDirty(state.dashboardDraft)) ||
+    state.assistantDraft.trim() !== "" ||
+    state.cronDraft !== null ||
+    state.scopeDraft !== null ||
+    Object.values(state.lakeSql).some((sql) => sql.trim() !== "")
+  );
 }
 
 /** One tenant's one kind, as `selectedAccount` is keyed. Nothing outside this file builds it. */

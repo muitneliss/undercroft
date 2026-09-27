@@ -33,6 +33,7 @@ import { Colophon } from "@/components/Colophon.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { StaleChunkBoundary } from "@/components/StaleChunkBoundary.tsx";
 import { TabRail } from "@/components/TabRail.tsx";
 import { applyBoard } from "@/lib/acetate.ts";
 import { type DivisionId, division } from "@/lib/divisions.ts";
@@ -213,7 +214,9 @@ export function Book({
           </div>
         </header>
 
-        {children}
+        {/* Inside the keyed leaf, so a page a deploy took away is answered here with the chrome
+            still around it, and the answer is dropped when the reader turns to another page. */}
+        <StaleChunkBoundary>{children}</StaleChunkBoundary>
 
         {/* Last on the leaf, and last in the DOM: the page is what the reader came for,
             and the printing it came from is the footnote to it. */}
@@ -228,17 +231,19 @@ export function Book({
           The fallback is the skeleton the divisions use -- lines of type being set -- rather
           than a spinner, which this system does not have. */}
       {interleaved && tenantId !== undefined ? (
-        <Suspense
-          fallback={
-            <div className="interleaf">
-              <div className="interleaf__turns">
-                <Skeleton rows={3} />
+        <StaleChunkBoundary>
+          <Suspense
+            fallback={
+              <div className="interleaf">
+                <div className="interleaf__turns">
+                  <Skeleton rows={3} />
+                </div>
               </div>
-            </div>
-          }
-        >
-          <Interleaf tenantId={tenantId} />
-        </Suspense>
+            }
+          >
+            <Interleaf tenantId={tenantId} />
+          </Suspense>
+        </StaleChunkBoundary>
       ) : null}
     </div>
   );

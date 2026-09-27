@@ -40,6 +40,14 @@ export const vi = {
      */
     releaseLive: "Phiên bản {{release}} đã được triển khai. Tải lại trang để sử dụng.",
     reload: "Tải lại",
+    /**
+     * A page this tab could not open because a deploy replaced the files it is built from.
+     * Shown only when the tab holds unsaved work, which is why the body asks for it to be
+     * saved first: every other page of the book still opens.
+     */
+    staleChunk: "Trang này thuộc một phiên bản mới hơn",
+    staleChunkBody:
+      "Undercroft đã được cập nhật sau khi bạn mở tab này. Hãy lưu những gì đang viết dở, rồi tải lại trang.",
   },
 
   lang: {
