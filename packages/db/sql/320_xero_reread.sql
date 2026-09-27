@@ -1,0 +1,25 @@
+-- Send every Xero stream back to one full read, once (#268).
+--
+-- Until this release the connector runtime sent the FIRST page of a `page-number` read without
+-- its `page`, and Xero answers a list with no `page` with every record in a summary that drops
+-- invoices' and credit notes' line items (and contacts' bank details). So `raw.records` holds a
+-- summary for the first hundred records of each Xero entity, for every credit note of an
+-- organisation with fewer than a hundred, and for every record an incremental read touched.
+-- The lake still holds the full observation of whatever a later page reached, but the newest
+-- one is what `raw.records` and every model read.
+--
+-- The runtime now names page one. That alone repairs only the records that change again: an
+-- incremental read asks Xero for what changed since the watermark, and a summary row whose
+-- record has not changed is never asked for. Forgetting the watermark makes the next run a
+-- full read, which re-lands each record in full over its summary. It costs one full read per
+-- Xero connection, and the next run after it is incremental again.
+--
+-- A data change in a numbered file on purpose: it must happen exactly once, at the deploy that
+-- brings the fixed runtime, and the ledger is what runs a file once. Deleting a cursor is
+-- always safe -- a missing watermark is a full read, never a gap (220).
+--
+-- `xero.%` as well as `xero`, for a second Xero organisation connected as its own source, the
+-- way a second mailbox is `gmail.<id>`. Not `xero%`, which would match a source that merely
+-- starts with the word.
+
+DELETE FROM raw.sync_cursor WHERE source = 'xero' OR source LIKE 'xero.%';
