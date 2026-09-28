@@ -14,6 +14,7 @@ import type { TFunction } from "i18next";
 
 import type { RunDetail, RunEventView } from "@/api/types.ts";
 import { formatCount } from "@/lib/money.ts";
+import { grantedBy } from "@/lib/runEventSentence.ts";
 import type { RunStage, StageMark } from "@/lib/runFlowTypes.ts";
 
 /**
@@ -165,9 +166,12 @@ function interruptedEntity(run: RunDetail, accs: readonly EntityAcc[]): string |
   return accs.find((acc) => acc.started && !acc.done)?.entity ?? null;
 }
 
-function entityDetail(t: TFunction, locale: Locale, acc: EntityAcc): string | null {
+function entityDetail(t: TFunction, locale: Locale, run: RunDetail, acc: EntityAcc): string | null {
   if (acc.ungranted !== null) {
-    return t("journal.flow.entityNotGrantedDetail", { scope: acc.ungranted });
+    // Granted the way the source is connected: a consent again, or a private app's own scopes.
+    return grantedBy(run.source) === "token"
+      ? t("journal.flow.entityNotGrantedDetailToken", { scope: acc.ungranted })
+      : t("journal.flow.entityNotGrantedDetail", { scope: acc.ungranted });
   }
   if (acc.done) {
     return landedSummary(t, locale, acc.landed, acc.refused);
@@ -231,7 +235,7 @@ export function entityStages(
       label: acc.entity,
       mark,
       markLabel: entityMarkLabel(t, mark, acc),
-      detail: entityDetail(t, locale, acc),
+      detail: entityDetail(t, locale, run, acc),
       gathered: mark === "pending" ? gatheredSoFar(acc) : null,
       href: null,
     };

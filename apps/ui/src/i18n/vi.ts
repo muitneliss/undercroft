@@ -849,8 +849,12 @@ export const vi = {
     hubspotCompanies: "Công ty",
     hubspotContacts: "Liên hệ",
     hubspotDeals: "Giao dịch",
+    hubspotQuotes: "Báo giá",
+    hubspotLineItems: "Dòng báo giá",
+    hubspotProducts: "Sản phẩm",
     /** Nothing chosen: the spec's own properties, which is what HubSpot has always read. */
-    hubspotStandard: "Các trường chuẩn của công ty, liên hệ và giao dịch",
+    hubspotStandard:
+      "Các trường chuẩn của công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm",
     hubspotChosen_other: "Các trường chuẩn, cùng {{count, number}} trường chọn thêm",
     anyFileType: "Mọi loại tệp",
     fileTypesChosen_other: "Đã chọn {{count, number}} loại tệp",
@@ -1067,6 +1071,9 @@ export const vi = {
       entityStarted: "Bắt đầu đọc {{entity}}.",
       entityNotGranted:
         "Không đọc {{entity}}: quyền đã cấp cho kết nối này thiếu {{scope}}. Hãy kết nối lại để cấp {{scope}}.",
+      /** A pasted token (HubSpot's private app): its scopes are ticked in HubSpot, not by reconnecting. */
+      entityNotGrantedToken:
+        "Không đọc {{entity}}: mã của ứng dụng riêng HubSpot chưa có quyền {{scope}}. Hãy cấp {{scope}} cho ứng dụng riêng trong HubSpot; các loại dữ liệu khác vẫn được đọc bình thường.",
       workListed: "Cần đọc {{total}} {{entity}}.",
       workListedSkipping: "Có {{total}} {{entity}}, {{skipped}} đã có sẵn nên không đọc lại.",
       recordsRead: "Đã đọc {{read}} {{entity}}.",
@@ -1106,6 +1113,7 @@ export const vi = {
       entityInterrupted: "Dừng ở đây",
       entityNotGranted: "Chưa được cấp quyền",
       entityNotGrantedDetail: "Kết nối lại để cấp {{scope}}",
+      entityNotGrantedDetailToken: "Cấp {{scope}} trong HubSpot",
       /* The unit matters on the rail: a datum hangs under the line on its own, where a
        bare "0" is a stray digit rather than a count of anything. `landed` carries the
        digits already grouped for the reader, or the em dash when there is no count at
@@ -1409,7 +1417,7 @@ export const vi = {
   source: {
     readOnly: "Không gì cả. Quyền chỉ đọc, và bạn có thể ngắt kết nối bất cứ lúc nào.",
     hubspotReads:
-      "Công ty, liên hệ và giao dịch từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm, và việc mỗi giao dịch thuộc công ty nào. HubSpot không lưu thời điểm sửa cho liên kết đó, nên thời điểm sửa phía nguồn của nó luôn để trống.",
+      "Công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm (kể cả sản phẩm đã lưu trữ) từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm; người phụ trách (owner), kể cả người đã ngừng hoạt động; các pipeline giao dịch cùng các giai đoạn của chúng; và liên kết giữa chúng: công ty, liên hệ, báo giá và dòng báo giá của mỗi giao dịch, dòng báo giá, liên hệ và công ty của mỗi báo giá, và công ty của mỗi liên hệ. HubSpot không lưu thời điểm sửa cho liên kết, nên thời điểm sửa phía nguồn của chúng luôn để trống.",
     xeroReads:
       "Liên hệ, hóa đơn, giấy báo có, báo giá, đơn đặt hàng, mặt hàng và các khoản thanh toán từ một tổ chức bạn chọn.",
     gmailReads: "Tiêu đề thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",

@@ -30,7 +30,8 @@ import {
 } from "@undercroft/core";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
 import { alreadyRead, checkIncremental, incrementalAt, sinceCarriedIn } from "./incremental.ts";
-import { startListing } from "./listing.ts";
+import { startNaming } from "./listing.ts";
+import { EntityNotGranted, refusedScopes } from "./refusal.ts";
 
 export interface RawRecordOut {
   readonly source: string;
@@ -68,6 +69,12 @@ export interface RunContext {
    */
   readonly sourceIds?: readonly string[];
   /**
+   * Hand back every id this read names, landed or skipped as unchanged, as `ReadEnd.named` --
+   * for a `batch-from` relation that reads against this entity. Off unless asked, because the
+   * ids are memory a streaming read otherwise never holds (`listing.ts`).
+   */
+  readonly keepIds?: boolean;
+  /**
    * How far this entity was read last time, in the source's own rendering, to be sent back
    * as the entity's `incremental` block says.
    *
@@ -97,10 +104,11 @@ export interface Reader {
   readonly since: string | null;
   seen: number;
   /**
-   * Every id the source has named so far, filtered or not, or `null` when this read could never
-   * say what the source holds. Only `run.ts` hands it on, once the read is over (`listing.ts`).
+   * Every id the source has named so far, filtered or not, or `null` when nobody will read them:
+   * neither a listing nor a relation. Only `run.ts` hands it on, once the read is over
+   * (`listing.ts`).
    */
-  readonly listed: Set<string> | null;
+  readonly named: Set<string> | null;
   /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
   readonly fetchJson: (request: HttpRequest) => Promise<unknown>;
 }
@@ -209,6 +217,10 @@ export async function createReader(
   checkIncremental(spec, entity);
 
   const since = ctx.since ?? null;
+  // Whether any request of this read has been answered yet. Until one has, the source's own
+  // "this credential may not read this list" is a list never readable rather than a failure
+  // part-way (`refusal.ts`); after one, it is a partial read and raises like anything else.
+  let answered = false;
 
   const reader: Reader = {
     spec,
@@ -222,18 +234,27 @@ export async function createReader(
     },
     since,
     seen: 0,
-    listed: startListing(entity, since),
+    named: startNaming(entity, since, ctx.keepIds === true),
     fetchJson: async (request: HttpRequest): Promise<unknown> =>
       await withRetry(
         async () => {
           await pacer.acquire();
           const response = await ctx.fetcher.send(request);
+          // Read before `raiseForStatus`, which keeps only the first 500 characters of a body.
+          const refused = answered ? null : refusedScopes(spec, entity, response);
+          if (refused !== null) {
+            throw new EntityNotGranted(spec.id, entity.name, refused);
+          }
           raiseForStatus(request, response);
+          answered = true;
           return parseLossless(response.text);
         },
         policy,
         { clock, ...(ctx.random === undefined ? {} : { random: ctx.random }) },
       ).catch((error: unknown) => {
+        if (error instanceof EntityNotGranted) {
+          throw error;
+        }
         throw new ConnectorError(spec.id, entity.name, reader.seen, describe(error), {
           cause: error,
         });
@@ -280,14 +301,14 @@ export function outOf(reader: Reader, id: string, record: unknown): RawRecordOut
   };
 }
 
-/** Turn one decoded page into records, refusing any that cannot be keyed. */
-export function* emit(reader: Reader, parsed: unknown): Generator<RawRecordOut> {
-  const { spec, entity, since } = reader;
-  for (const record of extractRecords(entity, spec, parsed)) {
+/** Turn one page's records into records out, refusing any that cannot be keyed. */
+export function* emit(reader: Reader, records: readonly unknown[]): Generator<RawRecordOut> {
+  const { entity, since } = reader;
+  for (const record of records) {
     const id = keyOf(reader, record);
     // Before the filter, never after it: a record skipped as unchanged is still one the source
     // holds, and leaving it out of the listing would report it removed.
-    reader.listed?.add(id);
+    reader.named?.add(id);
     if (!alreadyRead(entity, since, incrementalAt(entity, record))) {
       yield outOf(reader, id, record);
     }

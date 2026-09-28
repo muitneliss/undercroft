@@ -31,16 +31,38 @@ import type { ConnectorEntity } from "@undercroft/contracts";
 
 import { asksSourceForLess } from "./incremental.ts";
 
-/** A set to put every listed id in, or `null` when this read could never say what the source holds. */
-export function startListing(entity: ConnectorEntity, since: string | null): Set<string> | null {
-  const collects =
+/** Whether this read, got to the end, names every live record the source holds. */
+function listsWholeSource(entity: ConnectorEntity, since: string | null): boolean {
+  return (
     entity.removedWhen === "absent" &&
     entity.request.kind === "list" &&
-    !asksSourceForLess(entity, since);
-  return collects ? new Set() : null;
+    !asksSourceForLess(entity, since)
+  );
+}
+
+/**
+ * A set to put every id the source names in, or `null` when nobody will read one.
+ *
+ * Two readers want it. A listing, above. And a `batch-from` relation reading against this entity
+ * (`keepIds`), which asks about every record the read NAMED rather than only the ones it landed:
+ * a record a client filter skipped as unchanged still has links, and a relation added to a spec
+ * after its parent's watermark was set would otherwise only ever learn the links of records that
+ * changed since (ADR 0074). What the relation is handed is only ever what the read named, so a
+ * watermark sent to the source still narrows it, exactly as before.
+ */
+export function startNaming(
+  entity: ConnectorEntity,
+  since: string | null,
+  keepIds: boolean,
+): Set<string> | null {
+  return keepIds || listsWholeSource(entity, since) ? new Set() : null;
 }
 
 /** What a read that listed to the end may say. See the module docstring for the empty case. */
-export function finishListing(listing: Set<string> | null): ReadonlySet<string> | null {
-  return listing === null || listing.size === 0 ? null : listing;
+export function finishListing(
+  entity: ConnectorEntity,
+  since: string | null,
+  named: ReadonlySet<string> | null,
+): ReadonlySet<string> | null {
+  return named === null || named.size === 0 || !listsWholeSource(entity, since) ? null : named;
 }

@@ -15,4 +15,7 @@ export {
   laterStamp,
   requestKey,
 } from "./incremental.ts";
+// `refusedScopes` as well as the error it raises: the scope picker lists a portal's properties
+// outside any read, and must tell the same refusal apart in the same words.
+export { EntityNotGranted, refusedScopes } from "./refusal.ts";
 export { type RawRecordOut, type ReadEnd, type RunContext, readEntity } from "./run.ts";

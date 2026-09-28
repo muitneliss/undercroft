@@ -101,11 +101,14 @@ export function RunEvents({
   entries,
   locale,
   live,
+  source,
 }: {
   entries: readonly RunEventView[];
   locale: Locale;
   /** Whether the run is still going, which is the only time this table announces itself. */
   live: boolean;
+  /** The run's source, which decides how a missing permission is told to be granted. */
+  source?: string | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { regionRef, onScroll } = useTail(entries.length);
@@ -153,7 +156,7 @@ export function RunEvents({
                   <TableCell>
                     <span className="feed__what">
                       <Level level={event.level} />
-                      {eventSentence(t, locale, event)}
+                      {eventSentence(t, locale, event, source)}
                     </span>
                   </TableCell>
                 </TableRow>

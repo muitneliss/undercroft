@@ -80,6 +80,12 @@
                       "additionalProperties": false
                     }
                   ]
+                },
+                "grantRefusal": {
+                  "type": "string",
+                  "enum": [
+                    "hubspot-missing-scopes"
+                  ]
                 }
               },
               "required": [
@@ -395,6 +401,16 @@
                           "type": "string"
                         },
                         "default": {}
+                      },
+                      "partitions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "minItems": 2
                       },
                       "body": {},
                       "batchRead": {

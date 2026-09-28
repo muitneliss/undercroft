@@ -59,11 +59,19 @@ const MAX_IDS: Readonly<Record<BatchRead["bodyTemplate"], number>> = {
   "hubspot-batch-read": 100,
 };
 
-/** One page's records as the batch read answers them. `true` when `maxRecords` stopped it. */
+/**
+ * One page's records as the batch read answers them. `true` when `maxRecords` stopped it.
+ *
+ * `partition` is the list partition the page came from, and the batch read is sent with it: the
+ * records it names live there, and HubSpot answers an archived record asked for without
+ * `archived=true` as "not found" -- which this module accepts as a deletion, so without it every
+ * archived record would quietly go unlanded (ADR 0074).
+ */
 export async function* rereadPage(
   reader: Reader,
   batchRead: BatchRead,
   parsed: unknown,
+  partition: Readonly<Record<string, string>>,
 ): AsyncGenerator<RawRecordOut, boolean> {
   const { spec, entity, since } = reader;
   const wanted: string[] = [];
@@ -72,7 +80,7 @@ export async function* rereadPage(
     const id = keyOf(reader, record);
     // The LIST names what the source holds, whether or not the batch read then finds it: a
     // record deleted in between is simply decided by the next complete read.
-    reader.listed?.add(id);
+    reader.named?.add(id);
     if (!alreadyRead(entity, since, incrementalAt(entity, record))) {
       wanted.push(id);
     }
@@ -83,7 +91,7 @@ export async function* rereadPage(
     }
   }
 
-  const url = buildUrl(spec.baseUrl, batchRead.path, {});
+  const url = buildUrl(spec.baseUrl, batchRead.path, partition);
   const size = MAX_IDS[batchRead.bodyTemplate];
   for (let offset = 0; offset < wanted.length; offset += size) {
     const asked = wanted.slice(offset, offset + size);

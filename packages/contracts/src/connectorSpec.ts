@@ -30,6 +30,21 @@ const Auth = z.discriminatedUnion("kind", [
       // For a single-tenant self-hosted install, an env var is enough.
       z.object({ from: z.literal("env"), name: z.string().min(1) }),
     ]),
+    /**
+     * How the source says that this token may not read one list, when it says so in words.
+     *
+     * A pasted token carries whatever permissions somebody ticked on the provider's side, and
+     * nothing records which: a HubSpot private app's scopes live in HubSpot. So a list the token
+     * cannot read is found out on that list's first request, and a run that failed there would
+     * lose every list the token CAN read (issue 279). Declared, the runtime turns exactly that
+     * answer into `EntityNotGranted`, and the run names the list and its scope as not granted,
+     * the way ADR 0073 names a list a recorded grant lacks. Any other failure still raises.
+     *
+     * Named, never arbitrary, like a body template: what counts as "not granted" is a reading of
+     * one provider's error body, and a spec is configuration, not a parser. Declaring it makes
+     * `readScope` required on every entity, so a refusal always has a scope to name. ADR 0074.
+     */
+    grantRefusal: z.enum(["hubspot-missing-scopes"]).optional(),
   }),
   z.object({
     kind: z.literal("oauth2"),
@@ -167,12 +182,51 @@ const BatchRead = z.object({
   properties: z.array(z.string().min(1)).min(1),
 });
 
+/** A partition's values, keyed and sorted, so two spellings of one partition compare equal. */
+function partitionKey(partition: Readonly<Record<string, string>>): string {
+  return JSON.stringify(Object.entries(partition).toSorted(([a], [b]) => a.localeCompare(b, "en")));
+}
+
+/**
+ * A list the source answers in disjoint parts, one query value apart: the same path read once
+ * per partition, each partition's values laid over `query`, and the entity is every record any
+ * partition names.
+ *
+ * Exists because a source may keep part of a population out of its default list while other
+ * records still point at it. HubSpot lists live and archived records apart (`archived=false`,
+ * `archived=true`), and a line item still names the archived product it was sold as, as a company
+ * still names the deactivated owner who looked after it. Read as two entities, a record that is archived
+ * would move from one stream to the other and every model would have to put the two back
+ * together; read as one, it stays one record whose payload says it is archived. ADR 0074.
+ *
+ * Each partition is read to its end before the next begins, so the entity's listing is a union of
+ * complete listings, and `removedWhen: absent` means a record no partition names any more. A
+ * two-step read (`batchRead`) sends the partition's values on its batch read as well, because the
+ * record it re-reads lives in that partition: HubSpot's batch read answers an archived record as
+ * "not found" unless it too is asked with `archived=true`.
+ *
+ * Optional with no default, so an entity that declares none keeps the request -- and the request
+ * key its watermark is stored under (ADR 0072) -- that it had before the field existed.
+ */
+const Partitions = z
+  .array(z.record(z.string(), z.string()))
+  .min(2, "one partition is just a query: write its values into `query`")
+  .refine(
+    (partitions) => partitions.every((partition) => Object.keys(partition).length > 0),
+    "a partition with no values reads the same list as `query` alone",
+  )
+  .refine(
+    (partitions) => new Set(partitions.map(partitionKey)).size === partitions.length,
+    "two partitions with the same values would read the same records twice",
+  );
+
 const Request = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("list"),
     method: z.enum(["GET", "POST"]).default("GET"),
     path: z.string().min(1),
     query: z.record(z.string(), z.string()).default({}),
+    partitions: Partitions.optional(),
     body: z.unknown().optional(),
     batchRead: BatchRead.optional(),
   }),
@@ -233,6 +287,12 @@ const Entity = z.object({
    * read every other list, so a run reads those and names this one as not granted, rather than
    * failing as a whole or meeting the 401 part-way through (ADR 0073). Required of every entity
    * in a spec whose oauth2 consent names scopes, so no list's scope is left to a guess.
+   *
+   * On a pasted token (`bearer`) it is the permission the token must carry to read the list,
+   * which nobody records -- a HubSpot private app's scopes are ticked in HubSpot. Required when
+   * the auth declares a `grantRefusal`, so the run can name what to grant even when the source's
+   * refusal names nothing, and so the runbook's scope table has one place to agree with (ADR
+   * 0074).
    */
   readScope: z.string().min(1).optional(),
   removedWhen: RemovedWhen.optional(),
@@ -260,7 +320,6 @@ export const ConnectorSpec = z
   })
   .superRefine((spec, ctx) => {
     const names = new Set(spec.entities.map((e) => e.name));
-    const consent = spec.auth.kind === "oauth2" ? spec.auth.scopes : [];
     for (const entity of spec.entities) {
       if (entity.request.kind === "batch-from" && !names.has(entity.request.entity)) {
         ctx.addIssue({
@@ -269,7 +328,7 @@ export const ConnectorSpec = z
           message: `batch-from references unknown entity '${entity.request.entity}'`,
         });
       }
-      const readScopeIssue = readScopeProblem(entity.readScope, consent);
+      const readScopeIssue = readScopeProblem(entity.readScope, spec.auth);
       if (readScopeIssue !== null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -289,18 +348,25 @@ export const ConnectorSpec = z
   });
 
 /**
- * What is wrong with an entity's `readScope` against the consent's scopes, or `null`.
+ * What is wrong with an entity's `readScope` against the spec's auth, or `null`.
  *
  * A consent that names scopes needs every entity to say which one reads it: an entity without
  * one would be read on any grant and meet the provider's refusal part-way through a run, which
  * is the failure the field exists to prevent. A scope the consent does not ask for could never
- * be granted, so the entity could never be read. A spec with no scoped consent has no grant to
- * hold a scope against.
+ * be granted, so the entity could never be read.
+ *
+ * A pasted token asks for nothing -- its scopes are ticked at the provider -- so any scope may be
+ * named, and one must be when the auth declares how the source refuses a list (`grantRefusal`),
+ * so that a refusal always has a scope to name. A spec with neither has no grant to hold a scope
+ * against.
  */
-function readScopeProblem(
-  readScope: string | undefined,
-  consent: readonly string[],
-): string | null {
+function readScopeProblem(readScope: string | undefined, auth: ConnectorAuth): string | null {
+  if (auth.kind === "bearer") {
+    return readScope === undefined && auth.grantRefusal !== undefined
+      ? "a spec that declares a grantRefusal must name the scope each entity is read under"
+      : null;
+  }
+  const consent = auth.kind === "oauth2" ? auth.scopes : [];
   if (readScope === undefined) {
     return consent.length === 0
       ? null

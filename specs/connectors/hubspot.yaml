@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../schema/connector.v1.json
 #
-# HubSpot CRM. Bearer auth against a sealed per-tenant credential; JSON next-link
-# pagination; client-side incremental on each object's last-modified property.
+# HubSpot CRM. Bearer auth against a sealed per-tenant credential; pagination by HubSpot's
+# `after`; client-side incremental on the last-modified property of each object that has one.
 #
 # A whole connector as configuration: no code per source.
 #
@@ -25,6 +25,16 @@
 # A run that fails or stops partway decides nothing. `hs_merged_object_ids` is read so that a
 # merge says where a record went: HubSpot writes the merged-away ids onto the record they merged
 # into (a merge makes a NEW record id, and both old ids leave the live list).
+#
+# Every list is the objects API's (or the owners' and pipelines' own), paged by `after`, never
+# the search endpoint -- which stops at 10,000 results for any query. So no list here has a cap,
+# and there is deliberately no `failOnExactCount`: a portal with exactly 10,000 line items is a
+# portal, not a truncation (ADR 0074, issue 279).
+#
+# Each entity names the scope a HubSpot private app needs to read it (`readScope`), and
+# `docs/runbook/hubspot-setup.md` lists the same. A token without one is refused on that list's
+# first request with a 403 whose category is `MISSING_SCOPES`; the run names the list as not
+# granted, with the scope, and reads the rest (`grantRefusal`, ADR 0074).
 apiVersion: undercroft.dev/v1
 kind: Connector
 id: hubspot
@@ -34,6 +44,7 @@ baseUrl: https://api.hubapi.com
 auth:
   kind: bearer
   token: { from: connection }
+  grantRefusal: hubspot-missing-scopes
 
 defaults:
   headers: { Accept: application/json }
@@ -48,9 +59,6 @@ defaults:
     respectRetryAfter: true
   guards:
     failOnEmpty: true
-    # The search endpoint returns at most 10,000 results and does not signal
-    # truncation. Landing exactly on it is almost certainly silent data loss.
-    failOnExactCount: 10000
 
 entities:
   - name: companies
@@ -67,6 +75,7 @@ entities:
     incremental:
       strategy: client-filter
       sourcePath: properties.hs_lastmodifieddate
+    readScope: crm.objects.companies.read
     removedWhen: absent
 
   - name: contacts
@@ -85,6 +94,7 @@ entities:
       # NOT hs_lastmodifieddate. HubSpot names it differently on contacts, and the
       # wrong name yields a cursor that never advances.
       sourcePath: properties.lastmodifieddate
+    readScope: crm.objects.contacts.read
     removedWhen: absent
 
   - name: deals
@@ -101,17 +111,26 @@ entities:
     incremental:
       strategy: client-filter
       sourcePath: properties.hs_lastmodifieddate
+    readScope: crm.objects.deals.read
     removedWhen: absent
 
   # Not a CRM object: the deal-to-company edge, on a different route with a different
   # shape. Without it a deal has no owner and every deal-to-customer join is a guess --
-  # so a failure here is fatal, not skippable.
+  # so a failure here is fatal, not skippable. Only a token HubSpot says may not read it is
+  # named instead, as every list is (`grantRefusal`).
   #
   # No updatedAtPath, on purpose: the v4 associations batch read answers `from`, `to` and
   # `associationTypes` only -- HubSpot keeps no change time on a link. source_updated_at is
   # therefore NULL on every association, and correctly so; filling it from the deal's
   # hs_lastmodifieddate or from observed_at would be a plausible wrong instant (ADR 0034,
   # issue 141). The consent copy (`source.hubspotReads`) tells the user the same.
+  #
+  # Every link below is read the same way and keeps this one's name for what it always was.
+  # Each asks about every record its parent's read NAMED, not only the ones that changed, so a
+  # link read added after its parent's watermark learns every record's links on its first run
+  # (ADR 0074). v4 rather than v3: v3 answers a contact's primary company alone, and no kind or
+  # label on any link; v4 answers every link with its `associationTypes` -- category, typeId and
+  # label. A record with more links than one answer carries is read to its last page.
   - name: associations
     request:
       kind: batch-from
@@ -125,7 +144,229 @@ entities:
     pagination: { kind: none }
     guards:
       failOnEmpty: false # a portal with no associations is a real state
+    readScope: crm.objects.companies.read
     # Keyed by the deal (`from.id`), so a deal's links are removed when the deal is, and live
-    # again when it is. Decided by the deals listing: this read asks only about deals that
-    # changed, so it could never say which deals are gone.
+    # again when it is. Decided by the deals listing: this read asks only about the deals that
+    # listing named, so it could never say which deals are gone.
+    removedWhen: parent-removed
+
+  # The commerce objects, issue 279. Paged by `after` as a cursor rather than by HubSpot's next
+  # link, so every value of the query -- `archived` above all -- is carried to the next page by
+  # this spec rather than by however HubSpot writes its link. `failOnEmpty: false` on each: a
+  # portal that has never quoted anything is a real state.
+  - name: quotes
+    request:
+      kind: list
+      path: /crm/v3/objects/quotes
+      query:
+        limit: "100"
+        archived: "false"
+        properties: hs_title,hs_status,hs_quote_number,hs_expiration_date,hs_quote_amount,hs_currency,hubspot_owner_id,hs_createdate,hs_lastmodifieddate
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: cursor, cursorPath: paging.next.after, param: after }
+    incremental:
+      strategy: client-filter
+      sourcePath: properties.hs_lastmodifieddate
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.quotes.read
+    removedWhen: absent
+
+  # `hs_product_id` is how a line item names its product: HubSpot's products cannot be
+  # associated with anything, so there is no link to read. A line item added by hand has none.
+  - name: line_items
+    request:
+      kind: list
+      path: /crm/v3/objects/line_items
+      query:
+        limit: "100"
+        archived: "false"
+        properties: name,quantity,price,amount,hs_product_id,hs_sku,hs_line_item_currency_code,createdate,hs_lastmodifieddate
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: cursor, cursorPath: paging.next.after, param: after }
+    incremental:
+      strategy: client-filter
+      sourcePath: properties.hs_lastmodifieddate
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.line_items.read
+    removedWhen: absent
+
+  # Live and archived both, as one stream: a line item still names the product it was sold as
+  # after that product is archived, and HubSpot lists archived records only when asked with
+  # `archived=true` (`partitions`, ADR 0074). Each record says which it is in its own `archived`.
+  # No watermark: whether archiving moves `hs_lastmodifieddate` is not documented, and a product
+  # list is short, so it is read whole every run and an unchanged product lands as unchanged.
+  - name: products
+    request:
+      kind: list
+      path: /crm/v3/objects/products
+      query:
+        limit: "100"
+        properties: name,price,hs_sku,description,createdate,hs_lastmodifieddate
+      partitions:
+        - { archived: "false" }
+        - { archived: "true" }
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: cursor, cursorPath: paging.next.after, param: after }
+    guards:
+      failOnEmpty: false
+    # HubSpot's scope reference names `e-commerce` for the products endpoints; the products
+    # API also accepts `crm.objects.products.read`, where an app's scope list offers it.
+    readScope: e-commerce
+    removedWhen: absent
+
+  # Active and deactivated, for the reason products are: an old deal still names the owner
+  # who closed it. `id` is what a record's `hubspot_owner_id` holds; `userId` is not.
+  # Read whole every run -- there are as many as there are seats -- and landed unchanged when
+  # nothing moved.
+  - name: owners
+    request:
+      kind: list
+      path: /crm/v3/owners
+      query:
+        limit: "100"
+      partitions:
+        - { archived: "false" }
+        - { archived: "true" }
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: cursor, cursorPath: paging.next.after, param: after }
+    readScope: crm.objects.owners.read
+    removedWhen: absent
+
+  # Each deal pipeline with its stages nested in it: a stage's `label`, `displayOrder`, and
+  # `metadata.isClosed` and `metadata.probability` -- strings, as HubSpot types them. One
+  # unpaged answer, read whole every run; every portal has at least one deal pipeline.
+  - name: deal_pipelines
+    request:
+      kind: list
+      path: /crm/v3/pipelines/deals
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: none }
+    readScope: crm.objects.deals.read
+    removedWhen: absent
+
+  # The links, each keyed by the record it hangs off and removed with it, like `associations`.
+  # Every company a contact is linked to, each with its kind: `HUBSPOT_DEFINED` typeId 1 is the
+  # primary company, typeId 279 an unlabelled link, and `USER_DEFINED` the portal's own labels.
+  - name: contact_companies
+    request:
+      kind: batch-from
+      entity: contacts
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/contacts/companies/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.companies.read
+    removedWhen: parent-removed
+
+  - name: deal_contacts
+    request:
+      kind: batch-from
+      entity: deals
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/deals/contacts/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: parent-removed
+
+  - name: deal_quotes
+    request:
+      kind: batch-from
+      entity: deals
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/deals/quotes/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.quotes.read
+    removedWhen: parent-removed
+
+  - name: deal_line_items
+    request:
+      kind: batch-from
+      entity: deals
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/deals/line_items/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.line_items.read
+    removedWhen: parent-removed
+
+  - name: quote_line_items
+    request:
+      kind: batch-from
+      entity: quotes
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/quotes/line_items/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.line_items.read
+    removedWhen: parent-removed
+
+  - name: quote_contacts
+    request:
+      kind: batch-from
+      entity: quotes
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/quotes/contacts/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: parent-removed
+
+  - name: quote_companies
+    request:
+      kind: batch-from
+      entity: quotes
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/quotes/companies/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.companies.read
     removedWhen: parent-removed

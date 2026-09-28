@@ -9,7 +9,7 @@
  */
 
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
-import { getStringPath } from "@undercroft/core";
+import { getPath, getStringPath } from "@undercroft/core";
 
 /**
  * The compile-time end of an exhaustive switch.
@@ -27,10 +27,72 @@ export function assertNever(value: never, what: string): never {
  * Named, never arbitrary code: a spec is configuration a user writes, and a template that
  * could execute would make every connector spec a script.
  */
-export function renderBatchBody(template: "hubspot-batch-inputs", ids: readonly string[]): string {
+type BatchTemplate = "hubspot-batch-inputs";
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function renderBatchBody(template: BatchTemplate, ids: readonly string[]): string {
   switch (template) {
     case "hubspot-batch-inputs":
       return JSON.stringify({ inputs: ids.map((id) => ({ id })) });
+    default:
+      return assertNever(template, "batch body template");
+  }
+}
+
+/**
+ * The cursor to the rest of ONE relation record, when the source answered only part of it.
+ *
+ * HubSpot's v4 associations batch read answers a page of each record's links, and puts
+ * `paging.next.after` on a record that has more: "the 'after' field in a returned paging object
+ * can be added alongside the 'id' to retrieve the next page of associations from that objectId"
+ * (its OpenAPI document; the `link` beside it is deprecated). A reader that ignored it would land
+ * a quote's first page of line items as if it were all of them.
+ */
+export function recordPageAfter(template: BatchTemplate, record: unknown): string | null {
+  switch (template) {
+    case "hubspot-batch-inputs":
+      return getStringPath(record, "paging.next.after");
+    default:
+      return assertNever(template, "batch body template");
+  }
+}
+
+/** The body that asks for the next page of one record's links. */
+export function renderRecordPageBody(template: BatchTemplate, id: string, after: string): string {
+  switch (template) {
+    case "hubspot-batch-inputs":
+      return JSON.stringify({ inputs: [{ id, after }] });
+    default:
+      return assertNever(template, "batch body template");
+  }
+}
+
+/**
+ * One relation record out of its pages: the first as the source answered it, with every page's
+ * links in its `to`, in the order they came, and no `paging` -- the record the source would have
+ * answered had it not paged. A record that was never paged is returned as it is, untouched, so
+ * its bytes are the bytes it always landed as.
+ */
+export function joinRecordPages(
+  template: BatchTemplate,
+  first: unknown,
+  rest: readonly unknown[],
+): unknown {
+  switch (template) {
+    case "hubspot-batch-inputs": {
+      if (rest.length === 0 || !isRecord(first)) {
+        return first;
+      }
+      const { paging: _paging, ...record } = first;
+      const links = [first, ...rest].flatMap((page) => {
+        const to = getPath(page, "to");
+        return Array.isArray(to) ? to : [];
+      });
+      return { ...record, to: links };
+    }
     default:
       return assertNever(template, "batch body template");
   }
