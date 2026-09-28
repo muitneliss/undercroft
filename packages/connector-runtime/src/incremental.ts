@@ -20,6 +20,15 @@
  * moment of sending and rounded down to the second, and the stored text is still Xero's own.
  * ADR 0068, which supersedes the "sent back verbatim" half of ADR 0034.
  *
+ * ## A watermark belongs to the request that read it
+ *
+ * A watermark says how far ONE request's answers were read. Kept across a change to that
+ * request, it vouches for records the new request never asked about: Xero's lists were read
+ * without `unitdp=4` until #280, and a watermark carried over would leave every invoice not
+ * edited since holding the 2-decimal unit prices. So {@link requestKey} names the request, the
+ * caller stores the key beside the mark, and a changed request finds no mark and reads
+ * everything once. ADR 0072, superseding the "read as declared is `''`" half of ADR 0052.
+ *
  * ## Unreadable is never a skip, and never an advance
  *
  * Both answers here fail in the same direction, and it is the direction that cannot lose
@@ -37,8 +46,16 @@
  * skipped everything looks exactly like a source with nothing new.
  */
 
+import { createHash } from "node:crypto";
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
-import { ConnectorError, getStringPath, isoFromMillis, msJsonDateMillis } from "@undercroft/core";
+import {
+  ConnectorError,
+  canonicalJson,
+  getStringPath,
+  isoFromMillis,
+  msJsonDateMillis,
+  parseLossless,
+} from "@undercroft/core";
 
 /** An entity's `incremental` block, once the spec has been parsed. */
 export type Incremental = NonNullable<ConnectorEntity["incremental"]>;
@@ -110,6 +127,34 @@ export function checkIncremental(spec: ConnectorSpec, entity: ConnectorEntity): 
       `incremental strategy ${JSON.stringify(incremental.strategy)} needs a ${carrier} to carry the watermark, and the spec names none`,
     );
   }
+}
+
+/**
+ * Which request a watermark read under this entity belongs to: a digest of what the entity asks
+ * the source -- the base URL, the request (method, path, query, body) and the spec's headers.
+ *
+ * The caller stores it beside the watermark and asks for the watermark back only under the key
+ * of the request it is about to send, so ANY change to what is asked -- a spec edit such as
+ * `unitdp=4`, or a scope that widens a query -- finds no mark and costs one full read, and an
+ * unchanged request keeps its mark. Nobody has to remember to invalidate anything, which is the
+ * point: a one-off that forgets marks has to be written again for the next change, by someone
+ * who has noticed that it is needed.
+ *
+ * What is left out does not change what a record is answered AS: pagination, pacing, guards,
+ * the envelope and id paths, and the `incremental` block itself (a changed `format` already
+ * finds no mark, ADR 0034). So is everything a run resolves per connection -- the token, which
+ * rotates, and the account header -- because a key that moved with them would forget every
+ * mark on every refresh.
+ *
+ * The spec is config parsed from YAML, so its numbers (`chunkSize`, a body's `limit`) are
+ * already JavaScript numbers, which {@link canonicalJson} refuses on sight because a PAYLOAD's
+ * float has lost digits. The round trip through text hands it the same digits the YAML held,
+ * as lossless numbers; nothing here is a payload and nothing is landed.
+ */
+export function requestKey(spec: ConnectorSpec, entity: ConnectorEntity): string {
+  const asked = { baseUrl: spec.baseUrl, request: entity.request, headers: spec.defaults.headers };
+  const canonical = canonicalJson(parseLossless(JSON.stringify(asked)));
+  return createHash("sha256").update(canonical).digest("hex");
 }
 
 /**

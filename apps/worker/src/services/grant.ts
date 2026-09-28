@@ -21,7 +21,7 @@
  * without that scope, still able to read everything else. So the grant is not judged as a whole:
  * {@link partitionByGrant} splits a run's lists into the ones it reaches and the ones it does not,
  * before the first request, and the run reads the first and names each of the second with the
- * scope a reconnect would add. ADR 0072, superseding ADR 0069's refusal of the whole run.
+ * scope a reconnect would add. ADR 0073, superseding ADR 0069's refusal of the whole run.
  */
 
 import { type ConnectorEntity, missingReadScope } from "@undercroft/contracts";

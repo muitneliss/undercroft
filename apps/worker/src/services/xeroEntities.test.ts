@@ -9,10 +9,13 @@
  *   as the default pages, each would answer page two with page one again, never an empty page.
  * - `Quotes` and `LinkedTransactions` page, but take no `pageSize`.
  * - A list an organisation genuinely has none of is answered `[]`, and that is not a failure.
+ * - `Invoices`, `CreditNotes`, `Overpayments`, `Prepayments` and `Items` take `unitdp`, and are
+ *   asked for 4-decimal unit prices; without it Xero rounds each line's price to 2 (#280). The
+ *   fetcher answers only the URL carrying it, so a list that stopped asking would fail here.
  *
  * Also here: a grant recorded before a scope the consent now asks for -- every Xero connection
  * made before `accounting.settings.read` -- reads every list it can and never requests the rest,
- * which the run names with the scope a reconnect would add (ADR 0072). The 401 it used to meet on
+ * which the run names with the scope a reconnect would add (ADR 0073). The 401 it used to meet on
  * items part-way through a run was issue 276.
  */
 
@@ -27,6 +30,7 @@ import { writeConnectionDetail } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
+import { writeSyncCursor } from "../repos/syncCursor.ts";
 import { GrantTooNarrow } from "./grant.ts";
 import { runIngest } from "./ingest.ts";
 
@@ -65,13 +69,27 @@ interface XeroList {
   readonly settings?: true;
   /** Asked of the list besides paging. */
   readonly query?: Readonly<Record<string, string>>;
+  /** Whether Xero's endpoint takes `unitdp`, so the list is asked for 4-decimal unit prices. */
+  readonly unitdp?: true;
 }
 
 const LISTS: readonly XeroList[] = [
   { entity: "contacts", path: "/Contacts", idPath: "ContactID", paging: "page-size" },
-  { entity: "invoices", path: "/Invoices", idPath: "InvoiceID", paging: "page-size" },
+  {
+    entity: "invoices",
+    path: "/Invoices",
+    idPath: "InvoiceID",
+    paging: "page-size",
+    unitdp: true,
+  },
   { entity: "payments", path: "/Payments", idPath: "PaymentID", paging: "page-size" },
-  { entity: "credit_notes", path: "/CreditNotes", idPath: "CreditNoteID", paging: "page-size" },
+  {
+    entity: "credit_notes",
+    path: "/CreditNotes",
+    idPath: "CreditNoteID",
+    paging: "page-size",
+    unitdp: true,
+  },
   { entity: "quotes", path: "/Quotes", idPath: "QuoteID", paging: "page" },
   {
     entity: "purchase_orders",
@@ -91,9 +109,21 @@ const LISTS: readonly XeroList[] = [
     idPath: "LinkedTransactionID",
     paging: "page",
   },
-  { entity: "items", path: "/Items", idPath: "ItemID", paging: "none", settings: true },
-  { entity: "overpayments", path: "/Overpayments", idPath: "OverpaymentID", paging: "page-size" },
-  { entity: "prepayments", path: "/Prepayments", idPath: "PrepaymentID", paging: "page-size" },
+  { entity: "items", path: "/Items", idPath: "ItemID", paging: "none", unitdp: true, settings: true },
+  {
+    entity: "overpayments",
+    path: "/Overpayments",
+    idPath: "OverpaymentID",
+    paging: "page-size",
+    unitdp: true,
+  },
+  {
+    entity: "prepayments",
+    path: "/Prepayments",
+    idPath: "PrepaymentID",
+    paging: "page-size",
+    unitdp: true,
+  },
   { entity: "batch_payments", path: "/BatchPayments", idPath: "BatchPaymentID", paging: "none" },
   { entity: "contact_groups", path: "/ContactGroups", idPath: "ContactGroupID", paging: "none" },
   { entity: "accounts", path: "/Accounts", idPath: "AccountID", paging: "none", settings: true },
@@ -123,6 +153,9 @@ function pageUrl(list: XeroList, page: number | null): string {
   if (list.paging === "page-size") {
     url.searchParams.set("pageSize", "100");
   }
+  if (list.unitdp === true) {
+    url.searchParams.set("unitdp", "4");
+  }
   if (page !== null) {
     url.searchParams.set("page", String(page));
   }
@@ -141,16 +174,21 @@ function recordOf(list: XeroList): unknown {
 
 /**
  * Xero as recorded: each list answering `records(list)`. A paged list is asked page one and then
- * page two, which is empty; an unpaged one is asked once, with no `page`.
+ * page two, which is empty; an unpaged one is asked once, with no `page`. `firstPage` answers an
+ * entity's first page with Xero's own text instead, for a record whose numbers must arrive
+ * exactly as Xero writes them.
  */
-function xero(records: (list: XeroList) => readonly unknown[]): InMemoryFetcher {
+function xero(
+  records: (list: XeroList) => readonly unknown[],
+  firstPage: Readonly<Record<string, string>> = {},
+): InMemoryFetcher {
   const fetcher = new InMemoryFetcher();
   for (const list of LISTS) {
-    const answer = records(list);
+    const answer = firstPage[list.entity] ?? envelope(list, records(list));
     if (list.paging === "none") {
-      fetcher.on("GET", pageUrl(list, null), { body: envelope(list, answer) });
+      fetcher.on("GET", pageUrl(list, null), { body: answer });
     } else {
-      fetcher.on("GET", pageUrl(list, 1), { body: envelope(list, answer) });
+      fetcher.on("GET", pageUrl(list, 1), { body: answer });
       fetcher.on("GET", pageUrl(list, 2), { body: envelope(list, []) });
     }
   }
@@ -277,6 +315,37 @@ async function notGranted(): Promise<{ entity: string; scope: unknown }[]> {
   );
   return rows;
 }
+
+describe("a Xero list read before it asked for 4-decimal unit prices", () => {
+  it("is read whole on the next run, without reconnecting, and its unit prices land unrounded", async () => {
+    // A cursor as production held it before #280: written before every request had a key, so
+    // `request_key` is ''. Handed to the new request, it would ask Xero only for invoices changed
+    // since, and a bill nobody has edited would keep the 0.22 it was first read with.
+    await connect(FULL_GRANT);
+    await writeSyncCursor(
+      db,
+      { source: "xero", tenantId: TENANT, entity: "invoices" },
+      { format: "ms-json-date", requestKey: "", watermark: UPDATED },
+    );
+    const bill = `{"Invoices":[{"InvoiceID":"invoices-1","UpdatedDateUTC":"/Date(1500000000000+0000)/",
+      "LineItems":[{"Quantity":100,"UnitAmount":0.2248,"LineAmount":22.48}]}]}`;
+    const fetcher = xero((list) => [recordOf(list)], { invoices: bill });
+
+    await ingest(fetcher);
+
+    const asked = fetcher.calls.filter((call) => call.url.startsWith(`${BASE}/Invoices`));
+    expect(asked.map((call) => call.headers?.["If-Modified-Since"])).toEqual([
+      undefined,
+      undefined,
+    ]);
+    const { rows } = await db.query<{ price: string; amount: string }>(
+      `SELECT payload #>> '{LineItems,0,UnitAmount}' AS price,
+              payload #>> '{LineItems,0,LineAmount}' AS amount
+         FROM raw.records WHERE source = 'xero' AND entity = 'invoices'`,
+    );
+    expect(rows).toEqual([{ price: "0.2248", amount: "22.48" }]);
+  });
+});
 
 describe("a Xero grant recorded before the consent asked for accounting.settings.read", () => {
   it("reads every other list, requests none of the settings lists, and names each", async () => {

@@ -116,7 +116,7 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
      * `accounting.settings.read` reads items, the chart of accounts, tracking categories, tax
      * rates and currencies (#276, #277). A grant recorded before it was asked for still reads
      * every other list; each of those five is named in the run as not granted until the
-     * organisation is reconnected (ADR 0072).
+     * organisation is reconnected (ADR 0073).
      *
      * Granular, never the broad `accounting.transactions`: Xero grants that to no app created
      * on or after 2 March 2026 and to none at all after September 2027, and a consent asking

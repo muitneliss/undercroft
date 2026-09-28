@@ -231,7 +231,7 @@ const Entity = z.object({
    * list under its own granular scope and refuses one outside the grant with a 401 on that
    * list's request alone. A grant recorded before a scope was added to the consent can still
    * read every other list, so a run reads those and names this one as not granted, rather than
-   * failing as a whole or meeting the 401 part-way through (ADR 0072). Required of every entity
+   * failing as a whole or meeting the 401 part-way through (ADR 0073). Required of every entity
    * in a spec whose oauth2 consent names scopes, so no list's scope is left to a guess.
    */
   readScope: z.string().min(1).optional(),

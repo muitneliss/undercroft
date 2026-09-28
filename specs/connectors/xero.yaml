@@ -28,7 +28,7 @@ auth:
   # Xero no longer grants the broad accounting.transactions to a new app. A scope added here is a
   # new consent: add it in `oauthProviders.ts` too. A grant recorded without it still reads every
   # list it can, and each list it cannot is named in the run as not granted, never requested
-  # (ADR 0072). `/Items` was once read under invoices; live Xero answers it 401 there (#276).
+  # (ADR 0073). `/Items` was once read under invoices; live Xero answers it 401 there (#276).
   scopes:
     [
       offline_access,
@@ -77,6 +77,15 @@ defaults:
 # less. Sent verbatim, it would be a string Xero never accepts; ADR 0068. `updatedAtPath` is
 # read the same way into `source_updated_at`, where the raw text once failed the whole run
 # (#265). See `packages/connector-runtime/src/incremental.ts`.
+#
+# `unitdp: "4"` on every list whose endpoint takes it in Xero's OpenAPI document: /Invoices,
+# /CreditNotes, /Overpayments, /Prepayments and /Items. Without it Xero ROUNDS each line's
+# `UnitAmount` (an item's `UnitPrice`) to 2 decimals, so a bill line priced 0.2248 landed as 0.22,
+# and on some the line amount followed it below the subtotal (#280). The lists that do not take
+# it (/Quotes, /PurchaseOrders, /RepeatingInvoices among the ones with lines) are left as they
+# are; quotes already arrive with 4 decimals. Changing a query changes the entity's request key,
+# so the first run after it finds no watermark for that list and reads it whole, which is what
+# repairs the documents read before (ADR 0072).
 entities:
   - name: contacts
     request: { kind: list, path: /Contacts, query: { pageSize: "100" } }
@@ -92,7 +101,7 @@ entities:
       send: rfc3339-seconds
 
   - name: invoices
-    request: { kind: list, path: /Invoices, query: { pageSize: "100" } }
+    request: { kind: list, path: /Invoices, query: { pageSize: "100", unitdp: "4" } }
     readScope: accounting.invoices.read
     envelopePath: Invoices
     idPath: InvoiceID
@@ -120,7 +129,7 @@ entities:
   # Each entity names its own id field. A single hardcoded "InvoiceID" would silently key
   # credit notes on nothing.
   - name: credit_notes
-    request: { kind: list, path: /CreditNotes, query: { pageSize: "100" } }
+    request: { kind: list, path: /CreditNotes, query: { pageSize: "100", unitdp: "4" } }
     readScope: accounting.invoices.read
     envelopePath: CreditNotes
     idPath: CreditNoteID
@@ -195,7 +204,7 @@ entities:
     guards: { failOnEmpty: false }
 
   - name: items
-    request: { kind: list, path: /Items }
+    request: { kind: list, path: /Items, query: { unitdp: "4" } }
     readScope: accounting.settings.read
     envelopePath: Items
     idPath: ItemID
@@ -210,7 +219,7 @@ entities:
       send: rfc3339-seconds
 
   - name: overpayments
-    request: { kind: list, path: /Overpayments, query: { pageSize: "100" } }
+    request: { kind: list, path: /Overpayments, query: { pageSize: "100", unitdp: "4" } }
     readScope: accounting.payments.read
     envelopePath: Overpayments
     idPath: OverpaymentID
@@ -224,7 +233,7 @@ entities:
       send: rfc3339-seconds
 
   - name: prepayments
-    request: { kind: list, path: /Prepayments, query: { pageSize: "100" } }
+    request: { kind: list, path: /Prepayments, query: { pageSize: "100", unitdp: "4" } }
     readScope: accounting.payments.read
     envelopePath: Prepayments
     idPath: PrepaymentID

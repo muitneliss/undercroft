@@ -83,7 +83,7 @@ describe("eventSentence", () => {
   });
 
   it("names the scope a list was not read for, and says reconnecting grants it", () => {
-    // The only place a reader learns why items has no count (ADR 0072). Rendered as
+    // The only place a reader learns why items has no count (ADR 0073). Rendered as
     // "Event entity_not_granted." it would say nothing about what to do.
     const skipped = event("entity_not_granted", { scope: "accounting.settings.read" }, "items");
     expect(eventSentence(en, "en", skipped)).toBe(

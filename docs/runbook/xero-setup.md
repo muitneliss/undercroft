@@ -72,7 +72,7 @@ requested, and the run's Journal names it with the scope a reconnect would add. 
 no list it can read fails, naming the scope. If you add an entity that needs a new scope, add
 the scope in both places and in the test's path-to-scope table. Each existing connection reads
 the new list only after it reconnects.
-[ADR 0072](../adr/0072-a-list-its-grant-cannot-read-is-named-not-failed.md).
+[ADR 0073](../adr/0073-a-list-its-grant-cannot-read-is-named-not-failed.md).
 
 The scopes are Xero's **granular** ones, and the lists each one reads:
 

@@ -1,6 +1,6 @@
 /**
  * Opening a spec run: the spec, the request context, and the entities as this connection's
- * scope and grant read them -- each with the request its watermark belongs to.
+ * scope and grant read them.
  *
  * Split from `runPaths.ts`, which holds how a spec run READS; this holds what it reads, which
  * is where a scope reaches a spec run and the only place it does. The runtime is handed the
@@ -8,10 +8,9 @@
  *
  * The recorded grant narrows the same list, after the scope: a list the grant cannot read is
  * never requested, and is handed back beside the reads with the scope it lacks, so the run can
- * say so (`grant.ts`, ADR 0072).
+ * say so (`grant.ts`, ADR 0073).
  */
 
-import { createHash } from "node:crypto";
 import { createFetcher, type RunContext } from "@undercroft/connector-runtime";
 import {
   type ConnectionScope,
@@ -19,7 +18,6 @@ import {
   type ConnectorSpec,
   parseScope,
 } from "@undercroft/contracts";
-import { canonicalJson } from "@undercroft/core";
 import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
 import { partitionByGrant, type UngrantedRead } from "./grant.ts";
@@ -69,41 +67,15 @@ function scopedEntities(spec: ConnectorSpec, scope: ConnectionScope | null): Con
   return spec.entities;
 }
 
-/**
- * Which request an entity's watermark was read under: `""` when the entity is read exactly as its
- * spec declares it, otherwise a digest of the request a scope made of it.
- *
- * A watermark says how far ONE request's answers were read. Handed to a different request it is
- * a claim about records that request never asked for: widen HubSpot's companies by a property
- * today, keep yesterday's mark, and every company that has not changed since is filtered out of
- * the read -- the new property reaches only the records that happen to change, and the lake
- * never says which. So a changed request starts from no mark, which costs one full read;
- * `raw.sync_cursor.request_key` is where this lives (ADR 0052, extending ADR 0034).
- *
- * `""` for an entity read as declared, rather than a digest of the spec's request, so every
- * cursor written before this existed -- and every spec run that no scope touches -- keeps its
- * mark across the deploy that brought it in. Decided by identity, which `scopedEntities`
- * preserves for any entity a scope leaves alone.
- */
-function requestKeyOf(declared: ConnectorEntity | undefined, read: ConnectorEntity): string {
-  if (declared === read) {
-    return "";
-  }
-  return createHash("sha256").update(canonicalJson(read.request)).digest("hex");
-}
-
-/** One entity as this run reads it, and the request its watermark belongs to. */
-export interface EntityRead {
-  readonly entity: ConnectorEntity;
-  /** See {@link requestKeyOf}. */
-  readonly requestKey: string;
-}
-
 /** What one spec run needs, gathered once before the first entity is read. */
 export interface SpecRun {
   readonly spec: ConnectorSpec;
   readonly ctx: RunContext;
-  readonly reads: readonly EntityRead[];
+  /**
+   * In spec order. Which request each one's watermark belongs to is the runtime's `requestKey`
+   * of the entity as given here, so a scope that changed the request has changed the key too.
+   */
+  readonly entities: readonly ConnectorEntity[];
   /** The lists the scope chose that the grant cannot read, in spec order. Never requested. */
   readonly ungranted: readonly UngrantedRead[];
 }
@@ -135,15 +107,10 @@ export async function openSpecRun(
     ...(chosen.accountId === null ? {} : { accountId: chosen.accountId }),
   };
 
-  const declared = new Map(spec.entities.map((entity) => [entity.name, entity]));
   const { granted, ungranted } = partitionByGrant(
     scopedEntities(spec, chosen.scope),
     chosen.granted,
   );
-  const reads = granted.map((entity) => ({
-    entity,
-    requestKey: requestKeyOf(declared.get(entity.name), entity),
-  }));
 
-  return { spec, ctx, reads, ungranted };
+  return { spec, ctx, entities: granted, ungranted };
 }

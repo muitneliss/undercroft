@@ -18,7 +18,9 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { requestKey } from "@undercroft/connector-runtime";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
+import { parseSpec } from "@undercroft/contracts";
 import { createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
 import { eventsFor, writeConnectionDetail } from "@undercroft/db/repos";
@@ -67,6 +69,16 @@ entities:
     envelopePath: results
     idPath: id
 `;
+
+/** The request key `things` keeps its mark under, as the runtime names it. */
+function thingsKey(): string {
+  const spec = parseSpec(SPEC);
+  const things = spec.entities.find((entity) => entity.name === "things");
+  if (things === undefined) {
+    throw new Error("the spec no longer declares things");
+  }
+  return requestKey(spec, things);
+}
 
 let db: TestDatabase;
 let lake: LakeStore;
@@ -521,7 +533,7 @@ describe("a spec ingest stopped mid-entity", () => {
       await readSyncCursor(
         db,
         { source: "demo", tenantId: TENANT, entity: "things" },
-        { format: "epoch-millis", requestKey: "" },
+        { format: "epoch-millis", requestKey: thingsKey() },
       ),
     ).toBeNull();
     expect(recorded.calls.map((call) => call.url)).toEqual([

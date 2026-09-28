@@ -21,8 +21,9 @@ import {
   type ReadEnd,
   readEntity,
   type RunContext,
+  requestKey,
 } from "@undercroft/connector-runtime";
-import { type ConnectorSpec, sourceKind } from "@undercroft/contracts";
+import { type ConnectorEntity, type ConnectorSpec, sourceKind } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
@@ -35,7 +36,7 @@ import { settleRemovals } from "./removals.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken, RunStopped } from "./runTypes.ts";
 import type { RunJournal } from "./runJournal.ts";
-import { type EntityRead, openSpecRun } from "./specRun.ts";
+import { openSpecRun } from "./specRun.ts";
 
 /**
  * The Google path, reported in the same shape as a spec run.
@@ -213,7 +214,7 @@ async function* keepingEnd<T, R>(
  */
 async function ingestEntity(
   run: EntityRun,
-  { entity, requestKey }: EntityRead,
+  entity: ConnectorEntity,
   ctx: RunContext,
   ids: string[] | null,
 ): Promise<void> {
@@ -222,10 +223,13 @@ async function ingestEntity(
 
   const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
   const { incremental } = entity;
-  const since =
+  // The mark is read, and written back, only under the request this run sends: a request that has
+  // changed since -- a spec edit or a scope -- finds none and reads everything once (ADR 0072).
+  const reading =
     incremental === undefined
       ? null
-      : await readSyncCursor(deps.exec, stream, { format: incremental.format, requestKey });
+      : { format: incremental.format, requestKey: requestKey(spec, entity) };
+  const since = reading === null ? null : await readSyncCursor(deps.exec, stream, reading);
 
   const sink = createRecordSink(
     { lake: deps.lake, exec: deps.exec, refuse: intoLedger(run.ledger) },
@@ -268,12 +272,8 @@ async function ingestEntity(
   if (stopped) {
     throw new RunStopped();
   }
-  if (incremental !== undefined && mark !== null) {
-    await writeSyncCursor(deps.exec, stream, {
-      watermark: mark,
-      format: incremental.format,
-      requestKey,
-    });
+  if (reading !== null && mark !== null) {
+    await writeSyncCursor(deps.exec, stream, { ...reading, watermark: mark });
   }
   await settleRemovals(deps.exec, spec, stream, end.value);
 }
@@ -287,9 +287,9 @@ async function ingestEntity(
  * references one entity out of four -- and it grew with the source, which is the shape this
  * whole change exists to remove.
  */
-function referencedEntities(reads: readonly EntityRead[]): ReadonlySet<string> {
+function referencedEntities(entities: readonly ConnectorEntity[]): ReadonlySet<string> {
   return new Set(
-    reads.flatMap(({ entity }) =>
+    entities.flatMap((entity) =>
       entity.request.kind === "batch-from" ? [entity.request.entity] : [],
     ),
   );
@@ -303,7 +303,7 @@ function referencedEntities(reads: readonly EntityRead[]): ReadonlySet<string> {
  * question is which lists and what reconnecting would add; the Journal words it. Nothing goes
  * into the ledger's entities: a list never requested landed nothing, and a row saying `0` would
  * read as a list Xero answered empty. The run otherwise goes on, because the grant still reads
- * every other list, and a run that failed on their account would lose them too (ADR 0072).
+ * every other list, and a run that failed on their account would lose them too (ADR 0073).
  *
  * A run left with nothing to read fails instead of closing green on nothing: "no list was
  * readable" is not a success, and the error names the scopes a reconnect would add.
@@ -329,17 +329,16 @@ export async function runSpecIngest(
   ledger: Ledger,
   journal: RunJournal,
 ): Promise<void> {
-  const { spec, ctx, reads, ungranted } = await openSpecRun(deps, input);
-  reportUngranted(input, ungranted, reads.length, journal);
+  const { spec, ctx, entities, ungranted } = await openSpecRun(deps, input);
+  reportUngranted(input, ungranted, entities.length, journal);
   const run: EntityRun = { deps, input, spec, ledger, journal };
 
-  const referenced = referencedEntities(reads);
+  const referenced = referencedEntities(entities);
   // Ids per entity, so a `batch-from` relation can read against the entity it references --
   // and ONLY for the entities one does.
   const idsByEntity = new Map<string, string[]>();
 
-  for (const read of reads) {
-    const { entity } = read;
+  for (const entity of entities) {
     // Before an entity rather than only inside one, so a stop that arrived while the last
     // entity's sink was closing does not open the next and read its first page for nothing.
     if (deps.stop?.aborted === true) {
@@ -353,6 +352,6 @@ export async function runSpecIngest(
     if (ids !== null) {
       idsByEntity.set(entity.name, ids);
     }
-    await ingestEntity(run, read, entityCtx, ids);
+    await ingestEntity(run, entity, entityCtx, ids);
   }
 }
