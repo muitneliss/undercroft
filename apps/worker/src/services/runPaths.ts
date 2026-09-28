@@ -113,14 +113,19 @@ export async function runGoogleIngest(
 }
 
 /**
- * A collection as the ledger's two entities: its records, and its documents beside them.
+ * A collection as the ledger's entities: its records, its documents beside them, and every
+ * other record stream it landed -- a Drive walk's `folders` (ADR 0078).
  *
  * What was read again rides on the RECORD entity, because it is records that were re-read; the
  * documents they added are counted there too, as well as among the documents' own New, so
  * `runs get` can answer "what did re-reading buy" from one row. ADR 0076.
+ *
+ * Each refusal is counted on the entity it names. A pick's refusal names the record entity.
  */
 function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entities"] {
-  const records = result.refusals.filter((r) => r.entity !== "documents").length;
+  function refusedOf(entity: string): number {
+    return result.refusals.filter((r) => r.entity === entity).length;
+  }
   return [
     {
       entity: recordsEntity,
@@ -128,7 +133,7 @@ function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entit
       created: result.records.created,
       changed: result.records.changed,
       unchanged: result.records.unchanged,
-      refused: records,
+      refused: refusedOf(recordsEntity),
       ...(result.reread === null ? {} : { reread: { ...result.reread } }),
     },
     {
@@ -137,8 +142,16 @@ function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entit
       created: result.documents.created,
       changed: 0,
       unchanged: result.documents.unchanged,
-      refused: result.refusals.length - records,
+      refused: refusedOf("documents"),
     },
+    ...result.alongside.map((stream) => ({
+      entity: stream.entity,
+      landed: stream.landed,
+      created: stream.created,
+      changed: stream.changed,
+      unchanged: stream.unchanged,
+      refused: refusedOf(stream.entity),
+    })),
   ];
 }
 

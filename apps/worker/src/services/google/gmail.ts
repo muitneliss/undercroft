@@ -188,9 +188,9 @@ export async function* harvestGmail(
     yield itemOf(api, scope.fileTypes, { planned, message, labelIds });
   }
 
-  // Never `seenIds`. A message that stopped matching a label selection was relabelled, not
-  // deleted, and a tombstone would report a deletion that never happened.
-  return { seenIds: null, skipped: [], listed: messageIds.length, known: plan.skipped };
+  // Never a listing. A message that stopped matching a label selection was relabelled, not
+  // deleted, and a removal would report a deletion that never happened.
+  return { listings: null, skipped: [], listed: messageIds.length, known: plan.skipped };
 }
 
 /**

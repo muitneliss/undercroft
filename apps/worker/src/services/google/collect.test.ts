@@ -133,10 +133,13 @@ function message(id: string, labelIds: string[], withPdf = true): unknown {
   };
 }
 
-/** The ids `raw.records` holds for one source, which is what the next run skips on. */
+/**
+ * The ids `raw.records` holds for one source, which is what the next run skips on. A Drive
+ * walk's `folders` are records too (ADR 0078), and are left out: nothing skips on them.
+ */
 async function projected(source: string): Promise<string[]> {
   const { rows } = await db.query<{ id: string }>(
-    "SELECT source_record_id AS id FROM raw.records WHERE source = $1 ORDER BY id",
+    "SELECT source_record_id AS id FROM raw.records WHERE source = $1 AND entity <> 'folders' ORDER BY id",
     [source],
   );
   return rows.map((r) => r.id);
@@ -153,7 +156,7 @@ async function projected(source: string): Promise<string[]> {
 async function marks(source: string): Promise<{ id: string; landed: string | null }[]> {
   const { rows } = await db.query<{ id: string; landed: string | null }>(
     `SELECT source_record_id AS id, documents_landed::text AS landed
-       FROM raw.records WHERE source = $1 ORDER BY id`,
+       FROM raw.records WHERE source = $1 AND entity <> 'folders' ORDER BY id`,
     [source],
   );
   return rows;
@@ -1577,5 +1580,138 @@ describe("drive", () => {
       "SELECT content_type FROM raw.documents",
     );
     expect(rows.map((r) => r.content_type)).toEqual(["application/vnd.ms-excel"]);
+  });
+
+  describe("the folders a file sits under (issue #305, ADR 0078)", () => {
+    // Issue #305's tree: Office (picked, sub-folders included) holds a folder per status, each
+    // status a folder per client, each client a Finance folder. Only the folder says whose a
+    // file is, and a client changes status by being dragged to another status folder.
+    const STATEMENT = { ...file("stmt"), parents: ["fin-a"] };
+    const OFFICE_TREE: Record<string, unknown[]> = {
+      office: [folder("active"), folder("dormant")],
+      active: [folder("client-a"), folder("client-b")],
+      dormant: [],
+      "client-a": [folder("fin-a")],
+      "client-b": [folder("fin-b")],
+      "fin-a": [STATEMENT],
+      "fin-b": [],
+    };
+
+    /**
+     * Answer each run's listings with its own tree, in order, and the statement's bytes. All at
+     * once, because the fetcher only moves past a response once a later one is recorded.
+     */
+    function serve(...runs: Record<string, unknown[]>[]): void {
+      for (const tree of runs) {
+        for (const [id, files] of Object.entries(tree)) {
+          fetcher.on("GET", listUrlFor(id, ["application/pdf"], true), { body: { files } });
+        }
+      }
+      fetcher.on("GET", `${DRIVE}/stmt?alt=media`, { body: PDF });
+    }
+
+    /**
+     * The folders above a file, nearest first, resolved the way a reader's dbt model would:
+     * `WITH RECURSIVE` over the live `files` and `folders` rows, by id alone.
+     */
+    async function chainOf(fileId: string): Promise<string[]> {
+      const { rows } = await db.query<{ id: string }>(
+        `WITH RECURSIVE up (id, depth) AS (
+           SELECT payload -> 'parents' ->> 0, 1 FROM raw.records
+            WHERE source = 'drive' AND entity = 'files' AND source_record_id = $1
+              AND deleted_at IS NULL
+           UNION ALL
+           SELECT f.payload -> 'parents' ->> 0, up.depth + 1 FROM up
+             JOIN raw.records f ON f.source = 'drive' AND f.entity = 'folders'
+              AND f.source_record_id = up.id AND f.deleted_at IS NULL
+         )
+         SELECT id FROM up WHERE id IS NOT NULL ORDER BY depth`,
+        [fileId],
+      );
+      return rows.map((r) => r.id);
+    }
+
+    beforeEach(async () => {
+      await connect("drive", {
+        files: [{ id: "office", name: "Office", kind: "folder" }],
+        recurse: true,
+      });
+    });
+
+    it("a model resolves a file to every folder up to the pick, by id and nothing else", async () => {
+      // `client-a` also carries a legacy second parent outside the pick. What a folder record
+      // names is the folder whose listing found it, so that id is read into nothing.
+      serve({
+        ...OFFICE_TREE,
+        active: [{ ...folder("client-a"), parents: ["active", "outside"] }, folder("client-b")],
+      });
+
+      await collect("drive");
+
+      expect(await chainOf("stmt")).toEqual(["fin-a", "client-a", "active", "office"]);
+      const { rows } = await db.query<{ payload: unknown }>(
+        "SELECT payload FROM raw.records WHERE source = 'drive' AND entity = 'folders' AND source_record_id IN ('office', 'client-a') ORDER BY source_record_id",
+      );
+      expect(rows.map((r) => r.payload)).toEqual([
+        { id: "client-a", parents: ["active"] },
+        { id: "office", parents: [] },
+      ]);
+    });
+
+    it("dragging a client folder to another status moves every file beneath it, downloading none", async () => {
+      serve(OFFICE_TREE, {
+        ...OFFICE_TREE,
+        active: [folder("client-b")],
+        dormant: [folder("client-a")],
+      });
+      await collect("drive");
+
+      const dragged = await collect("drive");
+
+      expect(await chainOf("stmt")).toEqual(["fin-a", "client-a", "dormant", "office"]);
+      expect(fetcher.calls.filter((c) => c.url.endsWith("?alt=media"))).toHaveLength(1);
+      expect(dragged.records).toMatchObject({ landed: 0, skipped: 1 });
+      // One folder's record changed, and the six that did not were not landed again.
+      expect(dragged.alongside).toEqual([
+        { entity: "folders", landed: 1, created: 0, changed: 1, unchanged: 0, refused: 0 },
+      ]);
+    });
+
+    it("a file moved on its own lands its record again, not its bytes, and then rests", async () => {
+      serve(OFFICE_TREE, {
+        ...OFFICE_TREE,
+        "fin-a": [],
+        "fin-b": [{ ...STATEMENT, parents: ["fin-b"] }],
+      });
+      await collect("drive");
+
+      const moved = await collect("drive");
+      const after = await collect("drive");
+
+      expect(await chainOf("stmt")).toEqual(["fin-b", "client-b", "active", "office"]);
+      expect(moved.records).toMatchObject({ landed: 1, changed: 1, skipped: 0 });
+      expect(after.records).toMatchObject({ landed: 0, skipped: 1 });
+      expect(fetcher.calls.filter((c) => c.url.endsWith("?alt=media"))).toHaveLength(1);
+      expect(await marks("drive")).toEqual([{ id: "stmt", landed: "1" }]);
+    });
+
+    it("a folder dragged out of the pick is removed with its files, and live again when it returns", async () => {
+      serve(OFFICE_TREE, { ...OFFICE_TREE, active: [folder("client-b")] }, OFFICE_TREE);
+      await collect("drive");
+      await collect("drive");
+
+      const { rows } = await db.query<{ entity: string; id: string }>(
+        "SELECT entity, source_record_id AS id FROM raw.records WHERE source = 'drive' AND deleted_at IS NOT NULL ORDER BY entity, id",
+      );
+      expect(rows).toEqual([
+        { entity: "files", id: "stmt" },
+        { entity: "folders", id: "client-a" },
+        { entity: "folders", id: "fin-a" },
+      ]);
+
+      await collect("drive");
+
+      expect(await chainOf("stmt")).toEqual(["fin-a", "client-a", "active", "office"]);
+    });
   });
 });

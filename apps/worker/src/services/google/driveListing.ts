@@ -49,34 +49,44 @@ export interface DriveFile {
 }
 
 /**
+ * Every folder a walk listed, each with the folder whose listing named it: `null` for the
+ * picked folder, whose own parent is outside the pick and is never read. ADR 0078.
+ */
+export type FoldersListed = ReadonlyMap<string, string | null>;
+
+/**
  * Every matching file under a picked folder, to the depth the admin chose.
  *
  * A GENERATOR, so a tree of ten thousand files costs one page held rather than ten thousand
- * `DriveFile`s and every closure hanging off them. How many folders had to be listed to
- * produce them is the generator's RETURN value -- the `AsyncGenerator<T, R>` idiom
- * `connector-runtime` already carries `maxRecords`' verdict out on. A second output
- * parameter would be a second place for one number to live.
+ * `DriveFile`s and every closure hanging off them. Which folders had to be listed to produce
+ * them is the generator's RETURN value -- the `AsyncGenerator<T, R>` idiom `connector-runtime`
+ * already carries `maxRecords`' verdict out on. A second output parameter would be a second
+ * place for one answer to live. Its size is how many folders were listed.
+ *
+ * That answer is also the tree, so a model can resolve a file's folders by id (ADR 0078). Each
+ * folder is recorded with the folder that LISTED it, which is what this walk observed and is
+ * inside the pick by construction -- never with Drive's own `parents`, which on a legacy item
+ * can name a folder outside it.
  *
  * `visited` is what keeps the walk finite: a shortcut, or the same folder reachable down two
  * branches, would otherwise be listed forever. It holds folder ids rather than file ids --
- * duplicate FILES are a caller concern, and `harvestDrive` already de-duplicates them.
+ * duplicate FILES are a caller concern, and `harvestDrive` already de-duplicates them. The
+ * first listing to name a folder is the one recorded.
  */
 export async function* listMatchingIn(
   api: GoogleApi,
   rootId: string,
   options: { fileTypes: readonly string[]; recurse: boolean; seen: number },
-): AsyncGenerator<DriveFile, number> {
+): AsyncGenerator<DriveFile, FoldersListed> {
   const { fileTypes, recurse, seen } = options;
-  const visited = new Set<string>([rootId]);
+  const visited = new Map<string, string | null>([[rootId, null]]);
   const queue: string[] = [rootId];
   const typeClause = mimeTypeClause(listingTypes(mimeTypesOf(fileTypes), recurse));
-  let listed = 0;
 
   // A sub-folder pushed below is walked by this same loop: `for...of` reads the array live,
   // so the queue grows under the iterator rather than needing a second pass over it. It
   // still does inside a generator -- the loop is suspended at a yield, not restarted.
   for (const folderId of queue) {
-    listed += 1;
     const folders = yield* listOneFolder(api, queryFor(folderId, typeClause), fileTypes, seen);
 
     if (!recurse) {
@@ -84,13 +94,13 @@ export async function* listMatchingIn(
     }
     for (const childId of folders) {
       if (!visited.has(childId)) {
-        visited.add(childId);
+        visited.set(childId, folderId);
         queue.push(childId);
       }
     }
   }
 
-  return listed;
+  return visited;
 }
 
 /**

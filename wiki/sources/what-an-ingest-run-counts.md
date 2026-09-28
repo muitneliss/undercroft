@@ -5,7 +5,7 @@ date: 2026-09-28
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: e2945c6e0f616c2c675f5661d53f0a75eb0c3e0c8e12ca048c1f4df161838417
+source_hash: ca6ed504209204cd114469db937c5f5076f5a4379685b2788e5a1c91faf255bd
 ingested: 2026-09-28
 ---
 
@@ -24,3 +24,5 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 **Coarser in two places.** Documents are their own entity and count a changed document as New (Changed is always 0). The lake REST API's published response keeps `created` meaning "stored as a new version", first or not.
 
 **Held records read again.** A Gmail run's `messages` entity carries `reread` with `records` (held messages read again because they carry an attachment the current choice allows and no earlier read landed) and `documents` (attachments that reading stored for the first time, also counted in `documents`). It is `null` on every other entity, on Drive and spec runs, and on runs before [[ADR 0076 A Harvest Records What It Left Behind]]; a Gmail run that re-read nothing says 0.
+
+**Drive folders.** A Drive run also reports a `folders` entity: the folders its walk listed, each a record of its id and the folder that listed it, landed again only when that changed, so an unchanged tree counts nothing. `files` never counts a folder. A file whose bytes are held but whose record changed (it moved) counts as Changed on `files` and adds nothing to `documents`. [[ADR 0078 A Drive Walk Lands the Folders It Lists]].

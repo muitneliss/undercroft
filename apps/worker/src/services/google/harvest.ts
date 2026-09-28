@@ -60,6 +60,7 @@ import {
   type RecordProbe,
   type StreamIdentity,
   type LeftBehindDocument,
+  storedDigests,
 } from "../../repos/rawRecords.ts";
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
@@ -84,6 +85,12 @@ export interface HarvestItem {
    * for a record whose earlier harvest never said what it left behind, which offers everything.
    */
   readonly reread?: { readonly documentsLanded: number };
+  /**
+   * The record alone is to land: nothing of its documents is offered or settled this run, so
+   * the mark stays as the earlier harvest left it. A Drive file whose bytes are held and whose
+   * record changed -- it moved -- and a Drive folder, which has no documents at all. ADR 0078.
+   */
+  readonly recordOnly?: true;
 }
 
 /**
@@ -100,14 +107,16 @@ export interface PickSkipped {
 /** What is only true once a whole source has been walked. */
 export interface HarvestSummary {
   /**
-   * Every document id this run saw, so the caller can tombstone what vanished -- INCLUDING
-   * the ones it skipped because they had not changed.
+   * Every id this run's listing named, by entity, so the caller can settle what vanished --
+   * INCLUDING the ones it skipped because they had not changed. The record entity's ids are
+   * its documents' ids too, since a Drive file IS its document, so one set decides both
+   * `raw.records` and `raw.documents` and the two cannot disagree. ADR 0071, ADR 0078.
    *
    * Null for Gmail, deliberately: a message that stops matching a label selection has been
-   * relabelled, not deleted, and the tombstone pass must not be handed a set that would
+   * relabelled, not deleted, and the removal pass must not be handed a set that would
    * report a deletion which never happened.
    */
-  readonly seenIds: readonly string[] | null;
+  readonly listings: ReadonlyMap<string, readonly string[]> | null;
   readonly skipped: readonly PickSkipped[];
   /** How many source objects the listing named, before anything was skipped. */
   readonly listed: number;
@@ -140,4 +149,25 @@ export type AlreadyHeld = (
  */
 export function heldBy(exec: SqlExecutor, identity: StreamIdentity): AlreadyHeld {
   return (probes): Promise<ReadonlyMap<string, HeldRecord>> => knownRecords(exec, identity, probes);
+}
+
+/**
+ * The content digest this source holds for each of these ids of one entity, live rows only.
+ *
+ * The record-level question beside {@link AlreadyHeld}'s byte-level one: a collector that
+ * lists its whole source every run lands a record again only when the record it would land
+ * hashes differently from the one held. Keyed by entity because one Drive walk lands two.
+ */
+export type StoredDigests = (
+  entity: string,
+  ids: readonly string[],
+) => Promise<ReadonlyMap<string, string>>;
+
+/** The binding every real run uses. */
+export function digestsBy(
+  exec: SqlExecutor,
+  scoped: { source: string; tenantId: string },
+): StoredDigests {
+  return (entity, ids): Promise<ReadonlyMap<string, string>> =>
+    storedDigests(exec, { ...scoped, entity }, ids);
 }

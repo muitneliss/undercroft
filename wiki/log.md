@@ -207,3 +207,6 @@
 ## [2026-09-28] ingest | Architecture
 ## [2026-09-28] ingest | ADR 0077 Deleting a Model Drops What It Built
 ## [2026-09-28] ingest | Architecture
+## [2026-09-28] ingest | ADR 0078 A Drive Walk Lands the Folders It Lists
+## [2026-09-28] ingest | What an ingest run counts
+## [2026-09-28] ingest | ADR 0078 A Drive Walk Lands the Folders It Lists

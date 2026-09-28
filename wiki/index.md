@@ -81,6 +81,7 @@
 - [ADR 0075 HubSpot Reads Its Commerce Objects And Names A List Its Token Cannot Read](sources/adr-0075-hubspot-reads-its-commerce-objects-and-names-a-list-its-token-cannot-read.md)
 - [ADR 0076 A Harvest Records What It Left Behind](sources/adr-0076-a-harvest-records-what-it-left-behind.md)
 - [ADR 0077 Deleting a Model Drops What It Built](sources/adr-0077-deleting-a-model-drops-what-it-built.md)
+- [ADR 0078 A Drive Walk Lands the Folders It Lists](sources/adr-0078-a-drive-walk-lands-the-folders-it-lists.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
