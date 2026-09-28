@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.1](https://github.com/muitneliss/undercroft/compare/v1.43.0...v1.43.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **gmail:** land a newly chosen file type on mail the lake already holds ([#292](https://github.com/muitneliss/undercroft/issues/292)) ([#293](https://github.com/muitneliss/undercroft/issues/293)) ([60cbb11](https://github.com/muitneliss/undercroft/commit/60cbb1105bcd41869192b21f3e1bf34766d4469f))
+
 ## [1.43.0](https://github.com/muitneliss/undercroft/compare/v1.42.0...v1.43.0) (2026-09-28)
 
 
