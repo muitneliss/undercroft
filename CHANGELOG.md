@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.0](https://github.com/muitneliss/undercroft/compare/v1.44.0...v1.45.0) (2026-09-28)
+
+
+### Features
+
+* **worker:** land the folders a Drive walk lists, so a model can see where a file sits and follow it when it moves ([#306](https://github.com/muitneliss/undercroft/issues/306)) ([9e3e90b](https://github.com/muitneliss/undercroft/commit/9e3e90b90a8090fabb3dc0f1a2efcfd7634dbe48))
+
 ## [1.44.0](https://github.com/muitneliss/undercroft/compare/v1.43.3...v1.44.0) (2026-09-28)
 
 
