@@ -31,8 +31,8 @@ type RunLinkView = NonNullable<RunDetail["parentRun"]>;
 /**
  * The run's own outcome, distinct from any one entity's: `settle()` closes the ledger after
  * every entity has already had its own say, and can itself fail with every entity granted.
- * Only an ingest run gets this stage separately -- a transform, a build or a lake-api run
- * has exactly one stage in the first place, which already carries the run's own status.
+ * Only an ingest or an extract run gets this stage separately -- a transform, a build or a
+ * lake-api run has exactly one stage in the first place, which already carries its status.
  */
 function outcomeStage(t: TFunction, locale: Locale, run: RunDetail): RunStage {
   const mark = markForStatus(run.status);
@@ -155,7 +155,9 @@ export function deriveRunFlow(
     stages.push(linkStage(t, "link-parent", run.parentRun, runHref(run.parentRun.id)));
   }
 
-  if (run.kind === "ingest") {
+  // An extract reads one entity, `documents`, and narrates it the way an ingest narrates its
+  // own, so it gets the same per-entity stages rather than the one stage of a build.
+  if (run.kind === "ingest" || run.kind === "extract") {
     const accs = entityAccumulators(run, events);
     stages.push(...entityStages(t, locale, run, accs));
     stages.push(outcomeStage(t, locale, run));

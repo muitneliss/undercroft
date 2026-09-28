@@ -937,6 +937,7 @@ export const vi = {
     kindModels: "Dựng mô hình",
     kindBuild: "Dựng thử một mô hình",
     kindLakeApi: "Ghi từ ngoài vào {{source}}",
+    kindExtract: "Đọc chữ tài liệu của {{source}}",
     triggerSchedule: "theo lịch",
     triggerManual: "chạy tay",
     triggerBuild: "từ trình soạn",

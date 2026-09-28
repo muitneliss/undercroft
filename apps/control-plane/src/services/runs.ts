@@ -7,7 +7,8 @@
  * `kind` is derived here rather than stored: `build` is a transform run the editor started,
  * `lake-api` an ingest run an external script landed, and both share the row shape and the
  * one-running-per-pair guard with the scheduled kinds. A stored column would be a second
- * copy of `verb` + `trigger` to keep in step.
+ * copy of `verb` + `trigger` to keep in step. `extract` is its own verb (ADR 0024), so it is
+ * its own kind: read as an ingest, it put two identical lines on the journal for one source.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -31,7 +32,7 @@ import {
 import { record as recordAudit } from "../repos/auditLog.ts";
 import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
-export type RunKind = "ingest" | "transform" | "build" | "lake-api";
+export type RunKind = "ingest" | "extract" | "transform" | "build" | "lake-api";
 
 export interface RunView {
   readonly id: string;
@@ -101,6 +102,9 @@ export interface RunDetail extends RunView {
 function kindOf(run: Run): RunKind {
   if (run.verb === "transform") {
     return run.trigger === "build" ? "build" : "transform";
+  }
+  if (run.verb === "extract") {
+    return "extract";
   }
   return run.trigger === "lake-api" ? "lake-api" : "ingest";
 }
