@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.43.0](https://github.com/muitneliss/undercroft/compare/v1.42.0...v1.43.0) (2026-09-28)
+
+
+### Features
+
+* **hubspot:** read quotes, line items, products, owners, pipelines and their links ([#291](https://github.com/muitneliss/undercroft/issues/291)) ([fad104a](https://github.com/muitneliss/undercroft/commit/fad104a9c3636ab197f03e6a85ae7bb3cb822968))
+* **ui:** open a built model's table as a SQL question in Reports ([#285](https://github.com/muitneliss/undercroft/issues/285)) ([83d5a45](https://github.com/muitneliss/undercroft/commit/83d5a45ca2767ba6266ad8cad61fa7a4ff523e50))
+
+
+### Bug Fixes
+
+* **hubspot:** mark a record a complete run no longer lists as deleted at source ([#289](https://github.com/muitneliss/undercroft/issues/289)) ([4849f86](https://github.com/muitneliss/undercroft/commit/4849f86737ca54732842b320d0d44c3aff610ceb))
+* **ui:** a tab a deploy left behind reloads instead of going blank ([#274](https://github.com/muitneliss/undercroft/issues/274)) ([17016aa](https://github.com/muitneliss/undercroft/commit/17016aa671448530f173d9529e9f014c8b6af16d))
+* **ui:** keep a Xero connection runnable while its grant lacks a newer scope ([#290](https://github.com/muitneliss/undercroft/issues/290)) ([47144ed](https://github.com/muitneliss/undercroft/commit/47144ed93b41a8789cdeba1c9d8e163a698c7b0f))
+* **worker:** count a record re-read unchanged as Unchanged, so the run's columns add up ([#286](https://github.com/muitneliss/undercroft/issues/286)) ([cff61b9](https://github.com/muitneliss/undercroft/commit/cff61b905c3825cf02afc0461bdb513cd355b0e6)), closes [#284](https://github.com/muitneliss/undercroft/issues/284)
+* **xero:** ask for 4-decimal unit prices and re-read lists whose request changed ([#287](https://github.com/muitneliss/undercroft/issues/287)) ([816e9ad](https://github.com/muitneliss/undercroft/commit/816e9ade699ee65acb0dca38578aebb8d278d4c9)), closes [#280](https://github.com/muitneliss/undercroft/issues/280)
+* **xero:** ask for accounting.settings.read and skip a list its grant cannot read ([#288](https://github.com/muitneliss/undercroft/issues/288)) ([38584aa](https://github.com/muitneliss/undercroft/commit/38584aafd50883a94be85aa82a9ccd7c17784c8a))
+
 ## [1.42.0](https://github.com/muitneliss/undercroft/compare/v1.41.4...v1.42.0) (2026-09-27)
 
 
