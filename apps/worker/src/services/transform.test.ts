@@ -107,7 +107,7 @@ describe("runTransform", () => {
           tx.exec("CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id"),
         );
         writeResults(options.cwd, [MODEL_OK]);
-        return { exitCode: 0, output: "Completed successfully" };
+        return { exitCode: 0, stdout: "Completed successfully", stderr: "" };
       }),
       { tenantId: TENANT },
     );
@@ -155,7 +155,11 @@ describe("runTransform", () => {
             relation_name: null,
           },
         ]);
-        return Promise.resolve({ exitCode: 1, output: "Database Error in model stg_deals" });
+        return Promise.resolve({
+          exitCode: 1,
+          stdout: "Database Error in model stg_deals",
+          stderr: "",
+        });
       }),
       { tenantId: TENANT },
     );
@@ -183,7 +187,7 @@ describe("runTransform", () => {
             relation_name: '"undercroft"."dq_case_1"."not_null_stg_deals_deal_id"',
           },
         ]);
-        return { exitCode: 1, output: "Done. PASS=0 FAIL=1" };
+        return { exitCode: 1, stdout: "Done. PASS=0 FAIL=1", stderr: "" };
       }),
       { tenantId: TENANT },
     );
@@ -200,7 +204,8 @@ describe("runTransform", () => {
           seen.cwd = options.cwd;
           return Promise.resolve({
             exitCode: 2,
-            output: "Could not find profile named 'undercroft'",
+            stdout: "Could not find profile named 'undercroft'",
+            stderr: "",
           });
         }),
         { tenantId: TENANT },
@@ -215,7 +220,7 @@ describe("runTransform", () => {
     const outcome = await runTransform(
       deps(() => {
         spawned += 1;
-        return Promise.resolve({ exitCode: 0, output: "" });
+        return Promise.resolve({ exitCode: 0, stdout: "", stderr: "" });
       }),
       { tenantId: "CASE-2" },
     );

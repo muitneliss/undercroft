@@ -38,10 +38,10 @@ afterEach(async () => {
 });
 
 /** A spawn that answers as `pdftotext` would, and records that it was reached. */
-function spawnAnswering(output: string): Spawn {
+function spawnAnswering(stdout: string): Spawn {
   return (cmd) => {
     spawned.push([...cmd]);
-    return Promise.resolve({ exitCode: 0, output });
+    return Promise.resolve({ exitCode: 0, stdout, stderr: "" });
   };
 }
 

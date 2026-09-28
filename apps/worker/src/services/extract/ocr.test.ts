@@ -47,11 +47,15 @@ function imageOf(bytes: number): Uint8Array {
   return image;
 }
 
-function spawnAnswering(output: string, exitCode = 0): { spawn: Spawn; calls: string[][] } {
+function spawnAnswering(
+  stdout: string,
+  exitCode = 0,
+  stderr = "",
+): { spawn: Spawn; calls: string[][] } {
   const calls: string[][] = [];
   const spawn: Spawn = (cmd) => {
     calls.push([...cmd]);
-    return Promise.resolve({ exitCode, output });
+    return Promise.resolve({ exitCode, stdout, stderr });
   };
   return { spawn, calls };
 }
@@ -69,7 +73,7 @@ const spawnNothing: Spawn = () => Promise.reject(new Error("spawned a child that
 function spawnMissingAfter(installed: string): Spawn {
   return (cmd) =>
     cmd[0] === installed
-      ? Promise.resolve({ exitCode: 0, output: SCAN_LAYER })
+      ? Promise.resolve({ exitCode: 0, stdout: SCAN_LAYER, stderr: "" })
       : Promise.reject(new Error("ENOENT: no such file"));
 }
 
@@ -99,6 +103,17 @@ describe("an image big enough to be a document", () => {
     expect(result.text).toContain("Tiền thanh toán");
     expect(calls).toHaveLength(1);
     expect(calls[0]?.[0]).toBe("tesseract");
+  });
+
+  it("stores what the engine read and not what it remarked on stderr", async () => {
+    // Regression: tesseract prints its resolution estimate to stderr for almost every image,
+    // and a run's two streams were stored as one, so the remark ended every image's text.
+    const { spawn } = spawnAnswering(A_PAGE, 0, "Estimating resolution as 190\n");
+
+    const result = await extract(spawn);
+
+    expect(result.text).toContain("Tiền thanh toán");
+    expect(result.text).not.toContain("Estimating resolution");
   });
 
   it("is always asked for in Vietnamese as well as English", async () => {
@@ -201,6 +216,18 @@ describe("OCR that ran and found nothing", () => {
     expect(result.method).toBeNull();
   });
 
+  it("is what an image gets when the engine's only words were a remark on stderr", async () => {
+    // Regression: with stderr stored as text, "Estimating resolution as 190" was the whole
+    // "text" of an image with no words on it, so this refusal never fired on production --
+    // 113 of 289 sampled image reads there were that line and nothing else.
+    const { spawn } = spawnAnswering("\n\f", 0, "Estimating resolution as 190\n");
+
+    const result = await extract(spawn);
+
+    expect(result.reason).toBe(OCR_FOUND_NOTHING);
+    expect(result.text).toBe("");
+  });
+
   it("is not what a page with a single line on it gets", async () => {
     // The quiet side, and the reason there is no second threshold here: the size gate has
     // already removed the furniture, so a short page is a short document and is stored as one.
@@ -288,24 +315,24 @@ function scanner(options: ScanOptions): {
     elapsed += options.tickMs ?? 0;
 
     if (cmd[0] === "pdftotext") {
-      return { exitCode: 0, output: SCAN_LAYER };
+      return { exitCode: 0, stdout: SCAN_LAYER, stderr: "" };
     }
     if (cmd[0] === "pdftoppm") {
       if (options.rasteriser === "fails") {
-        return { exitCode: 1, output: "" };
+        return { exitCode: 1, stdout: "", stderr: "" };
       }
       if (options.rasteriser !== "silent") {
         await writePages(cmd, options.pages);
       }
-      return { exitCode: 0, output: "" };
+      return { exitCode: 0, stdout: "", stderr: "" };
     }
 
     const page = pageNumberOf(cmd[1] ?? "");
     if (page === options.failPage) {
-      return { exitCode: 1, output: "" };
+      return { exitCode: 1, stdout: "", stderr: "" };
     }
     const text = options.textFor ?? ((at: number): string => `Trang ${at}: Acme Holdings`);
-    return { exitCode: 0, output: text(page) };
+    return { exitCode: 0, stdout: text(page), stderr: "" };
   };
 
   return { spawn, calls, deadlines, now: (): number => elapsed };
