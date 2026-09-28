@@ -61,6 +61,7 @@ function caller(user: SessionUser | null, superadmin = false) {
         provider: "google" as const,
       }),
     worker: null,
+    specReads: new Map(),
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);

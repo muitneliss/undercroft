@@ -23,6 +23,7 @@ import {
   scopeSummary,
   selectedFor,
   setupProgress,
+  ungrantedNotes,
 } from "./connectionState.ts";
 
 // The real catalogue, not a stub that answers anything asked of it. A key these functions
@@ -47,6 +48,36 @@ describe("presentConnection", () => {
     expect(card.state).toBe("connected");
     expect(card.action).toBeNull();
     expect(card.complete).toBe(true);
+  });
+
+  it("a grant short of a permission still runs, and names what a reconnect would add", () => {
+    // A Xero grant from before settings were asked for (ADR 0073): it reads every other list,
+    // so it is connected and done -- not lapsed -- and its one next step is the reconnect.
+    const xero = connection("xero", {
+      status: "connected",
+      ungranted: ["items", "accounts"].map((entity) => ({
+        entity,
+        scope: "accounting.settings.read",
+      })),
+    });
+
+    const card = presentConnection(t, xero);
+
+    expect(card.state).toBe("connected");
+    expect(card.complete).toBe(true);
+    expect(card.action?.kind).toBe("reconnect");
+    expect(ungrantedNotes(t, xero)).toEqual([
+      "Chưa được cấp quyền accounting.settings.read, nên chưa đọc Mặt hàng, Hệ thống tài khoản.",
+      "Các dữ liệu còn lại vẫn đồng bộ theo lịch; hãy kết nối lại để cấp quyền còn thiếu.",
+    ]);
+    expect(ungrantedNotes(translatorFor("en"), xero)).toEqual([
+      "Not granted accounting.settings.read, so Items, Chart of accounts are not read.",
+      "Everything else syncs on schedule; reconnect to grant this permission.",
+    ]);
+  });
+
+  it("a whole grant has nothing to add", () => {
+    expect(ungrantedNotes(t, connection("xero", { status: "connected" }))).toEqual([]);
   });
 
   it("a source awaiting its scope asks for a decision, not a reconnect", () => {

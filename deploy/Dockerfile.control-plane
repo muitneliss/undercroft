@@ -55,6 +55,11 @@ COPY scripts/kestraFlows.ts ./scripts/kestraFlows.ts
 # same files `npx skills add` installs, carried here so a release serves the skills it tagged.
 COPY skills ./skills
 
+# The connector specs, which the Sources card judges a grant by: each list's `readScope`, read
+# at boot (`apps/control-plane/src/specs.ts`), the same files the worker reads a run by, so a
+# grant that lacks a newer scope shows as runnable exactly when a run would read (ADR 0073).
+COPY specs ./specs
+
 EXPOSE 3000
 
 CMD ["bun", "run", "apps/control-plane/src/main.ts"]

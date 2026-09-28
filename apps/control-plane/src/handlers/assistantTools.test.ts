@@ -49,6 +49,7 @@ function context(user: SessionUser | null, superadmin = false, exec: SqlExecutor
         provider: "google" as const,
       }),
     worker: null,
+    specReads: new Map(),
     googlePicker: null,
   };
 }

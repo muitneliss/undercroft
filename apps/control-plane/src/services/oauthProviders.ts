@@ -109,8 +109,9 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
     tokenUrl: "https://identity.xero.com/connect/token",
     /**
      * The same list `specs/connectors/xero.yaml` declares under `auth.scopes`, kept in step
-     * by hand: the control plane does not read specs, and a consent narrower than the spec
-     * would leave every list read under the missing scope unread. `offline_access` is what
+     * by hand: this table is the consent's, fixed when the process is written rather than read
+     * from a spec at boot (the card reads the spec's per-list scopes, `../specs.ts`), and a
+     * consent narrower than the spec would leave every list read under the missing scope unread. `offline_access` is what
      * makes Xero issue a refresh token at all.
      *
      * `accounting.settings.read` reads items, the chart of accounts, tracking categories, tax

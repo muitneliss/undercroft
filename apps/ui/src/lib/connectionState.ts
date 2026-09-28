@@ -110,8 +110,15 @@ export function connectionFacts(connection: Connection): CardFacts {
     case "needs_scope":
       return { state: "needs_scope", actionKind: "scope", mark: "pending", complete: false };
 
+    // Connected on a grant that lacks the scope of some lists it would read: it runs and reads
+    // the rest, so it is done, and a reconnect is the one thing that adds what it skips.
     case "connected":
-      return { state: "connected", actionKind: null, mark: "granted", complete: true };
+      return {
+        state: "connected",
+        actionKind: connection.ungranted.length > 0 ? "reconnect" : null,
+        mark: "granted",
+        complete: true,
+      };
 
     default: {
       const exhaustive: never = connection.status;
@@ -163,6 +170,33 @@ export function presentConnection(t: TFunction, connection: Connection): CardPre
       throw new Error(`unhandled card state ${String(exhaustive)}`);
     }
   }
+}
+
+/**
+ * What a runnable grant does not reach: one sentence per permission it lacks, naming the lists
+ * that permission gates, then the remedy. Empty for a grant that is whole.
+ *
+ * Which lists these are is decided server-side, by the rule a run skips them by
+ * (`partitionByGrant`, ADR 0073), and handed over as `connection.ungranted`; this only words
+ * them. Grouped by permission because that is what a reconnect grants, in the order the server
+ * listed them. A Xero list's name is translated; an id this build has no word for keeps its id.
+ */
+export function ungrantedNotes(t: TFunction, connection: Connection): string[] {
+  const byScope = new Map<string, string[]>();
+  for (const { entity, scope } of connection.ungranted) {
+    byScope.set(scope, [...(byScope.get(scope) ?? []), entity]);
+  }
+  if (byScope.size === 0) {
+    return [];
+  }
+  const gaps = [...byScope].map(([scope, entities]) =>
+    t("grantState.notGranted", {
+      count: entities.length,
+      scope,
+      entities: nameXeroEntities(t, entities),
+    }),
+  );
+  return [...gaps, t("grantState.notGrantedRemedy", { count: byScope.size })];
 }
 
 /**

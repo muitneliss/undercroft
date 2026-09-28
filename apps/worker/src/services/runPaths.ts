@@ -24,7 +24,12 @@ import {
   type RunContext,
   requestKey,
 } from "@undercroft/connector-runtime";
-import { type ConnectorEntity, type ConnectorSpec, sourceKind } from "@undercroft/contracts";
+import {
+  type ConnectorEntity,
+  type ConnectorSpec,
+  sourceKind,
+  type UngrantedRead,
+} from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";

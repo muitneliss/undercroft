@@ -70,6 +70,7 @@ function callerOf(worker: InMemoryWorkerClient) {
         provider: "google" as const,
       }),
     worker,
+    specReads: new Map(),
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);

@@ -66,13 +66,16 @@ kept in step by hand in `apps/control-plane/src/services/oauthProviders.ts`, and
 is not the scope Xero reads its list under. Every entity names its `readScope`; the spec
 schema refuses one that does not, or one naming a scope the consent does not ask for.
 
-A connection whose recorded grant lacks a scope the consent asks for reads **reconnect** on its
-card. Its runs still read every list the grant reaches. Each list it does not reach is never
-requested, and the run's Journal names it with the scope a reconnect would add. A run left with
-no list it can read fails, naming the scope. If you add an entity that needs a new scope, add
-the scope in both places and in the test's path-to-scope table. Each existing connection reads
-the new list only after it reconnects.
-[ADR 0073](../adr/0073-a-list-its-grant-cannot-read-is-named-not-failed.md).
+A connection whose recorded grant lacks a scope the consent asks for still reads every list the
+grant reaches. Each list it does not reach is never requested, and the run's Journal names it
+with the scope a reconnect would add. Its card stays connected, with **Run now** and its
+schedule, and names the missing scope and the lists it gates beside a **Reconnect** button. A
+grant that reaches none of the lists the connection reads reads **reconnect** on its card, and a
+run left with no list it can read fails, naming the scope. If you add an entity that needs a new
+scope, add the scope in both places and in the test's path-to-scope table. Each existing
+connection reads the new list only after it reconnects.
+[ADR 0073](../adr/0073-a-list-its-grant-cannot-read-is-named-not-failed.md),
+[ADR 0074](../adr/0074-the-card-judges-a-grant-by-the-lists-it-reads.md).
 
 The scopes are Xero's **granular** ones, and the lists each one reads:
 

@@ -38,6 +38,7 @@ import { messages } from "../i18n/index.ts";
 import type { Grant } from "../services/accessTokens.ts";
 import type { OAuthApps } from "../services/connectedApps.ts";
 import { authorityIn, outranks, type Role } from "../services/authz.ts";
+import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { effectOf, grantAdmits } from "./surface.ts";
@@ -141,6 +142,13 @@ export interface Context {
    * the procedures say so rather than failing in a way that reads like an outage.
    */
   readonly worker: WorkerClient | null;
+  /**
+   * The lists each connector spec reads and the scope each needs, by which `connections.list`
+   * judges whether a grant that lacks a scope still reads any of what its connection chose
+   * (ADR 0073). Required, so a door building a context decides it: an empty map judges every
+   * grant whole, which asks for a reconnect a spec source may not need.
+   */
+  readonly specReads: SpecReads;
   /**
    * The public halves of the ingestion Google client, for the browser's Drive Picker. The
    * client SECRET is not in here and must never be: it stays in the process.

@@ -15,6 +15,7 @@ export {
   StoreCredentialResponse,
 } from "./connectionApi.ts";
 export { GOOGLE_READ_SCOPES, missingReadScope } from "./googleGrant.ts";
+export { partitionByGrant, type UngrantedRead } from "./specGrant.ts";
 export {
   Aggregate,
   AGGREGATES,

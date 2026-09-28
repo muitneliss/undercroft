@@ -102,6 +102,35 @@ describe("Run now", () => {
     expect(plate.hasAttribute("disabled")).toBe(true);
   });
 
+  it("is offered on a grant short of a permission, beside what it skips and the reconnect", () => {
+    // Every Xero connection made before ADR 0073 still reads twelve lists. Its card read
+    // "lapsed" and offered no run, although the schedule kept reading them.
+    render(
+      <MemoryRouter>
+        <ConnectionCard
+          tenantId="CASE-0042"
+          connection={connection("xero", {
+            status: "connected",
+            ungranted: [{ entity: "tax_rates", scope: "accounting.settings.read" }],
+          })}
+          onConnect={noop}
+          onScope={noop}
+          onDisconnect={noop}
+          onRun={noop}
+          onCadence={noop}
+          canRun={true}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "Chạy ngay" })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Kết nối lại Xero/u })).toBeDefined();
+    expect(
+      screen.getByText("Chưa được cấp quyền accounting.settings.read, nên chưa đọc Thuế suất."),
+    ).toBeDefined();
+    expect(screen.queryByText("Cần kết nối lại")).toBeNull();
+  });
+
   it("is not offered to a reader who may not start one", () => {
     render(card({}, { canRun: false }));
 

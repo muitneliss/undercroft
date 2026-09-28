@@ -7,8 +7,8 @@
  * before the administrator sees an organisation, so the list is pinned here rather than
  * discovered by the first customer to press Connect.
  *
- * The control plane does not read specs, so the table is a hand copy of the spec's
- * `auth.scopes`; the third test is what keeps the copy honest, and the fourth that every entity
+ * The consent's table is a hand copy of the spec's `auth.scopes` (the card reads only the spec's
+ * per-list scopes, at boot); the third test is what keeps the copy honest, and the fourth that every entity
  * the spec reads names, as its `readScope`, the scope Xero reads its list under.
  */
 
