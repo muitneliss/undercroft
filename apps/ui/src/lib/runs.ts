@@ -74,6 +74,8 @@ export function describeRun(
   switch (run.kind) {
     case "ingest":
       return run.entities.length === 0 ? source : `${source} · ${run.entities.join(", ")}`;
+    case "extract":
+      return t("journal.kindExtract", { source });
     case "lake-api":
       return t("journal.kindLakeApi", { source });
     case "transform":

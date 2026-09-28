@@ -69,6 +69,14 @@ describe("describeRun", () => {
     expect(describeRun(vi, { kind: "ingest", source: "demo", entities: [] })).toBe("demo");
   });
 
+  it("a text-reading run says so, in words an ingest of the same source does not use (#309)", () => {
+    const ingest = { kind: "ingest" as const, source: "drive", entities: [] };
+    const extract = { ...ingest, kind: "extract" as const };
+    expect(describeRun(vi, extract)).toBe("Đọc chữ tài liệu của Google Drive");
+    expect(describeRun(en, extract)).toBe("Read the text of Google Drive documents");
+    expect(describeRun(vi, extract)).not.toBe(describeRun(vi, ingest));
+  });
+
   it("a build of the models is worded in the reader's language, with no source", () => {
     const run = { kind: "transform" as const, source: null, entities: [] };
     expect(describeRun(vi, run)).toBe("Dựng mô hình");

@@ -772,6 +772,7 @@ export const en = {
     kindModels: "Build the models",
     kindBuild: "Try one model",
     kindLakeApi: "Landed from outside into {{source}}",
+    kindExtract: "Read the text of {{source}} documents",
     triggerSchedule: "on schedule",
     triggerManual: "by hand",
     triggerBuild: "from the editor",

@@ -62,6 +62,21 @@ describe("a run's place in its chain", () => {
   });
 });
 
+describe("what kind of run it was", () => {
+  it("a text-reading run is an extract, not an ingest of the same source (#309)", async () => {
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO ops.run (id, tenant_id, source, verb, trigger)
+         VALUES ('run-read', $1, 'gmail', 'extract', 'schedule')`,
+        [TENANT],
+      ),
+    );
+
+    expect((await get(db, TENANT, "run-read"))?.kind).toBe("extract");
+    expect((await get(db, TENANT, "run-mine"))?.kind).toBe("ingest");
+  });
+});
+
 describe("what a run counted", () => {
   it("a closed ingest reports the records it saw", async () => {
     await db.asSuperuser((tx) =>

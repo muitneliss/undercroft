@@ -64,6 +64,25 @@ describe("an ingest run in progress", () => {
   });
 });
 
+describe("an extract run", () => {
+  it("shows the documents it is reading, not the stage of a model build", () => {
+    const detail = runDetail({
+      kind: "extract",
+      source: "drive",
+      entities: [],
+      status: "running",
+      counts: null,
+      endedAt: null,
+    });
+    const events = [
+      event("run_opened", { verb: "extract" }),
+      event("work_listed", { total: 30 }, "documents"),
+    ];
+
+    expect(flow(detail, events).map((s) => s.key)).toEqual(["entity:documents", "outcome"]);
+  });
+});
+
 describe("a failed ingest run", () => {
   it("strikes the one entity that was mid-flight, and nothing after it", () => {
     const detail = runDetail({
