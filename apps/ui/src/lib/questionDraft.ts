@@ -8,7 +8,12 @@
  * so before it is pressed.
  */
 
-import type { ChartConfig, QuestionDefinition, VisualDefinition } from "@undercroft/contracts/bi";
+import {
+  type ChartConfig,
+  type QuestionDefinition,
+  quoteIdent,
+  type VisualDefinition,
+} from "@undercroft/contracts/bi";
 
 import type { QuestionView } from "@/api/types.ts";
 
@@ -49,6 +54,24 @@ export function newQuestionDraft(tenantId: string, table: string | null): Questi
           orderBy: [],
           limit: DEFAULT_LIMIT,
         };
+  return { tenantId, id: null, name: "", definition, chart: TABLE_CHART, saved: null };
+}
+
+/**
+ * The search key that opens a new question on one table: a built model's door into Reports.
+ * The question page reads it once, seeds the draft, and drops it from the address.
+ */
+export const ON_TABLE = "table";
+
+/**
+ * A new question reading every column of one table, written as SQL so the author starts in
+ * the editor. No LIMIT: the server caps an unlimited SQL question and says when it cut.
+ */
+export function questionOnTable(tenantId: string, table: string): QuestionDraft {
+  const definition: QuestionDefinition = {
+    kind: "sql",
+    sql: `SELECT *\nFROM ${quoteIdent(table)}`,
+  };
   return { tenantId, id: null, name: "", definition, chart: TABLE_CHART, saved: null };
 }
 

@@ -13,6 +13,7 @@ import {
   isQuestionDirty,
   newQuestionDraft,
   patchVisual,
+  questionOnTable,
   switchToSql,
 } from "./questionDraft.ts";
 
@@ -40,6 +41,12 @@ describe("questionDraft", () => {
     expect(isQuestionDirty(loaded)).toBe(false);
     expect(isQuestionDirty(patchVisual(loaded, { limit: 50 }))).toBe(true);
     expect(isQuestionDirty({ ...loaded, name: "Deals, won" })).toBe(true);
+  });
+
+  it("a question opened on a table starts as unsaved SQL reading that table", () => {
+    const opened = questionOnTable("CASE-0042", "gmail_inbox");
+    expect(opened.definition).toEqual({ kind: "sql", sql: 'SELECT *\nFROM "gmail_inbox"' });
+    expect(isQuestionDirty(opened)).toBe(true);
   });
 
   it("switching to SQL keeps the text and the builder no longer applies", () => {
