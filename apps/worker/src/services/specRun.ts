@@ -1,10 +1,14 @@
 /**
  * Opening a spec run: the spec, the request context, and the entities as this connection's
- * scope reads them.
+ * scope and grant read them.
  *
  * Split from `runPaths.ts`, which holds how a spec run READS; this holds what it reads, which
  * is where a scope reaches a spec run and the only place it does. The runtime is handed the
  * entities this answers with and never learns there was a choice. ADR 0052.
+ *
+ * The recorded grant narrows the same list, after the scope: a list the grant cannot read is
+ * never requested, and is handed back beside the reads with the scope it lacks, so the run can
+ * say so (`grant.ts`, ADR 0073).
  */
 
 import { createFetcher, type RunContext } from "@undercroft/connector-runtime";
@@ -16,25 +20,32 @@ import {
 } from "@undercroft/contracts";
 import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
+import { partitionByGrant, type UngrantedRead } from "./grant.ts";
 import { withChosenProperties } from "./hubspot/properties.ts";
 import type { RunDeps } from "./runTypes.ts";
 import { resolveToken } from "./runTypes.ts";
 import { readSpec } from "./specs.ts";
 
 /**
- * What a spec run reads, as the connection records it: the provider's account id, and the
- * scope an admin chose. `null` for either means there is none -- a source with no organisation
- * to name, or a connection nobody has scoped -- and the spec is read as it is written.
+ * What a spec run reads, as the connection records it: the provider's account id, the scope an
+ * admin chose, and what the provider granted. `null` for either of the first two means there is
+ * none -- a source with no organisation to name, or a connection nobody has scoped -- and the
+ * spec is read as it is written; `""` for the grant means nothing was recorded, which judges
+ * nothing.
  */
 async function chosenFor(
   deps: Pick<RunDeps, "exec">,
   input: { source: string; tenantId: string },
-): Promise<{ accountId: string | null; scope: ConnectionScope | null }> {
+): Promise<{ accountId: string | null; scope: ConnectionScope | null; granted: string }> {
   const connection = await getConnection(deps.exec, input.tenantId, input.source);
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
   const accountId = connection?.externalAccountId ?? null;
-  return { accountId: accountId === "" ? null : accountId, scope };
+  return {
+    accountId: accountId === "" ? null : accountId,
+    scope,
+    granted: connection?.scope ?? "",
+  };
 }
 
 /**
@@ -65,11 +76,13 @@ export interface SpecRun {
    * of the entity as given here, so a scope that changed the request has changed the key too.
    */
   readonly entities: readonly ConnectorEntity[];
+  /** The lists the scope chose that the grant cannot read, in spec order. Never requested. */
+  readonly ungranted: readonly UngrantedRead[];
 }
 
 /**
- * Open a spec run: the spec, the request context, and the entities as the admin's scope reads
- * them.
+ * Open a spec run: the spec, the request context, and the entities as the admin's scope and the
+ * recorded grant read them.
  *
  * Spec ORDER is kept through the scope, because a `batch-from` relation reads against ids
  * harvested from an entity declared before it; the spec schema refuses an unknown reference,
@@ -94,5 +107,10 @@ export async function openSpecRun(
     ...(chosen.accountId === null ? {} : { accountId: chosen.accountId }),
   };
 
-  return { spec, ctx, entities: scopedEntities(spec, chosen.scope) };
+  const { granted, ungranted } = partitionByGrant(
+    scopedEntities(spec, chosen.scope),
+    chosen.granted,
+  );
+
+  return { spec, ctx, entities: granted, ungranted };
 }

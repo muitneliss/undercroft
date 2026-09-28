@@ -38,6 +38,12 @@ export interface EntityReading {
   skipped: number | null;
   landed: number | null;
   refused: number | null;
+  /**
+   * The scope the grant lacks, for a list the run never requested because of it; `null` for a
+   * list it read. Such a list has no count at all, and its plate says why rather than showing
+   * a dash that reads as "still to come" (ADR 0073).
+   */
+  ungranted: string | null;
 }
 
 type EntityAcc = EntityReading;
@@ -90,6 +96,9 @@ function applyEntityEvent(acc: EntityAcc, event: RunEventView): void {
     acc.done = true;
     acc.landed = numberField(event.detail, "landed");
     acc.refused = numberField(event.detail, "refused");
+  } else if (event.event === "entity_not_granted") {
+    const { scope } = event.detail;
+    acc.ungranted = typeof scope === "string" ? scope : "";
   }
 }
 
@@ -122,6 +131,7 @@ export function entityAccumulators(run: RunDetail, events: readonly RunEventView
       skipped: null,
       landed: null,
       refused: null,
+      ungranted: null,
     };
     byEntity.set(entity, created);
     accs.push(created);
@@ -156,6 +166,9 @@ function interruptedEntity(run: RunDetail, accs: readonly EntityAcc[]): string |
 }
 
 function entityDetail(t: TFunction, locale: Locale, acc: EntityAcc): string | null {
+  if (acc.ungranted !== null) {
+    return t("journal.flow.entityNotGrantedDetail", { scope: acc.ungranted });
+  }
   if (acc.done) {
     return landedSummary(t, locale, acc.landed, acc.refused);
   }
@@ -167,7 +180,10 @@ function entityDetail(t: TFunction, locale: Locale, acc: EntityAcc): string | nu
     : `${formatCount(acc.read, locale)} / ${formatCount(acc.total, locale)}`;
 }
 
-function entityMarkLabel(t: TFunction, mark: StageMark): string {
+function entityMarkLabel(t: TFunction, mark: StageMark, acc: EntityAcc): string {
+  if (acc.ungranted !== null) {
+    return t("journal.flow.entityNotGranted");
+  }
   if (mark === "lapsed") {
     return t("journal.flow.entityInterrupted");
   }
@@ -178,7 +194,8 @@ function entityMarkLabel(t: TFunction, mark: StageMark): string {
 }
 
 function entityStageMark(acc: EntityAcc, interrupted: boolean): StageMark {
-  if (interrupted) {
+  // Lapsed, the geometry of a grant that needs somebody to act, which is what reconnecting is.
+  if (interrupted || acc.ungranted !== null) {
     return "lapsed";
   }
   return acc.done ? "granted" : "pending";
@@ -213,7 +230,7 @@ export function entityStages(
       kind: "entity",
       label: acc.entity,
       mark,
-      markLabel: entityMarkLabel(t, mark),
+      markLabel: entityMarkLabel(t, mark, acc),
       detail: entityDetail(t, locale, acc),
       gathered: mark === "pending" ? gatheredSoFar(acc) : null,
       href: null,

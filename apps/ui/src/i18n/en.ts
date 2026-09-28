@@ -675,6 +675,10 @@ export const en = {
     xeroPrepayments: "Prepayments",
     xeroBatchPayments: "Batch payments",
     xeroContactGroups: "Contact groups",
+    xeroAccounts: "Chart of accounts",
+    xeroTrackingCategories: "Tracking categories",
+    xeroTaxRates: "Tax rates",
+    xeroCurrencies: "Currencies",
     xeroAll: "Every kind of data: {{entities}}",
     xeroEntities: "{{entities}}",
     hubspotCompanies: "Companies",
@@ -874,6 +878,8 @@ export const en = {
     event: {
       runOpened: "Started.",
       entityStarted: "Reading {{entity}}.",
+      entityNotGranted:
+        "{{entity}} was not read: this connection's grant lacks {{scope}}. Reconnect to grant {{scope}}.",
       workListed: "{{total}} {{entity}} to read.",
       workListedSkipping: "{{total}} {{entity}} listed, {{skipped}} already held and not read.",
       recordsRead: "Read {{read}} {{entity}}.",
@@ -909,6 +915,8 @@ export const en = {
       entityDone: "Done",
       entityActive: "In progress",
       entityInterrupted: "Stopped here",
+      entityNotGranted: "Not granted",
+      entityNotGrantedDetail: "Reconnect to grant {{scope}}",
       entityLanded_one: "{{landed}} record",
       entityLanded_other: "{{landed}} records",
       entityLandedRefused: "{{landed}} records · {{refused}} refused",

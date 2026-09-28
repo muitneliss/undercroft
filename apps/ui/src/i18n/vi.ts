@@ -839,6 +839,10 @@ export const vi = {
     xeroPrepayments: "Khoản trả trước",
     xeroBatchPayments: "Thanh toán theo lô",
     xeroContactGroups: "Nhóm liên hệ",
+    xeroAccounts: "Hệ thống tài khoản",
+    xeroTrackingCategories: "Danh mục theo dõi",
+    xeroTaxRates: "Thuế suất",
+    xeroCurrencies: "Tiền tệ",
     xeroAll: "Mọi loại dữ liệu: {{entities}}",
     xeroEntities: "{{entities}}",
     /** HubSpot's objects, by the spec's ids. The ids are recorded; these are the words. */
@@ -1061,6 +1065,8 @@ export const vi = {
     event: {
       runOpened: "Bắt đầu.",
       entityStarted: "Bắt đầu đọc {{entity}}.",
+      entityNotGranted:
+        "Không đọc {{entity}}: quyền đã cấp cho kết nối này thiếu {{scope}}. Hãy kết nối lại để cấp {{scope}}.",
       workListed: "Cần đọc {{total}} {{entity}}.",
       workListedSkipping: "Có {{total}} {{entity}}, {{skipped}} đã có sẵn nên không đọc lại.",
       recordsRead: "Đã đọc {{read}} {{entity}}.",
@@ -1098,6 +1104,8 @@ export const vi = {
       entityDone: "Xong",
       entityActive: "Đang xử lý",
       entityInterrupted: "Dừng ở đây",
+      entityNotGranted: "Chưa được cấp quyền",
+      entityNotGrantedDetail: "Kết nối lại để cấp {{scope}}",
       /* The unit matters on the rail: a datum hangs under the line on its own, where a
        bare "0" is a stray digit rather than a count of anything. `landed` carries the
        digits already grouped for the reader, or the em dash when there is no count at

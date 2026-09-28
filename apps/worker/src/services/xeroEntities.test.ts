@@ -13,8 +13,10 @@
  *   asked for 4-decimal unit prices; without it Xero rounds each line's price to 2 (#280). The
  *   fetcher answers only the URL carrying it, so a list that stopped asking would fail here.
  *
- * Also here: a grant narrower than the spec's scopes is refused before a run opens, rather than
- * meeting `401 insufficient_scope` on whichever entity needs the scope it lacks.
+ * Also here: a grant recorded before a scope the consent now asks for -- every Xero connection
+ * made before `accounting.settings.read` -- reads every list it can and never requests the rest,
+ * which the run names with the scope a reconnect would add (ADR 0073). The 401 it used to meet on
+ * items part-way through a run was issue 276.
  */
 
 import { afterAll, afterEach, beforeEach, describe, expect, test as it } from "bun:test";
@@ -51,8 +53,10 @@ if (UNPACED === SHIPPED) {
 const SPECS_DIR = mkdtempSync(join(tmpdir(), "undercroft-xero-"));
 writeFileSync(join(SPECS_DIR, "xero.yaml"), UNPACED);
 const BASE = "https://api.xero.com/api.xro/2.0";
-const FULL_GRANT =
+/** What every connection recorded before the consent asked for `accounting.settings.read`. */
+const OLD_GRANT =
   "offline_access accounting.invoices.read accounting.payments.read accounting.contacts.read";
+const FULL_GRANT = `${OLD_GRANT} accounting.settings.read`;
 const UPDATED = "/Date(1573755038314+0000)/";
 
 /** How each list is read, as Xero's OpenAPI document says it may be. */
@@ -61,6 +65,10 @@ interface XeroList {
   readonly path: string;
   readonly idPath: string;
   readonly paging: "page-size" | "page" | "none";
+  /** Read under `accounting.settings.read`, which a grant recorded before it lacks. */
+  readonly settings?: true;
+  /** Asked of the list besides paging. */
+  readonly query?: Readonly<Record<string, string>>;
   /** Whether Xero's endpoint takes `unitdp`, so the list is asked for 4-decimal unit prices. */
   readonly unitdp?: true;
 }
@@ -101,7 +109,14 @@ const LISTS: readonly XeroList[] = [
     idPath: "LinkedTransactionID",
     paging: "page",
   },
-  { entity: "items", path: "/Items", idPath: "ItemID", paging: "none", unitdp: true },
+  {
+    entity: "items",
+    path: "/Items",
+    idPath: "ItemID",
+    paging: "none",
+    unitdp: true,
+    settings: true,
+  },
   {
     entity: "overpayments",
     path: "/Overpayments",
@@ -118,7 +133,20 @@ const LISTS: readonly XeroList[] = [
   },
   { entity: "batch_payments", path: "/BatchPayments", idPath: "BatchPaymentID", paging: "none" },
   { entity: "contact_groups", path: "/ContactGroups", idPath: "ContactGroupID", paging: "none" },
+  { entity: "accounts", path: "/Accounts", idPath: "AccountID", paging: "none", settings: true },
+  {
+    entity: "tracking_categories",
+    path: "/TrackingCategories",
+    idPath: "TrackingCategoryID",
+    paging: "none",
+    settings: true,
+    // Xero leaves archived categories out unless asked, and old lines still name them (#277).
+    query: { includeArchived: "true" },
+  },
+  { entity: "tax_rates", path: "/TaxRates", idPath: "TaxType", paging: "none", settings: true },
+  { entity: "currencies", path: "/Currencies", idPath: "Code", paging: "none", settings: true },
 ];
+const SETTINGS = LISTS.filter((list) => list.settings === true).map((list) => list.entity);
 
 /** The four lists read before issue 271, which still refuse an empty first read. */
 const ALWAYS_READ = new Set(["contacts", "invoices", "payments", "credit_notes"]);
@@ -126,6 +154,9 @@ const ALWAYS_READ = new Set(["contacts", "invoices", "payments", "credit_notes"]
 /** One page's URL, built the way the runtime builds it. */
 function pageUrl(list: XeroList, page: number | null): string {
   const url = new URL(`${BASE}${list.path}`);
+  for (const [name, value] of Object.entries(list.query ?? {})) {
+    url.searchParams.set(name, value);
+  }
   if (list.paging === "page-size") {
     url.searchParams.set("pageSize", "100");
   }
@@ -188,8 +219,11 @@ afterAll(() => {
   rmSync(SPECS_DIR, { recursive: true, force: true });
 });
 
-/** A connected Xero organisation, holding the grant its consent recorded. */
-async function connect(scope: string): Promise<void> {
+/**
+ * A connected Xero organisation, holding the grant its consent recorded, and reading `entities`
+ * -- none ticked by default, which reads every entity the spec declares.
+ */
+async function connect(scope: string, entities: readonly string[] = []): Promise<void> {
   await db.query(
     `INSERT INTO ops.connection (tenant_id, source, status, external_account_id, scope)
      VALUES ($1, 'xero', 'connected', 'org-1', $2)`,
@@ -203,15 +237,13 @@ async function connect(scope: string): Promise<void> {
     "INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version) VALUES ($1, 'xero', $2, 1)",
     [TENANT, Buffer.from(sealed.blob)],
   );
-  // No entity ticked: every entity the spec declares, which is what an admin who chose nothing
-  // recorded and what a newly declared list is read under.
   await writeConnectionDetail(db, {
     tenantId: TENANT,
     source: "xero",
     selectionJson: JSON.stringify({
       kind: "xero",
       organisation: { id: "org-1", name: "Acme Ltd" },
-      entities: [],
+      entities,
     }),
   });
   await db.become("undercroft_worker");
@@ -282,6 +314,15 @@ describe("the shipped Xero spec", () => {
   });
 });
 
+/** The lists the run named as not granted, with the scope each lacks, in the order it said so. */
+async function notGranted(): Promise<{ entity: string; scope: unknown }[]> {
+  const { rows } = await db.query<{ entity: string; scope: unknown }>(
+    `SELECT entity, detail->'scope' AS scope FROM ops.run_event
+     WHERE event = 'entity_not_granted' ORDER BY id`,
+  );
+  return rows;
+}
+
 describe("a Xero list read before it asked for 4-decimal unit prices", () => {
   it("is read whole on the next run, without reconnecting, and its unit prices land unrounded", async () => {
     // A cursor as production held it before #280: written before every request had a key, so
@@ -313,18 +354,38 @@ describe("a Xero list read before it asked for 4-decimal unit prices", () => {
   });
 });
 
-describe("a Xero grant narrower than the spec reads", () => {
-  it("is refused before a run opens, naming the scope it lacks", async () => {
-    await connect("offline_access accounting.invoices.read accounting.contacts.read");
+describe("a Xero grant recorded before the consent asked for accounting.settings.read", () => {
+  it("reads every other list, requests none of the settings lists, and names each", async () => {
+    await connect(OLD_GRANT);
+    const fetcher = xero((list) => [recordOf(list)]);
+
+    const result = await ingest(fetcher);
+
+    expect(result.entities.map((entity) => entity.entity)).toEqual(
+      LISTS.filter((list) => list.settings !== true).map((list) => list.entity),
+    );
+    const settingsPaths = LISTS.filter((list) => list.settings === true).map((l) => l.path);
+    expect(
+      fetcher.calls.filter((call) => settingsPaths.some((path) => call.url.includes(path))),
+    ).toEqual([]);
+    const { rows } = await db.query<{ status: string }>("SELECT status FROM ops.run");
+    expect(rows).toEqual([{ status: "ok" }]);
+    expect(await notGranted()).toEqual(
+      SETTINGS.map((entity) => ({ entity, scope: "accounting.settings.read" })),
+    );
+  });
+
+  it("fails a run that could read none of the lists chosen, naming the scope", async () => {
+    // Closing green on no list read would call "nothing was readable" a success.
+    await connect(OLD_GRANT, ["items", "accounts"]);
     const fetcher = xero((list) => [recordOf(list)]);
 
     const failed = ingest(fetcher);
 
     await expect(failed).rejects.toBeInstanceOf(GrantTooNarrow);
-    await expect(failed).rejects.toThrow("accounting.payments.read");
+    await expect(failed).rejects.toThrow("accounting.settings.read");
     expect(fetcher.calls).toEqual([]);
-    const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM ops.run");
-    expect(rows[0]?.n).toBe(0);
+    expect((await notGranted()).map((row) => row.entity)).toEqual(["items", "accounts"]);
   });
 
   it("is not judged when no grant was recorded, which is no evidence either way", async () => {
@@ -334,5 +395,6 @@ describe("a Xero grant narrower than the spec reads", () => {
     const result = await ingest(fetcher);
 
     expect(result.entities).toHaveLength(LISTS.length);
+    expect(await notGranted()).toEqual([]);
   });
 });

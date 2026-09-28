@@ -224,6 +224,17 @@ const Entity = z.object({
   incremental: Incremental.optional(),
   rateLimit: RateLimit.optional(),
   guards: Guards.optional(),
+  /**
+   * The consent scope the source reads this entity's list under -- one of `auth.scopes`.
+   *
+   * Per entity, because a consent is not all-or-nothing on the provider's side: Xero reads each
+   * list under its own granular scope and refuses one outside the grant with a 401 on that
+   * list's request alone. A grant recorded before a scope was added to the consent can still
+   * read every other list, so a run reads those and names this one as not granted, rather than
+   * failing as a whole or meeting the 401 part-way through (ADR 0073). Required of every entity
+   * in a spec whose oauth2 consent names scopes, so no list's scope is left to a guess.
+   */
+  readScope: z.string().min(1).optional(),
   removedWhen: RemovedWhen.optional(),
 });
 
@@ -249,12 +260,21 @@ export const ConnectorSpec = z
   })
   .superRefine((spec, ctx) => {
     const names = new Set(spec.entities.map((e) => e.name));
+    const consent = spec.auth.kind === "oauth2" ? spec.auth.scopes : [];
     for (const entity of spec.entities) {
       if (entity.request.kind === "batch-from" && !names.has(entity.request.entity)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["entities", entity.name, "request", "entity"],
           message: `batch-from references unknown entity '${entity.request.entity}'`,
+        });
+      }
+      const readScopeIssue = readScopeProblem(entity.readScope, consent);
+      if (readScopeIssue !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["entities", entity.name, "readScope"],
+          message: readScopeIssue,
         });
       }
       const refused = removedWhenRefusal(spec.entities, entity);
@@ -267,6 +287,30 @@ export const ConnectorSpec = z
       }
     }
   });
+
+/**
+ * What is wrong with an entity's `readScope` against the consent's scopes, or `null`.
+ *
+ * A consent that names scopes needs every entity to say which one reads it: an entity without
+ * one would be read on any grant and meet the provider's refusal part-way through a run, which
+ * is the failure the field exists to prevent. A scope the consent does not ask for could never
+ * be granted, so the entity could never be read. A spec with no scoped consent has no grant to
+ * hold a scope against.
+ */
+function readScopeProblem(
+  readScope: string | undefined,
+  consent: readonly string[],
+): string | null {
+  if (readScope === undefined) {
+    return consent.length === 0
+      ? null
+      : "an oauth2 spec that names scopes must name the scope each entity is read under";
+  }
+  if (!consent.includes(readScope)) {
+    return `readScope '${readScope}' is not one of the scopes auth asks for`;
+  }
+  return null;
+}
 
 /**
  * Why this entity's `removedWhen` cannot mean what it says, or `null` when it can. A rule no

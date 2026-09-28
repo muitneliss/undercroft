@@ -29,6 +29,7 @@ import { createByteFetcher } from "@undercroft/core";
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type CollectResult, runGoogleCollect } from "./google/collect.ts";
+import { GrantTooNarrow, type UngrantedRead } from "./grant.ts";
 import type { LandSummary, RefusalWriter } from "./landing.ts";
 import { createRecordSink } from "./recordSink.ts";
 import { settleRemovals } from "./removals.ts";
@@ -294,13 +295,42 @@ function referencedEntities(entities: readonly ConnectorEntity[]): ReadonlySet<s
   );
 }
 
+/**
+ * Say, before the first request, which lists this run will not read because the grant lacks
+ * their scope -- and refuse the run when that is every list it was to read.
+ *
+ * A warning per list rather than one for the run, naming the scope, because the reader's
+ * question is which lists and what reconnecting would add; the Journal words it. Nothing goes
+ * into the ledger's entities: a list never requested landed nothing, and a row saying `0` would
+ * read as a list Xero answered empty. The run otherwise goes on, because the grant still reads
+ * every other list, and a run that failed on their account would lose them too (ADR 0073).
+ *
+ * A run left with nothing to read fails instead of closing green on nothing: "no list was
+ * readable" is not a success, and the error names the scopes a reconnect would add.
+ */
+function reportUngranted(
+  input: { source: string; tenantId: string },
+  ungranted: readonly UngrantedRead[],
+  readable: number,
+  journal: RunJournal,
+): void {
+  for (const { entity, scope } of ungranted) {
+    journal.warn("entity_not_granted", { entity, scope });
+  }
+  if (readable === 0 && ungranted.length > 0) {
+    const scopes = [...new Set(ungranted.map((read) => read.scope))].join(", ");
+    throw new GrantTooNarrow(input.source, input.tenantId, scopes);
+  }
+}
+
 export async function runSpecIngest(
   deps: RunDeps,
   input: { source: string; tenantId: string; runId: string },
   ledger: Ledger,
   journal: RunJournal,
 ): Promise<void> {
-  const { spec, ctx, entities } = await openSpecRun(deps, input);
+  const { spec, ctx, entities, ungranted } = await openSpecRun(deps, input);
+  reportUngranted(input, ungranted, entities.length, journal);
   const run: EntityRun = { deps, input, spec, ledger, journal };
 
   const referenced = referencedEntities(entities);

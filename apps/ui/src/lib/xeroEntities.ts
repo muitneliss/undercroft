@@ -26,6 +26,10 @@ const ENTITY_KEY = {
   prepayments: "scope.xeroPrepayments",
   batch_payments: "scope.xeroBatchPayments",
   contact_groups: "scope.xeroContactGroups",
+  accounts: "scope.xeroAccounts",
+  tracking_categories: "scope.xeroTrackingCategories",
+  tax_rates: "scope.xeroTaxRates",
+  currencies: "scope.xeroCurrencies",
 } as const;
 
 export type XeroEntity = keyof typeof ENTITY_KEY;

@@ -76,6 +76,7 @@
 - [ADR 0070 A Tab A Deploy Left Behind Reloads When It Loses Nothing](sources/adr-0070-a-tab-a-deploy-left-behind-reloads-when-it-loses-nothing.md)
 - [ADR 0071 A Record A Complete Listing No Longer Names Is Removed At Source](sources/adr-0071-a-record-a-complete-listing-no-longer-names-is-removed-at-source.md)
 - [ADR 0072 A Watermark Is Keyed on the Request as Sent](sources/adr-0072-a-watermark-is-keyed-on-the-request-as-sent.md)
+- [ADR 0073 A List Its Grant Cannot Read Is Named Not Failed](sources/adr-0073-a-list-its-grant-cannot-read-is-named-not-failed.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)

@@ -125,6 +125,30 @@ describe("a closed run's authoritative record", () => {
     expect(stages[1]).toMatchObject({ mark: "granted", detail: "50 records" });
   });
 
+  it("shows a list the grant could not read as not granted, never as still to come", () => {
+    const detail = runDetail({
+      status: "ok",
+      entityCounts: [
+        { entity: "contacts", landed: 5, created: 5, changed: 0, unchanged: 0, refused: 0 },
+      ],
+    });
+    const events = [
+      event("entity_not_granted", { scope: "accounting.settings.read" }, "items"),
+      event("entity_started", {}, "contacts"),
+      event("entity_done", { landed: 5, refused: 0 }, "contacts"),
+    ];
+
+    const stages = flow(detail, events);
+
+    expect(stages[0]).toMatchObject({
+      key: "entity:items",
+      mark: "lapsed",
+      markLabel: "Not granted",
+      detail: "Reconnect to grant accounting.settings.read",
+    });
+    expect(stages[1]).toMatchObject({ key: "entity:contacts", mark: "granted" });
+  });
+
   it("with no feed at all, still shows every entity entityCounts remembers", () => {
     const detail = runDetail({
       status: "ok",

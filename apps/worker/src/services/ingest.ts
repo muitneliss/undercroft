@@ -44,7 +44,6 @@ import {
   tenantExists,
 } from "@undercroft/db/repos";
 import { isGoogleSource, ScopeNotChosen } from "./google/collect.ts";
-import { requireSpecGrant } from "./grant.ts";
 import { runGoogleIngest, runSpecIngest } from "./runPaths.ts";
 import { readSpec } from "./specs.ts";
 import {
@@ -211,8 +210,11 @@ async function execute(
  * A spec with `auth: none` needs no connection at all and is not asked for one; every other
  * source -- a Google collector, a bearer or OAuth spec -- must have a row that says
  * `connected`. Anything else (`disconnected`, `expired`, `error`, or no row) is refused
- * here, so the ledger never fills with runs that could not have read anything. So is an OAuth
- * spec's grant recorded without a scope the spec declares (`grant.ts`).
+ * here, so the ledger never fills with runs that could not have read anything.
+ *
+ * A grant narrower than the spec's consent is NOT refused here. It still reads every list
+ * outside the scope it lacks, so the run opens, reads those, and names the rest as not granted
+ * (`grant.ts`, `openSpecRun`). ADR 0073 supersedes ADR 0069's refusal at this point.
  */
 async function requireUsableConnection(
   deps: Pick<RunDeps, "exec" | "specsDir">,
@@ -225,9 +227,6 @@ async function requireUsableConnection(
   const connection = await getConnection(deps.exec, input.tenantId, input.source);
   if (connection === null || connection.status !== "connected") {
     throw new ConnectionUnusable(input.source, input.tenantId, connection?.status ?? "absent");
-  }
-  if (spec !== null) {
-    requireSpecGrant(spec, connection);
   }
   // A scoped source with nothing chosen is refused before a row is opened, for the same
   // reason the scheduler skips it: a run that could only fail, every tick, is noise.

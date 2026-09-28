@@ -18,17 +18,25 @@ auth:
   # SELECT ... FOR UPDATE before refreshing: two concurrent refreshes do not race, they
   # destroy the connection.
   rotatesRefreshToken: true
-  # Granular scopes, and every entity below is read under one of these three -- none needs a new
-  # consent. Per Xero's granular scope table:
+  # Granular scopes. Each entity below names the one Xero reads its list under (`readScope`), per
+  # the `security` of each path in Xero's OpenAPI document (`xero_accounting.yaml`):
   #   accounting.invoices.read  /Invoices /CreditNotes /Quotes /PurchaseOrders /RepeatingInvoices
-  #                             /LinkedTransactions /Items
+  #                             /LinkedTransactions
   #   accounting.payments.read  /Payments /Overpayments /Prepayments /BatchPayments
   #   accounting.contacts.read  /Contacts /ContactGroups
-  # Xero no longer grants the broad accounting.transactions to a new app. An entity needing a
-  # scope not listed here is a new consent for every connection: add it here and in
-  # `oauthProviders.ts`, and a grant recorded without it is refused before its run opens.
+  #   accounting.settings.read  /Items /Accounts /TrackingCategories /TaxRates /Currencies
+  # Xero no longer grants the broad accounting.transactions to a new app. A scope added here is a
+  # new consent: add it in `oauthProviders.ts` too. A grant recorded without it still reads every
+  # list it can, and each list it cannot is named in the run as not granted, never requested
+  # (ADR 0073). `/Items` was once read under invoices; live Xero answers it 401 there (#276).
   scopes:
-    [offline_access, accounting.invoices.read, accounting.payments.read, accounting.contacts.read]
+    [
+      offline_access,
+      accounting.invoices.read,
+      accounting.payments.read,
+      accounting.contacts.read,
+      accounting.settings.read,
+    ]
   # THEIR organisation id, from ops.connection.external_account_id. It is not our
   # tenant_id, and sending ours here is a 401 at best and the wrong org's books at worst.
   accountHeader: xero-tenant-id
@@ -81,6 +89,7 @@ defaults:
 entities:
   - name: contacts
     request: { kind: list, path: /Contacts, query: { pageSize: "100" } }
+    readScope: accounting.contacts.read
     envelopePath: Contacts
     idPath: ContactID
     updatedAtPath: UpdatedDateUTC
@@ -93,6 +102,7 @@ entities:
 
   - name: invoices
     request: { kind: list, path: /Invoices, query: { pageSize: "100", unitdp: "4" } }
+    readScope: accounting.invoices.read
     envelopePath: Invoices
     idPath: InvoiceID
     updatedAtPath: UpdatedDateUTC
@@ -105,6 +115,7 @@ entities:
 
   - name: payments
     request: { kind: list, path: /Payments, query: { pageSize: "100" } }
+    readScope: accounting.payments.read
     envelopePath: Payments
     idPath: PaymentID
     updatedAtPath: UpdatedDateUTC
@@ -119,6 +130,7 @@ entities:
   # credit notes on nothing.
   - name: credit_notes
     request: { kind: list, path: /CreditNotes, query: { pageSize: "100", unitdp: "4" } }
+    readScope: accounting.invoices.read
     envelopePath: CreditNotes
     idPath: CreditNoteID
     updatedAtPath: UpdatedDateUTC
@@ -129,12 +141,13 @@ entities:
       format: ms-json-date
       send: rfc3339-seconds
 
-  # The lists below are the rest of what the three scopes above reach (issue 271). They do not all
-  # read like the four above, and each difference is Xero's OpenAPI document's, not a choice:
+  # The lists below are the rest of what the scopes above reach (issues 271 and 277). They do not
+  # all read like the four above, and each difference is Xero's OpenAPI document's, not a choice:
   #
   # - `pagination: none` where Xero takes no `page`: /RepeatingInvoices, /Items, /BatchPayments,
-  #   /ContactGroups answer every record at once. Paged as the default pages, each would answer
-  #   page two with page one again and never with the empty page the read stops on.
+  #   /ContactGroups and the four settings lists answer every record at once. Paged as the
+  #   default pages, each would answer page two with page one again and never with the empty
+  #   page the read stops on.
   # - No `pageSize` where Xero takes none: /Quotes and /LinkedTransactions page at 100.
   # - No `incremental` where Xero takes no `If-Modified-Since`: those lists are read whole every
   #   run, which costs nothing in the lake, where an unchanged record lands as unchanged.
@@ -143,11 +156,12 @@ entities:
   # `failOnEmpty: false` on every one, because an organisation with no quotes, no purchase orders
   # or no contact groups is ordinary, and the run must not fail on it -- for an unpaged or
   # non-incremental list, every run would. The guard exists for "failed after 0", which is what a
-  # credential problem looks like, and on Xero that arrives as a 401 or 403, which raises; a grant
-  # without a scope the spec declares is refused before the run opens. An empty 200 from Xero is
-  # Xero's own word that there is nothing.
+  # credential problem looks like, and on Xero that arrives as a 401 or 403, which raises; a list
+  # whose `readScope` the grant lacks is never requested at all. An empty 200 from Xero is Xero's
+  # own word that there is nothing.
   - name: quotes
     request: { kind: list, path: /Quotes }
+    readScope: accounting.invoices.read
     envelopePath: Quotes
     idPath: QuoteID
     updatedAtPath: UpdatedDateUTC
@@ -161,6 +175,7 @@ entities:
 
   - name: purchase_orders
     request: { kind: list, path: /PurchaseOrders, query: { pageSize: "100" } }
+    readScope: accounting.invoices.read
     envelopePath: PurchaseOrders
     idPath: PurchaseOrderID
     updatedAtPath: UpdatedDateUTC
@@ -174,6 +189,7 @@ entities:
 
   - name: repeating_invoices
     request: { kind: list, path: /RepeatingInvoices }
+    readScope: accounting.invoices.read
     envelopePath: RepeatingInvoices
     idPath: RepeatingInvoiceID
     pagination: { kind: none }
@@ -181,6 +197,7 @@ entities:
 
   - name: linked_transactions
     request: { kind: list, path: /LinkedTransactions }
+    readScope: accounting.invoices.read
     envelopePath: LinkedTransactions
     idPath: LinkedTransactionID
     updatedAtPath: UpdatedDateUTC
@@ -188,6 +205,7 @@ entities:
 
   - name: items
     request: { kind: list, path: /Items, query: { unitdp: "4" } }
+    readScope: accounting.settings.read
     envelopePath: Items
     idPath: ItemID
     updatedAtPath: UpdatedDateUTC
@@ -202,6 +220,7 @@ entities:
 
   - name: overpayments
     request: { kind: list, path: /Overpayments, query: { pageSize: "100", unitdp: "4" } }
+    readScope: accounting.payments.read
     envelopePath: Overpayments
     idPath: OverpaymentID
     updatedAtPath: UpdatedDateUTC
@@ -215,6 +234,7 @@ entities:
 
   - name: prepayments
     request: { kind: list, path: /Prepayments, query: { pageSize: "100", unitdp: "4" } }
+    readScope: accounting.payments.read
     envelopePath: Prepayments
     idPath: PrepaymentID
     updatedAtPath: UpdatedDateUTC
@@ -228,6 +248,7 @@ entities:
 
   - name: batch_payments
     request: { kind: list, path: /BatchPayments }
+    readScope: accounting.payments.read
     envelopePath: BatchPayments
     idPath: BatchPaymentID
     updatedAtPath: UpdatedDateUTC
@@ -242,7 +263,59 @@ entities:
 
   - name: contact_groups
     request: { kind: list, path: /ContactGroups }
+    readScope: accounting.contacts.read
     envelopePath: ContactGroups
     idPath: ContactGroupID
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+
+  # What the codes on a transaction's lines mean (issue 277): the chart of accounts an
+  # `AccountCode` names, the tracking categories and options a line is tagged with, the tax rate a
+  # `TaxType` names, and the currencies a `CurrencyCode` names. All four are read under
+  # `accounting.settings.read`, answer every record at once and are read with no `where`, so an
+  # archived account or tax rate lands beside the active ones: old transactions still name them.
+  #
+  # /TrackingCategories is the one that hides its archived records unless asked, so it asks.
+  # Its options travel inside each category, so they land with it.
+  #
+  # /TaxRates and /Currencies carry no id and no change time. Each is keyed on the code the lines
+  # carry -- a tax rate's `TaxType`, a currency's `Code` -- which Xero holds unique per
+  # organisation, and neither takes `If-Modified-Since`, so both are read whole every run.
+  - name: accounts
+    request: { kind: list, path: /Accounts }
+    readScope: accounting.settings.read
+    envelopePath: Accounts
+    idPath: AccountID
+    updatedAtPath: UpdatedDateUTC
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: tracking_categories
+    request: { kind: list, path: /TrackingCategories, query: { includeArchived: "true" } }
+    readScope: accounting.settings.read
+    envelopePath: TrackingCategories
+    idPath: TrackingCategoryID
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+
+  - name: tax_rates
+    request: { kind: list, path: /TaxRates }
+    readScope: accounting.settings.read
+    envelopePath: TaxRates
+    idPath: TaxType
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+
+  - name: currencies
+    request: { kind: list, path: /Currencies }
+    readScope: accounting.settings.read
+    envelopePath: Currencies
+    idPath: Code
     pagination: { kind: none }
     guards: { failOnEmpty: false }

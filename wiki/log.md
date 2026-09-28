@@ -191,3 +191,7 @@
 ## [2026-09-28] ingest | ADR 0071 A Record A Complete Listing No Longer Names Is Removed At Source
 ## [2026-09-28] remove | ADR 0071 A Watermark Is Keyed on the Request as Sent
 ## [2026-09-28] ingest | ADR 0072 A Watermark Is Keyed on the Request as Sent
+## [2026-09-28] ingest | ADR 0073 A List Its Grant Cannot Read Is Named Not Failed
+## [2026-09-28] ingest | Runbook Xero Setup
+## [2026-09-28] remove | ADR 0072 A List Its Grant Cannot Read Is Named Not Failed
+## [2026-09-28] ingest | Runbook Xero Setup

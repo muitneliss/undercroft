@@ -93,6 +93,41 @@ entities:
     }
   });
 
+  it("holds each entity of a scoped oauth2 consent to a scope that consent asks for", () => {
+    // An entity with no readScope would be read on any grant and meet the provider's 401
+    // part-way through a run; one naming a scope never asked for could never be read.
+    function scoped(readScope: string | null): string {
+      return `
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: scoped
+displayName: Scoped
+baseUrl: https://example.test
+auth: { kind: oauth2, tokenUrl: https://example.test/token, scopes: [offline_access, things.read] }
+entities:
+  - name: things
+    idPath: id
+    request: { kind: list, path: /things }
+${readScope === null ? "" : `    readScope: ${readScope}`}
+`;
+    }
+    function issues(yaml: string): readonly string[] {
+      try {
+        parseSpec(yaml);
+        return [];
+      } catch (error) {
+        if (!(error instanceof SpecError)) {
+          throw error;
+        }
+        return error.issues;
+      }
+    }
+
+    expect(issues(scoped("things.read"))).toEqual([]);
+    expect(issues(scoped(null)).some((i) => i.includes("entities.things.readScope"))).toBe(true);
+    expect(issues(scoped("other.read")).some((i) => i.includes("'other.read'"))).toBe(true);
+  });
+
   it("rejects a relation removed with a parent whose own removals nothing decides", () => {
     const broken = `
 apiVersion: undercroft.dev/v1

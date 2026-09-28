@@ -9,7 +9,7 @@
  *
  * The control plane does not read specs, so the table is a hand copy of the spec's
  * `auth.scopes`; the third test is what keeps the copy honest, and the fourth that every entity
- * the spec reads is read under a scope the copy asks for.
+ * the spec reads names, as its `readScope`, the scope Xero reads its list under.
  */
 
 import { readFileSync } from "node:fs";
@@ -40,9 +40,9 @@ const RETIRED = new Set([
 ]);
 
 /**
- * The granular read scope each Xero list is read under, as Xero's granular scope table assigns
- * them. `/Items` is also reachable under `accounting.settings.read`; this consent reaches it
- * through invoices, which it already holds.
+ * The granular read scope each Xero list is read under: the `security` of its GET in Xero's
+ * OpenAPI document (`xero_accounting.yaml`). `/Items` was held here under invoices once, which
+ * Xero's granular scope table also lists it under; live Xero answers it 401 there (#276).
  */
 const SCOPE_BY_PATH: Readonly<Record<string, string>> = {
   "/Contacts": "accounting.contacts.read",
@@ -53,11 +53,15 @@ const SCOPE_BY_PATH: Readonly<Record<string, string>> = {
   "/PurchaseOrders": "accounting.invoices.read",
   "/RepeatingInvoices": "accounting.invoices.read",
   "/LinkedTransactions": "accounting.invoices.read",
-  "/Items": "accounting.invoices.read",
   "/Payments": "accounting.payments.read",
   "/Overpayments": "accounting.payments.read",
   "/Prepayments": "accounting.payments.read",
   "/BatchPayments": "accounting.payments.read",
+  "/Items": "accounting.settings.read",
+  "/Accounts": "accounting.settings.read",
+  "/TrackingCategories": "accounting.settings.read",
+  "/TaxRates": "accounting.settings.read",
+  "/Currencies": "accounting.settings.read",
 };
 
 function xeroSpec(): ReturnType<typeof parseSpec> {
@@ -82,6 +86,7 @@ describe("the Xero consent's scopes", () => {
         "accounting.contacts.read",
         "accounting.invoices.read",
         "accounting.payments.read",
+        "accounting.settings.read",
         "offline_access",
       ].sort(),
     );
@@ -91,13 +96,17 @@ describe("the Xero consent's scopes", () => {
     expect([...asked].sort()).toEqual([...specScopes()].sort());
   });
 
-  it("covers every entity the spec reads, each by the scope Xero reads its list under", () => {
+  it("has every entity name the scope Xero reads its list under, and asks for it", () => {
     // An entity whose list is not in the table fails here as `undefined`: say which scope reads
-    // it before the spec may declare it, or its first run meets a 401 part-way through.
-    const needed = xeroSpec().entities.map((entity) => [
-      entity.name,
-      SCOPE_BY_PATH[entity.request.path],
-    ]);
-    expect(needed.filter(([, scope]) => scope === undefined || !asked.includes(scope))).toEqual([]);
+    // it before the spec may declare it. One that names another scope is read on a grant Xero
+    // will answer 401 -- which is what reading items under invoices did (#276).
+    const wrong = xeroSpec()
+      .entities.map((entity) => ({
+        entity: entity.name,
+        named: entity.readScope,
+        xero: SCOPE_BY_PATH[entity.request.path],
+      }))
+      .filter(({ named, xero }) => xero === undefined || named !== xero || !asked.includes(xero));
+    expect(wrong).toEqual([]);
   });
 });
