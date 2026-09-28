@@ -22,7 +22,7 @@ import type { XeroClient } from "../services/connections.ts";
 import type { Refresher, Transactor } from "../services/runTypes.ts";
 import { startExtractJob } from "../services/extract/job.ts";
 import { startIngestJob, startTransformJob } from "../services/jobs.ts";
-import { landRecords } from "../services/land.ts";
+import { landRecords, publishedResponse } from "../services/land.ts";
 import { claimExternal, recordExternal } from "../services/ledger.ts";
 import type { Spawn, TransformDeps } from "../services/transform.ts";
 import { failureOf } from "./errors.ts";
@@ -235,7 +235,7 @@ function registerLakeRecordsRoute(app: Hono, deps: LakeApiDeps): void {
     // If any record failed, the response is 422 -- never a 200 with a failed count, which
     // a caller checking only the status code would read as success.
     const status = result.failed > 0 ? 422 : 200;
-    return c.json({ runId: body.runId, ...result }, status);
+    return c.json(publishedResponse(body.runId, result), status);
   });
 }
 

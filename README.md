@@ -150,7 +150,8 @@ its ADR, and what exactly it accepts lives in a reference page.
   - Running it: [deployment](docs/runbook/deployment.md)
 - **Decisions:** [`docs/adr/`](docs/adr/). Each ADR records the options that were rejected
   and why.
-- **Reference:** [file formats a Gmail or Drive connection can land](docs/reference/file-formats.md).
+- **Reference:** [file formats a Gmail or Drive connection can land](docs/reference/file-formats.md),
+  [what an ingest run counts](docs/reference/run-counts.md).
 - **Design:** [the CLI's home page and sign-in](docs/design/cli-home-and-sign-in.md).
 - **Working on the code:** [CLAUDE.md](CLAUDE.md), also linked as `AGENTS.md`, is the map
   of the conventions. The rules it points to live in `.claude/rules/`.
