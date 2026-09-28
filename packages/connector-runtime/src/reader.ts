@@ -30,6 +30,7 @@ import {
 } from "@undercroft/core";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
 import { alreadyRead, checkIncremental, incrementalAt, sinceCarriedIn } from "./incremental.ts";
+import { startListing } from "./listing.ts";
 
 export interface RawRecordOut {
   readonly source: string;
@@ -95,6 +96,11 @@ export interface Reader {
   /** The watermark this read is actually carrying, or `null` for a full read. */
   readonly since: string | null;
   seen: number;
+  /**
+   * Every id the source has named so far, filtered or not, or `null` when this read could never
+   * say what the source holds. Only `run.ts` hands it on, once the read is over (`listing.ts`).
+   */
+  readonly listed: Set<string> | null;
   /** One paced, retried, loss-free fetch. Any failure becomes a ConnectorError with `seen`. */
   readonly fetchJson: (request: HttpRequest) => Promise<unknown>;
 }
@@ -216,6 +222,7 @@ export async function createReader(
     },
     since,
     seen: 0,
+    listed: startListing(entity, since),
     fetchJson: async (request: HttpRequest): Promise<unknown> =>
       await withRetry(
         async () => {
@@ -278,6 +285,9 @@ export function* emit(reader: Reader, parsed: unknown): Generator<RawRecordOut> 
   const { spec, entity, since } = reader;
   for (const record of extractRecords(entity, spec, parsed)) {
     const id = keyOf(reader, record);
+    // Before the filter, never after it: a record skipped as unchanged is still one the source
+    // holds, and leaving it out of the listing would report it removed.
+    reader.listed?.add(id);
     if (!alreadyRead(entity, since, incrementalAt(entity, record))) {
       yield outOf(reader, id, record);
     }

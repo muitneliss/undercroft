@@ -692,6 +692,13 @@
                 },
                 "additionalProperties": false,
                 "default": {}
+              },
+              "removedWhen": {
+                "type": "string",
+                "enum": [
+                  "absent",
+                  "parent-removed"
+                ]
               }
             },
             "required": [
