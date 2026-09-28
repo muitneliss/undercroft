@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.3](https://github.com/muitneliss/undercroft/compare/v1.43.2...v1.43.3) (2026-09-28)
+
+
+### Bug Fixes
+
+* **models:** deleting a model drops the table it built, or deletes nothing ([#300](https://github.com/muitneliss/undercroft/issues/300)) ([5111567](https://github.com/muitneliss/undercroft/commit/5111567fcd25c12f8caa1465a0dfed95bd8ab1cb))
+
 ## [1.43.2](https://github.com/muitneliss/undercroft/compare/v1.43.1...v1.43.2) (2026-09-28)
 
 
