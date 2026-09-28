@@ -4,8 +4,8 @@
  * Save stores what is on screen and executes nothing. Build runs dbt for this model alone,
  * from the SAVED version, and answers with the run's steps and the table's first rows read
  * as the tenant's own read-only login -- proof that a dashboard can see it, not only its
- * author. Delete removes the row; the built table stays until the next build, and the leaf
- * says so.
+ * author. Delete removes the row and drops the table it built, or does neither and says why
+ * (ADR 0077).
  *
  * The draft lives in the store, seeded from the server the first time this model is opened
  * and kept after: an author who switches to the journal to read a failed build and comes
@@ -261,9 +261,10 @@ function EditorBand({
 /**
  * Deleting the model, behind a disclosure.
  *
- * The row goes; the built table stays until the next build, and the lead says so -- a delete
- * that silently left a stale table in `analytics` would be a dashboard reading a model
- * nobody can find.
+ * The row goes with the table it built and its tests' stored rows, and the lead says so. The
+ * server deletes neither when it cannot drop the table, because a delete that left one in
+ * `analytics` was a dashboard reading a model nobody can find (ADR 0077); the refusal is shown
+ * here as it was worded.
  */
 function DeleteBand({
   tenantId,

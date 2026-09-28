@@ -42,7 +42,8 @@ These hold for the whole workflow. None of them bends because the person is in a
    on it reads. Ask again before `models.build`, even after the save was agreed.
 8. **Never delete.** This workflow does not call `models.delete`, and never removes a report
    or a dashboard. If the person wants a model gone, tell them it is a separate, destructive
-   act and let them ask for it on its own.
+   act -- it drops the table the model built and the failing rows its tests stored -- and let
+   them ask for it on its own.
 9. **Stop at a refusal.** `PERMISSION_DENIED`, `WRITES_DISABLED` and `HUMAN_REQUIRED` end the
    workflow. Tell the person what was refused and who can change it. Never work around one,
    for example by running the model's SQL through `lake.query` instead.

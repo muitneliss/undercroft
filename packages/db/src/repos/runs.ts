@@ -196,13 +196,27 @@ export async function openRun(
     if (!(error instanceof Error && error.message.includes("run_one_running"))) {
       throw error;
     }
-    const { rows } = await exec.query<{ id: string }>(
-      `SELECT id FROM ops.run
-       WHERE tenant_id = $1 AND source = $2 AND verb = $3 AND status = 'running'`,
-      [input.tenantId, input.source, input.verb],
-    );
-    return { ok: false, reason: "in-progress", runId: rows[0]?.id ?? "" };
+    return { ok: false, reason: "in-progress", runId: (await runningRun(exec, input)) ?? "" };
   }
+}
+
+/**
+ * The run in progress for this (tenant, source, verb), or `null` when there is none.
+ *
+ * A read, so it decides nothing about a race: a caller that must not overlap a run opens one
+ * (`openRun`), or makes its own write conditional on this in the same statement, as
+ * `deleteModelUnlessBuilding` does.
+ */
+export async function runningRun(
+  exec: SqlExecutor,
+  pair: { tenantId: string; source: string; verb: RunVerb },
+): Promise<string | null> {
+  const { rows } = await exec.query<{ id: string }>(
+    `SELECT id FROM ops.run
+     WHERE tenant_id = $1 AND source = $2 AND verb = $3 AND status = 'running'`,
+    [pair.tenantId, pair.source, pair.verb],
+  );
+  return rows[0]?.id ?? null;
 }
 
 export async function closeRun(

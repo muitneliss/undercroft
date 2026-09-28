@@ -354,8 +354,8 @@ export const PRIVILEGED_WRITE_TOOLS = {
   },
   deleteModel: {
     description:
-      "Delete one dbt model by name. The SQL the customer wrote goes with it, and the tables " +
-      "it built stop being refreshed.",
+      "Delete one dbt model by name, with its SQL, the table it built and the rows its tests " +
+      "stored. Refused, deleting nothing, while a build runs or another model reads its table.",
     inputSchema: inTenant.extend({ name: z.string().min(1) }),
     tier: "privileged",
     plate: "facts",

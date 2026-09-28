@@ -1009,7 +1009,8 @@ export const en = {
     sourcesHead: "sources.yml",
     macrosHead: "Macros",
     deleteHead: "Delete model",
-    deleteLead: "Remove {{name}} from the models. The built table stays until the next build.",
+    deleteLead:
+      "Delete {{name}} with the table it built and the rows its tests stored. A report reading that table will find nothing.",
     deleteConfirm: "Delete {{name}}",
     deleting: "Deleting…",
     notDeleted: "Not deleted",
@@ -1274,7 +1275,8 @@ export const en = {
         "Revoke ingest key {{id}} for {{tenantId}}. Anything posting with it is refused immediately.",
       revokeInvitation:
         "Withdraw invitation {{id}} for {{tenantId}}. That address can no longer sign in.",
-      deleteModel: "Delete the model “{{name}}” for {{tenantId}}. Its SQL goes with it.",
+      deleteModel:
+        "Delete the model “{{name}}” for {{tenantId}}. Its SQL, the table it built and the rows its tests stored go with it.",
       struck: "Discarded",
       runIngestNow: "Run an ingest of {{source}} for {{tenantId}} now.",
       setCadence: "Change {{source}}'s ingest cadence to “{{cadence}}”.",

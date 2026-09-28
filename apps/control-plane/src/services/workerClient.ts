@@ -19,6 +19,7 @@ import {
   type BuildModelResponse,
   type CredentialInput,
   type DqFailuresRequest,
+  DropModelResponse,
   type RawSearchRequest,
   type RawSearchResponse,
   type RevokeConnectionResponse,
@@ -76,6 +77,12 @@ export type TriggerOutcome =
   | { readonly ok: false; readonly reason: "in-progress"; readonly runId: string }
   | { readonly ok: false; readonly reason: WorkerFailure };
 
+/** A drop's extra answer: what reads from the model, named, so it can be dealt with. ADR 0077. */
+export type DropOutcome =
+  | { readonly ok: true; readonly value: DropModelResponse }
+  | { readonly ok: false; readonly reason: "depended-on"; readonly dependents: readonly string[] }
+  | { readonly ok: false; readonly reason: WorkerFailure };
+
 export interface WorkerClient {
   storeCredential: (input: StoreCredentialInput) => Promise<WorkerOutcome<StoreCredentialResponse>>;
   browseScope: (input: {
@@ -99,6 +106,8 @@ export interface WorkerClient {
     model: string;
     triggeredBy: string;
   }) => Promise<WorkerOutcome<BuildModelResponse>>;
+  /** Drop what a model built, before its row goes; drops nothing when it refuses. */
+  dropModel: (input: { tenantId: string; model: string }) => Promise<DropOutcome>;
   /** The rows a failed test stored, as the worker reads them for an admin. */
   dqFailures: (input: DqFailuresRequest) => Promise<WorkerOutcome<TableResult>>;
   /** SQL an author wrote, run as the tenant's read-only login. */
@@ -163,8 +172,8 @@ interface PostOptions<T> {
   readonly refusals?: ReadonlyMap<number, WorkerFailure>;
 }
 
-/** Where the worker is and how to reach it. Passed rather than closed over, so the two
- * request helpers below can live at module scope and be read on their own. */
+/** Where the worker is and how to reach it. Passed rather than closed over, so the request
+ * helpers below can live at module scope and be read on their own. */
 interface WorkerTransport {
   readonly doFetch: (input: string, init?: RequestInit) => Promise<Response>;
   readonly timeoutMs: number;
@@ -173,29 +182,55 @@ interface WorkerTransport {
 }
 
 /**
+ * One POST to the worker, bounded by a deadline, and `read`'s reading of the answer.
+ *
+ * The one place a request is sent, so every verb has the same deadline, the same token and
+ * the same answer for a worker that never replied: `unreachable`, which is worth retrying,
+ * rather than whatever `read` would have made of half an answer. `read` decides everything
+ * else -- including whether a refusal's body may be read at all (see `postTo`).
+ */
+async function exchange<T>(
+  t: WorkerTransport,
+  request: { readonly path: string; readonly body: unknown; readonly deadlineMs?: number },
+  read: (response: Response) => Promise<T>,
+): Promise<T | { ok: false; reason: "unreachable" }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), request.deadlineMs ?? t.timeoutMs);
+  try {
+    const response = await t.doFetch(`${t.baseUrl}${request.path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${t.triggerToken}` },
+      body: JSON.stringify(request.body),
+      signal: controller.signal,
+    });
+    return await read(response);
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** A refusal's envelope, for the few calls whose refusal names why. `null` when it has none. */
+type Envelope = { code?: unknown; message?: unknown; details?: unknown } | null;
+
+function envelopeOf(response: Response): Promise<Envelope> {
+  return response.json().catch(() => null) as Promise<Envelope>;
+}
+
+/**
  * One POST to the worker, with its refusals mapped onto `WorkerOutcome`. With a `schema` the
  * answer is parsed, not cast, so its defaults apply: `BrowseScopeResponse.partial` makes an
  * older worker's answer read as "whole" rather than as no answer. Unparseable is a refusal.
  */
 function postTo(t: WorkerTransport): typeof post {
-  async function post<T>(
+  function post<T>(
     path: string,
     body: unknown,
     options: PostOptions<T> = {},
   ): Promise<WorkerOutcome<T>> {
-    const { schema, refusals = REFUSAL_BY_STATUS } = options;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), options.deadlineMs ?? t.timeoutMs);
-    try {
-      const response = await t.doFetch(`${t.baseUrl}${path}`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${t.triggerToken}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+    const { schema, refusals = REFUSAL_BY_STATUS, deadlineMs = t.timeoutMs } = options;
+    return exchange(t, { path, body, deadlineMs }, async (response): Promise<WorkerOutcome<T>> => {
       if (!response.ok) {
         // The body is deliberately not read into the failure. A refusal from this endpoint
         // can echo a request that carried a live refresh token, and a control-plane log is
@@ -206,47 +241,23 @@ function postTo(t: WorkerTransport): typeof post {
       const raw: unknown = await response.json();
       const parsed = schema?.safeParse(raw) ?? { success: true as const, data: raw as T };
       return parsed.success ? { ok: true, value: parsed.data } : { ok: false, reason: "refused" };
-    } catch {
-      return { ok: false, reason: "unreachable" };
-    } finally {
-      clearTimeout(timer);
-    }
+    });
   }
-
-  /**
-   * The one call whose refusal body IS read: a 409 `run_in_progress` carries the running
-   * run's id in `details`, which is a run id and never a token. Every other status is
-   * handled as `post` handles it.
-   */
   return post;
 }
 
-/** Starting a run, whose refusal carries a runId when one is already in flight. */
+/**
+ * Starting a run: the one call whose 409 body IS read, because `run_in_progress` carries the
+ * running run's id in `details`, which is a run id and never a token.
+ */
 function triggerOn(t: WorkerTransport): typeof trigger {
-  async function trigger(input: {
-    source: string;
-    tenantId: string;
-    triggeredBy: string;
-  }): Promise<TriggerOutcome> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), t.timeoutMs);
-    try {
-      const response = await t.doFetch(`${t.baseUrl}/v1/runs/ingest`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${t.triggerToken}`,
-        },
-        body: JSON.stringify({ ...input, trigger: "manual", chain: true }),
-        signal: controller.signal,
-      });
+  function trigger(input: Parameters<WorkerClient["triggerIngest"]>[0]): Promise<TriggerOutcome> {
+    const body = { ...input, trigger: "manual", chain: true };
+    return exchange(t, { path: "/v1/runs/ingest", body }, async (response) => {
       if (response.status === CONFLICT) {
-        const body = (await response.json().catch(() => null)) as {
-          code?: unknown;
-          details?: unknown;
-        } | null;
-        if (body?.code === "run_in_progress" && Array.isArray(body.details)) {
-          return { ok: false, reason: "in-progress", runId: String(body.details[0] ?? "") };
+        const refusal = await envelopeOf(response);
+        if (refusal?.code === "run_in_progress" && Array.isArray(refusal.details)) {
+          return { ok: false, reason: "in-progress", runId: String(refusal.details[0] ?? "") };
         }
         return { ok: false, reason: "refused" };
       }
@@ -255,13 +266,8 @@ function triggerOn(t: WorkerTransport): typeof trigger {
       }
       const started = (await response.json()) as { runId: string };
       return { ok: true, runId: started.runId };
-    } catch {
-      return { ok: false, reason: "unreachable" };
-    } finally {
-      clearTimeout(timer);
-    }
+    });
   }
-
   return trigger;
 }
 
@@ -275,26 +281,12 @@ function triggerOn(t: WorkerTransport): typeof trigger {
  * reviewer can check against the endpoint it calls.
  */
 function queryOn(t: WorkerTransport): typeof query {
-  async function query(path: string, input: QueryInput): Promise<WorkerOutcome<TableResult>> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), t.timeoutMs);
-    try {
-      const response = await t.doFetch(`${t.baseUrl}${path}`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${t.triggerToken}`,
-        },
-        body: JSON.stringify(input),
-        signal: controller.signal,
-      });
+  function query(path: string, input: QueryInput): Promise<WorkerOutcome<TableResult>> {
+    return exchange(t, { path, body: input }, async (response) => {
       if (response.status === BAD_REQUEST) {
-        const body = (await response.json().catch(() => null)) as {
-          code?: unknown;
-          message?: unknown;
-        } | null;
-        if (body?.code === "query_failed" && typeof body.message === "string") {
-          return { ok: false, reason: "query-failed", message: body.message };
+        const refusal = await envelopeOf(response);
+        if (refusal?.code === "query_failed" && typeof refusal.message === "string") {
+          return { ok: false, reason: "query-failed", message: refusal.message };
         }
         return { ok: false, reason: "refused" };
       }
@@ -302,13 +294,34 @@ function queryOn(t: WorkerTransport): typeof query {
         return { ok: false, reason: "refused" };
       }
       return { ok: true, value: (await response.json()) as TableResult };
-    } catch {
-      return { ok: false, reason: "unreachable" };
-    } finally {
-      clearTimeout(timer);
-    }
+    });
   }
   return query;
+}
+
+/**
+ * The third call whose refusal body IS read: a 409 names a build in progress, or what reads from
+ * the model -- the tenant's own model names, never a value.
+ */
+function dropOn(t: WorkerTransport): typeof drop {
+  function drop(input: { tenantId: string; model: string }): Promise<DropOutcome> {
+    return exchange(t, { path: "/v1/models/drop", body: input }, async (response) => {
+      if (!response.ok) {
+        return dropRefusalOf(response.status === CONFLICT ? await envelopeOf(response) : null);
+      }
+      const parsed = DropModelResponse.safeParse(await response.json());
+      return parsed.success ? { ok: true, value: parsed.data } : { ok: false, reason: "refused" };
+    });
+  }
+  return drop;
+}
+
+/** A refused drop, read from its envelope; a status that names nothing is a plain refusal. */
+function dropRefusalOf(refusal: Envelope): DropOutcome {
+  if (refusal?.code === "relation_depended_on" && Array.isArray(refusal.details)) {
+    return { ok: false, reason: "depended-on", dependents: refusal.details.map(String) };
+  }
+  return { ok: false, reason: refusal?.code === "run_in_progress" ? "in-progress" : "refused" };
 }
 
 export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
@@ -322,6 +335,7 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
   const post = postTo(t);
   const trigger = triggerOn(t);
   const query = queryOn(t);
+  const drop = dropOn(t);
 
   return {
     storeCredential: (input) => post("/v1/connections/credential", input),
@@ -335,6 +349,7 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
     // The worker's own build deadline plus room for the rows; the default would cut a
     // build that is legitimately slow and report it as unreachable.
     buildModel: (input) => post("/v1/models/build", input, { deadlineMs: BUILD_DEADLINE_MS }),
+    dropModel: drop,
     dqFailures: (input) => post("/v1/dq/failures", input),
     runQuery: (input) => query("/v1/queries/run", input),
     readSchema: (input) => post("/v1/queries/schema", input),

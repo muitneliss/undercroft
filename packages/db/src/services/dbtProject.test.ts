@@ -2,7 +2,8 @@
  * What the generated project promises: the profile logs in as the tenant and writes to the
  * tenant's schema, the password is read from the environment and appears in no file, the
  * chosen tests become dbt's schema file, and dbt's results become the ledger's steps with
- * the failing tests counted.
+ * the failing tests counted. And what a model's build leaves behind is named exactly as dbt
+ * names it, so a model's delete finds it.
  */
 
 import { describe, expect, test as it } from "bun:test";
@@ -12,6 +13,7 @@ import {
   MACROS,
   parseRunResults,
   PASSWORD_VAR,
+  relationsOfModel,
   renderProject,
 } from "./dbtProject.ts";
 
@@ -120,5 +122,30 @@ describe("parseRunResults", () => {
   it("something that is not dbt's file yields no steps rather than a guess", () => {
     expect(parseRunResults("garbage")).toEqual({ steps: [], testsFailed: 0 });
     expect(parseRunResults({ results: "no" })).toEqual({ steps: [], testsFailed: 0 });
+  });
+});
+
+describe("relationsOfModel", () => {
+  it("names a long test's failing-rows table and a long model's working copies as dbt does", () => {
+    // The hashed name is dbt 1.9's `synthesize_generic_test_names` for this test, computed
+    // outside this module: the first 30 characters of `not_null_<model>`, then the md5 of the
+    // full 74-character name. A name dbt did not write is a table the delete would never find.
+    const model = "fct_customer_lifetime_value_by_region";
+    expect(
+      relationsOfModel({
+        name: model,
+        tests: { columns: { first_purchase_country_code: ["not_null"], region: ["unique"] } },
+      }).dq,
+    ).toEqual([
+      "not_null_fct_customer_lifetime_fe86bf5d797738089f46e3e192d7e930",
+      `unique_${model}_region`,
+    ]);
+
+    const longest = "a".repeat(63);
+    expect(relationsOfModel({ name: longest, tests: { columns: {} } }).analytics).toEqual([
+      longest,
+      `${"a".repeat(54)}__dbt_tmp`,
+      `${"a".repeat(51)}__dbt_backup`,
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 /**
- * The customer's dbt models: listed with their last build, read in full, saved, deleted.
+ * The customer's dbt models: listed with their last build, read in full, saved, deleted
+ * together with what they built.
  *
  * Save stores and executes nothing. That is the whole of this module's promise: a model
  * saved with a syntax error is a row in `app.model`, not a broken table in `analytics_x`,
@@ -22,7 +23,7 @@ import {
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
-  deleteModel,
+  deleteModelUnlessBuilding,
   getModel,
   insertModel,
   type LastBuild,
@@ -178,19 +179,52 @@ export function dqFailures(
   return worker.dqFailures(input);
 }
 
-/** Remove the model. `false` when there was none; the handler decides that is NOT_FOUND. */
+export type RemoveOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "not-found" | "in-progress" | "not-dropped" }
+  | { readonly ok: false; readonly reason: "depended-on"; readonly dependents: readonly string[] };
+
+/**
+ * Remove the model AND what it built, or neither. ADR 0077.
+ *
+ * The data goes first, through the worker, as the tenant's dbt login -- the only one that may
+ * drop what it built. The row goes only after the worker has said the relations are gone, so
+ * a worker that is down, refuses, or fails part-way leaves the model exactly as it was, and
+ * the person is told it was NOT deleted and can try again. The other order was the defect: a
+ * row deleted first said "deleted" while every table it built stayed readable, and left
+ * nothing on screen to try again with.
+ *
+ * The row's delete is conditional on no build running, in the same statement, because a
+ * build that opened after the drop re-creates what was dropped; then nothing is deleted and
+ * the person is asked to wait. The audit row names what was dropped, never what it held.
+ */
 export async function remove(
   exec: SqlExecutor,
+  worker: WorkerClient,
   input: { tenantId: string; name: string; actor: string },
-): Promise<boolean> {
-  const removed = await deleteModel(exec, input.tenantId, input.name);
-  if (removed) {
-    await recordAudit(exec, {
-      tenantId: input.tenantId,
-      actor: input.actor,
-      action: "models.delete",
-      detail: JSON.stringify({ name: input.name }),
-    });
+): Promise<RemoveOutcome> {
+  if ((await getModel(exec, input.tenantId, input.name)) === null) {
+    return { ok: false, reason: "not-found" };
   }
-  return removed;
+  const drop = await worker.dropModel({ tenantId: input.tenantId, model: input.name });
+  if (!drop.ok) {
+    if (drop.reason === "depended-on") {
+      return drop;
+    }
+    return { ok: false, reason: drop.reason === "in-progress" ? "in-progress" : "not-dropped" };
+  }
+  const deleted = await deleteModelUnlessBuilding(exec, input.tenantId, input.name);
+  if (deleted !== "deleted") {
+    return { ok: false, reason: deleted === "building" ? "in-progress" : "not-found" };
+  }
+  await recordAudit(exec, {
+    tenantId: input.tenantId,
+    actor: input.actor,
+    action: "models.delete",
+    detail: JSON.stringify({
+      name: input.name,
+      dropped: drop.value.dropped.map((r) => `${r.schema}.${r.name}`),
+    }),
+  });
+  return { ok: true };
 }

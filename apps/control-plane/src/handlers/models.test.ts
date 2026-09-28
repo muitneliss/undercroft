@@ -2,8 +2,8 @@
  * Models over tRPC: who may write one, and what a taken name is told.
  *
  * The role gate is pinned from both sides -- a member is refused, an admin is answered --
- * and the one worded refusal on this router, a name already in use, arrives in the
- * caller's language.
+ * and the worded refusals on this router arrive in the caller's language: a name already in
+ * use, and a delete that did not happen because what the model built could not be dropped.
  */
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
@@ -272,11 +272,34 @@ describe("models.check", () => {
 describe("models.delete", () => {
   it("removes an existing model; a name that is not there is NOT_FOUND", async () => {
     const admin = await seedMember("a@example.test", "admin");
-    const api = caller(admin, "a@example.test");
+    const api = caller(admin, "a@example.test", "vi", { worker: new InMemoryWorkerClient() });
     await api.models.save({ ...DRAFT, create: true });
 
     expect(await api.models.delete({ tenantId: TENANT, name: "stg_deals" })).toEqual({ ok: true });
     const got = await refusal(() => api.models.delete({ tenantId: TENANT, name: "stg_deals" }));
     expect(got.code).toBe("NOT_FOUND");
+  });
+
+  it("with nothing to drop the tables, nothing is deleted and the reader is told so", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const api = caller(admin, "a@example.test", "en", { worker: null });
+    await api.models.save({ ...DRAFT, create: true });
+
+    const got = await refusal(() => api.models.delete({ tenantId: TENANT, name: "stg_deals" }));
+    expect(got.code).toBe("PRECONDITION_FAILED");
+    expect(got.message).toContain("was not deleted");
+    expect((await api.models.get({ tenantId: TENANT, name: "stg_deals" })).sql).toBe("select 1");
+  });
+
+  it("a model another reads from is a CONFLICT naming the reader, and stays", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().dependedOnBy(["fct_pipeline"]);
+    const api = caller(admin, "a@example.test", "en", { worker });
+    await api.models.save({ ...DRAFT, create: true });
+
+    const got = await refusal(() => api.models.delete({ tenantId: TENANT, name: "stg_deals" }));
+    expect(got.code).toBe("CONFLICT");
+    expect(got.message).toContain("fct_pipeline");
+    expect((await api.models.list({ tenantId: TENANT })).map((m) => m.name)).toEqual(["stg_deals"]);
   });
 });

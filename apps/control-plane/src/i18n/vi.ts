@@ -162,6 +162,15 @@ export const vi = {
       "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
     buildNotStarted:
       "Không dựng được mô hình. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    /**
+     * The row is kept whenever the tables it built were not dropped (ADR 0077), so the
+     * sentence says the model is still there: "not deleted" alone would leave the reader
+     * wondering which half happened.
+     */
+    modelNotDeleted:
+      "Chưa xoá mô hình {{name}}: dịch vụ xử lý chưa gỡ được bảng mà mô hình đã dựng, nên mô hình vẫn còn nguyên. Hãy thử lại sau ít phút.",
+    modelDependedOn:
+      "Chưa xoá mô hình {{name}}: {{dependents}} đang đọc dữ liệu từ bảng của nó. Hãy xoá các mô hình đó, hoặc sửa để chúng không đọc {{name}} nữa rồi dựng lại, sau đó thử lại.",
     dqNotRead: "Không đọc được các dòng không đạt kiểm tra của bước này.",
     /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
     queryFailed: "Câu truy vấn không chạy được: {{message}}",

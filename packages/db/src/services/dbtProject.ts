@@ -24,6 +24,8 @@
  * per model or test, with the failing-row count a test reported. Pure, so a fixture pins it.
  */
 
+import { createHash } from "node:crypto";
+
 import type { RunStep } from "../repos/runs.ts";
 
 /** The environment variable the generated profile reads the tenant's password from. */
@@ -311,6 +313,70 @@ export function renderProject(input: ProjectInput): Record<string, string> {
     files[`models/${model.name}.sql`] = model.sql;
   }
   return files;
+}
+
+/** NAMEDATALEN - 1, and the length dbt-postgres fits every relation name it makes into. */
+const MAX_RELATION_NAME = 63;
+/** dbt 1.9: a generic test name this long or longer is truncated and hashed. */
+const LONG_TEST_NAME = 64;
+/** dbt 1.9: how much of `<kind>_<model>` a truncated test name keeps before its hash. */
+const TEST_NAME_KEPT = 30;
+/** The working copies dbt-postgres 1.9 renames through when it replaces a relation. */
+const WORKING_SUFFIXES = ["__dbt_tmp", "__dbt_backup"] as const;
+
+/**
+ * Where a build of this project puts what one model makes, named the way dbt names it.
+ *
+ * `analytics` is the model's own relation in the tenant's analytics schema, plus the two
+ * working copies dbt-postgres swaps through when it replaces one (`make_relation_with_suffix`:
+ * the name cut to fit, then the suffix). The swap commits before the backup is dropped, so a
+ * build killed between the two leaves `<name>__dbt_backup` holding the previous rows, and only
+ * the next build of the same model would have cleared it.
+ *
+ * `dq` is where each of the model's declared tests stores its failing rows, which the project
+ * above sends to `dq_<slug>` with `+store_failures`. dbt 1.9 names a generic test
+ * `<kind>_<model>_<column>` (`synthesize_generic_test_names`), and when that is 64 characters
+ * or more it keeps the first 30 of `<kind>_<model>` and appends the md5 of the full name --
+ * the only form in which Postgres would not cut the name itself.
+ *
+ * Here beside `renderProject` because it is a statement about what that rendering produces;
+ * a change to how tests are rendered is a change to this, and they should be read together.
+ * Names only: whether each exists, and whose it is when two models' names could collide, is
+ * the caller's to decide against the catalogue.
+ */
+export function relationsOfModel(model: Pick<ProjectModel, "name" | "tests">): {
+  readonly analytics: string[];
+  readonly dq: string[];
+} {
+  const analytics = [
+    model.name,
+    ...WORKING_SUFFIXES.map(
+      (suffix) => `${model.name.slice(0, MAX_RELATION_NAME - suffix.length)}${suffix}`,
+    ),
+  ];
+  const dq = Object.entries(model.tests.columns).flatMap(([column, kinds]) =>
+    kinds.map((kind) => testRelationName(kind, model.name, column)),
+  );
+  return { analytics, dq };
+}
+
+/**
+ * The prefix every failing-rows relation of a `kind` test on `model` starts with, hashed or
+ * not: a truncated name keeps `<kind>_<model>` whole when that is 30 characters or fewer.
+ */
+export function testRelationPrefix(kind: string, model: string): string {
+  return `${kind}_${model}_`;
+}
+
+function testRelationName(kind: string, model: string, column: string): string {
+  // dbt replaces anything outside [0-9a-zA-Z_] in an argument; a column that passed the
+  // contract's identifier rule has nothing to replace, and this keeps the rule exact anyway.
+  const full = `${kind}_${model}_${column.replaceAll(/[^0-9a-zA-Z_]+/gu, "_")}`;
+  if (full.length < LONG_TEST_NAME) {
+    return full;
+  }
+  const hash = createHash("md5").update(full, "utf8").digest("hex");
+  return `${`${kind}_${model}`.slice(0, TEST_NAME_KEPT)}_${hash}`;
 }
 
 interface RunResultsNode {

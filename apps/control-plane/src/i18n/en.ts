@@ -92,6 +92,10 @@ export const en = {
       "A build is already running for this customer. Wait for it to finish, then try again.",
     buildNotStarted:
       "The model could not be built. The processing service did not answer; try again in a few minutes.",
+    modelNotDeleted:
+      "The model {{name}} was not deleted: the processing service could not drop the table it built, so the model is still here. Try again in a few minutes.",
+    modelDependedOn:
+      "The model {{name}} was not deleted: {{dependents}} read from its table. Delete those models, or change them so they no longer read {{name}} and build them again, then try again.",
     dqNotRead: "The failing rows for this step could not be read.",
     queryFailed: "The query did not run: {{message}}",
     queryNotRun:

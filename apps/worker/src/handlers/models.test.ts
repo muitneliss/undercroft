@@ -2,7 +2,9 @@
  * The build verb end to end: a model is built as the tenant, the run lands in the ledger
  * with its steps, the model's columns are recorded, and the first rows come back as the
  * tenant's BI login -- which is what proves a dashboard can see what the author built.
- * And the dq verb: the rows a failed test stored, readable only where dbt put them.
+ * And the dq verb: the rows a failed test stored, readable only where dbt put them. And the
+ * drop verb: what a model built goes, as the login that built it, and nothing another model
+ * owns or reads from goes with it.
  *
  * dbt is the fake from the transform suite: it does to the database what the real one
  * would, as the login the real one would be, and writes dbt's own results file.
@@ -14,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createStampSource, TestClock } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { getModel, saveModel } from "@undercroft/db/repos";
+import { getModel, openRun, provisionTenantRoles, saveModel } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
@@ -235,6 +237,136 @@ describe("POST /v1/dq/failures", () => {
       uniqueId: "model.undercroft.stg_deals",
     });
     expect(model.status).toBe(404);
+  });
+});
+
+describe("POST /v1/models/drop", () => {
+  withDatabase();
+
+  /** What exists in the tenant's two schemas, as `schema.name`. Read as the superuser. */
+  async function relations(): Promise<string[]> {
+    const { rows } = await db.asSuperuser((tx) =>
+      tx.query<{ name: string }>(
+        `SELECT n.nspname || '.' || c.relname AS name FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname IN ('analytics_case_1', 'dq_case_1') AND c.relkind IN ('r', 'v', 'm')
+         ORDER BY 1`,
+      ),
+    );
+    return rows.map((r) => r.name);
+  }
+
+  /** Relations as dbt leaves them: created by the tenant's own dbt login, which owns them. */
+  async function built(sql: string): Promise<void> {
+    await provisionTenantRoles(db, TENANT);
+    await db.asRole("undercroft_dbt_case_1", (tx) => tx.exec(sql));
+  }
+
+  it("drops the built table and its tests' failing rows, so no login can read them", async () => {
+    const app = api();
+    await post(app, "/v1/models/build", { tenantId: TENANT, model: "stg_deals", triggeredBy: "" });
+    expect(await relations()).toEqual([
+      "analytics_case_1.stg_deals",
+      "dq_case_1.not_null_stg_deals_deal_name",
+    ]);
+
+    const res = await post(app, "/v1/models/drop", { tenantId: TENANT, model: "stg_deals" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      dropped: [
+        { schema: "analytics_case_1", name: "stg_deals", kind: "table" },
+        { schema: "dq_case_1", name: "not_null_stg_deals_deal_name", kind: "table" },
+      ],
+    });
+    expect(await relations()).toEqual([]);
+  });
+
+  it("a model never built drops nothing and succeeds, provisioned or not", async () => {
+    const unprovisioned = await post(api(), "/v1/models/drop", {
+      tenantId: TENANT,
+      model: "stg_deals",
+    });
+    expect(unprovisioned.status).toBe(200);
+    expect(await unprovisioned.json()).toEqual({ dropped: [] });
+
+    await provisionTenantRoles(db, TENANT);
+    const provisioned = await post(api(), "/v1/models/drop", {
+      tenantId: TENANT,
+      model: "stg_deals",
+    });
+    expect(await provisioned.json()).toEqual({ dropped: [] });
+  });
+
+  it("takes only its own: not a model whose name it prefixes, and a view as a view", async () => {
+    await db.asSuperuser((tx) =>
+      saveModel(tx, TENANT, {
+        name: "stg",
+        sql: "select 1 as id",
+        tests: { columns: { id: ["not_null"] } },
+        updatedBy: "u-1",
+      }),
+    );
+    await built(`
+      CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id;
+      CREATE VIEW analytics_case_1.stg AS SELECT 1 AS id;
+      CREATE TABLE analytics_case_1.stg__dbt_backup AS SELECT 1 AS id;
+      CREATE TABLE dq_case_1.not_null_stg_id AS SELECT NULL::int AS id;
+      CREATE TABLE dq_case_1.unique_stg_email AS SELECT 'x' AS email;
+      CREATE TABLE dq_case_1.unique_stg_deals_deal_id AS SELECT 1 AS deal_id;
+      CREATE TABLE dq_case_1.not_null_stg_deals_deal_name AS SELECT 2 AS deal_id`);
+
+    const res = await post(api(), "/v1/models/drop", { tenantId: TENANT, model: "stg" });
+    expect(res.status).toBe(200);
+    // Neither `unique_*` table is a declared test any more, so each is read by its name:
+    // `unique_stg_email` is `stg`'s, and `unique_stg_deals_deal_id` the longer `stg_deals`'s.
+    expect(await res.json()).toEqual({
+      dropped: [
+        { schema: "analytics_case_1", name: "stg", kind: "view" },
+        { schema: "analytics_case_1", name: "stg__dbt_backup", kind: "table" },
+        { schema: "dq_case_1", name: "not_null_stg_id", kind: "table" },
+        { schema: "dq_case_1", name: "unique_stg_email", kind: "table" },
+      ],
+    });
+    expect(await relations()).toEqual([
+      "analytics_case_1.stg_deals",
+      "dq_case_1.not_null_stg_deals_deal_name",
+      "dq_case_1.unique_stg_deals_deal_id",
+    ]);
+  });
+
+  it("refuses, dropping nothing, while another model's view reads from it", async () => {
+    await built(`
+      CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id;
+      CREATE TABLE dq_case_1.not_null_stg_deals_deal_name AS SELECT 2 AS deal_id;
+      CREATE VIEW analytics_case_1.fct_pipeline AS SELECT deal_id FROM analytics_case_1.stg_deals`);
+
+    const res = await post(api(), "/v1/models/drop", { tenantId: TENANT, model: "stg_deals" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: "relation_depended_on",
+      details: ["fct_pipeline"],
+    });
+    expect(await relations()).toEqual([
+      "analytics_case_1.fct_pipeline",
+      "analytics_case_1.stg_deals",
+      "dq_case_1.not_null_stg_deals_deal_name",
+    ]);
+  });
+
+  it("refuses, dropping nothing, while a build of the tenant is running", async () => {
+    await built("CREATE TABLE analytics_case_1.stg_deals AS SELECT 1 AS deal_id");
+    await openRun(db, {
+      id: "run-building",
+      tenantId: TENANT,
+      source: "*",
+      verb: "transform",
+      trigger: "schedule",
+    });
+
+    const res = await post(api(), "/v1/models/drop", { tenantId: TENANT, model: "stg_deals" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "run_in_progress", details: ["run-building"] });
+    expect(await relations()).toEqual(["analytics_case_1.stg_deals"]);
   });
 });
 
