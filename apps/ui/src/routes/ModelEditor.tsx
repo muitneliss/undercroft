@@ -28,6 +28,7 @@ import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
+import { ON_TABLE } from "@/lib/questionDraft.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -142,6 +143,8 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
   }
 
   const isAdmin = tenant.data.role === "admin";
+  // A viewer may only run saved questions, and before a successful build there is no table.
+  const queryable = tenant.data.role !== "viewer" && model.data.lastBuild?.status === "success";
 
   return (
     <div className="sheet">
@@ -152,6 +155,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
         name={name}
         draft={held}
         isAdmin={isAdmin}
+        queryable={queryable}
         locale={locale}
         actions={{ save, build, busy }}
       />
@@ -180,12 +184,17 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
  * Save stores what is on screen and executes nothing; Build runs dbt for this model alone,
  * from the SAVED version -- which is why it is disabled while the draft is dirty and says so
  * rather than quietly building something else.
+ *
+ * The model's SQL is a dbt template, which only a build can run; what can be read without
+ * one is the table the last build made. So the door to Reports opens a SQL question on that
+ * table, and is shown only once a build has succeeded.
  */
 function EditorBand({
   tenantId,
   name,
   draft,
   isAdmin,
+  queryable,
   locale,
   actions,
 }: {
@@ -193,20 +202,31 @@ function EditorBand({
   name: string;
   draft: ModelDraft;
   isAdmin: boolean;
+  queryable: boolean;
   locale: "vi" | "en";
   actions: ModelActions;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const setModelSql = useUiStore((state) => state.setModelSql);
   const { save, build } = actions;
+  const onTable = new URLSearchParams({ [ON_TABLE]: name });
 
   return (
     <div className="body stack">
-      <p className="prose">
+      <div className="row">
         <Link className="plate plate--small" to={divisionPath("models", tenantId)}>
           {t("models.backToList")}
         </Link>
-      </p>
+        {queryable ? (
+          <Link
+            className="plate plate--small"
+            title={t("models.queryInReportsHint")}
+            to={`${divisionPath("reports", tenantId)}/questions/new?${onTable.toString()}`}
+          >
+            {t("models.queryInReports")}
+          </Link>
+        ) : null}
+      </div>
       <h1>{name}</h1>
 
       {isAdmin ? null : <p className="note">{t("models.readOnlyNote")}</p>}
