@@ -65,7 +65,7 @@ const MAX_IDS: Readonly<Record<BatchRead["bodyTemplate"], number>> = {
  * `partition` is the list partition the page came from, and the batch read is sent with it: the
  * records it names live there, and HubSpot answers an archived record asked for without
  * `archived=true` as "not found" -- which this module accepts as a deletion, so without it every
- * archived record would quietly go unlanded (ADR 0074).
+ * archived record would quietly go unlanded (ADR 0075).
  */
 export async function* rereadPage(
   reader: Reader,

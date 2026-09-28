@@ -122,6 +122,46 @@ describe("batch-from reads a relation against ids from another entity", () => {
     expect(records.map((r) => r.sourceUpdatedAt)).toEqual([null]);
   });
 
+  it("reads a record the source paged to its last page, and lands one it did not page as sent", async () => {
+    // HubSpot's v4 batch read answers a page of a record's links and says `paging.next.after`
+    // when there are more (ADR 0075). Landed as answered, d1 would hold its first page alone.
+    const spec = relationSpec(10);
+    function link(id: string): unknown {
+      return {
+        toObjectId: id,
+        associationTypes: [{ category: "HUBSPOT_DEFINED", typeId: 67, label: null }],
+      };
+    }
+    const fetcher = new InMemoryFetcher()
+      .on("POST", `${BASE}/associations/batch/read`, {
+        body: {
+          status: "COMPLETE",
+          results: [
+            { from: { id: "d1" }, to: [link("l1")], paging: { next: { after: "p2" } } },
+            { from: { id: "d2" }, to: [link("l9")] },
+          ],
+        },
+      })
+      .on("POST", `${BASE}/associations/batch/read`, {
+        body: { status: "COMPLETE", results: [{ from: { id: "d1" }, to: [link("l2")] }] },
+      });
+
+    const records = await collect(
+      readEntity(spec, relation(spec), {
+        fetcher,
+        clock: new TestClock(),
+        sourceIds: ["d1", "d2"],
+      }),
+    );
+
+    expect(JSON.parse(fetcher.calls[1]?.body ?? "null")).toEqual({
+      inputs: [{ id: "d1", after: "p2" }],
+    });
+    const [paged, whole] = records.map((r) => JSON.parse(r.payloadText));
+    expect(paged).toEqual({ from: { id: "d1" }, to: [link("l1"), link("l2")] });
+    expect(whole).toEqual({ from: { id: "d2" }, to: [link("l9")] });
+  });
+
   it("a relation record with no id at its idPath is still fatal", async () => {
     const spec = relationSpec(10);
     const fetcher = new InMemoryFetcher().on("POST", `${BASE}/associations/batch/read`, {

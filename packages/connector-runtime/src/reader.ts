@@ -23,6 +23,7 @@ import {
   getPath,
   getStringPath,
   isoInstant,
+  type Pacer,
   parseLossless,
   type RetryPolicy,
   systemClock,
@@ -193,15 +194,10 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Build the reader for one entity: its pacer, its retry policy and its auth headers. */
-export async function createReader(
-  spec: ConnectorSpec,
-  entity: ConnectorEntity,
-  ctx: RunContext,
-): Promise<Reader> {
-  const clock = ctx.clock ?? systemClock;
+/** The entity's pacing, or the spec's when it declares none. */
+function pacerFor(spec: ConnectorSpec, entity: ConnectorEntity, clock: Clock): Pacer {
   const rateLimit = entity.rateLimit ?? spec.defaults.rateLimit;
-  const pacer = createPacer(
+  return createPacer(
     {
       minIntervalMs: rateLimit.minIntervalMs,
       ...(rateLimit.requestsPerMinute === undefined
@@ -213,6 +209,16 @@ export async function createReader(
     },
     clock,
   );
+}
+
+/** Build the reader for one entity: its pacer, its retry policy and its auth headers. */
+export async function createReader(
+  spec: ConnectorSpec,
+  entity: ConnectorEntity,
+  ctx: RunContext,
+): Promise<Reader> {
+  const clock = ctx.clock ?? systemClock;
+  const pacer = pacerFor(spec, entity, clock);
   const policy = retryPolicy(spec);
   checkIncremental(spec, entity);
 

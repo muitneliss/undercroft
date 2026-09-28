@@ -151,7 +151,7 @@ describe("a closed run's authoritative record", () => {
   });
 
   it("a list HubSpot refused on its first request is not granted, and granted in HubSpot", () => {
-    // Started, then refused (ADR 0074): the plate must not read as a read that stopped here, and
+    // Started, then refused (ADR 0075): the plate must not read as a read that stopped here, and
     // "reconnect" would send the reader to a screen that cannot tick a private app's scope.
     const detail = runDetail({
       status: "ok",

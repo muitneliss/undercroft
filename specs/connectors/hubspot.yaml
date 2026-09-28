@@ -29,12 +29,12 @@
 # Every list is the objects API's (or the owners' and pipelines' own), paged by `after`, never
 # the search endpoint -- which stops at 10,000 results for any query. So no list here has a cap,
 # and there is deliberately no `failOnExactCount`: a portal with exactly 10,000 line items is a
-# portal, not a truncation (ADR 0074, issue 279).
+# portal, not a truncation (ADR 0075, issue 279).
 #
 # Each entity names the scope a HubSpot private app needs to read it (`readScope`), and
 # `docs/runbook/hubspot-setup.md` lists the same. A token without one is refused on that list's
 # first request with a 403 whose category is `MISSING_SCOPES`; the run names the list as not
-# granted, with the scope, and reads the rest (`grantRefusal`, ADR 0074).
+# granted, with the scope, and reads the rest (`grantRefusal`, ADR 0075).
 apiVersion: undercroft.dev/v1
 kind: Connector
 id: hubspot
@@ -128,7 +128,7 @@ entities:
   # Every link below is read the same way and keeps this one's name for what it always was.
   # Each asks about every record its parent's read NAMED, not only the ones that changed, so a
   # link read added after its parent's watermark learns every record's links on its first run
-  # (ADR 0074). v4 rather than v3: v3 answers a contact's primary company alone, and no kind or
+  # (ADR 0075). v4 rather than v3: v3 answers a contact's primary company alone, and no kind or
   # label on any link; v4 answers every link with its `associationTypes` -- category, typeId and
   # label. A record with more links than one answer carries is read to its last page.
   - name: associations
@@ -198,7 +198,7 @@ entities:
 
   # Live and archived both, as one stream: a line item still names the product it was sold as
   # after that product is archived, and HubSpot lists archived records only when asked with
-  # `archived=true` (`partitions`, ADR 0074). Each record says which it is in its own `archived`.
+  # `archived=true` (`partitions`, ADR 0075). Each record says which it is in its own `archived`.
   # No watermark: whether archiving moves `hs_lastmodifieddate` is not documented, and a product
   # list is short, so it is read whole every run and an unchanged product lands as unchanged.
   - name: products

@@ -51,13 +51,14 @@ export async function* readBatch(
   ids: readonly string[],
 ): AsyncGenerator<RawRecordOut, boolean> {
   const url = buildUrl(reader.spec.baseUrl, request.path, {});
-  const post = (body: string): Promise<unknown> =>
-    reader.fetchJson({
+  function post(body: string): Promise<unknown> {
+    return reader.fetchJson({
       url,
       method: "POST",
       headers: { ...reader.headers, "content-type": "application/json" },
       body,
     });
+  }
 
   for (let offset = 0; offset < ids.length; offset += request.chunkSize) {
     const chunk = ids.slice(offset, offset + request.chunkSize);
@@ -96,7 +97,9 @@ async function wholeRecord(
   const rest: unknown[] = [];
   while (after !== null) {
     const parsed = await post(renderRecordPageBody(template, id, after));
-    const page = extractRecords(entity, spec, parsed).find((record) => keyOf(reader, record) === id);
+    const page = extractRecords(entity, spec, parsed).find(
+      (record) => keyOf(reader, record) === id,
+    );
     if (page === undefined) {
       throw new ConnectorError(
         spec.id,
@@ -136,7 +139,7 @@ function* emitPage(reader: Reader, records: readonly unknown[]): Generator<RawRe
  * no next one. An entity with no `partitions` is one partition with nothing laid over its query.
  *
  * One partition to its end before the next, so a partition that fails leaves no later partition
- * read and the entity's listing is never a union with a hole in it (ADR 0074).
+ * read and the entity's listing is never a union with a hole in it (ADR 0075).
  */
 export async function* readPages(
   reader: Reader,

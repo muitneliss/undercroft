@@ -172,7 +172,7 @@ export async function listProperties(
   // A token that may read none of the objects is the reconnect it always was. One that may read
   // some has its other objects left out of the listing -- the run names each of them as not
   // granted, with the scope to add -- rather than a picker that offers nothing at all because the
-  // private app was never given quotes (ADR 0074).
+  // private app was never given quotes (ADR 0075).
   if (listed === 0 && firstRefusal !== null) {
     raiseForByteStatus(firstRefusal.request, firstRefusal.response);
   }

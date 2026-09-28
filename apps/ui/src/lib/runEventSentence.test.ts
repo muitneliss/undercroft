@@ -95,7 +95,7 @@ describe("eventSentence", () => {
   });
 
   it("tells a HubSpot reader to grant the scope in HubSpot, where a private app's scopes are ticked", () => {
-    // Reconnecting a pasted token cannot add a scope to it (ADR 0074).
+    // Reconnecting a pasted token cannot add a scope to it (ADR 0075).
     const skipped = event("entity_not_granted", { scope: "crm.objects.quotes.read" }, "quotes");
     expect(eventSentence(en, "en", skipped, "hubspot")).toBe(
       "quotes was not read: the HubSpot private app's token lacks crm.objects.quotes.read. Give the private app crm.objects.quotes.read in HubSpot; every other kind of data is still read.",

@@ -42,7 +42,7 @@ const Auth = z.discriminatedUnion("kind", [
      *
      * Named, never arbitrary, like a body template: what counts as "not granted" is a reading of
      * one provider's error body, and a spec is configuration, not a parser. Declaring it makes
-     * `readScope` required on every entity, so a refusal always has a scope to name. ADR 0074.
+     * `readScope` required on every entity, so a refusal always has a scope to name. ADR 0075.
      */
     grantRefusal: z.enum(["hubspot-missing-scopes"]).optional(),
   }),
@@ -197,7 +197,7 @@ function partitionKey(partition: Readonly<Record<string, string>>): string {
  * `archived=true`), and a line item still names the archived product it was sold as, as a company
  * still names the deactivated owner who looked after it. Read as two entities, a record that is archived
  * would move from one stream to the other and every model would have to put the two back
- * together; read as one, it stays one record whose payload says it is archived. ADR 0074.
+ * together; read as one, it stays one record whose payload says it is archived. ADR 0075.
  *
  * Each partition is read to its end before the next begins, so the entity's listing is a union of
  * complete listings, and `removedWhen: absent` means a record no partition names any more. A
@@ -292,7 +292,7 @@ const Entity = z.object({
    * which nobody records -- a HubSpot private app's scopes are ticked in HubSpot. Required when
    * the auth declares a `grantRefusal`, so the run can name what to grant even when the source's
    * refusal names nothing, and so the runbook's scope table has one place to agree with (ADR
-   * 0074).
+   * 0075).
    */
   readScope: z.string().min(1).optional(),
   removedWhen: RemovedWhen.optional(),

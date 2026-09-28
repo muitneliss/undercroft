@@ -113,7 +113,7 @@ function readSentence(
 
 /**
  * A list the run did not read because the grant lacks its scope: a recorded grant judged before
- * the run (ADR 0073), or a pasted token its source refused on the list's first request (ADR 0074).
+ * the run (ADR 0073), or a pasted token its source refused on the list's first request (ADR 0075).
  *
  * Names the scope, because granting it is the repair. How it is granted depends on how the source
  * is connected: a consent is given again by reconnecting, while a HubSpot private app's scopes

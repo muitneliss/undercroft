@@ -197,3 +197,5 @@
 ## [2026-09-28] ingest | Runbook Xero Setup
 ## [2026-09-28] ingest | ADR 0074 The Card Judges A Grant By The Lists It Reads
 ## [2026-09-28] ingest | Runbook Xero Setup
+## [2026-09-28] ingest | ADR 0075 HubSpot Reads Its Commerce Objects And Names A List Its Token Cannot Read
+## [2026-09-28] ingest | Runbook HubSpot Setup

@@ -17,7 +17,7 @@
  *   A 403 with any other body is not read as a missing permission;
  * - only on the list's FIRST request. A refusal after a page has been answered is a credential
  *   that changed under a running read, and the records already landed make it a partial read,
- *   which is a failure, not a list that was never readable. ADR 0074.
+ *   which is a failure, not a list that was never readable. ADR 0075.
  */
 
 import type { ConnectorEntity, ConnectorSpec } from "@undercroft/contracts";
@@ -43,9 +43,11 @@ export class EntityNotGranted extends ConnectorError {
 }
 
 const FORBIDDEN = 403;
-const MISSING_SCOPES = "MISSING_SCOPES";
 
-/** HubSpot names the scopes in `errors[].context`, under a key ending `Scopes` (`missingScopes` in its OpenAPI example). */
+/**
+ * Where HubSpot names the scopes: `errors[].context`, under a key ending `Scopes`. Its OpenAPI
+ * example spells it `missingScopes`; which key live answers use is not documented.
+ */
 const SCOPES_KEY = /Scopes$/u;
 
 /**
@@ -85,7 +87,7 @@ function hubspotMissingScopes(
   } catch {
     return null;
   }
-  if (getPath(body, "category") !== MISSING_SCOPES) {
+  if (getPath(body, "category") !== "MISSING_SCOPES") {
     return null;
   }
   const named = namedScopes(body);
@@ -101,21 +103,20 @@ function hubspotMissingScopes(
 /** Every scope HubSpot's error body names, in the order it names them, once each. */
 function namedScopes(body: unknown): string[] {
   const errors = getPath(body, "errors");
-  const scopes = new Set<string>();
-  for (const error of Array.isArray(errors) ? errors : []) {
-    const context = getPath(error, "context");
-    if (typeof context !== "object" || context === null) {
-      continue;
-    }
-    for (const [key, value] of Object.entries(context)) {
-      if (SCOPES_KEY.test(key) && Array.isArray(value)) {
-        for (const scope of value) {
-          if (typeof scope === "string" && scope !== "") {
-            scopes.add(scope);
-          }
-        }
-      }
-    }
+  const named = (Array.isArray(errors) ? errors : []).flatMap((error) =>
+    scopesIn(getPath(error, "context")),
+  );
+  return [...new Set(named)];
+}
+
+/** The scopes one error's `context` names, under any key ending `Scopes`. */
+function scopesIn(context: unknown): string[] {
+  if (typeof context !== "object" || context === null) {
+    return [];
   }
-  return [...scopes];
+  return Object.entries(context).flatMap(([key, value]) =>
+    SCOPES_KEY.test(key) && Array.isArray(value)
+      ? value.filter((scope): scope is string => typeof scope === "string" && scope !== "")
+      : [],
+  );
 }

@@ -10,7 +10,8 @@
  * A listing is collected only when:
  *
  * - the entity declares `removedWhen: absent` on a `list` request -- nothing else pays for
- *   holding the ids, which is the memory a streaming read gave up on purpose (ADR 0033);
+ *   holding the ids, which is the memory a streaming read gave up on purpose (ADR 0033), except
+ *   a parent a relation reads against, which asks to keep them (`startNaming`, ADR 0075);
  * - the SOURCE is asked for all of it. A `client-filter` watermark does not narrow the listing,
  *   it pages the whole source and only skips landing what has not changed, so the id of every
  *   skipped record is in the set -- the rule Drive's `seenIds` learned the hard way, since
@@ -47,7 +48,7 @@ function listsWholeSource(entity: ConnectorEntity, since: string | null): boolea
  * (`keepIds`), which asks about every record the read NAMED rather than only the ones it landed:
  * a record a client filter skipped as unchanged still has links, and a relation added to a spec
  * after its parent's watermark was set would otherwise only ever learn the links of records that
- * changed since (ADR 0074). What the relation is handed is only ever what the read named, so a
+ * changed since (ADR 0075). What the relation is handed is only ever what the read named, so a
  * watermark sent to the source still narrows it, exactly as before.
  */
 export function startNaming(

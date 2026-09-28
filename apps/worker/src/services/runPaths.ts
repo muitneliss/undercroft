@@ -24,20 +24,16 @@ import {
   type RunContext,
   requestKey,
 } from "@undercroft/connector-runtime";
-import {
-  type ConnectorEntity,
-  type ConnectorSpec,
-  sourceKind,
-  type UngrantedRead,
-} from "@undercroft/contracts";
+import { type ConnectorEntity, type ConnectorSpec, sourceKind } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type CollectResult, runGoogleCollect } from "./google/collect.ts";
-import { GrantTooNarrow } from "./grant.ts";
 import type { LandSummary, RefusalWriter } from "./landing.ts";
+import { NotGranted } from "./notGranted.ts";
 import { createRecordSink } from "./recordSink.ts";
+import { parentOf, RelationIds } from "./relationIds.ts";
 import { settleRemovals } from "./removals.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken, RunStopped } from "./runTypes.ts";
@@ -195,7 +191,7 @@ async function* keepingEnd<T, R>(
  * otherwise. Named rather than landed: a record the client filter skipped as unchanged still has
  * links, and a relation handed only the landed ids would learn nothing of them. That was harmless
  * while the only relation had been read since its deals were; a relation added to the spec later
- * would never learn the links of any record that has not changed since (ADR 0074).
+ * would never learn the links of any record that has not changed since (ADR 0075).
  *
  * ## The watermark advances here, and only by getting to the end
  *
@@ -288,64 +284,28 @@ async function ingestEntity(
 }
 
 /**
- * The entities some `batch-from` relation actually reads against.
+ * Read one entity, or name it as not granted when its source refuses the token on the first
+ * request. `true` when it was read.
  *
- * Computed from the spec before the first request, so an entity nobody references never
- * builds an id list at all. Keeping every entity's ids to the end of the run was a second
- * copy of the source held for the benefit of a relation that, in both shipped specs,
- * references one entity out of four -- and it grew with the source, which is the shape this
- * whole change exists to remove.
+ * Only the source's own "this token may not read this list" is caught (`EntityNotGranted`,
+ * ADR 0075). Every other failure -- a 403 of any other kind included -- fails the run as it
+ * always did.
  */
-function referencedEntities(entities: readonly ConnectorEntity[]): ReadonlySet<string> {
-  return new Set(
-    entities.flatMap((entity) =>
-      entity.request.kind === "batch-from" ? [entity.request.entity] : [],
-    ),
-  );
-}
-
-/**
- * The lists a run did not read because the grant does not reach them, and the scope each lacks.
- *
- * Two ways in, one record of it. A recorded grant is judged before the first request
- * (`partitionByGrant`, ADR 0073). A grant that was never recorded -- a HubSpot private-app token
- * -- is judged by the source, on the list's first request, and the runtime raises
- * {@link EntityNotGranted} only when the source's answer says so in so many words (ADR 0074).
- * Either way the list gets one `entity_not_granted` warning naming the scope, because the
- * reader's question is which lists and what granting would add, and the Journal words it.
- *
- * Nothing goes into the ledger's entities: a list refused on its first request landed nothing,
- * and a row saying `0` would read as a list the source answered empty. The run otherwise goes
- * on, because the grant still reads every other list, and a run that failed on their account
- * would lose them too.
- */
-class NotGranted {
-  readonly #scopes = new Map<string, string>();
-  readonly #journal: RunJournal;
-
-  constructor(journal: RunJournal) {
-    this.#journal = journal;
-  }
-
-  record(entity: string, scope: string): void {
-    this.#scopes.set(entity, scope);
-    this.#journal.warn("entity_not_granted", { entity, scope });
-  }
-
-  /** The scope the entity was refused for, or `undefined` when it was not refused. */
-  scopeOf(entity: string): string | undefined {
-    return this.#scopes.get(entity);
-  }
-
-  /**
-   * Refuse a run that read nothing, when that is because nothing was granted: "no list was
-   * readable" is not a success, and the error names the scopes granting would add.
-   */
-  refuseWhenNothingRead(input: { source: string; tenantId: string }, read: number): void {
-    if (read === 0 && this.#scopes.size > 0) {
-      const scopes = [...new Set(this.#scopes.values())].join(", ");
-      throw new GrantTooNarrow(input.source, input.tenantId, scopes);
+async function readOrName(
+  run: EntityRun,
+  entity: ConnectorEntity,
+  ctx: RunContext,
+  seams: { readonly relations: RelationIds; readonly notGranted: NotGranted },
+): Promise<boolean> {
+  try {
+    seams.relations.keep(entity.name, await ingestEntity(run, entity, ctx));
+    return true;
+  } catch (error) {
+    if (!(error instanceof EntityNotGranted)) {
+      throw error;
     }
+    seams.notGranted.record(entity.name, error.scopes.join(", "));
+    return false;
   }
 }
 
@@ -357,15 +317,8 @@ export async function runSpecIngest(
 ): Promise<void> {
   const { spec, ctx, entities, ungranted } = await openSpecRun(deps, input);
   const run: EntityRun = { deps, input, spec, ledger, journal };
-  const notGranted = new NotGranted(journal);
-  for (const { entity, scope } of ungranted) {
-    notGranted.record(entity, scope);
-  }
-
-  const referenced = referencedEntities(entities);
-  // Ids per entity, so a `batch-from` relation can read against the entity it references --
-  // and ONLY for the entities one does.
-  const idsByEntity = new Map<string, readonly string[]>();
+  const notGranted = new NotGranted(journal, ungranted);
+  const relations = new RelationIds(entities);
   let read = 0;
 
   for (const entity of entities) {
@@ -374,33 +327,19 @@ export async function runSpecIngest(
     if (deps.stop?.aborted === true) {
       throw new RunStopped();
     }
-    const parent = entity.request.kind === "batch-from" ? entity.request.entity : null;
     // A relation hangs off records its parent could not read. Asked with no ids it would land
-    // nothing and close as a relation HubSpot answered empty, so it is named with its parent's
-    // scope instead: granting that is what would let it be read.
+    // nothing and close as a relation the source answered empty, so it is named with its
+    // parent's scope instead: granting that is what would let it be read.
+    const parent = parentOf(entity);
     const parentScope = parent === null ? undefined : notGranted.scopeOf(parent);
-    if (parentScope !== undefined) {
+    if (parentScope === undefined) {
+      const readIt = await readOrName(run, entity, relations.contextFor(entity, ctx), {
+        relations,
+        notGranted,
+      });
+      read += readIt ? 1 : 0;
+    } else {
       notGranted.record(entity.name, parentScope);
-      continue;
-    }
-    const entityCtx: RunContext = {
-      ...ctx,
-      ...(parent === null ? {} : { sourceIds: idsByEntity.get(parent) ?? [] }),
-      ...(referenced.has(entity.name) ? { keepIds: true } : {}),
-    };
-    try {
-      const named = await ingestEntity(run, entity, entityCtx);
-      read += 1;
-      if (referenced.has(entity.name)) {
-        idsByEntity.set(entity.name, [...(named ?? [])]);
-      }
-    } catch (error) {
-      // Only the source's own "this token may not read this list", on the list's first request.
-      // Every other failure -- a 403 of any other kind included -- fails the run as it always did.
-      if (!(error instanceof EntityNotGranted)) {
-        throw error;
-      }
-      notGranted.record(entity.name, error.scopes.join(", "));
     }
   }
   notGranted.refuseWhenNothingRead(input, read);
