@@ -28,3 +28,15 @@ tasks:
       additionally needs UNDERCROFT_S3_BUCKET_RAW and its credentials.
     cmds:
       - bun run extract:accuracy
+
+  semantic-probe:
+    # A measurement like extract-accuracy, for the same reason it is not in ci:*: it answers
+    # with numbers, and it needs a database and a provider key the offline gate must not have.
+    # It SENDS one tenant's document text to TypeSafe, so it takes the tenant explicitly and
+    # never defaults one. apps/worker/src/semanticProbeCli.ts says what it measures and why.
+    desc: >-
+      Ask Jev about a sample of one tenant's document text and write the cost and answers to
+      data/ (gitignored). Needs UNDERCROFT_POSTGRES_DSN and UNDERCROFT_TYPESAFE_API_KEY.
+      Usage: task db:semantic-probe -- --tenant CASE-0042 [--limit 200] [--multi 50] [--max-chars 32000]
+    cmds:
+      - bun run semantic:probe -- {{.CLI_ARGS}}

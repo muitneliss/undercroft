@@ -233,7 +233,8 @@ export interface ExtractionScan {
 /**
  * A reproducible sample of what has been extracted, for measuring whether it is right.
  *
- * READ-ONLY, AND THE ONLY STATEMENT HERE THAT SELECTS `text`. The column is granted to this
+ * READ-ONLY, AND ONE OF THE TWO STATEMENTS HERE THAT SELECT `text` (`sampleTextByDigest`
+ * below is the other, for the same kind of measurement). The column is granted to this
  * role and to a tenant's own dbt login and to nobody else -- `undercroft_app` is column-scoped
  * out of it precisely so a control-plane handler can never become a place a customer's
  * contracts leak from (`pii.md`). This runs in the worker, as the worker, and what it hands
@@ -293,6 +294,122 @@ export async function scanExtractions(
     lakeKey: row.lake_key,
     text: row.text,
   }));
+}
+
+/** One distinct text of a tenant, cut to the length a measurement will send. */
+export interface DigestText {
+  readonly source: string;
+  /** One document holding these bytes; which one is fixed by the key order, not chosen. */
+  readonly documentId: string;
+  readonly digest: string;
+  /** How many of the tenant's live documents hold these same bytes. */
+  readonly documents: number;
+  /** Characters of the whole extracted text, before `maxChars` cut it. */
+  readonly chars: number;
+  /** The extractor itself stopped reading (`MAX_TEXT_CHARS`), not this cut. */
+  readonly extractorTruncated: boolean;
+  readonly text: string;
+}
+
+/** A tenant's readable texts counted by digest, for pricing all of them from a sample. */
+export interface DigestTotals {
+  readonly digests: number;
+  readonly documents: number;
+  /** Characters a measurement would send for every digest, each cut to `maxChars`. */
+  readonly cutChars: number;
+}
+
+/**
+ * The live, readable documents of one tenant: those with a text and not tombstoned.
+ *
+ * `method IS NOT NULL AND chars > 0` because a document nobody could read has nothing to ask a
+ * model about; its reason is already on its row.
+ */
+const READABLE = `
+    FROM raw.document_text t
+    JOIN raw.documents d
+      ON d.source = t.source
+     AND d.tenant_id = t.tenant_id
+     AND d.document_id = t.document_id
+   WHERE t.tenant_id = $1
+     AND d.deleted_at IS NULL
+     AND t.method IS NOT NULL
+     AND t.chars > 0`;
+
+/**
+ * A reproducible sample of one tenant's texts, ONE ROW PER DISTINCT DIGEST.
+ *
+ * By digest because the catalogue repeats itself: one Gmail attachment quoted down a reply
+ * chain is a document per message over the same bytes (see the module note). A model asked
+ * about each copy is paid again for an answer it already gave, and a sample of documents
+ * would weight whatever gets forwarded most. Ordered by `md5` of the digest for the reason
+ * `scanExtractions` orders by `md5` of the key: the same sample twice, uncorrelated with time.
+ *
+ * The cut happens in SQL (`left`), so a million-character extraction never crosses the wire
+ * to be thrown away.
+ */
+export async function sampleTextByDigest(
+  exec: SqlExecutor,
+  {
+    tenantId,
+    limit,
+    maxChars,
+  }: { readonly tenantId: string; readonly limit: number; readonly maxChars: number },
+): Promise<DigestText[]> {
+  const { rows } = await exec.query<{
+    source: string;
+    document_id: string;
+    source_sha256: string;
+    documents: string;
+    chars: number;
+    truncated: boolean;
+    text: string;
+  }>(
+    `SELECT source, document_id, source_sha256, documents, chars, truncated, text
+       FROM (SELECT DISTINCT ON (t.source_sha256)
+                    t.source, t.document_id, t.source_sha256, t.chars, t.truncated,
+                    count(*) OVER (PARTITION BY t.source_sha256) AS documents,
+                    left(t.text, $3) AS text
+               ${READABLE}
+              ORDER BY t.source_sha256, t.source, t.document_id) AS distinct_texts
+      ORDER BY md5(source_sha256)
+      LIMIT $2`,
+    [tenantId, limit, maxChars],
+  );
+
+  return rows.map((row) => ({
+    source: row.source,
+    documentId: row.document_id,
+    digest: row.source_sha256,
+    // `count(*)` is int8, which the pool's pinned parsers return as a string. A count, not an
+    // amount.
+    documents: Number.parseInt(row.documents, 10),
+    chars: row.chars,
+    extractorTruncated: row.truncated,
+    text: row.text,
+  }));
+}
+
+/** How much a tenant's readable texts add up to, counted the way `sampleTextByDigest` samples. */
+export async function totalTextByDigest(
+  exec: SqlExecutor,
+  { tenantId, maxChars }: { readonly tenantId: string; readonly maxChars: number },
+): Promise<DigestTotals> {
+  const { rows } = await exec.query<{ digests: string; documents: string; cut_chars: string }>(
+    `SELECT count(*) AS digests,
+            COALESCE(sum(documents), 0) AS documents,
+            COALESCE(sum(least(chars, $2)), 0) AS cut_chars
+       FROM (SELECT t.source_sha256, max(t.chars) AS chars, count(*) AS documents
+               ${READABLE}
+              GROUP BY t.source_sha256) AS distinct_texts`,
+    [tenantId, maxChars],
+  );
+  const [row] = rows;
+  return {
+    digests: Number.parseInt(row?.digests ?? "0", 10),
+    documents: Number.parseInt(row?.documents ?? "0", 10),
+    cutChars: Number.parseInt(row?.cut_chars ?? "0", 10),
+  };
 }
 
 /**

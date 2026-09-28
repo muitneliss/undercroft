@@ -48,8 +48,8 @@ a Makefile, an npm script tree, or a bag of `scripts/*.sh`.
 - **Namespaces are operations, not features**: `dev:*` (`.taskfiles/dev/`) the local stack,
   `build:*` (`.taskfiles/artifacts/`) artifacts, `ci:*` (`.taskfiles/ci/`) the gate and its
   individual steps, `cd:*` (`.taskfiles/cd/`) `scripts/dokploy.ts`, `db:*`
-  (`.taskfiles/db/`) DSN-parameterised migrate/invite and the extraction-accuracy
-  measurement for a database that isn't the local one, `obs:*` (`.taskfiles/obs/`)
+  (`.taskfiles/db/`) DSN-parameterised migrate/invite and the extraction-accuracy and
+  semantic-probe measurements for a database that isn't the local one, `obs:*` (`.taskfiles/obs/`)
   `scripts/observe.ts`, reading a trace, its logs and a container's log. A
   task that doesn't fit one of these cleanly is a sign the namespace list is
   incomplete, not a reason to force it sideways — raise it rather than guessing.
