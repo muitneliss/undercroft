@@ -57,18 +57,49 @@ export const modelsRouter = router({
       return { ok: true };
     }),
 
+  /**
+   * Delete a model and drop what it built, or do neither (ADR 0077). Without a worker nothing
+   * can drop the tables, so nothing is deleted: a "deleted" over data still readable is the
+   * one answer this must never give. A build running and a model another one reads from are
+   * CONFLICTs the person can act on; a worker that did not drop is a precondition they cannot.
+   */
   delete: requireRole("admin")
     .input(z.object({ name: ModelName }))
     .mutation(async ({ ctx, input }) => {
-      const removed = await models.remove(ctx.exec, {
+      const t = messages(ctx.locale);
+      if (ctx.worker === null) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: t("error.modelNotDeleted", { name: input.name }),
+        });
+      }
+      const outcome = await models.remove(ctx.exec, ctx.worker, {
         tenantId: ctx.tenantId,
         name: input.name,
         actor: ctx.user.email,
       });
-      if (!removed) {
-        throw new TRPCError({ code: "NOT_FOUND" });
+      if (outcome.ok) {
+        return { ok: true };
       }
-      return { ok: true };
+      switch (outcome.reason) {
+        case "not-found":
+          throw new TRPCError({ code: "NOT_FOUND" });
+        case "in-progress":
+          throw new TRPCError({ code: "CONFLICT", message: t("error.buildInProgress") });
+        case "depended-on":
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: t("error.modelDependedOn", {
+              name: input.name,
+              dependents: outcome.dependents.join(", "),
+            }),
+          });
+        default:
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: t("error.modelNotDeleted", { name: input.name }),
+          });
+      }
     }),
 
   /**

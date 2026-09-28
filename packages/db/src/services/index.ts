@@ -13,8 +13,10 @@ export {
   PASSWORD_VAR,
   type ProjectInput,
   type ProjectModel,
+  relationsOfModel,
   renderProject,
   SOURCES_YML,
+  testRelationPrefix,
 } from "./dbtProject.ts";
 export { grantExpiryFor } from "./grantExpiry.ts";
 export {

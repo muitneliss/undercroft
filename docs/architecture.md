@@ -209,6 +209,7 @@ API also accepts a tenant's ingest key.
 | `POST /v1/runs/extract`                                  | Kestra                     | Reads text out of landed documents                                               |
 | `POST /v1/runs/transform`                                | tooling                    | Runs `dbt build` for one tenant                                                  |
 | `POST /v1/models/build`, `POST /v1/dq/failures`          | control plane              | Builds one model; returns a failed test's stored rows                            |
+| `POST /v1/models/drop`                                   | control plane              | Drops what one model built, before its row is deleted                            |
 | `POST /v1/queries/run`, `/schema`                        | control plane              | Runs report SQL as the tenant's BI login                                         |
 | `POST /v1/queries/raw/run`, `/raw/schema`, `/raw/search` | control plane              | Runs Lake Console SQL and lake search as the tenant's dbt login                  |
 | `POST /v1/connections/credential`, `/browse`, `/revoke`  | control plane              | Seals a consented credential, browses a provider, revokes a grant                |
@@ -392,7 +393,9 @@ A tenant's models are rows in `app.model`. For each build the worker renders a t
 project with `raw.records` and `raw.documents` as sources, plus the macros it ships, such as
 `parse_amount`. It then runs `dbt build` as a subprocess, connected as that tenant's dbt login
 ([ADR 0007](adr/0007-dbt-runs-as-a-subprocess-in-the-worker.md)). Models materialise as tables in
-`analytics_slug`, and test failures are stored in `dq_slug`.
+`analytics_slug`, and test failures are stored in `dq_slug`. Deleting a model drops what it built
+in both, as the same login, before its row goes; if the drop does not happen, the row stays
+([ADR 0077](adr/0077-deleting-a-model-drops-what-it-built.md)).
 
 Reports are first-party ([ADR 0020](adr/0020-bi-is-first-party-metabase-leaves-the-stack.md)). A
 question is a saved definition plus a chart. It compiles to SQL in which every identifier and

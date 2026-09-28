@@ -2,7 +2,8 @@
  * What the models service promises: a save stores SQL and tests and executes nothing, a
  * create refuses a name already in use without touching the row, the list carries each
  * model's last build from the ledger, one tenant's models are never another's, and the
- * trail names the model and never its SQL.
+ * trail names the model and never its SQL. A removal drops what the model built first and
+ * keeps the row whenever that did not happen or a build could bring it back.
  *
  * Runs as `undercroft_app`, so a missing grant on `app.model` fails here.
  */
@@ -11,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { closeRun, openRun, recordSteps } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
+import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 import { get, list, remove, save } from "./models.ts";
 
 const TENANT = "CASE-0042";
@@ -201,7 +203,7 @@ describe("list", () => {
 });
 
 describe("remove", () => {
-  it("removes the model and says so; a second removal says there was nothing", async () => {
+  async function seeded(): Promise<void> {
     await save(db, {
       ...ACTOR,
       tenantId: TENANT,
@@ -210,13 +212,46 @@ describe("remove", () => {
       tests: { columns: {} },
       create: true,
     });
+  }
+  const input = { tenantId: TENANT, name: "stg_deals", actor: ACTOR.actor };
 
-    expect(await remove(db, { tenantId: TENANT, name: "stg_deals", actor: ACTOR.actor })).toBe(
-      true,
-    );
+  it("drops what the model built, then removes it; a second removal finds nothing", async () => {
+    await seeded();
+    const worker = new InMemoryWorkerClient();
+
+    expect(await remove(db, worker, input)).toEqual({ ok: true });
+    expect(worker.dropped).toEqual([{ tenantId: TENANT, model: "stg_deals" }]);
     expect(await get(db, TENANT, "stg_deals")).toBeNull();
-    expect(await remove(db, { tenantId: TENANT, name: "stg_deals", actor: ACTOR.actor })).toBe(
-      false,
+
+    expect(await remove(db, worker, input)).toEqual({ ok: false, reason: "not-found" });
+    expect(worker.dropped).toHaveLength(1);
+  });
+
+  it("a worker that did not drop the tables leaves the model exactly where it was", async () => {
+    await seeded();
+
+    const outcome = await remove(db, new InMemoryWorkerClient().failing("unreachable"), input);
+
+    expect(outcome).toEqual({ ok: false, reason: "not-dropped" });
+    expect((await get(db, TENANT, "stg_deals"))?.sql).toBe(SQL);
+  });
+
+  it("a build that opened after the drop keeps the row, since it would build the model again", async () => {
+    await seeded();
+    await db.asSuperuser((tx) =>
+      openRun(tx, {
+        id: "t-running",
+        tenantId: TENANT,
+        source: "*",
+        verb: "transform",
+        trigger: "schedule",
+      }),
     );
+
+    expect(await remove(db, new InMemoryWorkerClient(), input)).toEqual({
+      ok: false,
+      reason: "in-progress",
+    });
+    expect(await get(db, TENANT, "stg_deals")).not.toBeNull();
   });
 });

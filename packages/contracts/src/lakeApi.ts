@@ -59,6 +59,9 @@ export type LandRecordsResponse = z.infer<typeof LandRecordsResponse>;
  * pasted token the source rejected, a thing that does not exist, and everything else --
  * which is answered with no message at all, because an unexpected error's text is the one
  * place a row value can leak into a response.
+ *
+ * `relation_depended_on` is a model's drop refused because a relation another model owns reads
+ * from one it would drop; `details` names the dependents (ADR 0077).
  */
 export const ApiError = z.object({
   code: z.enum([
@@ -78,6 +81,7 @@ export const ApiError = z.object({
     "credential_rejected",
     "account_mismatch",
     "query_failed",
+    "relation_depended_on",
     "not_found",
     "internal_error",
   ]),

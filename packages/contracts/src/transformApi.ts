@@ -57,6 +57,31 @@ export const BuildModelResponse = z.object({
 });
 export type BuildModelResponse = z.infer<typeof BuildModelResponse>;
 
+/**
+ * Drop what a model's builds left in the tenant's schemas, before its row is deleted.
+ *
+ * The worker answers with every relation it dropped, which is empty for a model that was
+ * never built -- a real answer, not a missing one. It refuses rather than drops while a build
+ * of the tenant is running (409 `run_in_progress`), and while a relation another model owns
+ * reads from one of them (409 `relation_depended_on`, the dependents' names in `details`).
+ * ADR 0077.
+ */
+export const DropModelRequest = z.object({
+  tenantId: z.string().min(1),
+  model: ModelName,
+});
+export type DropModelRequest = z.infer<typeof DropModelRequest>;
+
+export const DroppedRelation = z.object({
+  schema: z.string(),
+  name: z.string(),
+  kind: z.enum(["table", "view", "materialized view"]),
+});
+export type DroppedRelation = z.infer<typeof DroppedRelation>;
+
+export const DropModelResponse = z.object({ dropped: z.array(DroppedRelation) });
+export type DropModelResponse = z.infer<typeof DropModelResponse>;
+
 export const DqFailuresRequest = z.object({
   tenantId: z.string().min(1),
   runId: z.string().min(1),

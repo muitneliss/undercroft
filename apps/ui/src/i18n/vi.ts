@@ -1203,7 +1203,7 @@ export const vi = {
     macrosHead: "Macro",
     deleteHead: "Xoá mô hình",
     deleteLead:
-      "Xoá {{name}} khỏi danh sách mô hình. Bảng đã dựng vẫn còn cho đến lần dựng tiếp theo.",
+      "Xoá {{name}} cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu. Báo cáo đang đọc bảng này sẽ không còn dữ liệu.",
     deleteConfirm: "Xoá {{name}}",
     deleting: "Đang xoá…",
     notDeleted: "Chưa xoá được",
@@ -1504,7 +1504,7 @@ export const vi = {
       revokeInvitation:
         "Thu hồi lời mời {{id}} của khách hàng {{tenantId}}. Địa chỉ đó sẽ không đăng nhập được nữa.",
       deleteModel:
-        "Xoá mô hình “{{name}}” của khách hàng {{tenantId}}. Câu SQL của mô hình sẽ mất theo.",
+        "Xoá mô hình “{{name}}” của khách hàng {{tenantId}}. Câu SQL, bảng mô hình đã dựng và các dòng kiểm thử nó đã lưu sẽ mất theo.",
       struck: "Đã bỏ",
       runIngestNow: "Chạy đồng bộ nguồn {{source}} cho khách hàng {{tenantId}} ngay bây giờ.",
       setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",

@@ -83,6 +83,36 @@ describe("reading a worker refusal", () => {
   });
 });
 
+describe("reading a refused model drop", () => {
+  /** Answers every request with a 409 carrying this envelope, as the worker's drop does. */
+  function refusingWith(envelope: unknown): WorkerClient {
+    return createHttpWorkerClient({
+      baseUrl: "https://worker.test",
+      triggerToken: "t",
+      fetch: () => Promise.resolve(Response.json(envelope, { status: 409 })),
+    });
+  }
+  const input = { tenantId: "CASE-0042", model: "stg_deals" };
+
+  it("names what reads from the model, and tells that from a build in progress", async () => {
+    // The one refusal body read on this call. Both are 409s and want different sentences: the
+    // person must learn WHICH models to deal with, or that they only have to wait.
+    const depended = await refusingWith({
+      code: "relation_depended_on",
+      message: "other relations read from this model",
+      details: ["fct_pipeline"],
+    }).dropModel(input);
+    const building = await refusingWith({
+      code: "run_in_progress",
+      message: "transform is already running",
+      details: ["run-1"],
+    }).dropModel(input);
+
+    expect(depended).toEqual({ ok: false, reason: "depended-on", dependents: ["fct_pipeline"] });
+    expect(building).toEqual({ ok: false, reason: "in-progress" });
+  });
+});
+
 describe("reading a browse answer from a worker of another build", () => {
   it("a worker built before `partial` and `kind` is read as what it was: whole, unclassified", async () => {
     // Worker and control plane deploy separately, so for a while one answers the other in an

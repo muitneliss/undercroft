@@ -10,6 +10,7 @@
  */
 
 import type { SqlExecutor } from "../executor.ts";
+import { SOURCE_OF_TRANSFORM } from "./runs.ts";
 
 export interface ModelTestsJson {
   readonly columns: Record<string, readonly string[]>;
@@ -112,17 +113,40 @@ export async function saveModel(
   );
 }
 
-/** Remove the model. `false` when there was none to remove. */
-export async function deleteModel(
+export type DeleteOutcome = "deleted" | "absent" | "building";
+
+/**
+ * Remove the model, unless a build of the tenant is running: then nothing is removed.
+ *
+ * One statement, because the guard is only worth anything atomic with the delete. A build
+ * reads every model of the tenant when it starts, so a row deleted under a running build
+ * leaves that build to re-create the relation the caller has just dropped -- a table nobody
+ * can find, which is the defect ADR 0077 closes. Checked in application code, a build could
+ * open between the check and the delete. `absent` is a model that was not there to remove;
+ * while a build runs the answer is `building` whether or not it was.
+ */
+export async function deleteModelUnlessBuilding(
   exec: SqlExecutor,
   tenantId: string,
   name: string,
-): Promise<boolean> {
-  const { rows } = await exec.query<{ name: string }>(
-    "DELETE FROM app.model WHERE tenant_id = $1 AND name = $2 RETURNING name",
-    [tenantId, name],
+): Promise<DeleteOutcome> {
+  const { rows } = await exec.query<{ deleted: boolean; building: boolean }>(
+    `WITH building AS (
+       SELECT 1 FROM ops.run
+       WHERE tenant_id = $1 AND source = $3 AND verb = 'transform' AND status = 'running'
+     ), gone AS (
+       DELETE FROM app.model
+       WHERE tenant_id = $1 AND name = $2 AND NOT EXISTS (SELECT 1 FROM building)
+       RETURNING name
+     )
+     SELECT EXISTS (SELECT 1 FROM gone) AS deleted, EXISTS (SELECT 1 FROM building) AS building`,
+    [tenantId, name, SOURCE_OF_TRANSFORM],
   );
-  return rows.length === 1;
+  const [row] = rows;
+  if (row?.building === true) {
+    return "building";
+  }
+  return row?.deleted === true ? "deleted" : "absent";
 }
 
 /** Record what a build found the model's relation to have. The one column the worker writes. */

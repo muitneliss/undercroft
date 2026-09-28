@@ -45,7 +45,8 @@ export {
 } from "./ingestKeys.ts";
 export { type CursorKey, decodeCursor, encodeCursor } from "./cursor.ts";
 export {
-  deleteModel,
+  type DeleteOutcome,
+  deleteModelUnlessBuilding,
   getModel,
   insertModel,
   type LastBuild,
@@ -94,6 +95,7 @@ export {
   type RunStep,
   type RunTrigger,
   type RunVerb,
+  runningRun,
   SOURCE_OF_TRANSFORM,
   stepsFor,
 } from "./runs.ts";

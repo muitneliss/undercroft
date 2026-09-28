@@ -205,3 +205,5 @@
 ## [2026-09-28] ingest | Runbook Google Ingestion Setup
 ## [2026-09-28] ingest | ADR 0076 A Harvest Records What It Left Behind
 ## [2026-09-28] ingest | Architecture
+## [2026-09-28] ingest | ADR 0077 Deleting a Model Drops What It Built
+## [2026-09-28] ingest | Architecture

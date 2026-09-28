@@ -19,6 +19,7 @@ import type {
 import type { SqlExecutor } from "@undercroft/db";
 import { upsertConnection } from "@undercroft/db/repos";
 import type {
+  DropOutcome,
   QueryInput,
   SearchInput,
   StoreCredentialInput,
@@ -40,11 +41,14 @@ export class InMemoryWorkerClient implements WorkerClient {
   readonly revoked: { source: string; tenantId: string }[] = [];
   readonly triggered: { source: string; tenantId: string; triggeredBy: string }[] = [];
   readonly built: { tenantId: string; model: string; triggeredBy: string }[] = [];
+  /** Every model whose relations this double was asked to drop, and did. */
+  readonly dropped: { tenantId: string; model: string }[] = [];
   /** Which listing each browse asked for: the one fact about a browse only its caller decides. */
   readonly browsed: { source: string; tenantId: string; kind: BrowseListing }[] = [];
   #choices: BrowseScopeResponse = { items: [], partial: [] };
   #failWith: WorkerFailure | null = null;
   #runningAs: string | null = null;
+  #dependents: readonly string[] = [];
   #exec: SqlExecutor | null = null;
 
   /** Answer every trigger with "already running as `runId`", the worker's 409. */
@@ -172,6 +176,28 @@ export class InMemoryWorkerClient implements WorkerClient {
         preview: { columns: [], rows: [], truncated: false },
       },
     });
+  }
+
+  /** Refuse every drop because these relations read from the model, as the worker's 409 does. */
+  dependedOnBy(dependents: readonly string[]): this {
+    this.#dependents = dependents;
+    return this;
+  }
+
+  /**
+   * Drop nothing and say so. What the worker drops is decided against a real catalogue and is
+   * proven there (`apps/worker/src/handlers/models.test.ts`); this models the answers a caller
+   * has to handle -- dropped, refused with the dependents' names, or not reached at all.
+   */
+  dropModel(input: { tenantId: string; model: string }): Promise<DropOutcome> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    if (this.#dependents.length > 0) {
+      return Promise.resolve({ ok: false, reason: "depended-on", dependents: this.#dependents });
+    }
+    this.dropped.push(input);
+    return Promise.resolve({ ok: true, value: { dropped: [] } });
   }
 
   dqFailures(): Promise<WorkerOutcome<TableResult>> {
