@@ -1,17 +1,17 @@
 ---
-title: ADR 0071 A Watermark Is Keyed on the Request as Sent
+title: ADR 0072 A Watermark Is Keyed on the Request as Sent
 type: source
 date: 2026-09-28
 tags: []
-source: docs/adr/0071-a-watermark-is-keyed-on-the-request-as-sent.md
-source_path: docs/adr/0071-a-watermark-is-keyed-on-the-request-as-sent.md
-source_hash: 42f00e55c53a359b800416de9f28a8f4bad02f91453c956ffc52b73dc512925f
+source: docs/adr/0072-a-watermark-is-keyed-on-the-request-as-sent.md
+source_path: docs/adr/0072-a-watermark-is-keyed-on-the-request-as-sent.md
+source_hash: fe3c17a894211ad313d17c4686722732e85120cda17d6fed95e209d6e08d572c
 ingested: 2026-09-28
 ---
 
-# ADR 0071 A Watermark Is Keyed on the Request as Sent
+# ADR 0072 A Watermark Is Keyed on the Request as Sent
 
-# ADR 0071 A Watermark Is Keyed on the Request as Sent, Declared or Scoped
+# ADR 0072 A Watermark Is Keyed on the Request as Sent, Declared or Scoped
 
 Status: Accepted, 2026-09-28. Supersedes, in part, the "`''` for an entity read exactly as its spec
 declares it" decision of [[ADR 0052 A HubSpot Scope Adds to the Spec's Properties and a Widened Read Starts a New Watermark]].

@@ -15,4 +15,4 @@ export {
   laterStamp,
   requestKey,
 } from "./incremental.ts";
-export { type RawRecordOut, type RunContext, readEntity } from "./run.ts";
+export { type RawRecordOut, type ReadEnd, type RunContext, readEntity } from "./run.ts";

@@ -77,7 +77,7 @@ defaults:
 # it (/Quotes, /PurchaseOrders, /RepeatingInvoices among the ones with lines) are left as they
 # are; quotes already arrive with 4 decimals. Changing a query changes the entity's request key,
 # so the first run after it finds no watermark for that list and reads it whole, which is what
-# repairs the documents read before (ADR 0071).
+# repairs the documents read before (ADR 0072).
 entities:
   - name: contacts
     request: { kind: list, path: /Contacts, query: { pageSize: "100" } }

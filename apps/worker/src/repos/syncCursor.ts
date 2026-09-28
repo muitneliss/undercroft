@@ -10,7 +10,7 @@
  * question was answered, and records it never asked about sit below it. So the read takes the format and the request key the caller is
  * about to use and answers `null` when the stored row was written under others, which costs one
  * honest full read and cannot be forgotten by a caller: there is no way to ask for the row
- * without saying what you would do with it. ADR 0034, and ADR 0052 and ADR 0071 for the
+ * without saying what you would do with it. ADR 0034, and ADR 0052 and ADR 0072 for the
  * request.
  *
  * This deliberately does NOT mirror `writeCursor`'s `GREATEST`. That guard exists because two
@@ -34,7 +34,7 @@ import type { StreamIdentity } from "./rawRecords.ts";
 /**
  * What a watermark is only meaningful under: the dialect it is written in, and the request it
  * was read with -- `requestKey` from `@undercroft/connector-runtime`, opaque here. A row still
- * holding the column's default `''` was written before every request had a key (ADR 0071) and
+ * holding the column's default `''` was written before every request had a key (ADR 0072) and
  * matches none, so its stream reads in full once and the write replaces it.
  */
 export interface CursorReading {

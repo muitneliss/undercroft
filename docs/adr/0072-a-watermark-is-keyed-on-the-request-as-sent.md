@@ -1,4 +1,4 @@
-# 71. A watermark is keyed on the request as sent, declared or scoped
+# 72. A watermark is keyed on the request as sent, declared or scoped
 
 - Status: Accepted
 - Date: 2026-09-28
