@@ -6,6 +6,7 @@ values. Nothing here runs in `bun run test` or in CI.
 
 ```sh
 UNDERCROFT_LIVE=1 bun test ./scripts/live/hubspot.live.ts
+UNDERCROFT_LIVE=1 bun test ./scripts/live/xero.live.ts
 ```
 
 ## What `hubspot.live.ts` checks
@@ -50,3 +51,40 @@ it:
 
 The offline tests for the readers and the comparison are in `hubspotLake.test.ts` and run in the
 gate like any other suite.
+
+## What `xero.live.ts` checks
+
+The Xero side is the files Xero's web app exports, because an owner can take them without an app
+of their own: the invoice export (Business › Invoices, and Business › Bills to pay, status All)
+and the contacts export (Contacts › All contacts). The export has no Xero ids, so a document is
+found by its type, number, contact, date and total, then by fewer of them; see `xeroCompare.ts`.
+
+| Tests                                  | One per                                          | Passes when                                                              |
+| -------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------ |
+| `Xero export → lake`                   | exported invoice, bill, credit note, overpayment | the lake holds it with the same header fields and the same lines         |
+| `lake → Xero export`                   | live lake document the export does not list      | never: the lake holds a document the export does not                     |
+| `Xero contacts export → lake`          | exported contact                                 | the lake holds it with the same email, names, addresses, phones and more |
+| `lake contacts → Xero contacts export` | lake contact the export does not list            | never                                                                    |
+
+- A line's unit price is compared to four decimal places, the most Xero keeps.
+- A tax-inclusive document's lines are compared before tax, as the export writes them, and its
+  unit prices are left out: the export and the API price them on different bases.
+- Voided and deleted documents are reported **skipped**: the export never lists them.
+- A record Xero changed after `exportedAt` that disagrees is reported **skipped**: the export
+  cannot show a change made after it was taken.
+- A failure names the fields that differ, never their values.
+
+The configuration names a folder of exports; every `.csv` in it is read, and exports over
+overlapping date ranges may share documents:
+
+```json
+{
+  "tenant": "CASE-0042",
+  "cli": ["undercroft"],
+  "exports": "fixtures/live/xero",
+  "exportedAt": "2026-01-02T09:00:00Z"
+}
+```
+
+`exportedAt` is when the oldest of those files was exported. The offline tests are in
+`xeroLake.test.ts`.

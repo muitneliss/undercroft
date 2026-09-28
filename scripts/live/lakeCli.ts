@@ -6,6 +6,7 @@
  * the developer's own signed-in profile, and the offline suite hands in recorded envelopes.
  */
 
+import { parseLossless } from "@undercroft/core";
 import { arrayAt, objectAt, parse, textAt } from "./json.ts";
 
 export interface Cli {
@@ -13,7 +14,12 @@ export interface Cli {
   run: (args: readonly string[]) => Promise<string>;
 }
 
-/** One lake row: its key, its payload, and whether the lake marks it deleted at source. */
+/**
+ * One lake row: its key, its payload, and whether the lake marks it deleted at source.
+ *
+ * The payload is read with `lossless-json`, so a number keeps the digits the source sent: a
+ * Xero amount stays a string of digits and never passes through a float.
+ */
 export interface LakeRow {
   readonly sourceRecordId: string;
   readonly payload: unknown;
@@ -30,10 +36,26 @@ async function agentData(cli: Cli, args: readonly string[]): Promise<unknown> {
   return envelope.data;
 }
 
-/** Every row of one HubSpot entity, paged until the CLI's cursor runs out. */
-export async function lakeRows(cli: Cli, tenant: string, entity: string): Promise<LakeRow[]> {
+function payloadOf(raw: unknown): unknown {
+  if (typeof raw !== "string") {
+    return raw;
+  }
+  try {
+    return parseLossless(raw);
+  } catch (error) {
+    throw new Error("lake payload: the payload is not JSON", { cause: error });
+  }
+}
+
+/** Every row of one entity of one source, paged until the CLI's cursor runs out. */
+export async function lakeRows(
+  cli: Cli,
+  tenant: string,
+  entity: string,
+  source = "hubspot",
+): Promise<LakeRow[]> {
   const rows: LakeRow[] = [];
-  const base = ["lake", "records", "--tenant-id", tenant, "--source", "hubspot"];
+  const base = ["lake", "records", "--tenant-id", tenant, "--source", source];
   let cursor: string | null = null;
   do {
     const args = [...base, "--entity", entity, "--limit", "50"];
@@ -45,7 +67,7 @@ export async function lakeRows(cli: Cli, tenant: string, entity: string): Promis
       const row = objectAt(item, `lake records #${index}`);
       rows.push({
         sourceRecordId: textAt(row.sourceRecordId, `lake records #${index}.sourceRecordId`),
-        payload: typeof row.payload === "string" ? parse(row.payload, "lake payload") : row.payload,
+        payload: payloadOf(row.payload),
         deletedAt: typeof row.deletedAt === "string" ? row.deletedAt : null,
       });
     }
@@ -55,13 +77,17 @@ export async function lakeRows(cli: Cli, tenant: string, entity: string): Promis
   return rows;
 }
 
-/** When the newest HubSpot ingest run started, or null if there has been none. */
-export async function lastRunStart(cli: Cli, tenant: string): Promise<string | null> {
+/** When the newest ingest run of one source started, or null if there has been none. */
+export async function lastRunStart(
+  cli: Cli,
+  tenant: string,
+  source = "hubspot",
+): Promise<string | null> {
   const data = await agentData(cli, ["runs", "list", "--tenant-id", tenant, "--limit", "50"]);
   const items = Array.isArray(data) ? data : arrayAt(objectAt(data, "runs list").items, "runs");
   for (const item of items) {
     const run = objectAt(item, "runs list item");
-    if (run.source === "hubspot" && run.kind === "ingest") {
+    if (run.source === source && run.kind === "ingest") {
       return textAt(run.startedAt, "runs list startedAt");
     }
   }
