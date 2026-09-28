@@ -207,8 +207,8 @@ async function* keepingEnd<T, R>(
  * marked removed at source. It is the one decision here worse to get wrong than the watermark:
  * a partial listing would report every record it had not reached as deleted. So it rides on the
  * generator's return value, which a read that threw or stopped never produces, and sits below
- * the cursor write for the reason the cursor sits below the ledger. A read that threw or stopped
- * never returned, so `end` is empty and `settleRemovals` decides nothing. ADR 0071.
+ * the cursor write for the reason the cursor sits below the ledger. From an empty `end`,
+ * `settleRemovals` decides nothing. ADR 0071.
  */
 async function ingestEntity(
   run: EntityRun,
