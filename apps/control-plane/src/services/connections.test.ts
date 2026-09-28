@@ -151,8 +151,8 @@ describe("presentStatus", () => {
 
   it("a Xero grant from before settings were asked for still runs, and names what it cannot read", () => {
     // Every Xero connection made before ADR 0073 holds exactly this grant. It still reads twelve
-    // lists, and a run reads them and skips the five under `accounting.settings.read` -- so the
-    // card may not call it lapsed, and it names the five with the scope a reconnect would add.
+    // lists, and a run reads them and skips the ones under the scopes asked for since -- so the
+    // card may not call it lapsed, and it names each with the scope a reconnect would add.
     const card = presentStatus(
       {
         status: "connected",
@@ -164,12 +164,15 @@ describe("presentStatus", () => {
     );
 
     expect(card.status).toBe("connected");
-    expect(card.ungranted).toEqual(
-      ["items", "accounts", "tracking_categories", "tax_rates", "currencies"].map((entity) => ({
+    expect(card.ungranted).toEqual([
+      ...["items", "accounts", "tracking_categories", "tax_rates", "currencies"].map((entity) => ({
         entity,
         scope: "accounting.settings.read",
       })),
-    );
+      { entity: "bank_transactions", scope: "accounting.banktransactions.read" },
+      { entity: "bank_transfers", scope: "accounting.banktransactions.read" },
+      { entity: "manual_journals", scope: "accounting.manualjournals.read" },
+    ]);
   });
 
   it("a Xero grant that reads every list it was told to read names none as missing", () => {
@@ -421,7 +424,7 @@ describe("the schedule", () => {
 
   it("a Xero connection whose grant predates a scope keeps its schedule and names the gap", async () => {
     // Issue 277: a connection made before the consent asked for settings keeps reading every
-    // list it can until it reconnects. The card says so -- runnable, due, and short five lists.
+    // list it can until it reconnects. The card says so -- runnable, due, and short what it lacks.
     await upsertConnection(db, {
       tenantId: TENANT,
       source: "xero",
@@ -446,6 +449,9 @@ describe("the schedule", () => {
       "tracking_categories",
       "tax_rates",
       "currencies",
+      "bank_transactions",
+      "bank_transfers",
+      "manual_journals",
     ]);
   });
 });

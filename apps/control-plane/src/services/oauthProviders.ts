@@ -119,6 +119,10 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
      * every other list; each of those five is named in the run as not granted until the
      * organisation is reconnected (ADR 0073).
      *
+     * `accounting.banktransactions.read` reads bank transactions and bank transfers, and
+     * `accounting.manualjournals.read` manual journals: the money that moves without an invoice
+     * (#308). A grant recorded before them reads the rest and names those three (ADR 0079).
+     *
      * Granular, never the broad `accounting.transactions`: Xero grants that to no app created
      * on or after 2 March 2026 and to none at all after September 2027, and a consent asking
      * for it is refused before the administrator reaches an organisation.
@@ -130,6 +134,8 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
         "accounting.payments.read",
         "accounting.contacts.read",
         "accounting.settings.read",
+        "accounting.banktransactions.read",
+        "accounting.manualjournals.read",
       ],
     },
     // A confidential client with a secret: Xero takes it in a Basic header at the token

@@ -233,7 +233,7 @@ export function presentStatus(
  * A spec source reads each list under the scope its spec names (`readScope`), and a consent that
  * gained a scope leaves every grant recorded before it still able to read the other lists. Xero
  * asked for `accounting.settings.read` only from ADR 0073, and a run on an older grant reads
- * twelve lists and names the five it cannot. So the grant is shared out over the lists the
+ * twelve lists and names the five it cannot; the bank and journal scopes (#308) did the same. So the grant is shared out over the lists the
  * connection would read, by the run's own rule (`partitionByGrant`), and it is runnable while
  * any of them is granted -- with the rest named, so the card says what a reconnect would add.
  * One that reaches none of them is `null`: a run would read nothing and fail. ADR 0074.

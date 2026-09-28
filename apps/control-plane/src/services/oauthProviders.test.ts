@@ -43,6 +43,8 @@ const RETIRED = new Set([
  * The granular read scope each Xero list is read under: the `security` of its GET in Xero's
  * OpenAPI document (`xero_accounting.yaml`). `/Items` was held here under invoices once, which
  * Xero's granular scope table also lists it under; live Xero answers it 401 there (#276).
+ * The document still puts the last three under the broad `accounting.transactions`, which a new
+ * app cannot be granted; Xero's granular scope table splits it, and is their source (#308).
  */
 const SCOPE_BY_PATH: Readonly<Record<string, string>> = {
   "/Contacts": "accounting.contacts.read",
@@ -62,6 +64,9 @@ const SCOPE_BY_PATH: Readonly<Record<string, string>> = {
   "/TrackingCategories": "accounting.settings.read",
   "/TaxRates": "accounting.settings.read",
   "/Currencies": "accounting.settings.read",
+  "/BankTransactions": "accounting.banktransactions.read",
+  "/BankTransfers": "accounting.banktransactions.read",
+  "/ManualJournals": "accounting.manualjournals.read",
 };
 
 function xeroSpec(): ReturnType<typeof parseSpec> {
@@ -87,6 +92,8 @@ describe("the Xero consent's scopes", () => {
         "accounting.invoices.read",
         "accounting.payments.read",
         "accounting.settings.read",
+        "accounting.banktransactions.read",
+        "accounting.manualjournals.read",
         "offline_access",
       ].sort(),
     );

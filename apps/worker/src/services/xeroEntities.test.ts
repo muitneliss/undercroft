@@ -8,15 +8,18 @@
  * - `Items`, `BatchPayments`, `RepeatingInvoices` and `ContactGroups` take no `page` at all. Paged
  *   as the default pages, each would answer page two with page one again, never an empty page.
  * - `Quotes` and `LinkedTransactions` page, but take no `pageSize`.
+ * - `BankTransfers` takes no `page` either, and is asked for its deleted transfers too (#308).
  * - A list an organisation genuinely has none of is answered `[]`, and that is not a failure.
- * - `Invoices`, `CreditNotes`, `Overpayments`, `Prepayments` and `Items` take `unitdp`, and are
- *   asked for 4-decimal unit prices; without it Xero rounds each line's price to 2 (#280). The
- *   fetcher answers only the URL carrying it, so a list that stopped asking would fail here.
+ * - `Invoices`, `CreditNotes`, `Overpayments`, `Prepayments`, `Items` and `BankTransactions` take
+ *   `unitdp`, and are asked for 4-decimal unit prices; without it Xero rounds each line's price to
+ *   2 (#280). The fetcher answers only the URL carrying it, so a list that stopped asking would
+ *   fail here.
  *
  * Also here: a grant recorded before a scope the consent now asks for -- every Xero connection
- * made before `accounting.settings.read` -- reads every list it can and never requests the rest,
- * which the run names with the scope a reconnect would add (ADR 0073). The 401 it used to meet on
- * items part-way through a run was issue 276.
+ * made before `accounting.settings.read`, and every one made before the bank and journal scopes
+ * (#308) -- reads every list it can and never requests the rest, which the run names with the
+ * scope a reconnect would add (ADR 0073). The 401 it used to meet on items part-way through a run
+ * was issue 276.
  */
 
 import { afterAll, afterEach, beforeEach, describe, expect, test as it } from "bun:test";
@@ -53,10 +56,13 @@ if (UNPACED === SHIPPED) {
 const SPECS_DIR = mkdtempSync(join(tmpdir(), "undercroft-xero-"));
 writeFileSync(join(SPECS_DIR, "xero.yaml"), UNPACED);
 const BASE = "https://api.xero.com/api.xro/2.0";
-/** What every connection recorded before the consent asked for `accounting.settings.read`. */
+/** What every connection recorded before the consent asked for `accounting.settings.read` (#277). */
 const OLD_GRANT =
   "offline_access accounting.invoices.read accounting.payments.read accounting.contacts.read";
-const FULL_GRANT = `${OLD_GRANT} accounting.settings.read`;
+const SETTINGS = "accounting.settings.read";
+const BANK = "accounting.banktransactions.read";
+const JOURNALS = "accounting.manualjournals.read";
+const FULL_GRANT = `${OLD_GRANT} ${SETTINGS} ${BANK} ${JOURNALS}`;
 const UPDATED = "/Date(1573755038314+0000)/";
 
 /** How each list is read, as Xero's OpenAPI document says it may be. */
@@ -65,8 +71,8 @@ interface XeroList {
   readonly path: string;
   readonly idPath: string;
   readonly paging: "page-size" | "page" | "none";
-  /** Read under `accounting.settings.read`, which a grant recorded before it lacks. */
-  readonly settings?: true;
+  /** Read under a scope the consent gained after `OLD_GRANT`, which that grant lacks. */
+  readonly added?: string;
   /** Asked of the list besides paging. */
   readonly query?: Readonly<Record<string, string>>;
   /** Whether Xero's endpoint takes `unitdp`, so the list is asked for 4-decimal unit prices. */
@@ -115,7 +121,7 @@ const LISTS: readonly XeroList[] = [
     idPath: "ItemID",
     paging: "none",
     unitdp: true,
-    settings: true,
+    added: SETTINGS,
   },
   {
     entity: "overpayments",
@@ -133,20 +139,46 @@ const LISTS: readonly XeroList[] = [
   },
   { entity: "batch_payments", path: "/BatchPayments", idPath: "BatchPaymentID", paging: "none" },
   { entity: "contact_groups", path: "/ContactGroups", idPath: "ContactGroupID", paging: "none" },
-  { entity: "accounts", path: "/Accounts", idPath: "AccountID", paging: "none", settings: true },
+  { entity: "accounts", path: "/Accounts", idPath: "AccountID", paging: "none", added: SETTINGS },
   {
     entity: "tracking_categories",
     path: "/TrackingCategories",
     idPath: "TrackingCategoryID",
     paging: "none",
-    settings: true,
+    added: SETTINGS,
     // Xero leaves archived categories out unless asked, and old lines still name them (#277).
     query: { includeArchived: "true" },
   },
-  { entity: "tax_rates", path: "/TaxRates", idPath: "TaxType", paging: "none", settings: true },
-  { entity: "currencies", path: "/Currencies", idPath: "Code", paging: "none", settings: true },
+  { entity: "tax_rates", path: "/TaxRates", idPath: "TaxType", paging: "none", added: SETTINGS },
+  { entity: "currencies", path: "/Currencies", idPath: "Code", paging: "none", added: SETTINGS },
+  {
+    entity: "bank_transactions",
+    path: "/BankTransactions",
+    idPath: "BankTransactionID",
+    paging: "page-size",
+    unitdp: true,
+    added: BANK,
+  },
+  {
+    entity: "bank_transfers",
+    path: "/BankTransfers",
+    idPath: "BankTransferID",
+    paging: "none",
+    added: BANK,
+    // A DELETED transfer is left out unless asked, and one deleted after it landed would otherwise
+    // stay in the lake as money that moved (#308).
+    query: { includeDeleted: "true" },
+  },
+  {
+    entity: "manual_journals",
+    path: "/ManualJournals",
+    idPath: "ManualJournalID",
+    paging: "page-size",
+    added: JOURNALS,
+  },
 ];
-const SETTINGS = LISTS.filter((list) => list.settings === true).map((list) => list.entity);
+/** The lists `OLD_GRANT` cannot read, in the spec's order. */
+const ADDED = LISTS.filter((list) => list.added !== undefined);
 
 /** The four lists read before issue 271, which still refuse an empty first read. */
 const ALWAYS_READ = new Set(["contacts", "invoices", "payments", "credit_notes"]);
@@ -354,24 +386,24 @@ describe("a Xero list read before it asked for 4-decimal unit prices", () => {
   });
 });
 
-describe("a Xero grant recorded before the consent asked for accounting.settings.read", () => {
-  it("reads every other list, requests none of the settings lists, and names each", async () => {
+describe("a Xero grant recorded before the consent asked for the scopes it has since added", () => {
+  it("reads every other list, requests none of the lists it lacks, and names each", async () => {
     await connect(OLD_GRANT);
     const fetcher = xero((list) => [recordOf(list)]);
 
     const result = await ingest(fetcher);
 
     expect(result.entities.map((entity) => entity.entity)).toEqual(
-      LISTS.filter((list) => list.settings !== true).map((list) => list.entity),
+      LISTS.filter((list) => list.added === undefined).map((list) => list.entity),
     );
-    const settingsPaths = LISTS.filter((list) => list.settings === true).map((l) => l.path);
+    const addedPaths = ADDED.map((list) => `${BASE}${list.path}`);
     expect(
-      fetcher.calls.filter((call) => settingsPaths.some((path) => call.url.includes(path))),
+      fetcher.calls.filter((call) => addedPaths.some((path) => call.url.startsWith(path))),
     ).toEqual([]);
     const { rows } = await db.query<{ status: string }>("SELECT status FROM ops.run");
     expect(rows).toEqual([{ status: "ok" }]);
     expect(await notGranted()).toEqual(
-      SETTINGS.map((entity) => ({ entity, scope: "accounting.settings.read" })),
+      ADDED.map((list) => ({ entity: list.entity, scope: list.added })),
     );
   });
 
@@ -383,7 +415,7 @@ describe("a Xero grant recorded before the consent asked for accounting.settings
     const failed = ingest(fetcher);
 
     await expect(failed).rejects.toBeInstanceOf(GrantTooNarrow);
-    await expect(failed).rejects.toThrow("accounting.settings.read");
+    await expect(failed).rejects.toThrow(SETTINGS);
     expect(fetcher.calls).toEqual([]);
     expect((await notGranted()).map((row) => row.entity)).toEqual(["items", "accounts"]);
   });

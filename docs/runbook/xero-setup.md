@@ -79,19 +79,23 @@ connection reads the new list only after it reconnects.
 
 The scopes are Xero's **granular** ones, and the lists each one reads:
 
-| Scope                      | Lists                                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------- |
-| `offline_access`           | none: it makes Xero issue a refresh token                                                |
-| `accounting.invoices.read` | invoices, credit notes, quotes, purchase orders, repeating invoices, linked transactions |
-| `accounting.payments.read` | payments, overpayments, prepayments, batch payments                                      |
-| `accounting.contacts.read` | contacts, contact groups                                                                 |
-| `accounting.settings.read` | items, chart of accounts, tracking categories and their options, tax rates, currencies   |
+| Scope                              | Lists                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| `offline_access`                   | none: it makes Xero issue a refresh token                                                |
+| `accounting.invoices.read`         | invoices, credit notes, quotes, purchase orders, repeating invoices, linked transactions |
+| `accounting.payments.read`         | payments, overpayments, prepayments, batch payments                                      |
+| `accounting.contacts.read`         | contacts, contact groups                                                                 |
+| `accounting.settings.read`         | items, chart of accounts, tracking categories and their options, tax rates, currencies   |
+| `accounting.banktransactions.read` | bank transactions, bank transfers (deleted ones included)                                |
+| `accounting.manualjournals.read`   | manual journals                                                                          |
 
 Xero grants the broad `accounting.transactions` to no app created on or after 2 March 2026,
 and to no app at all after September 2027, so never add a broad scope back. Nothing needs
 registering on the Xero app for them; a web app is granted what the consent asks for.
 [ADR 0069](../adr/0069-xero-reads-every-list-its-granular-scopes-reach.md) records why each
-list reads the way it does.
+list reads the way it does, and
+[ADR 0079](../adr/0079-xero-reads-bank-transactions-transfers-and-manual-journals.md) why the
+bank and journal lists read under the two scopes Xero's OpenAPI document does not name.
 
 ## 4. Connect a customer, and verify each step
 

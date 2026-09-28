@@ -25,10 +25,14 @@ auth:
   #   accounting.payments.read  /Payments /Overpayments /Prepayments /BatchPayments
   #   accounting.contacts.read  /Contacts /ContactGroups
   #   accounting.settings.read  /Items /Accounts /TrackingCategories /TaxRates /Currencies
+  #   accounting.banktransactions.read  /BankTransactions /BankTransfers
+  #   accounting.manualjournals.read    /ManualJournals
   # Xero no longer grants the broad accounting.transactions to a new app. A scope added here is a
   # new consent: add it in `oauthProviders.ts` too. A grant recorded without it still reads every
   # list it can, and each list it cannot is named in the run as not granted, never requested
   # (ADR 0073). `/Items` was once read under invoices; live Xero answers it 401 there (#276).
+  # The OpenAPI document still puts the last three paths under the broad `accounting.transactions`;
+  # Xero's granular scope table is what splits it, and names these two (#308, ADR 0079).
   scopes:
     [
       offline_access,
@@ -36,6 +40,8 @@ auth:
       accounting.payments.read,
       accounting.contacts.read,
       accounting.settings.read,
+      accounting.banktransactions.read,
+      accounting.manualjournals.read,
     ]
   # THEIR organisation id, from ops.connection.external_account_id. It is not our
   # tenant_id, and sending ours here is a 401 at best and the wrong org's books at worst.
@@ -79,7 +85,7 @@ defaults:
 # (#265). See `packages/connector-runtime/src/incremental.ts`.
 #
 # `unitdp: "4"` on every list whose endpoint takes it in Xero's OpenAPI document: /Invoices,
-# /CreditNotes, /Overpayments, /Prepayments and /Items. Without it Xero ROUNDS each line's
+# /CreditNotes, /Overpayments, /Prepayments, /Items and /BankTransactions. Without it Xero ROUNDS each line's
 # `UnitAmount` (an item's `UnitPrice`) to 2 decimals, so a bill line priced 0.2248 landed as 0.22,
 # and on some the line amount followed it below the subtotal (#280). The lists that do not take
 # it (/Quotes, /PurchaseOrders, /RepeatingInvoices among the ones with lines) are left as they
@@ -141,11 +147,11 @@ entities:
       format: ms-json-date
       send: rfc3339-seconds
 
-  # The lists below are the rest of what the scopes above reach (issues 271 and 277). They do not
+  # The lists below are the rest of what the scopes above reach (issues 271, 277 and 308). They do not
   # all read like the four above, and each difference is Xero's OpenAPI document's, not a choice:
   #
   # - `pagination: none` where Xero takes no `page`: /RepeatingInvoices, /Items, /BatchPayments,
-  #   /ContactGroups and the four settings lists answer every record at once. Paged as the
+  #   /ContactGroups, /BankTransfers and the four settings lists answer every record at once. Paged as the
   #   default pages, each would answer page two with page one again and never with the empty
   #   page the read stops on.
   # - No `pageSize` where Xero takes none: /Quotes and /LinkedTransactions page at 100.
@@ -319,3 +325,52 @@ entities:
     idPath: Code
     pagination: { kind: none }
     guards: { failOnEmpty: false }
+
+  # Money that moves without an invoice (issue 308): spend and receive money on a bank account,
+  # transfers between two of them, and the journals a person writes by hand. Without them a model
+  # built on the lake sees bank fees, interest, owner drawings and period-end adjustments nowhere,
+  # and totals that look complete.
+  #
+  # /BankTransactions reads like /Invoices: paged, `pageSize`, `unitdp` and `If-Modified-Since`.
+  # /ManualJournals pages and takes `If-Modified-Since`, but no `unitdp`.
+  #
+  # /BankTransfers takes no `page`, and its record carries no change time, only `CreatedDateUTC`,
+  # so no watermark could say a transfer changed after it landed. And Xero leaves a DELETED
+  # transfer out unless asked: read without `includeDeleted`, one deleted after it landed would
+  # stay in the lake as AUTHORISED -- money that moved in no ledger. So it is read whole every
+  # run, deleted ones included, and a deletion lands as a new version whose `Status` says so.
+  - name: bank_transactions
+    request: { kind: list, path: /BankTransactions, query: { pageSize: "100", unitdp: "4" } }
+    readScope: accounting.banktransactions.read
+    envelopePath: BankTransactions
+    idPath: BankTransactionID
+    updatedAtPath: UpdatedDateUTC
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds
+
+  - name: bank_transfers
+    request: { kind: list, path: /BankTransfers, query: { includeDeleted: "true" } }
+    readScope: accounting.banktransactions.read
+    envelopePath: BankTransfers
+    idPath: BankTransferID
+    pagination: { kind: none }
+    guards: { failOnEmpty: false }
+
+  - name: manual_journals
+    request: { kind: list, path: /ManualJournals, query: { pageSize: "100" } }
+    readScope: accounting.manualjournals.read
+    envelopePath: ManualJournals
+    idPath: ManualJournalID
+    updatedAtPath: UpdatedDateUTC
+    guards: { failOnEmpty: false }
+    incremental:
+      strategy: header
+      header: If-Modified-Since
+      sourcePath: UpdatedDateUTC
+      format: ms-json-date
+      send: rfc3339-seconds

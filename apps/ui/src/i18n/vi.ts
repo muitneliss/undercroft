@@ -851,6 +851,9 @@ export const vi = {
     xeroTrackingCategories: "Danh mục theo dõi",
     xeroTaxRates: "Thuế suất",
     xeroCurrencies: "Tiền tệ",
+    xeroBankTransactions: "Giao dịch ngân hàng",
+    xeroBankTransfers: "Chuyển tiền giữa tài khoản",
+    xeroManualJournals: "Bút toán thủ công",
     xeroAll: "Mọi loại dữ liệu: {{entities}}",
     xeroEntities: "{{entities}}",
     /** HubSpot's objects, by the spec's ids. The ids are recorded; these are the words. */
