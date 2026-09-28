@@ -154,31 +154,28 @@ export interface SinkDeps {
   readonly refuse: RefusalWriter;
 }
 
-/** What the per-chunk projections wrote into `raw.records`, summed over every chunk. */
-export interface LoadedCounts {
-  readonly created: number;
-  readonly changed: number;
-  readonly unchanged: number;
-}
-
-/** What a record sink counted. Counters only: the per-record results are gone by now. */
+/**
+ * What a record sink counted: this run's records, each in exactly one column.
+ *
+ * `created`, `changed` and `unchanged` are decided per record by the lake's own write
+ * (`land.ts`), so `landed` is their sum by construction and a stopped run's counts add up for
+ * whatever it landed. They are the run's New / Changed / Unchanged, the numbers `ops.run_entity`
+ * holds and both the Journal and `runs get` show (`docs/reference/run-counts.md`).
+ *
+ * ACCUMULATED across the chunks rather than taken from the last: on a mailbox of 7,786 a
+ * per-chunk number would report whatever the last 200 did.
+ */
 export interface LandSummary {
-  /** Reached the lake, new or unchanged. What the ledger calls `landed`. */
+  /** Reached the lake: `created + changed + unchanged`. What the ledger calls `landed`. */
   readonly landed: number;
+  /** The first observation of its key. */
   readonly created: number;
+  /** A new version of a record the lake already held. */
+  readonly changed: number;
+  /** Identical to the lake's newest observation, so nothing was written. */
   readonly unchanged: number;
-  /** Refused with a reason, already written through the {@link RefusalWriter}. */
+  /** Refused with a reason, already written through the {@link RefusalWriter}. Not landed. */
   readonly refused: number;
-  /**
-   * What the projection did, ACCUMULATED across the chunks rather than taken from the last.
-   *
-   * The counts exist here because the projection now runs inside the sink, so the caller
-   * that used to hold `loadStreamToRaw`'s result no longer sees one -- and a run reporting
-   * `created: 0` because nobody carried the number back is indistinguishable from a run
-   * that genuinely created nothing. A per-chunk number would be worse than none: on a
-   * mailbox of 7,786 it would report whatever the last 200 did.
-   */
-  readonly loaded: LoadedCounts;
 }
 
 /** What a document sink counted. `skipped` and `failed` are both refusals, with two reasons. */

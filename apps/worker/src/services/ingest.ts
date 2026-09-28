@@ -41,7 +41,6 @@ import {
   readConnectionDetail,
   recordEntities,
   recordRefusals,
-  type RunEntity,
   tenantExists,
 } from "@undercroft/db/repos";
 import { isGoogleSource, ScopeNotChosen } from "./google/collect.ts";
@@ -249,9 +248,9 @@ function totals(ledger: Ledger): {
   let changed = 0;
   let unchanged = 0;
   for (const e of ledger.entities) {
-    created += e.loadedCreated;
-    changed += e.loadedChanged;
-    unchanged += e.loadedUnchanged;
+    created += e.created;
+    changed += e.changed;
+    unchanged += e.unchanged;
   }
   return { created, changed, unchanged, refused: ledger.refusals.length };
 }
@@ -263,15 +262,7 @@ async function settle(
   ledger: Ledger,
   outcome: { status: "ok" | "failed"; error?: string },
 ): Promise<void> {
-  const entities: RunEntity[] = ledger.entities.map((e) => ({
-    entity: e.entity,
-    landed: e.landed,
-    created: e.loadedCreated,
-    changed: e.loadedChanged,
-    unchanged: e.loadedUnchanged,
-    refused: e.refused,
-  }));
-  await recordEntities(exec, runId, entities);
+  await recordEntities(exec, runId, ledger.entities);
   await recordRefusals(exec, runId, ledger.refusals);
   await closeRun(exec, runId, {
     status: outcome.status,

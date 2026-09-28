@@ -504,15 +504,16 @@ export async function claimExternalRun(
 export async function recordExternalBatch(
   exec: SqlExecutor,
   id: string,
-  batch: { created: number; unchanged: number; refused: number },
+  batch: { created: number; changed: number; unchanged: number; refused: number },
 ): Promise<void> {
   await exec.query(
     `UPDATE ops.run
-     SET created = created + $2, unchanged = unchanged + $3, refused = refused + $4,
-         status = CASE WHEN $4 > 0 OR status = 'failed' THEN 'failed' ELSE 'ok' END,
+     SET created = created + $2, changed = changed + $3, unchanged = unchanged + $4,
+         refused = refused + $5,
+         status = CASE WHEN $5 > 0 OR status = 'failed' THEN 'failed' ELSE 'ok' END,
          ended_at = now()
      WHERE id = $1`,
-    [id, batch.created, batch.unchanged, batch.refused],
+    [id, batch.created, batch.changed, batch.unchanged, batch.refused],
   );
 }
 
