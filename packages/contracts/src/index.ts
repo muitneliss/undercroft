@@ -73,10 +73,13 @@ export {
   type ReadLevel,
 } from "./fileFormats.ts";
 export {
+  allowsFacts,
   allowsFile,
   type DescribedFile,
   exportTypeOf,
   extensionOf,
+  type FileFacts,
+  fileFactsOf,
   GENERIC_MIME_TYPES,
   isPlausibleFileChoice,
   landedType,

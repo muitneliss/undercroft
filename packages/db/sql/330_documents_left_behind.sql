@@ -1,0 +1,41 @@
+-- raw.records.documents_left_behind: the documents a harvest saw on a record and did NOT land, so a
+-- wider file-type choice can find them without re-reading every held message. ADR 0076, #292.
+--
+-- A held Gmail message is skipped whole (ADR 0033), so an attachment its harvest declined was
+-- declined for good: an admin who added XML to the choice, or an upgrade that taught the
+-- catalogue `image/jpg` is a JPEG, got every NEW message's attachments and none of the old
+-- ones', while every run reported success. The alternative to remembering is re-reading the
+-- whole mailbox whenever the choice moves -- 39,608 held messages at 334 ms each is 3.7 hours,
+-- for a checkbox that most messages have nothing to do with.
+--
+-- WHAT IS KEPT is a JSON array with one entry per attachment part the harvest left behind --
+-- one the file-type choice refused, or one over the size ceiling -- each as
+-- `{documentId, mimeType, extension, declaredBytes}`: the id it would land under, the two facts
+-- matching reads (`fileFactsOf` in `@undercroft/contracts`), and the size the ceiling reads.
+-- NEVER A FILENAME. This table is readable by `undercroft_dbt` and `undercroft_app`, so it holds
+-- what `raw.documents.metadata` may hold -- opaque ids, enumerated types, counts -- and nothing a
+-- person wrote (`pii.md`, ADR 0015). An extension is the one-to-eight-character suffix
+-- `extensionOf` accepts, never the rest of the name; the MIME type is bare, because its
+-- parameters can carry one.
+--
+-- NULL MEANS THE HARVEST DID NOT SAY, which is every row a harvest marked before this column
+-- existed. Such a message's parts are unknown, so it is read once more rather than trusted --
+-- the same repair `230_documents_landed.sql` made, for the same reason: skipping a message on
+-- the strength of a fact nobody recorded is how 7,786 messages kept zero attachments. `[]` is
+-- the recorded answer "this harvest left nothing behind".
+--
+-- NOT A PROJECTION OF THE LAKE, for the reason `230_documents_landed.sql` gives for its column:
+-- a re-read message's record is byte-identical, so the lake writes no version and the loader
+-- carries nothing. `markHarvested` (`apps/worker/src/repos/rawRecords.ts`) writes it beside
+-- `documents_landed`, after the projection, and rebuilding `raw.records` from the lake leaves it
+-- NULL -- one more full read of each mailbox, slow and never wrong.
+
+ALTER TABLE raw.records ADD COLUMN IF NOT EXISTS documents_left_behind jsonb;
+
+-- NO NEW GRANT: the grants on `raw.records` are table-level (`040_grants.sql`), which in Postgres
+-- covers a column added later. `230_documents_landed.sql` records the argument in full, and the
+-- worker suites `become` `undercroft_worker` before they write it.
+--
+-- NO INDEX: it is read only for rows the primary-key probe in `knownRecords` already found.
+--
+-- NO ROW LEVEL SECURITY CHANGE: `080_tenant_isolation.sql`'s policies are over the row.

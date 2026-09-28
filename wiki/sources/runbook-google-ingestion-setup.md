@@ -1,12 +1,12 @@
 ---
 title: Runbook Google Ingestion Setup
 type: source
-date: 2026-09-24
+date: 2026-09-28
 tags: []
 source: docs/runbook/google-ingestion-setup.md
 source_path: docs/runbook/google-ingestion-setup.md
-source_hash: cc518b1eb76981972972d5bc3a9b963ff2d5e817e63f741906efd9747724d8e4
-ingested: 2026-09-24
+source_hash: 793e1530fc836e6af81e3c2ff6ab51f5c958927d1bf2f43a3374bcb403532b2e
+ingested: 2026-09-28
 ---
 
 # Runbook Google Ingestion Setup
@@ -17,6 +17,6 @@ Verification is the long pole. `gmail.readonly` is a Google restricted scope: un
 
 The steps: create the ingest client with the redirect URI `<UNDERCROFT_PUBLIC_URL>/oauth/google/callback` and every browser origin under Authorized JavaScript origins (the Drive Picker requests a browser token with the same client id, and an unregistered origin fails with `origin_mismatch`), enable the Gmail, Drive and Picker APIs, add the scopes to the consent screen (`gmail.readonly` and `drive.readonly`, both restricted, plus `openid email`, and the Picker's own non-sensitive browser scope `drive.file`), set the ingest variables and the Picker's public values (the worker's optional `UNDERCROFT_GOOGLE_MIN_INTERVAL_MS` overrides the three-a-second request pacing, and a value that is not a positive whole number fails the run), connect a source from the customer's Sources leaf, choose a scope (labels for Gmail, files or folders for Drive) and save, then confirm in `psql` that `ops.connection` holds an opaque account id and never an address, that exactly one sealed credential exists and the control plane cannot open it, and that the mailbox address lives in `app.connection_detail` where BI has no USAGE.
 
-Running an ingest is a plate, not a `curl`: an admin presses Run now on the source's card, the card shows Running and polls, the mark flips with the count landed and the next due time, and the Journal division lists the run with per-entity counts and any refused record with its reason; a second Run now while one is in progress is refused with the running run's id. Run it twice: every document should report `unchanged`, the idempotency guard. Disconnect must revoke the grant at Google too.
+Running an ingest is a plate, not a `curl`: an admin presses Run now on the source's card, the card shows Running and polls, the mark flips with the count landed and the next due time, and the Journal division lists the run with per-entity counts and any refused record with its reason; a second Run now while one is in progress is refused with the running run's id. Run it twice: the second run reads no message again (the Journal says every message is already held) and the lake gains no version. Adding a file type on Change what syncs re-reads only held messages carrying an attachment of that type, and says how many; on a mailbox that ran before [[ADR 0076 A Harvest Records What It Left Behind]] the first run after the upgrade reads every held message once, about three a second. Disconnect must revoke the grant at Google too.
 
 Several accounts: "Add another account" on the card opens Google's account chooser and gives the chosen account a connection of its own, with its own mark, scope, schedule, last run and actions ([[ADR 0043 A Second Mailbox Is a Second Source]]). The first account keeps the source `gmail`/`drive`; each further one is `gmail.<account key>`. A dbt model filtering `source = 'gmail'` sees only the first mailbox; filter `source LIKE 'gmail.%'` too, or use the shipped `{{ gmail_letters() }}` macro, which folds cross-mailbox copies on the RFC 5322 Message-ID. Reconnect is pinned to its account: completing it as another Google account is refused as `reason=account-mismatch`; `reason=account-unidentified` means Google named no account, or the first account never recorded one. A failed callback returns to the tenant's Sources page with `connect=failed&reason=…`: `declined` is a cancel at Google's screen, `scope-declined` an unticked permission, `not-admin` a session that is not an admin of that tenant, `bad-state` a consent over 15 minutes old or opened twice, and `worker-refused` an unreachable worker or a mismatched trigger token. A source's card offers Run now, Change what syncs and Disconnect per account.

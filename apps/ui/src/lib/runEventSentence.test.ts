@@ -60,6 +60,36 @@ describe("eventSentence", () => {
     );
   });
 
+  it("says a run is reading held messages again, and what that reading added", () => {
+    // After a file type is added -- and once for every mailbox at the deploy of ADR 0076 -- a
+    // Gmail run reads messages it already holds, which can be hours. Without its own sentence
+    // the listing line would read "0 already held" on a synced mailbox, and the end of the run
+    // would be "Event records_reread." -- the one line saying what the hours bought.
+    const listed = event("work_listed", { total: 8668, skipped: 0, reread: 8668 }, "messages");
+    expect(eventSentence(en, "en", listed)).toBe(
+      "8,668 messages listed, 0 already held and not read, 8,668 already held but read again for attachments of a chosen type that no earlier read took.",
+    );
+    expect(eventSentence(vi, "vi", listed)).toBe(
+      "Có 8.668 messages, 0 đã có sẵn nên không đọc lại, 8.668 đã có sẵn nhưng được đọc lại để lấy tệp đính kèm thuộc loại hiện được chọn mà các lần đọc trước chưa lấy.",
+    );
+    // The quiet side: a steady run says `reread: 0` and reads as it always did.
+    expect(
+      eventSentence(
+        en,
+        "en",
+        event("work_listed", { total: 3, skipped: 3, reread: 0 }, "messages"),
+      ),
+    ).toBe("3 messages listed, 3 already held and not read.");
+
+    const reread = event("records_reread", { reread: 8668, landed: 528 }, "messages");
+    expect(eventSentence(en, "en", reread)).toBe(
+      "Read 8,668 held messages again for attachments of a chosen type; 528 attachments from them are new.",
+    );
+    expect(eventSentence(vi, "vi", reread)).toBe(
+      "Đã đọc lại 8.668 messages đã có sẵn để lấy tệp đính kèm thuộc loại hiện được chọn; 528 tệp đính kèm mới từ đó.",
+    );
+  });
+
   it("says why a green run built nothing, which the counts alone could not", () => {
     expect(eventSentence(vi, "vi", event("no_models", {}))).toBe(
       "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",

@@ -30,7 +30,16 @@
  * request-level filter on an attachment's MIME type -- only `labelIds` narrows what is fetched
  * at all -- so every part of every fetched message is walked and matched here. Empty means
  * every type, the same recorded-decision idiom `@undercroft/contracts` uses for an empty
- * label or entity list.
+ * label or entity list. `q=has:attachment` or `filename:` could narrow the listing, and is
+ * deliberately not used: Google does not define which parts either counts, so a message it
+ * leaves out is a guess that it carries nothing wanted. ADR 0076.
+ *
+ * **What a message's harvest did NOT take is kept, so a wider choice can take it later.** Every
+ * attachment part left behind -- refused by the choice, or over the size ceiling -- is recorded
+ * on the mark as `{documentId, mimeType, extension, declaredBytes}`, never with its filename.
+ * A held message is read again only when the current choice allows one of those and it is under
+ * the ceiling (`planReads` in `gmailAttachments.ts`), and then only those parts are offered.
+ * ADR 0076.
  *
  * Headers are extracted rather than stored whole, and that is now the ONLY thing keeping a
  * body out of the lake: `format=full` returns bodies and every header, where `format=metadata`
@@ -40,14 +49,15 @@
  * byte-for-byte what it was. Both halves are pinned by tests; neither is safe to relax.
  */
 
-import { allowsFile, type GmailScope, landedType } from "@undercroft/contracts";
+import { type GmailScope, landedType } from "@undercroft/contracts";
 import { canonicalJson, decodeBase64Url, getPath, getStringPath } from "@undercroft/core";
 
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
 import type { RunJournal } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
-import type { AlreadyHeld, Harvest } from "./harvest.ts";
+import { type AttachmentPart, type PlannedRead, planReads, sortParts } from "./gmailAttachments.ts";
+import type { AlreadyHeld, Harvest, HarvestItem } from "./harvest.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const ENTITY = "messages";
@@ -102,13 +112,22 @@ function labelKind(reported: string): "system" | "user" | null {
  * costs one message rather than the whole mailbox. Buffering it was what put 7,786 messages
  * in a 1 GiB container and got the process oom-killed 76 minutes in.
  *
- * **A MESSAGE WE ALREADY HOLD, COMPLETE, IS NOT FETCHED AT ALL.** Listing ids is one request
- * per hundred; reading a message is one paced request each, at 334ms, so a 7,786-message
- * mailbox is 43 minutes of `messages.get` and nothing else. The test is a row in
- * `raw.records` that is MARKED harvest-complete -- a message whose LABELS changed since is
- * still skipped, which is a decision the user took with its cost stated: a second run that
- * takes a minute instead of forty-three, at the price of a relabelling we will not notice
- * until something else makes us read the message.
+ * **A MESSAGE WE ALREADY HOLD, COMPLETE, IS NOT FETCHED -- UNLESS IT LEFT BEHIND SOMETHING THE
+ * CHOICE NOW WANTS.** Listing ids is one request per hundred; reading a message is one paced
+ * request each, at 334ms, so a 7,786-message mailbox is 43 minutes of `messages.get` and
+ * nothing else. The test is a row in `raw.records` that is MARKED harvest-complete -- a
+ * message whose LABELS changed since is still skipped, which is a decision the user took with
+ * its cost stated: a second run that takes a minute instead of forty-three, at the price of a
+ * relabelling we will not notice until something else makes us read the message.
+ *
+ * The one thing that does make us read it is an ATTACHMENT, and that is not the label
+ * trade-off extended: nobody chose to lose one. A held message whose mark lists a part the
+ * current file-type choice allows and the ceiling admits is read again, once, and only those
+ * parts are offered; a message marked before marks said what they left behind is read again
+ * once for the same reason, because what it carries is unknown. See `planReads` and ADR 0076,
+ * which supersedes the part of ADR 0033 that read "held" as "finished with" for file types.
+ * A message read again lands its record as any read does, so its labels are the ones Gmail
+ * gives now; that is the truth arriving, not a sweep for it.
  *
  * PRESENCE ALONE WAS THE TEST FOR ONE RELEASE, AND IT LOST A MAILBOX. It rested on a message's
  * record not reaching `raw.records` until its attachments had reached the lake -- true of
@@ -119,8 +138,8 @@ function labelKind(reported: string): "system" | "user" | null {
  * contract, `collect.ts` counts what got down, and `knownRecords` reads the count.
  *
  * **One consequence, so nobody reads the filter below as unconditional:** the defence-in-
- * depth label check now runs only on a message this run actually fetched. A message we
- * already hold is never fetched, so a label removed from it after it landed does not
+ * depth label check now runs only on a message this run actually fetched. A held message that
+ * is not read again is never fetched, so a label removed from it after it landed does not
  * un-land it. Nothing widens -- what was stored was covered by the selection when it was
  * stored -- but the check is a check on new reads, not a sweep over the mailbox.
  */
@@ -135,20 +154,27 @@ export async function* harvestGmail(
   // No timestamp: the listing carries none, so the only question this probe can put is
   // whether we hold the message, complete. See `RecordProbe` and `knownRecords`.
   const known = await held(messageIds.map((id) => ({ sourceRecordId: id, sourceUpdatedAt: null })));
-  const toRead = messageIds.filter((id) => !known.has(id));
+  const plan = planReads(messageIds, known, scope.fileTypes);
 
   // The most useful line this run writes. What follows is one paced request per message --
   // minutes for a real mailbox -- and until now the first sign of how long that would take
   // was the run ending. A total up front turns a blank screen into a quantity, and `skipped`
   // is what keeps "the mailbox is empty" and "nothing has changed" from being one sentence.
-  journal.info("work_listed", { entity: ENTITY, total: messageIds.length, skipped: known.size });
+  // `reread` is the held messages among the reads, so a run that reads a mailbox it already
+  // holds says why before it spends an hour doing it.
+  journal.info("work_listed", {
+    entity: ENTITY,
+    total: messageIds.length,
+    skipped: plan.skipped,
+    reread: plan.reread,
+  });
 
   let read = 0;
-  for (const messageId of toRead) {
+  for (const planned of plan.reads) {
     // The denominator is what is left to do, not what the mailbox holds: on a steady-state
     // mailbox the second is a gauge frozen at zero out of thousands.
-    journal.progress("records_read", { entity: ENTITY, read, total: toRead.length });
-    const message = await api.getJson(messageUrl(messageId), ENTITY, read);
+    journal.progress("records_read", { entity: ENTITY, read, total: plan.reads.length });
+    const message = await api.getJson(messageUrl(planned.messageId), ENTITY, read);
     const labelIds = strings(getPath(message, "labelIds"));
 
     // Defence in depth: the query said what to fetch, this says what may be kept. A label
@@ -158,20 +184,38 @@ export async function* harvestGmail(
       continue;
     }
 
-    const headers = headerMap(message);
-    const internalDate = str(message, "internalDate");
     read += 1;
-    yield {
-      record: messageRecord(messageId, message, labelIds, internalDate),
-      documents: matchingParts(message, scope.fileTypes).map((part) =>
-        attachment(api, { messageId, headers, labelIds, internalDate }, part),
-      ),
-    };
+    yield itemOf(api, scope.fileTypes, { planned, message, labelIds });
   }
 
   // Never `seenIds`. A message that stopped matching a label selection was relabelled, not
   // deleted, and a tombstone would report a deletion that never happened.
-  return { seenIds: null, skipped: [], listed: messageIds.length, known: known.size };
+  return { seenIds: null, skipped: [], listed: messageIds.length, known: plan.skipped };
+}
+
+/**
+ * One fetched message as what to land: its record, the attachments the choice takes from the
+ * parts this read looks at, and what it leaves behind. A held message read again also says what
+ * its earlier harvests landed, so its mark adds to that rather than forgetting it.
+ */
+function itemOf(
+  api: GoogleApi,
+  fileTypes: readonly string[],
+  fetched: { planned: PlannedRead; message: unknown; labelIds: string[] },
+): HarvestItem {
+  const { planned, message, labelIds } = fetched;
+  const { messageId } = planned;
+  const headers = headerMap(message);
+  const internalDate = str(message, "internalDate");
+  const sorted = sortParts(messageId, message, planned.lookAt, fileTypes);
+  return {
+    record: messageRecord(messageId, message, labelIds, internalDate),
+    documents: sorted.offered.map((part) =>
+      attachment(api, { messageId, headers, labelIds, internalDate }, part),
+    ),
+    leftBehind: sorted.leftBehind,
+    ...(planned.landedBefore === null ? {} : { reread: { documentsLanded: planned.landedBefore } }),
+  };
 }
 
 /**
@@ -218,13 +262,13 @@ interface MessageFacts {
  * enumerations and counts only. Every name a human wrote goes in `manifest`, which lives in
  * the access-controlled object store. `pii.md`, ADR 0015.
  */
-function attachment(api: GoogleApi, facts: MessageFacts, part: MatchingPart): DocumentToLand {
+function attachment(api: GoogleApi, facts: MessageFacts, part: AttachmentPart): DocumentToLand {
   const { messageId, headers, labelIds, internalDate } = facts;
   const { attachmentId } = part;
 
   return {
     // (messageId, partIndex), never attachmentId. See the module docstring.
-    documentId: `${messageId}:${String(part.index).padStart(3, "0")}`,
+    documentId: part.documentId,
     // An attachment Gmail could only call `application/octet-stream` is filed under what its
     // extension says when the catalogue knows it -- a `.oa` as JSON. `fileFormats.ts`.
     contentType: landedType({ mimeType: part.mimeType, name: part.filename }),
@@ -309,7 +353,7 @@ async function collectLabelIds(
  * `format=full`, which is the ONLY format that carries attachments.
  *
  * Google's Format reference: `metadata` "Returns only email message ID, labels, and email
- * headers" -- no `payload.parts`, so no `body.attachmentId`, so nothing for `matchingParts`
+ * headers" -- no `payload.parts`, so no `body.attachmentId`, so nothing for `attachmentParts`
  * to walk. This asked for `metadata` and therefore landed zero attachments for every tenant,
  * while the suite stayed green because its fixture answered a metadata request with parts.
  *
@@ -322,50 +366,6 @@ function messageUrl(messageId: string): string {
   const url = new URL(`${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}`);
   url.searchParams.set("format", "full");
   return url.toString();
-}
-
-interface MatchingPart {
-  readonly index: number;
-  readonly attachmentId: string;
-  readonly filename: string;
-  readonly size: string;
-  readonly mimeType: string;
-}
-
-/**
- * Every attachment in a message whose type the scope allows, walked depth-first.
- *
- * Recursive because a forwarded mail nests `parts` inside `parts`, and an attachment two
- * levels down is still an attachment. The index counts every part visited, so it is stable
- * for a given message shape -- which is what makes it usable as half of the document id.
- */
-function matchingParts(message: unknown, fileTypes: readonly string[]): MatchingPart[] {
-  const found: MatchingPart[] = [];
-  let index = 0;
-
-  function walk(part: unknown): void {
-    index += 1;
-    const mimeType = str(part, "mimeType");
-    const attachmentId = str(part, "body.attachmentId");
-    const filename = str(part, "filename");
-    if (allowsFile(fileTypes, { mimeType, name: filename }) && attachmentId !== "") {
-      found.push({
-        index,
-        attachmentId,
-        filename,
-        size: str(part, "body.size") || "0",
-        mimeType,
-      });
-    }
-    for (const child of asArray(getPath(part, "parts"))) {
-      walk(child);
-    }
-  }
-
-  for (const part of asArray(getPath(message, "payload.parts"))) {
-    walk(part);
-  }
-  return found;
 }
 
 /**

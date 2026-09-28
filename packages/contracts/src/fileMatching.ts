@@ -73,6 +73,28 @@ export interface DescribedFile {
 }
 
 /**
+ * Everything {@link allowsFile} reads about a file, and nothing a person wrote.
+ *
+ * The bare MIME type (parameters dropped, since `; name="..."` can carry a filename) and the
+ * extension {@link extensionOf} finds, or `null`. Matching reads NOTHING ELSE about a file, and
+ * that is a promise rather than an accident: it is what lets a Gmail harvest keep these two in
+ * `raw.records` for an attachment it did not take -- where a filename may not go (`pii.md`) --
+ * and ask the question again later, under a wider choice or a newer catalogue, without
+ * fetching the message. ADR 0076. A change that makes matching read more of a name than
+ * `extensionOf` does has to widen this too, and knows that every fact stored before it is
+ * short of what matching then needs.
+ */
+export interface FileFacts {
+  readonly mimeType: string;
+  readonly extension: string | null;
+}
+
+/** The {@link FileFacts} of a file as a provider describes it. */
+export function fileFactsOf(file: DescribedFile): FileFacts {
+  return { mimeType: bareType(file.mimeType), extension: extensionOf(file.name) };
+}
+
+/**
  * Whether a file is one a Gmail or Drive scope agreed to.
  *
  * The one place "empty means every type" is decided, and the one place the MIME-first rule
@@ -80,17 +102,22 @@ export interface DescribedFile {
  * generic one falls to the name -- and then only to an extension chosen as such.
  */
 export function allowsFile(fileTypes: readonly string[], file: DescribedFile): boolean {
+  return allowsFacts(fileTypes, fileFactsOf(file));
+}
+
+/** {@link allowsFile}, asked of the facts a harvest kept rather than of the file itself. */
+export function allowsFacts(fileTypes: readonly string[], facts: FileFacts): boolean {
   if (fileTypes.length === 0) {
     return true;
   }
-  const type = bareType(file.mimeType);
+  const type = bareType(facts.mimeType);
   // A MIME type chosen as itself matches first -- `application/octet-stream` included, which
   // the Drive browse offers like any other type present (ADR 0047). Only then does a generic
   // type fall to the name.
   if (chosenMimeTypes(fileTypes).includes(type)) {
     return true;
   }
-  const extension = isGeneric(type) ? extensionOf(file.name) : null;
+  const extension = isGeneric(type) ? facts.extension : null;
   return extension !== null && fileTypes.includes(`.${extension}`);
 }
 

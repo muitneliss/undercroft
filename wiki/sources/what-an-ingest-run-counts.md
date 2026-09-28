@@ -5,7 +5,7 @@ date: 2026-09-28
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: 40d45d79bf9bb6771657a802c2d8f5af30f58398562d3917794d77a6001735f8
+source_hash: e2945c6e0f616c2c675f5661d53f0a75eb0c3e0c8e12ca048c1f4df161838417
 ingested: 2026-09-28
 ---
 
@@ -22,3 +22,5 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 **Where they are decided.** Per record, at the lake write in `apps/worker/src/services/land.ts`, from `LakeStore.put`'s `previousSha256`. The projection into `raw.records` runs afterwards and decides none of them. Runs recorded before the fix for issue #284 took the split from the projection, which never saw an identical re-read, so on those runs Unchanged is short; their rows are not rewritten.
 
 **Coarser in two places.** Documents are their own entity and count a changed document as New (Changed is always 0). The lake REST API's published response keeps `created` meaning "stored as a new version", first or not.
+
+**Held records read again.** A Gmail run's `messages` entity carries `reread` with `records` (held messages read again because they carry an attachment the current choice allows and no earlier read landed) and `documents` (attachments that reading stored for the first time, also counted in `documents`). It is `null` on every other entity, on Drive and spec runs, and on runs before [[ADR 0076 A Harvest Records What It Left Behind]]; a Gmail run that re-read nothing says 0.

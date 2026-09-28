@@ -268,6 +268,101 @@ describe("a Gmail ingest stopped mid-harvest", () => {
     // It carried on from what was kept rather than starting over.
     expect(recorded.calls.filter((call) => call.url === messageUrl("m0"))).toHaveLength(1);
   });
+
+  /**
+   * Five held messages, each with the invoice PDF their first read took and the e-invoice XML it
+   * left behind, then XML added to the choice. `pdf` and `xml` are each message's two parts.
+   */
+  function invoicesWithXml(fetcher: InMemoryByteFetcher, ids: readonly string[]): void {
+    fetcher.on("GET", `${GMAIL}/messages?maxResults=100`, {
+      body: { messages: ids.map((id) => ({ id })) },
+    });
+    for (const id of ids) {
+      function part(kind: string, mimeType: string): unknown {
+        return {
+          mimeType,
+          filename: `invoice-${id}.${kind}`,
+          body: { size: String(PDF.byteLength), attachmentId: `att-${id}-${kind}` },
+        };
+      }
+      fetcher
+        .on("GET", messageUrl(id), {
+          body: {
+            id,
+            threadId: `t-${id}`,
+            labelIds: ["INBOX"],
+            internalDate: "1789400000000",
+            payload: {
+              headers: [{ name: "Subject", value: `Invoice ${id}` }],
+              parts: [part("pdf", "application/pdf"), part("xml", "text/xml")],
+            },
+          },
+        })
+        .on("GET", `${GMAIL}/messages/${id}/attachments/att-${id}-pdf`, {
+          body: { data: Buffer.from(PDF).toString("base64url") },
+        })
+        .on("GET", `${GMAIL}/messages/${id}/attachments/att-${id}-xml`, {
+          body: { data: Buffer.from("<invoice/>").toString("base64url") },
+        });
+    }
+  }
+
+  async function rereadOf(runId: string): Promise<{ reread: number; documents: number } | null> {
+    const { rows } = await db.query<{ reread: number | null; documents: number | null }>(
+      `SELECT reread, reread_documents AS documents
+         FROM ops.run_entity WHERE run_id = $1 AND entity = 'messages'`,
+      [runId],
+    );
+    const [row] = rows;
+    return row === undefined || row.reread === null || row.documents === null
+      ? null
+      : { reread: row.reread, documents: row.documents };
+  }
+
+  it("a re-read cut off by a stop is counted as far as it went, and the next run finishes it", async () => {
+    // Re-reading a mailbox for a newly chosen type is hours of paced requests on a real one, so
+    // a deploy will land in the middle of it. Nothing checkpoints it: a message whose mark has
+    // not been rewritten still lists the XML it left behind, so the next run finds exactly the
+    // messages the stopped one did not reach, and reads none of the others again.
+    const ids = ["m0", "m1", "m2", "m3", "m4"];
+    const recorded = new InMemoryByteFetcher();
+    invoicesWithXml(recorded, ids);
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    await ingest("gmail", { byteFetcher: recorded });
+    await db.asSuperuser((tx) =>
+      writeConnectionDetail(tx, {
+        tenantId: TENANT,
+        source: "gmail",
+        selectionJson: JSON.stringify({
+          labels: [],
+          fileTypes: ["application/pdf", "application/xml"],
+        }),
+      }),
+    );
+    const stop = new AbortController();
+
+    const outcome = await ingest("gmail", {
+      byteFetcher: stoppingAt(recorded, messageUrl("m3"), stop),
+      stop: stop.signal,
+    });
+    await ingest("gmail", { byteFetcher: recorded });
+
+    expect(outcome).toBeInstanceOf(RunStopped);
+    const [first, stopped, finished] = await runsOf("gmail");
+    // `runs get` reads these: the first run re-read nothing and says so with a 0, the stopped
+    // one what it settled before the stop, and the last one the rest.
+    expect(await rereadOf(first?.id ?? "")).toEqual({ reread: 0, documents: 0 });
+    expect(await rereadOf(stopped?.id ?? "")).toEqual({ reread: 3, documents: 3 });
+    expect(await rereadOf(finished?.id ?? "")).toEqual({ reread: 2, documents: 2 });
+    expect(await countOf("raw.documents", "gmail")).toBe(ids.length * 2);
+    // m0 was re-read by the stopped run and not again; no PDF was fetched twice.
+    expect(recorded.calls.filter((call) => call.url === messageUrl("m0"))).toHaveLength(2);
+    expect(recorded.calls.filter((call) => call.url.endsWith("-pdf"))).toHaveLength(ids.length);
+    const said = (await eventsFor(db, finished?.id ?? "")).find(
+      (event) => event.event === "records_reread",
+    );
+    expect(said?.detail).toMatchObject({ reread: 2, landed: 2 });
+  });
 });
 
 describe("a Drive ingest stopped mid-walk", () => {

@@ -26,6 +26,22 @@ before it stopped, and those counts still add up. A run that could not record it
 all, because the worker was killed or was shut down before the run reached a point where it
 could stop, shows zeroes that are not a count, and its error says so.
 
+## Held records a run read again
+
+A Gmail run reads a message it already holds when that message carries an attachment the
+current file-type choice allows and no earlier read landed
+([File formats](file-formats.md#when-the-choice-changes)). The run's `messages` entity then
+carries `reread`, with two counts:
+
+| Field       | Counts                                                                          |
+| ----------- | ------------------------------------------------------------------------------- |
+| `records`   | held messages this run read again                                               |
+| `documents` | attachments that reading stored for the first time, also counted in `documents` |
+
+`reread` is `null` on every other entity, on every Drive and spec run, and on runs recorded
+before ADR 0076. A Gmail run that read nothing again says `0` for both counts. The Journal says
+the same two numbers in its own line.
+
 ## Two places the split is coarser
 
 - **Documents** (Gmail attachments, Drive files) are counted beside the records as their own

@@ -1,12 +1,12 @@
 ---
 title: File formats a Gmail or Drive connection can land
 type: source
-date: 2026-09-25
+date: 2026-09-28
 tags: []
 source: docs/reference/file-formats.md
 source_path: docs/reference/file-formats.md
-source_hash: bacd7213c37cc00fd92905086e5084e138f478d4c506a99c0f71637237bf39bf
-ingested: 2026-09-25
+source_hash: a827ffd69b09e0c3329846bd227f600371032cf2920d91bda365c0eec0fc0f70
+ingested: 2026-09-28
 ---
 
 # File formats a Gmail or Drive connection can land
@@ -31,3 +31,5 @@ The reference page for every file type the connection picker offers, kept in ste
 * Structured: JSON (stored as text unless it claims the OpenAttestation schema).
 * Signed records: `.oa` (OpenAttestation v2). Three checks, by the official library: integrity (`openattestation-tampered`), signature by the named `did:ethr` key (`openattestation-signature-invalid`), and DNS-DID identity (`openattestation-identity-invalid`). An incomplete check gives `openattestation-could-not-verify`. Refused before any check: an unsupported version, a malformed document, or an issuer that is not a `did:ethr` key proven by DNS-DID. The DID resolves offline, the DNS lookup goes over DNS-over-HTTPS, and the renderer URL is never fetched. Verified output is JSON: the verification results, then either `acraBusinessProfile` (ACRA issuer and template `BP-COMPANY-2022-1`; ISO dates, amounts as signed strings, officers with their own positions, SSIC codes split out) or the unwrapped `data`.
 * Images: JPEG, PNG and WebP by OCR. An image under 20 KB is refused `image-too-small-to-read`; the other refusals are a missing tesseract, a failed run, nothing found, and out of time.
+
+**When the choice changes.** A Gmail mark lists each attachment part it left behind (document id, bare MIME type, extension, declared size; never a filename). A held message is read again only when the current choice allows one of those parts and it is under the ceiling, and then only those parts land. Adding a type, or an upgrade that admits a new spelling such as `image/jpg`, lands those attachments on held mail by the end of the first run that finishes; removing a type deletes and reads nothing; an over-ceiling attachment never causes a re-read; a message marked before the list existed is read once more; each mailbox is its own source. The Journal and `runs get` (`reread` on the `messages` entity) say how many were read again. See [[ADR 0076 A Harvest Records What It Left Behind]].

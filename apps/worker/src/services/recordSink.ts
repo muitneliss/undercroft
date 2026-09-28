@@ -72,7 +72,15 @@ function marksIn(
     record.entity === entity &&
     record.documentsLanded !== undefined &&
     reached.has(record.sourceRecordId)
-      ? [{ sourceRecordId: record.sourceRecordId, documentsLanded: record.documentsLanded }]
+      ? [
+          {
+            sourceRecordId: record.sourceRecordId,
+            documentsLanded: record.documentsLanded,
+            ...(record.documentsLeftBehind === undefined
+              ? {}
+              : { documentsLeftBehind: record.documentsLeftBehind }),
+          },
+        ]
       : [],
   );
 }

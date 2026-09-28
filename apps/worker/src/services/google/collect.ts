@@ -80,7 +80,7 @@
 import { type DriveScope, type GmailScope, parseScope, sourceKind } from "@undercroft/contracts";
 import { newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { readConnectionDetail, type RunRefusal } from "@undercroft/db/repos";
+import { readConnectionDetail, type RunRefusal, type RunReread } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
 import { tombstoneMissing } from "../../repos/rawDocuments.ts";
@@ -182,6 +182,12 @@ export interface CollectResult {
     tombstoned: number;
   };
   /**
+   * Held records read again because something they left behind may now land, and the documents
+   * that stored for the first time (ADR 0076). Counted as items settle, so a stopped run's are
+   * real. `null` for Drive, which never does this: a `0` would claim it looked.
+   */
+  readonly reread: RunReread | null;
+  /**
    * What this run refused, with why: a record that could not be landed under entity
    * `messages`/`files`, a document skipped over the size ceiling or failed under
    * `documents`, a record held back because a document of its own did not land. The ids are
@@ -216,6 +222,8 @@ interface Landing {
   readonly records: RecordSink;
   readonly documents: DocumentSink;
   readonly refuse: RefusalWriter;
+  /** Mutated as items settle. See {@link CollectResult.reread}. */
+  readonly reread: { records: number; documents: number };
 }
 
 /**
@@ -243,16 +251,25 @@ async function settleItem(item: HarvestItem, at: Landing): Promise<void> {
     await at.documents.add(document);
   }
   const settled = await at.documents.flush();
+  if (item.reread !== undefined) {
+    at.reread.records += 1;
+    at.reread.documents += item.documents.filter((doc) =>
+      settled.created.has(doc.documentId),
+    ).length;
+  }
   if (item.documents.some((document) => settled.unfetched.has(document.documentId))) {
     await at.refuse([
       { entity: at.entity, sourceRecordId: item.record.sourceRecordId, reason: DOCUMENT_UNLANDED },
     ]);
     return;
   }
+  const landedNow = item.documents.filter((doc) => settled.landed.has(doc.documentId)).length;
   await at.records.add({
     ...item.record,
-    documentsLanded: item.documents.filter((document) => settled.landed.has(document.documentId))
-      .length,
+    // A held record read again offers only what it left behind, so what its earlier harvests
+    // landed is added rather than forgotten. ADR 0076.
+    documentsLanded: (item.reread?.documentsLanded ?? 0) + landedNow,
+    ...(item.leftBehind === undefined ? {} : { documentsLeftBehind: item.leftBehind }),
   });
 }
 
@@ -301,6 +318,7 @@ interface Collection {
   readonly refuse: RefusalWriter;
   /** The array `refuse` fills. Answered to the caller; see {@link openCollection}. */
   readonly refusals: RunRefusal[];
+  readonly reread: { records: number; documents: number };
 }
 
 /**
@@ -334,6 +352,7 @@ function openCollection(
     documents: createDocumentSink(sinks, at),
     refuse,
     refusals,
+    reread: { records: 0, documents: 0 },
   };
 }
 
@@ -443,6 +462,7 @@ export async function runGoogleCollect(
     runId,
     source: input.source,
     stopped: summary === null,
+    reread: scope.kind === "gmail" ? { ...collection.reread } : null,
     records: {
       landed: closed.records.landed,
       skipped: summary === null ? null : summary.known,

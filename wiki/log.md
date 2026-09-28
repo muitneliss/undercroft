@@ -199,3 +199,8 @@
 ## [2026-09-28] ingest | Runbook Xero Setup
 ## [2026-09-28] ingest | ADR 0075 HubSpot Reads Its Commerce Objects And Names A List Its Token Cannot Read
 ## [2026-09-28] ingest | Runbook HubSpot Setup
+## [2026-09-28] ingest | ADR 0076 A Harvest Records What It Left Behind
+## [2026-09-28] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-28] ingest | What an ingest run counts
+## [2026-09-28] ingest | Runbook Google Ingestion Setup
+## [2026-09-28] ingest | ADR 0076 A Harvest Records What It Left Behind

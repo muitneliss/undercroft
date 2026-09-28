@@ -82,6 +82,18 @@ export interface RunEntity {
   readonly changed: number;
   readonly unchanged: number;
   readonly refused: number;
+  /**
+   * Held records this run read again, and the documents that reading stored for the first time
+   * -- a Gmail run's `messages` row, when a message left behind an attachment the file-type
+   * choice now allows (ADR 0076, `340_run_reread.sql`). `null`, and absent on a write, for every
+   * entity and run that has nothing to say about it: a `0` would claim it looked.
+   */
+  readonly reread?: RunReread | null;
+}
+
+export interface RunReread {
+  readonly records: number;
+  readonly documents: number;
 }
 
 export interface RunRefusal {
@@ -238,17 +250,27 @@ export async function recordEntities(
   if (entities.length === 0) {
     return;
   }
+  // `reread` stays NULL unless some write said it: a sum over two NULLs is a count nobody took.
   await exec.query(
-    `INSERT INTO ops.run_entity (run_id, entity, landed, created, changed, unchanged, refused)
+    `INSERT INTO ops.run_entity
+       (run_id, entity, landed, created, changed, unchanged, refused, reread, reread_documents)
      SELECT $1, e->>'entity', (e->>'landed')::int, (e->>'created')::int, (e->>'changed')::int,
-            (e->>'unchanged')::int, (e->>'refused')::int
+            (e->>'unchanged')::int, (e->>'refused')::int,
+            (e->'reread'->>'records')::int, (e->'reread'->>'documents')::int
      FROM jsonb_array_elements($2::jsonb) AS e
      ON CONFLICT (run_id, entity) DO UPDATE SET
        landed = ops.run_entity.landed + EXCLUDED.landed,
        created = ops.run_entity.created + EXCLUDED.created,
        changed = ops.run_entity.changed + EXCLUDED.changed,
        unchanged = ops.run_entity.unchanged + EXCLUDED.unchanged,
-       refused = ops.run_entity.refused + EXCLUDED.refused`,
+       refused = ops.run_entity.refused + EXCLUDED.refused,
+       reread = CASE WHEN ops.run_entity.reread IS NULL AND EXCLUDED.reread IS NULL THEN NULL
+                     ELSE COALESCE(ops.run_entity.reread, 0) + COALESCE(EXCLUDED.reread, 0) END,
+       reread_documents = CASE
+         WHEN ops.run_entity.reread_documents IS NULL AND EXCLUDED.reread_documents IS NULL
+           THEN NULL
+         ELSE COALESCE(ops.run_entity.reread_documents, 0)
+              + COALESCE(EXCLUDED.reread_documents, 0) END`,
     [runId, JSON.stringify(entities)],
   );
 }
@@ -801,8 +823,11 @@ export async function entitiesForRuns(
     changed: number;
     unchanged: number;
     refused: number;
+    reread: number | null;
+    reread_documents: number | null;
   }>(
-    `SELECT run_id, entity, landed, created, changed, unchanged, refused
+    `SELECT run_id, entity, landed, created, changed, unchanged, refused,
+            reread, reread_documents
      FROM ops.run_entity
      WHERE run_id IN (SELECT jsonb_array_elements_text($1::jsonb))
      ORDER BY run_id, entity`,
@@ -817,6 +842,10 @@ export async function entitiesForRuns(
       changed: row.changed,
       unchanged: row.unchanged,
       refused: row.refused,
+      reread:
+        row.reread === null || row.reread_documents === null
+          ? null
+          : { records: row.reread, documents: row.reread_documents },
     });
     byRun.set(row.run_id, list);
   }
