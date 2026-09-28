@@ -204,3 +204,4 @@
 ## [2026-09-28] ingest | What an ingest run counts
 ## [2026-09-28] ingest | Runbook Google Ingestion Setup
 ## [2026-09-28] ingest | ADR 0076 A Harvest Records What It Left Behind
+## [2026-09-28] ingest | Architecture
