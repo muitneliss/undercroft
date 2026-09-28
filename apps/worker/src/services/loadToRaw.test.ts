@@ -123,6 +123,23 @@ describe("loadStreamToRaw", () => {
     expect(result).toMatchObject({ created: 3, changed: 0, unchanged: 0 });
     expect(await readCursor(db, IDENTITY)).toBe((await stamps()).at(-1) ?? "");
   });
+
+  it("a record changed twice within one pass projects its newest version", async () => {
+    // Regression: both versions sat in one batch, the UPDATE ... FROM matched the held row
+    // twice, and Postgres applied whichever it met first -- the older one. The cursor then
+    // moved past both, so the row stayed stale until the record next changed.
+    await land([record("x", JSON.stringify({ v: 1 }))]);
+    await loadStreamToRaw(db, lake, IDENTITY);
+    await land([record("x", JSON.stringify({ v: 2 })), record("x", JSON.stringify({ v: 3 }))]);
+
+    await loadStreamToRaw(db, lake, IDENTITY);
+
+    const { rows } = await db.query<{ payload: unknown }>(
+      "SELECT payload FROM raw.records WHERE source = $1 AND source_record_id = 'x'",
+      [IDENTITY.source],
+    );
+    expect(rows).toEqual([{ payload: { v: 3 } }]);
+  });
 });
 
 describe("a manifest's sourceUpdatedAt reaches a timestamptz column", () => {
