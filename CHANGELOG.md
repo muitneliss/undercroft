@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.2](https://github.com/muitneliss/undercroft/compare/v1.43.1...v1.43.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* **worker:** project a record's newest version when one batch holds two ([#295](https://github.com/muitneliss/undercroft/issues/295)) ([5165641](https://github.com/muitneliss/undercroft/commit/51656413b89654d0b877522919a488cd1d567099))
+
 ## [1.43.1](https://github.com/muitneliss/undercroft/compare/v1.43.0...v1.43.1) (2026-09-28)
 
 
