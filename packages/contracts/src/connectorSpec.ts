@@ -192,6 +192,25 @@ const Request = z.discriminatedUnion("kind", [
   }),
 ]);
 
+/**
+ * What a complete read says about a record held for this entity that the read did not name.
+ * Absent means nothing: a record stops appearing and stays live in the lake, which is the
+ * honest default for a list the spec author cannot vouch for -- a filtered query, a label.
+ *
+ * - `absent`: this list, read whole, is every live record the source holds, so a record it
+ *   no longer names has been removed at source -- archived, deleted, or merged away. Only a
+ *   read that listed everything may say so, and the runtime decides which reads those are
+ *   (`connector-runtime/src/listing.ts`). A `list` request only.
+ * - `parent-removed`: a `batch-from` relation whose records are keyed by the id of the record
+ *   they hang off -- HubSpot's deal-to-company links, keyed by the deal -- so each is removed
+ *   exactly when that record is, and live again when it is. The referenced entity must itself
+ *   be `absent`, or nothing would ever decide.
+ *
+ * A removal is `raw.records.deleted_at`, never an erasure: the lake keeps every version, and a
+ * record listed live again is live again. ADR 0071.
+ */
+const RemovedWhen = z.enum(["absent", "parent-removed"]);
+
 const Entity = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]*$/u, "entity name must be snake_case"),
   request: Request,
@@ -205,6 +224,7 @@ const Entity = z.object({
   incremental: Incremental.optional(),
   rateLimit: RateLimit.optional(),
   guards: Guards.optional(),
+  removedWhen: RemovedWhen.optional(),
 });
 
 export const ConnectorSpec = z
@@ -237,8 +257,40 @@ export const ConnectorSpec = z
           message: `batch-from references unknown entity '${entity.request.entity}'`,
         });
       }
+      const refused = removedWhenRefusal(spec.entities, entity);
+      if (refused !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["entities", entity.name, "removedWhen"],
+          message: refused,
+        });
+      }
     }
   });
+
+/**
+ * Why this entity's `removedWhen` cannot mean what it says, or `null` when it can. A rule no
+ * read could ever act on would sit in a spec looking like a guarantee.
+ */
+function removedWhenRefusal(
+  entities: readonly ConnectorEntity[],
+  entity: ConnectorEntity,
+): string | null {
+  const { removedWhen, request } = entity;
+  if (removedWhen === "absent" && request.kind !== "list") {
+    return "removedWhen 'absent' needs a list request: only a listing names every live record";
+  }
+  if (removedWhen !== "parent-removed") {
+    return null;
+  }
+  if (request.kind !== "batch-from") {
+    return "removedWhen 'parent-removed' needs a batch-from request: it follows the entity it reads against";
+  }
+  const parent = entities.find((e) => e.name === request.entity);
+  return parent === undefined || parent.removedWhen === "absent"
+    ? null
+    : `removedWhen 'parent-removed' needs '${request.entity}' to be removedWhen 'absent', or nothing decides a removal`;
+}
 
 export type ConnectorSpec = z.infer<typeof ConnectorSpec>;
 export type ConnectorEntity = z.infer<typeof Entity>;

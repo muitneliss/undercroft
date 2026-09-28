@@ -16,7 +16,12 @@
  * (a watermark, a tombstone) is written. ADR 0051.
  */
 
-import { laterStamp, readEntity, type RunContext } from "@undercroft/connector-runtime";
+import {
+  laterStamp,
+  type ReadEnd,
+  readEntity,
+  type RunContext,
+} from "@undercroft/connector-runtime";
 import { type ConnectorSpec, sourceKind } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 
@@ -25,6 +30,7 @@ import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type CollectResult, runGoogleCollect } from "./google/collect.ts";
 import type { LandSummary, RefusalWriter } from "./landing.ts";
 import { createRecordSink } from "./recordSink.ts";
+import { settleRemovals } from "./removals.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken, RunStopped } from "./runTypes.ts";
 import type { RunJournal } from "./runJournal.ts";
@@ -160,6 +166,26 @@ function intoLedger(ledger: Ledger): RefusalWriter {
   };
 }
 
+/** Where {@link keepingEnd} puts what a generator returned. Empty until it has returned. */
+interface Ended<R> {
+  value?: R;
+}
+
+/**
+ * The same generator, with what it RETURNS put in `end` -- which `for await` would throw away.
+ *
+ * Only a generator that runs to the end returns anything. One that throws never does, and a
+ * `break` out of the loop closes this wrapper and, through `yield*`, the generator inside it,
+ * so `end` stays empty. That is what makes `end` safe to decide from: `readEntity` returns the
+ * listing of the whole source, and a read that did not finish must not be taken as one.
+ */
+async function* keepingEnd<T, R>(
+  generator: AsyncGenerator<T, R>,
+  end: Ended<R>,
+): AsyncGenerator<T> {
+  end.value = yield* generator;
+}
+
 /**
  * Read one entity, land it as it arrives, and record what it did.
  *
@@ -186,6 +212,16 @@ function intoLedger(ledger: Ledger): RefusalWriter {
  * the sink -- so the sink can land what was read and the ledger can count it, and then throws
  * {@link RunStopped} from above the cursor write. A stopped read is a partial read, and the
  * paragraph above is exactly why a partial read must not move the mark.
+ *
+ * ## And a removal is decided after that, by the same rule
+ *
+ * An entity whose spec says what an absence means (`removedWhen`) gets back, from a read that
+ * listed the whole source, every id it listed -- and its held records outside that set are
+ * marked removed at source. It is the one decision here worse to get wrong than the watermark:
+ * a partial listing would report every record it had not reached as deleted. So it rides on the
+ * generator's return value, which a read that threw or stopped never produces, and sits below
+ * the cursor write for the reason the cursor sits below the ledger. A read that threw or stopped
+ * never returned, so `end` is empty and `settleRemovals` decides nothing. ADR 0071.
  */
 async function ingestEntity(
   run: EntityRun,
@@ -212,7 +248,8 @@ async function ingestEntity(
   let read = 0;
   let mark: string | null = null;
   let stopped = false;
-  for await (const record of readEntity(spec, entity, entityCtx)) {
+  const end: Ended<ReadEnd> = {};
+  for await (const record of keepingEnd(readEntity(spec, entity, entityCtx), end)) {
     await sink.add({
       entity: record.entity,
       sourceRecordId: record.sourceRecordId,
@@ -250,6 +287,7 @@ async function ingestEntity(
       requestKey,
     });
   }
+  await settleRemovals(deps.exec, spec, stream, end.value);
 }
 
 /**

@@ -70,6 +70,9 @@ export async function* rereadPage(
   let stopped = false;
   for (const record of extractRecords(entity, spec, parsed)) {
     const id = keyOf(reader, record);
+    // The LIST names what the source holds, whether or not the batch read then finds it: a
+    // record deleted in between is simply decided by the next complete read.
+    reader.listed?.add(id);
     if (!alreadyRead(entity, since, incrementalAt(entity, record))) {
       wanted.push(id);
     }

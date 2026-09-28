@@ -9,4 +9,4 @@ export {
 // build one, while deciding whether a record is already read is the runtime's own business
 // and stays inside it.
 export { type Incremental, type IncrementalFormat, laterStamp } from "./incremental.ts";
-export { type RawRecordOut, type RunContext, readEntity } from "./run.ts";
+export { type RawRecordOut, type ReadEnd, type RunContext, readEntity } from "./run.ts";

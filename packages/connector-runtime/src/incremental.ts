@@ -183,6 +183,19 @@ function sent(
   return `${iso.slice(0, "YYYY-MM-DDTHH:MM:SS".length)}Z`;
 }
 
+/**
+ * Does the watermark this read carries make the SOURCE answer with less than all of it?
+ *
+ * True for a `header` or `query-param` strategy with a watermark to send: the source then names
+ * only what changed, so a record it leaves out may merely be unchanged. False for a
+ * `client-filter`, which pages the whole source and only skips the landing -- which is what lets
+ * such a read still say what the source holds (`listing.ts`).
+ */
+export function asksSourceForLess(entity: ConnectorEntity, since: string | null): boolean {
+  const { incremental } = entity;
+  return incremental !== undefined && since !== null && CARRIER[incremental.strategy] !== null;
+}
+
 /** The value at this entity's `incremental.sourcePath`, or null when it declares none. */
 export function incrementalAt(entity: ConnectorEntity, record: unknown): string | null {
   const { incremental } = entity;

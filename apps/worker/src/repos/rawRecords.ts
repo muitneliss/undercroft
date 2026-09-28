@@ -24,14 +24,16 @@
  * Postgres can get right, because the text Drive sends and the text the column reads back
  * as are the same instant spelled two ways. See its own docstring.
  *
- * `markHarvested` is the one statement here that does NOT project the lake, and the exception
- * is deliberate rather than an erosion. `documents_landed` records what a harvest settled
- * beside a record, which is a fact about the READING and not about the object -- so it has no
- * way in through a content-addressed store, where an unchanged record writes no new version
- * and therefore nothing for the projection to carry. `230_documents_landed.sql` argues it in
- * full. It is here rather than in a module of its own because this is the repo for this table
- * group (`layering.md`), and a second module writing `raw.records` would be the second writer
- * that argument is trying to avoid.
+ * `markHarvested` and `reconcileRemovals` are the two statements here that do NOT project the
+ * lake, and the exception is deliberate rather than an erosion. `documents_landed` records what
+ * a harvest settled beside a record, and `deleted_at` what a complete read found missing; both
+ * are facts about the READING and not about the object -- so neither has a way in through a
+ * content-addressed store, where an unchanged record writes no new version and therefore
+ * nothing for the projection to carry. `230_documents_landed.sql` argues it in full, and ADR
+ * 0071 for removals: a rebuilt projection loses a removal only until the next complete read
+ * decides it again. They are here rather than in a module of their own because this is the
+ * repo for this table group (`layering.md`), and a second module writing `raw.records` would
+ * be the second writer that argument is trying to avoid.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -249,6 +251,58 @@ export async function markHarvested(
     ],
   );
   return rows.length;
+}
+
+/** What {@link reconcileRemovals} changed: rows newly marked removed, and rows live again. */
+export interface RemovalCounts {
+  readonly removed: number;
+  readonly restored: number;
+}
+
+/**
+ * Bring this stream's `deleted_at` into line with a complete listing of its source: a held row
+ * the listing does not name is marked removed as of now, and a removed row it names again is
+ * live again.
+ *
+ * Only a caller holding a COMPLETE listing may call this. The whole decision is in that word,
+ * and it is made in `@undercroft/connector-runtime`'s `listing.ts`, never here: handed a partial
+ * list, this statement reports every record the list left out as deleted.
+ *
+ * The same column Drive's `tombstoneMissing` writes on `raw.documents`, and a column rather than
+ * a DELETE for the same reason: the row and every lake version behind it stay readable, and
+ * `deleted_at` is a statement about the SOURCE. A row already removed keeps the time it was
+ * first found gone rather than being re-stamped by every later run. Restoring is here as well as
+ * in {@link upsertRecords} because a restored record is very often unchanged -- a client-filtered
+ * read does not even land it -- so no upsert would ever reach the row.
+ *
+ * The anti-join is over `unnest` rather than `NOT (id = ANY(...))`, so a listing of tens of
+ * thousands of ids is one hash join rather than a scan of the array for every row.
+ */
+export async function reconcileRemovals(
+  exec: SqlExecutor,
+  identity: StreamIdentity,
+  listed: ReadonlySet<string>,
+): Promise<RemovalCounts> {
+  const params = [identity.source, identity.tenantId, identity.entity, [...listed]];
+  const removed = await exec.query<{ id: string }>(
+    `UPDATE raw.records r SET deleted_at = now()
+      WHERE r.source = $1 AND r.tenant_id = $2 AND r.entity = $3
+        AND r.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM unnest($4::text[]) AS l(id) WHERE l.id = r.source_record_id)
+     RETURNING r.source_record_id AS id`,
+    params,
+  );
+  const restored = await exec.query<{ id: string }>(
+    `UPDATE raw.records r SET deleted_at = NULL
+       FROM unnest($4::text[]) AS l(id)
+      WHERE r.source = $1 AND r.tenant_id = $2 AND r.entity = $3
+        AND r.source_record_id = l.id
+        AND r.deleted_at IS NOT NULL
+     RETURNING r.source_record_id AS id`,
+    params,
+  );
+  return { removed: removed.rows.length, restored: restored.rows.length };
 }
 
 /**
