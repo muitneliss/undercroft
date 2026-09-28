@@ -210,3 +210,5 @@
 ## [2026-09-28] ingest | ADR 0078 A Drive Walk Lands the Folders It Lists
 ## [2026-09-28] ingest | What an ingest run counts
 ## [2026-09-28] ingest | ADR 0078 A Drive Walk Lands the Folders It Lists
+## [2026-09-28] ingest | ADR 0079 Xero Reads Bank Transactions Transfers And Manual Journals
+## [2026-09-28] ingest | Runbook Xero Setup

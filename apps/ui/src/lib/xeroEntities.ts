@@ -30,6 +30,9 @@ const ENTITY_KEY = {
   tracking_categories: "scope.xeroTrackingCategories",
   tax_rates: "scope.xeroTaxRates",
   currencies: "scope.xeroCurrencies",
+  bank_transactions: "scope.xeroBankTransactions",
+  bank_transfers: "scope.xeroBankTransfers",
+  manual_journals: "scope.xeroManualJournals",
 } as const;
 
 export type XeroEntity = keyof typeof ENTITY_KEY;
