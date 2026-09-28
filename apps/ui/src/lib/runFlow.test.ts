@@ -128,6 +128,7 @@ describe("a closed run's authoritative record", () => {
   it("shows a list the grant could not read as not granted, never as still to come", () => {
     const detail = runDetail({
       status: "ok",
+      source: "xero",
       entityCounts: [
         { entity: "contacts", landed: 5, created: 5, changed: 0, unchanged: 0, refused: 0 },
       ],
@@ -147,6 +148,33 @@ describe("a closed run's authoritative record", () => {
       detail: "Reconnect to grant accounting.settings.read",
     });
     expect(stages[1]).toMatchObject({ key: "entity:contacts", mark: "granted" });
+  });
+
+  it("a list HubSpot refused on its first request is not granted, and granted in HubSpot", () => {
+    // Started, then refused (ADR 0075): the plate must not read as a read that stopped here, and
+    // "reconnect" would send the reader to a screen that cannot tick a private app's scope.
+    const detail = runDetail({
+      status: "ok",
+      source: "hubspot",
+      entityCounts: [
+        { entity: "deals", landed: 5, created: 5, changed: 0, unchanged: 0, refused: 0 },
+      ],
+    });
+    const events = [
+      event("entity_started", {}, "deals"),
+      event("entity_done", { landed: 5, refused: 0 }, "deals"),
+      event("entity_started", {}, "quotes"),
+      event("entity_not_granted", { scope: "crm.objects.quotes.read" }, "quotes"),
+    ];
+
+    const stages = flow(detail, events);
+
+    expect(stages[1]).toMatchObject({
+      key: "entity:quotes",
+      mark: "lapsed",
+      markLabel: "Not granted",
+      detail: "Grant crm.objects.quotes.read in HubSpot",
+    });
   });
 
   it("with no feed at all, still shows every entity entityCounts remembers", () => {

@@ -49,6 +49,14 @@ export interface ReadEnd {
    * absence means (`removedWhen: absent`); `null` whenever it cannot say -- `listing.ts`.
    */
   readonly listed: ReadonlySet<string> | null;
+  /**
+   * Every id the read named, landed or skipped as unchanged, when the caller asked for them
+   * (`RunContext.keepIds`) or a listing needed them; otherwise `null`. What a `batch-from`
+   * relation reading against this entity is handed. Unlike `listed`, it makes no claim to be
+   * the whole source: a truncated read, or one whose watermark the source filtered on, names
+   * only what it read.
+   */
+  readonly named: ReadonlySet<string> | null;
 }
 
 /**
@@ -66,8 +74,8 @@ export async function* readEntity(
     // `maxRecords` truncated the read on purpose, so the end-of-entity guards -- which
     // exist to catch truncation -- have nothing to say about it. Nor has the listing: a
     // truncated read did not name everything.
-    return { listed: null };
+    return { listed: null, named: reader.named };
   }
   checkGuards(reader);
-  return { listed: finishListing(reader.listed) };
+  return { listed: finishListing(entity, reader.since, reader.named), named: reader.named };
 }

@@ -146,7 +146,8 @@ its ADR, and what exactly it accepts lives in a reference page.
     [agent skills](docs/runbook/agent-skills.md)
   - Setting it up: [sign-in](docs/runbook/sign-in-setup.md),
     [the assistant](docs/runbook/assistant-setup.md),
-    [Google ingestion](docs/runbook/google-ingestion-setup.md), [Xero](docs/runbook/xero-setup.md)
+    [Google ingestion](docs/runbook/google-ingestion-setup.md), [Xero](docs/runbook/xero-setup.md),
+    [HubSpot](docs/runbook/hubspot-setup.md)
   - Running it: [deployment](docs/runbook/deployment.md)
 - **Decisions:** [`docs/adr/`](docs/adr/). Each ADR records the options that were rejected
   and why.

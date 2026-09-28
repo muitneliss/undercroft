@@ -144,7 +144,9 @@ describe("scopeSummary for HubSpot", () => {
     // properties -- so the card may not render it as missing.
     const hubspot = connection("hubspot", { status: "connected", config: {} });
 
-    expect(scopeSummary(t, hubspot)).toBe("Các trường chuẩn của công ty, liên hệ và giao dịch");
+    expect(scopeSummary(t, hubspot)).toBe(
+      "Các trường chuẩn của công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm",
+    );
   });
 
   it("counts what was chosen across every object", () => {

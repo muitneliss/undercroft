@@ -128,6 +128,37 @@ ${readScope === null ? "" : `    readScope: ${readScope}`}
     expect(issues(scoped("other.read")).some((i) => i.includes("'other.read'"))).toBe(true);
   });
 
+  it("holds each entity of a token whose refusal is read to a scope it can name", () => {
+    // A list HubSpot refuses is named with the scope to grant (ADR 0075); an entity with none
+    // would be named with nothing. A pasted token asks for no scopes, so any name is allowed.
+    function pasted(readScope: string | null): boolean {
+      try {
+        parseSpec(`
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: pasted
+displayName: Pasted
+baseUrl: https://example.test
+auth: { kind: bearer, token: { from: connection }, grantRefusal: hubspot-missing-scopes }
+entities:
+  - name: things
+    idPath: id
+    request: { kind: list, path: /things }
+${readScope === null ? "" : `    readScope: ${readScope}`}
+`);
+        return true;
+      } catch (error) {
+        if (!(error instanceof SpecError)) {
+          throw error;
+        }
+        return false;
+      }
+    }
+
+    expect(pasted("crm.objects.things.read")).toBe(true);
+    expect(pasted(null)).toBe(false);
+  });
+
   it("rejects a relation removed with a parent whose own removals nothing decides", () => {
     const broken = `
 apiVersion: undercroft.dev/v1

@@ -61,13 +61,54 @@ function company(id: string, modified: string, extra: Record<string, string> = {
   };
 }
 
+/** An entity's first-page URL as the runtime builds it: the spec's query, then a partition's. */
+function specUrl(entity: string, partition: Record<string, string> = {}): string {
+  const request = readSpec(SPECS_DIR, "hubspot").entities.find((e) => e.name === entity)?.request;
+  if (request?.kind !== "list") {
+    throw new Error(`the spec lists no ${entity}`);
+  }
+  const url = new URL(`https://api.hubapi.com${request.path}`);
+  for (const [key, value] of Object.entries({ ...request.query, ...partition })) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
+}
+
+/** Where HubSpot's v4 batch read answers one kind of link. */
+function links(from: string, to: string): string {
+  return `https://api.hubapi.com/crm/v4/associations/${from}/${to}/batch/read`;
+}
+
+/**
+ * What the spec reads beside the three objects a scope widens, in the order it reads it: none of
+ * it changes with a choice of properties, so it is recorded once, as quiet as a portal gets -- no
+ * quotes, line items or products, one owner and one pipeline.
+ */
+const REST_OF_PORTAL: readonly (readonly ["GET" | "POST", string, unknown])[] = [
+  ["GET", specUrl("quotes"), { results: [] }],
+  ["GET", specUrl("line_items"), { results: [] }],
+  ["GET", specUrl("products", { archived: "false" }), { results: [] }],
+  ["GET", specUrl("products", { archived: "true" }), { results: [] }],
+  ["GET", specUrl("owners", { archived: "false" }), { results: [{ id: "o1", archived: false }] }],
+  ["GET", specUrl("owners", { archived: "true" }), { results: [] }],
+  ["GET", specUrl("deal_pipelines"), { results: [{ id: "default", stages: [] }] }],
+  ["POST", links("contacts", "companies"), { results: [] }],
+  ["POST", links("deals", "contacts"), { results: [] }],
+  ["POST", links("deals", "quotes"), { results: [] }],
+  ["POST", links("deals", "line_items"), { results: [] }],
+];
+
 /**
  * HubSpot as recorded: `companies` listed as the spec declares it, the other two objects and the
- * relation at the URLs the spec has always used. Any other request is refused -- a widened read
- * records its batch read on top with {@link batchAnswers}.
+ * relation at the URLs the spec has always used, and the rest of the portal. Any other request is
+ * refused -- a widened read records its batch read on top with {@link batchAnswers}.
  */
 function hubspot(companies: unknown[]): InMemoryFetcher {
-  return new InMemoryFetcher()
+  const fetcher = new InMemoryFetcher();
+  for (const [method, url, body] of REST_OF_PORTAL) {
+    fetcher.on(method, url, { body });
+  }
+  return fetcher
     .on("GET", listUrl("companies", specProperties("companies")), {
       body: { results: companies, paging: {} },
     })
@@ -154,22 +195,37 @@ async function payloadOf(id: string): Promise<{ properties: Record<string, unkno
 }
 
 describe("a HubSpot connection nobody has scoped", () => {
-  it("asks every object for the spec's own properties, and reads all four entities", async () => {
+  it("asks every object for the spec's own properties, and reads every entity", async () => {
     const fetcher = hubspot([company("1", "2026-01-01T00:00:00.000Z")]);
 
     const result = await ingest(fetcher);
 
+    // The three quote relations read nothing, because the portal has no quotes -- and ask
+    // HubSpot nothing, which the recorded fetcher would have refused.
     expect(result.entities.map((entity) => entity.entity)).toEqual([
       "companies",
       "contacts",
       "deals",
       "associations",
+      "quotes",
+      "line_items",
+      "products",
+      "owners",
+      "deal_pipelines",
+      "contact_companies",
+      "deal_contacts",
+      "deal_quotes",
+      "deal_line_items",
+      "quote_line_items",
+      "quote_contacts",
+      "quote_companies",
     ]);
     expect(fetcher.calls.map((call) => call.url)).toEqual([
       listUrl("companies", specProperties("companies")),
       listUrl("contacts", specProperties("contacts")),
       listUrl("deals", specProperties("deals")),
       ASSOCIATIONS,
+      ...REST_OF_PORTAL.map(([, url]) => url),
     ]);
   });
 });

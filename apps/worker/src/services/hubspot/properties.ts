@@ -29,6 +29,7 @@ import type {
   ConnectorSpec,
   HubspotScope,
 } from "@undercroft/contracts";
+import { refusedScopes } from "@undercroft/connector-runtime";
 import type { ByteFetcher } from "@undercroft/core";
 import { raiseForByteStatus } from "@undercroft/core";
 
@@ -144,41 +145,71 @@ function isRecord(value: unknown): value is PropertyRow {
  * property it does not mark is, by HubSpot's own definition, not one of HubSpot's: the portal's.
  *
  * A 401 or 403 raises as an `HttpError` for `browseScope` to turn into `scope-insufficient`: a
- * token whose private app lacks the object's read scope is a reconnect, not an outage.
+ * token whose private app lacks the object's read scope is a reconnect, not an outage. The one
+ * exception is HubSpot's own "missing scopes" refusal on SOME of the objects: those are left out
+ * and the rest are listed, as a run reads the rest.
  */
 export async function listProperties(
   deps: PropertiesDeps,
   spec: ConnectorSpec,
 ): Promise<BrowseItem[]> {
   const items: BrowseItem[] = [];
+  let listed = 0;
+  let firstRefusal: Refused | null = null;
   for (const entity of spec.entities) {
     const objectType = objectTypeOf(entity);
     if (objectType !== null) {
       const always = new Set(floorOf(entity));
-      const rows = await fetchProperties(deps, spec.baseUrl, objectType);
-      items.push(...rows.flatMap((row) => itemOf(row, entity.name, always)));
+      const answer = await fetchProperties(deps, spec, entity, objectType);
+      if ("refused" in answer) {
+        firstRefusal ??= answer;
+      } else {
+        listed += 1;
+        items.push(...answer.rows.flatMap((row) => itemOf(row, entity.name, always)));
+      }
     }
+  }
+  // A token that may read none of the objects is the reconnect it always was. One that may read
+  // some has its other objects left out of the listing -- the run names each of them as not
+  // granted, with the scope to add -- rather than a picker that offers nothing at all because the
+  // private app was never given quotes (ADR 0075).
+  if (listed === 0 && firstRefusal !== null) {
+    raiseForByteStatus(firstRefusal.request, firstRefusal.response);
   }
   return items;
 }
 
+/** A properties request HubSpot refused because the token lacks the object's scope. */
+interface Refused {
+  readonly refused: true;
+  readonly request: Parameters<ByteFetcher["send"]>[0];
+  readonly response: Awaited<ReturnType<ByteFetcher["send"]>>;
+}
+
 async function fetchProperties(
   deps: PropertiesDeps,
-  baseUrl: string,
+  spec: ConnectorSpec,
+  entity: ConnectorEntity,
   objectType: string,
-): Promise<PropertyRow[]> {
-  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+): Promise<{ readonly rows: PropertyRow[] } | Refused> {
+  const base = spec.baseUrl.endsWith("/") ? spec.baseUrl : `${spec.baseUrl}/`;
   const request = {
     url: new URL(`crm/v3/properties/${encodeURIComponent(objectType)}`, base).toString(),
     method: "GET" as const,
     headers: { authorization: `Bearer ${await deps.token()}`, accept: "application/json" },
   };
   const response = await deps.fetcher.send(request);
+  const text = new TextDecoder().decode(response.bytes);
+  // The same reading of HubSpot's refusal a run makes, so the picker and the run agree about
+  // which objects this token may read.
+  if (refusedScopes(spec, entity, { status: response.status, headers: {}, text }) !== null) {
+    return { refused: true, request, response };
+  }
   raiseForByteStatus(request, response);
 
-  const body: unknown = JSON.parse(new TextDecoder().decode(response.bytes));
+  const body: unknown = JSON.parse(text);
   const results = isRecord(body) ? body.results : undefined;
-  return Array.isArray(results) ? results.filter(isRecord) : [];
+  return { rows: Array.isArray(results) ? results.filter(isRecord) : [] };
 }
 
 /** One row as a choice, or nothing for a row with no name -- there is nothing to record for it. */

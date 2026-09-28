@@ -10,7 +10,10 @@
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
-import type { RunEventView } from "@/api/types.ts";
+import { sourceKind } from "@undercroft/contracts/sources";
+
+import { isSource, type RunEventView } from "@/api/types.ts";
+import { connectsBy } from "@/lib/connectionState.ts";
 import { formatCount } from "@/lib/money.ts";
 
 /**
@@ -109,15 +112,34 @@ function readSentence(
 }
 
 /**
- * A list the run never requested because the recorded grant lacks its scope (ADR 0073).
+ * A list the run did not read because the grant lacks its scope: a recorded grant judged before
+ * the run (ADR 0073), or a pasted token its source refused on the list's first request (ADR 0075).
  *
- * Names the scope, because reconnecting is the repair and the scope is what it would add. A
- * detail with no scope still reads as a sentence, with the scope left empty, rather than as the
+ * Names the scope, because granting it is the repair. How it is granted depends on how the source
+ * is connected: a consent is given again by reconnecting, while a HubSpot private app's scopes
+ * are ticked in HubSpot, and "reconnect" would send that reader to a screen that cannot add one.
+ * A detail with no scope still reads as a sentence, with the scope left empty, rather than as the
  * raw event name.
  */
-function notGrantedSentence(t: TFunction, entity: string, detail: Record<string, unknown>): string {
+function notGrantedSentence(
+  t: TFunction,
+  entity: string,
+  detail: Record<string, unknown>,
+  source: string | null | undefined,
+): string {
   const scope = typeof detail.scope === "string" ? detail.scope : "";
-  return t("journal.event.entityNotGranted", { entity, scope });
+  return grantedBy(source) === "token"
+    ? t("journal.event.entityNotGrantedToken", { entity, scope })
+    : t("journal.event.entityNotGranted", { entity, scope });
+}
+
+/**
+ * How the run's source grants a scope: by a consent, or by the token an admin pasted. A source
+ * this build does not know is taken to consent, which is how every source but HubSpot connects.
+ */
+export function grantedBy(source: string | null | undefined): "consent" | "token" {
+  const kind = sourceKind(source ?? "");
+  return isSource(kind) ? connectsBy(kind) : "consent";
 }
 
 /**
@@ -131,11 +153,14 @@ function notGrantedSentence(t: TFunction, entity: string, detail: Record<string,
  *
  * Counts arrive pre-formatted through `formatCount`, so an absent one renders as MISSING
  * rather than as a `0` that would read as a real zero. Same reason `formatMoney` does it.
+ *
+ * `source` is the run's, and only a missing permission's remedy depends on it.
  */
 export function eventSentence(
   t: TFunction,
   locale: Locale,
   event: Pick<RunEventView, "event" | "entity" | "detail">,
+  source?: string | null,
 ): string {
   const entity = event.entity ?? "";
   function n(key: string): string {
@@ -154,7 +179,7 @@ export function eventSentence(
     case "entity_done":
       return doneSentence(t, n, entity, event.detail);
     case "entity_not_granted":
-      return notGrantedSentence(t, entity, event.detail);
+      return notGrantedSentence(t, entity, event.detail, source);
     case "picks_listed":
       return picksSentence(t, n, event.detail);
     case "documents_landed":

@@ -313,7 +313,9 @@ export function RunDetail({
       <RunProgress gauges={gauges} locale={locale} />
 
       {/* Above the counts, because while the run is going the counts are not there yet. */}
-      {events.length > 0 ? <RunEvents entries={entries} locale={locale} live={running} /> : null}
+      {events.length > 0 ? (
+        <RunEvents entries={entries} locale={locale} live={running} source={detail.source} />
+      ) : null}
 
       <RunCounts detail={detail} locale={locale} />
 

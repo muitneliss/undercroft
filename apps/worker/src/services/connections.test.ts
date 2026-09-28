@@ -65,31 +65,45 @@ describe("browsing a HubSpot portal's properties", () => {
   const specsDir = join(import.meta.dirname, "..", "..", "..", "..", "specs", "connectors");
   const PROPERTIES = "https://api.hubapi.com/crm/v3/properties";
 
-  function portal(): InMemoryByteFetcher {
-    return new InMemoryByteFetcher()
-      .on("GET", `${PROPERTIES}/companies`, {
-        body: {
-          results: [
-            { name: "name", label: "Company name", hubspotDefined: true },
-            { name: "annualrevenue", label: "Annual Revenue", hubspotDefined: true },
-            // Made in the portal: HubSpot does not mark it as one of its own.
-            { name: "x_onboarding_stage", label: "Onboarding stage" },
-          ],
-        },
-      })
-      .on("GET", `${PROPERTIES}/contacts`, {
-        body: { results: [{ name: "lastmodifieddate", label: "Last Modified Date" }] },
-      })
-      .on("GET", `${PROPERTIES}/deals`, { body: { results: [] } });
+  /** The objects whose properties the spec lets a scope choose, in spec order. */
+  const OBJECTS = ["companies", "contacts", "deals", "quotes", "line_items", "products"];
+
+  /** HubSpot's answer to a token without the object's scope. */
+  const MISSING_SCOPES = { status: 403, body: { category: "MISSING_SCOPES" } };
+
+  function portal(refused: readonly string[] = []): InMemoryByteFetcher {
+    const answers: Record<string, unknown[]> = {
+      companies: [
+        { name: "name", label: "Company name", hubspotDefined: true },
+        { name: "annualrevenue", label: "Annual Revenue", hubspotDefined: true },
+        // Made in the portal: HubSpot does not mark it as one of its own.
+        { name: "x_onboarding_stage", label: "Onboarding stage" },
+      ],
+      contacts: [{ name: "lastmodifieddate", label: "Last Modified Date" }],
+      quotes: [{ name: "hs_title", label: "Quote name", hubspotDefined: true }],
+    };
+    const fetcher = new InMemoryByteFetcher();
+    for (const object of OBJECTS) {
+      fetcher.on(
+        "GET",
+        `${PROPERTIES}/${object}`,
+        refused.includes(object) ? MISSING_SCOPES : { body: { results: answers[object] ?? [] } },
+      );
+    }
+    return fetcher;
+  }
+
+  function browse(fetcher: InMemoryByteFetcher): ReturnType<typeof browseScope> {
+    return browseScope(
+      { exec: noDatabase, fetcher, token: () => Promise.resolve("t"), specsDir },
+      { source: "hubspot", tenantId: "CASE-1", kind: "properties" },
+    );
   }
 
   it("lists every object's properties, the portal's own among them, and marks what is always read", async () => {
-    // Three objects, three requests: the associations relation has no properties to list, and
-    // the recorded fetcher refuses a fourth request nobody recorded.
-    const outcome = await browseScope(
-      { exec: noDatabase, fetcher: portal(), token: () => Promise.resolve("t"), specsDir },
-      { source: "hubspot", tenantId: "CASE-1", kind: "properties" },
-    );
+    // Six objects, six requests: owners, pipelines and the links have no properties to list,
+    // and the recorded fetcher refuses a request nobody recorded.
+    const outcome = await browse(portal());
 
     expect(outcome).toEqual({
       ok: true,
@@ -104,23 +118,24 @@ describe("browsing a HubSpot portal's properties", () => {
           entity: "contacts",
           always: true,
         },
+        { id: "hs_title", name: "Quote name", kind: "system", entity: "quotes", always: true },
       ],
       partial: [],
     });
   });
 
-  it("a token whose private app may not read an object is a reconnect, not an outage", async () => {
-    const fetcher = new InMemoryByteFetcher().on("GET", `${PROPERTIES}/companies`, {
-      status: 403,
-      body: { category: "MISSING_SCOPES" },
-    });
+  it("a private app without the quotes scope still lists every other object", async () => {
+    // Refusing the whole picker would stop an admin choosing a company property because the
+    // private app was never given quotes; the run reads the rest and names quotes (ADR 0075).
+    const outcome = await browse(portal(["quotes"]));
 
-    expect(
-      await browseScope(
-        { exec: noDatabase, fetcher, token: () => Promise.resolve("t"), specsDir },
-        { source: "hubspot", tenantId: "CASE-1", kind: "properties" },
-      ),
-    ).toEqual({ ok: false, reason: "scope-insufficient" });
+    expect(outcome.ok).toBe(true);
+    const entities = outcome.ok ? new Set(outcome.items.map((item) => item.entity)) : new Set();
+    expect([...entities]).toEqual(["companies", "contacts"]);
+  });
+
+  it("a token whose private app may read no object is a reconnect, not an outage", async () => {
+    expect(await browse(portal(OBJECTS))).toEqual({ ok: false, reason: "scope-insufficient" });
   });
 });
 
