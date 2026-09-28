@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.0](https://github.com/muitneliss/undercroft/compare/v1.45.0...v1.46.0) (2026-09-28)
+
+
+### Features
+
+* **xero:** land bank transactions, bank transfers and manual journals, so money that moves without an invoice reaches the lake ([#310](https://github.com/muitneliss/undercroft/issues/310)) ([e1da16a](https://github.com/muitneliss/undercroft/commit/e1da16aaebffdbcec3f53fc926cd4a4118430c54)), closes [#308](https://github.com/muitneliss/undercroft/issues/308)
+
 ## [1.45.0](https://github.com/muitneliss/undercroft/compare/v1.44.0...v1.45.0) (2026-09-28)
 
 
