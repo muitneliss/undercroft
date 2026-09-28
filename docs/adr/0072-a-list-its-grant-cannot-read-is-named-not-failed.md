@@ -1,4 +1,4 @@
-# 71. A list its grant cannot read is named in the run, not failed, and Xero asks for settings
+# 72. A list its grant cannot read is named in the run, not failed, and Xero asks for settings
 
 - Status: Accepted
 - Date: 2026-09-28

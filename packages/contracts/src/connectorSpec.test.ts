@@ -27,6 +27,17 @@ describe("the shipped HubSpot spec is valid", () => {
     expect(contacts?.incremental?.sourcePath).toBe("properties.lastmodifieddate");
     expect(deals?.incremental?.sourcePath).toBe("properties.hs_lastmodifieddate");
   });
+
+  it("every object says a record it stops listing was removed, and so do the deals' links", () => {
+    // An object added without it would keep every record HubSpot deletes live in the lake,
+    // silently -- issue 278. ADR 0071.
+    const declared = parseSpec(hubspotYaml()).entities.map((e) => [e.name, e.removedWhen]);
+    const wanted = parseSpec(hubspotYaml()).entities.map((e) => [
+      e.name,
+      e.request.kind === "list" ? "absent" : "parent-removed",
+    ]);
+    expect(declared).toEqual(wanted);
+  });
 });
 
 describe("an invalid spec fails with a path-qualified message", () => {
@@ -115,6 +126,31 @@ ${readScope === null ? "" : `    readScope: ${readScope}`}
     expect(issues(scoped("things.read"))).toEqual([]);
     expect(issues(scoped(null)).some((i) => i.includes("entities.things.readScope"))).toBe(true);
     expect(issues(scoped("other.read")).some((i) => i.includes("'other.read'"))).toBe(true);
+  });
+
+  it("rejects a relation removed with a parent whose own removals nothing decides", () => {
+    const broken = `
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: broken
+displayName: Broken
+baseUrl: https://example.test
+auth: { kind: none }
+entities:
+  - name: deals
+    request: { kind: list, path: /deals }
+    idPath: id
+  - name: links
+    idPath: from.id
+    removedWhen: parent-removed
+    request:
+      kind: batch-from
+      entity: deals
+      idPath: id
+      path: /batch
+      bodyTemplate: hubspot-batch-inputs
+`;
+    expect(() => parseSpec(broken)).toThrow("or nothing decides a removal");
   });
 
   it("rejects malformed YAML before it reaches schema validation", () => {

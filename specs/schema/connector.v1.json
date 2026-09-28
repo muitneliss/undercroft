@@ -696,6 +696,13 @@
               "readScope": {
                 "type": "string",
                 "minLength": 1
+              },
+              "removedWhen": {
+                "type": "string",
+                "enum": [
+                  "absent",
+                  "parent-removed"
+                ]
               }
             },
             "required": [

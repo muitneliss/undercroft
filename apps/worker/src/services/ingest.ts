@@ -214,7 +214,7 @@ async function execute(
  *
  * A grant narrower than the spec's consent is NOT refused here. It still reads every list
  * outside the scope it lacks, so the run opens, reads those, and names the rest as not granted
- * (`grant.ts`, `openSpecRun`). ADR 0071 supersedes ADR 0069's refusal at this point.
+ * (`grant.ts`, `openSpecRun`). ADR 0072 supersedes ADR 0069's refusal at this point.
  */
 async function requireUsableConnection(
   deps: Pick<RunDeps, "exec" | "specsDir">,

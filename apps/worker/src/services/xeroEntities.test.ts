@@ -12,7 +12,7 @@
  *
  * Also here: a grant recorded before a scope the consent now asks for -- every Xero connection
  * made before `accounting.settings.read` -- reads every list it can and never requests the rest,
- * which the run names with the scope a reconnect would add (ADR 0071). The 401 it used to meet on
+ * which the run names with the scope a reconnect would add (ADR 0072). The 401 it used to meet on
  * items part-way through a run was issue 276.
  */
 

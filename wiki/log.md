@@ -188,5 +188,7 @@
 ## [2026-09-27] ingest | Runbook Xero Setup
 ## [2026-09-27] ingest | ADR 0070 A Tab A Deploy Left Behind Reloads When It Loses Nothing
 ## [2026-09-28] ingest | What an ingest run counts
-## [2026-09-28] ingest | ADR 0071 A List Its Grant Cannot Read Is Named Not Failed
+## [2026-09-28] ingest | ADR 0071 A Record A Complete Listing No Longer Names Is Removed At Source
+## [2026-09-28] ingest | ADR 0072 A List Its Grant Cannot Read Is Named Not Failed
 ## [2026-09-28] ingest | Runbook Xero Setup
+## [2026-09-28] remove | ADR 0071 A List Its Grant Cannot Read Is Named Not Failed

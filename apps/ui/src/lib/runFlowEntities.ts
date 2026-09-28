@@ -41,7 +41,7 @@ export interface EntityReading {
   /**
    * The scope the grant lacks, for a list the run never requested because of it; `null` for a
    * list it read. Such a list has no count at all, and its plate says why rather than showing
-   * a dash that reads as "still to come" (ADR 0071).
+   * a dash that reads as "still to come" (ADR 0072).
    */
   ungranted: string | null;
 }

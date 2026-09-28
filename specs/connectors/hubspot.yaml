@@ -16,6 +16,15 @@
 # each page's records and carries the cursor, and HubSpot's batch read then fetches that page
 # with the union in its POST body -- a portal's full list of contact properties is longer than
 # any URL HubSpot accepts. The worker adds that step (`request.batchRead`); nothing here does.
+#
+# Each object is `removedWhen: absent` (ADR 0071). Its list asks for `archived=false`, which is
+# every live record the portal holds, paged by record id -- and the client-filter watermark below
+# never narrows it: every run pages the whole list and only skips LANDING what has not changed.
+# So a run that reads an object to the end names every live record, and a record the lake holds
+# that it no longer names has been archived, deleted or merged away; the worker marks it removed.
+# A run that fails or stops partway decides nothing. `hs_merged_object_ids` is read so that a
+# merge says where a record went: HubSpot writes the merged-away ids onto the record they merged
+# into (a merge makes a NEW record id, and both old ids leave the live list).
 apiVersion: undercroft.dev/v1
 kind: Connector
 id: hubspot
@@ -51,13 +60,14 @@ entities:
       query:
         limit: "100"
         archived: "false"
-        properties: name,domain,industry,lifecyclestage,createdate,hs_lastmodifieddate,hubspot_owner_id
+        properties: name,domain,industry,lifecyclestage,createdate,hs_lastmodifieddate,hubspot_owner_id,hs_merged_object_ids
     envelopePath: results
     idPath: id
     updatedAtPath: updatedAt
     incremental:
       strategy: client-filter
       sourcePath: properties.hs_lastmodifieddate
+    removedWhen: absent
 
   - name: contacts
     request:
@@ -66,7 +76,7 @@ entities:
       query:
         limit: "100"
         archived: "false"
-        properties: firstname,lastname,email,company,createdate,lastmodifieddate,hubspot_owner_id
+        properties: firstname,lastname,email,company,createdate,lastmodifieddate,hubspot_owner_id,hs_merged_object_ids
     envelopePath: results
     idPath: id
     updatedAtPath: updatedAt
@@ -75,6 +85,7 @@ entities:
       # NOT hs_lastmodifieddate. HubSpot names it differently on contacts, and the
       # wrong name yields a cursor that never advances.
       sourcePath: properties.lastmodifieddate
+    removedWhen: absent
 
   - name: deals
     request:
@@ -83,13 +94,14 @@ entities:
       query:
         limit: "100"
         archived: "false"
-        properties: dealname,dealstage,pipeline,amount,closedate,createdate,hs_lastmodifieddate,hubspot_owner_id
+        properties: dealname,dealstage,pipeline,amount,closedate,createdate,hs_lastmodifieddate,hubspot_owner_id,hs_merged_object_ids
     envelopePath: results
     idPath: id
     updatedAtPath: updatedAt
     incremental:
       strategy: client-filter
       sourcePath: properties.hs_lastmodifieddate
+    removedWhen: absent
 
   # Not a CRM object: the deal-to-company edge, on a different route with a different
   # shape. Without it a deal has no owner and every deal-to-customer join is a guess --
@@ -113,3 +125,7 @@ entities:
     pagination: { kind: none }
     guards:
       failOnEmpty: false # a portal with no associations is a real state
+    # Keyed by the deal (`from.id`), so a deal's links are removed when the deal is, and live
+    # again when it is. Decided by the deals listing: this read asks only about deals that
+    # changed, so it could never say which deals are gone.
+    removedWhen: parent-removed

@@ -28,7 +28,7 @@ auth:
   # Xero no longer grants the broad accounting.transactions to a new app. A scope added here is a
   # new consent: add it in `oauthProviders.ts` too. A grant recorded without it still reads every
   # list it can, and each list it cannot is named in the run as not granted, never requested
-  # (ADR 0071). `/Items` was once read under invoices; live Xero answers it 401 there (#276).
+  # (ADR 0072). `/Items` was once read under invoices; live Xero answers it 401 there (#276).
   scopes:
     [
       offline_access,

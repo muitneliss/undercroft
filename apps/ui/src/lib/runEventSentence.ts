@@ -109,7 +109,7 @@ function readSentence(
 }
 
 /**
- * A list the run never requested because the recorded grant lacks its scope (ADR 0071).
+ * A list the run never requested because the recorded grant lacks its scope (ADR 0072).
  *
  * Names the scope, because reconnecting is the repair and the scope is what it would add. A
  * detail with no scope still reads as a sentence, with the scope left empty, rather than as the

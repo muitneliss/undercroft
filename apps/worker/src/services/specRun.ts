@@ -8,7 +8,7 @@
  *
  * The recorded grant narrows the same list, after the scope: a list the grant cannot read is
  * never requested, and is handed back beside the reads with the scope it lacks, so the run can
- * say so (`grant.ts`, ADR 0071).
+ * say so (`grant.ts`, ADR 0072).
  */
 
 import { createHash } from "node:crypto";

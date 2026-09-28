@@ -1,17 +1,17 @@
 ---
-title: ADR 0071 A List Its Grant Cannot Read Is Named Not Failed
+title: ADR 0072 A List Its Grant Cannot Read Is Named Not Failed
 type: source
 date: 2026-09-28
 tags: []
-source: docs/adr/0071-a-list-its-grant-cannot-read-is-named-not-failed.md
-source_path: docs/adr/0071-a-list-its-grant-cannot-read-is-named-not-failed.md
-source_hash: 59bffcaec917c2cb52ca51e5655085d61c02faf65d20070ee609e314f6ae3a14
+source: docs/adr/0072-a-list-its-grant-cannot-read-is-named-not-failed.md
+source_path: docs/adr/0072-a-list-its-grant-cannot-read-is-named-not-failed.md
+source_hash: d4ba76010f41d24eca9ac08b35e96db3f77b5135011e5a20e434a8be31c9307e
 ingested: 2026-09-28
 ---
 
-# ADR 0071 A List Its Grant Cannot Read Is Named Not Failed
+# ADR 0072 A List Its Grant Cannot Read Is Named Not Failed
 
-# ADR 0071 A list its grant cannot read is named in the run, not failed, and Xero asks for settings
+# ADR 0072 A list its grant cannot read is named in the run, not failed, and Xero asks for settings
 
 Status: Accepted, 2026-09-28. Issues 276 and 277. Supersedes three points of
 [[ADR 0069 Xero Reads Every List Its Granular Scopes Reach]]: Items under
