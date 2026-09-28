@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.44.0](https://github.com/muitneliss/undercroft/compare/v1.43.3...v1.44.0) (2026-09-28)
+
+
+### Features
+
+* **worker:** measure Jev on a tenant's documents with task db:semantic-probe ([#302](https://github.com/muitneliss/undercroft/issues/302)) ([6baee6f](https://github.com/muitneliss/undercroft/commit/6baee6fa25487fbd3490dce449d6eb5392ca4e61))
+
+
+### Bug Fixes
+
+* **worker:** store a reader's stdout as text, never its stderr remarks ([#304](https://github.com/muitneliss/undercroft/issues/304)) ([1b7aa3a](https://github.com/muitneliss/undercroft/commit/1b7aa3a4219a3ee94c00083f70ab458b8428263a))
+
 ## [1.43.3](https://github.com/muitneliss/undercroft/compare/v1.43.2...v1.43.3) (2026-09-28)
 
 
