@@ -338,11 +338,11 @@ describe("an external caller's run id", () => {
     expect(await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0042", source: "csv" })).toBe(
       true,
     );
-    await recordExternalBatch(db, "ext-1", { created: 2, unchanged: 0, refused: 0 });
+    await recordExternalBatch(db, "ext-1", { created: 2, changed: 0, unchanged: 0, refused: 0 });
     expect(await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0042", source: "csv" })).toBe(
       true,
     );
-    await recordExternalBatch(db, "ext-1", { created: 1, unchanged: 1, refused: 1 });
+    await recordExternalBatch(db, "ext-1", { created: 1, changed: 0, unchanged: 1, refused: 1 });
 
     const run = await getRun(db, "CASE-0042", "ext-1");
     expect(run?.trigger).toBe("lake-api");

@@ -65,6 +65,16 @@ export interface PutResult {
    */
   readonly status: "created" | "unchanged";
   readonly sha256: string;
+  /**
+   * The digest of the newest observation at this key BEFORE this put, or `null` when the key
+   * had none -- so a `created` put says whether it was the key's first observation or a new
+   * version of one already held, and an `unchanged` put carries its own `sha256` here.
+   *
+   * Reported rather than left for the caller to ask `newestSha` first, because `put` has
+   * already read it to decide `unchanged`: a second read would double the cost of every write
+   * and could answer about a different moment than the one the write was decided on.
+   */
+  readonly previousSha256: string | null;
   readonly blobKey: string;
   readonly versionKey: string;
   readonly bytes: number;
@@ -190,10 +200,12 @@ export class LakeStore {
     const digest = await sha256Hex(data);
     const blob = LakeStore.blobKey(digest);
 
-    if ((await this.newestSha(key)) === digest) {
+    const previous = await this.newestSha(key);
+    if (previous === digest) {
       return {
         status: "unchanged",
         sha256: digest,
+        previousSha256: previous,
         blobKey: blob,
         versionKey: "",
         bytes: data.byteLength,
@@ -232,6 +244,7 @@ export class LakeStore {
     return {
       status: "created",
       sha256: digest,
+      previousSha256: previous,
       blobKey: blob,
       versionKey,
       bytes: data.byteLength,

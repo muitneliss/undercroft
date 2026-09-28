@@ -107,7 +107,7 @@ describe("a crash costs a chunk, not the run", () => {
     const result = await ingest(fetcher);
 
     expect(result.entities[0]?.landed).toBe(CHUNK + 5);
-    expect(result.entities[0]?.loadedCreated).toBe(CHUNK + 5);
+    expect(result.entities[0]?.created).toBe(CHUNK + 5);
     expect(await landedCount()).toBe(CHUNK + 5);
   });
 });

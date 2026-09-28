@@ -33,10 +33,10 @@ CREATE INDEX IF NOT EXISTS run_tenant_started ON ops.run (tenant_id, started_at 
 CREATE TABLE IF NOT EXISTS ops.run_entity (
     run_id    text NOT NULL REFERENCES ops.run(id) ON DELETE CASCADE,
     entity    text NOT NULL,
-    landed    integer NOT NULL DEFAULT 0,   -- reached the lake (new or unchanged)
-    created   integer NOT NULL DEFAULT 0,   -- projected into raw as new rows
-    changed   integer NOT NULL DEFAULT 0,   -- projected into raw as changed rows
-    unchanged integer NOT NULL DEFAULT 0,   -- already in raw, byte-identical
+    landed    integer NOT NULL DEFAULT 0,   -- reached the lake: created + changed + unchanged
+    created   integer NOT NULL DEFAULT 0,   -- the record's first version in the lake
+    changed   integer NOT NULL DEFAULT 0,   -- a new version of a record the lake held
+    unchanged integer NOT NULL DEFAULT 0,   -- identical to the lake's newest; nothing written
     refused   integer NOT NULL DEFAULT 0,   -- see ops.run_refusal
     PRIMARY KEY (run_id, entity)
 );
