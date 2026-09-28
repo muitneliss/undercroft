@@ -140,6 +140,8 @@ has the setup, the local stack and the checks outside the gate.
 This README is an index. How to do a thing lives in its runbook, why it is that way lives in
 its ADR, and what exactly it accepts lives in a reference page.
 
+- **Architecture:** [the map of the system](docs/architecture.md): its services, data layers,
+  key flows and security model, with diagrams.
 - **Runbooks,** one per way in or per thing to set up ([`docs/runbook/`](docs/runbook/)):
   - Getting started: [onboarding a new person](docs/runbook/onboarding.md)
   - Using it: [the CLI](docs/runbook/cli.md), [connecting an agent over MCP](docs/runbook/mcp-setup.md),
