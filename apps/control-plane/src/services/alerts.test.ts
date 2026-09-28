@@ -84,6 +84,7 @@ function caller(userId: string, address: string) {
         provider: "google" as const,
       }),
     worker: null,
+    specReads: new Map(),
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);

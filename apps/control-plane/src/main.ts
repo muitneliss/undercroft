@@ -25,8 +25,7 @@ import { asExecutor, createPool, withTransaction } from "@undercroft/db";
 import { startTelemetry } from "@undercroft/telemetry";
 import { createAuth } from "./handlers/auth.ts";
 import { createServer } from "./handlers/server.ts";
-import { loadSkills } from "./skills.ts";
-import { buildWidgets } from "./widgets.ts";
+import { readImageFiles } from "./imageFiles.ts";
 import { runAlerts } from "./services/alerts.ts";
 import { createAssistant } from "./services/assistant/agent.ts";
 import { createJudge } from "./services/assistant/judge.ts";
@@ -370,9 +369,9 @@ const app = createServer({
   ...(worker === undefined ? {} : { worker }),
   ...(assistant === undefined ? {} : { assistant }),
   ...(judge === undefined ? {} : { judge }),
-  // `/mcp`'s widgets (ADR 0061) and skills (ADR 0067): a failure is logged and serves none.
-  widgets: await buildWidgets(log),
-  skills: loadSkills(log),
+  // `/mcp`'s widgets and skills, and the specs the card judges a grant by: a failure in any is
+  // logged and serves without it.
+  ...(await readImageFiles(log)),
   log,
 });
 

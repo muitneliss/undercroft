@@ -8,7 +8,8 @@
  *
  * The recorded grant narrows the same list, after the scope: a list the grant cannot read is
  * never requested, and is handed back beside the reads with the scope it lacks, so the run can
- * say so (`grant.ts`, ADR 0073).
+ * say so (`partitionByGrant` in `@undercroft/contracts`, ADR 0073). The card asks the same rule
+ * whether the connection can run, so the two cannot disagree about a list.
  */
 
 import { createFetcher, type RunContext } from "@undercroft/connector-runtime";
@@ -17,10 +18,11 @@ import {
   type ConnectorEntity,
   type ConnectorSpec,
   parseScope,
+  partitionByGrant,
+  type UngrantedRead,
 } from "@undercroft/contracts";
 import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
-import { partitionByGrant, type UngrantedRead } from "./grant.ts";
 import { withChosenProperties } from "./hubspot/properties.ts";
 import type { RunDeps } from "./runTypes.ts";
 import { resolveToken } from "./runTypes.ts";
@@ -49,18 +51,17 @@ async function chosenFor(
 }
 
 /**
- * The spec's entities as this connection's scope reads them, in spec order.
+ * The spec's entities as this connection's scope widens them, in spec order.
  *
  * Two scopes shape a spec run and they pull in opposite directions. Xero's NARROWS which
- * entities are read, where an empty list means every one. HubSpot's WIDENS what each object read
- * asks for, and never below what the spec itself asks (`hubspot/properties.ts`). Any other
- * scope, or none, reads the spec as it is written. This is the one place a scope reaches a spec
- * run: the runtime is handed the entities this returns and never learns there was a choice.
+ * entities are read, where an empty list means every one; that is `partitionByGrant`'s to
+ * apply, beside the grant, because the card needs the same narrowing to name the lists a
+ * reconnect would add. HubSpot's WIDENS what each object read asks for, and never below what
+ * the spec itself asks (`hubspot/properties.ts`). Any other scope, or none, reads the spec as it
+ * is written. Between them these are the one place a scope reaches a spec run: the runtime is
+ * handed the entities `openSpecRun` returns and never learns there was a choice.
  */
-function scopedEntities(spec: ConnectorSpec, scope: ConnectionScope | null): ConnectorEntity[] {
-  if (scope?.kind === "xero" && scope.entities.length > 0) {
-    return spec.entities.filter((entity) => scope.entities.includes(entity.name));
-  }
+function widenedEntities(spec: ConnectorSpec, scope: ConnectionScope | null): ConnectorEntity[] {
   if (scope?.kind === "hubspot") {
     return spec.entities.map((entity) => withChosenProperties(entity, scope));
   }
@@ -107,10 +108,10 @@ export async function openSpecRun(
     ...(chosen.accountId === null ? {} : { accountId: chosen.accountId }),
   };
 
-  const { granted, ungranted } = partitionByGrant(
-    scopedEntities(spec, chosen.scope),
-    chosen.granted,
-  );
+  const { granted, ungranted } = partitionByGrant(widenedEntities(spec, chosen.scope), {
+    scope: chosen.scope,
+    grantedScope: chosen.granted,
+  });
 
   return { spec, ctx, entities: granted, ungranted };
 }

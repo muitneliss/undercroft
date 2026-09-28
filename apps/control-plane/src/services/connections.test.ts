@@ -26,6 +26,7 @@ import {
   setScope,
   setToken,
 } from "./connections.ts";
+import { loadSpecReads } from "../specs.ts";
 import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
 
 const TENANT = "CASE-0042";
@@ -34,6 +35,21 @@ const GMAIL_SCOPE = JSON.stringify({ labels: [{ id: "Label_8", name: "Invoices" 
 /** What Google returns for a Gmail consent nobody unticked. */
 const GMAIL_GRANT =
   "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly";
+/**
+ * What Xero recorded for a consent made before ADR 0073 asked for `accounting.settings.read`.
+ * Xero answers the scopes granted in its token response, which is what the column holds.
+ */
+const XERO_OLD_GRANT =
+  "offline_access accounting.invoices.read accounting.payments.read accounting.contacts.read";
+const ORGANISATION = { id: "org-9f2a", name: "CASE-0042 Pte Ltd" };
+/** A Xero choice of the named lists; none named is every list the spec declares. */
+function xeroChoosing(entities: string[]): string {
+  return JSON.stringify({ organisation: ORGANISATION, entities });
+}
+const XERO_EVERY_LIST = xeroChoosing([]);
+
+/** The shipped specs, read by the loader the process boots with: the card's rule reads these. */
+const SPECS = loadSpecReads();
 
 let db: TestDatabase;
 
@@ -63,70 +79,157 @@ const noDatabase: SqlExecutor = {
 describe("presentStatus", () => {
   it("a connected, scoped source is connected", () => {
     expect(
-      presentStatus({
-        status: "connected",
-        source: "gmail",
-        selectionJson: GMAIL_SCOPE,
-        scope: GMAIL_GRANT,
-      }),
+      presentStatus(
+        {
+          status: "connected",
+          source: "gmail",
+          selectionJson: GMAIL_SCOPE,
+          scope: GMAIL_GRANT,
+        },
+        SPECS,
+      ).status,
     ).toBe("connected");
   });
 
   it("connected with no recorded scope needs one", () => {
     // Running in this state would read a whole mailbox on the strength of a missing row.
     expect(
-      presentStatus({
-        status: "connected",
-        source: "gmail",
-        selectionJson: "{}",
-        scope: GMAIL_GRANT,
-      }),
+      presentStatus(
+        {
+          status: "connected",
+          source: "gmail",
+          selectionJson: "{}",
+          scope: GMAIL_GRANT,
+        },
+        SPECS,
+      ).status,
     ).toBe("needs_scope");
   });
 
   it("an empty label list is a recorded decision, not a missing one", () => {
     // The quiet side: "deliberately the whole mailbox" must not read as "nobody has chosen".
     expect(
-      presentStatus({
-        status: "connected",
-        source: "gmail",
-        selectionJson: JSON.stringify({ labels: [] }),
-        scope: GMAIL_GRANT,
-      }),
+      presentStatus(
+        {
+          status: "connected",
+          source: "gmail",
+          selectionJson: JSON.stringify({ labels: [] }),
+          scope: GMAIL_GRANT,
+        },
+        SPECS,
+      ).status,
     ).toBe("connected");
   });
 
   it("a source that takes no scope is connected without one", () => {
     // HubSpot and Xero have no picker, so `needs_scope` would be a state nobody can leave.
     expect(
-      presentStatus({ status: "connected", source: "hubspot", selectionJson: "{}", scope: "" }),
+      presentStatus(
+        { status: "connected", source: "hubspot", selectionJson: "{}", scope: "" },
+        SPECS,
+      ).status,
     ).toBe("connected");
   });
 
   it("a grant missing the permission it asked for needs a reconnect", () => {
     // What `case-001` actually held: Allow pressed with the Gmail tick removed. It read
     // `connected` on the card while every Gmail call came back 403, and the only repair is
-    // to consent again.
+    // to consent again. Gmail reads under that one scope, so there is no list left to run on,
+    // with the Xero spec's per-list scopes loaded beside it or not.
     expect(
-      presentStatus({
-        status: "connected",
-        source: "gmail",
-        selectionJson: GMAIL_SCOPE,
-        scope: "openid https://www.googleapis.com/auth/userinfo.email",
-      }),
+      presentStatus(
+        {
+          status: "connected",
+          source: "gmail",
+          selectionJson: GMAIL_SCOPE,
+          scope: "openid https://www.googleapis.com/auth/userinfo.email",
+        },
+        SPECS,
+      ).status,
     ).toBe("needs_reconnect");
+  });
+
+  it("a Xero grant from before settings were asked for still runs, and names what it cannot read", () => {
+    // Every Xero connection made before ADR 0073 holds exactly this grant. It still reads twelve
+    // lists, and a run reads them and skips the five under `accounting.settings.read` -- so the
+    // card may not call it lapsed, and it names the five with the scope a reconnect would add.
+    const card = presentStatus(
+      {
+        status: "connected",
+        source: "xero",
+        selectionJson: XERO_EVERY_LIST,
+        scope: XERO_OLD_GRANT,
+      },
+      SPECS,
+    );
+
+    expect(card.status).toBe("connected");
+    expect(card.ungranted).toEqual(
+      ["items", "accounts", "tracking_categories", "tax_rates", "currencies"].map((entity) => ({
+        entity,
+        scope: "accounting.settings.read",
+      })),
+    );
+  });
+
+  it("a Xero grant that reads every list it was told to read names none as missing", () => {
+    // The quiet side: a list nobody chose is not one the connection lacks.
+    const card = presentStatus(
+      {
+        status: "connected",
+        source: "xero",
+        selectionJson: xeroChoosing(["invoices", "contacts"]),
+        scope: XERO_OLD_GRANT,
+      },
+      SPECS,
+    );
+
+    expect(card).toEqual({ status: "connected", ungranted: [] });
+  });
+
+  it("a Xero grant that reads none of the lists it was told to read needs a reconnect", () => {
+    // A run would read nothing and fail, so the card may not offer one.
+    const card = presentStatus(
+      {
+        status: "connected",
+        source: "xero",
+        selectionJson: xeroChoosing(["items", "accounts"]),
+        scope: XERO_OLD_GRANT,
+      },
+      SPECS,
+    );
+
+    expect(card.status).toBe("needs_reconnect");
+  });
+
+  it("a Xero grant without a refresh token needs a reconnect, whatever lists it reads", () => {
+    // `offline_access` gates no list, so no run reads around its absence.
+    const card = presentStatus(
+      {
+        status: "connected",
+        source: "xero",
+        selectionJson: XERO_EVERY_LIST,
+        scope: XERO_OLD_GRANT.replace("offline_access ", ""),
+      },
+      SPECS,
+    );
+
+    expect(card.status).toBe("needs_reconnect");
   });
 
   it("an unrecorded grant is not judged either way", () => {
     // The quiet side. An empty scope column is no evidence -- rows predating it, and every
     // source that never went through Google -- and no evidence is not a verdict.
     expect(
-      presentStatus({
-        status: "connected",
-        source: "gmail",
-        selectionJson: GMAIL_SCOPE,
-        scope: "",
-      }),
+      presentStatus(
+        {
+          status: "connected",
+          source: "gmail",
+          selectionJson: GMAIL_SCOPE,
+          scope: "",
+        },
+        SPECS,
+      ).status,
     ).toBe("connected");
   });
 
@@ -134,31 +237,40 @@ describe("presentStatus", () => {
     // One state on screen: telling a token expiry from a provider fault is not the
     // customer's question to answer.
     expect(
-      presentStatus({
-        status: "expired",
-        source: "gmail",
-        selectionJson: GMAIL_SCOPE,
-        scope: GMAIL_GRANT,
-      }),
+      presentStatus(
+        {
+          status: "expired",
+          source: "gmail",
+          selectionJson: GMAIL_SCOPE,
+          scope: GMAIL_GRANT,
+        },
+        SPECS,
+      ).status,
     ).toBe("needs_reconnect");
     expect(
-      presentStatus({
-        status: "error",
-        source: "gmail",
-        selectionJson: GMAIL_SCOPE,
-        scope: GMAIL_GRANT,
-      }),
+      presentStatus(
+        {
+          status: "error",
+          source: "gmail",
+          selectionJson: GMAIL_SCOPE,
+          scope: GMAIL_GRANT,
+        },
+        SPECS,
+      ).status,
     ).toBe("needs_reconnect");
   });
 
   it("disconnected stays disconnected", () => {
     expect(
-      presentStatus({
-        status: "disconnected",
-        source: "gmail",
-        selectionJson: GMAIL_SCOPE,
-        scope: GMAIL_GRANT,
-      }),
+      presentStatus(
+        {
+          status: "disconnected",
+          source: "gmail",
+          selectionJson: GMAIL_SCOPE,
+          scope: GMAIL_GRANT,
+        },
+        SPECS,
+      ).status,
     ).toBe("disconnected");
   });
 });
@@ -169,7 +281,7 @@ describe("the schedule", () => {
   it("a tenant with nothing connected still sees every source", async () => {
     // The schedule IS the product: the screen a new customer lands on is the one an
     // established one uses, and an empty list gave it nothing to show.
-    const rows = await list(db, TENANT);
+    const rows = await list(db, TENANT, SPECS);
 
     expect(rows.map((r) => r.source)).toEqual([...KNOWN_SOURCES]);
     expect(rows.every((r) => r.status === "disconnected")).toBe(true);
@@ -197,7 +309,7 @@ describe("the schedule", () => {
       selectionJson: GMAIL_SCOPE,
     });
 
-    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
 
     expect(gmail?.expiresAt).toBeNull();
     expect(JSON.stringify(gmail)).not.toContain("2099-01-01T00:00:00.000Z");
@@ -231,7 +343,7 @@ describe("the schedule", () => {
       accountLabel: "billing@acme.test",
     });
 
-    const gmail = (await list(db, TENANT)).filter((r) => r.kind === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).filter((r) => r.kind === "gmail");
 
     expect(
       gmail.map((r) => ({ source: r.source, account: r.externalAccountLabel, status: r.status })),
@@ -254,7 +366,7 @@ describe("the schedule", () => {
       selectionJson: GMAIL_SCOPE,
     });
 
-    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
 
     expect(gmail?.scopes).toEqual(["openid", "https://www.googleapis.com/auth/gmail.readonly"]);
   });
@@ -275,10 +387,10 @@ describe("the schedule", () => {
       verb: "ingest",
       trigger: "schedule",
     });
-    const startedAt = (await list(db, TENANT)).find((r) => r.source === "hubspot")?.lastRun
+    const startedAt = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot")?.lastRun
       ?.startedAt;
 
-    const hubspot = (await list(db, TENANT, new Date("2026-03-01T10:00:00.000Z"))).find(
+    const hubspot = (await list(db, TENANT, SPECS, new Date("2026-03-01T10:00:00.000Z"))).find(
       (r) => r.source === "hubspot",
     );
     expect(hubspot?.cadence).toBe("hourly");
@@ -297,7 +409,7 @@ describe("the schedule", () => {
     });
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
 
-    const cards = await list(db, TENANT);
+    const cards = await list(db, TENANT, SPECS);
     expect(cards.find((r) => r.source === "hubspot")?.nextRunAt).toBeNull();
     expect(cards.find((r) => r.source === "gmail")?.nextRunAt).toBeNull();
     // A source nobody has connected reads the default and will not run.
@@ -305,6 +417,36 @@ describe("the schedule", () => {
       cadence: "daily",
       nextRunAt: null,
     });
+  });
+
+  it("a Xero connection whose grant predates a scope keeps its schedule and names the gap", async () => {
+    // Issue 277: a connection made before the consent asked for settings keeps reading every
+    // list it can until it reconnects. The card says so -- runnable, due, and short five lists.
+    await upsertConnection(db, {
+      tenantId: TENANT,
+      source: "xero",
+      status: "connected",
+      externalAccountId: ORGANISATION.id,
+      scope: XERO_OLD_GRANT,
+    });
+    await writeConnectionDetail(db, {
+      tenantId: TENANT,
+      source: "xero",
+      selectionJson: XERO_EVERY_LIST,
+    });
+    const now = new Date("2026-09-28T02:00:00.000Z");
+
+    const xero = (await list(db, TENANT, SPECS, now)).find((r) => r.source === "xero");
+
+    expect(xero?.status).toBe("connected");
+    expect(xero?.nextRunAt).toBe(now.toISOString());
+    expect(xero?.ungranted.map((read) => read.entity)).toEqual([
+      "items",
+      "accounts",
+      "tracking_categories",
+      "tax_rates",
+      "currencies",
+    ]);
   });
 });
 
@@ -359,7 +501,7 @@ describe("choosing a cadence", () => {
     expect(JSON.stringify(rows[0]?.detail)).toContain('"cron":"30 7 * * 1-5"');
     // The run just opened started "now", so the next fire is the first weekday 07:30 SGT
     // after it -- whatever day the suite runs on, it is in the future and on a weekday.
-    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
     expect(hubspot).toMatchObject({ cadence: "custom", cron: "30 7 * * 1-5" });
     const next = new Date(hubspot?.nextRunAt ?? "");
     expect(next.getTime()).toBeGreaterThan(Date.now());
@@ -382,7 +524,7 @@ describe("choosing a cadence", () => {
     });
     await setCadence(db, { tenantId: TENANT, source: "hubspot", cadence: "daily", actor });
 
-    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
     expect(hubspot).toMatchObject({ cadence: "daily", cron: null });
   });
 
@@ -409,7 +551,7 @@ describe("choosing a cadence", () => {
       }),
     ).toEqual({ ok: false, reason: "cron-without-custom" });
 
-    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
     expect(hubspot).toMatchObject({ cadence: "daily", cron: null });
     const { rows } = await db.query("SELECT 1 FROM ops.audit_log");
     expect(rows).toEqual([]);
@@ -433,7 +575,7 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
     expect(gmail?.status).toBe("connected");
     expect(gmail?.config.labels).toEqual(["Invoices"]);
   });
@@ -449,7 +591,7 @@ describe("choosing a scope", () => {
       actorId: "u1",
     });
 
-    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
     expect(gmail?.config.fileTypes).toEqual(["application/pdf"]);
   });
 
@@ -465,7 +607,7 @@ describe("choosing a scope", () => {
       actorId: "u1",
     });
 
-    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
     expect(gmail?.config.fileTypes).toEqual(["application/vnd.ms-excel", "text/csv"]);
   });
 
@@ -498,7 +640,7 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const xero = (await list(db, TENANT)).find((r) => r.source === "xero");
+    const xero = (await list(db, TENANT, SPECS)).find((r) => r.source === "xero");
     expect(xero?.status).toBe("connected");
     // The id is what a run sends as `xero-tenant-id`; the name is what a person reads.
     expect(xero?.externalAccountId).toBe("org-9f2a");
@@ -520,7 +662,7 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
     expect(hubspot?.status).toBe("connected");
     expect(hubspot?.config.properties).toEqual({
       companies: ["annualrevenue", "x_onboarding_stage"],
@@ -547,7 +689,7 @@ describe("choosing a scope", () => {
     });
 
     expect(result.ok).toBe(true);
-    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
     expect(hubspot?.config.properties).toEqual({ companies: ["city"], contacts: names });
   });
 
@@ -590,7 +732,7 @@ describe("connecting with a pasted token", () => {
       validate: true,
       externalAccountId: "",
     });
-    const hubspot = (await list(db, TENANT)).find((r) => r.source === "hubspot");
+    const hubspot = (await list(db, TENANT, SPECS)).find((r) => r.source === "hubspot");
     expect(hubspot?.status).toBe("connected");
     const { rows } = await db.query<{ action: string; detail: unknown }>(
       "SELECT action, detail FROM ops.audit_log",
@@ -640,7 +782,7 @@ describe("disconnecting", () => {
     expect(result.revokedUpstream).toBe(true);
     expect(worker.revoked).toEqual([{ tenantId: TENANT, source: "gmail" }]);
 
-    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
     expect(gmail?.status).toBe("disconnected");
     // A stored scope for a connection nobody may use is a record of what a customer once
     // shared, kept past the moment they asked us to stop.
@@ -659,7 +801,7 @@ describe("disconnecting", () => {
     });
 
     expect(result.revokedUpstream).toBe(false);
-    const gmail = (await list(db, TENANT)).find((r) => r.source === "gmail");
+    const gmail = (await list(db, TENANT, SPECS)).find((r) => r.source === "gmail");
     expect(gmail?.status).toBe("disconnected");
   });
 });

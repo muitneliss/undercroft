@@ -69,6 +69,7 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
         provider: "google" as const,
       }),
     worker: null,
+    specReads: new Map(),
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);

@@ -92,6 +92,7 @@ export function connection(source: string, over: Partial<Connection> = {}): Conn
     kind,
     source,
     status: "disconnected",
+    ungranted: [],
     externalAccountId: "",
     externalAccountLabel: "",
     scopes: [],

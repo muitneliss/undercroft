@@ -136,7 +136,9 @@ function cadenceRefusal(
 }
 
 export const connectionsRouter = router({
-  list: tenantProcedure.query(({ ctx, input }) => connections.list(ctx.exec, input.tenantId)),
+  list: tenantProcedure.query(({ ctx, input }) =>
+    connections.list(ctx.exec, input.tenantId, ctx.specReads),
+  ),
 
   get: tenantProcedure
     .input(z.object({ source: z.string().min(1) }))
