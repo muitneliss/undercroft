@@ -13,7 +13,7 @@
 import type { Fetcher } from "@undercroft/connector-runtime";
 import { type ByteFetcher, type Logger, UndercroftError } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import type { Credential, RunRefusal, RunTrigger } from "@undercroft/db/repos";
+import type { Credential, RunEntity, RunRefusal, RunTrigger } from "@undercroft/db/repos";
 import { ConnectionRegistryError, setStatus } from "@undercroft/db/repos";
 import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
@@ -90,14 +90,11 @@ export interface RunDeps {
 export interface IngestResult {
   readonly runId: string;
   readonly source: string;
-  readonly entities: {
-    entity: string;
-    landed: number;
-    loadedCreated: number;
-    loadedChanged: number;
-    loadedUnchanged: number;
-    refused: number;
-  }[];
+  /**
+   * What each entity did, in the shape `ops.run_entity` stores it: `landed` is `created +
+   * changed + unchanged`, and `refused` is beside them rather than inside. `LandSummary`.
+   */
+  readonly entities: RunEntity[];
   /** Every record or document this run refused, with why. Never a payload. */
   readonly refusals: RunRefusal[];
 }

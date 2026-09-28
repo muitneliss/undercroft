@@ -62,6 +62,7 @@ export async function recordExternal(
   await recordRefusals(exec, runId, refusals);
   await recordExternalBatch(exec, runId, {
     created: landed.created,
+    changed: landed.changed,
     unchanged: landed.unchanged,
     refused: landed.failed,
   });

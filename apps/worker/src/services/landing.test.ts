@@ -149,16 +149,16 @@ describe("a record sink lands a source it never holds", () => {
     }
     const summary = await records.close();
 
+    // ACCUMULATED across the three chunks, never taken from the last one. A summary that
+    // carried the last chunk's counts would say 50 here -- and on a source that fits in one
+    // chunk it would say the right number for the wrong reason, which is why the assertion
+    // belongs on the source that does not.
     expect(summary).toEqual({
       landed: source.length,
       created: source.length,
+      changed: 0,
       unchanged: 0,
       refused: 0,
-      // ACCUMULATED across the three chunks, never taken from the last one. The projection
-      // runs per chunk now, so a summary that carried the last call's counts would say 50
-      // here -- and on a source that fits in one chunk it would say the right number for
-      // the wrong reason, which is why the assertion belongs on the source that does not.
-      loaded: { created: source.length, changed: 0, unchanged: 0 },
     });
     expect(await inLake()).toBe(source.length);
   });
@@ -204,13 +204,7 @@ describe("a record sink lands a source it never holds", () => {
     await records.add(record("id-1"));
     const summary = await records.close();
 
-    expect(summary).toEqual({
-      landed: 2,
-      created: 2,
-      unchanged: 0,
-      refused: 1,
-      loaded: { created: 2, changed: 0, unchanged: 0 },
-    });
+    expect(summary).toEqual({ landed: 2, created: 2, changed: 0, unchanged: 0, refused: 1 });
     expect(await refusals()).toEqual([
       { entity: ENTITY, id: "..", reason: expect.stringContaining("must not traverse") },
     ]);
@@ -229,9 +223,11 @@ describe("a record sink lands a source it never holds", () => {
     await records.close();
   });
 
-  it("re-landing an unchanged source writes nothing and reports it", async () => {
+  it("re-landing an unchanged source writes nothing, and counts every record unchanged", async () => {
     // Content idempotence, reached through the sink. Without it an hourly schedule pushes
-    // real history out through retention using copies of the same record.
+    // real history out through retention using copies of the same record. And the COUNT is
+    // the other half: an identical record writes no journal entry, so a split taken from the
+    // projection counted it nowhere and the run read Landed 2, Unchanged 0 (issue #284).
     const first = sink(2);
     await first.add(record("id-0"));
     await first.add(record("id-1"));
@@ -242,15 +238,7 @@ describe("a record sink lands a source it never holds", () => {
     await second.add(record("id-1"));
     const summary = await second.close();
 
-    expect(summary).toEqual({
-      landed: 2,
-      created: 0,
-      unchanged: 2,
-      refused: 0,
-      // Nothing new reached the lake, so the journal the projection reads from the cursor is
-      // empty and there is nothing to write. Free, which is the whole point of idempotence.
-      loaded: { created: 0, changed: 0, unchanged: 0 },
-    });
+    expect(summary).toEqual({ landed: 2, created: 0, changed: 0, unchanged: 2, refused: 0 });
     expect(await inLake()).toBe(2);
   });
 });
@@ -303,9 +291,12 @@ describe("a chunk that landed is a chunk the next run can skip", () => {
 
     const records = sink(1);
     await records.add(record("id-0"));
-    await records.close();
+    const summary = await records.close();
 
     expect(await inRawRecords()).toBe(3);
+    // Projected, but not COUNTED: the orphans are the dead run's records, and a run that
+    // claimed them would report more than it landed.
+    expect(summary).toEqual({ landed: 1, created: 1, changed: 0, unchanged: 0, refused: 0 });
   });
 });
 

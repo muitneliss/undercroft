@@ -169,9 +169,10 @@ export interface CollectResult {
      * did not finish never received, and a `0` here would be a number nobody counted.
      */
     skipped: number | null;
-    loadedCreated: number;
-    loadedChanged: number;
-    loadedUnchanged: number;
+    /** This run's records, split as `LandSummary` splits them. */
+    created: number;
+    changed: number;
+    unchanged: number;
   };
   readonly documents: {
     created: number;
@@ -445,9 +446,9 @@ export async function runGoogleCollect(
     records: {
       landed: closed.records.landed,
       skipped: summary === null ? null : summary.known,
-      loadedCreated: closed.records.loaded.created,
-      loadedChanged: closed.records.loaded.changed,
-      loadedUnchanged: closed.records.loaded.unchanged,
+      created: closed.records.created,
+      changed: closed.records.changed,
+      unchanged: closed.records.unchanged,
     },
     refusals: collection.refusals,
     documents,

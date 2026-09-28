@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { LandRecordsResponse } from "@undercroft/contracts";
 import { canonicalJson, createLogger, createStampSource, TestClock } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
@@ -89,6 +90,30 @@ describe("the lake records API", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { created: number };
     expect(json.created).toBe(1);
+  });
+
+  it("a record that changed is still `created` on the wire, and `changed` on the run", async () => {
+    // The published response predates the New / Changed split (issue #284), and a script that
+    // validates it against `LandRecordsResponse` would refuse a status it has never seen.
+    function batch(payloadText: string): unknown {
+      return {
+        source: "hubspot",
+        tenantId: "CASE-1",
+        runId: "ext-1",
+        records: [{ entity: "deals", sourceRecordId: "1", sourceUpdatedAt: null, payloadText }],
+      };
+    }
+    await post(batch('{"id":"1"}'));
+
+    const res = await post(batch('{"id":"1","stage":"won"}'));
+
+    expect(LandRecordsResponse.parse(await res.json())).toMatchObject({
+      created: 1,
+      unchanged: 0,
+      results: [{ sourceRecordId: "1", status: "created" }],
+    });
+    const { rows } = await db.query("SELECT created, changed FROM ops.run WHERE id = 'ext-1'");
+    expect(rows[0]).toEqual({ created: 1, changed: 1 });
   });
 
   it("an unauthenticated caller is refused before anything is written", async () => {

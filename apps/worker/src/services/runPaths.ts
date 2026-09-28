@@ -71,9 +71,9 @@ export async function runGoogleIngest(
     journal.info("entity_done", {
       entity: entity.entity,
       landed: entity.landed,
-      created: entity.loadedCreated,
-      changed: entity.loadedChanged,
-      unchanged: entity.loadedUnchanged,
+      created: entity.created,
+      changed: entity.changed,
+      unchanged: entity.unchanged,
       refused: entity.refused,
       // Only on the RECORD entity, and only when there is one, because it answers a
       // question only the record entity is asked: in steady state a run lands nothing, and
@@ -100,17 +100,17 @@ function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entit
     {
       entity: recordsEntity,
       landed: result.records.landed,
-      loadedCreated: result.records.loadedCreated,
-      loadedChanged: result.records.loadedChanged,
-      loadedUnchanged: result.records.loadedUnchanged,
+      created: result.records.created,
+      changed: result.records.changed,
+      unchanged: result.records.unchanged,
       refused: records,
     },
     {
       entity: "documents",
       landed: result.documents.created + result.documents.unchanged,
-      loadedCreated: result.documents.created,
-      loadedChanged: 0,
-      loadedUnchanged: result.documents.unchanged,
+      created: result.documents.created,
+      changed: 0,
+      unchanged: result.documents.unchanged,
       refused: result.refusals.length - records,
     },
   ];
@@ -127,22 +127,9 @@ interface EntityRun {
 
 /** Write one entity's outcome into the ledger, and narrate it. */
 function recordEntity(run: EntityRun, entity: string, landed: LandSummary): void {
-  run.ledger.entities.push({
-    entity,
-    landed: landed.landed,
-    loadedCreated: landed.loaded.created,
-    loadedChanged: landed.loaded.changed,
-    loadedUnchanged: landed.loaded.unchanged,
-    refused: landed.refused,
-  });
-  run.journal.info("entity_done", {
-    entity,
-    landed: landed.landed,
-    created: landed.loaded.created,
-    changed: landed.loaded.changed,
-    unchanged: landed.loaded.unchanged,
-    refused: landed.refused,
-  });
+  const counts = { entity, ...landed };
+  run.ledger.entities.push(counts);
+  run.journal.info("entity_done", counts);
 }
 
 /**

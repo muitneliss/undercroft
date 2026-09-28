@@ -88,7 +88,7 @@ describe("the ingest run verb ties the slice together", () => {
 
     expect(result.entities[0]?.entity).toBe("things");
     expect(result.entities[0]?.landed).toBe(2);
-    expect(result.entities[0]?.loadedCreated).toBe(2);
+    expect(result.entities[0]?.created).toBe(2);
 
     const { rows } = await db.query<{ id: string }>(
       "SELECT source_record_id AS id FROM raw.records WHERE source = 'demo' ORDER BY source_record_id",
@@ -130,6 +130,40 @@ describe("every run is a row in the ledger", () => {
       [result.runId],
     );
     expect(entities.rows).toEqual([{ entity: "things", landed: 2, created: 2 }]);
+  });
+
+  it("a re-read counts each record once, as new, changed or unchanged, adding up to landed", async () => {
+    // Issue #284. The split was taken from the projection, which only sees what the lake
+    // WROTE, so a record re-read identical was in Landed and in no other column. These are the
+    // numbers the Journal's "By entity" table and `runs get` both read.
+    const deps = { lake, exec: db, specsDir, env: { UNDERCROFT_SECRET_KEY: KEY } };
+    function read(results: { id: string; v: string }[]): InMemoryFetcher {
+      return new InMemoryFetcher().on("GET", `${BASE}/things`, { body: { results, paging: {} } });
+    }
+    const once = [
+      { id: "1", v: "a" },
+      { id: "2", v: "b" },
+    ];
+    await runIngest({ ...deps, fetcher: read(once) }, { source: "demo", tenantId: "CASE-1" });
+
+    const again = await runIngest(
+      { ...deps, fetcher: read([once[0]!, { id: "2", v: "b, edited" }, { id: "3", v: "c" }]) },
+      { source: "demo", tenantId: "CASE-1" },
+    );
+
+    const entities = await db.query(
+      `SELECT entity, landed, created, changed, unchanged, refused
+       FROM ops.run_entity WHERE run_id = $1`,
+      [again.runId],
+    );
+    expect(entities.rows).toEqual([
+      { entity: "things", landed: 3, created: 1, changed: 1, unchanged: 1, refused: 0 },
+    ]);
+    const run = await db.query(
+      "SELECT created, changed, unchanged, refused FROM ops.run WHERE id = $1",
+      [again.runId],
+    );
+    expect(run.rows).toEqual([{ created: 1, changed: 1, unchanged: 1, refused: 0 }]);
   });
 
   it("a run that failed is recorded and narrated as failed, and does not block the next", async () => {
