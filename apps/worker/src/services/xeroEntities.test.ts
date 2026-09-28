@@ -109,7 +109,14 @@ const LISTS: readonly XeroList[] = [
     idPath: "LinkedTransactionID",
     paging: "page",
   },
-  { entity: "items", path: "/Items", idPath: "ItemID", paging: "none", unitdp: true, settings: true },
+  {
+    entity: "items",
+    path: "/Items",
+    idPath: "ItemID",
+    paging: "none",
+    unitdp: true,
+    settings: true,
+  },
   {
     entity: "overpayments",
     path: "/Overpayments",
