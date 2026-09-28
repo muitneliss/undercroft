@@ -18,7 +18,9 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { requestKey } from "@undercroft/connector-runtime";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
+import { parseSpec } from "@undercroft/contracts";
 import { createStampSource, TestClock } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
@@ -28,8 +30,6 @@ import { runIngest } from "./ingest.ts";
 
 const BASE = "https://demo.test";
 const STREAM = { source: "demo", tenantId: "CASE-1", entity: "things" } as const;
-/** How an entity read exactly as its spec declares it keeps its mark: no scope touched it. */
-const AS_DECLARED = { format: "epoch-millis", requestKey: "" } as const;
 
 // `auth: none`, so the run needs no connection and no sealed credential: what is under test
 // is the cursor, and a token would be a second harness to keep working.
@@ -54,6 +54,19 @@ entities:
       sourcePath: changedAt
       format: epoch-millis
 `;
+
+/** The request key a spec's only entity is read under, as the runtime names it. */
+function keyOf(specText: string): string {
+  const spec = parseSpec(specText);
+  const [entity] = spec.entities;
+  if (entity === undefined) {
+    throw new Error("the spec declares no entity");
+  }
+  return requestKey(spec, entity);
+}
+
+/** How the demo entity keeps its mark while its spec's request is unchanged. */
+const AS_DECLARED = { format: "epoch-millis", requestKey: keyOf(SPEC) } as const;
 
 let lake: LakeStore;
 let db: TestDatabase;
@@ -179,7 +192,7 @@ entities:
       send: rfc3339-seconds
 `;
   const LEDGER = { source: "ledger", tenantId: "CASE-1", entity: "contacts" } as const;
-  const LEDGER_MARK = { format: "ms-json-date", requestKey: "" } as const;
+  const LEDGER_MARK = { format: "ms-json-date", requestKey: keyOf(XERO_SHAPED) } as const;
 
   beforeEach(async () => {
     writeFileSync(join(specsDir, "ledger.yaml"), XERO_SHAPED);
@@ -242,5 +255,32 @@ describe("a watermark is only ever handed back under the format it was written i
     await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "900" });
 
     expect(await readSyncCursor(db, STREAM, { ...AS_DECLARED, format: "iso8601" })).toBeNull();
+  });
+});
+
+describe("a watermark is only ever handed back for the request it was read with", () => {
+  it("reads from the start once the spec changes what the entity asks for", async () => {
+    // Issue #280 in general form: Xero's lists gained `unitdp=4`, and a mark kept across that
+    // edit would ask only for what changed since, leaving every record not edited since as the
+    // old request answered it. The quiet side -- an unchanged request sends its mark -- is "the
+    // second run asks the source for less" above.
+    await ingest(
+      new InMemoryFetcher().on("GET", `${BASE}/things`, {
+        body: { results: [{ id: "1", changedAt: "400" }], paging: {} },
+      }),
+    );
+    const edited = SPEC.replace("path: /things }", 'path: /things, query: { detail: "full" } }');
+    writeFileSync(join(specsDir, "demo.yaml"), edited);
+
+    // Recorded only WITHOUT a watermark: a run that sent `updatedAfter=400` would be refused.
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things?detail=full`, {
+      body: { results: [{ id: "1", changedAt: "400" }], paging: {} },
+    });
+    await ingest(fetcher);
+
+    expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/things?detail=full`]);
+    expect(await readSyncCursor(db, STREAM, { ...AS_DECLARED, requestKey: keyOf(edited) })).toBe(
+      "400",
+    );
   });
 });

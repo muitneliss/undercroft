@@ -189,3 +189,5 @@
 ## [2026-09-27] ingest | ADR 0070 A Tab A Deploy Left Behind Reloads When It Loses Nothing
 ## [2026-09-28] ingest | What an ingest run counts
 ## [2026-09-28] ingest | ADR 0071 A Record A Complete Listing No Longer Names Is Removed At Source
+## [2026-09-28] remove | ADR 0071 A Watermark Is Keyed on the Request as Sent
+## [2026-09-28] ingest | ADR 0072 A Watermark Is Keyed on the Request as Sent
