@@ -119,3 +119,12 @@ tasks:
     desc: The wiki's coverage and provenance gate.
     cmds:
       - bun run wiki:check
+
+  reconcile-gmail-live:
+    desc: >-
+      The Gmail reconciliation over REAL data, one test per message and attachment against the
+      lake (scripts/reconcile/live/). Needs the undercroft CLI on PATH, a read-only profile,
+      gmail.readonly tokens and a local config in fixtures/live/ (or UNDERCROFT_LIVE_CONFIG);
+      NOT part of ci:verify.
+    cmds:
+      - UNDERCROFT_LIVE=1 bun test --timeout 86400000 ./scripts/reconcile/live/gmail.live.ts

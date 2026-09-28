@@ -1,0 +1,16 @@
+{
+  "tenantId": "CASE-0042",
+  "outDir": "/path/outside/this/repository/reconcile-runs",
+  "mailboxes": {
+    "primary": {
+      "address": "first-mailbox@example.test",
+      "tokenFile": "/path/outside/this/repository/first-mailbox-token.json",
+      "undercroftSource": "gmail"
+    },
+    "secondary": {
+      "address": "second-mailbox@example.test",
+      "tokenFile": "/path/outside/this/repository/second-mailbox-token.json",
+      "undercroftSource": "gmail.second"
+    }
+  }
+}
