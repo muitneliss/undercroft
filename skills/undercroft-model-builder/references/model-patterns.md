@@ -66,6 +66,42 @@ select
 from {{ gmail_letters() }} l
 ```
 
+## Where a Drive file sits
+
+A Drive source lands each file as a `files` record and each folder its walk listed as a
+`folders` record. Both name their folder by id in `payload -> 'parents'`, and a picked folder
+names none. No folder name reaches a model; match an id to its folder in the source's folder
+browse. Read a file's location from `records`, never from `documents`: a document's
+`metadata` says where the file was when its bytes landed, and a move does not land them again.
+
+A recursive query walks from each file up to the pick, one row per folder above it:
+
+```sql
+with recursive folders as (
+    select source_record_id as folder_id, payload -> 'parents' ->> 0 as parent_id
+    from {{ source('undercroft', 'records') }}
+    where source = 'drive' and entity = 'folders' and deleted_at is null
+),
+
+up (file_id, folder_id, depth) as (
+    select source_record_id, payload -> 'parents' ->> 0, 1
+    from {{ source('undercroft', 'records') }}
+    where source = 'drive' and entity = 'files' and deleted_at is null
+    union all
+    select up.file_id, f.parent_id, up.depth + 1
+    from up
+    join folders f on f.folder_id = up.folder_id
+    where f.parent_id is not null
+)
+
+select file_id, folder_id, depth from up
+```
+
+Which folder means what -- a client, a status -- is the person's to say, as a list of ids in
+the model that reads this one. A folder dragged elsewhere changes one `folders` record, and the
+next build places every file beneath it under its new parent. Keep this model a table or a
+view, not ephemeral.
+
 ## Building on other models
 
 Join and aggregate models through `ref()`, never through their tables:

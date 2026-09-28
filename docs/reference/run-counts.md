@@ -42,6 +42,17 @@ carries `reread`, with two counts:
 before ADR 0076. A Gmail run that read nothing again says `0` for both counts. The Journal says
 the same two numbers in its own line.
 
+## Drive folders
+
+A Drive run also reports `folders`: the folders its walk listed, each landed as a record that
+names only its id and the folder that listed it (ADR 0078). A folder is landed again only when
+that changed, so an unchanged tree counts nothing there. The run's `files` entity never
+counts a folder.
+
+A Drive file whose bytes are already held is not downloaded again, but its record is landed
+again when it changed, for instance when the file was moved. It then counts as Changed on
+`files` and adds nothing to `documents`.
+
 ## Two places the split is coarser
 
 - **Documents** (Gmail attachments, Drive files) are counted beside the records as their own

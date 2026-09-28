@@ -83,23 +83,27 @@ import type { SqlExecutor } from "@undercroft/db";
 import { readConnectionDetail, type RunRefusal, type RunReread } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
-import { tombstoneMissing } from "../../repos/rawDocuments.ts";
 import { createDocumentSink } from "../documentSink.ts";
-import type {
-  DocumentSink,
-  DocumentSummary,
-  LandSummary,
-  RecordSink,
-  RefusalWriter,
-  SinkDeps,
-} from "../landing.ts";
-import { createRecordSink } from "../recordSink.ts";
+import type { DocumentSink, DocumentSummary, RefusalWriter, SinkDeps } from "../landing.ts";
+import {
+  type AlongsideSummary,
+  createRecordStreams,
+  type RecordStreams,
+  type StreamsLanded,
+} from "../recordStreams.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
 import { harvestDrive } from "./drive.ts";
 import { harvestGmail } from "./gmail.ts";
 import { requireReadGrant } from "../grant.ts";
-import { type Harvest, type HarvestItem, type HarvestSummary, heldBy } from "./harvest.ts";
+import {
+  digestsBy,
+  type Harvest,
+  type HarvestItem,
+  type HarvestSummary,
+  heldBy,
+} from "./harvest.ts";
+import { settleWalk } from "./settleWalk.ts";
 
 export const GOOGLE_KINDS = ["gmail", "drive"] as const;
 export type GoogleKind = (typeof GOOGLE_KINDS)[number];
@@ -174,6 +178,11 @@ export interface CollectResult {
     changed: number;
     unchanged: number;
   };
+  /**
+   * Every other record stream this collection landed, counted apart from the record entity's:
+   * a Drive walk's `folders` (ADR 0078). Empty for Gmail.
+   */
+  readonly alongside: readonly AlongsideSummary[];
   readonly documents: {
     created: number;
     unchanged: number;
@@ -219,7 +228,7 @@ async function googleScope(
 /** What one walk of a harvest writes through, held together so `drain` takes two arguments. */
 interface Landing {
   readonly entity: string;
-  readonly records: RecordSink;
+  readonly records: RecordStreams;
   readonly documents: DocumentSink;
   readonly refuse: RefusalWriter;
   /** Mutated as items settle. See {@link CollectResult.reread}. */
@@ -245,8 +254,16 @@ interface Landing {
  *
  * One item, never a chunk of them: that is what puts a stop boundary after every download
  * rather than after every two hundred. See "A stop is honoured between items" above.
+ *
+ * A record-only item settles no documents, so it carries no count and its mark stays as an
+ * earlier harvest left it: the upsert never writes the mark, and `marksIn` writes none for a
+ * record with no count. ADR 0078.
  */
 async function settleItem(item: HarvestItem, at: Landing): Promise<void> {
+  if (item.recordOnly === true) {
+    await at.records.add(item.record);
+    return;
+  }
   for (const document of item.documents) {
     await at.documents.add(document);
   }
@@ -313,7 +330,7 @@ async function drain(
 /** Everything one collection reads through and writes into, wired once. */
 interface Collection {
   readonly harvest: Harvest;
-  readonly records: RecordSink;
+  readonly records: RecordStreams;
   readonly documents: DocumentSink;
   readonly refuse: RefusalWriter;
   /** The array `refuse` fills. Answered to the caller; see {@link openCollection}. */
@@ -341,14 +358,15 @@ function openCollection(
     return Promise.resolve();
   };
   const sinks: SinkDeps = { lake: deps.lake, exec: deps.exec, refuse };
-  const held = heldBy(deps.exec, { source: at.source, tenantId: at.tenantId, entity: at.entity });
+  const scoped = { source: at.source, tenantId: at.tenantId };
+  const held = heldBy(deps.exec, { ...scoped, entity: at.entity });
 
   return {
     harvest:
       scope.kind === "gmail"
         ? harvestGmail(deps.api, scope, journal, held)
-        : harvestDrive(deps.api, scope, journal, held),
-    records: createRecordSink(sinks, at),
+        : harvestDrive(deps.api, scope, journal, { held, digests: digestsBy(deps.exec, scoped) }),
+    records: createRecordStreams(sinks, at),
     documents: createDocumentSink(sinks, at),
     refuse,
     refusals,
@@ -356,47 +374,9 @@ function openCollection(
   };
 }
 
-/**
- * What is only decidable once the whole harvest has been walked: the tombstones, and the
- * refusal owed to each pick. Answers how many documents were tombstoned.
- *
- * Tombstoning is DRIVE'S ALONE and skipped when `seenIds` is null. A Gmail message that
- * stops matching a label selection has been relabelled, not deleted, and a tombstone would
- * report a deletion that never happened. It also runs only once every catalogue row is
- * written, because the sweep is a negated `ANY` over the ids this run kept -- a row written
- * after it would look like one nobody saw.
- *
- * A pick's refusal comes last for the same reason it comes at all: it is a statement about
- * the whole pick, and there is no such thing until the pick is exhausted.
- */
-async function settleDocuments(
-  deps: CollectDeps,
-  at: {
-    entity: string;
-    observedAt: string;
-    scoped: { source: string; tenantId: string };
-    refuse: RefusalWriter;
-  },
-  summary: HarvestSummary,
-): Promise<number> {
-  const tombstoned =
-    summary.seenIds === null
-      ? 0
-      : await tombstoneMissing(deps.exec, at.scoped, {
-          keptIds: summary.seenIds,
-          observedAt: at.observedAt,
-        });
-
-  for (const pick of summary.skipped) {
-    await at.refuse([{ entity: at.entity, sourceRecordId: pick.fileId, reason: pick.reason }]);
-  }
-
-  return tombstoned;
-}
-
 /** What a collection landed, once both sinks are closed. */
 interface Closed {
-  readonly records: LandSummary;
+  readonly records: StreamsLanded;
   readonly documents: DocumentSummary;
   readonly tombstoned: number;
 }
@@ -423,7 +403,7 @@ async function closeCollection(
     return { records, documents: collection.documents.abandon(), tombstoned: 0 };
   }
   const documents = await collection.documents.close();
-  const tombstoned = await settleDocuments(deps, { ...at, refuse: collection.refuse }, summary);
+  const tombstoned = await settleWalk(deps.exec, { ...at, refuse: collection.refuse }, summary);
   return { records, documents, tombstoned };
 }
 
@@ -458,18 +438,20 @@ export async function runGoogleCollect(
   };
   journal.info("documents_landed", { entity: "documents", ...documents });
 
+  const { records, alongside } = closed.records;
   return {
     runId,
     source: input.source,
     stopped: summary === null,
     reread: scope.kind === "gmail" ? { ...collection.reread } : null,
     records: {
-      landed: closed.records.landed,
+      landed: records.landed,
       skipped: summary === null ? null : summary.known,
-      created: closed.records.created,
-      changed: closed.records.changed,
-      unchanged: closed.records.unchanged,
+      created: records.created,
+      changed: records.changed,
+      unchanged: records.unchanged,
     },
+    alongside,
     refusals: collection.refusals,
     documents,
   };

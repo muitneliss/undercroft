@@ -29,14 +29,34 @@
  */
 
 import { type DriveScope, exportTypeOf, landedType } from "@undercroft/contracts";
-import { canonicalJson } from "@undercroft/core";
 
 import type { DocumentToLand } from "../landDocument.ts";
-import type { RecordToLand } from "../land.ts";
 import type { RunJournal } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
-import { DRIVE_BASE, type DriveFile, ENTITY, listMatchingIn, readOneFile } from "./driveListing.ts";
-import type { AlreadyHeld, Harvest, HarvestItem, PickSkipped, RecordProbe } from "./harvest.ts";
+import {
+  DRIVE_BASE,
+  type DriveFile,
+  ENTITY,
+  type FoldersListed,
+  listMatchingIn,
+  readOneFile,
+} from "./driveListing.ts";
+import {
+  FOLDER_ENTITY,
+  landFolders,
+  mergeFolders,
+  PROBE_BATCH,
+  toRecord,
+  unchangedRecords,
+} from "./driveRecords.ts";
+import type {
+  AlreadyHeld,
+  Harvest,
+  HarvestItem,
+  PickSkipped,
+  RecordProbe,
+  StoredDigests,
+} from "./harvest.ts";
 
 /**
  * Why a picked FOLDER yielded nothing.
@@ -48,16 +68,6 @@ import type { AlreadyHeld, Harvest, HarvestItem, PickSkipped, RecordProbe } from
  * a reason; this is the folder half of the same rule. CLAUDE.md rule 2.
  */
 export const NOTHING_MATCHED = "no-matching-files-in-folder";
-
-/**
- * How many listed files one skip-known probe covers.
- *
- * The listing streams, so nothing here holds the tree; this is only how many files are
- * gathered before one round trip asks which of them we already hold. Small enough that the
- * hold is noise against a 1 GiB budget, large enough that a folder of ten thousand files
- * costs fifty statements rather than ten thousand.
- */
-const PROBE_BATCH = 200;
 
 export function driveBaseUrl(): string {
   return DRIVE_BASE;
@@ -81,8 +91,8 @@ export function driveBaseUrl(): string {
  * alone -- which is why the mark is a count of what LANDED and not a comparison against what
  * the pick matched, or such a file would be downloaded again every run for ever.
  *
- * **A SKIPPED FILE STILL ENTERS `seenIds`**, which is the quiet half and the dangerous one.
- * `tombstoneMissing` negates the kept-id set, so a file left out of it because it had not
+ * **A SKIPPED FILE STILL ENTERS THE LISTING**, which is the quiet half and the dangerous one.
+ * The removal sweeps negate the listed set, so a file left out of it because it had not
  * changed is reported DELETED -- and in a steady-state Drive that is every file in it, on
  * the second run. A file the listing named was seen; whether we re-read it is a different
  * question from whether it exists.
@@ -90,21 +100,29 @@ export function driveBaseUrl(): string {
  * A file whose listing carries no `modifiedTime` is left out of the probe entirely rather
  * than probed on presence alone. There is no evidence it is unchanged, and no evidence is
  * not "unchanged" -- so it is read again, which costs a download and cannot lose an edit.
+ *
+ * **HELD BYTES ARE NOT A HELD RECORD.** A file moved to another folder keeps its bytes and,
+ * as far as Drive documents, its `modifiedTime`; what changed is its record. So a file whose
+ * bytes are held is still asked the record's own question (`driveRecords.ts`) and lands its
+ * record alone when it changed. ADR 0078.
+ *
+ * **THE FOLDERS THE WALK LISTED LAND TOO**, so a model can resolve a file's folders by id up
+ * to the pick. They land after the files, once every pick has been walked, because a folder
+ * picked in its own right and also reached through another pick is recorded with the
+ * listing's parent, and that is known only at the end. Holding them until then is bounded by
+ * the tree's shape, not its contents. ADR 0078.
  */
 export async function* harvestDrive(
   api: GoogleApi,
   scope: DriveScope,
   journal: RunJournal,
-  held: AlreadyHeld,
+  known: { held: AlreadyHeld; digests: StoredDigests },
 ): Harvest {
   const seen = new Set<string>();
+  const listed = new Map<string, string | null>();
   const skipped: PickSkipped[] = [];
   let folders = 0;
-  // Folders WALKED, which is not `HarvestSummary.listed` (files named). The journal's
-  // `listed` is this one, and it is what `picks_listed` compares against `folders` to say
-  // how far a recursive descent went.
-  let walked = 0;
-  let known = 0;
+  let unchanged = 0;
   const gauge = filesGauge(journal);
 
   for (const picked of scope.files) {
@@ -118,20 +136,12 @@ export async function* harvestDrive(
       skipped,
     });
 
-    const into: Taking = { api, picked, seen, held, gauge };
-    const batch: DriveFile[] = [];
-    let step = await files.next();
-    while (!step.done) {
-      gauge.found();
-      batch.push(step.value);
-      if (batch.length >= PROBE_BATCH) {
-        known += yield* take(batch.splice(0), into);
-      }
-      step = await files.next();
-    }
-    known += yield* take(batch.splice(0), into);
-    walked += step.value;
+    const taken = yield* takePick(files, { api, picked, seen, known, gauge });
+    unchanged += taken.unchanged;
+    mergeFolders(listed, taken.folders);
   }
+
+  yield* landFolders(listed, known.digests);
 
   // The sentence a green run landing nothing could not say before: what was looked in, what
   // was found there, and the descent that explains the difference between them. `listed`
@@ -142,13 +152,23 @@ export async function* harvestDrive(
   journal.info("picks_listed", {
     entity: ENTITY,
     folders,
-    listed: walked,
+    // Folders WALKED, which is not `HarvestSummary.listed` (files named). It is what
+    // `picks_listed` compares against `folders` to say how far a recursive descent went.
+    listed: listed.size,
     picks: scope.files.length,
     matched: seen.size,
     skipped: skipped.length,
   });
 
-  return { seenIds: [...seen], skipped, listed: seen.size, known };
+  return {
+    listings: new Map([
+      [ENTITY, [...seen]],
+      [FOLDER_ENTITY, [...listed.keys()]],
+    ]),
+    skipped,
+    listed: seen.size,
+    known: unchanged,
+  };
 }
 
 /** The three counts of a Drive walk, each told as it moves. See {@link filesGauge}. */
@@ -206,22 +226,51 @@ interface Taking {
   readonly picked: DriveScope["files"][number];
   /** Every file id this whole harvest has met. Mutated here; see {@link take}. */
   readonly seen: Set<string>;
-  readonly held: AlreadyHeld;
+  readonly known: { readonly held: AlreadyHeld; readonly digests: StoredDigests };
   readonly gauge: FilesGauge;
 }
 
 /**
- * One batch of listed files, turned into what to harvest. Answers how many it skipped.
+ * One pick's files, a probe batch at a time. Answers how many it skipped whole, and the
+ * folders its walk listed.
+ */
+async function* takePick(
+  files: AsyncGenerator<DriveFile, FoldersListed>,
+  into: Taking,
+): AsyncGenerator<HarvestItem, { unchanged: number; folders: FoldersListed }> {
+  const batch: DriveFile[] = [];
+  let unchanged = 0;
+  let step = await files.next();
+  while (!step.done) {
+    into.gauge.found();
+    batch.push(step.value);
+    if (batch.length >= PROBE_BATCH) {
+      unchanged += yield* take(batch.splice(0), into);
+    }
+    step = await files.next();
+  }
+  unchanged += yield* take(batch.splice(0), into);
+  return { unchanged, folders: step.value };
+}
+
+/**
+ * One batch of listed files, turned into what to harvest. Answers how many it skipped whole.
  *
  * Every file here enters `seen` before anything decides whether to read it, which is the
  * tombstone rule spelled out in `harvestDrive`'s docstring. De-duplication comes first: one
  * file picked twice, or sitting in two picked folders, is one file.
+ *
+ * Two questions, in this order. Bytes first: a file whose bytes are not held is harvested
+ * whole, as it always was. Then, of the files whose bytes ARE held, which records changed:
+ * those land alone. Asking the record's question only of held files keeps ADR 0035's repair
+ * intact -- a row whose harvest never said it finished is read in full, however its record
+ * hashes.
  */
 async function* take(
   batch: readonly DriveFile[],
   into: Taking,
 ): AsyncGenerator<HarvestItem, number> {
-  const { picked, seen, held } = into;
+  const { picked, seen, known } = into;
   const fresh: DriveFile[] = [];
   for (const file of batch) {
     if (!seen.has(file.id)) {
@@ -235,35 +284,25 @@ async function* take(
       ? []
       : [{ sourceRecordId: file.id, sourceUpdatedAt: file.modifiedTime }],
   );
-  const unchanged = await held(probes);
+  const held = await known.held(probes);
+  const listedNow = fresh.map((file) => ({ file, record: toRecord(file) }));
+  const same = await unchangedRecords(
+    listedNow.flatMap(({ file, record }) => (held.has(file.id) ? [record] : [])),
+    ENTITY,
+    known.digests,
+  );
   // Told before the first yield rather than after the last: a yield hands over a download,
   // and a count held back until the batch's downloads are done would sit stale behind them.
-  const skippedHere = fresh.filter((file) => unchanged.has(file.id)).length;
-  into.gauge.held(skippedHere);
+  into.gauge.held(same.size);
 
-  for (const file of fresh) {
-    if (!unchanged.has(file.id)) {
-      yield { record: toRecord(file), documents: [toDocument(into, file, picked, seen.size)] };
+  for (const { file, record } of listedNow) {
+    if (!held.has(file.id)) {
+      yield { record, documents: [toDocument(into, file, picked, seen.size)] };
+    } else if (!same.has(file.id)) {
+      yield { record, documents: [], recordOnly: true };
     }
   }
-  return skippedHere;
-}
-
-/** The row that lands in `raw.records`: Drive's own facts about the file, canonicalised. */
-function toRecord(file: DriveFile): RecordToLand {
-  return {
-    entity: ENTITY,
-    sourceRecordId: file.id,
-    sourceUpdatedAt: file.modifiedTime === "" ? null : file.modifiedTime,
-    payloadText: canonicalJson({
-      id: file.id,
-      mimeType: file.mimeType,
-      size: file.size,
-      modifiedTime: file.modifiedTime,
-      md5Checksum: file.md5Checksum,
-      parents: file.parents,
-    }),
-  };
+  return same.size;
 }
 
 /**
@@ -315,7 +354,7 @@ function toDocument(
 
 /**
  * The matching files one pick yields: a folder's tree, to the depth the admin chose, or the
- * single file itself. Answers how many folders were listed to produce them.
+ * single file itself. Answers the folders that were listed to produce them -- none for a file.
  *
  * A pick that yields nothing because it is outside the allow-list is appended to `skipped`
  * rather than yielded empty, so the caller can refuse it with a reason instead of landing a
@@ -337,17 +376,17 @@ async function* filesOfPick(
     seen: number;
     skipped: PickSkipped[];
   },
-): AsyncGenerator<DriveFile, number> {
+): AsyncGenerator<DriveFile, FoldersListed> {
   const { fileTypes, recurse, seen, skipped } = options;
 
   if (picked.kind !== "folder") {
     const one = await readOneFile(api, picked.id, fileTypes, seen);
     if (one.file === null) {
       skipped.push({ fileId: picked.id, reason: one.reason });
-      return 0;
+      return new Map();
     }
     yield one.file;
-    return 0;
+    return new Map();
   }
 
   let matched = 0;

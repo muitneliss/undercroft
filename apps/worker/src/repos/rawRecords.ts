@@ -238,6 +238,42 @@ export async function knownRecords(
 }
 
 /**
+ * The content digest this stream holds for each of these ids, live rows only.
+ *
+ * It answers "would landing this record again change anything", before the lake is asked. A
+ * collector that re-lists a whole source every run hashes the record it would land, compares,
+ * and lands only what differs. That is one statement per batch, where letting the lake decide
+ * costs an object-store lookup per record per run (ADR 0078). The lake still decides: a digest
+ * that differs is a put the lake may call `unchanged`, and an absent one is simply landed.
+ *
+ * A removed row answers nothing. It is live again only when its record lands or a complete
+ * listing names it again, and skipping it here would leave it removed.
+ */
+export async function storedDigests(
+  exec: SqlExecutor,
+  identity: StreamIdentity,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const digests = new Map<string, string>();
+
+  for (let from = 0; from < ids.length; from += PROBE_CHUNK) {
+    const { rows } = await exec.query<{ id: string; sha: string }>(
+      `SELECT r.source_record_id AS id, r.content_sha256 AS sha
+         FROM raw.records r
+        WHERE r.source = $1 AND r.tenant_id = $2 AND r.entity = $3
+          AND r.deleted_at IS NULL
+          AND r.source_record_id = ANY($4::text[])`,
+      [identity.source, identity.tenantId, identity.entity, ids.slice(from, from + PROBE_CHUNK)],
+    );
+    for (const row of rows) {
+      digests.set(row.id, row.sha);
+    }
+  }
+
+  return digests;
+}
+
+/**
  * The stored list read back, or `null` for anything that is not one.
  *
  * `jsonb` arrives parsed from both drivers. A value this cannot read -- hand-edited, or written

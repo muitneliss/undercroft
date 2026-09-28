@@ -441,6 +441,11 @@ describe("a Drive ingest stopped mid-walk", () => {
       "SELECT document_id FROM raw.documents WHERE source = 'drive' AND deleted_at IS NOT NULL",
     );
     expect(rows).toEqual([]);
+    // Nor are f2, or folder-2, removed from `raw.records`, which a listing settles too (ADR 0078).
+    const records = await db.query<{ id: string }>(
+      "SELECT source_record_id AS id FROM raw.records WHERE source = 'drive' AND deleted_at IS NOT NULL",
+    );
+    expect(records.rows).toEqual([]);
   });
 
   it("stops at the file after the one downloading, keeps every file before it, and the next run does not download them again", async () => {
