@@ -19,7 +19,9 @@ import {
   type DocumentTextRow,
   pendingDocuments,
   pendingScopes,
+  sampleTextByDigest,
   scanExtractions,
+  totalTextByDigest,
   upsertDocumentText,
 } from "./documentText.ts";
 
@@ -598,5 +600,51 @@ describe("the extraction sample", () => {
 
     expect(again.map((scan) => scan.text)).toEqual(first.map((scan) => scan.text));
     expect(first.map((scan) => scan.text)).not.toEqual(["d1", "d2", "d3", "d4"]);
+  });
+});
+
+describe("a tenant's texts, one per digest", () => {
+  it("offers each distinct text once, cut, with how many documents hold it", async () => {
+    // Two documents over the same bytes: one Gmail attachment quoted down a reply chain.
+    await land("f1");
+    await land("f2");
+    await extractedAt(NOW, [row("f1", { method: "pdf_text", reason: null, text: "a contract" })]);
+
+    expect(await sampleTextByDigest(db, { tenantId: TENANT, limit: 10, maxChars: 5 })).toEqual([
+      {
+        source: SOURCE,
+        documentId: "f1",
+        digest: SHA,
+        documents: 2,
+        chars: 10,
+        extractorTruncated: false,
+        text: "a con",
+      },
+    ]);
+    expect(await totalTextByDigest(db, { tenantId: TENANT, maxChars: 5 })).toEqual({
+      digests: 1,
+      documents: 2,
+      cutChars: 5,
+    });
+  });
+
+  it("never offers another tenant's text", async () => {
+    // The probe sends what this returns to a third party; the boundary is the whole guard.
+    await land("theirs", SHA, { tenantId: OTHER_TENANT });
+    await upsertDocumentText(
+      db,
+      { tenantId: OTHER_TENANT, source: SOURCE },
+      [row("theirs", { method: "pdf_text", reason: null, text: "not yours" })],
+      { extractedAt: "2026-09-20T09:00:00.000Z", runId: "run-extract-other", readerVersion: NOW },
+    );
+
+    expect(await sampleTextByDigest(db, { tenantId: TENANT, limit: 10, maxChars: 100 })).toEqual(
+      [],
+    );
+    expect(await totalTextByDigest(db, { tenantId: TENANT, maxChars: 100 })).toEqual({
+      digests: 0,
+      documents: 0,
+      cutChars: 0,
+    });
   });
 });

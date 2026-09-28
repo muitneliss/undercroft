@@ -145,6 +145,7 @@
       "dependencies": {
         "@tradetrust-tt/dnsprove": "2.21.1",
         "@tradetrust-tt/tt-verify": "9.7.6",
+        "@typesafe-ai/sdk": "0.6.0",
         "@undercroft/connector-runtime": "workspace:*",
         "@undercroft/contracts": "workspace:*",
         "@undercroft/core": "workspace:*",

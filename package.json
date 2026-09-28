@@ -33,6 +33,7 @@
     "kestra:flows": "bun run scripts/kestraFlows.ts",
     "invite": "bun run apps/control-plane/src/inviteCli.ts",
     "extract:accuracy": "bun run apps/worker/src/extractionAccuracyCli.ts",
+    "semantic:probe": "bun run apps/worker/src/semanticProbeCli.ts",
     "format": "biome format --write . && prettier --write .",
     "format:check": "biome format . && prettier --check .",
     "spec:validate": "bun run packages/contracts/scripts/validateSpecs.ts",
