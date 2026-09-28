@@ -25,6 +25,7 @@ describe("recording an external batch", () => {
     await claimExternal(db, { runId: "ext-1", tenantId: "CASE-0042", source: "csv" });
     await recordExternal(db, "ext-1", {
       created: 1,
+      changed: 0,
       unchanged: 0,
       failed: 1,
       results: [
@@ -47,6 +48,7 @@ describe("recording an external batch", () => {
     await claimExternal(db, { runId: "ext-2", tenantId: "CASE-0042", source: "csv" });
     await recordExternal(db, "ext-2", {
       created: 1,
+      changed: 0,
       unchanged: 0,
       failed: 0,
       results: [{ entity: "deals", sourceRecordId: "1", status: "created" }],

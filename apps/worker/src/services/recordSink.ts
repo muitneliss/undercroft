@@ -22,7 +22,6 @@ import {
   CHUNK,
   type HarvestedRecord,
   type Landing,
-  type LoadedCounts,
   type LandSummary,
   type RecordSink,
   SinkClosed,
@@ -81,9 +80,9 @@ function marksIn(
 /** What one chunk did, in the four numbers a sink accumulates. */
 interface ChunkOutcome {
   readonly created: number;
+  readonly changed: number;
   readonly unchanged: number;
   readonly refused: number;
-  readonly loaded: LoadedCounts;
 }
 
 /**
@@ -108,14 +107,13 @@ async function landChunk(
   await deps.refuse(refusalsIn(result.results));
 
   // A stream per entity present, since an entity is a property of a record rather than of the
-  // sink -- ordinarily one.
-  const loaded = { created: 0, changed: 0, unchanged: 0 };
+  // sink -- ordinarily one. What the projection counts is deliberately NOT this run's New /
+  // Changed / Unchanged: it reads journal entries, so it never sees a record re-read
+  // identical and it does see whatever an earlier dead run left unprojected. `land.ts` counts
+  // those, from the lake's own write; see its docstring and issue #284.
   for (const entity of new Set(chunkOf.map((record) => record.entity))) {
     const identity = { source: at.source, tenantId: at.tenantId, entity };
-    const projected = await loadStreamToRaw(deps.exec, deps.lake, identity);
-    loaded.created += projected.created;
-    loaded.changed += projected.changed;
-    loaded.unchanged += projected.unchanged;
+    await loadStreamToRaw(deps.exec, deps.lake, identity);
 
     // AFTER the projection, which is what puts the row there to mark -- and after rather than
     // inside it, because this is the one thing about a record that the lake cannot carry:
@@ -126,15 +124,17 @@ async function landChunk(
     await markHarvested(deps.exec, identity, marksIn(chunkOf, result.results, entity));
   }
 
-  return { created: result.created, unchanged: result.unchanged, refused: result.failed, loaded };
+  return {
+    created: result.created,
+    changed: result.changed,
+    unchanged: result.unchanged,
+    refused: result.failed,
+  };
 }
 
 export function createRecordSink(deps: SinkDeps, at: Landing, chunk: number = CHUNK): RecordSink {
   const buffer: HarvestedRecord[] = [];
-  const loaded = { created: 0, changed: 0, unchanged: 0 };
-  let created = 0;
-  let unchanged = 0;
-  let refused = 0;
+  const counted = { created: 0, changed: 0, unchanged: 0, refused: 0 };
   let closed = false;
 
   async function flush(): Promise<void> {
@@ -144,12 +144,10 @@ export function createRecordSink(deps: SinkDeps, at: Landing, chunk: number = CH
     // `splice` empties the buffer as it hands the chunk over, so the sink is already back to
     // holding nothing while this chunk is being landed.
     const outcome = await landChunk(deps, at, buffer.splice(0));
-    created += outcome.created;
-    unchanged += outcome.unchanged;
-    refused += outcome.refused;
-    loaded.created += outcome.loaded.created;
-    loaded.changed += outcome.loaded.changed;
-    loaded.unchanged += outcome.loaded.unchanged;
+    counted.created += outcome.created;
+    counted.changed += outcome.changed;
+    counted.unchanged += outcome.unchanged;
+    counted.refused += outcome.refused;
   }
 
   return {
@@ -165,7 +163,7 @@ export function createRecordSink(deps: SinkDeps, at: Landing, chunk: number = CH
     async close(): Promise<LandSummary> {
       await flush();
       closed = true;
-      return { landed: created + unchanged, created, unchanged, refused, loaded: { ...loaded } };
+      return { landed: counted.created + counted.changed + counted.unchanged, ...counted };
     },
   };
 }

@@ -635,10 +635,10 @@ describe("gmail", () => {
     );
     expect(rows.map((r) => r.document_id)).toEqual(["m1:002"]);
     // The mark reached the row although NOTHING was projected: the record's bytes had not
-    // moved, so the lake wrote no new version and the loader had no entry to read. A fact
-    // carried in the manifest would have died right here, and the mailbox would have been
-    // re-read on every run for ever.
-    expect(healing.records).toMatchObject({ loadedCreated: 0, loadedChanged: 0 });
+    // moved (it counts as unchanged), so the lake wrote no new version and the loader had no
+    // entry to read. A fact carried in the manifest would have died right here, and the
+    // mailbox would have been re-read on every run for ever.
+    expect(healing.records).toMatchObject({ created: 0, changed: 0, unchanged: 1 });
     expect(await marks("gmail")).toEqual([{ id: "m1", landed: "1" }]);
   });
 
@@ -745,7 +745,7 @@ describe("gmail", () => {
     expect(result.documents.created).toBe(ids.length);
     expect(await projected("gmail")).toHaveLength(ids.length);
     // The counts came back summed over the chunks, not from the last one.
-    expect(result.records.loadedCreated).toBe(ids.length);
+    expect(result.records.created).toBe(ids.length);
   });
 
   it("an empty allow-list lands attachments of every type in one message", async () => {
