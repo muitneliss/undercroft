@@ -1161,6 +1161,8 @@ export const vi = {
     buildFailedHead: "Dựng thất bại",
     testsFailed_other: "{{count, number}} kiểm tra không đạt. Xem từng bước trong Nhật ký.",
     openInJournal: "Xem trong Nhật ký",
+    queryInReports: "Truy vấn trong Báo cáo",
+    queryInReportsHint: "Mở một câu hỏi SQL mới trên bảng đã dựng gần nhất.",
     previewHead: "Những dòng đầu",
     previewEmpty: "Bảng đã dựng nhưng chưa có dòng nào.",
     testsHead: "Kiểm tra",

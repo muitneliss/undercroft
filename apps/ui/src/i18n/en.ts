@@ -973,6 +973,8 @@ export const en = {
     testsFailed_one: "{{count, number}} test failed. See each step in the Journal.",
     testsFailed_other: "{{count, number}} tests failed. See each step in the Journal.",
     openInJournal: "Open in the Journal",
+    queryInReports: "Query in Reports",
+    queryInReportsHint: "Open a new SQL question on the table the last build made.",
     previewHead: "First rows",
     previewEmpty: "The table was built but holds no rows yet.",
     testsHead: "Tests",
