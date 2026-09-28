@@ -110,8 +110,13 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
     /**
      * The same list `specs/connectors/xero.yaml` declares under `auth.scopes`, kept in step
      * by hand: the control plane does not read specs, and a consent narrower than the spec
-     * would fail every run with a 403 far from here. `offline_access` is what makes Xero
-     * issue a refresh token at all.
+     * would leave every list read under the missing scope unread. `offline_access` is what
+     * makes Xero issue a refresh token at all.
+     *
+     * `accounting.settings.read` reads items, the chart of accounts, tracking categories, tax
+     * rates and currencies (#276, #277). A grant recorded before it was asked for still reads
+     * every other list; each of those five is named in the run as not granted until the
+     * organisation is reconnected (ADR 0071).
      *
      * Granular, never the broad `accounting.transactions`: Xero grants that to no app created
      * on or after 2 March 2026 and to none at all after September 2027, and a consent asking
@@ -123,6 +128,7 @@ export const PROVIDERS: Readonly<Record<Provider, ProviderShape>> = {
         "accounting.invoices.read",
         "accounting.payments.read",
         "accounting.contacts.read",
+        "accounting.settings.read",
       ],
     },
     // A confidential client with a secret: Xero takes it in a Basic header at the token

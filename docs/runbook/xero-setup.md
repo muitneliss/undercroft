@@ -62,20 +62,27 @@ up as **Connect Xero** being refused (section 5). Both compose files already pas
 
 The consent asks for the scopes `specs/connectors/xero.yaml` declares under `auth.scopes`,
 kept in step by hand in `apps/control-plane/src/services/oauthProviders.ts`, and
-`oauthProviders.test.ts` fails the gate when the two differ, or when the spec reads a list
-under a scope neither asks for. A connection whose recorded grant lacks a scope the spec
-declares reads **reconnect** on its card, and its runs are refused before they open, naming
-the scope. If you add an entity that needs a new scope, add it in both places and in the
-test's path-to-scope table. Every existing connection then has to reconnect.
+`oauthProviders.test.ts` fails the gate when the two differ, or when an entity's `readScope`
+is not the scope Xero reads its list under. Every entity names its `readScope`; the spec
+schema refuses one that does not, or one naming a scope the consent does not ask for.
+
+A connection whose recorded grant lacks a scope the consent asks for reads **reconnect** on its
+card. Its runs still read every list the grant reaches. Each list it does not reach is never
+requested, and the run's Journal names it with the scope a reconnect would add. A run left with
+no list it can read fails, naming the scope. If you add an entity that needs a new scope, add
+the scope in both places and in the test's path-to-scope table. Each existing connection reads
+the new list only after it reconnects.
+[ADR 0071](../adr/0071-a-list-its-grant-cannot-read-is-named-not-failed.md).
 
 The scopes are Xero's **granular** ones, and the lists each one reads:
 
-| Scope                      | Lists                                                                                           |
-| -------------------------- | ----------------------------------------------------------------------------------------------- |
-| `offline_access`           | none: it makes Xero issue a refresh token                                                       |
-| `accounting.invoices.read` | invoices, credit notes, quotes, purchase orders, repeating invoices, linked transactions, items |
-| `accounting.payments.read` | payments, overpayments, prepayments, batch payments                                             |
-| `accounting.contacts.read` | contacts, contact groups                                                                        |
+| Scope                      | Lists                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| `offline_access`           | none: it makes Xero issue a refresh token                                                |
+| `accounting.invoices.read` | invoices, credit notes, quotes, purchase orders, repeating invoices, linked transactions |
+| `accounting.payments.read` | payments, overpayments, prepayments, batch payments                                      |
+| `accounting.contacts.read` | contacts, contact groups                                                                 |
+| `accounting.settings.read` | items, chart of accounts, tracking categories and their options, tax rates, currencies   |
 
 Xero grants the broad `accounting.transactions` to no app created on or after 2 March 2026,
 and to no app at all after September 2027, so never add a broad scope back. Nothing needs
@@ -109,4 +116,4 @@ list reads the way it does.
 | The scope page lists no organisation             | The Xero user has access to none                                                      | Consent from a user who does    |
 | Every run fails after 0 records with 401         | A refresh failed, or the grant lapsed                                                 | Reconnect; check the worker log |
 | Runs fail with "needs the provider's account id" | No organisation was chosen                                                            | Choose one on the scope page    |
-| Runs are refused as "granted without" a scope    | The grant predates a scope the spec now declares                                      | Reconnect                       |
+| A list in Journal says "not granted"             | The grant predates a scope the consent now asks for                                   | Reconnect                       |

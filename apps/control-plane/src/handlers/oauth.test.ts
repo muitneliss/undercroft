@@ -72,7 +72,7 @@ const xero = {
           refresh_token: "xrt",
           expires_in: 1800,
           scope:
-            "offline_access accounting.invoices.read accounting.payments.read accounting.contacts.read",
+            "offline_access accounting.invoices.read accounting.payments.read accounting.contacts.read accounting.settings.read",
         }),
         { status: 200 },
       ),

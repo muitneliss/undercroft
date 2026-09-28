@@ -146,7 +146,7 @@ interface Words {
  *
  * `t` is typed against `vi.ts`, so a key built by interpolation is not a key as far as the
  * compiler is concerned, and a typo in one would ship as a raw string on a page.
- * `eventSentence` in `runs.ts` is written out for the same reason.
+ * `eventSentence` in `runEventSentence.ts` is written out for the same reason.
  */
 function aboutTheDocument(t: TFunction, code: DocumentReason): Words {
   switch (code) {

@@ -14,18 +14,20 @@
  * empty drive. The scope each Google source needs is `@undercroft/contracts`'
  * `GOOGLE_READ_SCOPES`, the same table the consent asks from.
  *
- * A spec source consenting through OAuth -- Xero -- needs every scope its spec declares under
- * `auth.scopes`, the list its consent asks for. Xero does refuse a missing scope, with a 401, but
- * only on the request that needs it, part-way through a run that has already landed the entities
- * before it (issue 271); and the card already reads `needs_reconnect` for such a grant while the
- * scheduler, which knows nothing of grants, goes on starting runs. Refused here, the run is never
- * opened and the refusal names the scope a reconnect would add.
+ * A spec source consenting through OAuth -- Xero -- reads each list under its own scope, which
+ * the spec names per entity (`readScope`). Xero refuses a missing scope with a 401, but only on
+ * the request for that list, part-way through a run that has already landed the lists before it
+ * (issues 271 and 276). And a consent that gains a scope leaves every grant recorded before it
+ * without that scope, still able to read everything else. So the grant is not judged as a whole:
+ * {@link partitionByGrant} splits a run's lists into the ones it reaches and the ones it does not,
+ * before the first request, and the run reads the first and names each of the second with the
+ * scope a reconnect would add. ADR 0071, superseding ADR 0069's refusal of the whole run.
  */
 
-import { type ConnectorSpec, missingReadScope } from "@undercroft/contracts";
+import { type ConnectorEntity, missingReadScope } from "@undercroft/contracts";
 import { UndercroftError } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { type Connection, getConnection } from "@undercroft/db/repos";
+import { getConnection } from "@undercroft/db/repos";
 
 /** The recorded grant lacks the scope this source reads with. A reconnect is the repair. */
 export class GrantTooNarrow extends UndercroftError {
@@ -56,23 +58,35 @@ export async function requireReadGrant(
   }
 }
 
+/** A list the recorded grant cannot read, and the scope a reconnect would add for it. */
+export interface UngrantedRead {
+  readonly entity: string;
+  readonly scope: string;
+}
+
 /**
- * Raise {@link GrantTooNarrow} when a connection's recorded grant lacks a scope its spec declares.
+ * Split the lists a run would read into those the recorded grant reaches and those it does not,
+ * in the order given.
  *
- * Quiet for a spec that does not consent through OAuth, and for a connection with nothing
- * recorded as granted: an empty scope is no evidence of a narrow grant, for the reason
- * `missingReadScope` gives, and the card's `presentStatus` reads it the same way.
+ * An entity with no `readScope` is read on any grant: the spec contract requires one of every
+ * entity whose consent names scopes, so an entity without one has no scope to lack. An EMPTY
+ * recorded grant judges nothing and reads everything, for the reason `missingReadScope` gives:
+ * nothing recorded is no evidence of a narrow grant, and the card's `presentStatus` reads it the
+ * same way. Xero then answers for itself, with a 401 that raises.
  */
-export function requireSpecGrant(
-  spec: ConnectorSpec,
-  connection: Pick<Connection, "tenantId" | "source" | "scope">,
-): void {
-  if (spec.auth.kind !== "oauth2" || connection.scope.trim() === "") {
-    return;
+export function partitionByGrant<E extends Pick<ConnectorEntity, "name" | "readScope">>(
+  entities: readonly E[],
+  grantedScope: string,
+): { granted: E[]; ungranted: UngrantedRead[] } {
+  const granted: E[] = [];
+  const ungranted: UngrantedRead[] = [];
+  const held = new Set(grantedScope.split(" ").filter((scope) => scope !== ""));
+  for (const entity of entities) {
+    if (held.size === 0 || entity.readScope === undefined || held.has(entity.readScope)) {
+      granted.push(entity);
+    } else {
+      ungranted.push({ entity: entity.name, scope: entity.readScope });
+    }
   }
-  const granted = new Set(connection.scope.split(" "));
-  const missing = spec.auth.scopes.filter((scope) => !granted.has(scope));
-  if (missing.length > 0) {
-    throw new GrantTooNarrow(connection.source, connection.tenantId, missing.join(", "));
-  }
+  return { granted, ungranted };
 }

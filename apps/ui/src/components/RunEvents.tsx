@@ -41,7 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table.tsx";
-import { eventSentence } from "@/lib/runs.ts";
+import { eventSentence } from "@/lib/runEventSentence.ts";
 import { formatTime } from "@/lib/when.ts";
 
 /**

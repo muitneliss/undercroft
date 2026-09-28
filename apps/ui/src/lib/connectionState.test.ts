@@ -101,7 +101,8 @@ describe("scopeSummary for Xero", () => {
     expect(scopeSummary(t, xero)).toBe(
       "Mọi loại dữ liệu: Liên hệ, Hóa đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, " +
         "Hóa đơn định kỳ, Giao dịch liên kết, Mặt hàng, Khoản trả thừa, Khoản trả trước, " +
-        "Thanh toán theo lô, Nhóm liên hệ",
+        "Thanh toán theo lô, Nhóm liên hệ, Hệ thống tài khoản, Danh mục theo dõi, Thuế suất, " +
+        "Tiền tệ",
     );
   });
 });
