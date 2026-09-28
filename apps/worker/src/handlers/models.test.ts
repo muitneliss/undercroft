@@ -65,7 +65,7 @@ const fakeDbt: Spawn = async (_cmd, options) => {
       relation_name: '"undercroft"."dq_case_1"."not_null_stg_deals_deal_name"',
     },
   ]);
-  return { exitCode: 1, output: "Done. PASS=1 FAIL=1" };
+  return { exitCode: 1, stdout: "Done. PASS=1 FAIL=1", stderr: "" };
 };
 
 /** The API with dbt wired. `exec` is `noDatabase` only for requests refused before any SQL. */
@@ -180,7 +180,7 @@ describe("POST /v1/models/build", () => {
           relation_name: null,
         },
       ]);
-      return Promise.resolve({ exitCode: 1, output: "Database Error" });
+      return Promise.resolve({ exitCode: 1, stdout: "Database Error", stderr: "" });
     };
     const res = await post(api(broken), "/v1/models/build", {
       tenantId: TENANT,

@@ -51,10 +51,25 @@ export interface SpawnOptions {
   readonly timeoutMs: number;
 }
 
-export type Spawn = (
-  cmd: readonly string[],
-  options: SpawnOptions,
-) => Promise<{ exitCode: number; output: string }>;
+/**
+ * What a child said, on each stream, kept apart.
+ *
+ * APART BECAUSE THEY ARE DIFFERENT FACTS. `stdout` is the program's answer; `stderr` is its
+ * commentary on getting there. `tesseract` writes "Estimating resolution as 190" to stderr for
+ * almost every image and `pdftotext` a "Syntax Error" line for every malformed object, whether
+ * or not either found a word. Joined into one string they were stored as the document's text:
+ * an image with no text on it read as the sentence about its resolution, a scan's PDF cleared
+ * the text-layer threshold on poppler's complaints alone and was never OCR'd, and
+ * `OCR_FOUND_NOTHING` could never fire. A caller that wants both -- dbt's failure tail -- joins
+ * them itself, knowing it is making a log and not a value.
+ */
+export interface SpawnResult {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+export type Spawn = (cmd: readonly string[], options: SpawnOptions) => Promise<SpawnResult>;
 
 export interface TransformDeps {
   /** The worker's own executor: provisioning, rotation, the models, the columns written back. */
@@ -103,7 +118,7 @@ const TAIL_LINES = 20;
 export async function realSpawn(
   cmd: readonly string[],
   options: SpawnOptions,
-): Promise<{ exitCode: number; output: string }> {
+): Promise<SpawnResult> {
   const proc = Bun.spawn([...cmd], {
     cwd: options.cwd,
     env: options.env,
@@ -117,7 +132,7 @@ export async function realSpawn(
       new Response(proc.stderr).text(),
     ]);
     const exitCode = await proc.exited;
-    return { exitCode, output: `${stdout}\n${stderr}` };
+    return { exitCode, stdout, stderr };
   } finally {
     clearTimeout(deadline);
   }
@@ -240,12 +255,13 @@ export async function runTransform(
       dir,
       ...(input.select === undefined ? [] : ["--select", input.select]),
     ];
-    const { exitCode, output } = await spawn(cmd, {
+    const { exitCode, stdout, stderr } = await spawn(cmd, {
       cwd: dir,
       env: childEnv(deps.env, password),
       timeoutMs: input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     });
-    const tail = tailOf(output);
+    // A log, so both streams: dbt names a failed model on stdout and a crashed adapter on stderr.
+    const tail = tailOf(`${stdout}\n${stderr}`);
     const { steps, testsFailed } = parseRunResults(await readRunResults(dir));
 
     if (exitCode !== 0 && steps.length === 0) {

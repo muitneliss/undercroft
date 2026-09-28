@@ -88,26 +88,35 @@ export function extractorMissing(program: string): string {
  * its caller and lost the whole document from its shard rather than just the text. A reader
  * that added a path around this would put that back.
  *
- * A FAILED RUN KEEPS WHAT THE PROGRAM SAID. One exit code covers several causes -- `pdftotext`
- * exits 1 for a corrupt file and for a password-protected one alike -- so a reader that can
- * name the cause needs the diagnostic, and one that cannot simply ignores it. A program that
- * never started said nothing, which is the empty string.
+ * A RUN THAT WORKED ANSWERS WITH STDOUT ALONE, and never its stderr. That is the program's
+ * answer, and the answer is what gets stored as a document's text; stderr is what the program
+ * said about reading it. `tesseract` prints "Estimating resolution as 190" there for an image
+ * with no words on it, and until the two were kept apart that sentence was stored as the
+ * image's text. `SpawnResult` in `../transform.ts` records what it cost.
+ *
+ * A FAILED RUN KEEPS WHAT THE PROGRAM SAID, as `diagnostic`. One exit code covers several
+ * causes -- `pdftotext` exits 1 for a corrupt file and for a password-protected one alike -- so
+ * a reader that can name the cause needs the diagnostic, and one that cannot simply ignores it.
+ * Both streams, because nothing about a failure promises which one a program chose. A program
+ * that never started said nothing, which is the empty string.
  */
 export async function runProgram(
   deps: ExtractDeps,
   cmd: readonly string[],
-): Promise<{ ok: true; output: string } | { ok: false; missing: boolean; output: string }> {
+): Promise<{ ok: true; stdout: string } | { ok: false; missing: boolean; diagnostic: string }> {
   const options: SpawnOptions = {
     cwd: deps.workDir,
     env: deps.env ?? {},
     timeoutMs: deps.timeoutMs ?? DEFAULT_EXTRACT_TIMEOUT_MS,
   };
   try {
-    const { exitCode, output } = await deps.spawn(cmd, options);
-    return exitCode === 0 ? { ok: true, output } : { ok: false, missing: false, output };
+    const { exitCode, stdout, stderr } = await deps.spawn(cmd, options);
+    return exitCode === 0
+      ? { ok: true, stdout }
+      : { ok: false, missing: false, diagnostic: `${stderr}\n${stdout}` };
   } catch {
     // A spawn that could not start at all. Treated as "the program is not here", which is
     // what it means in practice and what the operator can fix.
-    return { ok: false, missing: true, output: "" };
+    return { ok: false, missing: true, diagnostic: "" };
   }
 }

@@ -36,11 +36,15 @@ const A_PAGE =
 /** What a scan's text layer leaves behind: a stamp's worth of stray characters. */
 const SCAN_NOISE = "  \f  page 1  \f ";
 
-function spawnAnswering(output: string, exitCode = 0): { spawn: Spawn; calls: string[][] } {
+function spawnAnswering(
+  stdout: string,
+  exitCode = 0,
+  stderr = "",
+): { spawn: Spawn; calls: string[][] } {
   const calls: string[][] = [];
   const spawn: Spawn = (cmd) => {
     calls.push([...cmd]);
-    return Promise.resolve({ exitCode, output });
+    return Promise.resolve({ exitCode, stdout, stderr });
   };
   return { spawn, calls };
 }
@@ -94,6 +98,19 @@ describe("a PDF's text layer", () => {
     expect(calls.map((cmd) => cmd[0])).toContain("pdftoppm");
   });
 
+  it("is not believed when poppler's complaints on stderr are all that make it long", async () => {
+    // Regression: a run's stderr was stored with its stdout, so a scan whose PDF made poppler
+    // print a screen of "Syntax Error" lines cleared the threshold on those lines alone. It was
+    // stored as `pdf_text` -- the complaints as the document's text -- and never OCR'd.
+    const complaints = "Syntax Error (571171): No font in show\n".repeat(40);
+    const { spawn } = spawnAnswering(SCAN_NOISE, 0, complaints);
+
+    const result = await extract(spawn);
+
+    expect(result.method).not.toBe("pdf_text");
+    expect(result.text).not.toContain("Syntax Error");
+  });
+
   it("measures the threshold in characters a reader would see, not raw bytes", async () => {
     // Pins the normalisation the threshold depends on. Whitespace-padded noise must not pass
     // by being long; this is the guard that makes the two tests above mean what they say.
@@ -127,7 +144,8 @@ describe("a password-protected PDF", () => {
     // Regression: six locked email attachments on production were reported `pdftotext-failed`,
     // which the UI words as "the PDF may be corrupt". Poppler exits 1 for both, so what it
     // SAYS is the only difference -- this is the line poppler 25.03 prints.
-    const { spawn, calls } = spawnAnswering("\nCommand Line Error: Incorrect password\n", 1);
+    // On stderr, which is where poppler writes it and the only place a run keeps it.
+    const { spawn, calls } = spawnAnswering("", 1, "Command Line Error: Incorrect password\n");
 
     const result = await extract(spawn);
 
@@ -416,7 +434,7 @@ describe("the child's deadline", () => {
     let seen = 0;
     const spawn: Spawn = (_cmd, options) => {
       seen = options.timeoutMs;
-      return Promise.resolve({ exitCode: 0, output: A_PAGE });
+      return Promise.resolve({ exitCode: 0, stdout: A_PAGE, stderr: "" });
     };
 
     await extract(spawn);

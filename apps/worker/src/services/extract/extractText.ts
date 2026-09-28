@@ -188,14 +188,14 @@ export async function pdfTextLayer(
 ): Promise<{ ok: true; text: string } | { ok: false; reason: string }> {
   const result = await runProgram(deps, ["pdftotext", "-layout", path, "-"]);
   if (result.ok) {
-    return { ok: true, text: result.output };
+    return { ok: true, text: result.stdout };
   }
   if (result.missing) {
     return { ok: false, reason: extractorMissing("pdftotext") };
   }
   return {
     ok: false,
-    reason: result.output.includes(POPPLER_PASSWORD_DIAGNOSTIC)
+    reason: result.diagnostic.includes(POPPLER_PASSWORD_DIAGNOSTIC)
       ? PDF_PASSWORD_PROTECTED
       : PDF_TEXT_FAILED,
   };

@@ -114,7 +114,7 @@ async function ocrPage(deps: ExtractDeps, path: string, timeoutMs: number): Prom
     LANGUAGES,
   ]);
   if (ran.ok) {
-    return { ok: true, text: ran.output };
+    return { ok: true, text: ran.stdout };
   }
   return { ok: false, reason: ran.missing ? extractorMissing("tesseract") : TESSERACT_FAILED };
 }

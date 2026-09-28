@@ -20,6 +20,7 @@ import { describe, expect, test as it } from "bun:test";
 import { align, type GoldCase, scoreGold, UNMEASURED } from "./accuracy.ts";
 import { extractDocument } from "./extractText.ts";
 import { GOLD_SET } from "./goldSet.ts";
+import type { SpawnResult } from "../transform.ts";
 import { pdfOf } from "./testing.ts";
 
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -36,8 +37,8 @@ function nothingInstalled(): never {
 }
 
 /** A spawn that runs and fails. A different fact, and the readers say so differently. */
-function everythingFails(): Promise<{ exitCode: number; output: string }> {
-  return Promise.resolve({ exitCode: 1, output: "" });
+function everythingFails(): Promise<SpawnResult> {
+  return Promise.resolve({ exitCode: 1, stdout: "", stderr: "" });
 }
 
 /** Which cases need poppler or tesseract, and so cannot be scored in the offline tier. */
