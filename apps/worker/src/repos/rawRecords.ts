@@ -401,6 +401,18 @@ export async function reconcileRemovals(
 }
 
 /**
+ * The batch as rows, one per record: its newest version, by lake stamp. Stamps ascend and are
+ * lexically sortable (`core/stamp.ts`), so this holds whatever order the caller passed.
+ */
+const NEWEST_PER_RECORD = `(
+     SELECT DISTINCT ON (srid) * FROM unnest(
+        $1::text[], $2::text[], $3::text[], $4::text[],
+        $5::jsonb[], $6::char(64)[], $7::timestamptz[], $8::timestamptz[],
+        $9::text[], $10::text[], $11::text[])
+        AS b(src, tid, ent, srid, payload, sha, sua, obs, lk, ls, rid)
+     ORDER BY srid, ls DESC)`;
+
+/**
  * Two portable statements instead of one `ON CONFLICT ... RETURNING (xmax = 0)`.
  *
  * Telling an insert from an update in a single upsert needs the `xmax` system column,
@@ -413,6 +425,13 @@ export async function reconcileRemovals(
  * The freshly-inserted rows carry the same content hash as the incoming batch, so the
  * UPDATE's `content_sha256 IS DISTINCT FROM` guard skips them for free -- there is no
  * window in which a row is counted twice. `unchanged` is whatever neither touched.
+ *
+ * Both read {@link NEWEST_PER_RECORD}, not the raw batch. A record landed twice before the
+ * projection ran brings two versions into one batch, and an `UPDATE ... FROM` that matches a
+ * row twice applies whichever join row Postgres meets first -- the older one, in practice --
+ * while the cursor moves past both. The no-time-travel guard cannot catch it: it compares
+ * each version with the stored row, never with each other. Counts are therefore per record,
+ * and a version superseded within its own batch is counted nowhere.
  */
 export async function upsertRecords(
   exec: SqlExecutor,
@@ -442,10 +461,7 @@ export async function upsertRecords(
         source, tenant_id, entity, source_record_id,
         payload, content_sha256, source_updated_at, observed_at,
         lake_key, lake_stamp, run_id)
-     SELECT * FROM unnest(
-        $1::text[], $2::text[], $3::text[], $4::text[],
-        $5::jsonb[], $6::char(64)[], $7::timestamptz[], $8::timestamptz[],
-        $9::text[], $10::text[], $11::text[])
+     SELECT * FROM ${NEWEST_PER_RECORD} AS v
      ON CONFLICT (source, tenant_id, entity, source_record_id) DO NOTHING
      RETURNING source_record_id AS id`,
     cols,
@@ -462,11 +478,7 @@ export async function upsertRecords(
         run_id            = v.rid,
         loaded_at         = now(),
         deleted_at        = NULL
-     FROM unnest(
-        $1::text[], $2::text[], $3::text[], $4::text[],
-        $5::jsonb[], $6::char(64)[], $7::timestamptz[], $8::timestamptz[],
-        $9::text[], $10::text[], $11::text[])
-        AS v(src, tid, ent, srid, payload, sha, sua, obs, lk, ls, rid)
+     FROM ${NEWEST_PER_RECORD} AS v
      WHERE r.source = v.src AND r.tenant_id = v.tid AND r.entity = v.ent
        AND r.source_record_id = v.srid
        AND r.content_sha256 IS DISTINCT FROM v.sha
@@ -477,5 +489,6 @@ export async function upsertRecords(
 
   const created = inserted.rows.length;
   const changedCount = changed.rows.length;
-  return { created, changed: changedCount, unchanged: batch.length - created - changedCount };
+  const records = new Set(batch.map((r) => r.sourceRecordId)).size;
+  return { created, changed: changedCount, unchanged: records - created - changedCount };
 }
