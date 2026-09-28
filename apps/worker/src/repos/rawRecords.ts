@@ -25,17 +25,19 @@
  * as are the same instant spelled two ways. See its own docstring.
  *
  * `markHarvested` and `reconcileRemovals` are the two statements here that do NOT project the
- * lake, and the exception is deliberate rather than an erosion. `documents_landed` records what
- * a harvest settled beside a record, and `deleted_at` what a complete read found missing; both
- * are facts about the READING and not about the object -- so neither has a way in through a
- * content-addressed store, where an unchanged record writes no new version and therefore
- * nothing for the projection to carry. `230_documents_landed.sql` argues it in full, and ADR
- * 0071 for removals: a rebuilt projection loses a removal only until the next complete read
+ * lake, and the exception is deliberate rather than an erosion. `documents_landed` and
+ * `documents_left_behind` record what a harvest settled beside a record and what it left behind,
+ * and `deleted_at` what a complete read found missing; all three are facts about the READING
+ * and not about the object -- so none has a way in through a content-addressed store, where an
+ * unchanged record writes no new version and therefore nothing for the projection to carry.
+ * `230_documents_landed.sql` argues it in full, `330_documents_left_behind.sql` for what a harvest
+ * left behind (ADR 0076), and ADR 0071 for removals: a rebuilt projection loses a removal only until the next complete read
  * decides it again. They are here rather than in a module of their own because this is the
  * repo for this table group (`layering.md`), and a second module writing `raw.records` would
  * be the second writer that argument is trying to avoid.
  */
 
+import { getPath } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 
 /** One observation of one record, ready to be written. */
@@ -130,12 +132,47 @@ export interface RecordProbe {
 const PROBE_CHUNK = 1000;
 
 /**
- * Which of these records this stream already holds, and holds unchanged.
+ * A document part a harvest saw on a record and did not land, described without its name.
+ *
+ * Left behind because the file-type choice refused it or because its declared size is over
+ * the ceiling. `documentId` is the id it would land under; `mimeType` and `extension` are the
+ * two facts file matching reads (`FileFacts` in `@undercroft/contracts`), and `declaredBytes`
+ * the one the size ceiling reads -- so a later run can ask both questions again without the
+ * provider. Nothing here is a name a person wrote, because `raw.records` is readable by dbt.
+ * `330_documents_left_behind.sql`, ADR 0076.
+ */
+export interface LeftBehindDocument {
+  readonly documentId: string;
+  readonly mimeType: string;
+  readonly extension: string | null;
+  /** Decimal digits as the provider declared them, never a number. */
+  readonly declaredBytes: string;
+}
+
+/**
+ * A record this stream holds harvest-complete, and what that harvest settled.
+ *
+ * `documentsLeftBehind` is `null` where the harvest that marked the row did not say -- every row
+ * marked before `330_documents_left_behind.sql`, every Drive row, and any value this module cannot
+ * read back as a list of {@link LeftBehindDocument}. `null` is "unknown", never "nothing": a
+ * collector that needs the list reads the record again rather than trusting an absence.
+ */
+export interface HeldRecord {
+  readonly documentsLanded: number;
+  readonly documentsLeftBehind: readonly LeftBehindDocument[] | null;
+}
+
+/**
+ * Which of these records this stream already holds, and holds unchanged -- and, for each, what
+ * its harvest settled.
  *
  * What a run does with the answer is skip: a message already in `raw.records` is not
  * fetched again, and a Drive file whose stored `source_updated_at` equals the
  * `modifiedTime` the listing just reported is not downloaded again. On an unchanged
- * mailbox that turns 7,786 paced requests into none.
+ * mailbox that turns 7,786 paced requests into none. The one exception is Gmail's, and it is
+ * the collector's decision rather than this statement's: a held message whose harvest left
+ * behind an attachment the CURRENT file-type choice allows is read again (ADR 0076), which is
+ * why this answers with what each row left behind rather than with a bare set.
  *
  * **THE COMPARISON IS POSTGRES'S, AND THAT IS THE POINT.** Drive renders a modification
  * time as `2026-09-17T12:00:00.000Z`; `timestamptz` reads back as `2026-09-17 12:00:00+00`.
@@ -166,13 +203,14 @@ export async function knownRecords(
   exec: SqlExecutor,
   identity: StreamIdentity,
   probes: readonly RecordProbe[],
-): Promise<Set<string>> {
-  const held = new Set<string>();
+): Promise<Map<string, HeldRecord>> {
+  const held = new Map<string, HeldRecord>();
 
   for (let from = 0; from < probes.length; from += PROBE_CHUNK) {
     const slice = probes.slice(from, from + PROBE_CHUNK);
-    const { rows } = await exec.query<{ id: string }>(
-      `SELECT r.source_record_id AS id
+    const { rows } = await exec.query<{ id: string; landed: number; left_behind: unknown }>(
+      `SELECT r.source_record_id AS id, r.documents_landed AS landed,
+              r.documents_left_behind AS left_behind
          FROM raw.records r
          JOIN unnest($4::text[], $5::timestamptz[]) AS v(srid, sua)
            ON v.srid = r.source_record_id
@@ -189,18 +227,69 @@ export async function knownRecords(
       ],
     );
     for (const row of rows) {
-      held.add(row.id);
+      held.set(row.id, {
+        documentsLanded: row.landed,
+        documentsLeftBehind: leftBehindFrom(row.left_behind),
+      });
     }
   }
 
   return held;
 }
 
-/** One record, and how many documents its harvest got down beside it. */
+/**
+ * The stored list read back, or `null` for anything that is not one.
+ *
+ * `jsonb` arrives parsed from both drivers. A value this cannot read -- hand-edited, or written
+ * by a later release in a shape this one does not know -- is "the harvest did not say", which
+ * reads the record again: the safe direction to be wrong in, and the visible one.
+ */
+function leftBehindFrom(stored: unknown): LeftBehindDocument[] | null {
+  if (!Array.isArray(stored)) {
+    return null;
+  }
+  const read: LeftBehindDocument[] = [];
+  for (const entry of stored) {
+    const document = leftBehindEntry(entry);
+    if (document === null) {
+      return null;
+    }
+    read.push(document);
+  }
+  return read;
+}
+
+/**
+ * One entry, or `null`. `getPath` rather than `getStringPath`, whose `""` is `null`: a part
+ * Gmail sent with no MIME type at all is stored as `""`, and reading that as unreadable would
+ * re-read its message on every run for ever.
+ */
+function leftBehindEntry(entry: unknown): LeftBehindDocument | null {
+  const documentId = getPath(entry, "documentId");
+  const mimeType = getPath(entry, "mimeType");
+  const extension = getPath(entry, "extension");
+  const declaredBytes = getPath(entry, "declaredBytes");
+  if (
+    typeof documentId !== "string" ||
+    typeof mimeType !== "string" ||
+    typeof declaredBytes !== "string" ||
+    (typeof extension !== "string" && extension !== null)
+  ) {
+    return null;
+  }
+  return { documentId, mimeType, extension, declaredBytes };
+}
+
+/** One record, how many documents its harvest got down beside it, and what it left behind. */
 export interface HarvestMark {
   readonly sourceRecordId: string;
   /** Reached the lake AND the catalogue. Never what was matched -- see {@link markHarvested}. */
   readonly documentsLanded: number;
+  /**
+   * What this record's harvests have left behind, or absent where the collector keeps no such
+   * list (Drive, whose documents ARE its records) -- which stores `NULL`, "did not say".
+   */
+  readonly documentsLeftBehind?: readonly LeftBehindDocument[];
 }
 
 /**
@@ -236,9 +325,12 @@ export async function markHarvested(
     return 0;
   }
 
+  // The list rides as JSON TEXT and Postgres casts it, the way a payload does in
+  // `upsertRecords`: one `jsonb[]` parameter whatever the driver, and a NULL element for a
+  // collector that keeps no list.
   const { rows } = await exec.query<{ id: string }>(
-    `UPDATE raw.records r SET documents_landed = v.n
-       FROM unnest($4::text[], $5::integer[]) AS v(srid, n)
+    `UPDATE raw.records r SET documents_landed = v.n, documents_left_behind = v.u
+       FROM unnest($4::text[], $5::integer[], $6::jsonb[]) AS v(srid, n, u)
       WHERE r.source = $1 AND r.tenant_id = $2 AND r.entity = $3
         AND r.source_record_id = v.srid
      RETURNING r.source_record_id AS id`,
@@ -248,6 +340,9 @@ export async function markHarvested(
       identity.entity,
       marks.map((mark) => mark.sourceRecordId),
       marks.map((mark) => mark.documentsLanded),
+      marks.map((mark) =>
+        mark.documentsLeftBehind === undefined ? null : JSON.stringify(mark.documentsLeftBehind),
+      ),
     ],
   );
   return rows.length;

@@ -79,6 +79,7 @@
 - [ADR 0073 A List Its Grant Cannot Read Is Named Not Failed](sources/adr-0073-a-list-its-grant-cannot-read-is-named-not-failed.md)
 - [ADR 0074 The Card Judges A Grant By The Lists It Reads](sources/adr-0074-the-card-judges-a-grant-by-the-lists-it-reads.md)
 - [ADR 0075 HubSpot Reads Its Commerce Objects And Names A List Its Token Cannot Read](sources/adr-0075-hubspot-reads-its-commerce-objects-and-names-a-list-its-token-cannot-read.md)
+- [ADR 0076 A Harvest Records What It Left Behind](sources/adr-0076-a-harvest-records-what-it-left-behind.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)

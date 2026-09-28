@@ -893,6 +893,8 @@ export const en = {
         "{{entity}} was not read: the HubSpot private app's token lacks {{scope}}. Give the private app {{scope}} in HubSpot; every other kind of data is still read.",
       workListed: "{{total}} {{entity}} to read.",
       workListedSkipping: "{{total}} {{entity}} listed, {{skipped}} already held and not read.",
+      workListedRereading:
+        "{{total}} {{entity}} listed, {{skipped}} already held and not read, {{reread}} already held but read again for attachments of a chosen type that no earlier read took.",
       recordsRead: "Read {{read}} {{entity}}.",
       recordsReadOf: "Read {{read}} of {{total}} {{entity}}.",
       entityDone:
@@ -905,6 +907,8 @@ export const en = {
         "Listed {{listed}} folders under {{folders}} picked and found {{matched}} matching files.",
       documentsLanded:
         "Documents: {{created}} new, {{unchanged}} unchanged, {{skipped}} skipped, {{failed}} failed.",
+      recordsReread:
+        "Read {{reread}} held {{entity}} again for attachments of a chosen type; {{landed}} attachments from them are new.",
       noModels: "This customer has no models yet, so there was nothing to build.",
       dbtFinished: "dbt built {{models}} models and ran {{tests}} tests, {{testsFailed}} failing.",
       runClosedOk: "Finished successfully.",

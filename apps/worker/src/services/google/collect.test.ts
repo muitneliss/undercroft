@@ -67,7 +67,7 @@ async function connect(source: string, selection: unknown, granted = ""): Promis
   );
 }
 
-function collect(source: "gmail" | "drive", journal?: RunJournal) {
+function collect(source: string, journal?: RunJournal) {
   const clock = new TestClock();
   const api = createGoogleApi(source, {
     fetcher,
@@ -182,7 +182,7 @@ async function asLegacy(source: string): Promise<void> {
 function messageWithAttachments(
   id: string,
   labelIds: string[],
-  attachments: readonly { mimeType: string; filename: string }[],
+  attachments: readonly { mimeType: string; filename: string; size?: string }[],
 ): unknown {
   return {
     id,
@@ -199,7 +199,10 @@ function messageWithAttachments(
         ...attachments.map((attachment, index) => ({
           mimeType: attachment.mimeType,
           filename: attachment.filename,
-          body: { size: String(PDF.byteLength), attachmentId: `att-${id}-${index}` },
+          body: {
+            size: attachment.size ?? String(PDF.byteLength),
+            attachmentId: `att-${id}-${index}`,
+          },
         })),
       ],
     },
@@ -768,6 +771,225 @@ describe("gmail", () => {
     const result = await collect("gmail");
 
     expect(result.documents.created).toBe(2);
+  });
+});
+
+/**
+ * A file type chosen AFTER the messages carrying it were held (#292, ADR 0076).
+ *
+ * A held message is skipped whole, so before this an attachment its harvest declined was
+ * declined for good: an admin who added XML got every new message's XML and no old one's,
+ * and every run said it succeeded. Each mailbox here is read once under one choice, and then
+ * again under another, with the fetcher's call log as the evidence of what was read.
+ */
+describe("gmail: a file type chosen after its messages were held", () => {
+  const XML = { mimeType: "text/xml", filename: "e-invoice.xml" };
+  const INVOICE = { mimeType: "application/pdf", filename: "invoice.pdf" };
+
+  /** The admin changes what syncs. A decision the control plane records, so as the superuser. */
+  async function choose(source: string, selection: unknown): Promise<void> {
+    await db.asSuperuser((tx) =>
+      writeConnectionDetail(tx, {
+        tenantId: TENANT,
+        source,
+        selectionJson: JSON.stringify(selection),
+      }),
+    );
+  }
+
+  /** m1 carries an invoice PDF (part 2) and its e-invoice XML (part 3), both fetchable. */
+  function invoiceWithXml(): void {
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments("m1", ["INBOX"], [INVOICE, XML]),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-1`, { body: { data: PDF_B64 } });
+  }
+
+  function reads(id: string): number {
+    return fetcher.calls.filter((call) => call.url === messageUrl(id)).length;
+  }
+
+  function fetchesOf(attachmentId: string): number {
+    return fetcher.calls.filter((call) => call.url.endsWith(`/attachments/${attachmentId}`)).length;
+  }
+
+  async function documentIds(source = "gmail"): Promise<string[]> {
+    const { rows } = await db.query<{ id: string }>(
+      "SELECT document_id AS id FROM raw.documents WHERE source = $1 ORDER BY document_id",
+      [source],
+    );
+    return rows.map((row) => row.id);
+  }
+
+  it("a type added to the choice lands on a message already held, and only it is fetched", async () => {
+    // The firing side, and the defect itself. Under PDF alone the XML is left behind; once XML
+    // is chosen the message is read again, the XML lands, and the PDF that already landed is not
+    // fetched a second time -- re-reading a mailbox must not re-download it.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    invoiceWithXml();
+    await collect("gmail");
+    expect(await documentIds()).toEqual(["m1:002"]);
+
+    await choose("gmail", { labels: [], fileTypes: ["application/pdf", "application/xml"] });
+    const widened = await collect("gmail");
+
+    expect(await documentIds()).toEqual(["m1:002", "m1:003"]);
+    expect(widened.reread).toEqual({ records: 1, documents: 1 });
+    expect(widened.records.skipped).toBe(0);
+    expect(reads("m1")).toBe(2);
+    expect(fetchesOf("att-m1-0")).toBe(1);
+    // The mark adds what landed now to what landed before, rather than forgetting the PDF.
+    expect(await marks("gmail")).toEqual([{ id: "m1", landed: "2" }]);
+  });
+
+  it("and the run after that reads it no more", async () => {
+    // The quiet side. Reading a held message whenever SOME type is chosen that it once left
+    // behind would repair the mailbox and then re-read it every hour: 39,608 messages at 334 ms
+    // is 3.7 hours a run. What it left behind is re-recorded, so the next run finds nothing new.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    invoiceWithXml();
+    await collect("gmail");
+    await choose("gmail", { labels: [], fileTypes: ["application/pdf", "application/xml"] });
+    await collect("gmail");
+
+    const settled = await collect("gmail");
+
+    expect(settled.reread).toEqual({ records: 0, documents: 0 });
+    expect(settled.records.skipped).toBe(1);
+    expect(reads("m1")).toBe(2);
+  });
+
+  it("narrowing deletes nothing and reads nothing, and widening back reads nothing landed", async () => {
+    // Removing a type is not a reason to touch what is stored -- the lake is create-only -- nor
+    // to read anything. And ticking it again must not re-read messages whose parts of that type
+    // already landed: they were taken, so they are not on the list of what was left behind.
+    const both = { labels: [], fileTypes: ["application/pdf", "application/xml"] };
+    await connect("gmail", both);
+    invoiceWithXml();
+    await collect("gmail");
+
+    await choose("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    const narrowed = await collect("gmail");
+    await choose("gmail", both);
+    const widenedBack = await collect("gmail");
+
+    expect(narrowed.reread).toEqual({ records: 0, documents: 0 });
+    expect(widenedBack.reread).toEqual({ records: 0, documents: 0 });
+    expect(await documentIds()).toEqual(["m1:002", "m1:003"]);
+    expect(reads("m1")).toBe(1);
+  });
+
+  it("a part over the size ceiling is not a reason to read its message again", async () => {
+    // The trap `markHarvested` already refuses for the count, arriving through this door: an
+    // allowed part the ceiling will refuse on every run would otherwise make its message
+    // "still wanting something" for ever. No attachment route is recorded for it, so a fetch
+    // of it would fail the run loudly.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    const hugeXml = { ...XML, size: String(80 * 1024 * 1024) };
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments("m1", ["INBOX"], [INVOICE, hugeXml]),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } });
+    await collect("gmail");
+
+    await choose("gmail", { labels: [], fileTypes: ["application/pdf", "application/xml"] });
+    const widened = await collect("gmail");
+
+    expect(widened.reread).toEqual({ records: 0, documents: 0 });
+    expect(reads("m1")).toBe(1);
+    expect(await documentIds()).toEqual(["m1:002"]);
+  });
+
+  it("an octet-stream part named .oa is taken once .oa is chosen, and lands as JSON", async () => {
+    // Gmail calls an OpenAttestation file `application/octet-stream`, so only its extension says
+    // what it is. What the mark keeps of a part is exactly what matching reads -- the bare type
+    // AND the extension -- so the name's verdict can be asked again without the name.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    const record = { mimeType: "application/octet-stream", filename: "certificate.oa" };
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), { body: messageWithAttachments("m1", ["INBOX"], [record]) })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } });
+    await collect("gmail");
+    expect(await documentIds()).toEqual([]);
+
+    await choose("gmail", { labels: [], fileTypes: ["application/pdf", ".oa"] });
+    const widened = await collect("gmail");
+
+    expect(widened.reread).toEqual({ records: 1, documents: 1 });
+    const { rows } = await db.query<{ content_type: string }>(
+      "SELECT content_type FROM raw.documents",
+    );
+    expect(rows.map((row) => row.content_type)).toEqual(["application/json"]);
+  });
+
+  it("a message marked before marks said what they left behind is read once more", async () => {
+    // Production at deploy: every held message is marked (ADR 0035), none says what it left
+    // behind, and the mailbox read first holds no `image/jpg` although JPEG is chosen -- the
+    // spelling a later catalogue admitted. The first read below stands in for that older
+    // release: under its choice the jpg was not taken. What such a message carries is unknown to
+    // a mark that lists nothing, so skipping it would be a guess that it carries nothing wanted.
+    // It is read again, the jpg lands, and the PDF re-lands as unchanged rather than as new.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    const photo = { mimeType: "image/jpg", filename: "receipt.jpg" };
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), {
+        body: messageWithAttachments("m1", ["INBOX"], [INVOICE, photo]),
+      })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-0`, { body: { data: PDF_B64 } })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1-1`, { body: { data: PDF_B64 } });
+    await collect("gmail");
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE raw.records SET documents_left_behind = NULL WHERE source = 'gmail'"),
+    );
+    await choose("gmail", { labels: [], fileTypes: ["application/pdf", "image/jpeg"] });
+
+    const repair = await collect("gmail");
+    const after = await collect("gmail");
+
+    expect(repair.reread).toEqual({ records: 1, documents: 1 });
+    expect(repair.documents).toMatchObject({ created: 1, unchanged: 1 });
+    expect(await documentIds()).toEqual(["m1:002", "m1:003"]);
+    expect(await marks("gmail")).toEqual([{ id: "m1", landed: "2" }]);
+    expect(after.reread).toEqual({ records: 0, documents: 0 });
+    expect(reads("m1")).toBe(2);
+  });
+
+  it("widening one mailbox reads nothing again in a second mailbox of the same customer", async () => {
+    // A second mailbox is a second source (ADR 0043), with its own choice and its own marks. The
+    // listing URL is the same for both, so its answers are queued in the order the runs ask.
+    const second = "gmail.3fa9c1d2e0ab";
+    const pdfOnly = { labels: [], fileTypes: ["application/pdf"] };
+    await connect("gmail", pdfOnly);
+    await connect(second, pdfOnly);
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m2" }] } })
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m2" }] } });
+    for (const id of ["m1", "m2"]) {
+      fetcher
+        .on("GET", messageUrl(id), { body: messageWithAttachments(id, ["INBOX"], [INVOICE, XML]) })
+        .on("GET", `${GMAIL}/messages/${id}/attachments/att-${id}-0`, { body: { data: PDF_B64 } })
+        .on("GET", `${GMAIL}/messages/${id}/attachments/att-${id}-1`, { body: { data: PDF_B64 } });
+    }
+    await collect("gmail");
+    await collect(second);
+
+    await choose("gmail", { labels: [], fileTypes: ["application/pdf", "application/xml"] });
+    const widened = await collect("gmail");
+    const untouched = await collect(second);
+
+    expect(widened.reread).toEqual({ records: 1, documents: 1 });
+    expect(untouched.reread).toEqual({ records: 0, documents: 0 });
+    expect(reads("m2")).toBe(1);
+    expect(await documentIds(second)).toEqual(["m2:002"]);
   });
 });
 

@@ -148,9 +148,15 @@ SELECT content_type, byte_length FROM raw.documents;
 SELECT metadata FROM raw.documents LIMIT 5;
 ```
 
-Run it a second time straight away. Every document should report `unchanged` and the lake
-should gain no new version — that is the idempotency guard, and it is the one that silently
-costs disk if it is wrong.
+Run it a second time straight away. It should read no message again: the Journal says every
+message is already held and not read, and the lake gains no new version. That is the guard that
+silently costs hours of reading, and disk, if it is wrong.
+
+Add a file type on **Change what syncs** and run again. Only held messages carrying an
+attachment of that type are read again, and the Journal says how many and how many attachments
+landed. On a mailbox that ran before ADR 0076, the first run after the upgrade reads every held
+message once, about three a second. [File formats](../reference/file-formats.md#when-the-choice-changes)
+has the rules.
 
 ## 8. Check disconnecting really disconnects
 

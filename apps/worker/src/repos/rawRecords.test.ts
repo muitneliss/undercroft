@@ -99,13 +99,13 @@ describe("markHarvested", () => {
     // starts; marked must read as "held" or it never ends.
     const probe = [{ sourceRecordId: "1", sourceUpdatedAt: null }];
 
-    expect([...(await knownRecords(db, IDENTITY, probe))]).toEqual([]);
+    expect([...(await knownRecords(db, IDENTITY, probe)).keys()]).toEqual([]);
 
     await markHarvested(db, IDENTITY, [{ sourceRecordId: "1", documentsLanded: 0 }]);
 
-    expect([...(await knownRecords(db, IDENTITY, probe))]).toEqual(["1"]);
+    expect([...(await knownRecords(db, IDENTITY, probe)).keys()]).toEqual(["1"]);
     // A mark of ZERO is a complete harvest, not an absent one: a record whose only document
     // was refused for its declared size settles nothing and must still be held.
-    expect([...(await knownRecords(db, NEIGHBOUR, probe))]).toEqual([]);
+    expect([...(await knownRecords(db, NEIGHBOUR, probe)).keys()]).toEqual([]);
   });
 });

@@ -113,7 +113,29 @@ describe("what a closed run keeps", () => {
       changed: 2,
       unchanged: 0,
       refused: 0,
+      reread: null,
     });
+  });
+
+  it("a re-read count is kept as said, and an entity that never said one reads null, not 0", async () => {
+    // `runs get` answers "how many held messages did this run read again" from here (ADR 0076).
+    // A 0 for an entity that never counted would claim it looked; a sum that dropped a NULL
+    // side, or turned it into 0, is the same claim reached by arithmetic.
+    await openRun(db, { id: "r1", ...PAIR });
+    const counts = { landed: 1, created: 1, changed: 0, unchanged: 0, refused: 0 };
+    await recordEntities(db, "r1", [
+      { entity: "messages", ...counts, reread: { records: 1, documents: 1 } },
+      { entity: "documents", ...counts },
+    ]);
+    await recordEntities(db, "r1", [
+      { entity: "messages", ...counts, reread: { records: 2, documents: 0 } },
+    ]);
+
+    const rows = (await entitiesForRuns(db, ["r1"])).get("r1") ?? [];
+    expect(rows.map((row) => [row.entity, row.reread])).toEqual([
+      ["documents", null],
+      ["messages", { records: 3, documents: 1 }],
+    ]);
   });
 
   it("a run of another tenant is not found through this tenant", async () => {

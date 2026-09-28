@@ -97,13 +97,28 @@ export async function runGoogleIngest(
         : {}),
     });
   }
+  // What reading held messages again bought (ADR 0076). Only when it read any: in steady state
+  // it reads none, and the ledger's `0` already says so to `runs get`.
+  if (result.reread !== null && result.reread.records > 0) {
+    journal.info("records_reread", {
+      entity: recordsEntity,
+      reread: result.reread.records,
+      landed: result.reread.documents,
+    });
+  }
   // After the ledger has the counts, never before: they are the point of stopping gracefully.
   if (result.stopped) {
     throw new RunStopped();
   }
 }
 
-/** A collection as the ledger's two entities: its records, and its documents beside them. */
+/**
+ * A collection as the ledger's two entities: its records, and its documents beside them.
+ *
+ * What was read again rides on the RECORD entity, because it is records that were re-read; the
+ * documents they added are counted there too, as well as among the documents' own New, so
+ * `runs get` can answer "what did re-reading buy" from one row. ADR 0076.
+ */
 function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entities"] {
   const records = result.refusals.filter((r) => r.entity !== "documents").length;
   return [
@@ -114,6 +129,7 @@ function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entit
       changed: result.records.changed,
       unchanged: result.records.unchanged,
       refused: records,
+      ...(result.reread === null ? {} : { reread: { ...result.reread } }),
     },
     {
       entity: "documents",

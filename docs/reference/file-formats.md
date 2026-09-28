@@ -36,6 +36,34 @@ octet-stream file whose name does not match is not landed.
 
 The picker's free-text field accepts either a MIME type (`image/png`) or an extension (`.oa`).
 
+## When the choice changes
+
+A Gmail run does not fetch a message it already holds, with one exception. When a message is
+first read, its mark in `raw.records` (`documents_left_behind`) lists each attachment part it did
+not land: its document id, its MIME type without parameters, its extension and its declared size.
+The list never holds a filename. A later run reads a held message again when its list holds a
+part that the current choice allows and that is not over the 25 MiB ceiling. It then lands only
+those parts.
+
+- **Adding a type**, or an upgrade that recognises a new spelling of a chosen type (such as
+  `image/jpg` for JPEG), lands those attachments on held messages in the chosen labels. They land
+  by the end of the first run that finishes after the change. Only messages that carry such a
+  part are read again, once each.
+- **Removing a type** deletes nothing and reads nothing. Adding it back reads only the messages
+  first read while it was removed.
+- **An attachment over the ceiling** is never landed, and never makes its message be read again.
+- **A message marked before this list existed** (before ADR 0076) is read again once, because
+  what it left behind is not known. On a mailbox that ran before that release, the first run after
+  it reads every held message again. At Gmail's pace that is about 3 messages a second.
+- **Each mailbox is its own source**, so changing one mailbox's choice reads nothing in another.
+
+The run's Journal says how many held messages it read again and how many attachments that added,
+and `runs get` returns the same two numbers as `reread` on the run's `messages` entity. A message
+read again stores the labels Gmail gives it now. A held message that is not read again keeps the
+labels it was read with. Drive is not affected: a Drive file of a type that was not chosen is
+never listed, so a widened choice finds it as a new file.
+[ADR 0076](../adr/0076-a-harvest-records-what-it-left-behind.md) records why.
+
 ## What is not offered
 
 ZIP and RAR archives, HEIC and TIFF images are not offered. The worker has no reader for them,

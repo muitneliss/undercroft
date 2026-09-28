@@ -100,6 +100,7 @@ import type { SqlExecutor } from "@undercroft/db";
 import { recordRefusals, type RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
+import type { LeftBehindDocument } from "../repos/rawRecords.ts";
 import type { RecordToLand } from "./land.ts";
 import type { DocumentToLand } from "./landDocument.ts";
 
@@ -206,6 +207,13 @@ export interface DocumentSummary {
  */
 export interface HarvestedRecord extends RecordToLand {
   readonly documentsLanded?: number;
+  /**
+   * The documents this record's harvests have seen and not landed, for a collector that keeps
+   * that list (Gmail, ADR 0076); absent for one that does not. Recorded beside the count, by
+   * the same mark, for the same reason: it is a fact about the reading that the lake cannot
+   * carry. `330_documents_left_behind.sql`.
+   */
+  readonly documentsLeftBehind?: readonly LeftBehindDocument[];
 }
 
 export interface RecordSink {
@@ -223,6 +231,11 @@ export interface RecordSink {
 export interface DocumentOutcome {
   /** Bytes in the lake and a row in `raw.documents`. */
   readonly landed: ReadonlySet<string>;
+  /**
+   * The part of `landed` the lake had never held: bytes stored for the first time, not an
+   * identical copy re-landed. What a re-read of a held record actually added (ADR 0076).
+   */
+  readonly created: ReadonlySet<string>;
   /** Refused and RETRYABLE: the fetch may succeed on a later run. */
   readonly unfetched: ReadonlySet<string>;
 }

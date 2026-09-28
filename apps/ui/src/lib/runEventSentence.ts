@@ -58,10 +58,16 @@ function picksSentence(
 /**
  * What the run has to read, and how much of it it already held.
  *
- * Two sentences rather than one with a count appended, and for a mechanical reason as well
+ * Separate sentences rather than one with counts appended, and for a mechanical reason as well
  * as a linguistic one: `counted` renders an absent number as MISSING, so a single sentence
  * carrying `{{skipped}}` would print MISSING on every run from a source that does not skip.
  * Same shape as `recordsRead` / `recordsReadOf`.
+ *
+ * The third is a Gmail run reading messages it already holds (ADR 0076): after a file type is
+ * added, and once for every mailbox marked before marks said what they left behind. That can be
+ * hours of reading on a mailbox the reader thought was synced, so the line says so before it
+ * starts rather than leaving "0 already held" to look like a lost mailbox. Only when the count
+ * is above zero, since in steady state it is zero on every run.
  */
 function listedSentence(
   t: TFunction,
@@ -69,9 +75,13 @@ function listedSentence(
   entity: string,
   detail: Record<string, unknown>,
 ): string {
-  return detail.skipped === undefined
-    ? t("journal.event.workListed", { entity, total: n("total") })
-    : t("journal.event.workListedSkipping", { entity, total: n("total"), skipped: n("skipped") });
+  if (detail.skipped === undefined) {
+    return t("journal.event.workListed", { entity, total: n("total") });
+  }
+  const counts = { entity, total: n("total"), skipped: n("skipped") };
+  return typeof detail.reread === "number" && detail.reread > 0
+    ? t("journal.event.workListedRereading", { ...counts, reread: n("reread") })
+    : t("journal.event.workListedSkipping", counts);
 }
 
 /**
@@ -97,6 +107,21 @@ function doneSentence(
   return detail.skipped === undefined
     ? t("journal.event.entityDone", counts)
     : t("journal.event.entityDoneSkipping", { ...counts, skipped: n("skipped") });
+}
+
+/** What a Google run's documents did, beside its records. */
+function documentsSentence(t: TFunction, n: (key: string) => string): string {
+  return t("journal.event.documentsLanded", {
+    created: n("created"),
+    unchanged: n("unchanged"),
+    skipped: n("skipped"),
+    failed: n("failed"),
+  });
+}
+
+/** What reading held messages again bought: how many, and the attachments new to the lake. */
+function rereadSentence(t: TFunction, n: (key: string) => string, entity: string): string {
+  return t("journal.event.recordsReread", { entity, reread: n("reread"), landed: n("landed") });
 }
 
 /** How far one entity's read has got, against a total only where the run stated one. */
@@ -183,12 +208,9 @@ export function eventSentence(
     case "picks_listed":
       return picksSentence(t, n, event.detail);
     case "documents_landed":
-      return t("journal.event.documentsLanded", {
-        created: n("created"),
-        unchanged: n("unchanged"),
-        skipped: n("skipped"),
-        failed: n("failed"),
-      });
+      return documentsSentence(t, n);
+    case "records_reread":
+      return rereadSentence(t, n, entity);
     case "no_models":
       return t("journal.event.noModels");
     case "dbt_finished":

@@ -1084,6 +1084,9 @@ export const vi = {
         "Không đọc {{entity}}: mã của ứng dụng riêng HubSpot chưa có quyền {{scope}}. Hãy cấp {{scope}} cho ứng dụng riêng trong HubSpot; các loại dữ liệu khác vẫn được đọc bình thường.",
       workListed: "Cần đọc {{total}} {{entity}}.",
       workListedSkipping: "Có {{total}} {{entity}}, {{skipped}} đã có sẵn nên không đọc lại.",
+      /** A held message read again: an attachment it carries is now allowed and never landed (ADR 0076). */
+      workListedRereading:
+        "Có {{total}} {{entity}}, {{skipped}} đã có sẵn nên không đọc lại, {{reread}} đã có sẵn nhưng được đọc lại để lấy tệp đính kèm thuộc loại hiện được chọn mà các lần đọc trước chưa lấy.",
       recordsRead: "Đã đọc {{read}} {{entity}}.",
       recordsReadOf: "Đã đọc {{read}}/{{total}} {{entity}}.",
       entityDone:
@@ -1096,6 +1099,8 @@ export const vi = {
         "Đã xem {{listed}} thư mục nằm trong {{folders}} thư mục được chọn, thấy {{matched}} tệp phù hợp.",
       documentsLanded:
         "Tài liệu: {{created}} mới, {{unchanged}} không đổi, {{skipped}} bỏ qua, {{failed}} lỗi.",
+      recordsReread:
+        "Đã đọc lại {{reread}} {{entity}} đã có sẵn để lấy tệp đính kèm thuộc loại hiện được chọn; {{landed}} tệp đính kèm mới từ đó.",
       noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
       dbtFinished:
         "dbt dựng {{models}} mô hình, chạy {{tests}} kiểm tra, {{testsFailed}} không đạt.",

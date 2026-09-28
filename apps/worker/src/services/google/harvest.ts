@@ -39,21 +39,51 @@
  * hold its record back and is not counted in the mark. That refusal is deterministic -- it
  * will refuse identically forever -- so waiting on it would make the message unharvestable,
  * and counting it would make the message perpetually incomplete. Both lose the same mailbox.
+ *
+ * ## Held is not the same as finished with, for a record whose documents were CHOSEN
+ *
+ * A mark says what a harvest settled under the file-type choice of its day. Widen the choice --
+ * or ship a catalogue that admits a new spelling of a chosen type -- and a held message may
+ * carry an attachment that is now wanted and was never landed, which skipping the message whole
+ * would lose for good while every run reported success (#292). So a Gmail mark also records
+ * what its harvest LEFT BEHIND, described by type, extension and size and never by name
+ * ({@link LeftBehindDocument}), and {@link AlreadyHeld} hands that list back. The collector asks
+ * the current choice about it and reads the message again only when something on it is now
+ * allowed and under the ceiling -- a {@link HarvestItem.reread}. ADR 0076.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
 
-import { knownRecords, type RecordProbe, type StreamIdentity } from "../../repos/rawRecords.ts";
+import {
+  type HeldRecord,
+  knownRecords,
+  type RecordProbe,
+  type StreamIdentity,
+  type LeftBehindDocument,
+} from "../../repos/rawRecords.ts";
 import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
 
-export type { RecordProbe } from "../../repos/rawRecords.ts";
+export type { HeldRecord, RecordProbe, LeftBehindDocument } from "../../repos/rawRecords.ts";
 
 /** One source object, with every document that belongs to it. */
 export interface HarvestItem {
   readonly record: RecordToLand;
   /** Landed before {@link HarvestItem.record} is. See the module docstring. */
   readonly documents: readonly DocumentToLand[];
+  /**
+   * What this harvest saw on the record and did not offer or could not land, to be recorded
+   * on the mark so a wider choice can find it later. Absent for a collector that keeps no such
+   * list -- Drive, where a file that is not chosen is never listed at all.
+   */
+  readonly leftBehind?: readonly LeftBehindDocument[];
+  /**
+   * Present when the record was already HELD and is read again because something it left
+   * behind may now land (ADR 0076). `documentsLanded` is what the earlier harvests already got
+   * down and this one does not offer again, so the mark is that plus what lands now; it is `0`
+   * for a record whose earlier harvest never said what it left behind, which offers everything.
+   */
+  readonly reread?: { readonly documentsLanded: number };
 }
 
 /**
@@ -81,7 +111,10 @@ export interface HarvestSummary {
   readonly skipped: readonly PickSkipped[];
   /** How many source objects the listing named, before anything was skipped. */
   readonly listed: number;
-  /** How many of those were already held and so were never fetched. */
+  /**
+   * How many of those were already held and so were never fetched. A held record read again
+   * (a {@link HarvestItem.reread}) is not among them: it was fetched.
+   */
   readonly known: number;
 }
 
@@ -89,18 +122,22 @@ export interface HarvestSummary {
 export type Harvest = AsyncGenerator<HarvestItem, HarvestSummary>;
 
 /**
- * Which of these a run already holds, and so does not need to read again.
+ * Which of these a run already holds, and what each one's harvest settled.
  *
  * A function rather than an executor, so a collector needs to know neither which tenant it
  * is running for nor that `raw.records` exists -- it asks what it may skip and is told. The
- * `deps`-as-functions idiom `layering.md` already asks for.
+ * `deps`-as-functions idiom `layering.md` already asks for. An id absent from the answer is
+ * not held and is read; what a collector does with a held one is its own decision, which for
+ * Drive is always "skip" and for Gmail turns on what the record left behind.
  */
-export type AlreadyHeld = (probes: readonly RecordProbe[]) => Promise<ReadonlySet<string>>;
+export type AlreadyHeld = (
+  probes: readonly RecordProbe[],
+) => Promise<ReadonlyMap<string, HeldRecord>>;
 
 /**
  * The binding every real run uses: what this stream has in `raw.records` AND has marked
  * harvest-complete. A row whose landing never said what it settled is not held. ADR 0035.
  */
 export function heldBy(exec: SqlExecutor, identity: StreamIdentity): AlreadyHeld {
-  return (probes): Promise<ReadonlySet<string>> => knownRecords(exec, identity, probes);
+  return (probes): Promise<ReadonlyMap<string, HeldRecord>> => knownRecords(exec, identity, probes);
 }

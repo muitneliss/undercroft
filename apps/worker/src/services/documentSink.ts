@@ -74,6 +74,8 @@ interface DocumentChunkOutcome {
   readonly tally: { created: number; unchanged: number; skipped: number; failed: number };
   /** Bytes in the lake AND a catalogue row pointing at them. That pairing IS "landed". */
   readonly landed: readonly string[];
+  /** The part of `landed` whose bytes the lake stored for the first time. */
+  readonly created: readonly string[];
   readonly unfetched: readonly string[];
 }
 
@@ -109,8 +111,20 @@ async function landDocumentChunk(
       failed: result.failed,
     },
     landed: sorted.rows.map((row) => row.documentId),
+    created: result.results.flatMap((landed) =>
+      landed.status === "created" ? [landed.documentId] : [],
+    ),
     unfetched: sorted.unfetched,
   };
+}
+
+/** Nothing settled yet: the three sets `flush` hands over and starts again from. */
+function emptyOutcome(): {
+  landed: Set<string>;
+  created: Set<string>;
+  unfetched: Set<string>;
+} {
+  return { landed: new Set<string>(), created: new Set<string>(), unfetched: new Set<string>() };
 }
 
 export function createDocumentSink(
@@ -124,7 +138,7 @@ export function createDocumentSink(
   // What has settled since the caller last asked. Bounded by the documents added between two
   // `flush` calls -- one chunk of records' worth for the collectors -- and emptied by `flush`,
   // so it is flat in the size of the source like everything else here.
-  let settled = { landed: new Set<string>(), unfetched: new Set<string>() };
+  let settled = emptyOutcome();
 
   /** Land what is held, and REMEMBER how it went. The remembering is the whole of the fix. */
   async function land(): Promise<void> {
@@ -138,6 +152,9 @@ export function createDocumentSink(
     tally.failed += outcome.tally.failed;
     for (const id of outcome.landed) {
       settled.landed.add(id);
+    }
+    for (const id of outcome.created) {
+      settled.created.add(id);
     }
     for (const id of outcome.unfetched) {
       settled.unfetched.add(id);
@@ -157,7 +174,7 @@ export function createDocumentSink(
     async flush(): Promise<DocumentOutcome> {
       await land();
       const outcome = settled;
-      settled = { landed: new Set<string>(), unfetched: new Set<string>() };
+      settled = emptyOutcome();
       return outcome;
     },
     async close(): Promise<DocumentSummary> {

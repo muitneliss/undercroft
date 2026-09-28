@@ -104,7 +104,7 @@ async function landOne(
   input: { source: string; tenantId: string; runId: string; reason?: string },
   document: DocumentToLand,
 ): Promise<LandedDocument> {
-  if (tooLarge(document.declaredBytes)) {
+  if (overCeiling(document.declaredBytes)) {
     return {
       documentId: document.documentId,
       status: "skipped",
@@ -149,12 +149,16 @@ async function landOne(
 }
 
 /**
- * Compare declared size to the ceiling without going through a float.
+ * Whether a declared size is over the ceiling, so the document will be refused unfetched.
+ *
+ * Exported because a Gmail harvest records a part it left behind for its size, and must not
+ * read the message again for it until the ceiling moves (ADR 0076) -- the same question, so the
+ * same function, rather than a second copy of the ceiling that could drift from this one.
  *
  * `BigInt` rather than `Number`: a declared size arrives as provider-controlled text, and
  * `Number("99999999999999999999")` is a silent rounding rather than a refusal.
  */
-function tooLarge(declaredBytes: string): boolean {
+export function overCeiling(declaredBytes: string): boolean {
   if (!DIGITS_ONLY.test(declaredBytes)) {
     return false; // Unreadable is not oversized; the fetch itself will report the truth.
   }
