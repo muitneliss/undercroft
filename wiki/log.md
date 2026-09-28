@@ -195,3 +195,5 @@
 ## [2026-09-28] ingest | Runbook Xero Setup
 ## [2026-09-28] remove | ADR 0072 A List Its Grant Cannot Read Is Named Not Failed
 ## [2026-09-28] ingest | Runbook Xero Setup
+## [2026-09-28] ingest | ADR 0074 The Card Judges A Grant By The Lists It Reads
+## [2026-09-28] ingest | Runbook Xero Setup

@@ -69,6 +69,7 @@ function context(user: SessionUser | null, locale: Locale = DEFAULT_LOCALE): Con
         provider: "google" as const,
       }),
     worker: null,
+    specReads: new Map(),
     googlePicker: null,
   };
 }

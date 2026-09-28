@@ -716,6 +716,14 @@ export const vi = {
     needsScopeDetailNamed:
       "Đã kết nối tới {{account}}. Hãy chọn dữ liệu cần đồng bộ trước lần chạy đầu tiên.",
     connectedDetail: "Đang đồng bộ theo lịch.",
+    /**
+     * Một câu cho mỗi quyền mà kết nối còn thiếu, kèm các loại dữ liệu quyền đó mở ra
+     * (ADR 0073). Tên quyền giữ nguyên như nhà cung cấp gọi, vì đó là chữ người đọc sẽ gặp
+     * lại trên màn hình đồng ý của họ.
+     */
+    notGranted_other: "Chưa được cấp quyền {{scope}}, nên chưa đọc {{entities}}.",
+    notGrantedRemedy_other:
+      "Các dữ liệu còn lại vẫn đồng bộ theo lịch; hãy kết nối lại để cấp quyền còn thiếu.",
   },
 
   /** What a live grant permits, in the customer's words. `@/lib/connectionState`. */

@@ -23,13 +23,18 @@ import {
   type RunContext,
   requestKey,
 } from "@undercroft/connector-runtime";
-import { type ConnectorEntity, type ConnectorSpec, sourceKind } from "@undercroft/contracts";
+import {
+  type ConnectorEntity,
+  type ConnectorSpec,
+  sourceKind,
+  type UngrantedRead,
+} from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 
 import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type CollectResult, runGoogleCollect } from "./google/collect.ts";
-import { GrantTooNarrow, type UngrantedRead } from "./grant.ts";
+import { GrantTooNarrow } from "./grant.ts";
 import type { LandSummary, RefusalWriter } from "./landing.ts";
 import { createRecordSink } from "./recordSink.ts";
 import { settleRemovals } from "./removals.ts";

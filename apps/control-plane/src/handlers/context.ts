@@ -28,6 +28,7 @@ import { appUserForEmail } from "../services/invite.ts";
 import { type GoogleIngestConfig, type ProviderConfig, startConsent } from "../services/oauth.ts";
 import { invitationMessage } from "../services/people.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
+import type { SpecReads } from "../services/connections.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import type { Assistant } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";
@@ -111,6 +112,12 @@ export interface ServerDeps {
    * is not declared; every tool is served exactly as before. ADR 0067.
    */
   readonly skills?: readonly Skill[];
+  /**
+   * The lists each connector spec the image carries reads, read once at boot (`specs.ts`), by
+   * which the card judges whether a grant still reads any of them (ADR 0073). Absent -- a suite
+   * that lists no cards, or a tree that failed to read -- and every grant is judged whole.
+   */
+  readonly specReads?: SpecReads;
   /**
    * Where a failed procedure is recorded, with the request's trace id. Absent in a suite that
    * does not read it; the process always passes one, because an internal error the browser is
@@ -387,6 +394,9 @@ export async function bearerContext(
  * locale resolved here -- including the invitation, which goes to somebody whose own language
  * nobody here knows. See `../i18n`.
  */
+/** No spec read: every grant is judged whole, as it was before ADR 0073. */
+const NO_SPECS: SpecReads = new Map();
+
 function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Caller): Context {
   const { user, credentialId, via, grant, superadmin } = caller;
   const { auth } = deps;
@@ -411,6 +421,7 @@ function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Call
       sendInvitation(deps, to, tenantId, locale),
     apps: auth?.mcp ?? null,
     worker: deps.worker ?? null,
+    specReads: deps.specReads ?? NO_SPECS,
     // The id and key only. `clientSecret` is deliberately not spread in here; the
     // browser never needs it and this object is serialised straight to it.
     googlePicker:

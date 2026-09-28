@@ -571,6 +571,11 @@ export const en = {
     needsScopeDetail: "Connected. Tell us which account to read before the first sync.",
     needsScopeDetailNamed: "Connected to {{account}}. Choose what to sync before the first run.",
     connectedDetail: "Syncing on schedule.",
+    notGranted_one: "Not granted {{scope}}, so {{entities}} is not read.",
+    notGranted_other: "Not granted {{scope}}, so {{entities}} are not read.",
+    notGrantedRemedy_one: "Everything else syncs on schedule; reconnect to grant this permission.",
+    notGrantedRemedy_other:
+      "Everything else syncs on schedule; reconnect to grant these permissions.",
   },
 
   scopePicker: {

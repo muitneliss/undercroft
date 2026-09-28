@@ -224,6 +224,7 @@ describe("a consent that cannot start names the provider of the source pressed",
       notifyInvitation: () => Promise.resolve(false),
       startConsent: (start) => startConsent({ exec: db, ...deps }, start),
       worker: null,
+      specReads: new Map(),
       googlePicker: null,
     };
     return appRouter.createCaller(ctx);

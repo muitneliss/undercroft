@@ -37,7 +37,13 @@ import { GrantWhen } from "@/components/GrantWhen.tsx";
 import { ArrowRight, Errata as ErrataMark } from "@/components/Icon.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import type { CadenceChoice } from "@/lib/cadence.ts";
-import { connectsBy, MARK_LABEL, presentConnection, scopeSummary } from "@/lib/connectionState.ts";
+import {
+  connectsBy,
+  MARK_LABEL,
+  presentConnection,
+  scopeSummary,
+  ungrantedNotes,
+} from "@/lib/connectionState.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
 import { expiryNote } from "@/lib/when.ts";
@@ -139,6 +145,8 @@ export function ConnectionCard({
           ) : null}
 
           {card.state === "needs_scope" ? <p className="note">{card.detail}</p> : null}
+
+          {card.state === "connected" ? <GrantGaps connection={connection} /> : null}
         </div>
 
         <GrantTiming
@@ -179,6 +187,27 @@ export function ConnectionCard({
         </dl>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * What a runnable grant does not reach, beside what it reads.
+ *
+ * A grant that lacks the permission some chosen lists are read under still runs and reads the
+ * rest, and a run skips exactly these lists (ADR 0073). So the row says which, and its one
+ * primary plate is the reconnect that grants them (ADR 0074). Nothing for a whole grant.
+ */
+function GrantGaps({ connection }: { connection: Connection }): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      {ungrantedNotes(t, connection).map((note) => (
+        <p key={note} className="note">
+          {note}
+        </p>
+      ))}
+    </>
   );
 }
 

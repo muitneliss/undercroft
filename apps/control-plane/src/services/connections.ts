@@ -22,12 +22,15 @@ import {
   type Cadence,
   cadenceSetting,
   type ConnectionScope,
+  type ConnectorEntity,
   type CronRefusal,
   needsScope,
   nextRunAt,
   parseScope,
   parseSourceInstance,
+  partitionByGrant,
   sourceKind,
+  type UngrantedRead,
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
@@ -44,7 +47,7 @@ import {
 } from "@undercroft/db/repos";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
-import { grantCovers, requestedScopeFor } from "./oauth.ts";
+import { missingScopes, requestedScopeFor } from "./oauth.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
 export type { Connection } from "@undercroft/db/repos";
@@ -72,6 +75,26 @@ export type KnownSource = (typeof KNOWN_SOURCES)[number];
  */
 export type CardStatus = "disconnected" | "connected" | "needs_scope" | "needs_reconnect";
 
+/**
+ * The lists each connector spec this deployment carries reads, and the scope each is read under,
+ * keyed by the kind of source it is read for, which is the spec's file name.
+ *
+ * The spec's own `entities`, read once at boot (`../specs.ts`), never a copy of them: the card
+ * judges a grant by the same `readScope` the run does. A kind with no spec here -- Gmail and
+ * Drive, which read under one scope and have no lists to share it out over -- is judged whole.
+ */
+export type SpecReads = ReadonlyMap<string, readonly Pick<ConnectorEntity, "name" | "readScope">[]>;
+
+/** The status a card shows, and the lists its connection would read that its grant cannot. */
+export interface CardGrant {
+  readonly status: CardStatus;
+  /**
+   * In spec order, each with the scope a reconnect would add. Empty unless the grant still reads
+   * some of what the connection chose and lacks the scope of the rest; see `presentStatus`.
+   */
+  readonly ungranted: readonly UngrantedRead[];
+}
+
 export interface ConnectionCardView {
   /** What this connection IS -- which labels, access statement and consent it has. */
   readonly kind: KnownSource;
@@ -82,6 +105,12 @@ export interface ConnectionCardView {
    */
   readonly source: string;
   readonly status: CardStatus;
+  /**
+   * The lists this connection would read that its recorded grant cannot, each with the scope a
+   * reconnect would add, in spec order. A run skips exactly these and names each as not granted
+   * (ADR 0073); the card names them before it does. Empty for every grant that is whole.
+   */
+  readonly ungranted: readonly UngrantedRead[];
   readonly externalAccountId: string;
   readonly externalAccountLabel: string;
   readonly scopes: string[];
@@ -147,52 +176,92 @@ export interface ConnectionCardView {
 }
 
 /**
- * Turn a stored row into the status the card shows.
+ * Turn a stored row into the status the card shows, and the lists its grant cannot read.
  *
  * Pure and exported, so the rule deciding whether a customer is asked to reconnect is tested
  * with no database.
  */
-export function presentStatus(row: {
-  status: Connection["status"];
-  selectionJson: string;
-  source: string;
-  /**
-   * What Google said it granted. Required rather than optional on purpose: a caller that
-   * could omit it would silently skip the grant check below, which is the very failure
-   * this function exists to surface.
-   */
-  scope: string;
-}): CardStatus {
+export function presentStatus(
+  row: {
+    status: Connection["status"];
+    selectionJson: string;
+    source: string;
+    /**
+     * What the provider said it granted. Required rather than optional on purpose: a caller
+     * that could omit it would silently skip the grant check below, which is the very failure
+     * this function exists to surface.
+     */
+    scope: string;
+  },
+  specs: SpecReads,
+): CardGrant {
   // `error` and `expired` are both "this will not run until somebody acts", and the card has
   // one state for that. Keeping them apart on screen would ask a customer to tell a token
   // expiry from a provider fault, which is not their question to answer.
   if (row.status === "error" || row.status === "expired") {
-    return "needs_reconnect";
+    return { status: "needs_reconnect", ungranted: [] };
   }
   if (row.status === "disconnected") {
-    return "disconnected";
+    return { status: "disconnected", ungranted: [] };
   }
-  // Connected, and holding a grant that cannot do the job. Google's consent screen lets a
-  // person untick one permission and press Allow, which yields a working token for a
-  // narrower grant -- `case-001` sat at `connected` on `openid email` alone, and said so on
-  // the card while every Gmail call came back 403.
-  //
-  // A reconnect is the only repair, so this is `needs_reconnect` rather than a fourth state:
-  // the copy and the button for "your grant no longer works, connect again" already exist
-  // and already say the right thing.
-  //
   // An EMPTY scope column is left alone deliberately. It means nothing was recorded -- rows
-  // predating the column, and every source that does not go through Google -- and rule 2
-  // forbids turning no evidence into a verdict in either direction.
-  if (row.scope !== "" && !grantCovers(requestedScopeFor(row.source), row.scope)) {
-    return "needs_reconnect";
+  // predating the column, and a source with a pasted token -- and rule 2 forbids turning no
+  // evidence into a verdict in either direction.
+  const ungranted = row.scope === "" ? [] : grantShortfall(row, specs);
+  if (ungranted === null) {
+    return { status: "needs_reconnect", ungranted: [] };
   }
   // Connected, but nobody has said what may be read. Running in this state would read a
   // whole mailbox on the strength of a missing row.
   if (needsScope(row.source, row.selectionJson)) {
-    return "needs_scope";
+    return { status: "needs_scope", ungranted };
   }
-  return "connected";
+  return { status: "connected", ungranted };
+}
+
+/**
+ * What a recorded grant lacks, judged against what the connection reads: `[]` when nothing it
+ * reads, the lists it cannot read when it can still read the rest, and `null` when it cannot
+ * run at all.
+ *
+ * Google's consent screen lets a person untick one permission and press Allow, which yields a
+ * working token for a narrower grant -- `case-001` sat at `connected` on `openid email` alone,
+ * and said so on the card while every Gmail call came back 403. Gmail and Drive read under ONE
+ * scope, so a grant without it reads nothing, and a reconnect is the only repair: `null`, which
+ * the card shows with the copy and the button that already say so.
+ *
+ * A spec source reads each list under the scope its spec names (`readScope`), and a consent that
+ * gained a scope leaves every grant recorded before it still able to read the other lists. Xero
+ * asked for `accounting.settings.read` only from ADR 0073, and a run on an older grant reads
+ * twelve lists and names the five it cannot. So the grant is shared out over the lists the
+ * connection would read, by the run's own rule (`partitionByGrant`), and it is runnable while
+ * any of them is granted -- with the rest named, so the card says what a reconnect would add.
+ * One that reaches none of them is `null`: a run would read nothing and fail. ADR 0074.
+ *
+ * A missing capability that gates no list at all -- Xero's `offline_access`, without which no
+ * refresh token is issued -- is not something the run can read around, so it is `null` too.
+ */
+function grantShortfall(
+  row: { source: string; selectionJson: string; scope: string },
+  specs: SpecReads,
+): readonly UngrantedRead[] | null {
+  const missing = missingScopes(requestedScopeFor(row.source), row.scope);
+  if (missing.length === 0) {
+    return [];
+  }
+  const lists = specs.get(sourceKind(row.source));
+  if (lists === undefined) {
+    return null;
+  }
+  const gating = new Set(lists.map((read) => read.readScope));
+  if (missing.some((scope) => !gating.has(scope))) {
+    return null;
+  }
+  const { granted, ungranted } = partitionByGrant(lists, {
+    scope: parseScope(row.source, row.selectionJson),
+    grantedScope: row.scope,
+  });
+  return granted.length === 0 ? null : ungranted;
 }
 
 /** The listing each kind's scope is chosen from. By kind, so a second account browses too. */
@@ -248,6 +317,7 @@ function accountsOf(rows: readonly ConnectionView[], kind: KnownSource): Connect
 export async function list(
   exec: SqlExecutor,
   tenantId: string,
+  specs: SpecReads,
   now: Date = new Date(),
 ): Promise<ConnectionCardView[]> {
   const rows = await listConnectionViews(exec, tenantId);
@@ -256,7 +326,7 @@ export async function list(
     const accounts = accountsOf(rows, kind);
     return accounts.length === 0
       ? [unconnected(kind)]
-      : accounts.map((row) => presentCard(kind, row, now));
+      : accounts.map((row) => presentCard(kind, row, specs, now));
   });
 }
 
@@ -266,6 +336,7 @@ function unconnected(kind: KnownSource): ConnectionCardView {
     kind,
     source: kind,
     status: "disconnected",
+    ungranted: [],
     externalAccountId: "",
     externalAccountLabel: "",
     scopes: [],
@@ -279,11 +350,16 @@ function unconnected(kind: KnownSource): ConnectionCardView {
 }
 
 /** One stored connection as its card shows it. */
-function presentCard(kind: KnownSource, row: ConnectionView, now: Date): ConnectionCardView {
+function presentCard(
+  kind: KnownSource,
+  row: ConnectionView,
+  specs: SpecReads,
+  now: Date,
+): ConnectionCardView {
   return {
     kind,
     source: row.source,
-    status: presentStatus(row),
+    ...presentStatus(row, specs),
     externalAccountId: row.externalAccountId ?? "",
     externalAccountLabel: row.accountLabel,
     // Google returns what it granted as one space-delimited string.

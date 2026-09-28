@@ -107,8 +107,13 @@ export function requestedScopeFor(source: string): string {
  * whatever that call's failure path happens to say.
  */
 export function grantCovers(requestedScope: string, grantedScope: string): boolean {
+  return missingScopes(requestedScope, grantedScope).length === 0;
+}
+
+/** The capabilities asked for that a grant came back without, in the order they were asked. */
+export function missingScopes(requestedScope: string, grantedScope: string): string[] {
   const granted = new Set(grantedScope.split(" "));
-  return capabilityScopes(requestedScope).every((scope) => granted.has(scope));
+  return capabilityScopes(requestedScope).filter((scope) => !granted.has(scope));
 }
 
 export interface OAuthDeps {
