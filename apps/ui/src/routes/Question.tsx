@@ -29,7 +29,13 @@ import { ResultBand } from "@/components/QuestionResult.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { paramsFromSearch } from "@/lib/params.ts";
-import { draftFromQuestion, newQuestionDraft, type QuestionDraft } from "@/lib/questionDraft.ts";
+import {
+  draftFromQuestion,
+  newQuestionDraft,
+  ON_TABLE,
+  type QuestionDraft,
+  questionOnTable,
+} from "@/lib/questionDraft.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -41,12 +47,19 @@ const NEW = "new";
  * A new question waits for the schema, to start from its first table; a saved one waits for
  * itself. A draft already held for this question is kept untouched, which is what lets an
  * author leave the leaf and come back to what they were writing.
+ *
+ * The one exception is a new question opened on a table (`ON_TABLE`), the door a built model
+ * opens: the link is a fresh request, so it replaces a held new draft rather than losing to
+ * it. The key is dropped from the address once read, so a reload keeps the author's edits
+ * and a `{{table}}` parameter never reads it as its value.
  */
 function useQuestionDraft(tenantId: string, id: string, isNew: boolean): QuestionDraft | null {
   const draft = useUiStore((state) => state.questionDraft);
   const setQuestionDraft = useUiStore((state) => state.setQuestionDraft);
   const schema = trpc.bi.schema.useQuery({ tenantId });
   const question = trpc.bi.questions.get.useQuery({ tenantId, id }, { enabled: !isNew });
+  const [search, setSearch] = useSearchParams();
+  const onTable = isNew ? search.get(ON_TABLE) : null;
 
   const held =
     draft !== null && draft.tenantId === tenantId && (isNew ? draft.id === null : draft.id === id)
@@ -54,6 +67,20 @@ function useQuestionDraft(tenantId: string, id: string, isNew: boolean): Questio
       : null;
 
   useEffect(() => {
+    if (onTable !== null) {
+      if (onTable !== "") {
+        setQuestionDraft(questionOnTable(tenantId, onTable));
+      }
+      setSearch(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete(ON_TABLE);
+          return next;
+        },
+        { replace: true },
+      );
+      return;
+    }
     if (held !== null) {
       return;
     }
@@ -66,9 +93,10 @@ function useQuestionDraft(tenantId: string, id: string, isNew: boolean): Questio
     if (question.data !== undefined) {
       setQuestionDraft(draftFromQuestion(tenantId, question.data));
     }
-  }, [held, isNew, schema.data, question.data, tenantId, setQuestionDraft]);
+  }, [onTable, held, isNew, schema.data, question.data, tenantId, setQuestionDraft, setSearch]);
 
-  return held;
+  // Until the address is cleared, `held` may be the draft the link is about to replace.
+  return onTable === null ? held : null;
 }
 
 export function Question({ tenantId }: { tenantId: string }): React.JSX.Element {
