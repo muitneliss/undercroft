@@ -36,9 +36,12 @@ Five things, each of which the code handles and each of which you will meet whil
   `Balances` is Xero's own figure, converted to the base currency, and it moves with every
   payment and every due date that passes. Derive outstanding and overdue amounts from invoices in
   a model instead.
-- **Reading a list whole spends at most 4,000 of Xero's 5,000 requests a day.** That covers a
-  first read, a re-sync, and the one full read a change to the spec's request forces. The other
-  1,000 are left for the ordinary "what changed" reads and **Run now**. The worker trusts Xero's
+- **Reading a list whole spends at most 800 of Xero's 1,000 requests a day.** Xero allows 1,000
+  a day to an app on its starter tier, which is where a new app starts, and 5,000 on higher
+  tiers; the budget is sized for the smaller. That covers a first read, a re-sync, and the one
+  full read a change to the spec's request forces. The other 200 are left for the ordinary
+  "what changed" reads and **Run now**: a daily sync of every list costs about 35. If the Xero
+  app moves to a higher tier, raise both numbers in `specs/connectors/xero.yaml`. The worker trusts Xero's
   own count, `X-DayLimit-Remaining`, which includes other apps on the same organisation. When
   the day's share is spent, a list that was cut short is read whole again on the next run, and a
   list with no earlier read waits for it. The run still closes as succeeded, and its Journal says

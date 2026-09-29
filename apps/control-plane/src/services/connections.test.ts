@@ -515,13 +515,13 @@ describe("re-syncing a connection's lists whole", () => {
 
   it("says how many days a re-sync takes, from what each list's last whole read cost", async () => {
     await connectXero(["invoices", "contacts"]);
-    // 3,000 and 2,000 requests against Xero's whole-read share of 4,000 a day: two days.
+    // 600 and 400 requests against Xero's whole-read share of 800 a day: two days.
     await db.asSuperuser((tx) =>
       tx.query(
         `INSERT INTO raw.sync_cursor
            (source, tenant_id, entity, watermark, format, request_key, whole_read_at, whole_read_requests)
-         VALUES ('xero', $1, 'invoices', 'w', 'ms-json-date', 'k', '2026-09-20T02:00:00Z', 3000),
-                ('xero', $1, 'contacts', 'w', 'ms-json-date', 'k', '2026-09-21T02:00:00Z', 2000)`,
+         VALUES ('xero', $1, 'invoices', 'w', 'ms-json-date', 'k', '2026-09-20T02:00:00Z', 600),
+                ('xero', $1, 'contacts', 'w', 'ms-json-date', 'k', '2026-09-21T02:00:00Z', 400)`,
         [TENANT],
       ),
     );
