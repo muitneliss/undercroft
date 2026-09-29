@@ -56,6 +56,8 @@ export const procedureSentences: SentenceTable = {
   "documentKinds.update": "Rewrite a kind's description in the catalogue's draft. Admins.",
   "documentKinds.remove":
     "Remove a kind from the catalogue's draft; other cannot be removed. Admins.",
+  "documentKinds.initialise":
+    "Draw the catalogue's first kinds from a sample of the customer's documents, as a run; publishes nothing. Admins.",
   "documentKinds.publish":
     "Publish the catalogue's draft, so every document is classified against it again. Admins.",
   "models.list": "The customer's dbt models.",

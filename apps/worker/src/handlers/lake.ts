@@ -24,6 +24,7 @@ import { startExtractJob } from "../services/extract/job.ts";
 import { startIngestJob, startTransformJob } from "../services/jobs.ts";
 import { landRecords, publishedResponse } from "../services/land.ts";
 import { claimExternal, recordExternal } from "../services/ledger.ts";
+import type { SemanticAsk } from "../services/semantic/definition.ts";
 import type { Spawn, TransformDeps } from "../services/transform.ts";
 import { failureOf } from "./errors.ts";
 
@@ -65,6 +66,8 @@ export interface LakeApiDeps {
    * image. Absent disables the extract verb, exactly as an absent `dbt` disables transform.
    */
   readonly extractSpawn?: Spawn;
+  /** The document-kind classifier; absent disables the semantic verbs (ADR 0085). */
+  readonly semanticAsk?: SemanticAsk;
   /** The Xero client, for revoking a grant. Absent means a disconnect only forgets our copy. */
   readonly xero?: XeroClient;
   /** Aborted when the process is stopping; handed to every run this API starts. `RunDeps.stop`. */

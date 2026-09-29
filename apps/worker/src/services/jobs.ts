@@ -42,6 +42,7 @@ import {
   type TransformDeps,
   type TransformOutcome,
 } from "./transform.ts";
+import type { SemanticAsk } from "./semantic/definition.ts";
 
 export interface JobDeps extends RunDeps {
   /** Absent means no transform is chained after an ingest: this deployment has no dbt. */
@@ -52,6 +53,8 @@ export interface JobDeps extends RunDeps {
    * is not configured in this deployment, exactly as an absent `dbt` disables transform.
    */
   readonly extractSpawn?: Spawn;
+  /** The document-kind classifier. Absent means the semantic verbs are not configured. */
+  readonly semanticAsk?: SemanticAsk;
 }
 
 const inFlight = new Set<Promise<unknown>>();

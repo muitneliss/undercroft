@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
+import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
+import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
 import type { Context, Role } from "./trpc.ts";
 
@@ -32,7 +34,12 @@ async function seedMember(email: string, role: Role): Promise<string> {
   return userId;
 }
 
-function caller(userId: string, email: string, locale: "vi" | "en" = "en") {
+function caller(
+  userId: string,
+  email: string,
+  locale: "vi" | "en" = "en",
+  worker: WorkerClient | null = null,
+) {
   const ctx: Context = {
     exec: db,
     user: { userId, email },
@@ -50,7 +57,7 @@ function caller(userId: string, email: string, locale: "vi" | "en" = "en") {
         reason: "not-configured" as const,
         provider: "google" as const,
       }),
-    worker: null,
+    worker,
     specReads: new Map(),
     googlePicker: null,
   };
@@ -162,5 +169,34 @@ describe("publishing the catalogue", () => {
     const got = await refusal(() => caller(admin, "a@example.test").publish({ tenantId: TENANT }));
 
     expect(got.code).toBe("PRECONDITION_FAILED");
+  });
+});
+
+describe("initialising the catalogue", () => {
+  it("starts a run on the worker and answers with its id to watch", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient();
+
+    const started = await caller(admin, "a@example.test", "en", worker).initialise({
+      tenantId: TENANT,
+    });
+
+    expect(started).toEqual({ runId: "run-init-1" });
+    expect(worker.initialised).toEqual([{ tenantId: TENANT, triggeredBy: admin }]);
+  });
+
+  it("is a CONFLICT for a tenant whose catalogue already has kinds", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().catalogueExists();
+
+    const got = await refusal(() =>
+      caller(admin, "a@example.test", "en", worker).initialise({ tenantId: TENANT }),
+    );
+
+    expect(got).toEqual({
+      code: "CONFLICT",
+      message:
+        "This catalogue already has kinds, and initialising again would re-add the ones you removed. Edit it instead.",
+    });
   });
 });

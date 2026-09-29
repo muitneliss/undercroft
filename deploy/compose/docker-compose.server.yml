@@ -270,6 +270,9 @@ services:
       # values the control plane runs the consent with. Unset means Xero cannot be connected.
       UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
       UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
+      # The document-kind classifier (ADR 0085). Unset turns the semantic verbs off and empties
+      # their due list; the same key the control plane gates the assistant with.
+      UNDERCROFT_TYPESAFE_API_KEY: ${UNDERCROFT_TYPESAFE_API_KEY:-}
       # dbt runs as a subprocess in this image (ADR 0007) as each TENANT'S OWN login (ADR
       # 0018). The worker points the generated profile at the server its own DSN names and
       # mints the login's password right before a build; no variable here carries one.

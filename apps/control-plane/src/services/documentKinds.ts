@@ -34,6 +34,7 @@ import {
 } from "@undercroft/db/repos";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
+import type { InitialiseOutcome, WorkerClient } from "./workerClient.ts";
 
 /** Bumped when the shape below changes, so a new canonical form can never match an old hash. */
 const DEFINITION_SCHEMA = "document-kind/1";
@@ -223,4 +224,28 @@ export async function publish(exec: SqlExecutor, input: Actor): Promise<PublishO
     detail: JSON.stringify({ version: published.version, kinds: kinds.length }),
   });
   return { ok: true, version: published.version, changed: true };
+}
+
+/**
+ * Draw the tenant's first catalogue from a sample of its own texts, as a worker run. The worker
+ * reads the text, which the control plane may not, and refuses a tenant that has a catalogue.
+ */
+export async function initialise(
+  exec: SqlExecutor,
+  worker: WorkerClient,
+  input: Actor,
+): Promise<InitialiseOutcome> {
+  const outcome = await worker.initialiseDocumentKinds({
+    tenantId: input.tenantId,
+    triggeredBy: input.actorId,
+  });
+  if (outcome.ok) {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "documentKinds.initialise",
+      detail: JSON.stringify({ runId: outcome.runId }),
+    });
+  }
+  return outcome;
 }

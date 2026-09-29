@@ -786,6 +786,8 @@ export const en = {
     kindBuild: "Try one model",
     kindLakeApi: "Landed from outside into {{source}}",
     kindExtract: "Read the text of {{source}} documents",
+    kindSemantic: "Classify the kinds of {{source}} documents",
+    kindSemanticInit: "Draw the catalogue of document kinds from a sample",
     triggerSchedule: "on schedule",
     triggerManual: "by hand",
     triggerBuild: "from the editor",

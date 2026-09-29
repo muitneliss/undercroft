@@ -26,7 +26,7 @@ export type RunStatus = "running" | "ok" | "failed";
  * rather than its tail because OCR over a real tenant is tens of minutes, and the unique
  * index on `(tenant_id, source, verb)` lets the two run beside each other. ADR 0024.
  */
-export type RunVerb = "ingest" | "transform" | "extract";
+export type RunVerb = "ingest" | "transform" | "extract" | "semantic" | "semantic-init";
 export type RunTrigger = "schedule" | "manual" | "build" | "lake-api";
 
 export interface Run {

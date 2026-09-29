@@ -12,17 +12,17 @@ Everything else talks over the compose network and publishes nothing.
 
 ## What is deployed
 
-| Service                      | Reachable from       | Notes                                                                  |
-| ---------------------------- | -------------------- | ---------------------------------------------------------------------- |
-| `control-plane`              | the internet, HTTPS  | tRPC + sign-in + SPA. **Configure sign-in — see the warning below.**   |
-| `worker`                     | compose network only | Ingestion, dbt per tenant, the BI query runner; HTTP verbs on :8081    |
-| `minio`                      | compose network only | Raw lake, on the `pgsty/minio` community build (ADR 0050)              |
-| `minio-init`                 | one-shot, exits 0    | Creates the lake's bucket                                              |
-| `postgres`                   | compose network only | Curated + control-plane schema                                         |
-| `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 5 minutes, `extract_due` hourly         |
-| `kestra-init`                | one-shot, exits 0    | Hands Kestra's volumes to uid 1000; without it Kestra crash-loops      |
-| `db-migrate`                 | one-shot, exits 0    | Applies `packages/db/sql`, sets the two platform roles' passwords      |
-| `kestra-flows`               | one-shot, exits 0    | Delivers `flows/` to Kestra from the control-plane image, every deploy |
+| Service                      | Reachable from       | Notes                                                                                           |
+| ---------------------------- | -------------------- | ----------------------------------------------------------------------------------------------- |
+| `control-plane`              | the internet, HTTPS  | tRPC + sign-in + SPA. **Configure sign-in — see the warning below.**                            |
+| `worker`                     | compose network only | Ingestion, dbt per tenant, the BI query runner; HTTP verbs on :8081                             |
+| `minio`                      | compose network only | Raw lake, on the `pgsty/minio` community build (ADR 0050)                                       |
+| `minio-init`                 | one-shot, exits 0    | Creates the lake's bucket                                                                       |
+| `postgres`                   | compose network only | Curated + control-plane schema                                                                  |
+| `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 5 minutes, `extract_due` hourly, `semantic_due` every 30 minutes |
+| `kestra-init`                | one-shot, exits 0    | Hands Kestra's volumes to uid 1000; without it Kestra crash-loops                               |
+| `db-migrate`                 | one-shot, exits 0    | Applies `packages/db/sql`, sets the two platform roles' passwords                               |
+| `kestra-flows`               | one-shot, exits 0    | Delivers `flows/` to Kestra from the control-plane image, every deploy                          |
 
 > **Sign-in must be configured, or the control plane has no way in.** Authentication is
 > wired (invite-only, Google or an emailed code — ADR 0010), but it is assembled only when
@@ -394,11 +394,14 @@ and the `kestra-flows` one-shot service runs `scripts/kestraFlows.ts` against Ke
 on every deploy — `PUT` per flow, `POST` when it is new — and exits non-zero on a flow Kestra
 rejects, so the worker (which waits on it) never starts against a scheduler holding last
 release's flow. There is nothing to upload by hand; a flow that is only on the server is
-drift the next deploy reverts. There are two flows. `ingest_due` asks the worker every five
+drift the next deploy reverts. There are three flows. `ingest_due` asks the worker every five
 minutes which (customer, source) pairs are due — by a preset cadence or a custom cron
 expression read in Singapore time (ADR 0059) — and starts each. `extract_due` asks hourly, at
 :07, which pairs hold landed documents not yet read into `raw.document_text`, and starts an
-extract run for each. A pair already running is a 409 both flows ignore.
+extract run for each. `semantic_due` asks every thirty minutes, at :22 and :52, which pairs hold
+texts with no answer to the customer's published catalogue of document kinds, and starts a
+semantic run for each (ADR 0085); with no `UNDERCROFT_TYPESAFE_API_KEY` on the worker it is
+answered an empty list and starts nothing. A pair already running is a 409 every flow ignores.
 
 Kestra has no domain by design — it is an operator surface holding execution history. To
 inspect executions, tunnel to it over read-only SSH; a tunnel carries application data,

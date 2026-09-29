@@ -32,7 +32,14 @@ import {
 import { record as recordAudit } from "../repos/auditLog.ts";
 import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
-export type RunKind = "ingest" | "extract" | "transform" | "build" | "lake-api";
+export type RunKind =
+  | "ingest"
+  | "extract"
+  | "semantic"
+  | "semantic-init"
+  | "transform"
+  | "build"
+  | "lake-api";
 
 export interface RunView {
   readonly id: string;
@@ -103,8 +110,8 @@ function kindOf(run: Run): RunKind {
   if (run.verb === "transform") {
     return run.trigger === "build" ? "build" : "transform";
   }
-  if (run.verb === "extract") {
-    return "extract";
+  if (run.verb === "extract" || run.verb === "semantic" || run.verb === "semantic-init") {
+    return run.verb;
   }
   return run.trigger === "lake-api" ? "lake-api" : "ingest";
 }

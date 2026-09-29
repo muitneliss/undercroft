@@ -68,6 +68,8 @@ export const procedureSentences: SentenceTable = {
     "Thêm một loại vào bản nháp catalogue; từ catalogue chung, hoặc loại riêng kèm mô tả. Quản trị.",
   "documentKinds.update": "Sửa mô tả của một loại trong bản nháp catalogue. Quản trị.",
   "documentKinds.remove": "Xoá một loại khỏi bản nháp catalogue; không xoá được other. Quản trị.",
+  "documentKinds.initialise":
+    "Khởi tạo các loại đầu tiên của catalogue từ một mẫu tài liệu của khách hàng, như một lần chạy; không publish gì. Quản trị.",
   "documentKinds.publish":
     "Publish bản nháp catalogue, để mọi tài liệu được phân loại lại theo nó. Quản trị.",
   "models.list": "Các mô hình dbt của khách hàng.",

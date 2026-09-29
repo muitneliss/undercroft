@@ -955,6 +955,8 @@ export const vi = {
     kindBuild: "Dựng thử một mô hình",
     kindLakeApi: "Ghi từ ngoài vào {{source}}",
     kindExtract: "Đọc chữ tài liệu của {{source}}",
+    kindSemantic: "Phân loại tài liệu của {{source}}",
+    kindSemanticInit: "Khởi tạo catalogue loại tài liệu từ một mẫu",
     triggerSchedule: "theo lịch",
     triggerManual: "chạy tay",
     triggerBuild: "từ trình soạn",

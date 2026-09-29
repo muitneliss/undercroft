@@ -71,3 +71,37 @@ export const BROWSE_REFUSALS: ReadonlyMap<number, WorkerFailure> = new Map([
   ...REFUSAL_BY_STATUS,
   [CONFLICT, "credential-expired"],
 ]);
+
+/**
+ * Initialising a catalogue's answers beyond a trigger's: the tenant already has one (the worker
+ * refuses to re-add kinds an admin removed), or the classifier is not configured. ADR 0085.
+ */
+export type InitialiseOutcome =
+  | { readonly ok: true; readonly runId: string }
+  | { readonly ok: false; readonly reason: "in-progress"; readonly runId: string }
+  | { readonly ok: false; readonly reason: "exists" | "not-configured" }
+  | { readonly ok: false; readonly reason: WorkerFailure };
+
+/**
+ * Why the worker refused to initialise: its 409 names "already has one" or "already running",
+ * and its 400 is the worker saying it has no classifier to initialise with.
+ */
+export function initialiseRefusalOf(
+  status: number,
+  envelope: { code?: unknown; details?: unknown } | null,
+): InitialiseOutcome {
+  if (status === BAD_REQUEST) {
+    return { ok: false, reason: "not-configured" };
+  }
+  if (status === CONFLICT && envelope?.code === "catalogue_exists") {
+    return { ok: false, reason: "exists" };
+  }
+  if (
+    status === CONFLICT &&
+    envelope?.code === "run_in_progress" &&
+    Array.isArray(envelope.details)
+  ) {
+    return { ok: false, reason: "in-progress", runId: String(envelope.details[0] ?? "") };
+  }
+  return { ok: false, reason: "refused" };
+}

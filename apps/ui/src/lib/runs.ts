@@ -76,6 +76,10 @@ export function describeRun(
       return run.entities.length === 0 ? source : `${source} · ${run.entities.join(", ")}`;
     case "extract":
       return t("journal.kindExtract", { source });
+    case "semantic":
+      return t("journal.kindSemantic", { source });
+    case "semantic-init":
+      return t("journal.kindSemanticInit");
     case "lake-api":
       return t("journal.kindLakeApi", { source });
     case "transform":

@@ -162,6 +162,14 @@ export const vi = {
       "{{kind}} không có trong catalogue chung nên cần một mô tả: đó là điều bộ phân loại được cho biết về loại này.",
     documentKindRequired:
       "Không thể xoá {{kind}}. Thiếu nó, mọi tài liệu sẽ bị ép vào một trong các loại còn lại.",
+    documentKindsExist:
+      "Catalogue này đã có loại tài liệu; khởi tạo lại sẽ thêm lại những loại bạn đã xoá. Hãy sửa catalogue thay vì khởi tạo.",
+    documentKindsInitialising:
+      "Catalogue đang được khởi tạo. Hãy theo dõi lần chạy đó trong Nhật ký.",
+    documentKindsNotStarted:
+      "Không khởi tạo được catalogue. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    semanticNotConfigured:
+      "Chưa cấu hình phân loại tài liệu: dịch vụ xử lý chưa có khoá của bộ phân loại.",
     documentKindsEmpty:
       "Catalogue chưa có loại nào ngoài other, nên publish sẽ xếp mọi tài liệu vào không loại nào. Hãy thêm một loại hoặc khởi tạo catalogue trước.",
     modelNameTaken: "Đã có một mô hình tên {{name}}. Hãy mở mô hình đó để sửa, hoặc chọn tên khác.",
