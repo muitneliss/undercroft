@@ -24,13 +24,18 @@ import pg from "pg";
 
 import { migrate } from "./migrate.ts";
 import { asExecutor } from "./pool.ts";
-import { provisionTenantRoles, rotateTenantPassword } from "./repos/tenantRoles.ts";
+import {
+  extendTenantPassword,
+  provisionTenantRoles,
+  rotateTenantPassword,
+} from "./repos/tenantRoles.ts";
 
 // biome-ignore lint/style/noProcessEnv: The integration tier gates itself on the env var that turns it on. A suite is its own composition root -- `layering.md`.
 const ENABLED = process.env.UNDERCROFT_ITEST === "1";
 const TENANT = "CASE-ITEST";
 const OTHER = "CASE-ITEST-OTHER";
 const DENIED = /permission denied/iu;
+const HOUR_MS = 60 * 60 * 1000;
 
 /** `deploy/compose/.env`, the one file that knows the dev Postgres's password and port. */
 function composeEnv(): Record<string, string> {
@@ -102,7 +107,7 @@ describe.skipIf(!ENABLED)("a tenant's login, against real Postgres", () => {
         [TENANT, OTHER],
       );
 
-      const password = await rotateTenantPassword(exec, TENANT, "dbt");
+      const password = await rotateTenantPassword(exec, TENANT, "dbt", HOUR_MS);
       const tenant = new pg.Pool({
         host: conn.host,
         port: conn.port,
@@ -145,6 +150,40 @@ describe.skipIf(!ENABLED)("a tenant's login, against real Postgres", () => {
       expect(rows[0]?.rolvaliduntil).toBeDefined();
     } finally {
       await exec.query("DELETE FROM raw.records WHERE source = 'itest'");
+      await admin.end();
+    }
+  });
+
+  // ADR 0087: a build that joins a login late extends it rather than rotating it, because a
+  // rotation would refuse every other holder still to authenticate with the password.
+  it("extending a login keeps the password it authenticates with", async () => {
+    const conn = connection();
+    const admin = new pg.Pool({ ...conn.admin, max: 2 });
+    const exec = asExecutor(admin);
+    try {
+      await migrate(exec);
+      await exec.query("INSERT INTO ops.tenant (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [
+        TENANT,
+      ]);
+      await provisionTenantRoles(exec, TENANT);
+      const password = await rotateTenantPassword(exec, TENANT, "dbt", HOUR_MS);
+      await extendTenantPassword(exec, TENANT, "dbt", 3 * HOUR_MS);
+
+      const tenant = new pg.Pool({
+        host: conn.host,
+        port: conn.port,
+        database: conn.database,
+        user: "undercroft_dbt_case_itest",
+        password,
+        max: 1,
+      });
+      try {
+        const { rows } = await tenant.query<{ who: string }>("SELECT current_user AS who");
+        expect(rows[0]?.who).toBe("undercroft_dbt_case_itest");
+      } finally {
+        await tenant.end();
+      }
+    } finally {
       await admin.end();
     }
   });

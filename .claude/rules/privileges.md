@@ -38,7 +38,13 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   `SET` any GUC and `RESET ROLE`; the only thing they cannot change is which login they are.
   `raw.tenant_of(current_user)` is the policy's one input.
 - **NEVER store a tenant role's password.** `ops.rotate_tenant_password` mints one for the
-  worker right before a build or a query session and returns it; the worker forgets it after.
+  worker right before the first build or query session of that login and returns it; the
+  worker holds it in memory while any build or session of the login runs, and forgets it after.
+- **NEVER rotate a tenant login that something is still using.** A role has one password, so a
+  rotation refuses every holder yet to authenticate -- a query that rotated under `dbt build`
+  failed the whole build. Overlapping holders share one password, and one that needs it longer
+  calls `ops.extend_tenant_password` (`420_extend_tenant_password.sql`), which moves only
+  `VALID UNTIL`. The lease lives in `apps/worker/src/services/tenantSession.ts`. ADR 0087.
 
 ## Follow
 
@@ -52,6 +58,8 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   (`repeatable/010_provision_tenant.sql`) and `ops.rotate_tenant_password`
   (`080_tenant_isolation.sql`) are `SECURITY DEFINER`, owned by that bootstrap role, and are
   the only code that creates a role, a schema or a default privilege.
+  `ops.extend_tenant_password` is `SECURITY DEFINER` too, and changes only a tenant login's
+  expiry.
 - The worker's reach into `app` is exactly what its verbs need, column-scoped where a column
   is all it writes: `SELECT, INSERT, UPDATE, DELETE` on `app.connection_secret` (it seals,
   refreshes and revokes), `SELECT` on `app.connection_detail` (the chosen scope),

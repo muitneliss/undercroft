@@ -235,3 +235,5 @@
 ## [2026-09-29] ingest | ADR 0086 A Tenant Writes Its Own Macros
 ## [2026-09-29] ingest | Architecture
 ## [2026-09-29] ingest | ADR 0086 A Tenant Writes Its Own Macros
+## [2026-09-29] ingest | ADR 0087 A Tenant Login Is Leased Not Rotated Per Session
+## [2026-09-29] ingest | Architecture

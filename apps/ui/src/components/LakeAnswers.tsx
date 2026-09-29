@@ -13,14 +13,12 @@
  * page, and there is nothing to keep in step. Which page it is on is not stored at all: it is
  * the offset that pane last ASKED for, which its own mutation already remembers.
  *
- * WHY THEY RUN ONE AT A TIME. Not politeness: `createTenantSessions.as` in the worker mints a
- * fresh password for the tenant's dbt role and then opens a pool with it, and one role has
- * one password. Two overlapping queries rotate it twice, and the first connection is refused
- * with an authentication error attributed to the reader's SQL. So the panes share one chain,
- * and a statement asks only when the one before it has settled. The worker-side fix -- a
- * mutex or a retry in that seam, which would also close the schema/query collision the
- * console already has on its first paint -- is a change to the credential path and belongs in
- * its own commit.
+ * WHY THEY RUN ONE AT A TIME. They had to, once: the worker minted a fresh password for the
+ * tenant's dbt role for every session, one role has one password, and two overlapping queries
+ * refused the first with an authentication error attributed to the reader's SQL. So the panes
+ * share one chain, and a statement asks only when the one before it has settled. The worker
+ * now shares one password among the sessions that overlap (ADR 0087), so the chain is no
+ * longer load-bearing; running the panes in parallel is a change of its own.
  */
 
 import type { Locale } from "@undercroft/core/locale";

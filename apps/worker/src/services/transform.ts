@@ -9,18 +9,21 @@
  *
  * What one build does, in order, and why each step is where it is:
  *
- * 1. **Provision** the tenant's roles and schemas (idempotent) and **mint** a password for
- *    its dbt login. The password is a local here and the environment of one child process.
+ * 1. **Provision** the tenant's roles and schemas (idempotent).
  * 2. **Write the project** to a fresh temporary directory: the platform's sources and macros,
  *    the customer's models from `app.model` and macros from `app.macro`, and a profile that
  *    IS the tenant. A directory
  *    that exists for one build cannot drift from the table.
- * 3. **Spawn `dbt build`** with a deadline. A build that runs for half an hour is a build
- *    that has hung, and the previous tables keep serving -- stale, not wrong.
+ * 3. **Spawn `dbt build`** with a deadline, **holding** the password of the tenant's dbt login
+ *    for as long as that deadline: dbt parses for seconds before it first connects, and opens
+ *    connections for the whole build, so a password changed under it by another session of the
+ *    same login locks it out (ADR 0087). The password is the environment of one child process.
+ *    A build that runs for half an hour is a build that has hung, and the previous tables keep
+ *    serving -- stale, not wrong.
  * 4. **Read `run_results.json`** into steps for the ledger, one per model or test. A
  *    non-zero exit with results is a build that ran and found something wrong, reported step
- *    by step; a non-zero exit with no results is dbt failing to start, and that raises with
- *    its last lines.
+ *    by step; a non-zero exit with no results is dbt stopping before its first model, and that
+ *    raises with dbt's own statement of why (`causeOf`).
  * 5. **Record what was built**: the columns each successful model's relation now has, read
  *    as the tenant's dbt login and written back to `app.model` so the editor can offer them.
  * 6. **Remove the directory**, whatever happened.
@@ -37,7 +40,6 @@ import {
   listMacros,
   listModels,
   provisionTenantRoles,
-  rotateTenantPassword,
   type RunStep,
   setModelColumns,
   tenantRolesFor,
@@ -78,7 +80,7 @@ export interface TransformDeps {
   readonly exec: SqlExecutor;
   /** Where the generated profile points dbt. */
   readonly database: DatabaseAddress;
-  /** How the worker becomes the tenant, to read what it built. */
+  /** How the worker becomes the tenant: the password dbt logs in with, and reading what it built. */
   readonly sessions: TenantSessions;
   /**
    * The worker's own environment, which the child sees only the `CHILD_ENV` part of. `PATH`
@@ -143,8 +145,36 @@ export async function realSpawn(
   }
 }
 
+/** The line dbt opens its own account of an error it stopped on with. */
+const ENCOUNTERED = "Encountered an error";
+/** The `HH:MM:SS  ` dbt writes in front of each line it logs. */
+const LOG_TIME = /^\d{2}:\d{2}:\d{2}\s+/u;
+
 function tailOf(output: string): string {
   return output.trim().split("\n").slice(-TAIL_LINES).join("\n");
+}
+
+/**
+ * Why dbt stopped before its first model, in its own words: its "Encountered an error:" line
+ * and everything after it, else its last lines.
+ *
+ * NOT THE TAIL (issue #336). A run keeps the first 500 characters of its error, and when dbt
+ * stops early its last lines are mostly its startup banner -- which took all 500 and cut the
+ * cause off at the "E" of "Encountered". Starting at that line puts the cause first, so the
+ * bound, when it bites, keeps the cause's opening words and drops the banner instead. The
+ * time dbt stamps on each line is dropped for the same reason: it is not the cause.
+ */
+function causeOf(output: string): string {
+  const lines = output.trim().split("\n");
+  const at = lines.findIndex((line) => line.replace(LOG_TIME, "").startsWith(ENCOUNTERED));
+  if (at === -1) {
+    return tailOf(output);
+  }
+  return lines
+    .slice(at)
+    .map((line) => line.replace(LOG_TIME, "").trim())
+    .filter((line) => line !== "")
+    .join("\n");
 }
 
 /**
@@ -243,11 +273,42 @@ async function recordColumns(
 }
 
 /**
+ * `dbt build` over the project in `dir`, logged in as the tenant's dbt login for the whole
+ * deadline. Both streams, joined: dbt names a failed model on stdout and a crashed adapter on
+ * stderr, and the caller reads them as a log, not a value.
+ */
+async function spawnDbt(
+  deps: TransformDeps,
+  input: { tenantId: string; select?: string; timeoutMs?: number },
+  dir: string,
+): Promise<{ exitCode: number; output: string }> {
+  const spawn = deps.spawn ?? realSpawn;
+  const cmd = [
+    "dbt",
+    "build",
+    // Colour codes are bytes of the stored error that say nothing about the fault.
+    "--no-use-colors",
+    "--profiles-dir",
+    dir,
+    "--project-dir",
+    dir,
+    ...(input.select === undefined ? [] : ["--select", input.select]),
+  ];
+  const timeoutMs = input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const { exitCode, stdout, stderr } = await deps.sessions.withPassword(
+    { tenantId: input.tenantId, kind: "dbt" },
+    timeoutMs,
+    (password) => spawn(cmd, { cwd: dir, env: childEnv(deps.env, password), timeoutMs }),
+  );
+  return { exitCode, output: `${stdout}\n${stderr}` };
+}
+
+/**
  * Build the tenant's models, or the one `select` names, and report step by step.
  *
- * Raises only when dbt could not run at all -- no binary, no results -- with its last lines
- * as the cause. A build that ran and failed is an outcome, not an exception: the ledger
- * wants its steps.
+ * Raises only when dbt could not run at all -- no binary, no results -- with dbt's own
+ * account of why as the cause. A build that ran and failed is an outcome, not an exception:
+ * the ledger wants its steps.
  */
 export async function runTransform(
   deps: TransformDeps,
@@ -264,7 +325,6 @@ export async function runTransform(
   }
 
   const macros = await listMacros(deps.exec, input.tenantId);
-  const password = await rotateTenantPassword(deps.exec, input.tenantId, "dbt");
   const dir = await mkdtemp(join(deps.workDir ?? tmpdir(), "undercroft-dbt-"));
   try {
     await writeProject(
@@ -276,31 +336,15 @@ export async function runTransform(
         macros: macros.map((m) => ({ name: m.name, sql: m.sql })),
       }),
     );
-    const spawn = deps.spawn ?? realSpawn;
-    const cmd = [
-      "dbt",
-      "build",
-      "--profiles-dir",
-      dir,
-      "--project-dir",
-      dir,
-      ...(input.select === undefined ? [] : ["--select", input.select]),
-    ];
-    const { exitCode, stdout, stderr } = await spawn(cmd, {
-      cwd: dir,
-      env: childEnv(deps.env, password),
-      timeoutMs: input.timeoutMs ?? deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    });
-    // A log, so both streams: dbt names a failed model on stdout and a crashed adapter on stderr.
-    const tail = tailOf(`${stdout}\n${stderr}`);
+    const { exitCode, output } = await spawnDbt(deps, input, dir);
     const { steps, testsFailed } = parseRunResults(await readRunResults(dir));
 
     if (exitCode !== 0 && steps.length === 0) {
       throw new ConnectorError("dbt", "build", 0, `dbt build exited ${String(exitCode)}`, {
-        cause: new Error(tail),
+        cause: new Error(causeOf(output)),
       });
     }
-    const error = errorOf(steps, tail);
+    const error = errorOf(steps, tailOf(output));
     const built = steps
       .filter((s) => s.kind === "model" && s.status === "success")
       .map((s) => s.name);
