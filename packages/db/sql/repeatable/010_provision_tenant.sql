@@ -74,10 +74,21 @@ BEGIN
     -- No password: a role nobody has rotated cannot log in. NOINHERIT so a membership
     -- granted by mistake later confers nothing by itself.
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_dbt) THEN
-        EXECUTE format('CREATE ROLE %I LOGIN NOINHERIT CONNECTION LIMIT 4', v_dbt);
+        EXECUTE format('CREATE ROLE %I LOGIN NOINHERIT CONNECTION LIMIT 8', v_dbt);
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_bi) THEN
         EXECUTE format('CREATE ROLE %I LOGIN NOINHERIT CONNECTION LIMIT 4', v_bi);
+    END IF;
+
+    -- THE DBT LOGIN'S LIMIT IS A POLICY, stated here for tenants created before it changed.
+    -- A build holds four connections, one per dbt thread (`THREADS` in `dbtProject.ts`); a
+    -- limit of four left none for the raw-lake queries, dq reads and column reads that use the
+    -- same login, and a query run during a build was refused "too many connections". Eight is
+    -- a build plus four sessions beside it. ALTERed only when it differs: `ALTER ROLE` rewrites
+    -- the role's row, which the worker's password rotation also writes, and two writers of one
+    -- row fail with "tuple concurrently updated" (ADR 0087).
+    IF (SELECT rolconnlimit FROM pg_roles WHERE rolname = v_dbt) <> 8 THEN
+        EXECUTE format('ALTER ROLE %I CONNECTION LIMIT 8', v_dbt);
     END IF;
 
     -- dbt owns the two schemas it writes, and may create in nothing else.

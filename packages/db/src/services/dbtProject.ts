@@ -33,7 +33,12 @@ import type { RunStep } from "../repos/runs.ts";
 /** The environment variable the generated profile reads the tenant's password from. */
 export const PASSWORD_VAR = "UNDERCROFT_DBT_PASSWORD";
 
-/** How many dbt threads one build gets. A tenant's project is small; the box is shared. */
+/**
+ * How many dbt threads one build gets. A tenant's project is small; the box is shared. Each
+ * thread holds a connection as the tenant's dbt login, whose limit of eight
+ * (`repeatable/010_provision_tenant.sql`) leaves room for sessions beside a build: raise
+ * one, raise the other.
+ */
 const THREADS = 4;
 /** dbt reports execution time in seconds; the ledger keeps milliseconds. */
 const MS_PER_SECOND = 1000;

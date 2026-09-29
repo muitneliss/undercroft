@@ -285,6 +285,19 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     });
   });
 
+  // A build holds four connections, one per dbt thread, and a dbt login limited to four
+  // refused every raw-lake query run during it ("too many connections"). A tenant created
+  // under the old limit has to get the new one too, not only the tenants created after it.
+  it("a dbt login created with no room beside a build gets it when re-provisioned", async () => {
+    await db.exec("ALTER ROLE undercroft_dbt_case_0042 CONNECTION LIMIT 4");
+    await db.query("SELECT ops.provision_tenant('CASE-0042')");
+
+    const { rows } = await db.query<{ rolconnlimit: number }>(
+      "SELECT rolconnlimit FROM pg_roles WHERE rolname = 'undercroft_dbt_case_0042'",
+    );
+    expect(rows[0]?.rolconnlimit).toBe(8);
+  });
+
   it("a reference that folds to an existing tenant's slug is refused before any role exists", async () => {
     await db.exec("INSERT INTO ops.tenant (id) VALUES ('case_0042')");
     const refusal = await refusalOf(() => db.query("SELECT ops.provision_tenant('case_0042')"));
