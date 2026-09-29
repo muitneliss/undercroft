@@ -662,6 +662,10 @@
                       "rfc3339-seconds"
                     ],
                     "default": "verbatim"
+                  },
+                  "wholeReadAfterHours": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
                   }
                 },
                 "required": [

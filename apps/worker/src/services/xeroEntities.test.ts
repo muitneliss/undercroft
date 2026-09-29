@@ -365,6 +365,7 @@ describe("a Xero list read before it asked for 4-decimal unit prices", () => {
       db,
       { source: "xero", tenantId: TENANT, entity: "invoices" },
       { format: "ms-json-date", requestKey: "", watermark: UPDATED },
+      null,
     );
     const bill = `{"Invoices":[{"InvoiceID":"invoices-1","UpdatedDateUTC":"/Date(1500000000000+0000)/",
       "LineItems":[{"Quantity":100,"UnitAmount":0.2248,"LineAmount":22.48}]}]}`;
