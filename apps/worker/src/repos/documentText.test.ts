@@ -616,7 +616,9 @@ describe("a tenant's texts, one per digest", () => {
     await land("f2");
     await extractedAt(NOW, [row("f1", { method: "pdf_text", reason: null, text: "a contract" })]);
 
-    expect(await sampleTextByDigest(db, { tenantId: TENANT, limit: 10, maxChars: 5 })).toEqual([
+    expect(
+      await sampleTextByDigest(db, { tenantId: TENANT, limit: 10, maxChars: 5, part: "all" }),
+    ).toEqual([
       {
         source: SOURCE,
         documentId: "f1",
@@ -627,7 +629,7 @@ describe("a tenant's texts, one per digest", () => {
         text: "a con",
       },
     ]);
-    expect(await totalTextByDigest(db, { tenantId: TENANT, maxChars: 5 })).toEqual({
+    expect(await totalTextByDigest(db, { tenantId: TENANT, maxChars: 5, part: "all" })).toEqual({
       digests: 1,
       documents: 2,
       cutChars: 5,
@@ -649,13 +651,38 @@ describe("a tenant's texts, one per digest", () => {
       },
     );
 
-    expect(await sampleTextByDigest(db, { tenantId: TENANT, limit: 10, maxChars: 100 })).toEqual(
-      [],
-    );
-    expect(await totalTextByDigest(db, { tenantId: TENANT, maxChars: 100 })).toEqual({
+    expect(
+      await sampleTextByDigest(db, { tenantId: TENANT, limit: 10, maxChars: 100, part: "all" }),
+    ).toEqual([]);
+    expect(await totalTextByDigest(db, { tenantId: TENANT, maxChars: 100, part: "all" })).toEqual({
       digests: 0,
       documents: 0,
       cutChars: 0,
     });
+  });
+});
+
+describe("a tenant's texts, by part", () => {
+  it("samples a mail body only when asked for bodies, and a file only when asked for files", async () => {
+    // Since ADR 0080 a message's body is a document of its own. What a file IS and what a mail
+    // SAYS are measured apart, so neither sample may carry the other.
+    await land("m1:body");
+    await land("m1:002", OTHER_SHA);
+    await extractedAt(NOW, [
+      row("m1:body", { method: "txt", reason: null, text: "please settle" }),
+      row("m1:002", { sourceSha256: OTHER_SHA, method: "pdf_text", reason: null, text: "invoice" }),
+    ]);
+    async function ids(part: "files" | "bodies"): Promise<string[]> {
+      const texts = await sampleTextByDigest(db, {
+        tenantId: TENANT,
+        limit: 10,
+        maxChars: 100,
+        part,
+      });
+      return texts.map((text) => text.documentId);
+    }
+
+    expect(await ids("bodies")).toEqual(["m1:body"]);
+    expect(await ids("files")).toEqual(["m1:002"]);
   });
 });
