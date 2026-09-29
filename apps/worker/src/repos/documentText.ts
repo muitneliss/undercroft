@@ -59,6 +59,8 @@ export interface ExtractStamp {
   readonly extractedAt: string;
   readonly runId: string;
   readonly readerVersion: number;
+  /** The generation of layouts the text was written in (`370_document_text_layout_version.sql`). */
+  readonly layoutVersion: number;
 }
 
 /** One document's text, ready to be written. `method` or `reason` -- never neither. */
@@ -487,9 +489,10 @@ const WRITE_BY_DIGEST = `WITH awaiting AS (
        )
        INSERT INTO raw.document_text
            (source, tenant_id, document_id, source_sha256, method, reason,
-            text, chars, truncated, extracted_at, run_id, reader_version)
+            text, chars, truncated, extracted_at, run_id, reader_version, layout_version)
        SELECT $2, $3, a.document_id, p.source_sha256, p.method, p.reason,
-              p.text, char_length(p.text), p.truncated, $4::timestamptz, $5, $1::integer
+              p.text, char_length(p.text), p.truncated, $4::timestamptz, $5, $1::integer,
+              $11::integer
          FROM unnest($6::text[], $7::text[], $8::text[], $9::text[], $10::boolean[])
            AS p(source_sha256, method, reason, text, truncated)
          JOIN awaiting a ON a.sha256 = p.source_sha256
@@ -502,7 +505,8 @@ const WRITE_BY_DIGEST = `WITH awaiting AS (
               truncated      = excluded.truncated,
               extracted_at   = excluded.extracted_at,
               run_id         = excluded.run_id,
-              reader_version = excluded.reader_version
+              reader_version = excluded.reader_version,
+              layout_version = excluded.layout_version
        RETURNING source_sha256`;
 
 /**
@@ -570,6 +574,7 @@ export async function upsertDocumentText(
     rows.map((r) => r.reason),
     rows.map((r) => r.text),
     rows.map((r) => r.truncated),
+    stamp.layoutVersion,
   ]);
 
   return answeredByRead(rows, written.rows);

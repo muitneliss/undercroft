@@ -458,7 +458,7 @@ describe("the schedule", () => {
 });
 
 describe("re-syncing a connection's lists whole", () => {
-  // ADR 0081: a schedule of its own beside the cadence, off until an admin opts in, for the edits
+  // ADR 0082: a schedule of its own beside the cadence, off until an admin opts in, for the edits
   // a source's change filter never returns.
   useDatabase();
 

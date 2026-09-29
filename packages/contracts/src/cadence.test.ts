@@ -173,7 +173,7 @@ describe("cadenceSetting", () => {
 });
 
 describe("wholeReadDue", () => {
-  // ADR 0081: a re-sync reads a list whole on the connection's own schedule, measured from the
+  // ADR 0082: a re-sync reads a list whole on the connection's own schedule, measured from the
   // start of the run that last read it whole.
   const LAST = "2026-03-01T02:03:00.000Z";
 

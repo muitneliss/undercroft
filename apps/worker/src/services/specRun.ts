@@ -62,7 +62,7 @@ async function chosenFor(
   };
 }
 
-/** How often the connection's lists are read whole again: its re-sync, ADR 0081. */
+/** How often the connection's lists are read whole again: its re-sync, ADR 0082. */
 export interface ResyncSetting {
   readonly cadence: Cadence;
   readonly cron: string | null;

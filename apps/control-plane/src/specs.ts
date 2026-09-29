@@ -7,7 +7,7 @@
  * answer from a copy of the spec is an answer that drifts from it. So the control plane reads the
  * same files the worker does (`COPY specs` in both Dockerfiles), and nothing else: the entities,
  * which is what `presentStatus` asks of them (ADR 0074), and how many whole-read requests a day
- * the spec allows, which is what a re-sync's "takes N days" is measured against (ADR 0081).
+ * the spec allows, which is what a re-sync's "takes N days" is measured against (ADR 0082).
  *
  * Here beside `main.ts`, like `skills.ts`, because reading the disk is the composition root's to
  * do. A spec that fails to read is logged and left out, and its source's grant is then judged

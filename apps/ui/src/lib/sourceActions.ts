@@ -2,7 +2,7 @@
  * The mutations a source's card is acted on with, and which of them a given card is waiting on.
  *
  * Split from `routes/TenantOverview.tsx`, which owns the mutations and had grown past what one
- * file may be once a card could save a second schedule (ADR 0081).
+ * file may be once a card could save a second schedule (ADR 0082).
  */
 
 import type { GrantPending } from "@/components/ConnectionCard.tsx";

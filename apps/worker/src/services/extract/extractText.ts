@@ -18,7 +18,8 @@ import { readDocx } from "./docx.ts";
 import { decodeHtmlBytes, htmlToText } from "./html.ts";
 import { mimeToText } from "./mime.ts";
 import { ocrImage, ocrScan } from "./ocr.ts";
-import { claimsOpenAttestation, readOpenAttestation } from "./openAttestation.ts";
+import { ACRA_LAYOUT_VERSION } from "./acraTemplates.ts";
+import { claimsOpenAttestation, readOpenAttestation, relaid } from "./openAttestation.ts";
 import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
 import { readXlsx } from "./xlsx.ts";
 
@@ -485,4 +486,36 @@ export async function extractDocument(deps: ExtractDeps, input: Document): Promi
   const type = input.contentType.split(";")[0]?.trim().toLowerCase() ?? "";
   const reader = READERS.get(type);
   return reader === undefined ? refused(UNSUPPORTED_TYPE) : await reader(deps, input);
+}
+
+/**
+ * The methods whose stored text can be laid out again from itself, each with how.
+ *
+ * Only a method whose text keeps everything its layout was made from belongs here. A verified
+ * OpenAttestation text holds the document's whole unwrapped data beside its verification; a
+ * PDF's text holds none of the page it came from, and laying it out again means reading it again.
+ */
+const RELAYERS: ReadonlyMap<string, (stored: string) => string | null> = new Map([
+  ["openattestation", relaid],
+]);
+
+export const RELAYABLE_METHODS: readonly string[] = [...RELAYERS.keys()];
+
+/**
+ * The generation of layouts every text is stamped with (`layout_version`). A raised one reaches
+ * each text of a `RELAYABLE_METHODS` method exactly once. Today the only layouts are the ACRA
+ * template table's, so its generation is this one.
+ */
+export const CURRENT_LAYOUT_VERSION = ACRA_LAYOUT_VERSION;
+
+/**
+ * A stored text laid out under today's layouts, capped like any reading -- or `null` when that
+ * changes nothing, in which case the row is left as it is.
+ */
+export function relayText(
+  method: string,
+  stored: string,
+): { readonly text: string; readonly truncated: boolean } | null {
+  const relayed = RELAYERS.get(method)?.(stored) ?? null;
+  return relayed === null ? null : capped(relayed.replaceAll(NUL, NOT_TEXT));
 }

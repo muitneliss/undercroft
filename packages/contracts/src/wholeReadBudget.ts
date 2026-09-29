@@ -3,14 +3,14 @@
  *
  * Split from `connectorSpec.ts`, which had grown past what one file may be; the spec's schema
  * embeds `WholeReadBudget` under `defaults` and runs `wholeReadBudgetProblem` over every spec
- * it parses. ADR 0081.
+ * it parses. ADR 0082.
  */
 
 import { z } from "zod";
 
 /**
  * How many of a day's requests reading lists WHOLE may spend -- a first read, a changed request,
- * or a re-sync (ADR 0081). The rest of the provider's `rateLimit.requestsPerDay` is the reserve
+ * or a re-sync (ADR 0082). The rest of the provider's `rateLimit.requestsPerDay` is the reserve
  * every "what changed" read and every Run now is left, so a day's re-sync never starves them.
  *
  * `remainingHeader` names the response header in which the provider reports how many requests

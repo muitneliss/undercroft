@@ -32,7 +32,7 @@ Five things, each of which the code handles and each of which you will meet whil
   `connections set-resync`. A re-sync happens only during a sync run, so a paused sync means no
   re-sync. While it is off, such an edit stays stale until the record changes for some other
   reason. A re-read lands every record nobody edited as unchanged.
-  [ADR 0081](../adr/0081-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md).
+  [ADR 0082](../adr/0082-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md).
   `Balances` is Xero's own figure, converted to the base currency, and it moves with every
   payment and every due date that passes. Derive outstanding and overdue amounts from invoices in
   a model instead.

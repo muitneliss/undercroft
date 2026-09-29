@@ -93,7 +93,7 @@ export interface SpecRead {
   readonly entities: readonly Pick<ConnectorEntity, "name" | "readScope" | "incremental">[];
   /**
    * The spec's `wholeReadBudget.requestsPerDay`, or `null` for a spec that rations no whole
-   * reads -- whose re-sync, however large, never has to wait for another day (ADR 0081).
+   * reads -- whose re-sync, however large, never has to wait for another day (ADR 0082).
    */
   readonly wholeReadsPerDay: number | null;
 }
@@ -189,7 +189,7 @@ export interface ConnectionCardView {
   /**
    * Reading this connection's lists WHOLE again, on a schedule of its own: a watermark vouches
    * only for what a source's change filter can see, and Xero documents edits its filter never
-   * returns (ADR 0081). `null` for a source with no list read through such a filter -- there is
+   * returns (ADR 0082). `null` for a source with no list read through such a filter -- there is
    * nothing to re-sync, and the card offers no schedule for it.
    */
   readonly resync: ResyncView | null;
@@ -540,7 +540,7 @@ export type SetResyncOutcome = SetCadenceOutcome | { ok: false; reason: "not-res
  *
  * The same words and the same check as {@link setCadence}, and one more refusal: a source that
  * reads no list through a change filter the source runs has nothing a re-sync could catch up on,
- * and a schedule stored for it would be a promise that changes nothing. ADR 0081.
+ * and a schedule stored for it would be a promise that changes nothing. ADR 0082.
  */
 export async function setResync(
   exec: SqlExecutor,

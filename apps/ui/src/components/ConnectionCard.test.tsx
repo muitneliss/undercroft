@@ -271,7 +271,7 @@ describe("the cadence", () => {
 });
 
 describe("the full re-sync", () => {
-  // ADR 0081: a second schedule, off until an admin opts in, for the edits a source's change
+  // ADR 0082: a second schedule, off until an admin opts in, for the edits a source's change
   // filter never reports; the card says when a re-sync needs more than a day of requests.
   const OFF = {
     cadence: "paused",

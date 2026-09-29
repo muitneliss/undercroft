@@ -183,7 +183,7 @@ export function grantedBy(source: string | null | undefined): "consent" | "token
  */
 /**
  * A whole read the day's request budget cut short, or a list that waited for a day with room
- * (ADR 0081): what a reader needs to know is that the list is not finished and when it will be.
+ * (ADR 0082): what a reader needs to know is that the list is not finished and when it will be.
  */
 function wholeReadSentence(
   t: TFunction,

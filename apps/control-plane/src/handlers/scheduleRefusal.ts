@@ -2,7 +2,7 @@
  * How a refused schedule is worded, for `connections.setCadence` and `connections.setResync`.
  *
  * Split from `connectionsRouter.ts`, which had grown past what one file may be, when a card grew
- * its second schedule (ADR 0081). Both procedures are refused for the same reasons in the same
+ * its second schedule (ADR 0082). Both procedures are refused for the same reasons in the same
  * words, so the wording has one owner.
  */
 

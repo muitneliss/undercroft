@@ -129,7 +129,7 @@ describe("the first page names its page", () => {
 });
 
 describe("a request budget ends a read part-way, as a truncated read", () => {
-  // ADR 0081: a whole read may spend only its share of the provider's day. The caller decides
+  // ADR 0082: a whole read may spend only its share of the provider's day. The caller decides
   // how much; the runtime asks before each page and reports what each answer said.
   function budgetOf(pages: number, seen: string[]): RequestBudget {
     let left = pages;

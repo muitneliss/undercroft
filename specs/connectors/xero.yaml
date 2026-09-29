@@ -74,7 +74,7 @@ defaults:
   # spend 4,000. The other 1,000 are the reserve every "what changed" read and Run now is left.
   # Xero reports what the day has left in `X-DayLimit-Remaining` on every response, counting
   # retries and every other app on the organisation, and that is the count trusted. A list the
-  # budget cuts is read whole on the next run with room; the run says so (ADR 0081).
+  # budget cuts is read whole on the next run with room; the run says so (ADR 0082).
   wholeReadBudget:
     requestsPerDay: 4000
     remainingHeader: x-daylimit-remaining
@@ -97,7 +97,7 @@ defaults:
 # move `UpdatedDateUTC`, and Fivetran documents a line's `AccountCode` too. A connection can
 # therefore opt into a RE-SYNC, a schedule of its own beside its sync cadence, on which each of
 # these lists is read whole again. That schedule is the connection's, set on its card, and not
-# this file's: ADR 0081, which supersedes the 24 hours ADR 0080 wrote in here (#314).
+# this file's: ADR 0082, which supersedes the 24 hours ADR 0080 wrote in here (#314).
 #
 # `pageSize: "500"` on every list that takes it, half of Xero's maximum of 1,000: a whole read
 # of a list costs a fifth of the requests it did at 100, and a page is still small enough to

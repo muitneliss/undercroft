@@ -64,8 +64,8 @@ export interface Connection {
   readonly cron: string | null;
   /**
    * How often this connection's lists are read WHOLE again, in the same words as `cadence`, and
-   * the expression of a `custom` one. `paused` by default: a re-sync is opted into (ADR 0081,
-   * 370_connection_resync.sql).
+   * the expression of a `custom` one. `paused` by default: a re-sync is opted into (ADR 0082,
+   * 380_connection_resync.sql).
    */
   readonly resyncCadence: Cadence;
   readonly resyncCron: string | null;

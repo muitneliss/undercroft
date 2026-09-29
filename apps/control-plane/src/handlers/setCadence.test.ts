@@ -115,7 +115,7 @@ describe("connections.setCadence with a cron expression", () => {
 describe("connections.setResync", () => {
   it("refuses a source with nothing to re-sync in the reader's words, with a code beside them", async () => {
     // HubSpot reads through a client-side filter, so a full re-sync could catch up on nothing
-    // (ADR 0081). The code is what the CLI and an agent match on.
+    // (ADR 0082). The code is what the CLI and an agent match on.
     let refused: unknown = null;
     try {
       await caller(loadSpecReads()).connections.setResync({

@@ -257,7 +257,7 @@ export const connectionsRouter = router({
 
   /**
    * How often a source's lists are read WHOLE again: its re-sync, off until an admin opts in
-   * (ADR 0081). The same flat shape and the same words as `setCadence`, and one more refusal: a
+   * (ADR 0082). The same flat shape and the same words as `setCadence`, and one more refusal: a
    * source that reads no list through a change filter the source runs has nothing to re-sync.
    */
   setResync: requireRole("admin")

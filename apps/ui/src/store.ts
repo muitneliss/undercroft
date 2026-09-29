@@ -379,7 +379,7 @@ interface UiState {
    * persisted: a schedule half-written last week is not one anybody is still deciding.
    *
    * It carries WHICH schedule too, because a card holds two -- how often it syncs, and how
-   * often it re-syncs in full (ADR 0081) -- and an expression typed for one must not open the
+   * often it re-syncs in full (ADR 0082) -- and an expression typed for one must not open the
    * other's field.
    */
   cronDraft: CronDraft | null;

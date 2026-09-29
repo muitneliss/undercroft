@@ -3,7 +3,7 @@
  * "custom", the cron field under it.
  *
  * Split from `GrantWhen` when a card grew a second schedule -- how often it re-syncs in full
- * beside how often it syncs (ADR 0081) -- so both are written with the same control and a custom
+ * beside how often it syncs (ADR 0082) -- so both are written with the same control and a custom
  * re-sync is previewed and refused exactly as a custom sync is. `ScheduleEdit` is the one thing
  * that differs: which schedule, what the server holds for it, and how its choices read.
  *
@@ -31,7 +31,7 @@ import { type CronSchedule, cronDraftFor, useUiStore } from "@/store.ts";
 
 /**
  * One of a card's two schedules as a control edits it: how often it syncs, or how often it
- * re-syncs in full (ADR 0081). The same select and the same cron field serve both, so a custom
+ * re-syncs in full (ADR 0082). The same select and the same cron field serve both, so a custom
  * re-sync is written, previewed and refused exactly as a custom sync is.
  */
 export interface ScheduleEdit {

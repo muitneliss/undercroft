@@ -1,5 +1,5 @@
 /**
- * How much of a provider's day one run's whole reads may spend. ADR 0081.
+ * How much of a provider's day one run's whole reads may spend. ADR 0082.
  *
  * A whole read -- a first read, a changed request, a re-sync -- asks for every page of a list, and
  * on a large organisation that is most of a day's requests. The spec's `wholeReadBudget` says how

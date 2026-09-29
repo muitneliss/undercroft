@@ -630,7 +630,7 @@ export const vi = {
     cadenceNotSaved: "Chưa lưu được tần suất",
     /**
      * The re-sync: a connection's lists read WHOLE again on a schedule of their own, for the edits
-     * a source's "what changed" filter never returns (ADR 0081). Off until an admin opts in.
+     * a source's "what changed" filter never returns (ADR 0082). Off until an admin opts in.
      */
     resync: "Đọc lại toàn bộ",
     resyncLabel: "Tần suất đọc lại toàn bộ",

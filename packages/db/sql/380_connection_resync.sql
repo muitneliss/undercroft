@@ -1,6 +1,6 @@
 -- ops.connection.resync_cadence / resync_cron: how often a connection's lists are read WHOLE
 -- again, and raw.sync_cursor.whole_read_requests: what the last whole read of a list cost.
--- ADR 0081, superseding the hardcoded bound of ADR 0080 (#314).
+-- ADR 0082, superseding the hardcoded bound of ADR 0080 (#314).
 --
 -- A watermark vouches only for what a source's change filter can see, and Xero documents edits
 -- its filter never returns. A re-sync reads each such list whole on a schedule so those edits

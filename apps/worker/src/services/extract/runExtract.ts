@@ -48,9 +48,16 @@ import {
   pendingDocuments,
   upsertDocumentText,
 } from "../../repos/documentText.ts";
+import { relayTexts, staleLayouts } from "../../repos/documentLayout.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
 import type { Spawn } from "../transform.ts";
-import { CURRENT_READER_VERSION, extractDocument } from "./extractText.ts";
+import {
+  CURRENT_LAYOUT_VERSION,
+  CURRENT_READER_VERSION,
+  extractDocument,
+  RELAYABLE_METHODS,
+  relayText,
+} from "./extractText.ts";
 
 /** Documents read in one pass. A cap, so one run cannot hold the verb open for hours. */
 export const DEFAULT_BATCH = 500;
@@ -83,6 +90,8 @@ export interface ExtractResult {
   readonly refused: number;
   /** Documents whose bytes could not be fetched from the lake at all. */
   readonly unreadable: number;
+  /** Texts laid out again from themselves under a newer layout, none of them read again. */
+  readonly relaid: number;
   /**
    * Every document this run would not read, with its reason, for `ops.run_refusal`.
    *
@@ -280,6 +289,34 @@ async function readEach(
   return rows;
 }
 
+/**
+ * Lay out again, from itself, each text of this scope written under an older layout -- a
+ * profile read as unwrapped `data` before its ACRA template was known. Nothing is fetched from
+ * the lake and nothing is verified again; see `relaid` in `openAttestation.ts` for why that is
+ * the safe way round. Returns how many texts changed.
+ */
+async function relayStale(
+  deps: ExtractRunDeps,
+  scope: { tenantId: string; source: string },
+  stamp: { extractedAt: string; runId: string; layoutVersion: number },
+): Promise<number> {
+  const stale = await staleLayouts(deps.exec, scope, {
+    methods: RELAYABLE_METHODS,
+    layoutVersion: stamp.layoutVersion,
+    limit: deps.batch ?? DEFAULT_BATCH,
+  });
+  const relaid = stale.map((stored) => {
+    const relayed = relayText(stored.method, stored.text);
+    return {
+      documentId: stored.documentId,
+      sourceSha256: stored.sourceSha256,
+      text: relayed?.text ?? null,
+      truncated: relayed?.truncated ?? false,
+    };
+  });
+  return await relayTexts(deps.exec, scope, relaid, stamp);
+}
+
 export async function runExtract(
   deps: ExtractRunDeps,
   input: { tenantId: string; source: string; runId: string },
@@ -313,19 +350,17 @@ export async function runExtract(
 
   const rows = await readEach(deps, scratch, pending, journal);
 
+  const stamp = { extractedAt, runId: input.runId, layoutVersion: CURRENT_LAYOUT_VERSION };
   const answered = await upsertDocumentText(deps.exec, scope, rows, {
-    extractedAt,
-    runId: input.runId,
+    ...stamp,
     readerVersion: CURRENT_READER_VERSION,
   });
   const { read, refused, unreadable } = tally(rows, answered);
+  // After the reads, so a text this run just wrote is already in the current layout and is
+  // not looked at twice.
+  const relaid = await relayStale(deps, scope, stamp);
 
-  journal.info("documents_extracted", {
-    entity: DOCUMENTS,
-    read,
-    refused,
-    unreadable,
-  });
+  journal.info("documents_extracted", { entity: DOCUMENTS, read, refused, unreadable, relaid });
 
   return {
     runId: input.runId,
@@ -333,6 +368,7 @@ export async function runExtract(
     read,
     refused,
     unreadable,
+    relaid,
     refusals: refusalsOf(rows),
     reasonCounts: tallyReasons(rows, answered),
     pendingBefore,

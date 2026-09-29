@@ -318,7 +318,7 @@ export function isDue(
 
 /**
  * Whether a run that started at `runStartedAt` should read a list whole, given the connection's
- * re-sync schedule and when the run that last read that list whole started. ADR 0081.
+ * re-sync schedule and when the run that last read that list whole started. ADR 0082.
  *
  * The same rule a sync cadence follows (`followingRunFor`), applied to whole reads instead of
  * runs, so "daily" and "0 2 * * 0" mean the same thing on both schedules. `paused` -- the default,

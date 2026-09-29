@@ -98,6 +98,7 @@ async function extractedAt(
     extractedAt: "2026-09-20T09:00:00.000Z",
     runId: `run-extract-${readerVersion}`,
     readerVersion,
+    layoutVersion: NOW,
   });
 }
 
@@ -385,7 +386,12 @@ describe("a second customer holding byte-identical bytes", () => {
       db,
       { tenantId: OTHER_TENANT, source: SOURCE },
       [row("f1", { method: "pdf_text", reason: null, text: "their own contract" })],
-      { extractedAt: "2026-09-20T09:00:00.000Z", runId: "run-extract-other", readerVersion: NOW },
+      {
+        extractedAt: "2026-09-20T09:00:00.000Z",
+        runId: "run-extract-other",
+        readerVersion: NOW,
+        layoutVersion: NOW,
+      },
     );
 
     expect((await textRows()).map((r) => r.tenant_id)).toEqual([OTHER_TENANT]);
@@ -635,7 +641,12 @@ describe("a tenant's texts, one per digest", () => {
       db,
       { tenantId: OTHER_TENANT, source: SOURCE },
       [row("theirs", { method: "pdf_text", reason: null, text: "not yours" })],
-      { extractedAt: "2026-09-20T09:00:00.000Z", runId: "run-extract-other", readerVersion: NOW },
+      {
+        extractedAt: "2026-09-20T09:00:00.000Z",
+        runId: "run-extract-other",
+        readerVersion: NOW,
+        layoutVersion: NOW,
+      },
     );
 
     expect(await sampleTextByDigest(db, { tenantId: TENANT, limit: 10, maxChars: 100 })).toEqual(

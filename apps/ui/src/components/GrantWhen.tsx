@@ -9,7 +9,7 @@
  *
  * Each schedule is a `<select>` for an admin and a word for everyone else (`ScheduleControl`).
  * There are two: how often the source syncs, and -- for a source whose lists are read through a
- * change filter -- how often it re-syncs in full, off until an admin opts in (ADR 0081). The
+ * change filter -- how often it re-syncs in full, off until an admin opts in (ADR 0082). The
  * re-sync row also says when the last full re-sync finished and, when one spans more than a day
  * of the provider's requests, how many days it takes.
  *
@@ -152,7 +152,7 @@ function Schedule({
 }
 
 /**
- * The full re-sync, for a source that has one (ADR 0081): its schedule, what it is for, when the
+ * The full re-sync, for a source that has one (ADR 0082): its schedule, what it is for, when the
  * last one finished, and -- when one needs more than a day of the provider's requests -- how many
  * days it takes. Nothing at all for a source whose lists no change filter reads.
  */

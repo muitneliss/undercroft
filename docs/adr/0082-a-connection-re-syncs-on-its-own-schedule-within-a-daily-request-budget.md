@@ -1,4 +1,4 @@
-# 81. A connection re-syncs on its own schedule, within a daily request budget
+# 82. A connection re-syncs on its own schedule, within a daily request budget
 
 - Status: Accepted
 - Date: 2026-09-29
@@ -99,7 +99,7 @@ list's last completed whole read cost. The card sums them over the lists the con
 divides by the budget, and says "a full re-sync takes about N days" when N is more than one. It
 also says when the stalest list was last read whole. The control plane may read five columns of
 `raw.sync_cursor` for this, none of them the watermark. The grant is column-scoped in
-`370_connection_resync.sql`.
+`380_connection_resync.sql`.
 
 **Xero's lists page at 500,** half of Xero's maximum of 1,000. A whole read costs a fifth of the
 requests it did at 100. The changed request makes every paged list read whole once after deploy

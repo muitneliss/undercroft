@@ -13,7 +13,7 @@
  *   skips everything below it forever (`laterStamp`).
  * - **It vouches only for what the source's filter can see.** Xero documents edits its filter
  *   never returns, so a connection may RE-SYNC: read its lists whole on a schedule of its own,
- *   measured from the start of the run that last read each list whole (ADR 0081).
+ *   measured from the start of the run that last read each list whole (ADR 0082).
  * - **A whole read spends from the day's budget, and waits when there is none.** A list that
  *   holds a watermark then reads what changed instead, from the reserve, so ordinary edits still
  *   arrive; a list with no watermark to fall back on is not read at all this run, and the run

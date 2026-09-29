@@ -1,5 +1,5 @@
 /**
- * The seam through which a caller rations a read's requests. ADR 0081.
+ * The seam through which a caller rations a read's requests. ADR 0082.
  *
  * Split from `reader.ts`, which had grown past what one file may be; a `Reader` asks its budget
  * through {@link admitUnder} before each page and tells it about each answer.
@@ -9,7 +9,7 @@
  * How many requests a read may make, asked before each one and told what each answer said.
  *
  * The runtime knows when it is about to ask a source for another page; only the caller knows how
- * much of the provider's day is left and how much of it this read may spend (ADR 0081). So the
+ * much of the provider's day is left and how much of it this read may spend (ADR 0082). So the
  * decision stays the caller's, and the runtime only asks and reports.
  *
  * - `admit` is asked before each page of a list and each chunk of a relation. `false` ends the

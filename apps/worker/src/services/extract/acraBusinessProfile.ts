@@ -6,113 +6,92 @@
  * does: what this produces is the TEXT of a document, written to `raw.document_text` like a
  * PDF's, which a customer's model parses or ignores. It exists because the document's own
  * field names are an issuer's internals (`representatives`, `id`, `sharesType`) and its dates
- * are `DD/MM/YYYY`; reading one well is a reader's job, the same way laying out a workbook's
- * rows is `xlsx.ts`'s.
+ * are a template's own form; reading one well is a reader's job, the same way laying out a
+ * workbook's rows is `xlsx.ts`'s.
  *
  * ONLY FOR A DOCUMENT ACRA ISSUED IN A TEMPLATE WE KNOW. Every issuer must prove its identity at
- * `acratrustbar.gov.sg`, and `$template.name` must be one listed below; anything else stays the
- * generic unwrapped data. The list is a list because ACRA will publish another template, and
- * guessing that its fields mean what this one's do is how a column fills with wrong values.
- * The check is not a trust decision: it runs only on a document whose signature and issuer
- * identity have ALREADY verified (`openAttestation.ts`).
+ * `acratrustbar.gov.sg`, and `$template.name` must be an entry of `ACRA_TEMPLATES`; anything
+ * else stays the generic unwrapped data. What each template's fields mean is that table's, and
+ * this module knows no template name and no field name of its own. The check is not a trust
+ * decision: it runs only on a document whose signature and issuer identity have ALREADY
+ * verified (`openAttestation.ts`).
  *
  * NOTHING IS GUESSED AND NOTHING IS DROPPED. A field the document does not carry is `null`, a
- * date that is not a real `DD/MM/YYYY` is `null` rather than a locale's reading of it, and an
- * amount stays the string the issuer signed (`money.md`); a currency stays its words, because
- * a table from "UNITED STATES OF AMERICA, DOLLARS" to `USD` is a guess this reader would own.
- * An activity keeps its description whole when it carries no trailing SSIC code.
+ * date that is not a real date in the template's own form is `null` rather than a locale's
+ * reading of it, a flag the document does not state is `null` and not `false`, and an amount
+ * stays the string the issuer signed (`money.md`); a currency stays its words, because a table
+ * from "UNITED STATES OF AMERICA, DOLLARS" to `USD` is a guess this reader would own. An
+ * activity keeps its description whole when it carries no trailing SSIC code.
  */
 
-import type { OaIssuer } from "./openAttestationVerify.ts";
+import { ACRA_TEMPLATES, type AcraField, type AcraLayout, type DateForm } from "./acraTemplates.ts";
 
 const ACRA_IDENTITY_LOCATION = "acratrustbar.gov.sg";
-/** The templates whose fields this mapping was written against. */
-const KNOWN_TEMPLATES: ReadonlySet<string> = new Set(["BP-COMPANY-2022-1"]);
 
 /** A five-digit SSIC code in parentheses at the very end of an activity's name. */
 const SSIC_SUFFIX = /^(?<description>[\s\S]*?)\s*\((?<code>\d{5})\)\s*$/u;
-const DD_MM_YYYY = /^(?<day>\d{2})\/(?<month>\d{2})\/(?<year>\d{4})$/u;
+
+/**
+ * Each date form, as exactly the shape it names. `DD Mon YYYY` is a two-digit day, an English
+ * month abbreviation in the case ACRA writes it, and a four-digit year: `1 July 2026` and
+ * `01 JUL 2026` are other shapes and read as `null`, not as a lenient parser's best effort.
+ */
+const DATE_SHAPES: Readonly<Record<DateForm, RegExp>> = {
+  "DD/MM/YYYY": /^(?<day>\d{2})\/(?<month>\d{2})\/(?<year>\d{4})$/u,
+  "DD Mon YYYY":
+    /^(?<day>\d{2}) (?<month>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (?<year>\d{4})$/u,
+};
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 type Row = Record<string, unknown>;
 
+/** Only where each issuer proved itself is consulted. */
+export interface ProfileIssuer {
+  readonly location: string;
+}
+
 /** The profile, or `null` when this is not an ACRA document in a template we know. */
-export function acraBusinessProfile(data: Row, issuers: readonly OaIssuer[]): Row | null {
-  const template = record(data.$template);
-  const acraTemplate =
-    issuers.every((issuer) => issuer.location.toLowerCase() === ACRA_IDENTITY_LOCATION) &&
-    KNOWN_TEMPLATES.has(text(template, "name") ?? "");
-  if (!acraTemplate) {
+export function acraBusinessProfile(data: Row, issuers: readonly ProfileIssuer[]): Row | null {
+  const template = ACRA_TEMPLATES.get(text(record(data.$template), "name") ?? "");
+  const fromAcra = issuers.every(
+    (issuer) => issuer.location.toLowerCase() === ACRA_IDENTITY_LOCATION,
+  );
+  if (template === undefined || !fromAcra) {
     return null;
   }
-  const uen = text(data, "uen");
-  const name = text(data, "entityName");
-  if (uen === null || name === null) {
-    return null;
+  const profile = laidOut(template.layout, data, template.dates);
+  return profile.uen === null || profile.name === null ? null : profile;
+}
+
+function laidOut(layout: AcraLayout, row: Row, dates: DateForm): Row {
+  return Object.fromEntries(
+    Object.entries(layout).map(([key, field]) => [key, fieldValue(field, row, dates)]),
+  );
+}
+
+function fieldValue(field: AcraField, row: Row, dates: DateForm): unknown {
+  switch (field.kind) {
+    case "text":
+      return text(row, field.from);
+    case "date":
+      return isoDate(text(row, field.from), dates);
+    case "flag":
+      return flagOf(row[field.from]);
+    case "activities":
+      return rows(row[field.from]).map(activity);
+    case "list":
+      return rows(row[field.from]).map((item) => laidOut(field.of, item, dates));
+    case "object": {
+      const nested = record(row[field.from]);
+      return Object.keys(nested).length === 0 ? null : laidOut(field.of, nested, dates);
+    }
+    case "section":
+      return laidOut(field.of, row, dates);
+    case "absent":
+      return null;
+    default:
+      return field satisfies never;
   }
-  return {
-    uen,
-    name,
-    companyType: text(data, "companyType"),
-    status: text(data, "status"),
-    statusDate: isoDate(text(data, "statusDate")),
-    incorporationDate: isoDate(text(data, "incorporationDate")),
-    gazettedIndicator: text(data, "gazettedIndicator"),
-    registeredAddress: address(data.address),
-    changeOfAddressDate: isoDate(text(data, "changeOfAddressDate")),
-    activities: rows(data.activities).map(activity),
-    capitals: rows(data.capitals).map(capital),
-    officers: rows(data.representatives).map(officer),
-    shareholders: rows(data.shareholders).map(shareholder),
-    document: {
-      productCode: text(data, "productCode"),
-      transactionNumber: text(data, "transactionNumber"),
-      receiptNumber: text(data, "receiptNumber"),
-      receiptDate: isoDate(text(data, "receiptDate")),
-      verificationUrl: text(data, "verifyLink"),
-      template: {
-        name: text(template, "name"),
-        type: text(template, "type"),
-        rendererUrl: text(template, "url"),
-      },
-    },
-  };
-}
-
-function capital(row: Row): Row {
-  return {
-    type: text(row, "type"),
-    amount: text(row, "amount"),
-    numberOfShares: text(row, "shares"),
-    currency: text(row, "currency"),
-    shareType: text(row, "sharesType"),
-  };
-}
-
-/** A representative, whatever the role: the document says Director, Secretary, and others. */
-function officer(row: Row): Row {
-  return {
-    name: text(row, "name"),
-    identificationNumber: text(row, "id"),
-    nationality: text(row, "nationality"),
-    position: text(row, "position"),
-    appointmentDate: isoDate(text(row, "appointmentDate")),
-    addressSource: text(row, "addressSource"),
-    address: address(row.address),
-  };
-}
-
-/** Mapped on its own: a shareholder carries shares where an officer carries a role. */
-function shareholder(row: Row): Row {
-  return {
-    name: text(row, "name"),
-    identificationNumber: text(row, "id"),
-    nationality: text(row, "nationality"),
-    numberOfShares: text(row, "shares"),
-    shareType: text(row, "sharesType"),
-    currency: text(row, "currency"),
-    addressSource: text(row, "addressSource"),
-    address: address(row.address),
-  };
 }
 
 function activity(row: Row): Row {
@@ -123,37 +102,28 @@ function activity(row: Row): Row {
     : { description: match.groups.description, ssicCode: match.groups.code };
 }
 
-/** A local address carries its parts, a foreign one its lines; either keeps its formatted form. */
-function address(value: unknown): Row | null {
-  const row = record(value);
-  if (Object.keys(row).length === 0) {
-    return null;
-  }
-  return {
-    kind: text(row, "type"),
-    houseNumber: text(row, "houseNumber"),
-    streetName: text(row, "streetName"),
-    floor: text(row, "floor"),
-    unit: text(row, "unit"),
-    buildingName: text(row, "buildingName"),
-    postalCode: text(row, "postalCode"),
-    address1: text(row, "address1"),
-    address2: text(row, "address2"),
-    country: text(row, "country"),
-    formattedAddress: text(row, "formattedAddress"),
-  };
-}
-
-/** `DD/MM/YYYY` as `YYYY-MM-DD`, or `null` when it is not that shape or not a real date. */
-function isoDate(value: string | null): string | null {
-  const parts = value === null ? undefined : DD_MM_YYYY.exec(value)?.groups;
+/** A date in `form` as `YYYY-MM-DD`, or `null` when it is not that shape or not a real date. */
+function isoDate(value: string | null, form: DateForm): string | null {
+  const parts = value === null ? undefined : DATE_SHAPES[form].exec(value)?.groups;
   if (parts === undefined) {
     return null;
   }
   const { day = "", month = "", year = "" } = parts;
-  const iso = `${year}-${month}-${day}`;
-  // A calendar check without a locale: the UTC date round-trips only if it exists.
-  return new Date(`${iso}T00:00:00Z`).toISOString().startsWith(iso) ? iso : null;
+  const monthIndex = MONTHS.indexOf(month);
+  const mm = monthIndex < 0 ? month : String(monthIndex + 1).padStart(2, "0");
+  const iso = `${year}-${mm}-${day}`;
+  // A calendar check without a locale: the UTC date round-trips only if it exists. A day or
+  // month past any calendar's makes no date at all, and `toISOString` throws on one.
+  const parsed = new Date(`${iso}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().startsWith(iso) ? iso : null;
+}
+
+/** The word the issuer signed, unwrapped as text (`unsalted`); anything else is unstated. */
+function flagOf(value: unknown): boolean | null {
+  if (value === "true") {
+    return true;
+  }
+  return value === "false" ? false : null;
 }
 
 function text(row: Row, key: string): string | null {

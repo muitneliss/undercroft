@@ -114,7 +114,7 @@ describe("re-sync", () => {
   });
 
   it("a connection re-reads nothing whole until an admin turns it on", async () => {
-    // Opt-in (ADR 0081): a connection made before the column existed keeps what it had, nothing.
+    // Opt-in (ADR 0082): a connection made before the column existed keeps what it had, nothing.
     expect(await getConnection(db, "CASE-1", "xero")).toMatchObject({
       resyncCadence: "paused",
       resyncCron: null,

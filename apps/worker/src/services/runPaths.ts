@@ -265,7 +265,7 @@ async function startEntity(
  *
  * It lands what it read, saves no cursor -- so the list is still due next run -- and the run
  * says so and closes ok. A throw would settle the run failed and page the operators for a
- * provider doing exactly what its limits say (ADR 0081).
+ * provider doing exactly what its limits say (ADR 0082).
  */
 async function ingestEntity(
   run: EntityRun,

@@ -15,7 +15,7 @@
  *
  * The row also says when the stream was last read WHOLE and what that cost, because a
  * watermark vouches only for what a source's filter can see: Xero documents edits its filter
- * never returns, so a connection may re-sync on a schedule (ADR 0081). Whether a re-sync is due
+ * never returns, so a connection may re-sync on a schedule (ADR 0082). Whether a re-sync is due
  * is decided one layer up, from these facts; this file only hands them back.
  *
  * This deliberately does NOT mirror `writeCursor`'s `GREATEST`. That guard exists because two

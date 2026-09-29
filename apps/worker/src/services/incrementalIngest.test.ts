@@ -292,7 +292,7 @@ describe("a watermark is only ever handed back for the request it was read with"
 });
 
 describe("a connection re-syncs its lists whole on its own schedule, within the day's budget", () => {
-  // Issue #314, ADR 0081: Xero documents edits that do not move `UpdatedDateUTC`, so
+  // Issue #314, ADR 0082: Xero documents edits that do not move `UpdatedDateUTC`, so
   // `If-Modified-Since` never returns them. A connection may opt into a re-sync -- its lists read
   // whole again on a schedule of its own -- and whole reads spend only their share of the day.
   // The budget here is 3 of a 5-request day, so the reserve is 2.

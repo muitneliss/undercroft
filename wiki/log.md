@@ -220,3 +220,8 @@
 ## [2026-09-29] ingest | ADR 0081 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget
 ## [2026-09-29] ingest | Runbook Xero Setup
 ## [2026-09-29] ingest | ADR 0081 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget
+## [2026-09-29] ingest | ADR 0081: ACRA templates are a configured table, and a reading is laid out again from itself
+## [2026-09-29] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-29] ingest | ADR 0082 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget
+## [2026-09-29] ingest | Runbook Xero Setup
+## [2026-09-29] remove | ADR 0081 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget

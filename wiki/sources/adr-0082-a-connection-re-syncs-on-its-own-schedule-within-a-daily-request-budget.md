@@ -1,21 +1,21 @@
 ---
 title: >-
-  ADR 0081 A Connection Re-Syncs on Its Own Schedule Within a Daily Request
+  ADR 0082 A Connection Re-Syncs on Its Own Schedule Within a Daily Request
   Budget
 type: source
 date: 2026-09-29
 tags: []
 source: >-
-  docs/adr/0081-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md
+  docs/adr/0082-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md
 source_path: >-
-  docs/adr/0081-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md
-source_hash: a155b7f327b5c1e7db84d97fa0dc2778fec1da13aa8a12a2fd3944dbd35d326f
+  docs/adr/0082-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md
+source_hash: 59651a75ab85730b1ac241638d7c32a71f0c857e1f8df69ca9509d90a0e08ffc
 ingested: 2026-09-29
 ---
 
-# ADR 0081 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget
+# ADR 0082 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget
 
-# ADR 0081 A connection re-syncs on its own schedule, within a daily request budget
+# ADR 0082 A connection re-syncs on its own schedule, within a daily request budget
 
 Status: Accepted, 2026-09-29. Supersedes in part [[ADR 0080 A List Whose Change Filter Cannot See Every Change Is Read Whole on a Bound]]: its spec field `incremental.wholeReadAfterHours` and the 24 hours in `xero.yaml` are removed; its reasoning (Xero's change filter misses edits), `raw.sync_cursor.whole_read_at` as a run's start, and the preset tick slack stand.
 
@@ -31,7 +31,7 @@ How often to re-read a customer's lists whole is the customer's choice, and a la
 * The trusted count is the provider's `X-DayLimit-Remaining` (covers retries, Xero's unpublished window, other apps); fallback is this run's own whole-read requests. One `DayBudget` per run in the worker.
 * Runtime `RunContext.budget` (`admit` before each page/chunk, `spent` with each response's headers); a refusal ends the read as truncated with `ReadEnd.exhausted`, no guards, `listed: null`.
 * Per list: whole read under budget when unwatermarked or due and room exists; incremental from the reserve when due but no room; wait (no request, journal `whole_read_waiting`, counted as read) when unwatermarked and no room. A budget-cut whole read saves no cursor (still due next run), journals `whole_read_paused`, and the run closes ok (no alert). Lists restart from their start rather than a page: at 500 per page one list needs \~2M records to exceed a day, beyond Xero's 100k-document refusal.
-* `raw.sync_cursor.whole_read_requests` records each completed whole read's cost; the card sums them over the connection's lists, divides by the budget and warns "a full re-sync takes about N days" when N > 1, and shows the stalest list's last whole read. The app gets a column-scoped SELECT on five cursor columns (not the watermark), in `370_connection_resync.sql`.
+* `raw.sync_cursor.whole_read_requests` records each completed whole read's cost; the card sums them over the connection's lists, divides by the budget and warns "a full re-sync takes about N days" when N > 1, and shows the stalest list's last whole read. The app gets a column-scoped SELECT on five cursor columns (not the watermark), in `380_connection_resync.sql`.
 * Xero lists page at 500 (half of Xero's max 1,000), which also forces one whole read per paged list after deploy (ADR 0072).
 
 ## Consequences
