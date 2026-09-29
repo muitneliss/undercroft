@@ -231,3 +231,4 @@
 ## [2026-09-29] ingest | ADR 0084 A Gmail Harvest Lands Each Messages Body
 ## [2026-09-29] ingest | File formats a Gmail or Drive connection can land
 ## [2026-09-29] ingest | ADR 0085 A Document Is Classified Into Its Tenants Own Catalogue Of Kinds
+## [2026-09-29] ingest | Runbook Deployment

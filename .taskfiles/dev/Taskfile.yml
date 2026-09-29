@@ -192,6 +192,7 @@ tasks:
       UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET: "{{.UNDERCROFT_GOOGLE_INGEST_CLIENT_SECRET}}"
       UNDERCROFT_XERO_CLIENT_ID: "{{.UNDERCROFT_XERO_CLIENT_ID}}"
       UNDERCROFT_XERO_CLIENT_SECRET: "{{.UNDERCROFT_XERO_CLIENT_SECRET}}"
+      UNDERCROFT_TYPESAFE_API_KEY: "{{.UNDERCROFT_TYPESAFE_API_KEY}}"
       # Set directly rather than `export ... &&`-prefixing the command below: a compound
       # shell statement runs bun as a child of Task's shell interpreter instead of the
       # command it directly execs, which is what triggers a spurious EADDRINUSE from

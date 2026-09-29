@@ -30,17 +30,7 @@ import { join, resolve } from "node:path";
 import process from "node:process";
 import { parseArgs } from "node:util";
 
-import {
-  APIConnectionError,
-  APIError,
-  APITimeoutError,
-  choice,
-  noul,
-  type Question,
-  type ResultFor,
-  score,
-  TypeSafeClient,
-} from "@typesafe-ai/sdk";
+import { TypeSafeClient } from "@typesafe-ai/sdk";
 import { DOCUMENT_KIND_INSTRUCTION, DOCUMENT_KINDS } from "@undercroft/contracts";
 import { asExecutor, createPool } from "@undercroft/db";
 
@@ -50,16 +40,11 @@ import {
   type TextPart,
   totalTextByDigest,
 } from "./repos/documentText.ts";
-import {
-  type ProviderAnswer,
-  type SemanticAsk,
-  type SemanticDefinition,
-  SemanticProviderError,
-  type SemanticQuestions,
-} from "./services/semantic/definition.ts";
+import type { SemanticDefinition, SemanticQuestions } from "./services/semantic/definition.ts";
 import { type ProbeDocument, type ProbePlan, runProbe } from "./services/semantic/probe.ts";
 import { renderProbeCsv } from "./services/semantic/probeCsv.ts";
 import { renderProbeReport } from "./services/semantic/probeReport.ts";
+import { typesafeAsk } from "./typesafe.ts";
 
 /** The most texts one run may send, whatever `--limit` says: a mistyped zero is not a bill. */
 const MAX_LIMIT = 2000;
@@ -124,76 +109,6 @@ const MULTI: SemanticQuestions = {
     ],
   },
 };
-
-function toQuestion(definition: SemanticDefinition): Question {
-  switch (definition.kind) {
-    case "choice":
-      return choice(definition.instruction, definition.choices);
-    case "boolean":
-      return noul(definition.instruction);
-    case "score":
-      return score(definition.instruction, definition.rubric);
-    default:
-      throw new Error("unknown semantic kind");
-  }
-}
-
-function fromResult(result: ResultFor<Question>): ProviderAnswer {
-  switch (result.type) {
-    case "choice":
-      return {
-        kind: "choice",
-        label: result.choice,
-        confidence: result.confidence,
-        probabilities: result.probabilities,
-      };
-    case "noul":
-      return { kind: "boolean", probability: result.noul };
-    case "score":
-      return { kind: "score", score: result.score, confidence: result.confidence };
-    default:
-      throw new Error("unknown answer type");
-  }
-}
-
-/** A fixed word for why the call failed. Never the SDK's message: it can quote the input. */
-function reasonOf(error: unknown): string {
-  if (error instanceof APIError) {
-    return `http-${error.status}`;
-  }
-  if (error instanceof APITimeoutError) {
-    return "timeout";
-  }
-  if (error instanceof APIConnectionError) {
-    return "connection";
-  }
-  return "sdk";
-}
-
-/** The vendor's surface, kept here as `main.ts` keeps it for the control plane. */
-function typesafeAsk(client: TypeSafeClient, model: string | undefined): SemanticAsk {
-  return async (text, questions) => {
-    const asked: Record<string, Question> = {};
-    for (const [name, definition] of Object.entries(questions)) {
-      asked[name] = toQuestion(definition);
-    }
-    const result = await client
-      .systemOne({ state: text, questions: asked, ...(model === undefined ? {} : { model }) })
-      .catch((error: unknown) => {
-        throw new SemanticProviderError(reasonOf(error));
-      });
-    const answers: Record<string, ProviderAnswer> = {};
-    for (const [name, answer] of Object.entries(result.answers)) {
-      answers[name] = fromResult(answer);
-    }
-    return {
-      model: result.model,
-      inputTokens: result.usage.input_tokens,
-      outputTokens: result.usage.output_tokens,
-      answers,
-    };
-  };
-}
 
 function required(name: string): string {
   const value = process.env[name];

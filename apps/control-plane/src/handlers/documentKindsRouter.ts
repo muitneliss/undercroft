@@ -78,6 +78,44 @@ export const documentKindsRouter = router({
       return { ok: true };
     }),
 
+  /**
+   * Draw the first catalogue from a sample, as a worker run, and answer with its id to watch.
+   * Nothing is published: the admin reviews what was kept, then publishes.
+   */
+  initialise: requireRole("admin").mutation(async ({ ctx }) => {
+    const say = messages(ctx.locale);
+    if (ctx.worker === null) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: say("error.documentKindsNotStarted"),
+      });
+    }
+    const outcome = await documentKinds.initialise(ctx.exec, ctx.worker, {
+      tenantId: ctx.tenantId,
+      actor: ctx.user.email,
+      actorId: ctx.user.userId,
+    });
+    if (outcome.ok) {
+      return { runId: outcome.runId };
+    }
+    switch (outcome.reason) {
+      case "exists":
+        throw new TRPCError({ code: "CONFLICT", message: say("error.documentKindsExist") });
+      case "in-progress":
+        throw new TRPCError({ code: "CONFLICT", message: say("error.documentKindsInitialising") });
+      case "not-configured":
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: say("error.semanticNotConfigured"),
+        });
+      default:
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: say("error.documentKindsNotStarted"),
+        });
+    }
+  }),
+
   /** Publish the draft as the version the worker classifies against. */
   publish: requireRole("admin").mutation(async ({ ctx }) => {
     const outcome = await documentKinds.publish(ctx.exec, {

@@ -92,6 +92,14 @@ export const en = {
       "{{kind}} is not in the generic catalogue, so it needs a description: the classifier is told what it means.",
     documentKindRequired:
       "{{kind}} cannot be removed. Without it every document would be forced into one of the other kinds.",
+    documentKindsExist:
+      "This catalogue already has kinds, and initialising again would re-add the ones you removed. Edit it instead.",
+    documentKindsInitialising:
+      "The catalogue is being initialised right now. Watch that run in the Journal.",
+    documentKindsNotStarted:
+      "The catalogue could not be initialised. The processing service did not answer; try again in a few minutes.",
+    semanticNotConfigured:
+      "Classifying documents is not configured: the processing service has no classifier key.",
     documentKindsEmpty:
       "The catalogue has no kind besides other, so publishing it would classify every document as nothing. Add a kind or initialise the catalogue first.",
     modelNameTaken:

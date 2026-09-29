@@ -17,6 +17,8 @@
 import { join } from "node:path";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
+import { TypeSafeClient } from "@typesafe-ai/sdk";
+import { DOCUMENT_KIND_MODEL } from "@undercroft/contracts";
 import { createByteFetcher, createLogger } from "@undercroft/core";
 import { asExecutor, connectionOf, createPool, withTransaction } from "@undercroft/db";
 import { LakeStore, S3ObjectStore } from "@undercroft/lake";
@@ -30,6 +32,7 @@ import { drainJobsBy } from "./services/shutdown.ts";
 import { createTenantSessions } from "./services/tenantSession.ts";
 import { realSpawn } from "./services/transform.ts";
 import { xeroRefresher } from "./services/xero/refresh.ts";
+import { typesafeAsk } from "./typesafe.ts";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -101,6 +104,28 @@ const store = new S3ObjectStore({
 const xero = xeroClient();
 
 /**
+ * The document-kind classifier (ADR 0085), when this deployment has a provider key. Absent is said
+ * at boot and turns the semantic verbs off; nothing is sent to the provider without it.
+ *
+ * The model is the one every published catalogue names (`DOCUMENT_KIND_MODEL`), never
+ * `jev-latest`, which moves when the provider ships. Per attempt 60 s, as the probe measured a
+ * long document to need; the SDK's own retries cover a 429 or a 5xx.
+ */
+const typesafeKey = process.env.UNDERCROFT_TYPESAFE_API_KEY ?? "";
+const semanticAsk =
+  typesafeKey === ""
+    ? undefined
+    : typesafeAsk(
+        new TypeSafeClient({ apiKey: typesafeKey, logLevel: "error", timeout: 60_000 }),
+        DOCUMENT_KIND_MODEL,
+      );
+log.info(semanticAsk === undefined ? "semantic_unconfigured" : "semantic_ready", {
+  ...(semanticAsk === undefined
+    ? { missing: "UNDERCROFT_TYPESAFE_API_KEY" }
+    : { model: DOCUMENT_KIND_MODEL }),
+});
+
+/**
  * How long a stop waits for the runs in flight to settle before the process exits anyway.
  *
  * ONE DECISION WITH `stop_grace_period: 60s` on the worker in
@@ -125,6 +150,7 @@ const app = createLakeApi({
   log,
   refreshers: refreshers(xero),
   ...(xero === undefined ? {} : { xero }),
+  ...(semanticAsk === undefined ? {} : { semanticAsk }),
   // Without this the `SELECT ... FOR UPDATE` in `accessToken` holds a lock for one
   // statement and protects nothing, which is what lets two concurrent runs spend the same
   // refresh token. See `services/ingest.ts`.

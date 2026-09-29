@@ -680,6 +680,7 @@
       "includes": [
         "apps/control-plane/src/services/googleExchange.ts",
         "apps/control-plane/src/services/workerClient.ts",
+        "apps/control-plane/src/services/workerTransport.ts",
         "apps/ui/src/lib/drivePicker.ts",
         "apps/ui/src/test/setup.ts",
         "apps/ui/vite.config.ts",

@@ -23,6 +23,7 @@ import type {
   QueryInput,
   SearchInput,
   StoreCredentialInput,
+  InitialiseOutcome,
   TriggerOutcome,
   WorkerClient,
   WorkerOutcome,
@@ -41,6 +42,9 @@ export class InMemoryWorkerClient implements WorkerClient {
   readonly revoked: { source: string; tenantId: string }[] = [];
   readonly triggered: { source: string; tenantId: string; triggeredBy: string }[] = [];
   readonly built: { tenantId: string; model: string; triggeredBy: string }[] = [];
+  /** Every catalogue this double was asked to initialise, and did. */
+  readonly initialised: { tenantId: string; triggeredBy: string }[] = [];
+  #catalogueExists = false;
   /** Every model whose relations this double was asked to drop, and did. */
   readonly dropped: { tenantId: string; model: string }[] = [];
   /** Which listing each browse asked for: the one fact about a browse only its caller decides. */
@@ -50,6 +54,12 @@ export class InMemoryWorkerClient implements WorkerClient {
   #runningAs: string | null = null;
   #dependents: readonly string[] = [];
   #exec: SqlExecutor | null = null;
+
+  /** Refuse to initialise, as the worker does for a tenant that already has a catalogue. */
+  catalogueExists(): this {
+    this.#catalogueExists = true;
+    return this;
+  }
 
   /** Answer every trigger with "already running as `runId`", the worker's 409. */
   runningAs(runId: string): this {
@@ -138,6 +148,23 @@ export class InMemoryWorkerClient implements WorkerClient {
     }
     this.revoked.push(input);
     return Promise.resolve({ ok: true, value: { revokedUpstream: true } });
+  }
+
+  initialiseDocumentKinds(input: {
+    tenantId: string;
+    triggeredBy: string;
+  }): Promise<InitialiseOutcome> {
+    if (this.#failWith !== null) {
+      return Promise.resolve({ ok: false, reason: this.#failWith });
+    }
+    if (this.#runningAs !== null) {
+      return Promise.resolve({ ok: false, reason: "in-progress", runId: this.#runningAs });
+    }
+    if (this.#catalogueExists) {
+      return Promise.resolve({ ok: false, reason: "exists" });
+    }
+    this.initialised.push(input);
+    return Promise.resolve({ ok: true, runId: `run-init-${String(this.initialised.length)}` });
   }
 
   triggerIngest(input: {

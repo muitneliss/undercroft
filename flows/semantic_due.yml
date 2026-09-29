@@ -1,0 +1,89 @@
+id: semantic_due
+namespace: undercroft
+
+description: |
+  Every thirty minutes, ask the worker which (tenant, source) pairs have texts with no answer
+  to the tenant's current catalogue of document kinds, and start a semantic run for each.
+  ADR 0085.
+
+  DUE HERE MEANS WORK OUTSTANDING, NOT A CADENCE. `semantic-due` returns only pairs whose
+  tenant has PUBLISHED a catalogue and whose readable texts have no answer to it -- never
+  classified, answered under a catalogue since replaced, or refused by the provider -- so a
+  tick over a settled tenant starts nothing and sends nothing to the classifier. A worker with
+  no provider key answers an empty list, so this flow ticks quietly rather than failing.
+
+  Every thirty minutes rather than hourly: a run classifies a capped batch (DEFAULT_BATCH, 500
+  texts) in about five minutes, one call at a time, so an hourly tick would leave the worker
+  idle most of the hour while a first classification of ~50,000 texts waited. Every thirty
+  minutes halves that without overlapping itself; a pair still running is a 409 this flow
+  ignores. At :22 and :52 so it lands on neither `ingest_due`'s five-minute ticks' busiest
+  minute nor `extract_due`'s :07.
+
+  NOT CHAINED TO THE EXTRACT THAT READ THE TEXT, for the reason `extract_due` is not chained
+  to the ingest: a classifier's pace and outages are facts about classifying, and a failure
+  there must not read as a failed read.
+
+labels:
+  owner: data-platform
+
+concurrency:
+  behavior: CANCEL
+  limit: 1
+
+tasks:
+  - id: due
+    type: io.kestra.plugin.core.http.Request
+    uri: http://undercroft-worker:8081/v1/runs/semantic-due
+    method: GET
+    headers:
+      Authorization: "Bearer {{ envs.trigger_token }}"
+      # The worker tags this request's trace with it, so a failed execution leads to the
+      # server's side of it. ADR 0058.
+      x-kestra-execution-id: "{{ execution.id }}"
+    options:
+      timeout:
+        connectTimeout: PT30S
+        readIdleTimeout: PT1M
+
+  - id: start
+    # `Loop`, `item.value` and `fromJson` for the Kestra 2.x reasons `extract_due` records.
+    type: io.kestra.plugin.core.flow.Loop
+    values: "{{ fromJson(outputs.due.body).due }}"
+    # One at a time: each run makes one classifier call at a time, and the provider's pace
+    # is per key, so starting pairs in parallel would only queue them at the provider.
+    concurrencyLimit: 1
+    tasks:
+      - id: classify
+        type: io.kestra.plugin.core.http.Request
+        uri: http://undercroft-worker:8081/v1/runs/semantic
+        method: POST
+        contentType: application/json
+        body: "{{ item.value }}"
+        headers:
+          Authorization: "Bearer {{ envs.trigger_token }}"
+          x-kestra-execution-id: "{{ execution.id }}"
+        options:
+          # A 409 is a semantic run already going for that pair: the worker's own guard, not
+          # a failure of this flow.
+          allowFailed: true
+          timeout:
+            connectTimeout: PT30S
+            readIdleTimeout: PT5M
+
+  - id: report
+    type: io.kestra.plugin.core.log.Log
+    message: "asked the worker to classify documents for {{ fromJson(outputs.due.body).due | length }} pair(s)"
+
+triggers:
+  - id: half_hourly
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "22,52 * * * *"
+
+errors:
+  - id: alert
+    type: io.kestra.plugin.core.log.Log
+    level: ERROR
+    message: |
+      semantic_due FAILED. execution={{ execution.id }}
+      The worker could not be asked what is unclassified. Nothing was started; answers already
+      stored stay as they are, and the unclassified texts stay unclassified rather than guessed.

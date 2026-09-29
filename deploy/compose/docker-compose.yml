@@ -227,6 +227,8 @@ services:
       # The Xero client, for refreshing and revoking; the control plane runs the consent.
       UNDERCROFT_XERO_CLIENT_ID: ${UNDERCROFT_XERO_CLIENT_ID:-}
       UNDERCROFT_XERO_CLIENT_SECRET: ${UNDERCROFT_XERO_CLIENT_SECRET:-}
+      # The document-kind classifier (ADR 0085). Unset turns the semantic verbs off.
+      UNDERCROFT_TYPESAFE_API_KEY: ${UNDERCROFT_TYPESAFE_API_KEY:-}
       # dbt runs as a subprocess here (ADR 0007) as each TENANT'S OWN login (ADR 0018). The
       # worker mints that login's password right before a build and hands it to the child
       # by environment; no variable here carries a dbt password any more.

@@ -151,6 +151,7 @@ export const EFFECTS: EffectTable = {
   "documentKinds.update": "write",
   "documentKinds.remove": "write",
   "documentKinds.publish": "write",
+  "documentKinds.initialise": "write",
 
   // Both are POSTs because a question definition does not fit a query string. They answer a
   // definition the BI role compiles; neither changes anything.

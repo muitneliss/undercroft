@@ -1,12 +1,12 @@
 ---
 title: Runbook Deployment
 type: source
-date: 2026-09-26
+date: 2026-09-29
 tags: []
 source: docs/runbook/deployment.md
 source_path: docs/runbook/deployment.md
-source_hash: 2413a4b1cdabdf3f76e16b14559c0d76403c7d28965a117f780cfb3da5a814a4
-ingested: 2026-09-26
+source_hash: 6d32cbe81f47f0b3d95ccffc5b4a713272c553872673dc34bcbde5016cd3ce2e
+ingested: 2026-09-29
 ---
 
 # Runbook Deployment
@@ -32,3 +32,5 @@ Undercroft runs on the Dokploy instance at `lowbit.link` as a **single compose s
 **Tracing.** Every request to the control plane or the worker answers with an `x-trace-id`, which the UI's error box, the CLI's `error.traceId` and every log line written while serving it share ([[ADR 0058: Every request is traced, into the host's shared otel-lgtm stack]]). Export to the host's shared `otel-lgtm` stack -- the `observability` project, not ours, with Grafana at `kanna-grafana.lowbit.link` -- is one line a person sets in Undercroft's Dokploy environment, `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4318`; the worker reaches it because the server compose attaches it to `dokploy-network`. Unset is export off, with the ids still stamped, and each service logs `telemetry_exporting` or `telemetry_export_off` at boot. `task obs:trace`, `obs:logs`, `obs:search` and `obs:host-logs` read a trace back, each finding its own credentials (`task obs:creds` checks them).
 
 Sign-in is invite-only by Google or an emailed code ([[ADR 0010 Invite-Only Sign-In with Better Auth]]); this page carries only the production-specific part -- the Google client's redirect URIs, the origin having to match `UNDERCROFT_PUBLIC_URL` exactly, and scopes staying at `openid email profile` -- while [[Runbook Sign-In Setup]] is the walkthrough. The first admins come from `UNDERCROFT_SUPERADMINS` in Dokploy's environment, comma-separated, named more than one because a single address is a single point of lockout ([[ADR 0013 Superadmins Named in the Environment]]). **Rollback** is `IMAGE_TAG=vX.Y.Z` in the panel and a redeploy -- the release on screen is printed at the foot of every page including sign-in, so it can be read by someone who cannot get in -- and `IMAGE_TAG` must go back to `latest` once the fix ships, or the next release fails `verify` for the right reason. The compose file does not roll back with it: the host clones `main`'s file whatever `IMAGE_TAG` says, so a file change the older images cannot run must be reverted on `main` too. Kestra has no domain by design; its flows are baked into the control-plane image and delivered every deploy, `{{ envs.x }}` resolves from `ENV_X` rather than `KESTRA_X`, and Kestra silently 401s every request when a password fails its complexity rules. Recorded gaps: the real `pg` + `search_path` path and a real login are proven in the Docker tier rather than the offline gate, and the raw lake is not in a backup set -- it is object storage with versioning and replication, and the one layer that cannot be regenerated.
+
+**Kestra flows.** Three flows are delivered by the deploy: `ingest_due` (every five minutes), `extract_due` (hourly at :07) and `semantic_due` (every thirty minutes at :22 and :52), which starts a semantic run for each pair whose texts have no answer to the customer's published catalogue of document kinds ([[ADR 0085 A Document Is Classified Into Its Tenants Own Catalogue Of Kinds]]). With no `UNDERCROFT_TYPESAFE_API_KEY` on the worker it is answered an empty list and starts nothing.

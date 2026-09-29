@@ -35,9 +35,20 @@ import {
   BAD_REQUEST,
   BROWSE_REFUSALS,
   CONFLICT,
+  type InitialiseOutcome,
+  initialiseRefusalOf,
   REFUSAL_BY_STATUS,
   type WorkerFailure,
 } from "./workerRefusals.ts";
+import {
+  type Envelope,
+  envelopeOf,
+  exchange,
+  type FetchLike,
+  type WorkerTransport,
+} from "./workerTransport.ts";
+
+export type { InitialiseOutcome } from "./workerRefusals.ts";
 
 /**
  * What a caller sends to run a query.
@@ -100,6 +111,11 @@ export interface WorkerClient {
     tenantId: string;
     triggeredBy: string;
   }) => Promise<TriggerOutcome>;
+  /** Draw a tenant's first catalogue of document kinds from a sample of its texts. ADR 0085. */
+  initialiseDocumentKinds: (input: {
+    tenantId: string;
+    triggeredBy: string;
+  }) => Promise<InitialiseOutcome>;
   /** Build one model and wait for it: the editor is looking. */
   buildModel: (input: {
     tenantId: string;
@@ -141,16 +157,6 @@ export type SearchInput = Omit<RawSearchRequest, "kinds" | "limit" | "offset"> &
   readonly offset?: number;
 };
 
-/**
- * The part of `fetch` this client actually uses.
- *
- * Narrower than `typeof globalThis.fetch` on purpose: under Bun that type carries a
- * `preconnect` method, so a substitute would have to supply one that nothing here ever
- * calls. An injected seam should ask for what it uses and no more -- the platform's own
- * `fetch` still satisfies this.
- */
-type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-
 export interface HttpWorkerConfig {
   readonly baseUrl: string;
   readonly triggerToken: string;
@@ -170,52 +176,6 @@ interface PostOptions<T> {
     safeParse: (raw: unknown) => { success: true; data: T } | { success: false };
   };
   readonly refusals?: ReadonlyMap<number, WorkerFailure>;
-}
-
-/** Where the worker is and how to reach it. Passed rather than closed over, so the request
- * helpers below can live at module scope and be read on their own. */
-interface WorkerTransport {
-  readonly doFetch: (input: string, init?: RequestInit) => Promise<Response>;
-  readonly timeoutMs: number;
-  readonly baseUrl: string;
-  readonly triggerToken: string;
-}
-
-/**
- * One POST to the worker, bounded by a deadline, and `read`'s reading of the answer.
- *
- * The one place a request is sent, so every verb has the same deadline, the same token and
- * the same answer for a worker that never replied: `unreachable`, which is worth retrying,
- * rather than whatever `read` would have made of half an answer. `read` decides everything
- * else -- including whether a refusal's body may be read at all (see `postTo`).
- */
-async function exchange<T>(
-  t: WorkerTransport,
-  request: { readonly path: string; readonly body: unknown; readonly deadlineMs?: number },
-  read: (response: Response) => Promise<T>,
-): Promise<T | { ok: false; reason: "unreachable" }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), request.deadlineMs ?? t.timeoutMs);
-  try {
-    const response = await t.doFetch(`${t.baseUrl}${request.path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${t.triggerToken}` },
-      body: JSON.stringify(request.body),
-      signal: controller.signal,
-    });
-    return await read(response);
-  } catch {
-    return { ok: false, reason: "unreachable" };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** A refusal's envelope, for the few calls whose refusal names why. `null` when it has none. */
-type Envelope = { code?: unknown; message?: unknown; details?: unknown } | null;
-
-function envelopeOf(response: Response): Promise<Envelope> {
-  return response.json().catch(() => null) as Promise<Envelope>;
 }
 
 /**
@@ -269,6 +229,17 @@ function triggerOn(t: WorkerTransport): typeof trigger {
     });
   }
   return trigger;
+}
+
+/** Initialising a catalogue: its refusal body is read, as `initialiseRefusalOf` says why. */
+function initialiseOn(t: WorkerTransport): WorkerClient["initialiseDocumentKinds"] {
+  return (input) =>
+    exchange(t, { path: "/v1/runs/semantic-init", body: input }, async (response) => {
+      if (response.ok) {
+        return { ok: true, runId: ((await response.json()) as { runId: string }).runId };
+      }
+      return initialiseRefusalOf(response.status, await envelopeOf(response));
+    });
 }
 
 /**
@@ -346,6 +317,7 @@ export function createHttpWorkerClient(config: HttpWorkerConfig): WorkerClient {
       }),
     revokeConnection: (input) => post("/v1/connections/revoke", input),
     triggerIngest: trigger,
+    initialiseDocumentKinds: initialiseOn(t),
     // The worker's own build deadline plus room for the rows; the default would cut a
     // build that is legitimately slow and report it as unreachable.
     buildModel: (input) => post("/v1/models/build", input, { deadlineMs: BUILD_DEADLINE_MS }),
