@@ -1,0 +1,709 @@
+/*
+ * The blog is the product's printed manual, read at leisure: the same bone paper, ink,
+ * hairline rules and three faces as `apps/ui` (see apps/ui/DESIGN.md).
+ *
+ * The font files are the UI's own, imported by relative path so the bundler copies them from
+ * `apps/ui/public/fonts` -- one set of vendored binaries, not two. The palette below mirrors
+ * the few tokens of `apps/ui/src/index.css` `:root` this site uses; change them there first.
+ *
+ * Like the public homepage (ADR 0064), it follows the reader's colour scheme, and at night it
+ * is the book inverted rather than a second palette.
+ */
+
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("../../../ui/public/fonts/archivo-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("../../../ui/public/fonts/archivo-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("../../../ui/public/fonts/garamond-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("../../../ui/public/fonts/garamond-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("../../../ui/public/fonts/garamond-italic-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("../../../ui/public/fonts/garamond-italic-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "Spline Sans Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../../../ui/public/fonts/mono-latin.woff2") format("woff2");
+}
+
+/*
+ * Every style rule sits in one layer, as in apps/ui/src/index.css: an unlayered rule would
+ * beat any layered sheet added later regardless of specificity. @font-face stays outside --
+ * it declares a resource, not a style.
+ */
+@layer blog {
+  :root {
+    --face-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+    --face-prose: "EB Garamond", ui-serif, Georgia, serif;
+    --face-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --bone: #efe9d9;
+    --page: #f7f3e7;
+    --leaf: #fbf8f0;
+    --ink: #16150f;
+    --ink-2: #56513f;
+    --rule: rgba(22, 21, 15, 0.16);
+    --rule-strong: rgba(22, 21, 15, 0.44);
+    --chrome: #eda600;
+    --hair: 1px;
+
+    --ground: var(--page);
+
+    --s-2: 0.5rem;
+    --s-3: 0.75rem;
+    --s-4: 1rem;
+    --s-5: 1.5rem;
+    --s-6: 2rem;
+    --s-7: 3rem;
+    --s-8: 4.5rem;
+
+    --r-leaf: 3px;
+    --r-plate: 2px;
+    --head-col: 9.5rem;
+    --measure: 42rem;
+
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #16150f;
+      --ink: #efe9d9;
+      --ink-2: color-mix(in srgb, #efe9d9 80%, #16150f);
+      --leaf: color-mix(in srgb, #efe9d9 6%, #16150f);
+      --rule: color-mix(in srgb, #efe9d9 18%, transparent);
+      --rule-strong: color-mix(in srgb, #efe9d9 42%, transparent);
+    }
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--face-prose);
+    font-size: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: 0 var(--s-5);
+  }
+
+  ::selection {
+    background: var(--chrome);
+    color: #16150f;
+  }
+
+  a {
+    color: var(--ink);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+    text-decoration-color: var(--rule-strong);
+  }
+  a:hover {
+    text-decoration-color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+    font-family: var(--face-display);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .skip {
+    position: absolute;
+    left: -9999px;
+  }
+  .skip:focus {
+    left: var(--s-4);
+    top: var(--s-4);
+    z-index: 1;
+    background: var(--ground);
+    padding: var(--s-2) var(--s-3);
+  }
+
+  /* -- the running head and the colophon ----------------------------------------------------- */
+
+  .runhead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3) var(--s-5);
+    width: 100%;
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: var(--s-4) var(--s-5);
+    border-bottom: var(--hair) solid var(--rule-strong);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    text-decoration: none;
+  }
+
+  .brand__mark {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .brand__word {
+    font-family: var(--face-display);
+    font-weight: 700;
+    font-size: 1.125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-variation-settings: "wdth" 78;
+  }
+
+  .brand__kicker,
+  .kicker,
+  .head,
+  .meta,
+  .tags,
+  .runhead__nav,
+  .colophon,
+  .crumbs {
+    font-family: var(--face-display);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--ink-2);
+  }
+
+  .brand__kicker {
+    padding-left: var(--s-3);
+    border-left: var(--hair) solid var(--rule-strong);
+  }
+
+  .runhead__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
+  }
+
+  .runhead__nav a,
+  .colophon a,
+  .crumbs a {
+    color: var(--ink-2);
+  }
+
+  .colophon {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
+    width: 100%;
+    max-width: 78rem;
+    margin: var(--s-8) auto 0;
+    padding: var(--s-5);
+    border-top: var(--hair) solid var(--rule-strong);
+  }
+
+  .colophon span {
+    margin-right: auto;
+  }
+
+  /* -- the masthead ------------------------------------------------------------------------- */
+
+  .masthead {
+    padding: var(--s-8) 0 var(--s-7);
+    max-width: 56rem;
+  }
+
+  .masthead__headline {
+    margin-top: var(--s-4);
+    font-size: clamp(2.25rem, 6vw, 4.5rem);
+    font-variation-settings: "wdth" 76;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  .masthead__lead {
+    margin: var(--s-5) 0 0;
+    font-size: clamp(1.1875rem, 2.2vw, 1.5rem);
+    line-height: 1.4;
+    color: var(--ink-2);
+    max-width: var(--measure);
+  }
+
+  /* -- sheets: a margin head on the left, the matter on the right ---------------------------- */
+
+  .sheet {
+    display: grid;
+    grid-template-columns: var(--head-col) minmax(0, 1fr);
+    gap: var(--s-5);
+    padding: var(--s-6) 0;
+    border-top: var(--hair) solid var(--rule-strong);
+  }
+
+  .head {
+    padding-top: 0.2rem;
+  }
+
+  .sheet__lead {
+    margin: 0 0 var(--s-4);
+    font-size: 1.0625rem;
+    color: var(--ink-2);
+  }
+
+  @media (max-width: 48rem) {
+    .sheet {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-4);
+    }
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-4);
+    margin: 0;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+    margin: var(--s-4) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tags li {
+    padding: 0.1rem var(--s-2);
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+  }
+
+  /* -- the integrations strip --------------------------------------------------------------- */
+
+  .sources {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: var(--hair) solid var(--rule);
+  }
+
+  .sources li + li {
+    border-left: var(--hair) solid var(--rule);
+  }
+
+  .sources a {
+    display: block;
+    height: 100%;
+    padding: var(--s-4);
+    text-decoration: none;
+  }
+
+  .sources a:hover {
+    background: var(--leaf);
+  }
+
+  .sources__name {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-family: var(--face-display);
+    font-weight: 700;
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    font-variation-settings: "wdth" 88;
+  }
+
+  /* The punched hole, the book's mark for "this one". */
+  .sources__name::before {
+    content: "";
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    border: var(--hair) solid var(--rule-strong);
+    box-shadow: inset 0 1px 1px rgba(22, 21, 15, 0.4);
+  }
+
+  .sources a:hover .sources__name::before {
+    background: var(--chrome);
+  }
+
+  .sources__title {
+    display: block;
+    margin-top: var(--s-2);
+    font-size: 1rem;
+    line-height: 1.35;
+    color: var(--ink-2);
+  }
+
+  @media (max-width: 48rem) {
+    .sources li + li {
+      border-left: 0;
+      border-top: var(--hair) solid var(--rule);
+    }
+  }
+
+  /* -- the index of posts ------------------------------------------------------------------- */
+
+  .index {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .index__item {
+    display: grid;
+    grid-template-columns: 22rem minmax(0, 1fr);
+    gap: var(--s-5);
+    padding: var(--s-5) 0;
+    border-top: var(--hair) solid var(--rule);
+  }
+
+  .index__item:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .index__figure img {
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    background: var(--bone);
+  }
+
+  .index__title {
+    margin-top: var(--s-2);
+    font-size: 1.5rem;
+    font-variation-settings: "wdth" 88;
+  }
+
+  .index__title a {
+    text-decoration: none;
+  }
+
+  .index__title a:hover {
+    text-decoration: underline;
+  }
+
+  .index__desc {
+    margin: var(--s-3) 0 0;
+    font-size: 1.0625rem;
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: var(--measure);
+  }
+
+  @media (max-width: 48rem) {
+    .index__item {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* -- the article -------------------------------------------------------------------------- */
+
+  .article {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding-top: var(--s-6);
+  }
+
+  .article__head {
+    max-width: var(--measure);
+    margin: var(--s-5) auto var(--s-6);
+  }
+
+  .article__title {
+    font-size: clamp(2rem, 4.5vw, 3.25rem);
+    font-variation-settings: "wdth" 82;
+    text-transform: uppercase;
+  }
+
+  .article__lead {
+    margin: var(--s-4) 0 var(--s-4);
+    font-size: 1.3125rem;
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+
+  .crumbs {
+    max-width: var(--measure);
+    margin: 0 auto;
+  }
+
+  .article__hero {
+    margin: 0 0 var(--s-7);
+  }
+
+  .article__hero img,
+  .prose img {
+    width: 100%;
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    background: var(--bone);
+  }
+
+  .article > .tags,
+  .try {
+    max-width: var(--measure);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .prose {
+    max-width: var(--measure);
+    margin: 0 auto;
+    font-size: 1.1875rem;
+    line-height: 1.6;
+  }
+
+  .prose > * + * {
+    margin-top: 1.1em;
+  }
+
+  .prose p,
+  .prose ul,
+  .prose ol {
+    margin-bottom: 0;
+  }
+
+  .prose h2 {
+    margin-top: 2.2em;
+    font-size: 1.75rem;
+    font-variation-settings: "wdth" 88;
+    text-transform: uppercase;
+  }
+
+  .prose h3 {
+    margin-top: 1.8em;
+    font-size: 1.3125rem;
+    font-variation-settings: "wdth" 96;
+    letter-spacing: -0.015em;
+  }
+
+  .prose li + li {
+    margin-top: 0.35em;
+  }
+
+  .prose blockquote {
+    margin-left: 0;
+    padding-left: var(--s-4);
+    border-left: var(--hair) solid var(--rule-strong);
+    color: var(--ink-2);
+    font-style: italic;
+  }
+
+  .prose code {
+    font-family: var(--face-mono);
+    font-size: 0.8em;
+    padding: 0.05em 0.3em;
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-plate);
+    background: var(--leaf);
+  }
+
+  .prose pre {
+    padding: var(--s-4);
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+  }
+
+  .prose pre code {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: inherit;
+  }
+
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1rem;
+  }
+
+  .prose th,
+  .prose td {
+    padding: var(--s-2) var(--s-3);
+    border-bottom: var(--hair) solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .prose th {
+    font-family: var(--face-display);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom-color: var(--rule-strong);
+  }
+
+  .prose hr {
+    border: 0;
+    border-top: var(--hair) solid var(--rule-strong);
+  }
+
+  .try {
+    margin-top: var(--s-7);
+    padding: var(--s-5);
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-leaf);
+    background: var(--leaf);
+    font-size: 1.0625rem;
+    line-height: 1.5;
+  }
+
+  .try__title {
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    font-variation-settings: "wdth" 88;
+  }
+
+  .try p {
+    margin: var(--s-3) 0 0;
+  }
+
+  .try__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+  }
+
+  .plate {
+    display: inline-block;
+    padding: 0.6rem var(--s-4);
+    border: var(--hair) solid var(--ink);
+    border-radius: var(--r-plate);
+    font-family: var(--face-display);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    text-decoration: none;
+  }
+
+  .plate:hover {
+    background: var(--ink);
+    color: var(--ground);
+  }
+
+  .plate--primary {
+    background: var(--chrome);
+    border-color: var(--chrome);
+    color: #16150f;
+  }
+
+  .related {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .related li + li {
+    margin-top: var(--s-4);
+    padding-top: var(--s-4);
+    border-top: var(--hair) solid var(--rule);
+  }
+
+  .related a {
+    font-family: var(--face-display);
+    font-weight: 700;
+    font-size: 1.1875rem;
+    text-decoration: none;
+  }
+
+  .related p {
+    margin: var(--s-2) 0 0;
+    color: var(--ink-2);
+  }
+}

@@ -1,0 +1,111 @@
+---
+/** The front page of one language: the masthead and every post, newest first. */
+import { Image } from "astro:assets";
+import appleTouch from "../../../ui/public/apple-touch-icon.png?url";
+import Base from "../layouts/Base.astro";
+import { integrationLandings, pathOf, postsIn, readingMinutes } from "../posts.ts";
+import { INTEGRATION_NAMES, LANGS, type Lang, STRINGS, langPrefix } from "../site.ts";
+import { type JsonLd, organization, softwareApplication } from "../structuredData.ts";
+import "../styles/blog.css";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const s = STRINGS[lang];
+const posts = await postsIn(lang);
+const landings = await integrationLandings(lang);
+const site = Astro.site ?? new URL("https://blog.undercroft.lowbit.link");
+const path = `${langPrefix(lang)}/`;
+const date = new Intl.DateTimeFormat(s.dateLocale, { dateStyle: "long" });
+
+const jsonLd: JsonLd[] = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    name: s.siteTitle,
+    description: s.siteDescription,
+    url: new URL(path, site).href,
+    inLanguage: lang,
+    publisher: organization(new URL(appleTouch, site).href),
+    blogPost: posts.map((post) => ({
+      "@type": "BlogPosting",
+      headline: post.data.title,
+      url: new URL(pathOf(post), site).href,
+      datePublished: post.data.pubDate.toISOString(),
+    })),
+  },
+  softwareApplication(s.siteDescription),
+];
+---
+
+<Base
+  lang={lang}
+  title={s.siteTitle}
+  description={s.siteDescription}
+  path={path}
+  alternates={LANGS.map((l) => ({ lang: l, path: `${langPrefix(l)}/` }))}
+  jsonLd={jsonLd}
+>
+  <section class="masthead">
+    <p class="kicker">{s.kicker}</p>
+    <h1 class="masthead__headline">{s.headline}</h1>
+    <p class="masthead__lead">{s.lead}</p>
+  </section>
+
+  {
+    landings.length > 0 && (
+      <section class="sheet" aria-labelledby="integrations">
+        <h2 class="head" id="integrations">{s.integrations}</h2>
+        <div>
+          <p class="sheet__lead">{s.integrationsLead}</p>
+          <ul class="sources">
+            {landings.map(([source, post]) => (
+              <li>
+                <a href={pathOf(post)}>
+                  <span class="sources__name">{INTEGRATION_NAMES[source]}</span>
+                  <span class="sources__title">{post.data.title}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    )
+  }
+
+  <section class="sheet" aria-labelledby="latest">
+    <h2 class="head" id="latest">{s.latest}</h2>
+    <ol class="index">
+      {
+        posts.map((post, i) => (
+          <li class="index__item">
+            <div class="index__figure">
+              <Image
+                src={post.data.hero}
+                alt=""
+                widths={[480, 800]}
+                sizes="(max-width: 48rem) 100vw, 22rem"
+                loading={i < 2 ? "eager" : "lazy"}
+              />
+            </div>
+            <div>
+              <p class="meta">
+                <time datetime={post.data.pubDate.toISOString()}>{date.format(post.data.pubDate)}</time>
+                <span>{s.readingTime(readingMinutes(post))}</span>
+              </p>
+              <h3 class="index__title">
+                <a href={pathOf(post)}>{post.data.title}</a>
+              </h3>
+              <p class="index__desc">{post.data.description}</p>
+              <ul class="tags" aria-label={s.tags}>
+                {post.data.tags.map((tag) => <li>{tag}</li>)}
+              </ul>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+</Base>

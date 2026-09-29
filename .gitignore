@@ -48,3 +48,7 @@ fixtures/live/
 # (mirrors the versions pinned in deploy/Dockerfile.worker). Neither is portable or shared.
 .task/
 .dbt-venv/
+
+# Astro's generated content types (`astro sync`, run by `task build:blog`). Rebuilt from the
+# posts on every build, so a tracked copy is only ever stale.
+apps/blog/.astro/

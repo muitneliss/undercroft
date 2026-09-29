@@ -249,6 +249,10 @@ rollout landed rather than trusting Dokploy's `done`. A manual deploy or rollbac
 `.claude/rules/deployment.md`, `.claude/rules/tooling.md`, `docs/runbook/deployment.md`, and
 ADR 0008.
 
+The blog is the one exception, and it is not part of the product: `apps/blog` is a static Astro
+site on GitHub Pages at `blog.undercroft.lowbit.link`, published by `blog.yml` on a merge to
+`main` rather than by a release (ADR 0089). How to write a post is in `apps/blog/WRITING.md`.
+
 Every request is traced and answers with an `x-trace-id`, exported to the host's shared
 `otel-lgtm` stack when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (ADR 0058). `task obs:*`, driven by
 the `debug-trace` skill, follows an id through Tempo, Loki and the container log.

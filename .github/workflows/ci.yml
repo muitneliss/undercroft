@@ -1,6 +1,6 @@
 # The runner image is pinned rather than `ubuntu-latest` in every workflow here: that label
 # migrates to Ubuntu 26 in October 2026, and a base image that changes under a release build
-# is a variable nobody chose. Bump the pin deliberately, in one commit, across all four files.
+# is a variable nobody chose. Bump the pin deliberately, in one commit, across every workflow file.
 name: ci
 
 on:

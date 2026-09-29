@@ -65,6 +65,14 @@
     "globals": ["Bun", "__UNDERCROFT_RELEASE__"]
   },
 
+  // Astro components (`apps/blog`, ADR 0089). Without this Biome reads only an `.astro`
+  // file's frontmatter, so every import used only in the template -- a component, an image,
+  // a helper -- reads as unused (41 findings across the blog's eight components), and the
+  // template itself is never linted: the a11y rules that caught an unlabelled, aria-hidden
+  // focusable link there could not run. It is experimental, which is why it is measured:
+  // switching it on reported nothing in any file outside `apps/blog`.
+  "html": { "experimentalFullSupportEnabled": true },
+
   // `tailwindDirectives` off by default treats `@theme`, `@utility` and `@custom-variant` as
   // parse errors -- confirmed by running against `apps/ui/src/index.css`'s own `@theme inline`
   // block (docs/adr/0025), which also made the following `@import` "wrong position" until this
@@ -368,6 +376,68 @@
       }
     },
 
+    // The blog (ADR 0089) is Astro, not React. The `react` domain's rules read an `.astro`
+    // template as JSX and refuse what HTML requires there: `class`, `datetime` and `tabindex`
+    // are "not valid React props" (18 findings), a heading's static `id` "should use
+    // useId()", which a static page has no runtime to call, and an Astro endpoint's
+    // `export const GET` "is a React component". Every rule outside that domain stays on.
+    {
+      "includes": ["apps/blog/**"],
+      "linter": { "domains": { "react": "none" } }
+    },
+    // An Astro component is named by its file, PascalCase as a React one is (`Base.astro`
+    // is imported as `Base`), the same exception `apps/ui/**/*.tsx` has above.
+    {
+      "includes": ["apps/blog/**/*.astro"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": { "filenameCases": ["camelCase", "PascalCase"] }
+            }
+          }
+        }
+      }
+    },
+    // Under `src/pages` a filename IS the URL: `[slug].astro` is Astro's dynamic-route
+    // syntax, and `rss.xml.ts` and `robots.txt.ts` are served at `/rss.xml` and `/robots.txt`.
+    // No case convention can spell those, so the rule has nothing to enforce here.
+    {
+      "includes": ["apps/blog/src/pages/**"],
+      "linter": { "rules": { "style": { "useFilenamingConvention": "off" } } }
+    },
+    // The blog's one stylesheet. Each reason below was measured against it.
+    {
+      "includes": ["apps/blog/src/styles/blog.css"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            // Biome's Astro reader sees a class in plain template markup but not one inside a
+            // `{...map()}` expression. All 23 classes it reported are written in one, in
+            // `PostIndex.astro` and `PostPage.astro`, so acting on it would delete live
+            // styles. `noUndeclaredClasses`, the other direction, stays on: it found the
+            // one class that really had no style.
+            "noUnusedClasses": "off",
+            // `::selection` is a progressive enhancement: where it is unsupported the
+            // browser's own selection shows, and nothing on the page is told by a selection.
+            // The same reason `index.css` and `landing-cover.css` carry.
+            "useBaseline": "off"
+          },
+          "style": {
+            // The palette mirrors `apps/ui/src/index.css` `:root` value for value, which is
+            // hex there for `@/lib/acetate`'s `parseHex`. A different spelling here would make
+            // the two impossible to compare by eye, and drift is what the mirror must avoid.
+            "noHexColors": "off",
+            // One sheet for a small site, ordered as the page reads: head, masthead, index,
+            // article, colophon. Cutting it at 300 lines separates the article's prose rules
+            // from the tokens they are measured against, as it would for `index.css`.
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+
     // Code that does not run in a browser. `noNodejsModules` is a portability rule for
     // bundled code; `node:fs` and `node:crypto` are the platform for the two server apps, the
     // shared packages, the build scripts and the agent hook. It stays ON for `apps/ui/src`,
@@ -460,7 +530,12 @@
         "packages/db/src/pool.ts",
         // `@tradetrust-tt/dnsprove` declares `"types": "dist/ts"`, a directory, which `tsc`
         // resolves to its `index.d.ts` and Biome reports as "found directory without index".
-        "apps/worker/src/services/extract/openAttestationVerify.ts"
+        "apps/worker/src/services/extract/openAttestationVerify.ts",
+        // `astro:content` is a virtual module Astro generates at build time, which `astro
+        // check` resolves and Biome, reading the filesystem, cannot. The `.astro` components
+        // import it too but are not reported, because Biome resolves nothing inside them.
+        "apps/blog/src/content.config.ts",
+        "apps/blog/src/posts.ts"
       ],
       "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } }
     },
@@ -703,11 +778,17 @@
       "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
     },
 
-    // Three entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
+    // Four entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
     // default export carrying `port` and `fetch` to start a server, and Vite reads a default
-    // export from its config. A named export is not an option a caller would accept.
+    // export from its config, as Astro does from `astro.config.ts`. A named export is not an
+    // option a caller would accept.
     {
-      "includes": ["apps/*/src/main.ts", "apps/worker/src/server.ts", "apps/ui/vite.config.ts"],
+      "includes": [
+        "apps/*/src/main.ts",
+        "apps/worker/src/server.ts",
+        "apps/ui/vite.config.ts",
+        "apps/blog/astro.config.ts"
+      ],
       "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
     },
 

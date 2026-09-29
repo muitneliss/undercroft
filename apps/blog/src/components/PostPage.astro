@@ -1,0 +1,130 @@
+---
+/** One article, in either language, with its pair, its related posts and the way to the product. */
+import { Image } from "astro:assets";
+import { render } from "astro:content";
+import appleTouch from "../../../ui/public/apple-touch-icon.png?url";
+import Base from "../layouts/Base.astro";
+import {
+  type Post,
+  langOf,
+  pathOf,
+  readingMinutes,
+  relatedTo,
+  translationOf,
+} from "../posts.ts";
+import { PRODUCT_URL, REPO_URL, STRINGS, langPrefix } from "../site.ts";
+import { type JsonLd, breadcrumbs, organization } from "../structuredData.ts";
+import "../styles/blog.css";
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+const lang = langOf(post);
+const s = STRINGS[lang];
+const site = Astro.site ?? new URL("https://blog.undercroft.lowbit.link");
+const { Content } = await render(post);
+const translation = await translationOf(post);
+const related = await relatedTo(post, 3);
+const date = new Intl.DateTimeFormat(s.dateLocale, { dateStyle: "long" });
+const modified = post.data.updatedDate ?? post.data.pubDate;
+const url = new URL(pathOf(post), site).href;
+const heroUrl = new URL(post.data.hero.src, site).href;
+
+const jsonLd: JsonLd[] = [
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.data.title,
+    description: post.data.description,
+    image: [heroUrl],
+    datePublished: post.data.pubDate.toISOString(),
+    dateModified: modified.toISOString(),
+    inLanguage: lang,
+    keywords: post.data.keywords.join(", "),
+    articleSection: post.data.tags[0],
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+    url,
+    author: organization(new URL(appleTouch, site).href),
+    publisher: organization(new URL(appleTouch, site).href),
+    isPartOf: { "@type": "Blog", url: new URL(`${langPrefix(lang)}/`, site).href },
+  },
+  breadcrumbs([
+    { name: "Undercroft Blog", url: new URL(`${langPrefix(lang)}/`, site).href },
+    { name: post.data.title, url },
+  ]),
+];
+---
+
+<Base
+  lang={lang}
+  title={`${post.data.title} | Undercroft`}
+  description={post.data.description}
+  path={pathOf(post)}
+  alternates={[
+    { lang, path: pathOf(post) },
+    { lang: langOf(translation), path: pathOf(translation) },
+  ]}
+  image={post.data.hero}
+  imageAlt={post.data.heroAlt}
+  article={{ published: post.data.pubDate, modified, tags: post.data.tags }}
+  jsonLd={jsonLd}
+>
+  <article class="article">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href={`${langPrefix(lang)}/`}>{s.home}</a>
+    </nav>
+    <header class="article__head">
+      <h1 class="article__title">{post.data.title}</h1>
+      <p class="article__lead">{post.data.description}</p>
+      <p class="meta">
+        <span>{s.published}</span>
+        <time datetime={post.data.pubDate.toISOString()}>{date.format(post.data.pubDate)}</time>
+        <span>{s.readingTime(readingMinutes(post))}</span>
+        <a href={pathOf(translation)} hreflang={langOf(translation)} lang={langOf(translation)}>
+          {s.otherLanguage}
+        </a>
+      </p>
+    </header>
+    <figure class="article__hero">
+      <Image
+        src={post.data.hero}
+        alt={post.data.heroAlt}
+        widths={[640, 960, 1400]}
+        sizes="(max-width: 62rem) 100vw, 62rem"
+        loading="eager"
+        fetchpriority="high"
+      />
+    </figure>
+    <div class="prose">
+      <Content />
+    </div>
+    <ul class="tags" aria-label={s.tags}>
+      {post.data.tags.map((tag) => <li>{tag}</li>)}
+    </ul>
+    <aside class="try">
+      <h2 class="try__title">{s.tryTitle}</h2>
+      <p>{s.tryBody}</p>
+      <p class="try__actions">
+        <a class="plate plate--primary" href={PRODUCT_URL}>{s.tryProduct}</a>
+        <a class="plate" href={REPO_URL}>{s.tryRepo}</a>
+      </p>
+    </aside>
+  </article>
+  {
+    related.length > 0 && (
+      <section class="sheet" aria-labelledby="related">
+        <h2 class="head" id="related">{s.related}</h2>
+        <ul class="related">
+          {related.map((other) => (
+            <li>
+              <a href={pathOf(other)}>{other.data.title}</a>
+              <p>{other.data.description}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+</Base>

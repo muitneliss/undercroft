@@ -1,0 +1,65 @@
+# The blog (apps/blog) is static files on GitHub Pages at blog.undercroft.lowbit.link.
+#
+# A pull request that touches the blog gets the build as its check; a merge to main publishes.
+# Unlike release.yml, a plain push ships here, because a post changes no running code and
+# should not wait for an unrelated release. docs/adr/0089 records the trade.
+#
+# The build is `task build:blog`, the same command a developer runs, so the check here and a
+# local run share one definition of green (.claude/rules/tooling.md).
+name: blog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/blog/**"
+      - "apps/ui/public/**"
+      - ".github/workflows/blog.yml"
+      - "bun.lock"
+  pull_request:
+    paths:
+      - "apps/blog/**"
+      - "apps/ui/public/**"
+      - ".github/workflows/blog.yml"
+      - "bun.lock"
+  workflow_dispatch:
+
+permissions: {}
+
+# One publish at a time, and a newer merge supersedes one still queued -- but never cancel a
+# deploy halfway, which can leave Pages serving a partial site.
+concurrency:
+  group: blog-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      - run: bun install --frozen-lockfile
+      - run: task build:blog
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/blog/dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
