@@ -42,6 +42,7 @@
     "email:preview": "bun run apps/control-plane/scripts/emailPreview.ts",
     "mcp:smoke": "bun run scripts/mcpSmoke.ts",
     "build:ui": "bun run --filter '@undercroft/ui' build",
+    "build:blog": "bun run --filter '@undercroft/blog' build",
     "build:cli": "bun run apps/cli/scripts/build.ts",
     "build:cli-pack": "bun run apps/cli/scripts/pack.ts",
     "cli:pack-check": "bun run apps/cli/scripts/packCheck.ts",

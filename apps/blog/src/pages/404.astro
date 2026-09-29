@@ -1,0 +1,16 @@
+---
+import Base from "../layouts/Base.astro";
+import { STRINGS } from "../site.ts";
+import "../styles/blog.css";
+
+const { vi, en } = STRINGS;
+---
+
+<Base lang="vi" title={`${vi.notFoundTitle} | Undercroft`} description={vi.notFoundBody} path="/404/" alternates={[]} noindex>
+  <section class="masthead">
+    <p class="kicker">404</p>
+    <h1 class="masthead__headline">{vi.notFoundTitle}</h1>
+    <p class="masthead__lead">{vi.notFoundBody} <a href="/">{vi.home}</a></p>
+    <p class="masthead__lead" lang="en">{en.notFoundBody} <a href="/en/">{en.home}</a></p>
+  </section>
+</Base>

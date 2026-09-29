@@ -7,6 +7,11 @@ tasks:
     cmds:
       - bun run build:ui
 
+  blog:
+    desc: Check and build the static blog (apps/blog) into apps/blog/dist -- what GitHub Pages serves.
+    cmds:
+      - bun run build:blog
+
   cli:
     desc: Build the CLI into apps/cli/dist/undercroft.mjs -- one Node ES module, the router's manifest baked in.
     cmds:

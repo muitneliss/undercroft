@@ -216,6 +216,11 @@ tasks:
     cmds:
       - bun run dev
 
+  blog:
+    desc: Run the blog's dev server (Astro, hot reload) on its own; it needs none of the stack.
+    cmds:
+      - bun run --filter '@undercroft/blog' dev
+
   serve:
     desc: Fan out api/worker/ui in parallel and block until Ctrl+C.
     internal: true

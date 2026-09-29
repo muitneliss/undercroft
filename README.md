@@ -156,6 +156,9 @@ its ADR, and what exactly it accepts lives in a reference page.
 - **Reference:** [file formats a Gmail or Drive connection can land](docs/reference/file-formats.md),
   [what an ingest run counts](docs/reference/run-counts.md).
 - **Design:** [the CLI's home page and sign-in](docs/design/cli-home-and-sign-in.md).
+- **Blog:** [blog.undercroft.lowbit.link](https://blog.undercroft.lowbit.link), articles in
+  Vietnamese and English on Xero, Gmail, Google Drive and HubSpot integration, ETL vs ELT and
+  the raw lake. Its source is [`apps/blog`](apps/blog), and [how to write a post](apps/blog/WRITING.md).
 - **Working on the code:** [CLAUDE.md](CLAUDE.md), also linked as `AGENTS.md`, is the map
   of the conventions. The rules it points to live in `.claude/rules/`.
 - **Changes:** [CHANGELOG.md](CHANGELOG.md), maintained by release-please.

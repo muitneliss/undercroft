@@ -240,3 +240,5 @@
 ## [2026-09-29] ingest | ADR 0088 Tenant Logins Reach Postgres Through A Pooler And Runs Take A Turn
 ## [2026-09-29] ingest | Architecture
 ## [2026-09-29] ingest | Runbook Deployment
+## [2026-09-29] ingest | ADR 0089 The Blog Is A Static Astro Site On GitHub Pages
+## [2026-09-29] ingest | ADR 0089 The Blog Is A Static Astro Site On GitHub Pages

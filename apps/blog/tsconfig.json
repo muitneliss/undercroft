@@ -1,0 +1,10 @@
+{
+  "//": "Checked by `astro check` inside `build:blog`, not by the root `tsc -b`: tsc cannot read .astro files or the generated `astro:content` types. The strictness flags mirror tsconfig.base.json.",
+  "extends": "astro/tsconfigs/strictest",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
+  }
+}
