@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.1](https://github.com/muitneliss/undercroft/compare/v1.49.0...v1.49.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **xero:** size the whole-read budget for Xero's starter tier, so paged lists are read again ([#328](https://github.com/muitneliss/undercroft/issues/328)) ([3c1b459](https://github.com/muitneliss/undercroft/commit/3c1b45996404edf2757972b2b31f9a4eec779fbf))
+
 ## [1.49.0](https://github.com/muitneliss/undercroft/compare/v1.48.0...v1.49.0) (2026-09-29)
 
 
