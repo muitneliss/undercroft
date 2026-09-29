@@ -21,7 +21,7 @@
 
 import { describe, expect, test as it } from "bun:test";
 
-import { checkModel } from "@undercroft/db/services";
+import { checkMacro, checkModel } from "@undercroft/db/services";
 
 import { PROCEDURE_PATHS } from "./handlers/procedures.ts";
 import { MCP_EXCLUDED, SESSION_ONLY } from "./handlers/surface.ts";
@@ -64,6 +64,8 @@ const FILE_NAME = /\.(?:json|ya?ml|md|ts|sql|toml|txt|tgz)$/u;
 const SNAKE = /^(?<topic>[a-z]+)_[A-Za-z_]+$/u;
 const COMMAND = /(?:^|[\s(])undercroft\s+(?<words>[a-z][a-z-]*(?:\s+[a-z][a-z-]*)*)/gu;
 const SQL_FENCE = /^```sql\n(?<sql>[\s\S]*?)^```/gmu;
+const JINJA_FENCE = /^```jinja\n(?<sql>[\s\S]*?)^```/gmu;
+const MACRO_NAME = /\{%-?\s*macro\s+(?<name>[a-z][a-z0-9_]*)\s*\(/gu;
 const REF_NAME = /ref\(\s*'(?<model>[a-z][a-z0-9_]*)'\s*\)/gu;
 const LINK = /\]\((?<target>[^)\s]+)\)/gu;
 const REFERENCE_FILE = /^(?<file>references\/[\w./-]+\.\w+)$/u;
@@ -143,23 +145,56 @@ function resolveWithin(from: string, target: string): string | null {
   return parts.join("/");
 }
 
-/** Every ```sql block a skill holds, as `[path within the skill, the SQL]`. */
-function sqlExamplesOf(skill: Skill): [string, string][] {
+/** Every block a skill holds under `fence`, as `[path within the skill, its text]`. */
+function examplesOf(skill: Skill, fence: RegExp): [string, string][] {
   return textsOf(skill).flatMap(([path, text]) =>
-    [...text.matchAll(SQL_FENCE)].map((match): [string, string] => [path, match.groups?.sql ?? ""]),
+    [...text.matchAll(fence)].map((match): [string, string] => [path, match.groups?.sql ?? ""]),
   );
 }
 
+/**
+ * The macros a skill teaches, by name: each ```jinja block defines one. A ```sql example that
+ * calls one is checked with it taken as the tenant's, as it would be once the agent saved it.
+ */
+function macrosTaughtBy(skill: Skill): string[] {
+  return examplesOf(skill, JINJA_FENCE).flatMap(([, sql]) =>
+    [...sql.matchAll(MACRO_NAME)].map((match) => match.groups?.name ?? ""),
+  );
+}
+
+function modelsRefdIn(sql: string): string[] {
+  return [...sql.matchAll(REF_NAME)].map((ref) => ref.groups?.model ?? "");
+}
+
+function said(findings: readonly { code: string; subject: string | null }[]): string[] {
+  return findings.map((found) => `${found.code} ${found.subject ?? ""}`.trim());
+}
+
 /** What `models.check` finds in an example, every model it `ref()`s taken as existing. */
-function exampleFindings(sql: string): string[] {
-  const models = [...sql.matchAll(REF_NAME)].map((ref) => ref.groups?.model ?? "");
+function exampleFindings(sql: string, macros: readonly string[]): string[] {
   const { findings } = checkModel({
     name: "an_example",
     sql,
     tests: { columns: {} },
-    existingModels: models,
+    existingModels: modelsRefdIn(sql),
+    existingMacros: macros,
   });
-  return findings.map((found) => `${found.code} ${found.subject ?? ""}`.trim());
+  return said(findings);
+}
+
+/** What `macros.check` finds in a taught macro, under the name its definition gives it. */
+function macroFindings(sql: string, macros: readonly string[]): string[] {
+  const [name] = [...sql.matchAll(MACRO_NAME)].map((match) => match.groups?.name ?? "");
+  if (name === undefined) {
+    return ["no macro defined"];
+  }
+  const { findings } = checkMacro({
+    name,
+    sql,
+    existingModels: modelsRefdIn(sql),
+    existingMacros: macros,
+  });
+  return said(findings);
 }
 
 const skills = readSkills(SKILLS_ROOT);
@@ -254,8 +289,18 @@ describe("the published skills", () => {
     // An example is what an agent copies. One that trips the checker teaches the agent to
     // write a model the checker refuses -- or, worse, to stop believing the checker.
     const noisy = skills.flatMap((skill) =>
-      sqlExamplesOf(skill).flatMap(([path, sql]) =>
-        exampleFindings(sql).map((code) => `${skill.name}/${path}: ${code}`),
+      examplesOf(skill, SQL_FENCE).flatMap(([path, sql]) =>
+        exampleFindings(sql, macrosTaughtBy(skill)).map((code) => `${skill.name}/${path}: ${code}`),
+      ),
+    );
+    expect(noisy).toEqual([]);
+  });
+
+  it("teach only macros that macros.check accepts without a single finding", () => {
+    // The same promise for a macro: what an agent copies must be what the platform would save.
+    const noisy = skills.flatMap((skill) =>
+      examplesOf(skill, JINJA_FENCE).flatMap(([path, sql]) =>
+        macroFindings(sql, macrosTaughtBy(skill)).map((code) => `${skill.name}/${path}: ${code}`),
       ),
     );
     expect(noisy).toEqual([]);

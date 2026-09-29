@@ -48,6 +48,15 @@ export {
 } from "./ingestKeys.ts";
 export { type CursorKey, decodeCursor, encodeCursor } from "./cursor.ts";
 export {
+  deleteMacro,
+  getMacro,
+  insertMacro,
+  listMacros,
+  type Macro,
+  type MacroWrite,
+  saveMacro,
+} from "./macros.ts";
+export {
   type DeleteOutcome,
   deleteModelUnlessBuilding,
   getModel,

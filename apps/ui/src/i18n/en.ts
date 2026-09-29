@@ -1028,9 +1028,13 @@ export const en = {
     addColumn: "Add",
     noTests: "No tests yet.",
     referenceHead: "Reference",
-    referenceLead: "The source and the macros every model can use. Read-only.",
+    referenceLead:
+      "The source, the platform's macros and the customer's own, which every model can use. Read-only.",
     sourcesHead: "sources.yml",
     macrosHead: "Macros",
+    tenantMacrosHead: "The customer's macros",
+    tenantMacrosNone:
+      "This customer has no macros of its own yet. One is saved with macros.save, from the CLI, MCP or an agent.",
     deleteHead: "Delete model",
     deleteLead:
       "Delete {{name}} with the table it built and the rows its tests stored. A report reading that table will find nothing.",

@@ -28,6 +28,7 @@ import {
   insertModel,
   type LastBuild,
   lastBuildPerModel,
+  listMacros,
   listModels,
   type Model,
   saveModel,
@@ -150,25 +151,46 @@ export async function build(
 
 /**
  * What can be said about a model's SQL before it is saved or built, against the tenant's own
- * model names. Reads, stores nothing, and is not the security boundary: the tenant's dbt
- * login's grants are (`modelCheck.ts`).
+ * model and macro names. Reads, stores nothing, and is not the security boundary: the tenant's
+ * dbt login's grants are (`modelCheck.ts`).
  */
 export async function check(
   exec: SqlExecutor,
   input: { tenantId: string; name: string; sql: string; tests: ModelTests },
 ): Promise<ModelCheck> {
-  const existing = await listModels(exec, input.tenantId);
+  const [existing, macros] = await Promise.all([
+    listModels(exec, input.tenantId),
+    listMacros(exec, input.tenantId),
+  ]);
   return checkModel({
     name: input.name,
     sql: input.sql,
     tests: input.tests,
     existingModels: existing.map((model) => model.name),
+    existingMacros: macros.map((macro) => macro.name),
   });
 }
 
-/** What the platform ships into every project, for the editor's reference panel. */
-export function reference(): { sourcesYml: string; macros: { name: string; sql: string }[] } {
-  return { sourcesYml: SOURCES_YML, macros: MACROS.map((m) => ({ name: m.name, sql: m.sql })) };
+export interface Reference {
+  readonly sourcesYml: string;
+  /** What the platform ships into every project. */
+  readonly macros: { name: string; sql: string }[];
+  /** The tenant's own macros, which any of its models may call too (ADR 0086). */
+  readonly tenantMacros: { name: string; description: string; sql: string }[];
+}
+
+/** What a model of this tenant can read and call, for the editor's reference panel. */
+export async function reference(exec: SqlExecutor, tenantId: string): Promise<Reference> {
+  const tenantMacros = await listMacros(exec, tenantId);
+  return {
+    sourcesYml: SOURCES_YML,
+    macros: MACROS.map((m) => ({ name: m.name, sql: m.sql })),
+    tenantMacros: tenantMacros.map((m) => ({
+      name: m.name,
+      description: m.description,
+      sql: m.sql,
+    })),
+  };
 }
 
 /** The rows a failed test stored, through the worker; nothing here decides who may look. */

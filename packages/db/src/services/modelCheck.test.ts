@@ -34,6 +34,7 @@ function check(
     sql,
     tests: { columns: options.tests ?? {} },
     existingModels: options.existing ?? [],
+    existingMacros: [],
   });
 }
 

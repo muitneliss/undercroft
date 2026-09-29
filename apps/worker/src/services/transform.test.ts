@@ -214,6 +214,42 @@ describe("runTransform", () => {
     expect(existsSync(seen.cwd)).toBe(false);
   });
 
+  it("dbt sees the tenant's macros, and none of the worker's secrets: a model's env_var() cannot read them", async () => {
+    // A model or macro is the tenant's text, and `env_var()` reads the child's environment
+    // into it. The worker's own holds the master key and its DSN (ADR 0086).
+    await db.asSuperuser((tx) =>
+      tx.query(
+        "INSERT INTO app.macro (tenant_id, name, description, sql) VALUES ($1, $2, $3, $4)",
+        [TENANT, "trimmed", "Trims a text.", "{% macro trimmed(x) %}btrim({{ x }}){% endmacro %}"],
+      ),
+    );
+    const seen: { env: Readonly<Record<string, string>>; files: Record<string, string> } = {
+      env: {},
+      files: {},
+    };
+    await runTransform(
+      {
+        ...deps((_cmd, options) => {
+          seen.env = options.env;
+          seen.files = readTree(options.cwd);
+          writeResults(options.cwd, []);
+          return Promise.resolve({ exitCode: 0, stdout: "", stderr: "" });
+        }),
+        env: {
+          PATH: "/opt/dbt/bin",
+          UNDERCROFT_SECRET_KEY: "master-key-material",
+          UNDERCROFT_POSTGRES_DSN: "postgres://undercroft_worker:pw@db/undercroft",
+        },
+      },
+      { tenantId: TENANT },
+    );
+
+    expect(seen.files["macros/tenant/trimmed.sql"]).toContain("{% macro trimmed(x) %}");
+    expect(Object.keys(seen.env).sort()).toEqual([PASSWORD_VAR, "PATH"].sort());
+    expect(seen.env.PATH).toBe("/opt/dbt/bin");
+    expect(Object.values(seen.env).join("\n")).not.toContain("master-key-material");
+  });
+
   it("a tenant with no models spawns nothing and reports an empty build", async () => {
     await db.asSuperuser((tx) => tx.query("INSERT INTO ops.tenant (id) VALUES ('CASE-2')"));
     let spawned = 0;

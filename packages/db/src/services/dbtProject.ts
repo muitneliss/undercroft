@@ -4,8 +4,10 @@
  * There is no dbt project in the repository any more. What the platform ships is here, as
  * text: the source definition over `raw.records`, the macros every project carries, and
  * the shape of a `dbt_project.yml` and a `profiles.yml`. What the customer wrote is in
- * `app.model`. `renderProject` joins the two into the files dbt reads, for a directory that
- * exists for one build and is removed after.
+ * `app.model` and `app.macro`. `renderProject` joins the two into the files dbt reads, for a
+ * directory that exists for one build and is removed after. The customer's macros go under
+ * `macros/tenant/`, apart from the platform's, and every one is rendered on every build: a
+ * macro is a helper any model may call, and which models call which is dbt's to resolve.
  *
  * Three things the rendering holds to:
  *
@@ -214,6 +216,12 @@ export interface ProjectModel {
   readonly tests: { readonly columns: Record<string, readonly string[]> };
 }
 
+/** A tenant's macro: one whole `{% macro %}` definition, as `macroDefinition.ts` admitted it. */
+export interface ProjectMacro {
+  readonly name: string;
+  readonly sql: string;
+}
+
 export interface DatabaseAddress {
   readonly host: string;
   readonly port: number;
@@ -224,6 +232,7 @@ export interface ProjectInput {
   /** The tenant's slug, as `ops.tenant_slug` folds it: `case_0042`. */
   readonly slug: string;
   readonly models: readonly ProjectModel[];
+  readonly macros: readonly ProjectMacro[];
   readonly database: DatabaseAddress;
 }
 
@@ -295,9 +304,11 @@ function schemaYml(models: readonly ProjectModel[]): string {
 /**
  * Every file of the tenant's project, keyed by path relative to the project root.
  *
- * Model and column names have been validated against the contract's identifier rule
+ * Model, macro and column names have been validated against the contract's identifier rule
  * before they reach a row, and the slug is Postgres's own folding; nothing here is quoted
- * for YAML except the two values that come from configuration.
+ * for YAML except the two values that come from configuration. A tenant's macro has its own
+ * directory, so its file can never be one of the platform's whatever it is named -- and a name
+ * that would override one of the platform's macros never reaches a row (`macroDefinition.ts`).
  */
 export function renderProject(input: ProjectInput): Record<string, string> {
   const files: Record<string, string> = {
@@ -308,6 +319,9 @@ export function renderProject(input: ProjectInput): Record<string, string> {
   };
   for (const macro of MACROS) {
     files[`macros/${macro.name}.sql`] = macro.sql;
+  }
+  for (const macro of input.macros) {
+    files[`macros/tenant/${macro.name}.sql`] = macro.sql;
   }
   for (const model of input.models) {
     files[`models/${model.name}.sql`] = model.sql;

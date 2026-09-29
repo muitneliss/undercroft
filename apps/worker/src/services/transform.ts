@@ -12,7 +12,8 @@
  * 1. **Provision** the tenant's roles and schemas (idempotent) and **mint** a password for
  *    its dbt login. The password is a local here and the environment of one child process.
  * 2. **Write the project** to a fresh temporary directory: the platform's sources and macros,
- *    the customer's models from `app.model`, and a profile that IS the tenant. A directory
+ *    the customer's models from `app.model` and macros from `app.macro`, and a profile that
+ *    IS the tenant. A directory
  *    that exists for one build cannot drift from the table.
  * 3. **Spawn `dbt build`** with a deadline. A build that runs for half an hour is a build
  *    that has hung, and the previous tables keep serving -- stale, not wrong.
@@ -33,6 +34,7 @@ import { dirname, join } from "node:path";
 import { ConnectorError } from "@undercroft/core";
 import type { DatabaseAddress, SqlExecutor } from "@undercroft/db";
 import {
+  listMacros,
   listModels,
   provisionTenantRoles,
   rotateTenantPassword,
@@ -78,7 +80,10 @@ export interface TransformDeps {
   readonly database: DatabaseAddress;
   /** How the worker becomes the tenant, to read what it built. */
   readonly sessions: TenantSessions;
-  /** The child's environment, less the password this module adds. `PATH` finds `dbt`. */
+  /**
+   * The worker's own environment, which the child sees only the `CHILD_ENV` part of. `PATH`
+   * finds `dbt`.
+   */
   readonly env?: NodeJS.ProcessEnv;
   /** Injected in tests; the process uses Bun.spawn against the real binary. */
   readonly spawn?: Spawn;
@@ -142,10 +147,34 @@ function tailOf(output: string): string {
   return output.trim().split("\n").slice(-TAIL_LINES).join("\n");
 }
 
-/** The child's environment: the parent's defined values, plus the one password. */
+/**
+ * What dbt may see of the worker's environment: where programs and certificates are, and the
+ * locale and zone it formats in. Nothing else.
+ *
+ * WHY AN ALLOWLIST. A model or a macro is text a tenant wrote, and dbt's `env_var()` reads the
+ * process environment into it: `{{ env_var('UNDERCROFT_SECRET_KEY') }}` in a model would copy
+ * the master key into a table the tenant can read, and so would the worker's DSN or an OAuth
+ * client secret. The worker's environment holds all of them, and handing it over whole was
+ * exactly that hole (ADR 0086). Copying the few names dbt needs cannot leak a secret added
+ * tomorrow; removing the known secrets from the whole would.
+ */
+const CHILD_ENV: readonly string[] = [
+  "PATH",
+  "HOME",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TZ",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+];
+
+/** The child's environment: `CHILD_ENV` of the parent's, plus the tenant's one password. */
 function childEnv(parent: NodeJS.ProcessEnv | undefined, password: string): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parent ?? {})) {
+  for (const key of CHILD_ENV) {
+    const value = parent?.[key];
     if (value !== undefined) {
       env[key] = value;
     }
@@ -234,6 +263,7 @@ export async function runTransform(
     return { ok: true, steps: [], testsFailed: 0, error: null, models: 0 };
   }
 
+  const macros = await listMacros(deps.exec, input.tenantId);
   const password = await rotateTenantPassword(deps.exec, input.tenantId, "dbt");
   const dir = await mkdtemp(join(deps.workDir ?? tmpdir(), "undercroft-dbt-"));
   try {
@@ -243,6 +273,7 @@ export async function runTransform(
         slug: roles.slug,
         database: deps.database,
         models: models.map((m) => ({ name: m.name, sql: m.sql, tests: m.tests })),
+        macros: macros.map((m) => ({ name: m.name, sql: m.sql })),
       }),
     );
     const spawn = deps.spawn ?? realSpawn;

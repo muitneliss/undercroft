@@ -37,6 +37,7 @@ const PROJECT = renderProject({
     },
     { name: "stg_contacts", sql: "select 2 as contact_id", tests: { columns: {} } },
   ],
+  macros: [{ name: "trimmed", sql: "{% macro trimmed(x) %}btrim({{ x }}){% endmacro %}" }],
 });
 
 describe("renderProject", () => {
@@ -64,6 +65,13 @@ describe("renderProject", () => {
     for (const macro of MACROS) {
       expect(PROJECT[`macros/${macro.name}.sql`]).toBe(macro.sql);
     }
+  });
+
+  it("writes each of the tenant's macros whole, in a directory apart from the platform's", () => {
+    expect(PROJECT["macros/tenant/trimmed.sql"]).toBe(
+      "{% macro trimmed(x) %}btrim({{ x }}){% endmacro %}",
+    );
+    expect(PROJECT["macros/trimmed.sql"]).toBeUndefined();
   });
 
   it("ships gmail_letters as exactly the SQL the offline suite runs, over dbt's source", () => {

@@ -1,10 +1,15 @@
 /**
- * The vocabulary of `models.check`: what a finding is, how severe each kind is, and what a
- * check can never verify. Its own module so the Jinja half (`modelCheck.ts`) and the SQL half
- * (`sqlChecks.ts`) decide in one set of words, and a new code is one entry in one table.
+ * The vocabulary of `models.check` and `macros.check`: what a finding is, how severe each kind
+ * is, and what a check can never verify. Its own module so the Jinja half (`modelCheck.ts`),
+ * the SQL half (`sqlChecks.ts`) and a macro's definition (`macroDefinition.ts`) decide in one
+ * set of words, and a new code is one entry in one table.
  */
 
+import type { MacroRefusal } from "./macroDefinition.ts";
+
 export type FindingCode =
+  | MacroRefusal
+  | "unbound-name"
   | "empty"
   | "semicolon"
   | "not-select"
@@ -49,6 +54,14 @@ export interface ModelCheck {
 
 /** Which codes block a save (`error`) and which the person must only see (`warning`). */
 const SEVERITY: Readonly<Record<FindingCode, Severity>> = {
+  // A macro's definition: `macros.save` refuses on any of these, so each is an error.
+  "not-one-macro": "error",
+  "name-mismatch": "error",
+  "reserved-name": "error",
+  "forbidden-block": "error",
+  // A bare `{{ name }}` in a macro that is no parameter and nothing dbt defines: rendered as
+  // an empty string, silently. A model's version of this is `report-parameter`.
+  "unbound-name": "error",
   empty: "error",
   semicolon: "error",
   "not-select": "error",

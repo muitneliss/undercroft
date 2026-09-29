@@ -18,6 +18,10 @@ Every role check and every refusal the web UI has applies to you unchanged.
   schema. The logic lives here: joins, deduplication, time zones, what a metric means. A
   model changes only when it is built -- after each successful ingest, or by
   `models.build`.
+- **Macro**: a named piece of dbt Jinja a model calls, such as `{{ parse_amount(...) }}`.
+  The platform ships a few into every project; a customer's admin can save the customer's
+  own with `macros.save`, and every model of that customer can then call it. Reuse one
+  (`macros.list`) before writing the same expression into a second model.
 - **Question** (_câu hỏi_ in Vietnamese): a saved query over the built models, either a
   visual definition or SQL, together with how to draw it as a table or a chart. It is what
   other BI tools call a saved query, a chart or a Look; the name comes from Metabase, the BI
@@ -51,6 +55,7 @@ Every operation is a procedure with a dotted path, and both doors spell it mecha
 | `models.check`      | `models_check`      | `undercroft models check`      |
 | `bi.questions.save` | `bi_questions_save` | `undercroft bi questions save` |
 | `lake.querySchema`  | `lake_querySchema`  | `undercroft lake query-schema` |
+| `macros.save`       | `macros_save`       | `undercroft macros save`       |
 
 The workflow skills name operations by their procedure path. Translate the path for your
 door with this rule.
@@ -61,8 +66,8 @@ door with this rule.
    tool list. With the CLI, run `undercroft describe <command> --agent`. Never call an
    operation you have not seen listed, and never invent one.
 2. **Read before you write, and never guess an ID.** Take a tenant ID from `tenants.list`, a
-   run ID from `runs.list`, a model name from `models.list` and a source name from
-   `connections.list`. Tenant IDs look like `CASE-0042`. When an ID is not in what you read,
+   run ID from `runs.list`, a model name from `models.list`, a macro name from `macros.list`
+   and a source name from `connections.list`. Tenant IDs look like `CASE-0042`. When an ID is not in what you read,
    stop and ask the person. Do not construct one.
 3. **Say what you will change, then change it.** Before a `write` or `destructive`
    operation, tell the person what it will do and to what. With the CLI, run it with

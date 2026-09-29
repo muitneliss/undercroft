@@ -10,6 +10,7 @@ import { MAX_MODEL_SQL_BYTES, ModelName, ModelTests } from "@undercroft/contract
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as models from "../services/models.ts";
+import { wordCheck } from "./checkWords.ts";
 import { requireRole, router, tenantProcedure } from "./trpc.ts";
 
 export const modelsRouter = router({
@@ -148,25 +149,18 @@ export const modelsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const t = messages(ctx.locale);
       const checked = await models.check(ctx.exec, {
         tenantId: ctx.tenantId,
         name: input.name,
         sql: input.sql,
         tests: input.tests,
       });
-      return {
-        findings: checked.findings.map((finding) => ({
-          ...finding,
-          message: t(`modelCheck.finding.${finding.code}`, { subject: finding.subject ?? "" }),
-        })),
-        unverified: checked.unverified.map((code) => ({
-          code,
-          message: t(`modelCheck.unverified.${code}`),
-        })),
-      };
+      return wordCheck(ctx.locale, checked);
     }),
 
-  /** The sources and macros every project carries, for the editor's reference panel. */
-  reference: tenantProcedure.query(() => models.reference()),
+  /**
+   * The sources and macros every project carries, and the tenant's own macros, for the
+   * editor's reference panel and for an agent choosing what to call.
+   */
+  reference: tenantProcedure.query(({ ctx, input }) => models.reference(ctx.exec, input.tenantId)),
 });

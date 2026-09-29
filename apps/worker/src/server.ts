@@ -158,9 +158,11 @@ const app = createLakeApi({
   specsDir:
     process.env.UNDERCROFT_SPECS_DIR ??
     join(import.meta.dirname, "..", "..", "..", "specs", "connectors"),
-  // A tenant's project is generated per build from `app.model` and pointed at the same
-  // server this process is on; the worker becomes the tenant to build and to read. The
-  // child's environment is this process's, so `PATH` finds the `dbt` the image installed.
+  // A tenant's project is generated per build from `app.model` and `app.macro` and pointed at
+  // the same server this process is on; the worker becomes the tenant to build and to read.
+  // The child sees only an allowlisted part of this environment (`CHILD_ENV` in
+  // `services/transform.ts`): `PATH` finds the `dbt` the image installed, and no secret of
+  // this process can be read by a model's `env_var()`.
   dbt: {
     database: connectionOf(dsn),
     sessions: createTenantSessions({ exec: asExecutor(pool), dsn }),
