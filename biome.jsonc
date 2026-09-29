@@ -556,7 +556,11 @@
         // `OpenAttestationSignature2018` and `EcdsaSecp256k1RecoveryMethod2020` -- long,
         // camel-cased and numbered, which is what the entropy score counts.
         "apps/worker/src/services/extract/openAttestation.ts",
-        "apps/worker/src/services/extract/openAttestationVerify.ts"
+        "apps/worker/src/services/extract/openAttestationVerify.ts",
+        // One finding: `lastArDateFye`, a field name ACRA's 2024 Business Profile template
+        // defines. Short, camel-cased and ending in a capitalised acronym, which the entropy
+        // score counts; the table has to name the field the document carries.
+        "apps/worker/src/services/extract/acraTemplates.ts"
       ],
       "linter": { "rules": { "security": { "noSecrets": "off" } } }
     },

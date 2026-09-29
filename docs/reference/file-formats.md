@@ -321,14 +321,48 @@ The verified text is JSON. It starts with `openAttestation.verification`: the th
 each issuer's name, DID and DNS location. After that comes one of two things:
 
 - **`acraBusinessProfile`**, for a document that every issuer proves at `acratrustbar.gov.sg`
-  and whose template is `BP-COMPANY-2022-1`. It holds the UEN, name, company type, status,
+  and whose template is one of those below. It holds the UEN, name, company type, status,
   registered address, activities (each split into a description and an SSIC code when the name
   ends in one), capitals, officers with their own positions, shareholders, and document details
-  such as the receipt number and verification URL. Dates are converted from `DD/MM/YYYY` to ISO,
-  or become `null` when they are not real dates. Amounts and share counts stay the exact strings
-  the issuer signed. Currencies stay in words.
+  such as the receipt number and verification URL. Dates are converted to ISO `YYYY-MM-DD`, or
+  become `null` when they are not in the template's own form or are not real dates. Amounts and
+  share counts stay the exact strings the issuer signed. Currencies stay in words.
 - **`data`**, the unwrapped document, for any other issuer or template. The salt is removed at
   the first two colons of each value, so URLs and DIDs keep their own colons.
+
+| Template            | Date form     | Example       |
+| ------------------- | ------------- | ------------- |
+| `BP-COMPANY-2022-1` | `DD/MM/YYYY`  | `01/07/2026`  |
+| `BP-COMPANY-2024-1` | `DD Mon YYYY` | `01 Jul 2026` |
+
+`DD Mon YYYY` is a two-digit day, an English month abbreviation written `Jan` to `Dec`, and a
+four-digit year. `1 July 2026`, `01 JUL 2026` and `2026-07-01` are other forms, so they read as
+`null`.
+
+A `BP-COMPANY-2024-1` profile has every key a `BP-COMPANY-2022-1` profile has, in the same
+place. Where the 2024 template has no field for an item, the item is `null`: an officer's and a
+shareholder's `addressSource`, and `document.productCode`. The 2024 template's own `productId`
+is kept as `document.productId`, because nothing states that it is the same item as the 2022
+product code. After those keys come the items only the 2024 template has:
+
+- On each officer and shareholder: `entryDate`, `addressChangedDate` and `isNominee`. The
+  `isNominee` flag is `true` or `false` as the document states it, and `null` when the document
+  does not state it.
+- On each shareholder: `position` and `appointmentDate`.
+- On the profile: `registrationDate`, `formerNames`, `changeOfNameDate`, `auditFirms`, and
+  `charges`. Each charge keeps its `amountSecured` as the issuer's words. `annualFilings` holds
+  the financial year end and the last AGM and annual-return dates.
+- In `document`: `signatureName` and `qrCode`, which is the document's own PNG data URL of its
+  verification link.
+
+The templates are configured in `apps/worker/src/services/extract/acraTemplates.ts`, one entry
+per template. A template that is not listed there is read as `data`.
+
+When a template is added, the texts that were already read are laid out again from the
+verified data they hold. The bytes are not fetched again, and the document is not verified
+again. This happens in the next extract run of each tenant after the release, and no operator
+step is needed. Only an OpenAttestation text changes, and only when it becomes a profile. See
+ADR 0081.
 
 A verification whose DNS lookup failed is not retried until the worker's reader version is next
 raised.

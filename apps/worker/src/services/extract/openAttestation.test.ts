@@ -137,6 +137,87 @@ function profile(location = ACRA, template = "BP-COMPANY-2022-1"): v2.OpenAttest
   };
 }
 
+/**
+ * The same kind of company in the 2024 template: its own field names (`productId`,
+ * `isNominee`, `entryDate`, `agm`), its own date form, and the items 2022 has no place for.
+ * One officer is a nominee, the shareholder is stated not to be, and the secretary states
+ * neither.
+ */
+function profile2024(
+  dates: Partial<Record<"statusDate" | "entryDate", string>> = {},
+  location = ACRA,
+): v2.OpenAttestationDocument {
+  return {
+    $template: {
+      name: "BP-COMPANY-2024-1",
+      type: v2.TemplateType.EmbeddedRenderer,
+      url: "https://renderer.example.test",
+    },
+    issuers: profile(location).issuers,
+    productId: "I065",
+    uen: "209900001A",
+    entityName: "ACME HOLDINGS PTE. LTD.",
+    companyType: "Exempt Private Company Limited by Shares",
+    status: "Live Company",
+    statusDate: dates.statusDate ?? "01 Jul 2026",
+    incorporationDate: "15 Mar 2019",
+    registrationDate: "15 Mar 2019",
+    changeOfNameDate: "02 Jan 2021",
+    formerNames: [{ name: "ACME TRADING PTE. LTD." }],
+    gazettedIndicator: "N",
+    activities: [{ name: "OTHER HOLDING COMPANIES (64202)" }],
+    capitals: [
+      {
+        type: "Issued Share Capital",
+        shares: "1000",
+        currency: "SINGAPORE, DOLLARS",
+        sharesType: "Ordinary",
+        amount: "1000",
+      },
+    ],
+    address: { type: "local", postalCode: "000001", formattedAddress: "1 EXAMPLE ROAD" },
+    changeOfAddressDate: "15 Mar 2019",
+    agm: [{ currentFyeDate: "31 Dec 2026", lastAgmDate: "01 Jul 2026", lastArDate: "02 Jul 2026" }],
+    representatives: [
+      {
+        name: "ALEX EXAMPLE",
+        id: "X0000001A",
+        nationality: "EXAMPLIAN",
+        position: "Director",
+        appointmentDate: "01 Jul 2026",
+        entryDate: dates.entryDate ?? "03 Jul 2026",
+        isNominee: true,
+        addressChanged: "04 Jul 2026",
+        address: { type: "foreign", address1: "1 EXAMPLE STREET", country: "EXAMPLIA" },
+      },
+      {
+        name: "SAM EXAMPLE",
+        id: "X0000002B",
+        position: "Secretary",
+        appointmentDate: "01 Jul 2026",
+        entryDate: "03 Jul 2026",
+      },
+    ],
+    shareholders: [
+      {
+        name: "ALEX EXAMPLE",
+        id: "X0000001A",
+        position: "Shareholder",
+        shares: "1000",
+        sharesType: "Ordinary",
+        currency: "SINGAPORE, DOLLARS",
+        appointmentDate: "01 Jul 2026",
+        entryDate: "03 Jul 2026",
+        isNominee: false,
+      },
+    ],
+    receiptNumber: "RCP0000001",
+    receiptDate: "05 Jul 2026",
+    signatureName: "EXAMPLE REGISTRAR",
+    verifyLink: "https://example.test/verify",
+  };
+}
+
 async function signed(data = profile()): Promise<Record<string, unknown>> {
   return await signedAs(wrapDocument(data), ISSUER_DID, ISSUER_KEY);
 }
@@ -212,12 +293,152 @@ describe("a verified ACRA business profile", () => {
     });
   });
 
+  it("lays a 2022 profile out whole, every field it has always had and no other", async () => {
+    // The whole object, because a dbt model parses exactly this: moving the 2022 layout into
+    // the template table must not add, drop or rename one key of it.
+    const body = JSON.parse((await read(await signed())).text);
+    const unstated = { nationality: null, addressSource: null, address: null };
+    expect(body.acraBusinessProfile).toEqual({
+      uen: "209900001A",
+      name: "ACME HOLDINGS PTE. LTD.",
+      companyType: "EXEMPT PRIVATE COMPANY LIMITED BY SHARES",
+      status: "Live Company",
+      statusDate: "2024-02-01",
+      incorporationDate: "2024-02-01",
+      gazettedIndicator: null,
+      registeredAddress: {
+        kind: "LOCAL",
+        houseNumber: "1",
+        streetName: "EXAMPLE ROAD",
+        floor: null,
+        unit: null,
+        buildingName: null,
+        postalCode: "000001",
+        address1: null,
+        address2: null,
+        country: null,
+        formattedAddress: "1 EXAMPLE ROAD SINGAPORE (000001)",
+      },
+      changeOfAddressDate: null,
+      activities: [
+        {
+          description: "WHOLESALE TRADE OF A VARIETY OF GOODS WITHOUT A DOMINANT PRODUCT",
+          ssicCode: "46900",
+        },
+        { description: "OTHER HOLDING COMPANIES", ssicCode: "64202" },
+      ],
+      capitals: [
+        {
+          type: "Issued Share Capital",
+          amount: "1000",
+          numberOfShares: "1000",
+          currency: "SINGAPORE, DOLLARS",
+          shareType: "ORDINARY",
+        },
+      ],
+      officers: [
+        {
+          name: "ALEX EXAMPLE",
+          identificationNumber: "X0000001A",
+          position: "Director",
+          appointmentDate: "2024-02-01",
+          ...unstated,
+        },
+        {
+          name: "SAM EXAMPLE",
+          identificationNumber: "X0000002B",
+          position: "Secretary",
+          appointmentDate: null,
+          ...unstated,
+        },
+      ],
+      shareholders: [
+        {
+          name: "ALEX EXAMPLE",
+          identificationNumber: "X0000001A",
+          numberOfShares: "1000",
+          shareType: "ORDINARY",
+          currency: null,
+          ...unstated,
+        },
+      ],
+      document: {
+        productCode: "I003",
+        transactionNumber: null,
+        receiptNumber: null,
+        receiptDate: null,
+        verificationUrl: "https://example.test/verify",
+        template: {
+          name: "BP-COMPANY-2022-1",
+          type: "EMBEDDED_RENDERER",
+          rendererUrl: "https://renderer.example.test",
+        },
+      },
+    });
+  });
+
   it("maps each officer's own role, and a date that is not on the calendar to null", async () => {
     const body = JSON.parse((await read(await signed())).text);
     expect(body.acraBusinessProfile.officers).toMatchObject([
       { name: "ALEX EXAMPLE", position: "Director", appointmentDate: "2024-02-01" },
       { name: "SAM EXAMPLE", position: "Secretary", appointmentDate: null },
     ]);
+  });
+});
+
+describe("a verified ACRA business profile in the 2024 template", () => {
+  it("is read into the same profile, by its own field names and its own dates", async () => {
+    const body = JSON.parse((await read(await signed(profile2024()))).text);
+
+    expect(body.data).toBeUndefined();
+    expect(body.acraBusinessProfile).toMatchObject({
+      uen: "209900001A",
+      statusDate: "2026-07-01",
+      activities: [{ description: "OTHER HOLDING COMPANIES", ssicCode: "64202" }],
+      capitals: [{ amount: "1000", currency: "SINGAPORE, DOLLARS", numberOfShares: "1000" }],
+      officers: [
+        {
+          position: "Director",
+          appointmentDate: "2026-07-01",
+          entryDate: "2026-07-03",
+          isNominee: true,
+          addressChangedDate: "2026-07-04",
+          addressSource: null,
+          address: { kind: "foreign", country: "EXAMPLIA" },
+        },
+        { position: "Secretary", isNominee: null },
+      ],
+      shareholders: [{ numberOfShares: "1000", isNominee: false, entryDate: "2026-07-03" }],
+      registrationDate: "2019-03-15",
+      formerNames: [{ name: "ACME TRADING PTE. LTD." }],
+      changeOfNameDate: "2021-01-02",
+      annualFilings: [
+        {
+          currentFinancialYearEnd: "2026-12-31",
+          lastAgmDate: "2026-07-01",
+          lastAnnualReturnDate: "2026-07-02",
+          lastAnnualReturnFinancialYearEnd: null,
+        },
+      ],
+      // `productId` is not filed as 2022's `productCode`: nothing states they are one item.
+      document: { productCode: null, productId: "I065", receiptDate: "2026-07-05" },
+    });
+  });
+
+  it("reads a date only in the template's own form, and one not on the calendar as null", async () => {
+    const dates = ["31 Feb 2026", "1 July 2026", "01 JUL 2026", "2026-07-01", "00 Jul 2026"];
+    for (const statusDate of dates) {
+      const body = JSON.parse((await read(await signed(profile2024({ statusDate })))).text);
+      expect([statusDate, body.acraBusinessProfile.statusDate]).toEqual([statusDate, null]);
+    }
+  });
+
+  it("from an issuer other than ACRA keeps its data", async () => {
+    const dns = dnsListing({ "registry.example.test": `${ISSUER_DID}#controller` });
+    const fromElsewhere = profile2024({}, "registry.example.test");
+    const body = JSON.parse((await read(await signed(fromElsewhere), dns.resolver)).text);
+    expect(body.acraBusinessProfile).toBeUndefined();
+    expect(body.data.statusDate).toBe("01 Jul 2026");
   });
 });
 

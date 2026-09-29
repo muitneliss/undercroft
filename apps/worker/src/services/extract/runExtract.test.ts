@@ -11,10 +11,12 @@ import { createStampSource, TestClock } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
+import { listExtractDue } from "../schedule.ts";
 import type { Spawn } from "../transform.ts";
 import { runExtract } from "./runExtract.ts";
 
 const TENANT = "CASE-0042";
+const ACRA_LOCATION = "acratrustbar.gov.sg";
 const SOURCE = "drive";
 const A_PAGE =
   "Acme Holdings agrees to supply the services described in schedule one, " +
@@ -214,6 +216,94 @@ describe("a pass after the readers changed", () => {
     expect(second).toMatchObject({ read: 0, refused: 1 });
     expect(third).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
     expect((await textRows())[0]?.reason).toBe("legacy-xls-unsupported");
+  });
+});
+
+describe("a pass after the layouts changed", () => {
+  /**
+   * What a verified 2024 ACRA profile's text was before its template was known: the
+   * verification this worker wrote, then the unwrapped `data`. Invented, like every fixture.
+   */
+  function readingBeforeItsTemplate(location: string): string {
+    const verification = {
+      verified: true,
+      documentIntegrity: "VALID",
+      documentStatus: "VALID",
+      issuerIdentity: "VALID",
+      issuers: [
+        { name: "REGISTRY", identityProofType: "DNS-DID", identityProofLocation: location },
+      ],
+    };
+    const data = {
+      $template: { name: "BP-COMPANY-2024-1", type: "EMBEDDED_RENDERER" },
+      uen: "209900001A",
+      entityName: "ACME HOLDINGS PTE. LTD.",
+      statusDate: "01 Jul 2026",
+      representatives: [{ name: "ALEX EXAMPLE", position: "Director", isNominee: "true" }],
+    };
+    const openAttestation = { version: "https://schema.openattestation.com/2.0/schema.json" };
+    return JSON.stringify({ openAttestation: { ...openAttestation, verification }, data }, null, 2);
+  }
+
+  /** Land a document and its text as a release before this one wrote it: layout generation 0. */
+  async function heldAsRead(documentId: string, method: string, text: string): Promise<void> {
+    const sha256 = await landDocument({
+      documentId,
+      bytes: new TextEncoder().encode(text),
+      contentType: method === "openattestation" ? "application/json" : "application/pdf",
+    });
+    await db.query(
+      `INSERT INTO raw.document_text
+         (source, tenant_id, document_id, source_sha256, method, text, chars, truncated,
+          extracted_at, run_id, reader_version)
+       VALUES ($1, $2, $3, $4, $5, $6, char_length($6), false,
+               '2026-09-01T00:00:00Z', 'run-before', 5)`,
+      [SOURCE, TENANT, documentId, sha256, method, text],
+    );
+  }
+
+  async function held(documentId: string): Promise<{ text: string; run_id: string }> {
+    const { rows } = await db.query<{ text: string; run_id: string }>(
+      "SELECT text, run_id FROM raw.document_text WHERE document_id = $1",
+      [documentId],
+    );
+    return rows[0] ?? { text: "", run_id: "" };
+  }
+
+  it("lays a profile read before its template was known out again, reading nothing", async () => {
+    // #313: 418 verified 2024 profiles on production were stored as their unwrapped data. A
+    // read cannot reach them -- they WERE read -- and re-reading would re-verify over DNS.
+    await heldAsRead("profile", "openattestation", readingBeforeItsTemplate(ACRA_LOCATION));
+    await heldAsRead("contract", "pdf_text", A_PAGE);
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result).toMatchObject({ read: 0, refused: 0, relaid: 1 });
+    expect(spawned).toEqual([]);
+    const profile = await held("profile");
+    expect(profile.run_id).toBe("run-extract-1");
+    expect(JSON.parse(profile.text).acraBusinessProfile).toMatchObject({
+      uen: "209900001A",
+      statusDate: "2026-07-01",
+      officers: [{ name: "ALEX EXAMPLE", isNominee: true }],
+    });
+    // Another reader's text is not looked at, let alone moved.
+    expect(await held("contract")).toEqual({ text: A_PAGE, run_id: "run-before" });
+  });
+
+  it("looks once at a text that will never be a profile, and is then not due", async () => {
+    // Stamping the text that stays is what stops the scheduler starting a run for this scope
+    // on every tick for ever, over a document from another issuer.
+    const elsewhere = readingBeforeItsTemplate("registry.example.test");
+    await heldAsRead("other-issuer", "openattestation", elsewhere);
+    const scope = [{ tenantId: TENANT, source: SOURCE }];
+    expect(await listExtractDue(db)).toEqual(scope);
+
+    const result = await extract(spawnAnswering(A_PAGE));
+
+    expect(result.relaid).toBe(0);
+    expect(await held("other-issuer")).toEqual({ text: elsewhere, run_id: "run-before" });
+    expect(await listExtractDue(db)).toEqual([]);
   });
 });
 

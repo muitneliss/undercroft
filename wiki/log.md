@@ -217,3 +217,5 @@
 ## [2026-09-29] ingest | Runbook Xero Setup
 ## [2026-09-29] ingest | ADR 0080 A Gmail Harvest Lands Each Messages Body
 ## [2026-09-29] ingest | File formats a Gmail or Drive connection can land
+## [2026-09-29] ingest | ADR 0081: ACRA templates are a configured table, and a reading is laid out again from itself
+## [2026-09-29] ingest | File formats a Gmail or Drive connection can land
