@@ -1,6 +1,6 @@
 ---
-title: "MCP server for business data: Xero, Gmail and Drive"
-description: "Use an MCP server for business data to work with Xero, Gmail, Drive and HubSpot through Undercroft, with personal permissions, grants and agent skills."
+title: "MCP server for business data: AI with clear boundaries"
+description: "An MCP server for business data helps AI agents work with Xero, Gmail and Drive. Understand permissions, reliable answers and when Undercroft fits."
 translationKey: "ai-agent-mcp"
 pubDate: "2026-09-29"
 tags: ["MCP", "AI", "Integration", "Open-source"]
@@ -14,108 +14,81 @@ keywords:
     "Undercroft",
   ]
 hero: "../../../assets/posts/ai-agent-mcp/hero.png"
-heroAlt: "Sketch of an MCP server for business data routing an AI agent through a Bearer token and grant to Undercroft tenant data"
+heroAlt: "Sketch of an MCP server for business data connecting an AI agent to Xero, Gmail and Drive data through Undercroft permission checks"
 ---
 
-An **MCP server for business data** gives an AI agent a defined way to inspect data and request actions. In Undercroft, that means working with information ingested from Xero, Gmail, Google Drive and HubSpot through the platform's own procedures. The agent acts with the person's Undercroft permissions, bounded further by a read or write grant. Connecting a model does not give it a database administrator's credentials.
+An **MCP server for business data** addresses a familiar problem: the information needed for a decision lives in several places. Finance checks Xero, operations searches Gmail, and supporting documents sit in Google Drive. An AI agent could help investigate across that information, but the business needs to know what it can see, what it can change, and where its answers come from.
 
-There are three pieces to understand: MCP exposes tools, the CLI exposes commands, and skills teach an agent how to use them. Undercroft also has a built-in assistant with a separate injection gate for mutations. Knowing which protection belongs to which route matters before asking an agent to change anything.
+Without those boundaries, a convenient conversation can create more review work than it saves. A convincing explanation may use an old report, miss an unread document, or confuse a sales opportunity with an invoice. Connecting an agent is useful only when the underlying evidence and the agent's authority are clear.
 
-## What does an MCP server for business data actually expose?
+## What is an MCP server for business data?
 
-Undercroft serves MCP at `/mcp` on its control plane. The endpoint exposes the router's procedures as tools, with deliberate exclusions such as account credential management. Tool inputs use the procedures' own schemas. A procedure named `runs.list` becomes `runs_list`; `bi.questions.save` becomes `bi_questions_save`.
+MCP, short for Model Context Protocol, gives an AI application a shared way to discover and use another application's tools. Think of it as a service desk: the agent can ask for an available service, and the application decides whether that person may use it.
 
-Each MCP call goes through `appRouter.createCaller(ctx)`. That is the same router used by the built-in assistant, with the platform's existing role checks and refusals. MCP is another entrance to the application, with no separate business permission system for an agent to learn or bypass.
+For business data, those services might include checking a sync, finding an existing model, or reading a report. The connection makes those actions available inside an AI conversation. It does not, by itself, collect your records, reconcile different sources, or decide what revenue means.
 
-The [Undercroft repository](https://github.com/muitneliss/undercroft) contains the implementation and setup guides. It is an open-source data platform: source records land in an immutable raw data lake, and people define dbt models for analysis. MCP makes those platform capabilities available to an external client; it does not replace ingestion or define your metrics.
+That distinction separates access from understanding. MCP provides a way to ask; your data platform supplies the evidence and rules behind the answer. Neither removes the need for someone to own the business definitions.
 
-## How can an agent work with Xero, Gmail, Drive and HubSpot?
+## How does Undercroft bring Xero, Gmail and Drive together?
 
-First connect the sources, choose their scope and run ingestion. Source access and agent access are separate decisions. Approving an MCP connection does not also authorize a mailbox or select a Xero organisation.
+Undercroft collects selected source data into an immutable raw data lake: a retained record of what arrived. Your team then defines dbt models that turn that material into information suitable for reports. The approach keeps source evidence separate from the interpretation used for analysis.
 
-| Source       | What must be established before analysis                                                  |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| Xero         | An OAuth connection, the chosen organisation and the entities its granted scopes can read |
-| Gmail        | A connected account and selected labels; additional mailboxes have separate connections   |
-| Google Drive | A connected account and the selected files or folders to ingest                           |
-| HubSpot      | A private app token with the read scopes needed for the chosen objects                    |
+An agent works with information already collected by Undercroft. Connecting the agent does not also authorize access to a mailbox or choose which company's Xero records to collect. Source access remains a separate decision.
 
-Once data is held, an authorized agent can inspect runs, discover models, read reports or use the lake tools its role permits. A useful initial request is: “Show the latest runs and identify which sources are missing data.” That establishes the evidence available before asking a business question.
+Once the information is available, an authorized agent can investigate collection status, discover models and read reports. A useful opening question is whether the relevant sources have been collected successfully. It establishes what evidence is available before asking why a business result changed.
 
-Cross-source analysis still needs explicit definitions. A deal in HubSpot and an invoice in Xero are not automatically the same business event. Put the join rules and metric definitions in a dbt model, then query its output. The guides to [Xero integration with Postgres](/en/xero-integration-postgres/) and [Xero reporting with SQL and dbt](/en/xero-reporting-sql-dbt/) explain that foundation.
+Combining sources still takes judgment. A HubSpot deal and a Xero invoice may describe different stages of the same relationship, but they are not interchangeable measures of sales. Your team must define that relationship. The guides to [Xero reporting with dbt](/en/xero-reporting-sql-dbt/) and [preserving evidence in a raw data lake](/en/immutable-raw-data-lake/) explain those foundations.
 
-For document-based questions, check what actually landed and what text is available. The [Gmail integration guide](/en/gmail-integration-email-to-database/) and [Google Drive OCR guide](/en/google-drive-integration-ocr-search/) cover those source paths. An agent should report missing evidence rather than infer the contents of an unread document.
+## What can an AI agent read or change?
 
-## How do you connect Claude, ChatGPT or another AI agent?
+In Undercroft, the agent acts on behalf of a person. It faces the same application permission checks that govern that person's work. A connection can narrow those permissions further, but cannot make a viewer into an administrator.
 
-A compatible remote MCP client connects to your control plane's `/mcp` URL. Undercroft supports OAuth sign-in and personal access tokens. Its setup guide documents claude.ai, Claude Desktop and Claude Code; for ChatGPT or another host, use that host's supported remote MCP connection flow. Tool access, widgets and skill discovery are separate host capabilities, so do not assume support for one means support for all three.
+For an initial evaluation, access limited to reading offers a useful boundary. The agent can use the available reading tools without permission to change things. This does not mean unrestricted access to every possible analysis: some operations involving the raw data lake require additional authorization.
 
-With OAuth, the client sends you through Undercroft's own sign-in and consent pages. Use the invited address, sign in with Google or an emailed code, and choose read only unless you intend to allow changes. The connected app appears on your account page, where revoking it stops its access at the next call.
+You can withdraw a connected application's access. Also consider the person's full reach: the connection can cover the workspaces they belong to, rather than only the workspace they currently have open. Choosing whose account to connect is therefore part of choosing what information the agent may encounter.
 
-For Claude Code, the documented command is below. The URL is an illustrative placeholder: replace it with your deployment's actual origin.
+## Can an email trick an AI agent into taking action?
 
-```sh
-claude mcp add --transport http undercroft https://undercroft.example.test/mcp
-```
+An email or document can contain instructions, including instructions intended to mislead an AI agent. The important distinction is between material the agent reads and a request from the person using it. A sentence inside a supplier's email should not become permission to disconnect a source.
 
-Then open `/mcp` in Claude Code, select `undercroft` and authenticate. The [MCP setup runbook](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/mcp-setup.md) contains the other connection options and troubleshooting steps.
+Undercroft's built-in assistant requires the person to confirm a proposed change. A separate AI check also assesses whether the person's own words requested that action, without using the retrieved material as evidence of permission. If that check is unavailable, the change is refused.
 
-For a client that accepts headers but cannot complete browser sign-in, mint a personal access token on `/account`. Choose its grant and expiry, copy it when shown, and configure the client's `Authorization: Bearer` header. A browser cookie alone does not authenticate `/mcp`.
+![The built-in assistant requires both human confirmation and an independent check of the person's request before allowing a change; a failed check blocks it](../../../assets/posts/ai-agent-mcp/flow.png)
 
-## Does the AI agent get exactly my permissions?
+This protection belongs to the built-in assistant. An external agent connected through MCP uses Undercroft's permissions together with the confirmation behavior of its own AI application. Teams should assess that application's behavior before allowing changes; the same connection protocol does not guarantee the same approval experience.
 
-Your identity sets the maximum reach; the credential's grant can narrow it. A personal token reaches the tenants you belong to with your role in each. It is not confined to whichever tenant you happened to have open when you created it, and it cannot make you an admin somewhere you are a viewer.
+## How do agent skills help produce useful answers?
 
-A `read` grant exposes only tools classified as reads. A `write` grant allows write tools, subject to the same role checks. The router enforces the grant again when a tool is called; hiding a tool from the list is not the only check. A read credential cannot mint itself a write credential, because account procedures require a browser or CLI session.
+MCP supplies capabilities; skills supply working guidance. Undercroft's published skills teach an agent to inspect available evidence, clarify the person's request and respect refusals. They do not grant additional permissions, and connecting MCP does not necessarily load them.
 
-One classification deserves attention: `lake_query` requires a write grant even though its SQL reads data. Undercroft deliberately treats running admin-authored SQL against the raw lake as an operation needing explicit opt-in. “Read-only connection” therefore does not mean unrestricted SQL access.
+For example, a model-building workflow helps an external agent clarify a business question and draft a dbt model, with approval before saving and building it. Its checks identify issues and uncertainty rather than certify the result as correct. An engineer still needs to review the logic. Teams whose agents work through a CLI can use that route with the person's application permissions as well.
 
-Removing the person's access removes the credential's access on the next request. OAuth consent is also checked on every call. A non-member receives `NOT_FOUND`, preserving the same boundary the web UI uses instead of revealing whether another tenant exists.
+Before relying on an answer, ask which sources and models support it, how recently they were updated, and whether any information is missing. A report reflects its last build, not necessarily today's source records. Missing amounts must stay missing, and amounts in different currencies need an explicit basis for comparison.
 
-## How does the injection gate protect mutations?
+## When is this approach a good fit?
 
-The **built-in assistant** requires two checks for a mutation: the person's confirmation of a proposed proof, and an independent injection gate's agreement that the person asked for the action. A proof presents the proposed change and arguments for review. Its confirmation wording comes from the application, not from the model proposing the action.
+Undercroft fits teams that want AI-assisted investigation alongside retained source evidence and business definitions they control. It can reduce the work of navigating between tools while keeping access tied to existing responsibilities. As a self-hosted, open-source platform, it also gives the engineering team responsibility for operating the system.
 
-![The built-in assistant requires the person's proof and an injection gate using only user words before a mutation reaches the router; either failed check denies it](../../../assets/posts/ai-agent-mcp/flow.png)
+It is a weaker fit if you expect connecting a chatbot to produce finished financial reporting without data preparation. It also needs careful evaluation when decisions require immediate source updates or no engineer is available to maintain models. A managed service or an existing BI workflow may suit those constraints better.
 
-The gate evaluates the person's own turns with tool results excluded. That separation matters when an email or document contains instructions such as “disconnect this source.” Those words are data supplied by someone else; they must not become the person's request merely because the assistant read them.
+## How can you get started with Undercroft?
 
-If the gate is unavailable or unconfigured, mutations are denied. Operators also configure an approval secret for tamper-proof signed approvals; without that secret, approvals are unsigned. The [assistant setup guide](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/assistant-setup.md) states these configuration limits.
-
-This two-check flow belongs to the built-in assistant. External MCP clients use grants, router permissions and their host's confirmation behavior; the CLI uses its own write opt-in. The published skill requires confirmation for an exact destructive action. These mechanisms do not mean every external tool call passes through the built-in assistant's judge.
-
-## When should you use the CLI and agent skills?
-
-Use MCP when the agent's host offers Undercroft tools. Use the CLI when the agent can run commands and no MCP tools are available. The CLI signs in as the person and calls `/trpc` over HTTP. It does not connect directly to Postgres or use a service credential.
-
-Each CLI environment profile has `allowWrites`, off by default. Only a person at a terminal can enable it; an agent attempting that change receives `HUMAN_REQUIRED`. A one-off `--url` never permits writes. In agent mode, commands return one JSON envelope, and destructive commands require `--yes` for the specifically authorized action.
-
-Skills supply the workflow around those capabilities. The `undercroft` skill prefers MCP when available and otherwise uses the CLI. It tells agents to discover operations, read before writing, obtain real IDs from results and report refusals accurately.
-
-The `undercroft-model-builder` workflow interviews the person, inspects the lake, drafts a dbt model and runs `models.check`. It asks before saving and again before building. The check reports errors, warnings and what it cannot verify; it does not prove SQL compilation, field existence or passing tests.
-
-Install the published skills using the [agent skills runbook](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/agent-skills.md). The same files are served through the MCP Skills extension for hosts that support it. Do not assume merely connecting MCP has loaded those workflows.
-
-## How do you check an answer before relying on it?
-
-Ask which tenant, source, run and model support the answer. A saved report question reads a built model, so it is no fresher than that model's last build. A fluent answer cannot make an earlier sync current.
-
-Also check whether a result was clipped. MCP returns the whole result in `structuredContent`, but its text representation limits lists to 50 items and total text to 60 KB, with a truncation note. An agent must not present a clipped list as complete. Keep missing amounts missing, preserve currencies, and resolve gaps before treating an answer as a financial conclusion.
+Explore [Undercroft](https://undercroft.lowbit.link) and its [open-source repository](https://github.com/muitneliss/undercroft), then use the [MCP setup guide](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/mcp-setup.md) for connection details. Evaluate a narrow question against evidence your team already understands, with access limited to reading, before expanding the agent's responsibilities.
 
 ## FAQ
 
-### Can I use Claude MCP with Xero data?
+### Can I use Claude with Xero data through MCP?
 
-Yes, through Undercroft after Xero is connected and its data has been ingested. Claude accesses that data through the tools your Undercroft role and MCP grant permit.
+Yes, after Xero data has been collected into Undercroft. Claude can use the tools allowed by your permissions and the access you granted the connection.
 
-### Can ChatGPT use the same MCP server?
+### Does MCP replace data integration?
 
-A ChatGPT setup that supports a compatible remote MCP connection can use the endpoint. Follow the host's connection flow and check its tool, widget and skill support separately.
+No, MCP gives an agent a way to use application capabilities. Data integration still brings the sources together, and models still define how to interpret them.
 
-### Can I chat with my data without allowing writes?
+### Can I chat with business data without allowing changes?
 
-Start with a read grant for the MCP connection. It permits classified read tools, while operations such as `lake_query` still require write authorization and the appropriate role.
+Yes, you can limit the connection to reading tools. Some forms of analysis require further authorization, so this does not provide unrestricted access to the raw data lake.
 
-### Can every assistant build dbt models?
+### Does connecting an AI agent make reports accurate?
 
-An external agent can follow the model-builder skill through MCP or the CLI with the required permissions. Undercroft's built-in assistant does not author or build dbt models, and drafts lake SQL for a person to review and run.
+No, accuracy depends on source coverage, freshness and the business rules in your models. The agent should make those dependencies and any missing evidence visible.

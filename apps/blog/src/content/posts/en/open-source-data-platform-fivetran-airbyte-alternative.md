@@ -1,6 +1,6 @@
 ---
-title: "Undercroft: an open-source data platform for self-hosted ELT"
-description: "Explore Undercroft, an MIT-licensed open-source data platform combining ingestion, a raw lake, dbt and BI. Compare its scope with Fivetran and Airbyte."
+title: "Choosing an open-source data platform: is Undercroft a fit?"
+description: "Is an open-source data platform right for your team? Explore how Undercroft connects raw data, models and reports, and what self-hosting asks of you."
 translationKey: "open-source-data-platform"
 pubDate: "2026-09-29"
 tags: ["Open Source", "ELT", "Data Platform", "BI"]
@@ -13,125 +13,85 @@ keywords:
     "open source elt",
   ]
 hero: "../../../assets/posts/open-source-data-platform/hero.png"
-heroAlt: "An open-source data platform on your server, with APIs feeding connectors, a raw lake, Postgres, dbt and reports"
+heroAlt: "An open-source data platform connecting source APIs to a raw lake, Postgres, dbt and reports on your server"
 ---
 
-An open-source data platform should make it clear where your data lives, how it becomes a report, and which parts your team must operate. Undercroft brings ingestion, an immutable raw data lake, Postgres, dbt and first-party BI into one self-hosted stack. Its code is MIT-licensed, and its business models are yours to define.
+Choosing an open-source data platform starts with a business question: can your team explain where a report's numbers came from and change the calculation without losing the evidence? When information is scattered across accounting software, customer systems and documents, preparing a dashboard often means repeating exports and reconciling conflicting copies. The cost appears as delayed decisions and time spent defending numbers instead of using them.
 
-That makes it worth considering as a Fivetran alternative or Airbyte alternative when you want to own the path from source to dashboard. It also comes with a significant qualification: the [Undercroft repository](https://github.com/muitneliss/undercroft) describes the project as **pre-alpha**, with nothing stable yet. Evaluate the actual sources and operating requirements before choosing it for a critical workflow.
+Undercroft brings data collection, retained raw data, analytical models and reporting into a self-hosted product. It is worth evaluating when you want control over that whole journey. The important qualification is maturity: the project is **pre-alpha**, with nothing stable yet, so an evaluation should begin with a bounded reporting problem.
 
-## What does this open-source data platform include?
+## What should an open-source data platform help you control?
 
-Undercroft connects several layers that a team might otherwise assemble separately. REST connectors read records, the raw lake preserves what arrived, Postgres makes that data queryable, dbt builds your analytical tables, and the Reports division displays saved questions and dashboards.
+Open-source means your team can inspect and adapt the software. Undercroft's code uses the MIT licence. Self-hosting is a separate choice: you run the platform and control its storage, while also taking responsibility for keeping it available.
 
-The repository ships YAML connector specs for Xero and HubSpot. Gmail and Google Drive use first-party collectors because retrieving document bytes needs more than a record-oriented YAML spec. Scripts can also send records through the lake write API, using the same create-only storage path.
+That control matters beyond where a server sits. You should be able to distinguish the information collected from a source, the business rules applied to it, and the results people see. If those are blurred together, changing a definition can mean starting the data collection work again.
 
-The distinction is scope. An ingestion service may fit perfectly into an existing warehouse and BI setup. Undercroft supplies those adjacent modelling and reporting layers together, but still requires someone to define what the data means. It ships no business schema and no universal definition of a customer or revenue.
+A useful evaluation therefore asks who owns the evidence, who agrees the calculations, and who handles failures. Access to source code helps with transparency, but it does not answer those organisational questions for you.
 
-![Comparison of separate ingestion, storage, dbt and BI tools with connectors, a raw lake, Postgres, dbt and reports inside one Undercroft platform](../../../assets/posts/open-source-data-platform/flow.png)
+## How does ELT turn source data into useful reports?
 
-This sketch compares ways to assemble a stack. It is not a claim that competing products lack integrations with the other layers.
+ELT means collecting data, storing it, then transforming it for analysis. Think of keeping the original documents alongside a working summary. The summary can change as your questions change; the originals remain available to check how you reached an answer.
 
-## How does self-hosted ELT work in Undercroft?
+Undercroft follows that sequence. Connectors collect source data, a raw data lake preserves what arrived, and Postgres makes it available for analysis. Your team defines dbt models: reusable rules that shape the collected information into something useful. Built-in BI then presents saved questions and dashboards over those models.
 
-The sequence is explicit in the repository's [architecture guide](https://github.com/muitneliss/undercroft/blob/main/docs/architecture.md):
+![Separate tools for collection, storage, modelling and BI compared with the same journey inside Undercroft](../../../assets/posts/open-source-data-platform/flow.png)
 
-1. A connector or collector obtains data from the source with the granted credentials.
-2. The worker lands records or document bytes in the S3-compatible raw lake.
-3. Records are projected into the generic `raw.records` table in Postgres; documents have their own catalogue and extracted-text projections.
-4. The worker runs dbt with the tenant's models to build analytical tables.
-5. Reports query those models through the tenant's read-only database login.
+Bringing those stages together reduces the number of separate tools a team must assemble. It still leaves the meaning of the report with the people who understand the business. The [comparison of ETL and ELT](/en/etl-vs-elt/) explores why the order of storage and transformation affects that flexibility.
 
-Business transformation follows landing, so teams can revise SQL without making the source API the only place to recover earlier observations. For a reporting workflow, that means separating “what did we receive?” from “how do we calculate this metric?”
+## Why keep raw data after a report is built?
 
-This is useful when an operations team changes a grouping or finance revises a reporting rule. Retained raw data provides the input for rebuilding analytical projections. It does not supply missing records that the connector never collected, nor decide which accounting interpretation is correct.
+A report answers a particular question using a particular set of rules. Next month, operations may want a different grouping, or finance may revise which date determines a reporting period. Keeping only the finished result makes those changes harder to check.
 
-## Where does the raw data live, and why keep it?
+Undercroft preserves collected content without overwriting earlier content. Identical content is stored once; changed content can be retained alongside what came before. The analytical layer can then be rebuilt from retained inputs when a model needs correcting.
 
-Undercroft's durable data foundation is its raw lake on S3 or MinIO. The documented server stack runs MinIO. Lake writes are create-only and content-addressed: identical content is deduplicated, and changed content receives a new version manifest rather than overwriting the previous one.
+This is evidence of what the platform collected, not a complete history of everything that ever happened in the source. It cannot recover records that were never retrieved. Nor does immutable storage protect itself against lost disks or deleted infrastructure: the documented deployment does not include the raw lake in its backup set, so storage protection needs its own plan. The [raw data lake guide](/en/immutable-raw-data-lake/) explains that distinction.
 
-Postgres holds queryable projections. That separation matters because a table optimised for today's report need not be your only retained representation of a source record. A faulty model can be corrected while the landed input remains available.
+## What does your team still need to define?
 
-Immutability also has a boundary. It describes the application's write path; it does not make a disk indestructible or automatically configure replication. The deployment runbook explicitly records that the raw lake is not in a backup set. A self-hosting team must plan object-storage durability and recovery instead of assuming a database dump protects the lake.
+Undercroft does not ship a universal business schema or ready-made definitions of revenue and customers. Engineers build the models, while finance and operations agree what belongs in each measure. A missing amount must remain distinguishable from a real zero; uncertainty should be visible instead of becoming a plausible-looking answer.
 
-For the storage rationale, see the [immutable raw data lake guide](/en/immutable-raw-data-lake/). When comparing products, ask about destination data, temporary processing storage and retained source history separately. Those are three different questions.
+Reporting access is separated from the underlying raw data. Built-in reports read the organisation's modelled results with read-only permissions, and organisations' data is kept apart through database access controls. This supports a division of responsibility between preparing data and consuming it, without making every report viewer a raw-data administrator.
 
-## How does Undercroft compare with Fivetran and Airbyte?
+For a practical example of that shared work, see [how Xero data becomes a report](/en/xero-reporting-sql-dbt/). Connecting an account is the beginning; agreeing what the report means is what makes it useful.
 
-Fivetran and Airbyte both centre their replication offerings on moving data from sources to destinations. Undercroft combines that ingestion work with its own raw lake, Postgres modelling environment and BI surface. The following comparison concerns that ELT workflow, rather than every adjacent product either vendor offers.
+## Is Undercroft an alternative to Fivetran or Airbyte?
 
-| Decision          | Undercroft                                                            | Fivetran                                                                      | Airbyte                                                                                      |
-| ----------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Hosting           | Self-hosted stack                                                     | Managed SaaS; hybrid processing is also available                             | Self-managed and managed offerings                                                           |
-| Licence           | MIT for the Undercroft repository                                     | Commercial service                                                            | Core and connectors under ELv2; Protocol under MIT; commercial offerings have separate terms |
-| Data location     | Raw lake on your configured S3/MinIO storage; projections in Postgres | Loads into your chosen destination; processing location depends on deployment | Loads into your chosen destination; execution location depends on deployment                 |
-| Scope here        | Ingestion, raw lake, dbt and first-party BI                           | Data movement with transformation capabilities and integrations               | Source-to-destination replication within a broader product offering                          |
-| Connector breadth | Xero and HubSpot specs; Gmail and Drive collectors                    | Hundreds of connectors                                                        | Hundreds of connectors                                                                       |
+It belongs on an evaluation list when you are looking for a self-hosted journey from supported sources to reports. Its current sources include Xero, HubSpot, Gmail and Google Drive. Support for those sources should be checked against the particular records or documents your workflow needs.
 
-Fivetran's [deployment documentation](https://fivetran.com/docs/deployment-models) distinguishes SaaS processing from hybrid processing in your network. Calling it “cloud-only” would miss that option. Its [transformation documentation](https://fivetran.com/docs/transformations) also describes hosted dbt and transformation orchestration, so the comparison is not “Undercroft has dbt; Fivetran does not.”
+The useful comparison with Fivetran or Airbyte starts with the job you want to buy or build:
 
-Airbyte documents both [self-hosted and managed options](https://airbyte.com/why-open-source). Its [licence inventory](https://github.com/airbytehq/airbyte/blob/master/docs/community/licenses/README.md) distinguishes ELv2 components, the MIT-licensed Protocol and commercial products. Public source availability should not be treated as identical licensing across the whole stack.
+- **Data movement into an existing setup:** prioritise source coverage and compatibility with your warehouse and BI tools.
+- **A combined path from collection to reporting:** consider whether Undercroft's raw lake, models and built-in BI reduce assembly work for your team.
+- **Less operational responsibility:** weigh a managed service against the staff time needed to run a self-hosted platform.
 
-Neither destination replication nor the presence of a raw table alone establishes the same create-only versioned archive as Undercroft's lake. Check the chosen connector, destination and retention behaviour instead of assuming one product owns your data and another does not.
+Adding a REST API source is still engineering work. A reusable connector approach reduces repeated plumbing, but someone must verify access, how records are retrieved, and how changes are represented. An API being available does not mean it is already supported.
 
-## When are Fivetran or Airbyte the better choice?
+## When is self-hosted Undercroft a poor fit?
 
-Connector coverage is a strong reason to choose them. Fivetran describes [pipelines from hundreds of sources](https://www.fivetran.com/data-movement/hybrid-deployment), and Airbyte advertises a similarly broad catalogue. If your required source is already supported there, that can remove substantial connector implementation and maintenance work.
+Undercroft is a poor fit if you need a stable, turnkey system for a critical workflow today. Its pre-alpha status matters even when its design matches your goals. It also asks too much of a team that wants finished business dashboards without anyone owning the models.
 
-Fivetran's managed SaaS model is worth considering when the team wants the provider to run ingestion infrastructure. Airbyte is worth considering when self-managed replication and a broad connector ecosystem are the priorities. Both may fit a team that already has a warehouse, dbt workflow and preferred BI tool.
+Self-hosting needs an operational owner for access, failed syncs, upgrades and recovery. Infrastructure and engineering time remain costs even with an open-source licence. If your existing warehouse and reporting tools already work well, adding only the missing data connection may be simpler than adopting a broader platform.
 
-Undercroft is more relevant when its existing sources cover your needs and you want raw retention, SQL models and reports in one product. A missing connector is real work, even if the API looks simple. Authentication, paging, deletions and source-specific change tracking still need verification.
+The stronger fit is a team that values retained source evidence, wants to define its own analysis, and has the capacity to operate and evaluate an evolving product.
 
-## Can you add a REST API connector without a new business schema?
+## How can you get started with Undercroft?
 
-For APIs that fit its connector contract, Undercroft describes the read in YAML. This real excerpt from `specs/connectors/hubspot.yaml` identifies the source and how bearer credentials are obtained; it is not a complete standalone connector:
-
-```yaml
-apiVersion: "undercroft.dev/v1"
-kind: "Connector"
-id: "hubspot"
-displayName: "HubSpot CRM"
-baseUrl: "https://api.hubapi.com"
-auth:
-  kind: "bearer"
-  token: { from: "connection" }
-  grantRefusal: "hubspot-missing-scopes"
-```
-
-The rest of the spec declares entities, pagination and other reading rules. Source records go into a generic table, so a new REST source does not require a new business-table migration. Making it available in the product still requires packaging the spec, exposing the supported source and releasing the change.
-
-The [REST API and YAML connector guide](/en/data-integration-rest-api-yaml-connectors/) explains that boundary. Declarative connectors reduce repeated plumbing; they do not prove that an arbitrary API is supported.
-
-## How do dbt and BI work for engineering and finance teams?
-
-Engineers author dbt models that turn source payloads into useful tables. Finance and operations teams help define the meaning: which statuses count, which date determines a period, and how missing values should appear. The platform does not silently supply those decisions.
-
-Database permissions separate the work. Each tenant has its own dbt login and analytical schemas. Row-level security restricts raw reads by tenant login. Reports run as a separate read-only BI login against that tenant's analytical schema; BI cannot directly read the raw schema. These boundaries are documented in [ADR 0018](https://github.com/muitneliss/undercroft/blob/main/docs/adr/0018-per-tenant-roles-and-row-level-security.md).
-
-Reports are part of Undercroft itself, and Metabase is no longer in the stack. Members and admins author saved questions and dashboards; viewers read them. The [Xero SQL and dbt reporting guide](/en/xero-reporting-sql-dbt/) gives a concrete example of the modelling work between an API response and a useful report.
-
-## What must your team operate when you self-host?
-
-The documented deployment uses one Docker Compose stack on Dokploy, containing multiple services. The control plane is its only public surface. The worker, databases, MinIO and scheduler communicate internally; “one stack” does not mean one process.
-
-Dokploy clones the server compose file from `main`, while releases supply published application images. Verification checks running image digests. A rollback changes image versions but does not automatically roll back that compose file, as the [deployment runbook](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/deployment.md) explains.
-
-Your operating plan therefore needs owners for credentials, sign-in configuration, storage durability, upgrades and failed syncs. MIT licensing does not remove infrastructure costs or engineering time. For an open source ELT evaluation, test one representative source through one agreed report, including a failed run and recovery, before expanding the scope.
+Explore [Undercroft](https://undercroft.lowbit.link) and the [repository](https://github.com/muitneliss/undercroft), then choose a representative source and a report whose meaning your team already agrees on. Evaluate whether you can explain the result and recover from a failed sync. Use the [deployment guide](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/deployment.md) to assess the operating work before expanding the trial.
 
 ## FAQ
 
-### Is Undercroft an open-source Fivetran alternative?
+### Is an open-source data platform free to run?
 
-Yes, for teams evaluating a self-hosted path from supported sources through a raw lake, dbt and BI. It is MIT-licensed and pre-alpha, with much narrower connector coverage than Fivetran.
+Undercroft's MIT licence gives you access to use and adapt its code. Hosting, storage, maintenance and model development still require resources.
 
-### Is Undercroft an Airbyte alternative for self-hosted ELT?
+### Can Undercroft replace Fivetran or Airbyte?
 
-It can be when you want modelling and reporting in the same stack as ingestion. Airbyte remains a strong candidate when broad connector coverage and replication into an existing destination are the main requirements.
+It may suit a supported workflow where you want collection, modelling and reporting together. It is not a drop-in replacement; evaluate source coverage, operating effort and its pre-alpha maturity.
 
-### Does Undercroft include ready-made business models?
+### Does Undercroft include dashboards?
 
-No business schema ships with the platform. You write dbt models to define the analytical tables and calculations your team needs.
+Yes, it includes BI for saved questions and dashboards. Your team still supplies the models and business definitions those reports depend on.
 
-### Does self-hosting mean everything stays offline?
+### Does self-hosted mean the system works offline?
 
-No: connectors still call external source APIs, and configured external services may make other outbound requests. Self-hosting gives you control over the deployed stack and its storage; it is not an air-gap guarantee.
+No, connectors still need to reach external source services. Self-hosting gives you control over the deployed platform and storage, rather than a guarantee that nothing communicates outside it.

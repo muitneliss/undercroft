@@ -1,6 +1,6 @@
 ---
-title: "Data integration là gì? Tích hợp REST API bằng YAML"
-description: "Data integration là gì? Tìm hiểu cách tích hợp dữ liệu từ REST API bằng YAML connector, quản lý auth, pagination, watermark và lỗi khi sync."
+title: "Data integration là gì? Từ dữ liệu rời rạc đến report"
+description: "Data integration là gì, giúp ích gì cho doanh nghiệp? Hiểu cách Undercroft kết nối nguồn, giữ raw data và những đánh đổi trước khi lựa chọn."
 translationKey: "data-integration"
 pubDate: "2026-09-29"
 tags: ["Integration", "REST API", "ELT"]
@@ -11,125 +11,80 @@ keywords:
     "data pipeline",
     "API connector",
     "REST API",
-    "YAML connector",
+    "incremental sync",
   ]
 hero: "../../../assets/posts/data-integration/hero.png"
-heroAlt: "Data integration là gì: sơ đồ REST API và Google collector đưa dữ liệu về cùng một raw data lake"
+heroAlt: "Data integration là gì: sơ đồ dữ liệu bán hàng, kế toán và tài liệu đi qua raw data lake và model để tạo report"
 ---
 
-Data integration là gì khi áp dụng vào công việc hằng ngày? Đó là việc đưa dữ liệu từ các hệ thống riêng lẻ về một cách sử dụng chung. Chẳng hạn, đội finance cần đối chiếu hóa đơn trong Xero với thông tin bán hàng ở HubSpot và tài liệu nhận qua Gmail. Lấy được dữ liệu chỉ là bước đầu; còn phải biết đã đọc đủ chưa, lần cập nhật nào được giữ lại và số liệu trong report được tính theo quy tắc nào.
+Data integration là gì mà doanh nghiệp cần quan tâm? Hãy nghĩ đến kỳ chốt báo cáo: kinh doanh theo dõi giao dịch trên HubSpot, kế toán giữ hóa đơn trong Xero, còn tài liệu nằm ở Gmail. Muốn biết giao dịch nào đã thu tiền, mọi người lại xuất dữ liệu rồi đối chiếu bằng tay. Công việc lặp lại, nhưng vẫn khó biết bản nào mới nhất.
 
-Với REST API, nhiều phần của công việc này có thể mô tả bằng YAML connector. Undercroft dùng một runtime chung để thực hiện các khai báo đó, lưu raw data trước rồi mới để người dùng viết dbt model cho nhu cầu riêng.
+Data integration giúp các nguồn đó được sử dụng cùng nhau. Giá trị không chỉ là bớt thao tác: người đọc report cần biết số liệu đến từ đâu, còn thiếu gì và được tính theo quy tắc nào.
 
-## Data integration là gì, khác data pipeline ở đâu?
+## Data integration là gì, khác data pipeline thế nào?
 
-Data integration là mục tiêu làm cho dữ liệu từ nhiều nguồn có thể dùng cùng nhau. Data pipeline là chuỗi bước đọc, lưu và xử lý dữ liệu. API connector phụ trách giao tiếp với một nguồn: auth, endpoint, pagination và cách nhận biết thay đổi.
+Có thể hình dung data integration như việc gom hồ sơ về cùng bàn làm việc. Hồ sơ đã ở cạnh nhau chưa có nghĩa là khớp nhau. Doanh nghiệp vẫn phải thống nhất khi nào ghi nhận một giao dịch: lúc chốt bán, xuất hóa đơn hay nhận tiền.
 
-Trong Undercroft, record từ REST API đi vào raw data lake trên S3 hoặc MinIO, rồi được đưa vào bảng chung `raw.records` trong Postgres. Người dùng viết SQL qua dbt model để tạo các bảng phục vụ BI. Platform không định nghĩa sẵn thế nào là khách hàng hay doanh thu của doanh nghiệp.
+Data pipeline là chuỗi bước thu thập, lưu và xử lý dữ liệu. Connector phụ trách đọc từng nguồn; REST API là cách ứng dụng cho hệ thống khác lấy thông tin trong phạm vi được cấp quyền. Đây là phương tiện, còn mục tiêu là trả lời đúng câu hỏi kinh doanh.
 
-Cách tổ chức này giúp đội kỹ thuật sửa model mà vẫn có raw data đã lưu để xử lý lại. Bài về [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích lớp lưu trữ này; bài [ETL và ELT](/etl-va-elt-la-gi/) làm rõ vị trí của bước biến đổi dữ liệu.
+## Undercroft kết nối dữ liệu theo cách nào?
 
-## YAML connector thay thế phần code nào?
+Undercroft lưu raw data vào data lake trước, rồi đưa dữ liệu thu thập được sang Postgres để phục vụ phân tích. Đội ngũ của bạn viết dbt model để áp dụng quy tắc nghiệp vụ và chuẩn bị dữ liệu cho report hoặc BI. Platform không quyết định sẵn khách hàng hay doanh thu phải được hiểu thế nào.
 
-Một declarative connector mô tả yêu cầu đọc dữ liệu thay vì viết lại vòng lặp HTTP cho từng nguồn. Undercroft kiểm tra spec theo schema; repo hiện có YAML connector cho Xero và HubSpot.
+Raw data đã lưu không bị ghi đè. Nội dung giống nhau không cần lưu thêm bản nữa; nội dung thay đổi có thể được giữ thành phiên bản mới. Khi sửa cách tính report, đội kỹ thuật có thể xử lý lại từ raw data còn được giữ. Bài về [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích lợi ích này.
 
-| Thành phần       | Khai báo trong spec                              | Câu hỏi cần trả lời                        |
-| ---------------- | ------------------------------------------------ | ------------------------------------------ |
-| Auth             | Bearer token hoặc OAuth                          | Đọc bằng quyền của connection nào?         |
-| Endpoint         | URL, path, query                                 | Cần lấy danh sách và trường nào?           |
-| Identity         | `envelopePath`, `idPath`                         | Record nằm ở đâu, ID là gì?                |
-| Pagination       | Page number, cursor, next link, offset hoặc none | Làm sao đọc hết danh sách?                 |
-| Incremental sync | Strategy, source field, format                   | Lần sau dùng watermark thế nào?            |
-| Reliability      | Rate limit, retry, guard                         | Khi bị giới hạn hoặc lỗi thì xử lý ra sao? |
+Xero và HubSpot dùng chung cơ chế connector: mô tả cách đọc từng nguồn, rồi dùng lại phần thu thập. Gmail và Google Drive có cách thu thập riêng cho email và tài liệu, nhưng cùng đưa nội dung vào data lake. Thêm nguồn mới vẫn cần công việc kỹ thuật và phát hành sản phẩm; không phải REST API nào cũng có thể kết nối ngay.
 
-Nguồn phù hợp với schema có thể khai báo cách đọc bằng YAML mà không cần database migration. Tuy nhiên, đưa nguồn mới lên giao diện vẫn cần đóng gói spec vào worker, đăng ký nguồn ở control plane và release. Đây không phải tính năng tải YAML bất kỳ lên là có ngay màn hình connection.
+## Nên hiểu ETL và ELT trong data integration ra sao?
 
-[Repo Undercroft](https://github.com/muitneliss/undercroft) chứa spec và schema để kiểm tra; dự án open-source theo MIT và đang ở giai đoạn pre-alpha.
+ETL lấy dữ liệu, biến đổi rồi mới đưa kết quả vào nơi lưu trữ phục vụ phân tích. ELT đưa dữ liệu vào trước, sau đó mới biến đổi theo nhu cầu. Data integration là mục tiêu rộng hơn; ETL và ELT là cách tổ chức công việc.
 
-## Auth và pagination được khai báo ra sao?
+Undercroft đi theo ELT, giữ raw data trước khi chạy model của người dùng. Cách này hữu ích khi câu hỏi kinh doanh thay đổi, nhưng doanh nghiệp phải có người chịu trách nhiệm về định nghĩa chỉ tiêu. Bài [ETL và ELT khác nhau thế nào](/etl-va-elt-la-gi/) giúp cân nhắc lựa chọn đó.
 
-HubSpot dùng bearer token lấy từ connection. Xero dùng OAuth với refresh-token rotation và header chứa ID organisation bên Xero. Secret không được viết trực tiếp vào YAML công khai.
+## Incremental sync có bảo đảm dữ liệu luôn mới không?
 
-Pagination phải theo từng endpoint. Mặc định Xero bắt đầu từ `page=1`, đọc đến khi gặp trang rỗng. Endpoint trả toàn bộ danh sách một lần dùng `kind: none`. HubSpot dùng next link hoặc cursor `after` tùy entity.
+Incremental sync tập trung vào phần thay đổi từ lần đọc trước. Có thể coi đó là dấu đánh trang khi đọc một cuốn sổ dài. Undercroft chỉ dời dấu sau khi đọc xong danh sách liên quan; lần đọc bị gián đoạn không được coi là đã kiểm tra hết.
 
-Đây là phần invoices thật trong `specs/connectors/xero.yaml`. Đoạn trích kế thừa auth, pagination, pacing và retry từ spec đầy đủ; riêng nó chưa phải một connector hoàn chỉnh.
+Hiệu quả còn tùy nguồn. Có REST API trả riêng phần thay đổi, nhưng có nguồn vẫn cần đọc toàn bộ danh sách rồi mới lọc. Vì vậy, incremental sync có thể giảm việc lưu và xử lý lại mà không giảm số lần yêu cầu dữ liệu.
 
-```yaml
-- name: invoices
-  request: { kind: list, path: /Invoices, query: { pageSize: "500", unitdp: "4" } }
-  readScope: accounting.invoices.read
-  envelopePath: Invoices
-  idPath: InvoiceID
-  updatedAtPath: UpdatedDateUTC
-  incremental:
-    strategy: header
-    header: If-Modified-Since
-    sourcePath: UpdatedDateUTC
-    format: ms-json-date
-    send: rfc3339-seconds
-```
+![Sơ đồ sync định kỳ lấy phần thay đổi và lượt đọc toàn bộ tìm chỉnh sửa bị bỏ sót, cùng đưa dữ liệu vào raw data lake](../../../assets/posts/data-integration/flow.png)
 
-`envelopePath` chỉ đến danh sách invoices, còn `idPath` xác định ID từng record. Thiếu ID sẽ phát sinh lỗi, không tự đoán khóa để lưu. Query `unitdp` yêu cầu Xero trả đơn giá với bốn chữ số thập phân.
+Nguồn cũng có thể không báo mọi chỉnh sửa. Với kết nối phù hợp, Undercroft cho phép bật lịch đọc toàn bộ để tìm thay đổi mà incremental sync có thể bỏ qua. Cần chủ động bật khi cần; việc này dùng thêm khả năng truy cập nguồn và không bảo đảm dữ liệu mới ngay lập tức.
 
-![Sơ đồ YAML connector với chú thích auth, endpoint, pagination và cấu hình watermark trước khi runtime ghi vào raw data lake](../../../assets/posts/data-integration/flow.png)
+## Làm sao biết một lần sync đã lấy đủ dữ liệu?
 
-## Incremental sync dùng watermark thế nào để tránh bỏ sót?
+Kết nối thành công chưa chứng minh dữ liệu đã đầy đủ. Một danh sách không có kết quả có thể do chưa phát sinh dữ liệu, chưa có thay đổi, hoặc tài khoản không được phép đọc. Những tình huống này mang ý nghĩa khác nhau với người làm báo cáo.
 
-Watermark ghi nhận mốc nguồn đã được đọc thành công. Undercroft lưu mốc này riêng với cursor đưa dữ liệu từ data lake vào Postgres, vì hai bước hoàn thành ở những thời điểm khác nhau.
+Undercroft điều tiết việc đọc, thử lại với một số lỗi tạm thời và báo lỗi connector thay vì biến lỗi thành kết quả rỗng. Nhật ký của lần chạy giúp người quản trị xem tiến độ và cảnh báo sau đó. Một lần chạy kết thúc vẫn có thể kèm cảnh báo thiếu quyền hoặc phải tạm dừng đọc vì giới hạn của nguồn.
 
-Watermark chỉ tiến sau khi đọc xong entity. Nếu lỗi ở giữa danh sách, lần sau vẫn dùng mốc trước đó. Lấy timestamp lớn nhất trong phần đã lưu có thể bỏ qua record cũ hơn nằm ở trang chưa đọc.
+Vì thế, cần xem cảnh báo cùng số lượng dữ liệu nhận được. Không nên diễn giải phần chưa đọc được thành “không có giao dịch”.
 
-Giá trị watermark được giữ cùng format của nguồn. Với Xero, runtime lưu Microsoft JSON date nhưng gửi header theo RFC 3339 UTC, làm tròn xuống giây. Đây là hai cách biểu diễn mà phía trả dữ liệu và phía nhận filter yêu cầu.
+## Khi nào cách tiếp cận này phù hợp với doanh nghiệp?
 
-Watermark còn gắn với request. Khi query hoặc tập properties thay đổi, mốc cũ có thể không còn hợp lệ; danh sách cần được đọc toàn bộ theo request mới, trong giới hạn budget.
+Undercroft phù hợp với đội ngũ muốn kiểm soát raw data và tự xây dựng quy tắc cho report. Việc giữ dữ liệu nguồn có ích khi cần giải thích số liệu cũ hoặc tính lại theo định nghĩa mới.
 
-Schema có ba strategy: `header`, `query-param` và `client-filter`. HubSpot dùng `client-filter`: vẫn đọc mọi trang, chỉ bỏ qua bước lưu record cũ hơn watermark. Cách này giảm công việc phía sau, không giảm số API request.
+Đổi lại, mô hình self-hosted cần người vận hành; model cần người hiểu nghiệp vụ và dữ liệu. Doanh nghiệp cũng phải quyết định cách lưu giữ và kiểm soát truy cập. Undercroft là open-source, đang ở giai đoạn pre-alpha và còn được xây dựng tích cực.
 
-Với Xero, change filter không thấy mọi chỉnh sửa. Connection có thể bật lịch re-sync để đọc toàn bộ lại trong các lần sync. Re-sync mặc định là paused; nếu không bật, những chỉnh sửa filter không thấy có thể vẫn giữ giá trị cũ.
+Nếu cần dịch vụ được vận hành sẵn, report nghiệp vụ dùng ngay hoặc cập nhật tức thời có bảo đảm, đây có thể chưa phải lựa chọn phù hợp. Tính linh hoạt đi kèm phần việc mà đội ngũ phải đảm nhận.
 
-## Rate limit và lỗi sync có bị biến thành dữ liệu rỗng không?
+## Nên bắt đầu tìm hiểu từ đâu?
 
-Không. Lỗi connector phát sinh `ConnectorError`, kèm số record đã thấy. Thông tin đó giúp phân biệt lỗi xảy ra ngay đầu lần đọc với lỗi sau khi đã nhận một phần dữ liệu, nhưng vẫn cần xem nguyên nhân cụ thể.
-
-Cả hai spec đều cấu hình retry cho `429`, `500`, `502`, `503`, `504` và tôn trọng `Retry-After`. Xero đặt khoảng cách request tối thiểu 1.100 milliseconds, đồng thời giới hạn thời gian chờ từ header này.
-
-Spec Xero hiện đặt 1.000 request mỗi ngày, trong đó whole read được dùng 800, giữ lại 200 làm reserve. Worker dùng header báo budget còn lại từ Xero khi có. Khi budget hết, whole read có thể dừng với cảnh báo trong journal; phần đọc chưa hoàn tất không lưu watermark mới. Lần đọc toàn bộ sau bắt đầu lại từ đầu.
-
-Danh sách rỗng hợp lệ là chuyện khác. Spec cho phép một số entity không có record; incremental read thực sự gửi watermark cũng có thể không thấy thay đổi. Danh sách thiếu quyền được ghi rõ là chưa được cấp quyền. Không nên diễn giải các trường hợp này thành “doanh nghiệp không có dữ liệu”.
-
-## Đặt lịch sync và kiểm tra kết quả ở đâu?
-
-Connection hỗ trợ lịch mỗi giờ, mỗi sáu giờ, hằng ngày, paused hoặc cron năm trường. Cron dùng múi giờ `Asia/Singapore`, không phải giờ Việt Nam. Scheduler kiểm tra mỗi năm phút và từ chối biểu thức có các lần chạy sát nhau hơn khoảng đó.
-
-Khi kiểm tra, đọc cả counts lẫn run journal. Undercroft lưu event có cấu trúc trong `ops.run_event`, nên đóng trình duyệt không làm mất bằng chứng của run. Event dùng loại sự kiện, counts và ID; giao diện hiển thị nội dung theo ngôn ngữ người đọc.
-
-Một run có trạng thái thành công vẫn có thể chứa cảnh báo budget hoặc danh sách chưa được cấp quyền. Trước khi dùng cho report, nên xem lần đọc toàn bộ đầu tiên, một lần incremental sync và phạm vi dữ liệu model thực sự nhận được.
-
-## Nên đọc hướng dẫn nào cho Xero, HubSpot, Gmail và Drive?
-
-Mỗi nguồn có đặc điểm riêng cần kiểm tra trước khi ghép vào data pipeline:
-
-- [Tích hợp Xero vào Postgres](/tich-hop-xero-postgres/) cho dữ liệu kế toán trong ví dụ YAML.
-- [Tích hợp HubSpot vào Postgres](/tich-hop-hubspot-postgres/) cho CRM object và quan hệ.
-- [Tích hợp Gmail đưa email vào database](/tich-hop-gmail-email-vao-database/) cho luồng email.
-- [Tích hợp Google Drive với OCR](/tich-hop-google-drive-ocr/) cho tài liệu.
-
-Gmail và Google Drive dùng collector viết bằng code vì có nội dung dạng bytes mà JSON connector runtime không biểu diễn. Chúng dùng chung pacing, retry và đường ghi data lake. Nguồn nằm ngoài khả năng của YAML có thể dùng external caller qua REST lake API; không cần ép mọi kiểu dữ liệu vào spec.
+Chọn một câu hỏi kinh doanh có thể đối chiếu kết quả, xác định nguồn cần đọc và độ trễ chấp nhận được. Bạn có thể khám phá [Undercroft](https://undercroft.lowbit.link) và xem [repository của dự án](https://github.com/muitneliss/undercroft) để đánh giá sản phẩm cùng yêu cầu triển khai. Một đợt thử nhỏ nên làm rõ cả độ đầy đủ của dữ liệu lẫn cách model diễn giải nó.
 
 ## Câu hỏi thường gặp
 
 ### Data integration có phải là ETL không?
 
-ETL là một cách tổ chức các bước trong quá trình tích hợp dữ liệu. Undercroft lưu raw data trước rồi chạy dbt model do người dùng viết, theo cách tiếp cận ELT.
+ETL là một cách tổ chức công việc trong data integration. Undercroft dùng ELT, giữ raw data trước rồi mới áp dụng quy tắc nghiệp vụ qua model.
 
-### API connector bằng YAML có cần viết code không?
+### Có thể kết nối mọi REST API với Undercroft không?
 
-Với REST API phù hợp schema, cách đọc được khai báo trong YAML thay cho vòng lặp request riêng. Đưa nguồn vào sản phẩm vẫn cần đăng ký và release; trường hợp ngoài schema cần đường ingest khác.
+Connector chung chỉ hỗ trợ những cách đọc nằm trong khả năng của nó. Nguồn khác có thể cần xử lý riêng và công việc kỹ thuật để đưa vào sản phẩm.
 
-### Incremental sync có luôn tiết kiệm API request không?
+### Incremental sync có luôn giảm số lần gọi API không?
 
-Không, `client-filter` vẫn đọc mọi trang. Chỉ filter phía nguồn qua header hoặc query mới có thể giảm dữ liệu trả về theo khả năng của endpoint.
+Không, một số nguồn vẫn phải được đọc hết để tìm thay đổi. Khi đó, lợi ích nằm ở việc giảm lưu trữ và xử lý lặp lại.
 
-### Sync thành công có nghĩa là dữ liệu đã đầy đủ không?
+### Data integration có cung cấp report theo thời gian thực không?
 
-Chưa đủ để kết luận: cần xem journal, phạm vi quyền và budget. Với nguồn có change filter không thấy mọi chỉnh sửa, còn phải kiểm tra lịch re-sync.
+Điều đó phụ thuộc lịch thu thập, khả năng của nguồn và bước xử lý tiếp theo. Undercroft dùng sync theo lịch, nên cần đánh giá độ trễ theo nhu cầu ra quyết định.

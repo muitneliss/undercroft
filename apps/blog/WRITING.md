@@ -37,12 +37,33 @@ either being found or being trusted once found.
   Airbyte). Write the Vietnamese around them: "tích hợp Xero", "đồng bộ dữ liệu", "raw data
   lake bất biến".
 
+## Concepts, not code
+
+The reader is deciding whether this approach, and this product, fits their problem. They are
+a finance lead, an operations manager, or an engineer weighing options. They are not yet
+operating Undercroft. Implementation detail loses the first two readers and tells the third
+nothing they can use before they have chosen. The runbooks in `docs/runbook/` hold the how-to,
+so the post explains the idea and links there.
+
+- **No code.** No code blocks, no SQL, no YAML, no shell commands, no JSON.
+- **No internals.** No file paths, function, table, column or config-key names, environment
+  variables, API endpoints, OAuth scope strings, header names, or internal limits and
+  defaults ("1,100 ms", "800 requests", "25 MiB"). Write what they mean for the reader
+  instead: "it reads only what changed since the last sync", not the header it sends.
+- **No inline code formatting** (backticks) at all. A product or concept name is plain text.
+- Explain **the concept** (what ELT is, why raw data should be kept), **the problem it solves**
+  for the business, **how Undercroft approaches it** in plain words, **when it fits and when it
+  does not**, and **what to do next** (a link to the product, the repository or a runbook).
+- One level of mechanism is enough. "Each sync reads only what changed, and a periodic full
+  read catches edits the source does not report" is the right depth. How the watermark is
+  stored is not.
+
 ## Only what is true
 
-- Every claim about Undercroft must be checkable in this repository: `README.md`,
+- Every claim about Undercroft must be true of this repository: `README.md`,
   `docs/architecture.md`, `docs/adr/`, `docs/runbook/`, `specs/connectors/`. Read the source
   before describing a feature, and never promise one that does not exist. The product's own
-  rule applies here: never guess.
+  rule applies here: never guess. Read deeply, then write at the level of the concept.
 - Compare competitors fairly and only on facts you can state generally (hosted vs
   self-hosted, licence, where raw data lives). No invented benchmarks or prices.
 - No real customer, person or company data (`.claude/rules/pii.md`). Tenants are `CASE-0042`;
@@ -57,6 +78,9 @@ either being found or being trusted once found.
   gradients, no 3D, no stock-photo people.
 - Labels are short and in English. They are the technical terms, which the Vietnamese post
   keeps in English anyway, so one image serves both.
+- A diagram shows a concept, the same as the text: boxes named for what they are ("Raw
+  lake", "Models", "Report"). It never shows code, a config file, or an internal table or
+  file name.
 - Reference an image by its relative path from the post:
   `![alt text](../../../assets/posts/<translationKey>/<file>.png)`. The build converts it to
   WebP at every width. Alt text describes what the diagram shows, in the post's language.

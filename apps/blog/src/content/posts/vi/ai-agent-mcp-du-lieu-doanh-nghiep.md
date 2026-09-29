@@ -1,6 +1,6 @@
 ---
-title: "MCP server cho dữ liệu doanh nghiệp: AI agent đúng quyền"
-description: "MCP server cho dữ liệu doanh nghiệp giúp AI agent dùng dữ liệu Xero, Gmail, Drive và HubSpot qua Undercroft, với quyền người dùng và read/write grant."
+title: "MCP server cho dữ liệu doanh nghiệp: AI agent được làm gì?"
+description: "MCP server cho dữ liệu doanh nghiệp giúp AI agent làm việc với Xero, Gmail và Drive. Hiểu quyền truy cập, độ tin cậy và khi nào nên chọn Undercroft."
 translationKey: "ai-agent-mcp"
 pubDate: "2026-09-29"
 tags: ["MCP", "AI", "Integration", "Open-source"]
@@ -14,109 +14,79 @@ keywords:
     "Claude MCP Xero",
   ]
 hero: "../../../assets/posts/ai-agent-mcp/hero.png"
-heroAlt: "Sơ đồ MCP server cho dữ liệu doanh nghiệp đưa yêu cầu của AI agent qua Bearer token, grant và Undercroft router đến dữ liệu của tenant"
+heroAlt: "Sơ đồ MCP server cho dữ liệu doanh nghiệp kết nối AI agent với dữ liệu Xero, Gmail và Drive qua kiểm tra quyền của Undercroft"
 ---
 
-**MCP server cho dữ liệu doanh nghiệp** cần trả lời hai câu hỏi: AI agent đọc được gì, và được phép thay đổi gì? Với Undercroft, Claude, ChatGPT hoặc một AI agent có kết nối phù hợp làm việc trên dữ liệu đã ingest từ Xero, Gmail, Google Drive và HubSpot. Quyền truy cập gắn với người dùng Undercroft, rồi được giới hạn thêm bằng read hoặc write grant.
+**MCP server cho dữ liệu doanh nghiệp** hữu ích khi một câu hỏi cần thông tin từ nhiều nơi: số liệu trong Xero, trao đổi qua Gmail, chứng từ trên Google Drive. AI agent có thể hỗ trợ tìm hiểu, nhưng doanh nghiệp cần biết agent được xem gì, được thay đổi gì và dựa vào đâu để trả lời.
 
-Điều này hữu ích khi đội finance cần kiểm tra số liệu, còn đội ops muốn xem một lần sync đã đọc đủ nguồn chưa. Nhưng cần phân biệt MCP, CLI, skills và assistant có sẵn trong ứng dụng: chúng dùng chung các kiểm tra quyền của router, còn cơ chế xác nhận thay đổi không hoàn toàn giống nhau.
+Cuối kỳ, kế toán và vận hành thường mất thời gian tìm lại căn cứ cho cùng một con số. Câu trả lời trôi chảy chưa giải quyết được việc đó nếu dùng report cũ hoặc bỏ sót chứng từ. Giá trị của AI nằm ở khả năng giúp kiểm tra bằng chứng, không chỉ diễn đạt kết quả.
 
-## MCP server là gì trong Undercroft?
+## MCP server cho dữ liệu doanh nghiệp là gì?
 
-MCP là Model Context Protocol, giao thức để client khám phá và gọi tool. Undercroft phục vụ MCP tại `/mcp` trên control plane. Mỗi tool tương ứng với một procedure của router; chẳng hạn `runs.list` thành `runs_list`. Input dùng schema của chính procedure đó.
+MCP là giao thức giúp ứng dụng AI tìm và sử dụng các công cụ mà ứng dụng khác cung cấp. Có thể hình dung đây là quầy tiếp nhận yêu cầu: agent hỏi một việc, còn ứng dụng kiểm tra người dùng có quyền thực hiện việc ấy hay không.
 
-Một lần gọi MCP đi qua `appRouter.createCaller(ctx)`, nên vẫn chịu kiểm tra role và tenant như các thao tác trong ứng dụng. Các procedure quản lý credential của tài khoản không được cung cấp qua MCP. AI agent không nhận một kết nối Postgres có quyền vượt người dùng.
+Với dữ liệu doanh nghiệp, việc đó có thể là xem tình trạng sync, tìm model hoặc đọc report. MCP đưa những khả năng này vào cuộc hội thoại. Nó không tự thu thập dữ liệu hay quyết định cách tính doanh thu.
 
-[Undercroft là dự án open-source](https://github.com/muitneliss/undercroft). Dữ liệu nguồn đi vào raw data lake bất biến; người dùng viết dbt model để tạo dữ liệu phục vụ report và dashboard. MCP bổ sung cách thao tác với platform, không tự định nghĩa doanh thu hay cách đối chiếu chứng từ.
+Vì vậy, có kết nối chưa có nghĩa là đã có câu trả lời đáng tin. Doanh nghiệp vẫn cần thống nhất ý nghĩa của số liệu và nguồn làm căn cứ.
 
-## MCP server cho dữ liệu doanh nghiệp đọc Xero, Gmail và Drive thế nào?
+## Undercroft kết hợp dữ liệu từ các nguồn thế nào?
 
-Phải kết nối nguồn, chọn phạm vi rồi ingest trước. Consent cho AI agent vào Undercroft khác với consent cho Undercroft đọc tài khoản nguồn. Đăng nhập MCP không đồng nghĩa với việc đã cấp quyền đọc Gmail.
+Undercroft lưu dữ liệu đã thu thập vào raw data lake bất biến, giữ lại bằng chứng về những gì đã nhận. Đội ngũ xây dựng dbt model để chuyển dữ liệu đó thành thông tin dùng cho report. Bản gốc và cách diễn giải phục vụ kinh doanh được tách riêng.
 
-| Nguồn        | Điều cần thiết lập                                                |
-| ------------ | ----------------------------------------------------------------- |
-| Xero         | OAuth, organisation được chọn và các entity mà scope cho phép đọc |
-| Gmail        | Tài khoản đã kết nối và các label được chọn                       |
-| Google Drive | Tài khoản đã kết nối, file hoặc folder được chọn để ingest        |
-| HubSpot      | Private app token có read scope cho các object cần dùng           |
+Quyền kết nối agent khác với quyền đọc nguồn. Cho phép AI agent vào Undercroft không đồng nghĩa với việc đã cho phép đọc Gmail. Doanh nghiệp phải chọn nguồn và phạm vi thu thập trước.
 
-Khi dữ liệu đã được lưu, AI agent có thể xem run, tìm model và đọc report trong phạm vi role cho phép. Với câu hỏi thiếu số liệu, nên kiểm tra run gần nhất và nguồn nào chưa được đọc trước khi yêu cầu giải thích kết quả kinh doanh.
+Khi dữ liệu đã có, agent đủ quyền có thể kiểm tra sync và tìm report liên quan. Tuy nhiên, một cơ hội bán hàng trong HubSpot không tự động tương đương một hóa đơn Xero. Quy tắc đối chiếu cần do đội ngũ xác định trong model, như phần nền tảng của [report từ Xero bằng dbt](/bao-cao-xero-sql-dbt/).
 
-Việc nối deal trong HubSpot với invoice trong Xero vẫn cần quy tắc rõ ràng trong dbt model. Có thể đọc thêm về [tích hợp Xero vào Postgres](/tich-hop-xero-postgres/) và [report từ Xero bằng SQL, dbt](/bao-cao-xero-sql-dbt/). Với chứng từ, bài về [Google Drive, OCR và tìm kiếm](/tich-hop-google-drive-ocr/) giải thích phần dữ liệu đầu vào.
+## AI agent được xem và thay đổi những gì?
 
-## Kết nối Claude, ChatGPT hoặc AI agent khác ra sao?
+Agent làm việc theo quyền của người dùng Undercroft. Kết nối có thể thu hẹp quyền đó, không thể nâng một người chỉ được xem thành quản trị viên. Các thao tác vẫn chịu kiểm tra quyền của ứng dụng.
 
-Client hỗ trợ remote MCP kết nối đến `/mcp` của deployment. Undercroft hỗ trợ OAuth và personal access token; runbook có hướng dẫn cho claude.ai, Claude Desktop và Claude Code. Với ChatGPT hoặc host khác, cần dùng luồng remote MCP mà host đó hỗ trợ, đồng thời kiểm tra riêng khả năng hiển thị widget và đọc skills.
+Khi đánh giá ban đầu, chỉ cho phép đọc là phạm vi dễ kiểm soát. Agent dùng được các công cụ tra cứu được cung cấp, nhưng không được thay đổi dữ liệu. Một số cách phân tích trực tiếp raw data vẫn cần cho phép thêm; chỉ đọc không có nghĩa là được phân tích mọi thứ.
 
-Qua OAuth, client đưa người dùng đến trang đăng nhập của Undercroft, rồi đến trang consent. Đăng nhập bằng địa chỉ đã được mời, chọn read only nếu chỉ cần tra cứu. Connected app xuất hiện trên trang tài khoản; revoke tại đó chặn lần gọi tiếp theo.
+Quyền của kết nối có thể trải rộng trên các không gian làm việc mà người dùng tham gia. Đừng coi màn hình đang mở là giới hạn truy cập. Người dùng có thể thu hồi quyền của ứng dụng đã kết nối khi không còn cần.
 
-Ví dụ dưới đây dùng lệnh được ghi trong runbook cho Claude Code. Domain minh họa phải được thay bằng origin thật của deployment:
+## Email có thể khiến AI agent làm sai yêu cầu không?
 
-```sh
-claude mcp add --transport http undercroft https://undercroft.example.test/mcp
-```
+Một email có thể chứa lời hướng dẫn nhằm đánh lừa AI agent. Nội dung “ngắt kết nối nguồn này” do người gửi viết không phải yêu cầu của người đang dùng assistant. Đọc được một chỉ dẫn không có nghĩa là được phép làm theo.
 
-Sau đó mở `/mcp` trong Claude Code, chọn `undercroft` và authenticate. Nếu client chỉ gửi được header, người dùng có thể tạo personal access token tại `/account`, chọn grant và thời hạn, rồi cấu hình `Authorization: Bearer`. Token chỉ hiện một lần; cookie đăng nhập không đủ để gọi `/mcp`.
+Assistant có sẵn trong Undercroft yêu cầu người dùng xác nhận thay đổi dự kiến. Một bước kiểm tra AI độc lập cũng xem lời của chính người dùng có yêu cầu hành động đó không, không lấy nội dung vừa đọc làm căn cứ cấp quyền. Nếu bước kiểm tra không hoạt động, thay đổi bị từ chối.
 
-## Read/write grant khác gì với role của người dùng?
+![Assistant có sẵn chỉ cho phép thay đổi khi người dùng xác nhận và bước kiểm tra độc lập đồng ý với yêu cầu; một điều kiện không đạt sẽ chặn thay đổi](../../../assets/posts/ai-agent-mcp/flow.png)
 
-Role quyết định người dùng được làm gì trong từng tenant. Grant có thể thu hẹp quyền đó, không thể mở rộng nó. Một token thuộc về người dùng có thể tới các tenant họ là thành viên, với role tương ứng; token không chỉ giới hạn ở tenant đang mở lúc tạo.
+Cơ chế này thuộc assistant có sẵn. AI agent bên ngoài qua MCP dùng quyền Undercroft cùng cách xác nhận của ứng dụng AI đang sử dụng. Không nên mặc nhiên coi chúng có cùng cách kiểm soát thay đổi.
 
-Grant `read` chỉ cung cấp tool được phân loại là read. Grant `write` cho phép gọi thêm thao tác thay đổi, nhưng router vẫn kiểm tra role. Viewer không thành admin chỉ vì chọn write. Việc kiểm tra grant diễn ra cả khi gọi tool, không chỉ khi liệt kê tool.
+## Skills có giúp AI agent hiểu nghiệp vụ không?
 
-Có một trường hợp dễ nhầm: `lake_query` cần write grant dù SQL chỉ đọc dữ liệu. Undercroft xem việc chạy SQL do admin viết trên raw data lake là thao tác cần cho phép rõ ràng. Read grant không có nghĩa là được chạy mọi câu SQL.
+Skills hướng dẫn cách làm việc: kiểm tra bằng chứng, hỏi rõ nhu cầu và báo đúng khi thao tác bị từ chối. Chúng không cấp thêm quyền. Kết nối MCP cũng chưa chắc đã đưa các hướng dẫn này vào agent.
 
-Credential không thể tự tạo credential khác để nâng quyền. Khi người dùng bị gỡ quyền truy cập, credential cũng mất quyền ở request tiếp theo. Với tenant không thuộc phạm vi của người gọi, câu trả lời là `NOT_FOUND`, tránh tiết lộ tenant đó có tồn tại hay không.
+Undercroft có workflow giúp agent bên ngoài làm rõ câu hỏi và soạn dbt model, xin xác nhận trước khi lưu và build. Việc kiểm tra bản nháp không bảo đảm nghiệp vụ đúng; kỹ sư vẫn cần rà soát logic.
 
-## Injection gate ngăn một email ra lệnh cho assistant thế nào?
+Với kết quả cuối cùng, hãy yêu cầu nêu nguồn, thời điểm cập nhật và phần còn thiếu. Report chỉ phản ánh lần build gần nhất. Số tiền chưa đọc được phải để thiếu, không coi là bằng không. Bài về [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích vì sao giữ bằng chứng gốc quan trọng khi cần kiểm tra lại.
 
-Assistant có sẵn trong Undercroft cần hai điều kiện cho mutation: người dùng xác nhận proof của thay đổi, và injection gate độc lập đồng ý rằng người dùng đã yêu cầu hành động đó. Proof trình bày thao tác cùng arguments để kiểm tra; câu xác nhận do ứng dụng định nghĩa, không để model tự viết.
+## Khi nào doanh nghiệp nên chọn cách này?
 
-![Mutation của assistant có sẵn phải qua proof được người dùng xác nhận và injection gate chỉ đọc lời người dùng; một kiểm tra không đạt thì yêu cầu bị từ chối](../../../assets/posts/ai-agent-mcp/flow.png)
+Cách này phù hợp khi đội ngũ muốn dùng AI để tra cứu nhưng vẫn giữ bằng chứng nguồn và tự quyết định quy tắc tính toán. Kế toán có thêm cách tìm căn cứ, còn kỹ thuật quản lý model dùng chung cho report.
 
-Injection gate chỉ xét lời người dùng, loại toàn bộ tool results khỏi phần đánh giá. Ví dụ, email chứa câu “disconnect nguồn này” vẫn là dữ liệu của người gửi email, không tự trở thành yêu cầu của người đang dùng assistant.
+Đổi lại, Undercroft là nền tảng self-hosted, open-source nên cần người vận hành và bảo trì. Nếu mong chỉ kết nối chatbot là có ngay report hoàn chỉnh, hoặc không có người phụ trách dữ liệu, hướng này khó đáp ứng. Nhu cầu luôn phản ánh nguồn ngay lập tức cũng phải được đánh giá theo độ trễ sync và build thực tế.
 
-Gate không được cấu hình hoặc không trả lời thì mutation bị từ chối. Approval secret cũng cần được cấu hình để ký xác nhận chống sửa đổi; thiếu secret thì approval không có chữ ký. Đây là giới hạn được ghi trong [hướng dẫn thiết lập assistant](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/assistant-setup.md).
+## Bắt đầu dùng Undercroft từ đâu?
 
-Hai kiểm tra trong hình thuộc assistant có sẵn. MCP client bên ngoài dùng grant, role và cơ chế xác nhận của host; CLI dùng opt-in theo profile. Không nên hiểu rằng mọi mutation từ Claude hay ChatGPT đều đi qua injection gate này.
-
-## Khi nào đội kỹ thuật nên dùng CLI và skills?
-
-Nếu host đã có tool của Undercroft qua MCP, skill ưu tiên dùng chúng. Khi không có MCP nhưng AI agent chạy được command, skill dùng CLI. CLI đăng nhập theo người dùng và gọi `/trpc` qua HTTP, không dùng DSN hay service token để đi thẳng vào database.
-
-Mỗi environment profile có `allowWrites`, mặc định tắt. Chỉ người dùng tại terminal mới bật được; AI agent thử bật trong agent mode sẽ nhận `HUMAN_REQUIRED`. Một URL truyền riêng qua `--url` không cho phép write. Agent mode trả về một JSON envelope để kiểm tra kết quả và mã lỗi.
-
-Skills hướng dẫn thứ tự làm việc, thay vì cấp thêm quyền:
-
-1. Đọc input schema và xác định operation thật sự có sẵn.
-2. Lấy tenant ID, run ID, source hoặc model từ kết quả đọc, không tự dựng tên.
-3. Nêu thay đổi dự kiến; với CLI, chạy `--dry-run` trước write.
-4. Xin xác nhận cho đúng hành động destructive và báo lại kết quả platform trả về.
-
-Workflow `undercroft-model-builder` hỏi rõ nhu cầu, đọc lake, soạn dbt model rồi chạy `models.check`. Nó hỏi trước khi save và trước khi build. Check trả errors, warnings và những gì chưa kiểm chứng; không bảo đảm SQL compile hay test sẽ pass.
-
-[Runbook về agent skills](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/agent-skills.md) hướng dẫn cài qua `npx skills`. MCP Skills extension cũng phục vụ cùng các file cho host hỗ trợ; chỉ kết nối MCP chưa đủ để kết luận workflow đã được nạp.
-
-## Hỏi đáp dữ liệu bằng AI cần kiểm tra kết quả gì?
-
-Yêu cầu AI agent chỉ ra tenant, nguồn, run và model làm căn cứ. Một saved question đọc model đã build, nên kết quả không mới hơn lần build đó. Cần kiểm tra thời điểm sync và build trước khi dùng câu trả lời cho công việc.
-
-MCP giữ kết quả đầy đủ trong `structuredContent`, nhưng phần text giới hạn mỗi list ở 50 mục và tổng text ở 60 KB, có thông báo khi cắt. AI agent không được xem một list bị cắt là toàn bộ dữ liệu. Với số tiền, giữ nguyên currency và phần thiếu; không biến giá trị chưa đọc được thành số không.
+Xem [Undercroft](https://undercroft.lowbit.link) và [repository của dự án](https://github.com/muitneliss/undercroft), rồi tham khảo [hướng dẫn kết nối MCP](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/mcp-setup.md). Hãy đánh giá bằng một câu hỏi hẹp, có dữ liệu đối chiếu sẵn và chỉ cho phép đọc trước khi giao thêm trách nhiệm cho agent.
 
 ## Câu hỏi thường gặp
 
-### Có thể dùng Claude MCP với dữ liệu Xero không?
+### Claude có đọc dữ liệu Xero qua MCP được không?
 
-Có, sau khi Xero được kết nối và dữ liệu đã ingest vào Undercroft. Claude chỉ gọi được các tool mà role và grant của người dùng cho phép.
+Có, sau khi dữ liệu Xero được thu thập vào Undercroft. Claude chỉ dùng được công cụ trong phạm vi quyền của người dùng và kết nối.
 
-### ChatGPT có dùng cùng MCP server được không?
+### MCP có thay thế data integration không?
 
-Có thể dùng endpoint khi cấu hình ChatGPT hỗ trợ remote MCP tương thích. Cần kiểm tra riêng khả năng gọi tool, hiển thị widget và đọc skills của host.
+Không, MCP giúp agent sử dụng khả năng của ứng dụng. Data integration vẫn đưa dữ liệu về, còn model xác định cách diễn giải.
 
-### Chỉ muốn hỏi dữ liệu thì có cần write grant không?
+### Có thể hỏi dữ liệu mà không cho AI thay đổi không?
 
-Có thể bắt đầu với read grant để dùng các tool được phân loại là read. Riêng `lake_query` vẫn cần write grant và role phù hợp dù câu SQL chỉ đọc.
+Có thể giới hạn kết nối ở các công cụ chỉ đọc. Một số hình thức phân tích raw data vẫn cần quyền bổ sung.
 
-### Assistant nào cũng tạo được dbt model phải không?
+### Kết nối AI agent có làm report chính xác hơn không?
 
-AI agent bên ngoài có thể dùng model-builder skill qua MCP hoặc CLI khi đủ quyền. Assistant có sẵn trong Undercroft không author hay build dbt model, và chỉ soạn lake SQL để người dùng kiểm tra rồi chạy.
+Độ chính xác vẫn phụ thuộc dữ liệu đủ, cập nhật và quy tắc nghiệp vụ đúng. Agent cần chỉ rõ căn cứ cùng những phần chưa thể xác minh.

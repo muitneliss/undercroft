@@ -1,136 +1,92 @@
 ---
-title: "Data integration with REST APIs and YAML connectors"
-description: "Learn how data integration works with declarative REST API connectors: YAML specs, auth, pagination, watermarks, rate limits, and visible failures."
+title: "Data integration: connect sources, keep the evidence"
+description: "Understand data integration, how REST API connectors bring sources together, and when Undercroft's raw-data-first approach fits your reporting needs."
 translationKey: "data-integration"
 pubDate: "2026-09-29"
 tags: ["Integration", "REST API", "ELT"]
 keywords:
-  [
-    "data integration",
-    "rest api integration",
-    "api connector",
-    "declarative connector",
-    "data pipeline",
-  ]
+  ["data integration", "rest api integration", "API connector", "incremental sync", "data pipeline"]
 hero: "../../../assets/posts/data-integration/hero.png"
-heroAlt: "Data integration sketch showing REST sources and Google byte collectors feeding one raw lake"
+heroAlt: "Data integration sketch showing sales, accounting and documents flowing through a raw lake and models into a report"
 ---
 
-Data integration brings information from separate systems into a form you can use together. For an engineering or finance team, that might mean reading invoices from Xero, relationships from HubSpot, and supporting documents from Gmail or Google Drive. The work includes obtaining permission, reading complete results, preserving evidence, and deciding what those records mean in a shared report.
+Data integration makes information from separate systems useful together. A sales team may track relationships in HubSpot, finance may keep invoices in Xero, and supporting documents may arrive through Gmail. When someone asks which sales have become paid invoices, those separate views need to meet. Otherwise, each reporting cycle starts with exports, manual matching, and arguments about whose spreadsheet is current.
 
-A REST API integration often starts as a short script. Keeping it reliable is the harder part: tokens expire, results span pages, requests get throttled, and a run can stop halfway through. Undercroft describes supported REST reads in YAML and executes them through a shared connector runtime, with raw data stored before business models are built.
+The business problem is bigger than moving data. People need to know what was collected, what is missing, and how a report reached its answer. A faster dashboard is not much help if a failed collection looks like a quiet month.
 
-## What is data integration, and where does a data pipeline fit?
+## What is data integration, and how does it work?
 
-Data integration is the broader task of making separate sources useful together. A data pipeline is the sequence that moves and processes the data. An API connector handles one part of that sequence: speaking a source's authentication, request, pagination, and change-tracking conventions.
+Think of data integration as bringing evidence to a shared workbench. The source systems provide the material; the business supplies the rules for interpreting it. Bringing a sales record and an invoice together does not automatically establish that they represent the same transaction.
 
-Undercroft's record pipeline goes from REST APIs to an immutable raw data lake on S3 or MinIO, then to the generic `raw.records` table in Postgres. Your dbt models define the tables used for analysis and BI. There is no shipped business schema that decides what a customer, invoice match, or revenue metric means for you.
+A data pipeline is the sequence of steps that collects, stores, and prepares that material. A connector is the part that knows how to read a particular source. A REST API is a way an application lets another system request information with permission.
 
-This separation matters when a report changes. You can rebuild a Postgres projection or revise a model using retained raw data. The connector does not need a new business table for every endpoint. The [immutable raw data lake guide](/en/immutable-raw-data-lake/) explains that foundation, while [ETL versus ELT](/en/etl-vs-elt/) explains where transformation belongs.
+Reliable integration needs all these parts, plus agreed definitions. Does a sale count when it is agreed, invoiced, or paid? That choice belongs to the business and determines what engineering must build into the report.
 
-## What does a declarative REST API connector contain?
+## How does Undercroft bring data sources together?
 
-A declarative connector describes what the runtime should request instead of implementing another HTTP loop. Undercroft validates its YAML specs against a connector schema. The repository ships Xero and HubSpot specs with different authentication and pagination choices, demonstrating that the shared format handles more than one API shape.
+Undercroft separates collecting evidence from interpreting it. It saves raw data in an immutable data lake, makes collected records available in Postgres, and lets your team define business models with dbt. Those models prepare the data for reports and BI.
 
-| Concern          | What the spec declares                               | Why it matters                                                          |
-| ---------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| Authentication   | Bearer token or OAuth configuration                  | Requests reach the intended account with its granted access.            |
-| Endpoint         | Base URL, path, query, and request kind              | The read asks for the fields and records you intended.                  |
-| Record identity  | `envelopePath` and `idPath`                          | The runtime finds records and their source IDs.                         |
-| Pagination       | Page number, cursor, JSON next link, offset, or none | Reading one successful response is not mistaken for reading everything. |
-| Incremental sync | Strategy, source field, format, and sending format   | Later reads can use a valid watermark.                                  |
-| Reliability      | Pacing, retry policy, and guards                     | Throttling and incomplete reads have explicit behavior.                 |
+Immutable means the saved content is not overwritten in place. Reading identical content again does not create another stored copy; changed content can be kept as a new version. If a reporting rule changes, your team can rebuild the analysis from retained raw data instead of relying entirely on another export. The [immutable raw data lake guide](/en/immutable-raw-data-lake/) explains why that matters.
 
-For a REST source that fits this contract, its extraction logic can be configuration without a database migration. Making a new source available in the product still requires packaging the spec in the worker and adding it to the control plane's supported sources, followed by a release. It is not a claim that uploading arbitrary YAML creates a new connection screen.
+For supported REST APIs, Undercroft uses a shared connector approach: describe how a source is read, then reuse the machinery that performs the collection. Xero and HubSpot use this approach. Gmail and Google Drive need dedicated collectors for message and document content, but feed the same raw lake.
 
-The [Undercroft repository](https://github.com/muitneliss/undercroft) contains the specs and their schema. The project is open-source under MIT and currently identifies itself as pre-alpha.
+This reduces repeated engineering work without making every source interchangeable. Adding a supported source still requires development and a release. An unusual source may need a custom collection path; a connector cannot manufacture information the source does not expose.
 
-## How do authentication and pagination work in YAML?
+## How is data integration different from ETL and ELT?
 
-The HubSpot spec uses bearer authentication with a token obtained from the connection. Xero uses OAuth with refresh-token rotation and an account header carrying the external organisation ID. Credentials are connection data; they do not belong as literal secrets in a published YAML file.
+Data integration is the goal. ETL and ELT describe where the preparation happens along the way.
 
-Pagination also follows the endpoint. Xero's default starts at `page=1` and continues until an empty page. Endpoints that return their whole list without pagination override that default with `kind: none`. HubSpot uses next links or an `after` cursor, depending on the entity.
+| Approach | Plain meaning                                              | Main consideration                                              |
+| -------- | ---------------------------------------------------------- | --------------------------------------------------------------- |
+| ETL      | Extract data, transform it, then load the prepared result. | Decide how to prepare the data before loading it.               |
+| ELT      | Extract data, load it, then transform it for analysis.     | Keep collected material available while reporting rules evolve. |
 
-The following is the real invoices entity from `specs/connectors/xero.yaml`, shown as an excerpt. It inherits authentication, pagination, pacing, and retries from the surrounding spec; it is not a complete standalone connector.
+Undercroft follows an ELT approach, preserving raw data before your team's transformations. It does not ship a business schema that decides what a customer or revenue means. That flexibility is useful when departments need different views, but someone must own the definitions and maintain the models. See [ETL versus ELT](/en/etl-vs-elt/) for the broader comparison.
 
-```yaml
-- name: invoices
-  request: { kind: list, path: /Invoices, query: { pageSize: "500", unitdp: "4" } }
-  readScope: accounting.invoices.read
-  envelopePath: Invoices
-  idPath: InvoiceID
-  updatedAtPath: UpdatedDateUTC
-  incremental:
-    strategy: header
-    header: If-Modified-Since
-    sourcePath: UpdatedDateUTC
-    format: ms-json-date
-    send: rfc3339-seconds
-```
+## How does incremental sync keep data up to date?
 
-Here, `envelopePath` locates the invoice array and `idPath` identifies each invoice. A missing ID raises an error rather than producing a guessed key. The `unitdp` query is another part of the read's meaning: this request asks Xero for four-decimal unit prices.
+Incremental sync focuses later collection on what changed since an earlier read. Imagine a bookmark in a long ledger: after finishing a section, you record where to continue. Undercroft advances that bookmark only after the relevant list has been read completely. An interruption does not turn partial progress into a claim that the rest was checked.
 
-![Annotated YAML connector sketch showing authentication, endpoint selection, pagination, and the watermark configuration](../../../assets/posts/data-integration/flow.png)
+The saving depends on the source. Some APIs return only changed records. Others still require reading the full list before Undercroft can avoid storing older records again. Incremental sync can therefore reduce later processing without reducing requests to the source.
 
-## How does incremental sync use watermarks safely?
+![Sketch of regular sync collecting changes and a full reread checking for missed edits, both feeding the same raw lake](../../../assets/posts/data-integration/flow.png)
 
-A watermark records how far a source was successfully read. Undercroft stores it separately from the Postgres loading cursor: fetching from a provider and projecting saved data into Postgres are different operations.
+A source's change tracking can also miss edits. For eligible connections, Undercroft offers an optional full reread schedule to catch changes that ordinary incremental reads may not reveal. The diagram shows these complementary approaches; the full reread must be enabled where needed. It consumes more source capacity and is not a guarantee of immediate freshness.
 
-Three details prevent a partial run from becoming a permanent gap:
+## How can you tell whether a sync is complete?
 
-1. **Advance after a completed entity read.** A failure midway through an entity leaves its previous watermark available for the next run. Taking the greatest timestamp from records already loaded could skip older records on unread pages.
-2. **Keep the source's value and its format together.** A format change invalidates the saved watermark. Xero's Microsoft JSON date is stored as source text, but sent as RFC 3339 UTC rounded down to the second because its filter reads a different representation.
-3. **Associate the watermark with the request.** Changes to the endpoint query or selected properties can invalidate it. A changed request needs a whole read to obtain its new representation of older records, subject to the whole-read budget.
+A successful connection proves that some communication worked. It does not prove that every needed record arrived. Permission gaps, temporary failures, and provider limits all affect what a report can know.
 
-The schema supports `header`, `query-param`, and `client-filter` strategies. The first two ask the provider to filter. HubSpot's `client-filter` still walks every page and skips landing records older than the watermark. It saves downstream work, not API bandwidth, and never stops merely because one old record appeared.
+Undercroft paces requests, retries selected temporary failures, and reports connector errors rather than disguising them as empty results. Its run journal records progress and warnings so an administrator can inspect what happened after the run, even if nobody watched it live.
 
-Incremental sync also depends on what the source considers a change. Xero's change filter cannot expose every edit. Undercroft therefore supports a separate, opt-in re-sync schedule for eligible connections, which reads lists whole again during sync runs. Re-sync is paused by default; leaving it off can leave edits invisible to that filter stale.
+Read those warnings alongside the result counts. A run can finish with a warning that part of a full read paused, or that access to a list was not granted. “Nothing changed,” “nothing exists,” and “we could not read it” have different business meanings. None should be silently treated as the others.
 
-## How should a data pipeline handle rate limits and failures?
+## When does this approach fit, and when does it not?
 
-Pacing reduces request pressure before throttling happens; retries handle selected responses after it happens. Both shipped YAML specs configure retries for `429`, `500`, `502`, `503`, and `504`, and respect `Retry-After`. The Xero spec sets a minimum request interval of 1,100 milliseconds and caps the wait accepted from that header.
+Undercroft fits teams that want control over retained source data and are prepared to own their reporting logic. It is especially relevant when reports evolve and the team needs to revisit the evidence behind an earlier interpretation.
 
-Whole reads have a separate budget. The current Xero spec sets a 1,000-request day and allows whole reads to spend 800, leaving a reserve of 200. These are the repository's configured values. The worker uses Xero's remaining-budget header when available, so the decision can account for requests spent outside the current run.
+The trade-off is responsibility. A self-hosted platform needs operational ownership, and flexible models need people who understand both the data and the business. Retaining raw data also requires storage and access decisions. Undercroft is open-source and pre-alpha, so it is still under active construction.
 
-When that budget stops a whole read, the journal says it paused or is waiting. A partial whole read saves no new watermark, and a later whole read starts from the beginning. The run may close successfully with a warning; its status alone does not establish that every list completed.
+It is a weaker fit if you need a managed service with minimal operational involvement, finished business reports immediately, or guaranteed instantaneous updates. Scheduled collection has limits, and a successful sync cannot repair an incorrect business definition.
 
-Actual connector failures raise `ConnectorError` with the number of records seen. They are not converted into an empty stream. An unreadable record ID is an error, while an unreadable incremental timestamp is not treated as proof that the record is old: the record can land without advancing the watermark.
+## How can you get started with data integration?
 
-Empty results need context too. Specs can allow legitimately empty entities. The empty-read guard is relaxed for an incremental read that actually sends a watermark, allowing “nothing changed” without pretending a first read succeeded. Missing source permissions are explicitly reported as lists not granted, rather than silently presented as empty business data.
-
-## How do you schedule syncs and check what happened?
-
-Connections support hourly, every-six-hours, daily, and paused presets, plus custom five-field cron expressions. Custom schedules use `Asia/Singapore`, and the scheduler checks due work on a five-minute tick. Expressions whose fires can fall closer together than that tick are refused; this is scheduled ingestion, not a promise of instantaneous streaming.
-
-For an operational check, read the run journal alongside the counts. Undercroft stores structured run events in `ops.run_event`, so evidence remains available after the browser closes. The journal uses defined events, counts, and opaque IDs, with wording supplied in the interface's language; it is not a copy of unrestricted worker logs.
-
-Before depending on a new source, inspect its first whole read, a later incremental read, and any permission or budget warnings. Then check that the dbt model answers the business question with the data actually collected.
-
-## Which integration guide should you read for your source?
-
-Use the source guides for the details a shared connector overview cannot settle:
-
-- [Xero integration into Postgres](/en/xero-integration-postgres/) covers the accounting source behind the YAML example.
-- [HubSpot integration into Postgres](/en/hubspot-integration-postgres/) covers CRM objects and relationships.
-- [Gmail integration from email to a database](/en/gmail-integration-email-to-database/) addresses the email collection path.
-- [Google Drive integration for OCR and search](/en/google-drive-integration-ocr-search/) addresses the document path.
-
-Gmail and Google Drive use first-party code collectors because their content includes bytes that the JSON connector runtime does not represent. They reuse pacing, retries, and the same lake write path. Other source behavior outside the declarative contract can use an external caller of the REST lake API. YAML is useful within its supported contract; it does not eliminate every integration-specific implementation.
+Start with a business question whose answer you can check, then identify its sources and acceptable delay. Explore [Undercroft](https://undercroft.lowbit.link) and review the [project repository](https://github.com/muitneliss/undercroft) to assess the product and setup requirements. A small evaluation should establish both that the necessary evidence arrives and that your model interprets it correctly.
 
 ## FAQ
 
 ### Is data integration the same as ETL?
 
-No. Data integration is the broader goal of using separate sources together; ETL describes extracting, transforming, and loading data in that order. Undercroft stores raw data before user-authored dbt transformations, following an ELT approach.
+No. Data integration is the broader goal of making sources useful together, while ETL is one way to organize the work. Undercroft follows ELT, saving raw data before business transformations.
 
-### Can I build an API connector without writing code?
+### Can any REST API connect to Undercroft?
 
-You can describe a supported REST read in YAML rather than write its request loop. Product registration and release work still applies, and behavior outside the schema needs another ingestion path.
+The shared connector approach covers supported ways of reading REST APIs. Sources outside those capabilities need additional engineering, and making a new source available in the product requires a release.
 
 ### Does incremental sync always reduce API calls?
 
-No: a client-side filter still reads the source's pages. A server-side header or query filter can reduce the returned data, subject to that endpoint's capabilities.
+No, some sources still require reading every page to identify changes. The saving may be in storage and later processing rather than requests to the source.
 
-### Does a successful run mean every source record is current?
+### Does data integration provide real-time reporting?
 
-No: inspect the journal for lists not granted, budget pauses, and other limits. A source's change filter can also miss edits, so consider the connection's re-sync setting before treating its data as current.
+Not necessarily: freshness depends on collection schedules, source behavior, and later processing. Undercroft uses scheduled syncs, so evaluate the delay your decisions can tolerate rather than assuming every change appears immediately.
