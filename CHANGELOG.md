@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.1](https://github.com/muitneliss/undercroft/compare/v1.46.0...v1.46.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **ui:** hold the tab strip at the foot of a phone's window, so a long page no longer hides the navigation ([#316](https://github.com/muitneliss/undercroft/issues/316)) ([3f06f99](https://github.com/muitneliss/undercroft/commit/3f06f997143d1947d0741d26e5bcc2d9632e1e9b))
+
 ## [1.46.0](https://github.com/muitneliss/undercroft/compare/v1.45.0...v1.46.0) (2026-09-28)
 
 
