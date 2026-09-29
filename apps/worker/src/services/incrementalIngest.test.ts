@@ -128,7 +128,7 @@ describe("a watermark advances only by getting to the end", () => {
   });
 
   it("stays where it was when an incremental read finds nothing new", async () => {
-    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "900" });
+    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "900" }, null);
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things?updatedAfter=900`, {
       body: { results: [], paging: {} },
     });
@@ -233,7 +233,12 @@ entities:
   });
 
   it("asks the second read for what changed since, in the dialect the header reads", async () => {
-    await writeSyncCursor(db, LEDGER, { ...LEDGER_MARK, watermark: "/Date(1573755038314+0000)/" });
+    await writeSyncCursor(
+      db,
+      LEDGER,
+      { ...LEDGER_MARK, watermark: "/Date(1573755038314+0000)/" },
+      null,
+    );
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/Contacts`, {
       body: { Contacts: [], paging: {} },
     });
@@ -252,7 +257,7 @@ describe("a watermark is only ever handed back under the format it was written i
     // and being silently wrong about which is later. The quiet side -- the same format answers
     // the stored value -- is "stays where it was when an incremental read finds nothing new",
     // which writes this cursor and reads it back through a whole run.
-    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "900" });
+    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "900" }, null);
 
     expect(await readSyncCursor(db, STREAM, { ...AS_DECLARED, format: "iso8601" })).toBeNull();
   });
@@ -282,5 +287,61 @@ describe("a watermark is only ever handed back for the request it was read with"
     expect(await readSyncCursor(db, STREAM, { ...AS_DECLARED, requestKey: keyOf(edited) })).toBe(
       "400",
     );
+  });
+});
+
+describe("a list whose change filter cannot see every change is read whole on a bound", () => {
+  // Issue #314: Xero documents edits that do not move `UpdatedDateUTC` -- a due date moved on a
+  // partially paid invoice, a contact's balances -- so `If-Modified-Since` never returns them.
+  // `wholeReadAfterHours` reads the list whole again, sending no watermark, once the run that
+  // last did so is that old. ADR 0080.
+  const BOUNDED = SPEC.replace(
+    "format: epoch-millis\n",
+    "format: epoch-millis\n      wholeReadAfterHours: 24\n",
+  );
+
+  beforeEach(() => {
+    writeFileSync(join(specsDir, "demo.yaml"), BOUNDED);
+  });
+
+  /** A whole read of `/things`, the only request the fetcher answers. */
+  function whole(results: readonly object[]): InMemoryFetcher {
+    return new InMemoryFetcher().on("GET", `${BASE}/things`, { body: { results, paging: {} } });
+  }
+
+  it("reads whole once its last whole read is a day old, landing an edit the filter never reported", async () => {
+    await ingest(whole([{ id: "1", changedAt: "400", due: "2026-10-01" }]));
+    // A day passing, as the one fact that measures it: the run that read the list whole began a
+    // day ago. The worker holds no clock of its own to move instead.
+    await db.query("UPDATE raw.sync_cursor SET whole_read_at = whole_read_at - interval '1 day'");
+
+    // The due date moved and `changedAt` did not, which is exactly what the filter cannot see.
+    const fetcher = whole([{ id: "1", changedAt: "400", due: "2026-10-30" }]);
+    const result = await ingest(fetcher);
+
+    expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/things`]);
+    expect(result.entities[0]).toMatchObject({ changed: 1 });
+  });
+
+  it("asks only for what changed while its last whole read is recent", async () => {
+    await ingest(whole([{ id: "1", changedAt: "400" }]));
+
+    // Recorded only WITH the watermark: a run that read whole again would be refused.
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things?updatedAfter=400`, {
+      body: { results: [], paging: {} },
+    });
+    await ingest(fetcher);
+
+    expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/things?updatedAfter=400`]);
+  });
+
+  it("reads whole once when its cursor was written before whole reads were recorded", async () => {
+    // Every cursor production holds when this ships: a watermark, and no whole read on record.
+    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "400" }, null);
+
+    const fetcher = whole([{ id: "1", changedAt: "400" }]);
+    await ingest(fetcher);
+
+    expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/things`]);
   });
 });

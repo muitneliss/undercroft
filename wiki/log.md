@@ -212,3 +212,6 @@
 ## [2026-09-28] ingest | ADR 0078 A Drive Walk Lands the Folders It Lists
 ## [2026-09-28] ingest | ADR 0079 Xero Reads Bank Transactions Transfers And Manual Journals
 ## [2026-09-28] ingest | Runbook Xero Setup
+## [2026-09-29] ingest | ADR 0080 A List Whose Change Filter Cannot See Every Change Is Read Whole on a Bound
+## [2026-09-29] ingest | Runbook Xero Setup
+## [2026-09-29] ingest | Runbook Xero Setup

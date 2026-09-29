@@ -1,19 +1,19 @@
 ---
 title: Runbook Xero Setup
 type: source
-date: 2026-09-28
+date: 2026-09-29
 tags: []
 source: docs/runbook/xero-setup.md
 source_path: docs/runbook/xero-setup.md
-source_hash: 5675457207537fd7b66ff5e10ea9d2a2562e5772b1affd20116dfc85b6f559ca
-ingested: 2026-09-28
+source_hash: 3d118111c7ea725dd146240d33ba8fe5f4811a922aac641c3d27ae272b6999b5
+ingested: 2026-09-29
 ---
 
 # Runbook Xero Setup
 
 # Runbook Xero Setup
 
-How to stand up per-tenant Xero ingestion. Xero differs from Google in three ways the platform handles: it rotates the refresh token on every refresh (the worker writes the new pair back under a row lock and refuses a refresh that returns none), one consent can see several organisations (the administrator chooses one after consent; its id is sent as the `xero-tenant-id` header and a run without one is refused), and the grant lapses sixty days after its last use (the platform warns admins a week ahead).
+How to stand up per-tenant Xero ingestion. Xero differs from Google in four ways the platform handles: it rotates the refresh token on every refresh (the worker writes the new pair back under a row lock and refuses a refresh that returns none), one consent can see several organisations (the administrator chooses one after consent; its id is sent as the `xero-tenant-id` header and a run without one is refused), and the grant lapses sixty days after its last use (the platform warns admins a week ahead). And some Xero edits are invisible to `If-Modified-Since`: a due date or sent flag moved on a partially paid transaction, a contact's `Balances`, `IsSupplier` and `IsCustomer`, and a line's `AccountCode`. So each incrementally read list is read whole again on its first run a day (less one five-minute tick) after its last whole read, without a reconnect; such an edit reaches Raw lake within 24 hours plus one run interval (at most 25 hours hourly, 30 every six hours, one day on daily, which reads whole every run), and unedited records land as unchanged. The first run after this shipped read every list whole once. `Balances` is Xero's own base-currency figure and moves with every payment and passing due date, so outstanding and overdue amounts should be derived from invoices in a model. See [[ADR 0080 A List Whose Change Filter Cannot See Every Change Is Read Whole on a Bound]].
 
 The surface is gated on `UNDERCROFT_XERO_CLIENT_ID`, `UNDERCROFT_XERO_CLIENT_SECRET` and `UNDERCROFT_PUBLIC_URL`, an empty value counting as unset; with any unset, Connect Xero still shows and only pressing it says the deployment is not set up.
 
