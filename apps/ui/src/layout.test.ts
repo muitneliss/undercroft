@@ -320,6 +320,24 @@ describe("a pane's grip", () => {
 });
 
 /**
+ * The tab strip is the whole navigation, so on a phone it must be on screen.
+ *
+ * At the phone's width the strip moves under the leaf, and the leaf is as tall as its page. A
+ * strip that only followed it in the grid shipped once: a long schedule of grants pushed every
+ * division below the last card, and a reader on a phone saw no way to the lake or the models.
+ * It renders perfectly and typechecks perfectly, so it is asserted off the real sheet.
+ */
+describe("the tab strip", () => {
+  it("stays at the foot of a phone's window however long the page is", () => {
+    viewport(390);
+    const style = globalThis.getComputedStyle(render(`<nav class="rail"></nav>`));
+    const phone = { position: style.position, bottom: style.bottom };
+    viewport(WINDOW);
+    expect(phone).toEqual({ position: "sticky", bottom: "0px" });
+  });
+});
+
+/**
  * The interleaf is a grid AREA, not a floating panel.
  *
  * Which is the whole reason the page behind it stays in the document and in the tab order: the

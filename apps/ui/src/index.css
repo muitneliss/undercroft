@@ -4285,7 +4285,17 @@
       grid-template-rows: minmax(0, 1fr) auto;
     }
 
+    /* Held to the foot of the WINDOW, not the foot of the book. The leaf above it is as tall
+     as what is printed on it, so a strip that only followed it in the grid sat after the last
+     grant of a long schedule -- a phone opened on a page with no way to another division
+     until the reader scrolled to the end, which reads as the menu being missing. Sticky
+     rather than fixed: at the true end of the page it is back in its own row, so it never
+     covers the colophon, and the leaf needs no padding reserved for it. Above the leaf,
+     because while it is held it lies over the page that scrolls under it. */
     .rail {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
       padding: var(--s-3) var(--s-3) env(safe-area-inset-bottom, 0);
       overflow-x: auto;
     }
