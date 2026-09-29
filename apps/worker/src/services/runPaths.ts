@@ -35,8 +35,9 @@ import { settleRemovals } from "./removals.ts";
 import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken, RunStopped } from "./runTypes.ts";
 import type { RunJournal } from "./runJournal.ts";
-import { openSpecRun } from "./specRun.ts";
-import { openStreamCursor } from "./streamCursor.ts";
+import { type Ended, keepingEnd } from "./keepingEnd.ts";
+import { openSpecRun, type SpecRun } from "./specRun.ts";
+import { openStreamCursor, type StreamCursor } from "./streamCursor.ts";
 
 /**
  * The Google path, reported in the same shape as a spec run.
@@ -158,6 +159,8 @@ interface EntityRun {
   readonly deps: RunDeps;
   readonly input: { source: string; tenantId: string; runId: string };
   readonly spec: ConnectorSpec;
+  /** What decides how each list is read this run: the re-sync and the day's budget. */
+  readonly opened: Pick<SpecRun, "resync" | "day">;
   readonly ledger: Ledger;
   readonly journal: RunJournal;
 }
@@ -184,24 +187,37 @@ function intoLedger(ledger: Ledger): RefusalWriter {
   };
 }
 
-/** Where {@link keepingEnd} puts what a generator returned. Empty until it has returned. */
-interface Ended<R> {
-  value?: R;
-}
-
 /**
- * The same generator, with what it RETURNS put in `end` -- which `for await` would throw away.
- *
- * Only a generator that runs to the end returns anything. One that throws never does, and a
- * `break` out of the loop closes this wrapper and, through `yield*`, the generator inside it,
- * so `end` stays empty. That is what makes `end` safe to decide from: `readEntity` returns the
- * listing of the whole source, and a read that did not finish must not be taken as one.
+ * How this entity's read starts: its cursor and the context it is read under, or `null` when it
+ * is not read this run because it must be read whole and the day has nothing left for it. The
+ * run says which, and a waiting list counts as read: it was not refused, it was deferred.
  */
-async function* keepingEnd<T, R>(
-  generator: AsyncGenerator<T, R>,
-  end: Ended<R>,
-): AsyncGenerator<T> {
-  end.value = yield* generator;
+async function startEntity(
+  run: EntityRun,
+  entity: ConnectorEntity,
+  ctx: RunContext,
+): Promise<{ readonly cursor: StreamCursor; readonly entityCtx: RunContext } | null> {
+  const { deps, input, journal } = run;
+  const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
+  const cursor = await openStreamCursor(deps.exec, {
+    spec: run.spec,
+    entity,
+    stream,
+    runId: input.runId,
+    run: run.opened,
+  });
+  if (cursor.waiting) {
+    journal.warn("whole_read_waiting", { entity: entity.name });
+    return null;
+  }
+  journal.info("entity_started", { entity: entity.name });
+  const { since, budget } = cursor;
+  const entityCtx: RunContext = {
+    ...ctx,
+    ...(since === null ? {} : { since }),
+    ...(budget === undefined ? {} : { budget }),
+  };
+  return { cursor, entityCtx };
 }
 
 /**
@@ -244,24 +260,29 @@ async function* keepingEnd<T, R>(
  * generator's return value, which a read that threw or stopped never produces, and sits below
  * the cursor write for the reason the cursor sits below the ledger. From an empty `end`,
  * `settleRemovals` decides nothing. ADR 0071.
+ *
+ * ## A whole read the day's budget cuts short is not a failure
+ *
+ * It lands what it read, saves no cursor -- so the list is still due next run -- and the run
+ * says so and closes ok. A throw would settle the run failed and page the operators for a
+ * provider doing exactly what its limits say (ADR 0082).
  */
 async function ingestEntity(
   run: EntityRun,
   entity: ConnectorEntity,
   ctx: RunContext,
 ): Promise<ReadonlySet<string> | null> {
+  const started = await startEntity(run, entity, ctx);
+  if (started === null) {
+    return null;
+  }
+  const { cursor, entityCtx } = started;
   const { deps, input, spec, journal } = run;
-  journal.info("entity_started", { entity: entity.name });
-
   const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
-  const cursor = await openStreamCursor(deps.exec, { spec, entity, stream, runId: input.runId });
-
   const sink = createRecordSink(
     { lake: deps.lake, exec: deps.exec, refuse: intoLedger(run.ledger) },
     { source: input.source, tenantId: input.tenantId, runId: input.runId },
   );
-  const { since } = cursor;
-  const entityCtx: RunContext = { ...ctx, ...(since === null ? {} : { since }) };
 
   let read = 0;
   let stopped = false;
@@ -294,7 +315,12 @@ async function ingestEntity(
   if (stopped) {
     throw new RunStopped();
   }
-  await cursor.save();
+  if (end.value?.exhausted === true) {
+    journal.warn("whole_read_paused", { entity: entity.name, requests: end.value.requests });
+  }
+  if (end.value !== undefined) {
+    await cursor.save(end.value);
+  }
   await settleRemovals(deps.exec, spec, stream, end.value);
   return end.value?.named ?? null;
 }
@@ -331,8 +357,9 @@ export async function runSpecIngest(
   ledger: Ledger,
   journal: RunJournal,
 ): Promise<void> {
-  const { spec, ctx, entities, ungranted } = await openSpecRun(deps, input);
-  const run: EntityRun = { deps, input, spec, ledger, journal };
+  const opened = await openSpecRun(deps, input);
+  const { spec, ctx, entities, ungranted } = opened;
+  const run: EntityRun = { deps, input, spec, opened, ledger, journal };
   const notGranted = new NotGranted(journal, ungranted);
   const relations = new RelationIds(entities);
   let read = 0;

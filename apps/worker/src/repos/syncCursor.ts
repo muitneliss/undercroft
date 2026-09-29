@@ -13,10 +13,10 @@
  * without saying what you would do with it. ADR 0034, and ADR 0052 and ADR 0072 for the
  * request.
  *
- * A watermark can also be refused for its AGE. A source may document changes its filter never
- * reports -- Xero does -- so the mark vouches only for what the filter can see, and a stream whose
- * spec bounds that is read whole once its last whole read is too old (ADR 0080). The same `null`
- * answers it, for the same reason.
+ * The row also says when the stream was last read WHOLE and what that cost, because a
+ * watermark vouches only for what a source's filter can see: Xero documents edits its filter
+ * never returns, so a connection may re-sync on a schedule (ADR 0082). Whether a re-sync is due
+ * is decided one layer up, from these facts; this file only hands them back.
  *
  * This deliberately does NOT mirror `writeCursor`'s `GREATEST`. That guard exists because two
  * loaders overlap on one stream by construction and a rewound LOAD cursor drags a projection
@@ -47,48 +47,39 @@ export interface CursorReading {
   readonly requestKey: string;
 }
 
-/**
- * How recent this stream's last whole read must be for its watermark to be trusted: no older
- * than `maxAgeMs` before the start of run `runId`. `whole_read_at` is a run's start too, so both
- * ends are on the clock the cadence measures gaps with. ADR 0080.
- */
-export interface WholeReadBound {
-  readonly runId: string;
-  readonly maxAgeMs: number;
+/** What is held for a stream under the format and request a read is about to use. */
+export interface StoredCursor {
+  /** The watermark, in the source's own rendering. */
+  readonly watermark: string;
+  /** The start of the run that last read the stream whole, or `null` when none is recorded. */
+  readonly wholeReadAt: string | null;
 }
 
 /**
- * The watermark to send for this stream, or `null` for a full read.
+ * The cursor held for this stream, or `null` for a full read.
  *
- * `null` covers every honest reason to read everything -- this stream has never run, the stored
- * watermark was written under a different format or for a different request, or a `bound` was
- * given and the last whole read is older than it (or was never recorded) -- because a caller
- * does the same thing in each case and a distinction it cannot act on is one more thing to get
- * wrong.
+ * `null` covers every honest reason to read everything -- this stream has never run, or the
+ * stored watermark was written under a different format or for a different request -- because a
+ * caller does the same thing in each case and a distinction it cannot act on is one more thing
+ * to get wrong.
  */
 export async function readSyncCursor(
   exec: SqlExecutor,
   identity: StreamIdentity,
   reading: CursorReading,
-  bound?: WholeReadBound,
-): Promise<string | null> {
-  const { rows } = await exec.query<{ watermark: string }>(
-    `SELECT watermark FROM raw.sync_cursor
-      WHERE source = $1 AND tenant_id = $2 AND entity = $3 AND format = $4 AND request_key = $5
-        AND ($6::text IS NULL OR whole_read_at > (
-              SELECT started_at - $7::bigint * interval '1 millisecond'
-                FROM ops.run WHERE id = $6))`,
-    [
-      identity.source,
-      identity.tenantId,
-      identity.entity,
-      reading.format,
-      reading.requestKey,
-      bound?.runId ?? null,
-      bound?.maxAgeMs ?? null,
-    ],
+): Promise<StoredCursor | null> {
+  const { rows } = await exec.query<{ watermark: string; wholeReadAt: Date | string | null }>(
+    `SELECT watermark, whole_read_at AS "wholeReadAt" FROM raw.sync_cursor
+      WHERE source = $1 AND tenant_id = $2 AND entity = $3 AND format = $4 AND request_key = $5`,
+    [identity.source, identity.tenantId, identity.entity, reading.format, reading.requestKey],
   );
-  return rows[0]?.watermark ?? null;
+  const [row] = rows;
+  return row === undefined
+    ? null
+    : {
+        watermark: row.watermark,
+        wholeReadAt: row.wholeReadAt === null ? null : new Date(row.wholeReadAt).toISOString(),
+      };
 }
 
 /**
@@ -98,24 +89,28 @@ export async function readSyncCursor(
  * caller's head: they are one fact, and a row holding a value under yesterday's format or
  * yesterday's request is what {@link readSyncCursor} refuses to answer with.
  *
- * `wholeReadBy` is the run that read the stream whole, sending no watermark, and its start
- * becomes `whole_read_at`; `null` for a read that sent one, which keeps the time already held.
+ * `wholeRead` is set for a read that sent no watermark and got to the end: the run that made it,
+ * whose start becomes `whole_read_at`, and the requests it cost. `null` for a read that sent one,
+ * which keeps what is already held.
  */
 export async function writeSyncCursor(
   exec: SqlExecutor,
   identity: StreamIdentity,
   cursor: CursorReading & { readonly watermark: string },
-  wholeReadBy: string | null,
+  wholeRead: { readonly runId: string; readonly requests: number } | null,
 ): Promise<void> {
   await exec.query(
     `INSERT INTO raw.sync_cursor
-       (source, tenant_id, entity, watermark, format, request_key, whole_read_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, (SELECT started_at FROM ops.run WHERE id = $7), now())
+       (source, tenant_id, entity, watermark, format, request_key,
+        whole_read_at, whole_read_requests, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, (SELECT started_at FROM ops.run WHERE id = $7), $8, now())
      ON CONFLICT (source, tenant_id, entity) DO UPDATE
        SET watermark = EXCLUDED.watermark, format = EXCLUDED.format,
            request_key = EXCLUDED.request_key,
            whole_read_at = CASE WHEN $7::text IS NULL THEN raw.sync_cursor.whole_read_at
                                 ELSE EXCLUDED.whole_read_at END,
+           whole_read_requests = CASE WHEN $7::text IS NULL THEN raw.sync_cursor.whole_read_requests
+                                      ELSE EXCLUDED.whole_read_requests END,
            updated_at = now()`,
     [
       identity.source,
@@ -124,7 +119,8 @@ export async function writeSyncCursor(
       cursor.watermark,
       cursor.format,
       cursor.requestKey,
-      wholeReadBy,
+      wholeRead?.runId ?? null,
+      wholeRead?.requests ?? null,
     ],
   );
 }

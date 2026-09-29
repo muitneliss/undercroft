@@ -60,6 +60,14 @@ export function describeCadence(t: TFunction, cadence: Cadence): string {
   return t(KEY[cadence]);
 }
 
+/**
+ * A re-sync's schedule in words: the cadence's, but "Off" for `paused`. A re-sync is opted into
+ * (ADR 0082), so its resting state is off rather than a sync that was paused.
+ */
+export function describeResync(t: TFunction, cadence: Cadence): string {
+  return cadence === "paused" ? t("grant.resyncOff") : describeCadence(t, cadence);
+}
+
 const PRESETS: ReadonlySet<string> = new Set(PRESET_CADENCES);
 
 /** Whether a `<select>` value is one of the presets, which save the moment they are chosen. */

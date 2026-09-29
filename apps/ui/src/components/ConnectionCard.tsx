@@ -53,7 +53,7 @@ import { expiryNote } from "@/lib/when.ts";
  * the mutations belong to the page: one action at a time across the whole schedule (`busy`),
  * but only the card it was started from says what is happening.
  */
-export type GrantPending = "connect" | "disconnect" | "run" | "cadence";
+export type GrantPending = "connect" | "disconnect" | "run" | "cadence" | "resync";
 
 export function ConnectionCard({
   tenantId,
@@ -63,6 +63,7 @@ export function ConnectionCard({
   onDisconnect,
   onRun,
   onCadence,
+  onResync,
   canRun = false,
   busy = false,
   pending = null,
@@ -78,6 +79,8 @@ export function ConnectionCard({
   onRun: () => void;
   /** Record how often this source is read. Only offered when `canRun`. */
   onCadence: (choice: CadenceChoice) => void;
+  /** Record how often this source's lists are re-read in full. Only offered when `canRun`. */
+  onResync: (choice: CadenceChoice) => void;
   /** Whether the reader is an admin. Courtesy; the server refuses regardless. */
   canRun?: boolean;
   busy?: boolean;
@@ -157,6 +160,7 @@ export function ConnectionCard({
           busy={busy}
           pending={pending}
           onCadence={onCadence}
+          onResync={onResync}
         />
 
         <GrantActions
@@ -227,6 +231,7 @@ function GrantTiming({
   busy,
   pending,
   onCadence,
+  onResync,
 }: {
   tenantId: string;
   connection: Connection;
@@ -235,6 +240,7 @@ function GrantTiming({
   busy: boolean;
   pending: GrantPending | null;
   onCadence: (choice: CadenceChoice) => void;
+  onResync: (choice: CadenceChoice) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -248,6 +254,8 @@ function GrantTiming({
           busy={busy}
           saving={pending === "cadence"}
           onCadence={onCadence}
+          resyncSaving={pending === "resync"}
+          onResync={onResync}
         />
       ) : null}
 

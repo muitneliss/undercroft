@@ -120,6 +120,8 @@ export const en = {
       "The cron expression “{{cron}}” runs more often than every {{minutes}} minutes, faster than the scheduler ticks.",
     cronWithoutCustom:
       "Only a custom schedule takes a cron expression; choose “custom”, or leave the cron out.",
+    resyncNothingToRead:
+      "{{source}} reads no list through a change filter, so there is nothing a full re-sync would catch up on.",
     propertiesInsufficient:
       "The HubSpot access token does not currently carry enough permission to read the list of properties. In HubSpot, give the private app read access to companies, contacts and deals (crm.objects.companies.read, crm.objects.contacts.read, crm.objects.deals.read), then paste the token again if HubSpot issued a new one.",
     ingestNotConfigured:

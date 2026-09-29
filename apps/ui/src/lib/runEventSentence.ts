@@ -181,6 +181,21 @@ export function grantedBy(source: string | null | undefined): "consent" | "token
  *
  * `source` is the run's, and only a missing permission's remedy depends on it.
  */
+/**
+ * A whole read the day's request budget cut short, or a list that waited for a day with room
+ * (ADR 0082): what a reader needs to know is that the list is not finished and when it will be.
+ */
+function wholeReadSentence(
+  t: TFunction,
+  event: "whole_read_paused" | "whole_read_waiting",
+  entity: string,
+  n: (key: string) => string,
+): string {
+  return event === "whole_read_paused"
+    ? t("journal.event.wholeReadPaused", { entity, requests: n("requests") })
+    : t("journal.event.wholeReadWaiting", { entity });
+}
+
 export function eventSentence(
   t: TFunction,
   locale: Locale,
@@ -211,6 +226,9 @@ export function eventSentence(
       return documentsSentence(t, n);
     case "records_reread":
       return rereadSentence(t, n, entity);
+    case "whole_read_paused":
+    case "whole_read_waiting":
+      return wholeReadSentence(t, event.event, entity, n);
     case "no_models":
       return t("journal.event.noModels");
     case "dbt_finished":

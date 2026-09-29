@@ -628,6 +628,23 @@ export const vi = {
     openInJournal: "Xem trong nhật ký",
     runNotStarted: "Chưa chạy được",
     cadenceNotSaved: "Chưa lưu được tần suất",
+    /**
+     * The re-sync: a connection's lists read WHOLE again on a schedule of their own, for the edits
+     * a source's "what changed" filter never returns (ADR 0082). Off until an admin opts in.
+     */
+    resync: "Đọc lại toàn bộ",
+    resyncLabel: "Tần suất đọc lại toàn bộ",
+    /** The re-sync's `paused`: a re-sync is opted into, so "off" rather than the cadence's "paused". */
+    resyncOff: "Tắt",
+    resyncSaving: "Đang lưu lịch đọc lại…",
+    resyncNotSaved: "Chưa lưu được lịch đọc lại",
+    resyncHint:
+      "Đọc lại toàn bộ để lấy những thay đổi mà nguồn không báo khi được hỏi “có gì mới”. Việc này chỉ diễn ra trong một lần đồng bộ, nên khi đồng bộ tạm dừng thì cũng không đọc lại.",
+    resyncLast: "Đọc lại toàn bộ gần nhất: {{when}}",
+    resyncNever: "Chưa có lần đọc lại toàn bộ nào hoàn tất.",
+    /** Above one day only: a re-sync spans days because the provider caps requests per day. */
+    resyncDays_other:
+      "Một lần đọc lại toàn bộ cần khoảng {{count}} ngày, vì mỗi ngày chỉ được dùng {{budget}} lượt gọi cho việc này; phần chưa kịp sẽ tiếp tục ở lần chạy sau.",
     /** The custom cadence's field. The zone is named every time: see `@/lib/when`. */
     cronLabel: "Biểu thức cron",
     cronHint:
@@ -1105,6 +1122,12 @@ export const vi = {
         "Tài liệu: {{created}} mới, {{unchanged}} không đổi, {{skipped}} bỏ qua, {{failed}} lỗi.",
       recordsReread:
         "Đã đọc lại {{reread}} {{entity}} đã có sẵn để lấy tệp đính kèm thuộc loại hiện được chọn; {{landed}} tệp đính kèm mới từ đó.",
+      /** A whole read the day's request budget cut short; the list is read whole next run. */
+      wholeReadPaused:
+        "Đã dùng hết số lượt gọi trong ngày dành cho việc đọc toàn bộ sau {{requests}} lượt, nên {{entity}} chưa đọc xong; phần còn lại sẽ đọc ở lần chạy sau.",
+      /** A list that must be read whole, not read at all this run: the day had nothing left. */
+      wholeReadWaiting:
+        "{{entity}} cần được đọc toàn bộ nhưng hôm nay đã hết lượt gọi dành cho việc này, nên sẽ đọc ở lần chạy sau.",
       noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
       dbtFinished:
         "dbt dựng {{models}} mô hình, chạy {{tests}} kiểm tra, {{testsFailed}} không đạt.",

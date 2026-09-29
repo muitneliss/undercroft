@@ -32,7 +32,7 @@ import { useSearchParams } from "react-router-dom";
 
 import type { Connection } from "@/api/types.ts";
 import { AccountSwitcher } from "@/components/AccountSwitcher.tsx";
-import { ConnectionCard, type GrantPending } from "@/components/ConnectionCard.tsx";
+import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { IngestKeys } from "@/components/IngestKeys.tsx";
@@ -52,6 +52,7 @@ import {
 } from "@/lib/consentFailure.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { chosenAccount, useUiStore } from "@/store.ts";
+import { type Actions, pendingFor } from "@/lib/sourceActions.ts";
 import { trpc } from "@/trpc.ts";
 
 /** How often the list re-reads while a run is in progress. A run is minutes; this is not. */
@@ -126,14 +127,6 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
   );
 }
 
-/** The four mutations a grant can be acted on with, held in one place so a card gets all four. */
-interface Actions {
-  readonly startOAuth: ReturnType<typeof trpc.connections.startOAuth.useMutation>;
-  readonly disconnect: ReturnType<typeof trpc.connections.disconnect.useMutation>;
-  readonly runNow: ReturnType<typeof trpc.runs.trigger.useMutation>;
-  readonly setCadence: ReturnType<typeof trpc.connections.setCadence.useMutation>;
-}
-
 /**
  * The lead, what the last action refused, and the schedule itself.
  *
@@ -173,7 +166,13 @@ function SourcesBand({
       // cadence for as long as the refetch took, and the field would blink shut and open.
       onSuccess: async (_saved, sent) => {
         await invalidate();
-        dropCronDraft(tenantId, sent.source);
+        dropCronDraft(tenantId, sent.source, "sync");
+      },
+    }),
+    setResync: trpc.connections.setResync.useMutation({
+      onSuccess: async (_saved, sent) => {
+        await invalidate();
+        dropCronDraft(tenantId, sent.source, "resync");
       },
     }),
   };
@@ -217,7 +216,7 @@ function Refusals({
   failedReturn: FailedReturn | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const { startOAuth, disconnect, runNow, setCadence } = actions;
+  const { startOAuth, disconnect, runNow, setCadence, setResync } = actions;
 
   return (
     <>
@@ -259,6 +258,10 @@ function Refusals({
       {setCadence.isError ? (
         <Errata heading={t("grant.cadenceNotSaved")} live={true} error={setCadence.error} />
       ) : null}
+
+      {setResync.isError ? (
+        <Errata heading={t("grant.resyncNotSaved")} live={true} error={setResync.error} />
+      ) : null}
     </>
   );
 }
@@ -281,7 +284,7 @@ function SourceCards({
   canRun: boolean;
   actions: Actions;
 }): React.JSX.Element {
-  const { startOAuth, disconnect, runNow, setCadence } = actions;
+  const { startOAuth, disconnect, runNow, setCadence, setResync } = actions;
   // One action at a time, across every card: the list is about to be invalidated and a
   // second request answers about a schedule that no longer exists. A consent that has been
   // started counts until the browser has left for it (`isSuccess`), not only until the server
@@ -292,6 +295,7 @@ function SourceCards({
     disconnect.isPending ||
     runNow.isPending ||
     setCadence.isPending ||
+    setResync.isPending ||
     !canRun;
 
   return (
@@ -335,7 +339,7 @@ function SourceRow({
   busy: boolean;
   actions: Actions;
 }): React.JSX.Element {
-  const { startOAuth, disconnect, runNow, setCadence } = actions;
+  const { startOAuth, disconnect, runNow, setCadence, setResync } = actions;
   const chosen = useUiStore((state) => chosenAccount(state, tenantId, group.kind));
   const selectAccount = useUiStore((state) => state.selectAccount);
   const connection = selectedFor(group.accounts, chosen);
@@ -385,35 +389,11 @@ function SourceRow({
         onCadence={(choice): void => {
           setCadence.mutate({ tenantId, source: connection.source, ...choice });
         }}
+        onResync={(choice): void => {
+          setResync.mutate({ tenantId, source: connection.source, ...choice });
+        }}
         tokenForm={<TokenForm tenantId={tenantId} source={connection.source} />}
       />
     </>
   );
-}
-
-/**
- * Which of `source`'s actions is in flight, read off the mutations' `variables` -- the request
- * each one was last called with -- so no second record of "what was clicked" exists to drift
- * from what was actually sent. A consent counts until the browser has left for it.
- *
- * `addAccount` separates the two consents that can name the same source: the first Gmail
- * account's card and the switcher's "add another" both send `gmail`, and only the one that
- * was pressed should say it is on its way to Google.
- */
-function pendingFor(actions: Actions, source: string, addAccount: boolean): GrantPending | null {
-  const { startOAuth, disconnect, runNow, setCadence } = actions;
-  const consent = startOAuth.isPending || startOAuth.isSuccess ? startOAuth.variables : undefined;
-  if (consent?.source === source && (consent.addAccount === true) === addAccount) {
-    return "connect";
-  }
-  if (disconnect.isPending && disconnect.variables.source === source) {
-    return "disconnect";
-  }
-  if (runNow.isPending && runNow.variables.source === source) {
-    return "run";
-  }
-  if (setCadence.isPending && setCadence.variables.source === source) {
-    return "cadence";
-  }
-  return null;
 }

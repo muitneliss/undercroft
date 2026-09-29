@@ -10,7 +10,7 @@ worked.
 
 ## 0. What is different about Xero
 
-Four things, each of which the code handles and each of which you will meet while testing:
+Five things, each of which the code handles and each of which you will meet while testing:
 
 - **Xero rotates the refresh token.** Every refresh issues a new pair and kills the one just
   spent. The worker writes the new pair back under a row lock before it uses the access token,
@@ -26,16 +26,24 @@ Four things, each of which the code handles and each of which you will meet whil
   list asks only for what changed since the last one (`If-Modified-Since`). Xero documents edits
   that header never returns: a due date or the sent flag moved on a partially paid transaction,
   such as an invoice or bill, and a contact's `Balances`, `IsSupplier` and `IsCustomer`. A line's
-  `AccountCode` is another. So each such list is read whole again once a day. The run does this
-  itself, without a reconnect, on its first run that starts a day (less one five-minute tick)
-  after the list was last read whole. Such an edit reaches Raw lake within 24 hours plus one
-  run interval: at most 25 hours on the hourly cadence, 30 every six hours, and one day on the
-  daily cadence, which reads whole on every run. A whole read lands every record nobody edited
-  as unchanged. The first run after this shipped read every list whole once.
-  [ADR 0080](../adr/0080-a-list-whose-change-filter-cannot-see-every-change-is-read-whole-on-a-bound.md).
+  `AccountCode` is another. A **full re-sync** reads the lists whole again so those edits land. It
+  is **off by default**: turn it on per connection under **Full re-sync** on the source's card,
+  with the same choices as its sync schedule (a preset, or a cron in Singapore time), or with
+  `connections set-resync`. A re-sync happens only during a sync run, so a paused sync means no
+  re-sync. While it is off, such an edit stays stale until the record changes for some other
+  reason. A re-read lands every record nobody edited as unchanged.
+  [ADR 0082](../adr/0082-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md).
   `Balances` is Xero's own figure, converted to the base currency, and it moves with every
-  payment and every due date that passes, so it can be up to that bound out of date. Derive
-  outstanding and overdue amounts from invoices in a model instead.
+  payment and every due date that passes. Derive outstanding and overdue amounts from invoices in
+  a model instead.
+- **Reading a list whole spends at most 4,000 of Xero's 5,000 requests a day.** That covers a
+  first read, a re-sync, and the one full read a change to the spec's request forces. The other
+  1,000 are left for the ordinary "what changed" reads and **Run now**. The worker trusts Xero's
+  own count, `X-DayLimit-Remaining`, which includes other apps on the same organisation. When
+  the day's share is spent, a list that was cut short is read whole again on the next run, and a
+  list with no earlier read waits for it. The run still closes as succeeded, and its Journal says
+  which lists waited. When one full re-sync needs more than a day's share, the card says how many
+  days it takes, from what each list's last full read cost. Lists page at 500 records per request.
 
 The whole surface is gated on `UNDERCROFT_XERO_CLIENT_ID`, `UNDERCROFT_XERO_CLIENT_SECRET` and
 `UNDERCROFT_PUBLIC_URL`; an empty value counts as unset. With any of them unset, Xero reads

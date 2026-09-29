@@ -360,6 +360,23 @@
               },
               "additionalProperties": false,
               "default": {}
+            },
+            "wholeReadBudget": {
+              "type": "object",
+              "properties": {
+                "requestsPerDay": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "remainingHeader": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "requestsPerDay"
+              ],
+              "additionalProperties": false
             }
           },
           "additionalProperties": false,
@@ -662,10 +679,6 @@
                       "rfc3339-seconds"
                     ],
                     "default": "verbatim"
-                  },
-                  "wholeReadAfterHours": {
-                    "type": "integer",
-                    "exclusiveMinimum": 0
                   }
                 },
                 "required": [

@@ -43,6 +43,8 @@ export const procedureSentences: SentenceTable = {
   "connections.setToken": "Kết nối một nguồn bằng token dán vào. Quản trị.",
   "connections.setCadence":
     "Đặt tần suất đọc một nguồn: hourly, every_6h, daily, paused, hoặc custom kèm --cron, một biểu thức cron 5 trường theo giờ Singapore, không chạy dày hơn 5 phút một lần. Quản trị.",
+  "connections.setResync":
+    "Đặt tần suất đọc lại toàn bộ các danh sách của một nguồn, để bắt những thay đổi bộ lọc thay đổi bỏ sót: cùng các lựa chọn như set-cadence, mặc định paused (tắt). Mỗi lần đọc lại toàn bộ chỉ dùng tối đa phần lượt gọi mỗi ngày mà spec cho phép; phần chưa kịp sẽ tiếp tục ở lần chạy sau. Quản trị.",
   "connections.disconnect": "Chấm dứt quyền truy cập của một nguồn. Quản trị.",
   "keys.list": "Các khoá nạp dữ liệu của khách hàng. Quản trị.",
   "keys.mint": "Tạo khoá nạp dữ liệu; token chỉ được trả về một lần. Quản trị.",

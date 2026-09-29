@@ -50,6 +50,7 @@ function card(
         onDisconnect={noop}
         onRun={noop}
         onCadence={noop}
+        onResync={noop}
         {...props}
       />
     </MemoryRouter>
@@ -118,6 +119,7 @@ describe("Run now", () => {
           onDisconnect={noop}
           onRun={noop}
           onCadence={noop}
+          onResync={noop}
           canRun={true}
         />
       </MemoryRouter>,
@@ -153,6 +155,7 @@ describe("how a source is connected", () => {
           onDisconnect={noop}
           onRun={noop}
           onCadence={noop}
+          onResync={noop}
           tokenForm={<input aria-label="the token form" />}
         />
         <ConnectionCard
@@ -163,6 +166,7 @@ describe("how a source is connected", () => {
           onDisconnect={noop}
           onRun={noop}
           onCadence={noop}
+          onResync={noop}
         />
       </MemoryRouter>,
     );
@@ -263,5 +267,60 @@ describe("the cadence", () => {
     expect(screen.getByText("Tuỳ chỉnh (cron)")).toBeDefined();
     expect(screen.getByText("30 7 * * 1-5")).toBeDefined();
     expect(screen.queryByLabelText("Biểu thức cron")).toBeNull();
+  });
+});
+
+describe("the full re-sync", () => {
+  // ADR 0082: a second schedule, off until an admin opts in, for the edits a source's change
+  // filter never reports; the card says when a re-sync needs more than a day of requests.
+  const OFF = {
+    cadence: "paused",
+    cron: null,
+    lastWholeReadAt: null,
+    days: null,
+    budget: 4000,
+  } as const;
+
+  function resyncSelect(): HTMLSelectElement {
+    return screen.getByRole<HTMLSelectElement>("combobox", { name: "Tần suất đọc lại toàn bộ" });
+  }
+
+  it("is off until an admin turns it on, and a choice saves as the re-sync, not the cadence", () => {
+    const resyncs: CadenceChoice[] = [];
+    const cadences: CadenceChoice[] = [];
+    render(
+      card(
+        { resync: OFF },
+        {
+          canRun: true,
+          onCadence: (choice: CadenceChoice): void => {
+            cadences.push(choice);
+          },
+          onResync: (choice: CadenceChoice): void => {
+            resyncs.push(choice);
+          },
+        },
+      ),
+    );
+
+    expect(resyncSelect().value).toBe("paused");
+    expect(resyncSelect().selectedOptions[0]?.textContent).toBe("Tắt");
+
+    fireEvent.change(resyncSelect(), { target: { value: "daily" } });
+
+    expect(resyncs).toEqual([{ cadence: "daily" }]);
+    expect(cadences).toEqual([]);
+  });
+
+  it("warns when one re-sync takes more than a day of the provider's requests", () => {
+    render(card({ resync: { ...OFF, cadence: "daily", days: 2 } }, { canRun: true }));
+
+    expect(screen.getByText(/Một lần đọc lại toàn bộ cần khoảng 2 ngày/u)).toBeDefined();
+  });
+
+  it("is not offered for a source with nothing to re-sync", () => {
+    render(card({ resync: null }, { canRun: true }));
+
+    expect(screen.queryByRole("combobox", { name: "Tần suất đọc lại toàn bộ" })).toBeNull();
   });
 });

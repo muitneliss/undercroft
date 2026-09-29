@@ -109,7 +109,7 @@ describe("a watermark advances only by getting to the end", () => {
 
     await ingest(fetcher);
 
-    expect(await readSyncCursor(db, STREAM, AS_DECLARED)).toBe("900");
+    expect((await readSyncCursor(db, STREAM, AS_DECLARED))?.watermark).toBe("900");
   });
 
   it("does not advance when the entity throws partway", async () => {
@@ -137,7 +137,7 @@ describe("a watermark advances only by getting to the end", () => {
     const result = await ingest(fetcher);
 
     expect(result.entities[0]?.landed).toBe(0);
-    expect(await readSyncCursor(db, STREAM, AS_DECLARED)).toBe("900");
+    expect((await readSyncCursor(db, STREAM, AS_DECLARED))?.watermark).toBe("900");
   });
 });
 
@@ -157,7 +157,7 @@ describe("the second run asks the source for less", () => {
 
     expect(second.calls.map((call) => call.url)).toEqual([`${BASE}/things?updatedAfter=400`]);
     expect(result.entities[0]?.landed).toBe(1);
-    expect(await readSyncCursor(db, STREAM, AS_DECLARED)).toBe("800");
+    expect((await readSyncCursor(db, STREAM, AS_DECLARED))?.watermark).toBe("800");
 
     const { rows } = await db.query<{ id: string }>(
       "SELECT source_record_id AS id FROM raw.records WHERE source = 'demo' ORDER BY source_record_id",
@@ -229,7 +229,9 @@ entities:
       { id: "a", at: "2019-11-14 18:10:38.314+00" },
       { id: "b", at: "1970-01-01 00:00:00.999+00" },
     ]);
-    expect(await readSyncCursor(db, LEDGER, LEDGER_MARK)).toBe("/Date(1573755038314+0000)/");
+    expect((await readSyncCursor(db, LEDGER, LEDGER_MARK))?.watermark).toBe(
+      "/Date(1573755038314+0000)/",
+    );
   });
 
   it("asks the second read for what changed since, in the dialect the header reads", async () => {
@@ -284,36 +286,54 @@ describe("a watermark is only ever handed back for the request it was read with"
     await ingest(fetcher);
 
     expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/things?detail=full`]);
-    expect(await readSyncCursor(db, STREAM, { ...AS_DECLARED, requestKey: keyOf(edited) })).toBe(
-      "400",
-    );
+    const edit = { ...AS_DECLARED, requestKey: keyOf(edited) };
+    expect((await readSyncCursor(db, STREAM, edit))?.watermark).toBe("400");
   });
 });
 
-describe("a list whose change filter cannot see every change is read whole on a bound", () => {
-  // Issue #314: Xero documents edits that do not move `UpdatedDateUTC` -- a due date moved on a
-  // partially paid invoice, a contact's balances -- so `If-Modified-Since` never returns them.
-  // `wholeReadAfterHours` reads the list whole again, sending no watermark, once the run that
-  // last did so is that old. ADR 0080.
-  const BOUNDED = SPEC.replace(
-    "format: epoch-millis\n",
-    "format: epoch-millis\n      wholeReadAfterHours: 24\n",
+describe("a connection re-syncs its lists whole on its own schedule, within the day's budget", () => {
+  // Issue #314, ADR 0082: Xero documents edits that do not move `UpdatedDateUTC`, so
+  // `If-Modified-Since` never returns them. A connection may opt into a re-sync -- its lists read
+  // whole again on a schedule of its own -- and whole reads spend only their share of the day.
+  // The budget here is 3 of a 5-request day, so the reserve is 2.
+  const BUDGETED = SPEC.replace(
+    "  pagination: { kind: json-link, nextPath: paging.next.link }\n",
+    `  pagination: { kind: json-link, nextPath: paging.next.link }
+  rateLimit: { requestsPerDay: 5 }
+  wholeReadBudget: { requestsPerDay: 3, remainingHeader: x-daylimit-remaining }
+`,
   );
 
-  beforeEach(() => {
-    writeFileSync(join(specsDir, "demo.yaml"), BOUNDED);
+  beforeEach(async () => {
+    writeFileSync(join(specsDir, "demo.yaml"), BUDGETED);
+    await db.query(
+      "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-1', 'demo', 'connected')",
+    );
   });
 
-  /** A whole read of `/things`, the only request the fetcher answers. */
-  function whole(results: readonly object[]): InMemoryFetcher {
-    return new InMemoryFetcher().on("GET", `${BASE}/things`, { body: { results, paging: {} } });
+  function resync(cadence: "daily" | "paused"): Promise<unknown> {
+    return db.query("UPDATE ops.connection SET resync_cadence = $1 WHERE source = 'demo'", [
+      cadence,
+    ]);
   }
 
-  it("reads whole once its last whole read is a day old, landing an edit the filter never reported", async () => {
+  /** A whole read of `/things` in one page, the only request the fetcher answers. */
+  function whole(results: readonly object[], remaining = "4000"): InMemoryFetcher {
+    return new InMemoryFetcher().on("GET", `${BASE}/things`, {
+      body: { results, paging: {} },
+      headers: { "x-daylimit-remaining": remaining },
+    });
+  }
+
+  /** The run that read the list whole began a day ago: the one fact a day passing changes. */
+  function aDayPasses(): Promise<unknown> {
+    return db.query("UPDATE raw.sync_cursor SET whole_read_at = whole_read_at - interval '1 day'");
+  }
+
+  it("a daily re-sync reads whole once a day has passed, landing an edit the filter never reported", async () => {
+    await resync("daily");
     await ingest(whole([{ id: "1", changedAt: "400", due: "2026-10-01" }]));
-    // A day passing, as the one fact that measures it: the run that read the list whole began a
-    // day ago. The worker holds no clock of its own to move instead.
-    await db.query("UPDATE raw.sync_cursor SET whole_read_at = whole_read_at - interval '1 day'");
+    await aDayPasses();
 
     // The due date moved and `changedAt` did not, which is exactly what the filter cannot see.
     const fetcher = whole([{ id: "1", changedAt: "400", due: "2026-10-30" }]);
@@ -323,8 +343,10 @@ describe("a list whose change filter cannot see every change is read whole on a 
     expect(result.entities[0]).toMatchObject({ changed: 1 });
   });
 
-  it("asks only for what changed while its last whole read is recent", async () => {
+  it("a paused re-sync keeps asking only for what changed, however old the last whole read", async () => {
+    await resync("paused");
     await ingest(whole([{ id: "1", changedAt: "400" }]));
+    await aDayPasses();
 
     // Recorded only WITH the watermark: a run that read whole again would be refused.
     const fetcher = new InMemoryFetcher().on("GET", `${BASE}/things?updatedAfter=400`, {
@@ -335,13 +357,59 @@ describe("a list whose change filter cannot see every change is read whole on a 
     expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/things?updatedAfter=400`]);
   });
 
-  it("reads whole once when its cursor was written before whole reads were recorded", async () => {
-    // Every cursor production holds when this ships: a watermark, and no whole read on record.
-    await writeSyncCursor(db, STREAM, { ...AS_DECLARED, watermark: "400" }, null);
+  /** How each run so far settled, oldest first: the ledger's word, which alerts key on. */
+  async function settled(): Promise<string[]> {
+    const { rows } = await db.query<{ status: string }>(
+      "SELECT status FROM ops.run ORDER BY started_at, id",
+    );
+    return rows.map((row) => row.status);
+  }
 
-    const fetcher = whole([{ id: "1", changedAt: "400" }]);
+  it("a whole read the budget cuts short lands what it read, closes ok, and is read whole next run", async () => {
+    // Page one answers that the day is down to its reserve, so page two is never asked for.
+    const cut = new InMemoryFetcher().on("GET", `${BASE}/things`, {
+      body: { results: [{ id: "1", changedAt: "400" }], paging: { next: { link: `${BASE}/p2` } } },
+      headers: { "x-daylimit-remaining": "2" },
+    });
+    const first = await ingest(cut);
+
+    expect(cut.calls).toHaveLength(1);
+    expect(first.entities[0]).toMatchObject({ landed: 1 });
+    expect(await settled()).toEqual(["ok"]);
+
+    // No cursor was saved, so the next run -- a new day, with room -- reads the list whole again.
+    const next = whole([{ id: "1", changedAt: "400" }]);
+    await ingest(next);
+    expect(next.calls.map((call) => call.url)).toEqual([`${BASE}/things`]);
+  });
+
+  it("a list with nothing to fall back on waits, unread, while the day has no room", async () => {
+    // A list read every run is asked for first and answers that the day is down to its reserve;
+    // `things` has no watermark to read changes from instead, so it is not read at all.
+    writeFileSync(
+      join(specsDir, "demo.yaml"),
+      BUDGETED.replace(
+        "entities:\n",
+        `entities:
+  - name: others
+    request: { kind: list, path: /others }
+    envelopePath: results
+    idPath: id
+`,
+      ),
+    );
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/others`, {
+      body: { results: [{ id: "o" }], paging: {} },
+      headers: { "x-daylimit-remaining": "2" },
+    });
+
     await ingest(fetcher);
 
-    expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/things`]);
+    expect(fetcher.calls.map((call) => call.url)).toEqual([`${BASE}/others`]);
+    expect(await settled()).toEqual(["ok"]);
+    const { rows } = await db.query<{ entity: string }>(
+      "SELECT entity FROM ops.run_event WHERE event = 'whole_read_waiting'",
+    );
+    expect(rows).toEqual([{ entity: "things" }]);
   });
 });

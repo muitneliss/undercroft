@@ -23,6 +23,7 @@ import {
   list,
   presentStatus,
   setCadence,
+  setResync,
   setScope,
   setToken,
 } from "./connections.ts";
@@ -453,6 +454,84 @@ describe("the schedule", () => {
       "bank_transfers",
       "manual_journals",
     ]);
+  });
+});
+
+describe("re-syncing a connection's lists whole", () => {
+  // ADR 0082: a schedule of its own beside the cadence, off until an admin opts in, for the edits
+  // a source's change filter never returns.
+  useDatabase();
+
+  async function connectXero(entities: string[]): Promise<void> {
+    await upsertConnection(db, {
+      tenantId: TENANT,
+      source: "xero",
+      status: "connected",
+      externalAccountId: ORGANISATION.id,
+    });
+    await writeConnectionDetail(db, {
+      tenantId: TENANT,
+      source: "xero",
+      accountLabel: ORGANISATION.name,
+      selectionJson: xeroChoosing(entities),
+      chosenBy: "ada@example.test",
+    });
+  }
+
+  it("is off until an admin turns it on, then shows on the card and in the trail", async () => {
+    await connectXero(["invoices"]);
+    const before = await list(db, TENANT, SPECS);
+    expect(before.find((card) => card.source === "xero")?.resync?.cadence).toBe("paused");
+
+    const result = await setResync(db, SPECS, {
+      tenantId: TENANT,
+      source: "xero",
+      cadence: "custom",
+      cron: "0 2 * * 0",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: true });
+    const after = await list(db, TENANT, SPECS);
+    expect(after.find((card) => card.source === "xero")?.resync).toMatchObject({
+      cadence: "custom",
+      cron: "0 2 * * 0",
+    });
+    const { rows } = await db.query<{ action: string }>("SELECT action FROM ops.audit_log");
+    expect(rows.map((row) => row.action)).toEqual(["connection.resync_set"]);
+  });
+
+  it("refuses a source whose lists no change filter reads, before writing anything", async () => {
+    // HubSpot filters on the client, paging the whole source every run: nothing to catch up on.
+    const result = await setResync(noDatabase, SPECS, {
+      tenantId: TENANT,
+      source: "hubspot",
+      cadence: "daily",
+      actor: "ada@example.test",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "not-resyncable" });
+  });
+
+  it("says how many days a re-sync takes, from what each list's last whole read cost", async () => {
+    await connectXero(["invoices", "contacts"]);
+    // 3,000 and 2,000 requests against Xero's whole-read share of 4,000 a day: two days.
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO raw.sync_cursor
+           (source, tenant_id, entity, watermark, format, request_key, whole_read_at, whole_read_requests)
+         VALUES ('xero', $1, 'invoices', 'w', 'ms-json-date', 'k', '2026-09-20T02:00:00Z', 3000),
+                ('xero', $1, 'contacts', 'w', 'ms-json-date', 'k', '2026-09-21T02:00:00Z', 2000)`,
+        [TENANT],
+      ),
+    );
+
+    const cards = await list(db, TENANT, SPECS);
+
+    expect(cards.find((card) => card.source === "xero")?.resync).toMatchObject({
+      days: 2,
+      lastWholeReadAt: "2026-09-20T02:00:00.000Z",
+    });
   });
 });
 

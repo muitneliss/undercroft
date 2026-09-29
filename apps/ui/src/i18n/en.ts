@@ -516,6 +516,19 @@ export const en = {
     openInJournal: "Open in the journal",
     runNotStarted: "The run could not be started",
     cadenceNotSaved: "The schedule could not be saved",
+    resync: "Full re-sync",
+    resyncLabel: "How often to re-sync in full",
+    resyncOff: "Off",
+    resyncSaving: "Saving the re-sync…",
+    resyncNotSaved: "The re-sync could not be saved",
+    resyncHint:
+      "A full re-sync reads every list again to catch edits the source does not report when asked what changed. It happens only during a sync run, so while syncing is paused nothing is re-synced.",
+    resyncLast: "Last full re-sync: {{when}}",
+    resyncNever: "No full re-sync has finished yet.",
+    resyncDays_one:
+      "A full re-sync takes about {{count}} day, because only {{budget}} requests a day may go to it; what does not fit continues on the next run.",
+    resyncDays_other:
+      "A full re-sync takes about {{count}} days, because only {{budget}} requests a day may go to it; what does not fit continues on the next run.",
     cronLabel: "Cron expression",
     cronHint:
       "Five fields: minute, hour, day of month, month, day of week (0 is Sunday). In Singapore time (SGT), no more often than every {{minutes}} minutes.",
@@ -913,6 +926,10 @@ export const en = {
         "Documents: {{created}} new, {{unchanged}} unchanged, {{skipped}} skipped, {{failed}} failed.",
       recordsReread:
         "Read {{reread}} held {{entity}} again for attachments of a chosen type; {{landed}} attachments from them are new.",
+      wholeReadPaused:
+        "The day's requests for full reads ran out after {{requests}}, so {{entity}} was not read to the end; the rest is read on the next run.",
+      wholeReadWaiting:
+        "{{entity}} has to be read in full, but today's requests for full reads are spent, so it is read on the next run.",
       noModels: "This customer has no models yet, so there was nothing to build.",
       dbtFinished: "dbt built {{models}} models and ran {{tests}} tests, {{testsFailed}} failing.",
       runClosedOk: "Finished successfully.",

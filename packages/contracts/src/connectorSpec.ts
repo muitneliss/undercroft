@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { WholeReadBudget, wholeReadBudgetProblem } from "./wholeReadBudget.ts";
 
 /** A dotted path into a JSON body: `paging.next.link`, `Invoices`, `from.id`. */
 const JsonPath = z
@@ -150,14 +151,6 @@ const Incremental = z.object({
    * `If-Modified-Since` as RFC 3339. Rounding down can only ask for more. ADR 0068.
    */
   send: z.enum(["verbatim", "rfc3339-seconds"]).default("verbatim"),
-  /**
-   * How old, in hours, the run that last read this list whole may be before the next run reads
-   * it whole again, sending no watermark. For a source whose change filter cannot see every
-   * change: Xero documents edits that do not move `UpdatedDateUTC`, so `If-Modified-Since`
-   * never returns them, and without this a stale value stays until the record changes for some
-   * other reason. Absent means the watermark is always trusted. ADR 0080.
-   */
-  wholeReadAfterHours: z.number().int().positive().optional(),
 });
 
 /**
@@ -322,11 +315,20 @@ export const ConnectorSpec = z
         rateLimit: RateLimit,
         retry: Retry,
         guards: Guards,
+        wholeReadBudget: WholeReadBudget.optional(),
       })
       .default({}),
     entities: z.array(Entity).min(1),
   })
   .superRefine((spec, ctx) => {
+    const budgetIssue = wholeReadBudgetProblem(spec.defaults);
+    if (budgetIssue !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["defaults", "wholeReadBudget", "requestsPerDay"],
+        message: budgetIssue,
+      });
+    }
     const names = new Set(spec.entities.map((e) => e.name));
     for (const entity of spec.entities) {
       if (entity.request.kind === "batch-from" && !names.has(entity.request.entity)) {

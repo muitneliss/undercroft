@@ -6,7 +6,8 @@
  * question -- can this connection still run, and which lists would a reconnect add -- and an
  * answer from a copy of the spec is an answer that drifts from it. So the control plane reads the
  * same files the worker does (`COPY specs` in both Dockerfiles), and nothing else: the entities,
- * which is all `presentStatus` asks of them. ADR 0074.
+ * which is what `presentStatus` asks of them (ADR 0074), and how many whole-read requests a day
+ * the spec allows, which is what a re-sync's "takes N days" is measured against (ADR 0082).
  *
  * Here beside `main.ts`, like `skills.ts`, because reading the disk is the composition root's to
  * do. A spec that fails to read is logged and left out, and its source's grant is then judged
@@ -18,14 +19,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { parseSpec } from "@undercroft/contracts";
 import { describeError, type Logger } from "@undercroft/core";
-import type { SpecReads } from "./services/connections.ts";
+import type { SpecRead, SpecReads } from "./services/connections.ts";
 
 /** `specs/connectors` at the repository root: where the image carries it, and a checkout has it. */
 export const SPECS_ROOT = join(import.meta.dir, "..", "..", "..", "specs", "connectors");
 
-/** Each spec's entities by the name the worker reads it under, `<source>.yaml`. */
+/** What the card reads of each spec, by the name the worker reads it under, `<source>.yaml`. */
 export function loadSpecReads(log?: Logger, root = SPECS_ROOT): SpecReads {
-  const reads = new Map<string, ReturnType<typeof parseSpec>["entities"]>();
+  const reads = new Map<string, SpecRead>();
   let files: string[];
   try {
     files = readdirSync(root).filter((file) => extname(file) === ".yaml");
@@ -35,10 +36,11 @@ export function loadSpecReads(log?: Logger, root = SPECS_ROOT): SpecReads {
   }
   for (const file of files.toSorted()) {
     try {
-      reads.set(
-        basename(file, ".yaml"),
-        parseSpec(readFileSync(join(root, file), "utf8")).entities,
-      );
+      const spec = parseSpec(readFileSync(join(root, file), "utf8"));
+      reads.set(basename(file, ".yaml"), {
+        entities: spec.entities,
+        wholeReadsPerDay: spec.defaults.wholeReadBudget?.requestsPerDay ?? null,
+      });
     } catch (error) {
       log?.error("connector_spec_unloaded", { file, ...describeError(error) });
     }

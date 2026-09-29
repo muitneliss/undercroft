@@ -377,29 +377,43 @@ interface UiState {
    * an expression typed against one tenant's Gmail must never appear under another's. Starting
    * a second card's draft drops the first, which is one field in flight at a time. Not
    * persisted: a schedule half-written last week is not one anybody is still deciding.
+   *
+   * It carries WHICH schedule too, because a card holds two -- how often it syncs, and how
+   * often it re-syncs in full (ADR 0082) -- and an expression typed for one must not open the
+   * other's field.
    */
   cronDraft: CronDraft | null;
-  /** Hold `cron` as the draft for this card, replacing any other card's. */
-  setCronDraft: (tenantId: string, source: string, cron: string) => void;
-  /** Drop the draft if it is this card's; another card's is left alone. */
-  dropCronDraft: (tenantId: string, source: string) => void;
+  /** Hold `cron` as the draft for this card's `schedule`, replacing any other draft. */
+  setCronDraft: (tenantId: string, source: string, schedule: CronSchedule, cron: string) => void;
+  /** Drop the draft if it is this card's `schedule`'s; any other is left alone. */
+  dropCronDraft: (tenantId: string, source: string, schedule: CronSchedule) => void;
 }
+
+/** Which of a card's two schedules a cron draft is for. See `cronDraft`. */
+export type CronSchedule = "sync" | "resync";
 
 /** See `cronDraft`. */
 interface CronDraft {
   readonly tenantId: string;
   readonly source: string;
+  readonly schedule: CronSchedule;
   readonly cron: string;
 }
 
-/** The expression being written on this card, or `null` when nobody is writing one here. */
+/** The expression being written for this schedule of this card, or `null` when nobody is. */
 export function cronDraftFor(
   state: { readonly cronDraft: CronDraft | null },
   tenantId: string,
   source: string,
+  schedule: CronSchedule,
 ): string | null {
   const held = state.cronDraft;
-  return held !== null && held.tenantId === tenantId && held.source === source ? held.cron : null;
+  return held !== null &&
+    held.tenantId === tenantId &&
+    held.source === source &&
+    held.schedule === schedule
+    ? held.cron
+    : null;
 }
 
 /**
@@ -916,10 +930,12 @@ function assistantSlice(
 function cronSlice(set: Setter): Pick<UiState, "cronDraft" | "setCronDraft" | "dropCronDraft"> {
   return {
     cronDraft: null,
-    setCronDraft: (tenantId, source, cron): unknown =>
-      set({ cronDraft: { tenantId, source, cron } }),
-    dropCronDraft: (tenantId, source): unknown =>
-      set((state) => (cronDraftFor(state, tenantId, source) === null ? {} : { cronDraft: null })),
+    setCronDraft: (tenantId, source, schedule, cron): unknown =>
+      set({ cronDraft: { tenantId, source, schedule, cron } }),
+    dropCronDraft: (tenantId, source, schedule): unknown =>
+      set((state) =>
+        cronDraftFor(state, tenantId, source, schedule) === null ? {} : { cronDraft: null },
+      ),
   };
 }
 
