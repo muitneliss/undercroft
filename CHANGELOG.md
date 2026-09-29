@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.49.0](https://github.com/muitneliss/undercroft/compare/v1.48.0...v1.49.0) (2026-09-29)
+
+
+### Features
+
+* **assistant:** turn a source's full re-sync on or off from the chat panel ([#325](https://github.com/muitneliss/undercroft/issues/325)) ([24ba126](https://github.com/muitneliss/undercroft/commit/24ba126b35a0e17114c55a6f6b5cd1c4f556fa4d))
+
+
+### Bug Fixes
+
+* **resync:** record a whole read of an empty list, so the card can say when every list was last re-synced ([#327](https://github.com/muitneliss/undercroft/issues/327)) ([38c31ee](https://github.com/muitneliss/undercroft/commit/38c31ee595de95f6fc0ad2e12322d3e4e850ae8c))
+
 ## [1.48.0](https://github.com/muitneliss/undercroft/compare/v1.47.0...v1.48.0) (2026-09-29)
 
 
