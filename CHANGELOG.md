@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.47.0](https://github.com/muitneliss/undercroft/compare/v1.46.1...v1.47.0) (2026-09-29)
+
+
+### Features
+
+* **worker:** land each Gmail message's body as a document of that message ([#320](https://github.com/muitneliss/undercroft/issues/320)) ([00fb597](https://github.com/muitneliss/undercroft/commit/00fb597b993d31540a13b47a56db9082c5661c0e))
+
+
+### Bug Fixes
+
+* **xero:** read each incremental list whole once a day, so an edit Xero's change filter never returns reaches the lake ([#314](https://github.com/muitneliss/undercroft/issues/314)) ([#318](https://github.com/muitneliss/undercroft/issues/318)) ([f8e1639](https://github.com/muitneliss/undercroft/commit/f8e1639bde8a2b47ee0c1e70e0ed8f2b151aa5c1))
+
 ## [1.46.1](https://github.com/muitneliss/undercroft/compare/v1.46.0...v1.46.1) (2026-09-29)
 
 
