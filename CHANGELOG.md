@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.52.0](https://github.com/muitneliss/undercroft/compare/v1.51.0...v1.52.0) (2026-09-29)
+
+
+### Features
+
+* **models:** a tenant writes its own dbt macros, and dbt no longer sees the worker's secrets (ADR 0086) ([#337](https://github.com/muitneliss/undercroft/issues/337)) ([6bc6f7e](https://github.com/muitneliss/undercroft/commit/6bc6f7e815556f3cde5ef350c27a9e760f4dbc94))
+
+
+### Bug Fixes
+
+* **worker:** a tenant's login is leased by overlapping sessions, so a query no longer locks dbt out of its build (ADR 0087) ([#339](https://github.com/muitneliss/undercroft/issues/339)) ([905a195](https://github.com/muitneliss/undercroft/commit/905a1957632b731655174d2cb5b20f54bb6320fa))
+
 ## [1.51.0](https://github.com/muitneliss/undercroft/compare/v1.50.0...v1.51.0) (2026-09-29)
 
 
