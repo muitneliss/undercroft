@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.51.0](https://github.com/muitneliss/undercroft/compare/v1.50.0...v1.51.0) (2026-09-29)
+
+
+### Features
+
+* **semantic:** a tenant's own catalogue of document kinds, published in versions (ADR 0085, part 1) ([#333](https://github.com/muitneliss/undercroft/issues/333)) ([88ea85e](https://github.com/muitneliss/undercroft/commit/88ea85e4f491f45710786432ab662e1f90f8cb00))
+* **semantic:** classify texts against a tenant's published catalogue, and initialise one from a sample (ADR 0085, part 2) ([#335](https://github.com/muitneliss/undercroft/issues/335)) ([2f94200](https://github.com/muitneliss/undercroft/commit/2f94200905fdcf88995aff0dead3a683cfd3be4e))
+
 ## [1.50.0](https://github.com/muitneliss/undercroft/compare/v1.49.1...v1.50.0) (2026-09-29)
 
 
