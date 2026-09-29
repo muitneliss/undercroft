@@ -112,6 +112,7 @@ export {
   stepsFor,
 } from "./runs.ts";
 export {
+  extendTenantPassword,
   isRoleCollision,
   provisionTenantRoles,
   rotateTenantPassword,

@@ -565,7 +565,7 @@ sequenceDiagram
     else member
         CP->>CP: compile definition to quoted SQL, bind filters
         CP->>W: POST /v1/queries/run with service token
-        W->>PG: ops.rotate_tenant_password, short-lived password
+        W->>PG: ops.rotate_tenant_password, unless a session already holds the login
         W->>PG: connect as undercroft_bi_slug, READ ONLY, 15 s statement_timeout
         PG-->>W: rows from analytics_slug only
         W-->>CP: TableResult, numeric cells as strings
@@ -722,8 +722,10 @@ flowchart LR
 - Row-level security on `raw.records`, `raw.documents` and `raw.document_text` keys on
   `raw.tenant_of(current_user)`, that is, on which login is connected. It never keys on a
   session setting ([ADR 0018](adr/0018-per-tenant-roles-and-row-level-security.md)).
-- Per-tenant passwords are short-lived. `ops.rotate_tenant_password` mints one for each session,
-  only the worker may call it, and the password is never stored.
+- Per-tenant passwords are short-lived. `ops.rotate_tenant_password` mints one when a login
+  is first used, the builds and sessions that overlap it share it, and it changes again once
+  none is left; only the worker may call it, and the password is never stored
+  ([ADR 0087](adr/0087-a-tenant-login-is-leased-not-rotated-per-session.md)).
 - The BI roles are revoked the whole `raw` schema, so the text a customer's documents contain
   reaches a dashboard only through a model that customer wrote
   ([ADR 0005](adr/0005-the-role-and-grant-model.md), `.claude/rules/privileges.md`). The

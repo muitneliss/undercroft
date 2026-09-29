@@ -68,6 +68,28 @@ const fakeDbt: Spawn = async (_cmd, options) => {
   return { exitCode: 1, stdout: "Done. PASS=1 FAIL=1", stderr: "" };
 };
 
+/**
+ * What dbt 1.9 prints when it stops before its first model: this startup banner, then its own
+ * account of why. Captured from a real `dbt build --no-use-colors` that was refused a login.
+ */
+const BANNER = [
+  "11:09:28  Running with dbt=1.9.1",
+  "11:09:29  Registered adapter: postgres=1.9.0",
+  "11:09:29  Unable to do partial parsing because saved manifest not found. Starting full parse.",
+  "11:09:31  Found 44 models, 123 data tests, 2 sources, 437 macros",
+  "11:09:31  ",
+  "11:09:31  Concurrency: 4 threads (target='tenant')",
+  "11:09:31  ",
+  "11:09:32  ",
+  "11:09:32  Finished running  in 0 hours 0 minutes and 0.13 seconds (0.13s).",
+].join("\n");
+
+/** dbt that stopped before any model: exit 2, the banner and then `cause`, no results file. */
+function stoppedEarly(cause: string): Spawn {
+  return () =>
+    Promise.resolve({ exitCode: 2, stdout: `${BANNER}\n11:09:32  ${cause}\n  `, stderr: "" });
+}
+
 /** The API with dbt wired. `exec` is `noDatabase` only for requests refused before any SQL. */
 function api(spawn: Spawn = fakeDbt, exec: SqlExecutor = db) {
   return createLakeApi({
@@ -191,6 +213,36 @@ describe("POST /v1/models/build", () => {
     expect(body.ok).toBe(false);
     expect(body.error).toBe('column "nope" does not exist');
     expect(body.preview).toBeNull();
+  });
+
+  // #336: the run kept the first 500 characters of dbt's last lines, the banner filled them,
+  // and the cause was cut off at the "E" of "Encountered".
+  it("a build dbt stopped before its first model records dbt's own cause, not its banner", async () => {
+    const refused =
+      'Encountered an error:\nDatabase Error\n  connection to server at "db.internal" (10.0.0.5), port 5432 failed: FATAL:  password authentication failed for user "undercroft_dbt_case_1"';
+    const res = await post(api(stoppedEarly(refused)), "/v1/models/build", {
+      tenantId: TENANT,
+      model: "stg_deals",
+    });
+    const body = (await res.json()) as { ok: boolean; error: string | null };
+
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain(
+      'Encountered an error:\nDatabase Error\nconnection to server at "db.internal" (10.0.0.5), port 5432 failed: FATAL:  password authentication failed for user "undercroft_dbt_case_1"',
+    );
+    expect(body.error).not.toContain("Running with dbt");
+  });
+
+  it("a cause longer than the run keeps is cut at its end, never at its start", async () => {
+    const cause = `Encountered an error:\nCompilation Error\n${"in macro trimmed ".repeat(60)}`;
+    const res = await post(api(stoppedEarly(cause)), "/v1/models/build", {
+      tenantId: TENANT,
+      model: "stg_deals",
+    });
+    const body = (await res.json()) as { error: string | null };
+
+    expect(body.error?.length).toBe(500);
+    expect(body.error).toContain("Encountered an error:\nCompilation Error\nin macro trimmed");
   });
 });
 

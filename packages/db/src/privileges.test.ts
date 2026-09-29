@@ -273,6 +273,18 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     });
   });
 
+  it("only the worker may extend a password", async () => {
+    const extend = "SELECT ops.extend_tenant_password('CASE-0042', 'bi', interval '2 hours')";
+    await db.asRole("undercroft_worker", (tx) => tx.query(extend));
+
+    await db.asRole("undercroft_app", async (tx) => {
+      await expectDenied(() => tx.query(extend));
+    });
+    await db.asRole("undercroft_bi_case_0042", async (tx) => {
+      await expectDenied(() => tx.query(extend));
+    });
+  });
+
   it("a reference that folds to an existing tenant's slug is refused before any role exists", async () => {
     await db.exec("INSERT INTO ops.tenant (id) VALUES ('case_0042')");
     const refusal = await refusalOf(() => db.query("SELECT ops.provision_tenant('case_0042')"));

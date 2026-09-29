@@ -3,13 +3,13 @@
  *
  * The two SQL functions behind `provisionTenantRoles` and `rotateTenantPassword` are the
  * only code that creates a role, a schema or a default privilege, and they are the only
- * code that ever sees a tenant role's password in the clear. This repo does nothing but
- * call them and read the mapping; the reasoning is in `080_tenant_isolation.sql` and ADR
- * 0018.
+ * code that ever sees a tenant role's password in the clear. `extendTenantPassword` changes
+ * only when that password expires. This repo does nothing but call them and read the
+ * mapping; the reasoning is in `080_tenant_isolation.sql`, ADR 0018 and ADR 0087.
  *
  * Both apps import this from `@undercroft/db/repos`: the control plane provisions when a
- * tenant is created, the worker rotates before a build or a query session. Neither holds
- * a private copy of the SQL.
+ * tenant is created, the worker rotates or extends before a build or a query session.
+ * Neither holds a private copy of the SQL.
  */
 
 import type { SqlExecutor } from "../executor.ts";
@@ -41,25 +41,44 @@ export function isRoleCollision(error: unknown): boolean {
 }
 
 /**
- * Set a fresh, time-limited password on one of the tenant's roles and return it.
+ * Set a fresh password on one of the tenant's roles, good for `validForMs`, and return it.
  *
- * The plaintext exists in the caller's memory for the one build or session it was minted
- * for. Nothing stores it; the next need mints another.
+ * A role has one password, so this refuses every login still to be made with the previous
+ * one. The plaintext exists only in the worker's memory while a build or session of that
+ * login runs (ADR 0087); nothing stores it.
  */
 export async function rotateTenantPassword(
   exec: SqlExecutor,
   tenantId: string,
   kind: TenantRoleKind,
+  validForMs: number,
 ): Promise<string> {
   const { rows } = await exec.query<{ password: string }>(
-    "SELECT ops.rotate_tenant_password($1, $2) AS password",
-    [tenantId, kind],
+    "SELECT ops.rotate_tenant_password($1, $2, $3::interval) AS password",
+    [tenantId, kind, `${String(validForMs)} milliseconds`],
   );
   const password = rows[0]?.password;
   if (password === undefined || password === "") {
     throw new Error(`undercroft: no password was minted for ${tenantId}/${kind}`);
   }
   return password;
+}
+
+/**
+ * Keep the role's current password valid for at least `validForMs` more, without changing
+ * it. Never shortens: a later expiry already set stays.
+ */
+export async function extendTenantPassword(
+  exec: SqlExecutor,
+  tenantId: string,
+  kind: TenantRoleKind,
+  validForMs: number,
+): Promise<void> {
+  await exec.query("SELECT ops.extend_tenant_password($1, $2, $3::interval)", [
+    tenantId,
+    kind,
+    `${String(validForMs)} milliseconds`,
+  ]);
 }
 
 /** The tenant's roles and schemas, or `null` for a tenant never provisioned. */
