@@ -13,6 +13,7 @@ import {
   InMemoryByteFetcher,
   TestClock,
 } from "@undercroft/core";
+import { loadMigrations } from "@undercroft/db";
 import { eventsFor, openRun, writeConnectionDetail } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
@@ -993,6 +994,144 @@ describe("gmail: a file type chosen after its messages were held", () => {
     expect(untouched.reread).toEqual({ records: 0, documents: 0 });
     expect(reads("m2")).toBe(1);
     expect(await documentIds(second)).toEqual(["m2:002"]);
+  });
+});
+
+describe("gmail: a message's text (ADR 0080)", () => {
+  const TEXT = "Please settle invoice 17 by Friday.";
+  function b64(text: string | Uint8Array): string {
+    return Buffer.from(text).toString("base64url");
+  }
+
+  /** A message whose body parts carry their bytes inline, the way Gmail sends a small body. */
+  function mail(id: string, parts: unknown[]): unknown {
+    return {
+      id,
+      threadId: `t-${id}`,
+      labelIds: ["INBOX"],
+      internalDate: "1789400000000",
+      payload: {
+        mimeType: "multipart/mixed",
+        headers: [
+          { name: "Subject", value: `Invoice ${id}` },
+          { name: "From", value: "billing@acme.test" },
+        ],
+        parts,
+      },
+    };
+  }
+
+  const PLAIN = { mimeType: "text/plain", body: { size: String(TEXT.length), data: b64(TEXT) } };
+  const HTML = {
+    mimeType: "text/html",
+    body: { data: b64(`<p>${TEXT}</p>`), size: String(TEXT.length + 7) },
+  };
+  const INVOICE = {
+    mimeType: "application/pdf",
+    filename: "invoice.pdf",
+    body: { size: String(PDF.byteLength), attachmentId: "att-m1" },
+  };
+
+  async function bodyOf(id: string): Promise<{ type: string; text: string } | null> {
+    const { rows } = await db.query<{ content_type: string; lake_key: string }>(
+      "SELECT content_type, lake_key FROM raw.documents WHERE document_id = $1",
+      [`${id}:body`],
+    );
+    const [row] = rows;
+    if (row === undefined) {
+      return null;
+    }
+    return {
+      type: row.content_type,
+      text: new TextDecoder().decode(await lake.read(row.lake_key)),
+    };
+  }
+
+  function serve(body: unknown): void {
+    fetcher
+      .on("GET", listUrl(null), { body: { messages: [{ id: "m1" }] } })
+      .on("GET", messageUrl("m1"), { body })
+      .on("GET", `${GMAIL}/messages/m1/attachments/att-m1`, { body: { data: PDF_B64 } });
+  }
+
+  it("lands the plain text as the message's own document, whatever the file-type choice", async () => {
+    // PDF alone is chosen and the body is text/plain: the choice governs attachments, not the
+    // mail itself. Of the two alternatives the plain one is the body.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    serve(mail("m1", [{ mimeType: "multipart/alternative", parts: [PLAIN, HTML] }, INVOICE]));
+
+    await collect("gmail");
+
+    expect(await bodyOf("m1")).toEqual({ type: "text/plain", text: TEXT });
+    expect(await marks("gmail")).toEqual([{ id: "m1", landed: "2" }]);
+  });
+
+  it("never puts the text in the record, which dbt reads directly", async () => {
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    serve(mail("m1", [PLAIN]));
+
+    await collect("gmail");
+
+    const { rows } = await db.query<{ payload: string }>(
+      "SELECT payload::text AS payload FROM raw.records WHERE source = 'gmail'",
+    );
+    expect(rows[0]?.payload).toContain("Invoice m1");
+    expect(rows[0]?.payload).not.toContain("settle");
+  });
+
+  it("lands the HTML as the body when a message has no plain text", async () => {
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    serve(mail("m1", [HTML]));
+
+    await collect("gmail");
+
+    expect(await bodyOf("m1")).toEqual({ type: "text/html", text: `<p>${TEXT}</p>` });
+  });
+
+  it("writes a body sent in another charset as UTF-8", async () => {
+    // The text reader ignores a declared charset, so the declaration is honoured here or never.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    const latin1 = Uint8Array.of(0x43, 0x61, 0x66, 0xe9); // "Café" in ISO-8859-1
+    serve(
+      mail("m1", [
+        {
+          mimeType: "text/plain",
+          headers: [{ name: "Content-Type", value: 'text/plain; charset="ISO-8859-1"' }],
+          body: { size: "4", data: b64(latin1) },
+        },
+      ]),
+    );
+
+    await collect("gmail");
+
+    expect((await bodyOf("m1"))?.text).toBe("Café");
+  });
+
+  it("reads a message held from before bodies landed once more, for its text alone", async () => {
+    // Production at deploy: the message and its PDF are held, the mark says nothing was left
+    // behind, and no body was ever landed. `360_gmail_body_left_behind.sql` lists the body, the
+    // next run reads the message for it, and the PDF already landed is not fetched again.
+    await connect("gmail", { labels: [], fileTypes: ["application/pdf"] });
+    // The first read stands in for the release before: its text part offers nothing to land,
+    // which is what that release made of every body. Every later read gets the message as it is.
+    const textless = { mimeType: "text/plain", body: { size: String(TEXT.length) } };
+    fetcher.on("GET", messageUrl("m1"), { body: mail("m1", [textless, INVOICE]) });
+    serve(mail("m1", [PLAIN, INVOICE]));
+    await collect("gmail");
+    expect(await bodyOf("m1")).toBeNull();
+    const repair = loadMigrations().find((m) => m.name === "360_gmail_body_left_behind.sql");
+    await db.asSuperuser((tx) => tx.query(repair?.sql ?? "SELECT missing_migration()"));
+
+    const reread = await collect("gmail");
+    const after = await collect("gmail");
+
+    expect(await bodyOf("m1")).toEqual({ type: "text/plain", text: TEXT });
+    expect(reread.reread).toEqual({ records: 1, documents: 1 });
+    expect(fetcher.calls.filter((call) => call.url.endsWith("/attachments/att-m1"))).toHaveLength(
+      1,
+    );
+    expect(after.reread).toEqual({ records: 0, documents: 0 });
+    expect(await marks("gmail")).toEqual([{ id: "m1", landed: "2" }]);
   });
 });
 

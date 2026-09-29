@@ -1437,7 +1437,8 @@ export const vi = {
       "Công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm (kể cả sản phẩm đã lưu trữ) từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm; người phụ trách (owner), kể cả người đã ngừng hoạt động; các pipeline giao dịch cùng các giai đoạn của chúng; và liên kết giữa chúng: công ty, liên hệ, báo giá và dòng báo giá của mỗi giao dịch, dòng báo giá, liên hệ và công ty của mỗi báo giá, và công ty của mỗi liên hệ. HubSpot không lưu thời điểm sửa cho liên kết, nên thời điểm sửa phía nguồn của chúng luôn để trống.",
     xeroReads:
       "Liên hệ, hóa đơn, giấy báo có, báo giá, đơn đặt hàng, mặt hàng và các khoản thanh toán từ một tổ chức bạn chọn.",
-    gmailReads: "Tiêu đề thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
+    gmailReads:
+      "Tiêu đề thư, nội dung thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
     driveReads:
       "Tài liệu trong các thư mục bạn chọn, theo loại tệp bạn cho phép. Không thư mục nào khác được đọc.",
   },

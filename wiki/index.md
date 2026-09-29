@@ -83,6 +83,7 @@
 - [ADR 0077 Deleting a Model Drops What It Built](sources/adr-0077-deleting-a-model-drops-what-it-built.md)
 - [ADR 0078 A Drive Walk Lands the Folders It Lists](sources/adr-0078-a-drive-walk-lands-the-folders-it-lists.md)
 - [ADR 0079 Xero Reads Bank Transactions Transfers And Manual Journals](sources/adr-0079-xero-reads-bank-transactions-transfers-and-manual-journals.md)
+- [ADR 0080 A Gmail Harvest Lands Each Messages Body](sources/adr-0080-a-gmail-harvest-lands-each-messages-body.md)
 - [ADR 0080 A List Whose Change Filter Cannot See Every Change Is Read Whole on a Bound](sources/adr-0080-a-list-whose-change-filter-cannot-see-every-change-is-read-whole-on-a-bound.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)

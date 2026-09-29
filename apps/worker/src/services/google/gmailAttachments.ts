@@ -16,6 +16,13 @@
  * spelling of a chosen type (`image/jpg` for JPEG) finds what it now admits exactly the way a
  * widened choice does. Both ask the ceiling through the sink's own `overCeiling`, so a part too
  * large to land is never a reason to read its message again. ADR 0076, #292.
+ *
+ * THE BODY IS A PART TOO, and the one the file-type choice does not govern. Since ADR 0080 a
+ * message's text lands as a document of its own under `<messageId>:body`, so it takes the same
+ * road as an attachment -- the lake, the catalogue, the extract verb -- and the same mark. A
+ * message held from before that release has a body nobody landed, so its mark lists the body as
+ * left behind (`360_gmail_body_left_behind.sql`), and `planReads` reads it once more for that
+ * and nothing else.
  */
 
 import { allowsFacts, type FileFacts, fileFactsOf } from "@undercroft/contracts";
@@ -91,9 +98,27 @@ export function planReads(
   return { reads, skipped, reread };
 }
 
-/** A part left behind that this run would land: the choice allows it, the ceiling admits it. */
+/**
+ * A part left behind that this run would land: the choice allows it -- or it is the body, which
+ * the choice does not govern -- and the ceiling admits it.
+ */
 function wantedNow(fileTypes: readonly string[], part: LeftBehindDocument): boolean {
-  return allowsFacts(fileTypes, part) && !overCeiling(part.declaredBytes);
+  const chosen = isBodyId(part.documentId) || allowsFacts(fileTypes, part);
+  return chosen && !overCeiling(part.declaredBytes);
+}
+
+const BODY_SUFFIX = ":body";
+
+/** The two types a body is read from. */
+const BODY_TEXT_TYPE = /^text\/(?:plain|html)$/iu;
+
+/** The id a message's body lands under. An attachment's is `<messageId>:<3 digits>`. */
+export function bodyDocumentId(messageId: string): string {
+  return `${messageId}${BODY_SUFFIX}`;
+}
+
+function isBodyId(documentId: string): boolean {
+  return documentId.endsWith(BODY_SUFFIX);
 }
 
 export interface AttachmentPart {
@@ -125,7 +150,11 @@ function attachmentParts(messageId: string, message: unknown): AttachmentPart[] 
     const mimeType = str(part, "mimeType");
     const attachmentId = str(part, "body.attachmentId");
     const filename = str(part, "filename");
-    if (attachmentId !== "") {
+    // A text part with no filename is the body, which Gmail moves out of the message like an
+    // attachment once it is large. `bodyPart` takes it; taking it here too would land it twice.
+    // The index still counts it, so every attachment keeps the id it has always landed under.
+    const isBodyText = filename === "" && BODY_TEXT_TYPE.test(mimeType);
+    if (attachmentId !== "" && !isBodyText) {
       found.push({
         index,
         documentId: `${messageId}:${String(index).padStart(3, "0")}`,
@@ -147,10 +176,81 @@ function attachmentParts(messageId: string, message: unknown): AttachmentPart[] 
   return found;
 }
 
-/** What one read of a message does with its attachment parts. */
+/** A message's text: the one part a person reading the mail would call its body. */
+export interface BodyPart {
+  readonly documentId: string;
+  readonly mimeType: "text/plain" | "text/html";
+  /** What the part's own Content-Type declares, lowercased; `null` where it declares none. */
+  readonly charset: string | null;
+  /** The bytes, base64url, as Gmail sends a small body inline; `""` when it moved them out. */
+  readonly data: string;
+  /** Set when Gmail moved a large body out of the message, as it does an attachment's bytes. */
+  readonly attachmentId: string;
+  readonly size: string;
+}
+
+const CHARSET = /charset\s*=\s*"?(?<charset>[^";\s]+)/iu;
+
+function charsetOf(part: unknown): string | null {
+  for (const header of asArray(getPath(part, "headers"))) {
+    if (str(header, "name").toLowerCase() === "content-type") {
+      return CHARSET.exec(str(header, "value"))?.groups?.charset?.toLowerCase() ?? null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The body: the first `text/plain` part carrying no filename, else the first `text/html` one.
+ *
+ * Plain first because a `multipart/alternative` mail says the same thing twice, and the plain
+ * half is what the text reader stores without first stripping a stylesheet out of it. A part
+ * with a filename is an attachment that happens to be text, and is the choice's to take or not.
+ * The payload itself is walked too: a single-part message has no `parts` and IS its body.
+ */
+function bodyPart(messageId: string, message: unknown): BodyPart | null {
+  const found: { "text/plain": BodyPart | null; "text/html": BodyPart | null } = {
+    "text/plain": null,
+    "text/html": null,
+  };
+
+  function walk(part: unknown): void {
+    const mimeType = str(part, "mimeType").toLowerCase();
+    const data = str(part, "body.data");
+    const attachmentId = str(part, "body.attachmentId");
+    if (
+      (mimeType === "text/plain" || mimeType === "text/html") &&
+      found[mimeType] === null &&
+      str(part, "filename") === "" &&
+      (data !== "" || attachmentId !== "")
+    ) {
+      found[mimeType] = {
+        documentId: bodyDocumentId(messageId),
+        mimeType,
+        charset: charsetOf(part),
+        data,
+        attachmentId,
+        size: str(part, "body.size") || "0",
+      };
+    }
+    for (const child of asArray(getPath(part, "parts"))) {
+      walk(child);
+    }
+  }
+
+  walk(getPath(message, "payload"));
+  return found["text/plain"] ?? found["text/html"];
+}
+
+/** What one read of a message does with its parts. */
 export interface SortedParts {
   /** Allowed by the choice: offered to the sink, which refuses one over the ceiling itself. */
   readonly offered: readonly AttachmentPart[];
+  /**
+   * The message's text, when it has one and this read looks at it: always on a first read, and on
+   * a read again only when the mark lists it. Offered whatever the choice, since ADR 0080.
+   */
+  readonly body: BodyPart | null;
   /** Refused by the choice or over the ceiling: kept on the mark, so a wider choice finds it. */
   readonly leftBehind: readonly LeftBehindDocument[];
 }
@@ -176,6 +276,18 @@ export function sortParts(
 ): SortedParts {
   const offered: AttachmentPart[] = [];
   const leftBehind: LeftBehindDocument[] = [];
+  const found = bodyPart(messageId, message);
+  const body = found !== null && (lookAt === null || lookAt.has(found.documentId)) ? found : null;
+  if (body !== null && overCeiling(body.size)) {
+    // Offered all the same, so the sink refuses it with its reason, and listed, so the count
+    // leaves it out -- exactly what an attachment over the ceiling gets, for the same reasons.
+    leftBehind.push({
+      documentId: body.documentId,
+      mimeType: body.mimeType,
+      extension: null,
+      declaredBytes: body.size,
+    });
+  }
   for (const part of attachmentParts(messageId, message)) {
     if (lookAt !== null && !lookAt.has(part.documentId)) {
       continue;
@@ -193,7 +305,7 @@ export function sortParts(
       });
     }
   }
-  return { offered, leftBehind };
+  return { offered, body, leftBehind };
 }
 
 function asArray(value: unknown): unknown[] {
