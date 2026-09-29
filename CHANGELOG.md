@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.1](https://github.com/muitneliss/undercroft/compare/v1.52.0...v1.52.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **db:** a tenant's dbt login leaves room for sessions beside a build ([#340](https://github.com/muitneliss/undercroft/issues/340)) ([8ccae4a](https://github.com/muitneliss/undercroft/commit/8ccae4ae236f500abfdf545831a870d3e20d5a64))
+
 ## [1.52.0](https://github.com/muitneliss/undercroft/compare/v1.51.0...v1.52.0) (2026-09-29)
 
 
