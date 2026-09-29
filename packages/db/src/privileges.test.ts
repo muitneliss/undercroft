@@ -156,6 +156,36 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     expect(docs.rows.map((r) => r.tenant_id)).toEqual(["CASE-0042"]);
   });
 
+  it("a tenant's dbt role reads its own document kinds through the view, and no other tenant's", async () => {
+    // The view reads four row-secure tables. Were it to run as its owner (the default), the owner
+    // would pass their policies and every tenant's login would see every tenant's kinds; only
+    // `security_invoker` keeps the policies in force (400_document_kinds.sql, ADR 0085).
+    await db.exec(
+      `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method, text,
+         chars, extracted_at, run_id)
+       VALUES ('demo', 'CASE-0042', 'd1', repeat('0', 64), 'txt', 'an invoice', 10, now(), 'r'),
+              ('demo', 'CASE-0043', 'd1', repeat('0', 64), 'txt', 'an invoice', 10, now(), 'r');
+       INSERT INTO raw.document_kind (tenant_id, source_sha256, definition_hash, version, status,
+         kind, confidence, model, classified_at, run_id)
+       VALUES ('CASE-0042', repeat('0', 64), repeat('a', 64), 1, 'classified', 'invoice', 0.97, 'm', now(), 'r'),
+              ('CASE-0043', repeat('0', 64), repeat('b', 64), 1, 'classified', 'receipt', 0.97, 'm', now(), 'r');
+       INSERT INTO raw.document_kind_definition (tenant_id, version, definition_hash, published_at)
+       VALUES ('CASE-0042', 1, repeat('a', 64), now()), ('CASE-0043', 1, repeat('b', 64), now());`,
+    );
+
+    const own = await db.asRole("undercroft_dbt_case_0042", (tx) =>
+      tx.query<{ tenant_id: string; accepted_kind: string | null }>(
+        "SELECT tenant_id, accepted_kind FROM raw.document_kinds",
+      ),
+    );
+    const legacy = await db.asRole("undercroft_dbt", (tx) =>
+      tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.document_kinds"),
+    );
+
+    expect(own.rows).toEqual([{ tenant_id: "CASE-0042", accepted_kind: "invoice" }]);
+    expect(legacy.rows[0]?.n).toBe("0");
+  });
+
   it("naming a partition directly is a permission error, not a way round the policy", async () => {
     await db.asRole("undercroft_dbt_case_0042", async (tx) => {
       await expectDenied(() => tx.query("SELECT * FROM raw.records_demo"));

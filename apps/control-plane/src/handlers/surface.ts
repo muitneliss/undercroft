@@ -145,6 +145,13 @@ export const EFFECTS: EffectTable = {
   "models.build": "write",
   "models.delete": "destructive",
 
+  // Edits change a draft; `publish` is the one that costs, since the worker then classifies every
+  // text again (ADR 0085). Removing a kind is undone by adding it back, so it is a write.
+  "documentKinds.add": "write",
+  "documentKinds.update": "write",
+  "documentKinds.remove": "write",
+  "documentKinds.publish": "write",
+
   // Both are POSTs because a question definition does not fit a query string. They answer a
   // definition the BI role compiles; neither changes anything.
   "bi.answer": "read",

@@ -152,4 +152,12 @@ export {
   type SourceInstance,
   sourceKind,
 } from "./sourceInstance.ts";
-export { DOCUMENT_KIND_INSTRUCTION, DOCUMENT_KINDS, type DocumentKind } from "./documentKinds.ts";
+export {
+  DOCUMENT_KIND_INSTRUCTION,
+  DOCUMENT_KIND_MODEL,
+  DOCUMENT_KINDS,
+  type DocumentKind,
+  DocumentKindDescription,
+  DocumentKindName,
+  OTHER_KIND,
+} from "./documentKinds.ts";
