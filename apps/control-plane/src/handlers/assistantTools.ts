@@ -26,7 +26,8 @@
 
 import { TRPCError } from "@trpc/server";
 import { tool, type ToolSet } from "ai";
-import { type Tier, TOOLS } from "../services/assistant/catalogue.ts";
+import { TOOLS } from "../services/assistant/catalogue.ts";
+import type { Tier } from "../services/assistant/toolSpec.ts";
 import { PROCEDURE_PATHS, resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";

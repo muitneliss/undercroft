@@ -24,3 +24,18 @@ export const CadenceChoice = {
         "minutes -- e.g. '30 7 * * 1-5' for 07:30 on weekdays.",
     ),
 };
+
+/**
+ * How often a source's lists are read WHOLE again, as the model writes it: the same two fields as
+ * `CadenceChoice`, because `connections.setResync` takes the same choices (ADR 0082). Only the
+ * words differ, and they matter: `paused` is a re-sync that is off, which is where every
+ * connection starts, and a model told "paused runs only when asked" would misread it.
+ */
+export const ResyncChoice = {
+  cadence: Cadence.describe(
+    "hourly, every_6h and daily are gaps since each list was last read whole; paused is off, " +
+      "the default; custom re-reads on the expression in `cron`. A re-sync only happens during " +
+      "a sync run, so it never runs more often than the source's own cadence.",
+  ),
+  cron: CadenceChoice.cron,
+};

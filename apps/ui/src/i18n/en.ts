@@ -1304,6 +1304,9 @@ export const en = {
       setCadence: "Change {{source}}'s ingest cadence to “{{cadence}}”.",
       setCadenceCron:
         "Schedule {{source}}'s ingest on the cron expression “{{cron}}”, in Singapore time.",
+      setResync: "Change {{source}}'s full re-sync to “{{cadence}}”.",
+      setResyncCron:
+        "Schedule {{source}}'s full re-sync on the cron expression “{{cron}}”, in Singapore time.",
       invitePerson: "Invite {{email}} to {{tenantId}} as {{role}}.",
     },
     unconfiguredTitle: "The assistant is not ready",
