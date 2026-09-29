@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.0](https://github.com/muitneliss/undercroft/compare/v1.49.1...v1.50.0) (2026-09-29)
+
+
+### Features
+
+* **contracts:** a generic catalogue of document kinds, and a probe that samples files or mail bodies apart ([#330](https://github.com/muitneliss/undercroft/issues/330)) ([8b84702](https://github.com/muitneliss/undercroft/commit/8b847024e9d163b852274e4985a49aaaaf493f1b))
+
 ## [1.49.1](https://github.com/muitneliss/undercroft/compare/v1.49.0...v1.49.1) (2026-09-29)
 
 
