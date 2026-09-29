@@ -2,7 +2,7 @@
  * Ask Jev about a sample of one tenant's real documents, and report what it cost and said.
  *
  *   UNDERCROFT_POSTGRES_DSN=... UNDERCROFT_TYPESAFE_API_KEY=... \
- *     task db:semantic-probe -- --tenant CASE-0042 [--limit 200] [--multi 50] [--max-chars 32000]
+ *     task db:semantic-probe -- --tenant CASE-0042 [--part files|bodies|all] [--limit 200] [--multi 50]
  *
  * WHY IT EXISTS BEFORE THE FEATURE. Semantic fields -- a typed, confidence-carrying answer
  * derived from a document's text and kept as a rebuildable projection -- need a schema, a worker
@@ -41,9 +41,15 @@ import {
   score,
   TypeSafeClient,
 } from "@typesafe-ai/sdk";
+import { DOCUMENT_KIND_INSTRUCTION, DOCUMENT_KINDS } from "@undercroft/contracts";
 import { asExecutor, createPool } from "@undercroft/db";
 
-import { type DigestTotals, sampleTextByDigest, totalTextByDigest } from "./repos/documentText.ts";
+import {
+  type DigestTotals,
+  sampleTextByDigest,
+  type TextPart,
+  totalTextByDigest,
+} from "./repos/documentText.ts";
 import {
   type ProviderAnswer,
   type SemanticAsk,
@@ -64,19 +70,25 @@ const MAX_LIMIT = 2000;
  */
 const CALL_TIMEOUT_MS = 60_000;
 
-/** The document-type question from the design notes: the first semantic field worth having. */
+/**
+ * The document-kind question over the whole generic catalogue (`DOCUMENT_KINDS`), which is how a
+ * tenant's first catalogue is drawn: classify a sample into every kind and keep what occurs.
+ */
 const DOCUMENT_TYPE: SemanticDefinition = {
   kind: "choice",
-  instruction: "Classify the primary type of this document.",
-  choices: {
-    invoice: "A bill asking for payment for goods or services.",
-    contract: "An agreement setting out obligations between parties.",
-    receipt: "A record that a payment was received.",
-    report: "An account of findings, figures or activity.",
-    correspondence: "A letter, memo or message addressed to someone.",
-    other: "None of the above.",
-  },
+  instruction: DOCUMENT_KIND_INSTRUCTION,
+  choices: Object.fromEntries(DOCUMENT_KINDS.map((entry) => [entry.kind, entry.description])),
 };
+
+const PARTS: readonly TextPart[] = ["files", "bodies", "all"];
+
+function partOf(value: string | undefined): TextPart {
+  const part = PARTS.find((candidate) => candidate === (value ?? "files"));
+  if (part === undefined) {
+    throw new Error(`--part must be one of ${PARTS.join(", ")}`);
+  }
+  return part;
+}
 
 /**
  * Three questions of three kinds, asked in ONE call: what batching by text would cost.
@@ -204,6 +216,7 @@ interface Options {
   readonly limit: number;
   readonly maxChars: number;
   readonly model: string | undefined;
+  readonly part: TextPart;
   readonly plan: ProbePlan;
 }
 
@@ -215,6 +228,7 @@ function readOptions(): Options {
       multi: { type: "string" },
       "max-chars": { type: "string" },
       model: { type: "string" },
+      part: { type: "string" },
     },
   });
   if (values.tenant === undefined || values.tenant === "") {
@@ -226,6 +240,7 @@ function readOptions(): Options {
     limit,
     maxChars: positive("max-chars", values["max-chars"], 32_000),
     model: values.model,
+    part: partOf(values.part),
     plan: {
       single: { document_type: DOCUMENT_TYPE },
       multi: MULTI,
@@ -238,12 +253,12 @@ function readOptions(): Options {
 async function readSample(
   options: Options,
 ): Promise<{ documents: ProbeDocument[]; catalogue: DigestTotals }> {
-  const { tenantId, limit, maxChars } = options;
+  const { tenantId, limit, maxChars, part } = options;
   const pool = createPool(required("UNDERCROFT_POSTGRES_DSN"));
   try {
     const exec = asExecutor(pool);
-    const catalogue = await totalTextByDigest(exec, { tenantId, maxChars });
-    const rows = await sampleTextByDigest(exec, { tenantId, limit, maxChars });
+    const catalogue = await totalTextByDigest(exec, { tenantId, maxChars, part });
+    const rows = await sampleTextByDigest(exec, { tenantId, limit, maxChars, part });
     const documents = rows.map((row) => ({
       source: row.source,
       documentId: row.documentId,
@@ -274,7 +289,7 @@ async function main(): Promise<void> {
     throw new Error(`tenant ${options.tenantId} has no readable document text to ask about`);
   }
   process.stderr.write(
-    `asking about ${documents.length} texts (${options.plan.multiSample} twice)...\n`,
+    `asking about ${documents.length} ${options.part} texts (${options.plan.multiSample} twice)...\n`,
   );
   const calls = await runProbe(
     { ask: typesafeAsk(client, options.model), clock: () => performance.now() },
@@ -289,7 +304,7 @@ async function main(): Promise<void> {
 
   const directory = resolve(import.meta.dirname, "../../..", "data");
   await mkdir(directory, { recursive: true });
-  const stem = join(directory, `semantic-probe-${at.replaceAll(":", "-")}`);
+  const stem = join(directory, `semantic-probe-${options.part}-${at.replaceAll(":", "-")}`);
   await writeFile(`${stem}.txt`, report);
   await writeFile(`${stem}.csv`, renderProbeCsv(calls, plan));
   process.stdout.write(`\nwritten to ${stem}.txt and ${stem}.csv\n`);

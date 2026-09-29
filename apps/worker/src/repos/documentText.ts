@@ -322,12 +322,23 @@ export interface DigestTotals {
 }
 
 /**
- * The live, readable documents of one tenant: those with a text and not tombstoned.
+ * Which texts a measurement reads: attachments and files, mail bodies, or both.
+ *
+ * Apart because they answer different questions. A mail's body is its own document since ADR
+ * 0080, under an id ending `:body` (`bodyDocumentId` in `services/google/gmailAttachments.ts`,
+ * which this layer may not import); what a file IS and what a message SAYS are measured best
+ * one at a time, and a sample of both is weighted by whichever the tenant holds more of.
+ */
+export type TextPart = "files" | "bodies" | "all";
+
+/**
+ * The live, readable documents of one tenant, of one part: those with a text and not tombstoned.
  *
  * `method IS NOT NULL AND chars > 0` because a document nobody could read has nothing to ask a
- * model about; its reason is already on its row.
+ * model about; its reason is already on its row. `part` is the parameter numbered `partParam`.
  */
-const READABLE = `
+function readable(partParam: string): string {
+  return `
     FROM raw.document_text t
     JOIN raw.documents d
       ON d.source = t.source
@@ -336,7 +347,9 @@ const READABLE = `
    WHERE t.tenant_id = $1
      AND d.deleted_at IS NULL
      AND t.method IS NOT NULL
-     AND t.chars > 0`;
+     AND t.chars > 0
+     AND (${partParam} = 'all' OR (t.document_id LIKE '%:body') = (${partParam} = 'bodies'))`;
+}
 
 /**
  * A reproducible sample of one tenant's texts, ONE ROW PER DISTINCT DIGEST.
@@ -356,7 +369,13 @@ export async function sampleTextByDigest(
     tenantId,
     limit,
     maxChars,
-  }: { readonly tenantId: string; readonly limit: number; readonly maxChars: number },
+    part,
+  }: {
+    readonly tenantId: string;
+    readonly limit: number;
+    readonly maxChars: number;
+    readonly part: TextPart;
+  },
 ): Promise<DigestText[]> {
   const { rows } = await exec.query<{
     source: string;
@@ -372,11 +391,11 @@ export async function sampleTextByDigest(
                     t.source, t.document_id, t.source_sha256, t.chars, t.truncated,
                     count(*) OVER (PARTITION BY t.source_sha256) AS documents,
                     left(t.text, $3) AS text
-               ${READABLE}
+               ${readable("$4")}
               ORDER BY t.source_sha256, t.source, t.document_id) AS distinct_texts
       ORDER BY md5(source_sha256)
       LIMIT $2`,
-    [tenantId, limit, maxChars],
+    [tenantId, limit, maxChars, part],
   );
 
   return rows.map((row) => ({
@@ -395,16 +414,20 @@ export async function sampleTextByDigest(
 /** How much a tenant's readable texts add up to, counted the way `sampleTextByDigest` samples. */
 export async function totalTextByDigest(
   exec: SqlExecutor,
-  { tenantId, maxChars }: { readonly tenantId: string; readonly maxChars: number },
+  {
+    tenantId,
+    maxChars,
+    part,
+  }: { readonly tenantId: string; readonly maxChars: number; readonly part: TextPart },
 ): Promise<DigestTotals> {
   const { rows } = await exec.query<{ digests: string; documents: string; cut_chars: string }>(
     `SELECT count(*) AS digests,
             COALESCE(sum(documents), 0) AS documents,
             COALESCE(sum(least(chars, $2)), 0) AS cut_chars
        FROM (SELECT t.source_sha256, max(t.chars) AS chars, count(*) AS documents
-               ${READABLE}
+               ${readable("$3")}
               GROUP BY t.source_sha256) AS distinct_texts`,
-    [tenantId, maxChars],
+    [tenantId, maxChars, part],
   );
   const [row] = rows;
   return {
