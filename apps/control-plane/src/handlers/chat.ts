@@ -32,13 +32,8 @@ import {
 import type { Context as HonoContext, Hono } from "hono";
 import { messages as catalogue } from "../i18n/index.ts";
 import type { Assistant, Responded } from "../services/assistant/agent.ts";
-import {
-  inputSchemas,
-  mutates,
-  summarizeFor,
-  type Tier,
-  TOOLS,
-} from "../services/assistant/catalogue.ts";
+import { inputSchemas, mutates, summarizeFor, TOOLS } from "../services/assistant/catalogue.ts";
+import type { Tier } from "../services/assistant/toolSpec.ts";
 import { history, remember, resume } from "../services/assistant/conversation.ts";
 import type { ApprovalDecision, ApprovalPolicy } from "../services/assistant/agent.ts";
 import type { Judge } from "../services/assistant/judge.ts";

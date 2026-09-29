@@ -61,6 +61,16 @@ export function proofSentence(t: TFunction, tool: string, input: unknown): strin
             source: pick(values, "source"),
             cadence: pick(values, "cadence"),
           });
+    case "setResync":
+      return values.cadence === "custom"
+        ? t("assistant.proof.setResyncCron", {
+            source: pick(values, "source"),
+            cron: pick(values, "cron"),
+          })
+        : t("assistant.proof.setResync", {
+            source: pick(values, "source"),
+            cadence: pick(values, "cadence"),
+          });
     case "invitePerson":
       return t("assistant.proof.invitePerson", {
         email: pick(values, "email"),
@@ -114,6 +124,7 @@ export const PLATES: Readonly<Record<string, string>> = {
   analyticsSchema: "facts",
   runIngestNow: "runs",
   setCadence: "grants",
+  setResync: "grants",
   invitePerson: "facts",
   revokeGrant: "grants",
   withdrawIngestKey: "facts",

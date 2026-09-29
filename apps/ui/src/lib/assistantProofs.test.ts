@@ -31,6 +31,7 @@ describe("the proof sentence", () => {
     for (const [tool, input] of [
       ["runIngestNow", { tenantId: "CASE-0042", source: "xero" }],
       ["setCadence", { source: "gmail", cadence: "daily" }],
+      ["setResync", { source: "xero", cadence: "daily" }],
       ["invitePerson", { tenantId: "CASE-0042", email: "a@example.test", role: "member" }],
     ] as const) {
       const said = proofSentence(t, tool, input);

@@ -1538,6 +1538,10 @@ export const vi = {
       setCadence: "Đổi tần suất đồng bộ của nguồn {{source}} thành “{{cadence}}”.",
       setCadenceCron:
         "Đặt lịch đồng bộ của nguồn {{source}} theo biểu thức cron “{{cron}}”, tính theo giờ Singapore.",
+      /** A re-sync's `paused` is "off", so the sentence names the word the model sent as-is. */
+      setResync: "Đổi lịch đọc lại toàn bộ của nguồn {{source}} thành “{{cadence}}”.",
+      setResyncCron:
+        "Đặt lịch đọc lại toàn bộ của nguồn {{source}} theo biểu thức cron “{{cron}}”, tính theo giờ Singapore.",
       invitePerson: "Mời {{email}} vào khách hàng {{tenantId}} với vai trò {{role}}.",
     },
     unconfiguredTitle: "Trợ lý chưa sẵn sàng",
