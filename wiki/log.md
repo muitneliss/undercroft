@@ -225,3 +225,5 @@
 ## [2026-09-29] ingest | ADR 0082 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget
 ## [2026-09-29] ingest | Runbook Xero Setup
 ## [2026-09-29] remove | ADR 0081 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget
+## [2026-09-29] ingest | ADR 0083 Xero's Whole-Read Budget Is Sized for the Starter Tier
+## [2026-09-29] ingest | Runbook Xero Setup

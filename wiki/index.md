@@ -87,6 +87,7 @@
 - [ADR 0080 A List Whose Change Filter Cannot See Every Change Is Read Whole on a Bound](sources/adr-0080-a-list-whose-change-filter-cannot-see-every-change-is-read-whole-on-a-bound.md)
 - [ADR 0081: ACRA templates are a configured table, and a reading is laid out again from itself](sources/adr-0081-acra-templates-are-a-configured-table-and-a-reading-is-laid-out-again-from-itself.md)
 - [ADR 0082 A Connection Re-Syncs on Its Own Schedule Within a Daily Request Budget](sources/adr-0082-a-connection-re-syncs-on-its-own-schedule-within-a-daily-request-budget.md)
+- [ADR 0083 Xero's Whole-Read Budget Is Sized for the Starter Tier](sources/adr-0083-xero-s-whole-read-budget-is-sized-for-the-starter-tier.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)

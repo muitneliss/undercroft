@@ -57,12 +57,14 @@ defaults:
     startAt: 1
     stopOn: empty-page
   rateLimit:
-    # 60/min, 5,000/day, 5 concurrent per tenant. 1100ms leaves headroom for clock skew.
+    # 60/min, 5 concurrent per tenant, and 1,000 a day on Xero's starter tier -- the tier a new
+    # app is on, and this deployment's (5,000 on higher tiers). 1100ms leaves headroom for clock
+    # skew.
     # Do not lower this to make a backfill finish sooner: a 429 storm costs far more than
     # the time it saves.
     minIntervalMs: 1100
     requestsPerMinute: 60
-    requestsPerDay: 5000
+    requestsPerDay: 1000
   retry:
     attempts: 5
     on: [429, 500, 502, 503, 504]
@@ -70,13 +72,16 @@ defaults:
     maxRetryAfterMs: 120000 # a malformed header must not park a run for hours
   guards:
     failOnEmpty: true
-  # Of the 5,000 a day, reading lists whole -- a first read, a changed request, a re-sync -- may
-  # spend 4,000. The other 1,000 are the reserve every "what changed" read and Run now is left.
+  # Of the 1,000 a day, reading lists whole -- a first read, a changed request, a re-sync -- may
+  # spend 800. The other 200 are the reserve every "what changed" read and Run now is left: a daily
+  # sync of every list costs about 35. Sized for the starter tier because a reserve above the
+  # day's whole limit admits no whole read ever -- the first v1.48.0 run left every paged list
+  # waiting (ADR 0083). On a higher tier this only reads whole a little more slowly.
   # Xero reports what the day has left in `X-DayLimit-Remaining` on every response, counting
   # retries and every other app on the organisation, and that is the count trusted. A list the
   # budget cuts is read whole on the next run with room; the run says so (ADR 0082).
   wholeReadBudget:
-    requestsPerDay: 4000
+    requestsPerDay: 800
     remainingHeader: x-daylimit-remaining
 
 # Xero filters server-side on a HEADER, not a query parameter: `If-Modified-Since` carries
