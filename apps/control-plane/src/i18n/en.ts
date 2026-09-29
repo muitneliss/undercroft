@@ -112,6 +112,10 @@ export const en = {
       "The model {{name}} was not deleted: the processing service could not drop the table it built, so the model is still here. Try again in a few minutes.",
     modelDependedOn:
       "The model {{name}} was not deleted: {{dependents}} read from its table. Delete those models, or change them so they no longer read {{name}} and build them again, then try again.",
+    macroNameTaken:
+      "A macro named {{name}} already exists. Open it to edit, or choose another name.",
+    macroDependedOn:
+      "The macro {{name}} was not deleted: it is still called by {{dependents}}. Remove those calls first, then try again.",
     dqNotRead: "The failing rows for this step could not be read.",
     queryFailed: "The query did not run: {{message}}",
     queryNotRun:
@@ -159,6 +163,16 @@ export const en = {
 
   modelCheck: {
     finding: {
+      "not-one-macro":
+        "A macro is exactly one {% macro name(...) %} ... {% endmacro %} block. Nothing may stand outside it but comments, and there is no second block.",
+      "name-mismatch":
+        "The definition is named {{subject}}, not the name it is being saved under. Give both the same name.",
+      "reserved-name":
+        "{{subject}} is reserved: a macro of that name would silently replace one dbt or the platform relies on. Choose another name.",
+      "forbidden-block":
+        "A macro may not hold a {{subject}} block. It would change how the whole project builds, not add something a model calls.",
+      "unbound-name":
+        "{{subject}} is not a parameter of this macro, nor anything dbt defines. dbt would render it as an empty string without an error.",
       empty: "The model has no SQL yet.",
       semicolon:
         "Remove the semicolon. dbt wraps a model in CREATE TABLE ... AS, so a semicolon ends that statement early and the build fails.",
@@ -184,7 +198,7 @@ export const en = {
       "top-level-limit":
         "A limit on the whole query saves only part of the data as the model. Keep it only if that is intended.",
       "unknown-macro":
-        "{{subject}} is neither a macro this project ships nor a dbt function. models.reference lists the macros.",
+        "{{subject}} is neither a macro of this project -- the platform's or the customer's own -- nor a dbt function. models.reference lists the macros.",
       "dynamic-reference":
         "The name passed to {{subject}} is not written out as plain text, so whether it exists cannot be checked.",
       "test-column-unmentioned":

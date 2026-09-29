@@ -1,5 +1,5 @@
 /**
- * What can be said about a model's SQL before anything runs it.
+ * What can be said about a model's SQL -- or a tenant's macro -- before anything runs it.
  *
  * `models.check` answers with this so an author -- a person, or an agent the model-builder
  * skill drives -- hears about a mistake while it is still text. It is deliberately modest,
@@ -24,7 +24,11 @@
  * what the Jinja says, both in the words of `modelFindings.ts`. `source()` and `ref()` are
  * checked against what exists: the sources `SOURCES_YML` declares (`dbtSources.ts`, read
  * from that text so the two cannot drift), and the tenant's own models, which the caller
- * passes in.
+ * passes in. A call is checked against dbt's context, the platform's macros and the tenant's
+ * own (ADR 0086), which the caller passes in too.
+ *
+ * `checkMacro` holds a tenant's macro to the same reading, after `macroDefinition.ts` has said
+ * the text is one macro a tenant may define at all.
  *
  * `raw.document_text` is granted to dbt but is not a declared source, so reading it directly
  * is the only way there is; `raw-direct` fires only for a table a source declares.
@@ -33,8 +37,9 @@
 import { MACROS } from "./dbtProject.ts";
 import { SOURCES } from "./dbtSources.ts";
 import { DBT_CONTEXT, type JinjaReading, readJinja } from "./jinja.ts";
+import { readMacroDefinition } from "./macroDefinition.ts";
 import { type Finding, finding, type ModelCheck, UNVERIFIED } from "./modelFindings.ts";
-import { bareModelFindings, namesIn, sqlFindings } from "./sqlChecks.ts";
+import { bareModelFindings, fragmentFindings, namesIn, sqlFindings } from "./sqlChecks.ts";
 import { lex, type Token } from "./sqlLexer.ts";
 
 export type {
@@ -51,35 +56,60 @@ export interface ModelCheckInput {
   readonly tests: { readonly columns: Readonly<Record<string, readonly string[]>> };
   /** The tenant's model names, which a `ref()` must name one of. */
   readonly existingModels: readonly string[];
+  /** The tenant's own macro names, which a model may call like the platform's. */
+  readonly existingMacros: readonly string[];
+}
+
+export interface MacroCheckInput {
+  readonly name: string;
+  readonly sql: string;
+  /** The tenant's model names, which a `ref()` in the macro must name one of. */
+  readonly existingModels: readonly string[];
+  /** The tenant's other macros, which this one may call. */
+  readonly existingMacros: readonly string[];
 }
 
 // ---------------------------------------------------------------------------------------
 // Jinja
 
 const MACRO_NAMES: ReadonlySet<string> = new Set(MACROS.map((macro) => macro.name));
+const MACRO_IMPLICITS = ["varargs", "kwargs"] as const;
 
-function known(jinja: JinjaReading, name: string): boolean {
-  return DBT_CONTEXT.has(name) || MACRO_NAMES.has(name) || jinja.bound.has(name);
+function known(jinja: JinjaReading, defined: ReadonlySet<string>, name: string): boolean {
+  return (
+    DBT_CONTEXT.has(name) || MACRO_NAMES.has(name) || defined.has(name) || jinja.bound.has(name)
+  );
 }
 
 /**
- * A call to something the project does not ship is a warning; a bare `{{ name }}` nothing
- * binds is an error. A report question writes its parameters exactly so, and dbt renders an
- * unknown name as an empty string -- the filter would vanish from a build that succeeds.
+ * A call to something neither dbt nor the project defines is a warning; a bare `{{ name }}`
+ * nothing binds is an error, `bare` saying which. A report question writes its parameters
+ * exactly so, and dbt renders an unknown name as an empty string -- the filter would vanish
+ * from a build that succeeds. `defined` is what the caller's text may use besides dbt's
+ * context and the platform's macros: the tenant's macros, and a macro's own parameters.
  */
-function nameFindings(jinja: JinjaReading): Finding[] {
+function nameFindings(
+  jinja: JinjaReading,
+  defined: ReadonlySet<string>,
+  bare: "report-parameter" | "unbound-name",
+): Finding[] {
   return [
     ...jinja.calls
-      .filter(({ name }) => !known(jinja, name))
+      .filter(({ name }) => !known(jinja, defined, name))
       .map(({ name, line }) => finding("unknown-macro", line, name)),
     ...jinja.names
-      .filter(({ name }) => !known(jinja, name))
-      .map(({ name, line }) => finding("report-parameter", line, name)),
+      .filter(({ name }) => !known(jinja, defined, name))
+      .map(({ name, line }) => finding(bare, line, name)),
   ];
 }
 
-function referenceFindings(jinja: JinjaReading, input: ModelCheckInput): Finding[] {
-  const existing = new Set(input.existingModels);
+/** `self` is the model being checked, which may not read itself; `null` for a macro. */
+function referenceFindings(
+  jinja: JinjaReading,
+  existingModels: readonly string[],
+  self: string | null,
+): Finding[] {
+  const existing = new Set(existingModels);
   return jinja.references.flatMap(({ fn, args, line }): Finding[] => {
     if (args === null) {
       return [finding("dynamic-reference", line, fn)];
@@ -92,7 +122,7 @@ function referenceFindings(jinja: JinjaReading, input: ModelCheckInput): Finding
     }
     // `ref('model')` or `ref('package', 'model')`: the model is the last argument.
     const model = args.at(-1) ?? "";
-    if (model === input.name) {
+    if (model === self) {
       return [finding("self-ref", line, model)];
     }
     return existing.has(model) ? [] : [finding("unknown-ref", line, model)];
@@ -150,10 +180,42 @@ export function checkModel(input: ModelCheckInput): ModelCheck {
     : wholeModelFindings(tokens, sql, jinja, input);
   return {
     findings: distinct([
-      ...nameFindings(jinja),
-      ...referenceFindings(jinja, input),
+      ...nameFindings(jinja, new Set(input.existingMacros), "report-parameter"),
+      ...referenceFindings(jinja, input.existingModels, input.name),
       ...sql,
       ...whole,
+    ]),
+    unverified: UNVERIFIED,
+  };
+}
+
+/**
+ * Everything text alone can say about a tenant's macro. A definition `macros.save` would refuse
+ * is the one finding, since nothing else about the text means anything until it is one macro;
+ * otherwise its Jinja is read as a model's is, its parameters and its own name (a macro may call
+ * itself) counting as defined, and its SQL as the fragment it is (`fragmentFindings`).
+ */
+export function checkMacro(input: MacroCheckInput): ModelCheck {
+  const definition = readMacroDefinition(input.name, input.sql);
+  if (!definition.ok) {
+    return {
+      findings: [finding(definition.reason, null, definition.subject)],
+      unverified: UNVERIFIED,
+    };
+  }
+  const jinja = readJinja(input.sql);
+  const defined = new Set([
+    ...input.existingMacros,
+    input.name,
+    ...definition.params,
+    // What Jinja binds inside every macro: the arguments no parameter named.
+    ...MACRO_IMPLICITS,
+  ]);
+  return {
+    findings: distinct([
+      ...nameFindings(jinja, defined, "unbound-name"),
+      ...referenceFindings(jinja, input.existingModels, null),
+      ...fragmentFindings(lex(jinja.text)),
     ]),
     unverified: UNVERIFIED,
   };

@@ -78,9 +78,17 @@ export const procedureSentences: SentenceTable = {
   "models.delete":
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",
   "models.build": "Chạy dbt cho một mô hình và chờ kết quả. Quản trị.",
-  "models.reference": "Tài liệu tham khảo cho người viết mô hình.",
+  "models.reference":
+    "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng.",
   "models.check":
     "Kiểm tra SQL của một mô hình trước khi lưu, không chạy gì: lỗi chắc chắn, điều đáng ngờ, và những gì không kiểm được.",
+  "macros.list": "Các macro dbt riêng của khách hàng, mỗi macro kèm công dụng và tham số.",
+  "macros.get": "Một macro dbt của khách hàng và định nghĩa của nó.",
+  "macros.check":
+    "Kiểm tra định nghĩa một macro trước khi lưu, không chạy gì: điều sẽ bị từ chối, điều đáng ngờ, và những gì không kiểm được.",
+  "macros.save":
+    "Lưu một macro dbt, trọn một định nghĩa {% macro %} mà mọi mô hình gọi được; không chạy gì. Quản trị.",
+  "macros.delete": "Xoá một macro dbt; bị từ chối khi còn mô hình hay macro khác gọi nó. Quản trị.",
   "bi.answer": "Trả lời một định nghĩa câu hỏi. Thành viên trở lên.",
   "bi.runQuestion": "Chạy một câu hỏi đã lưu với tham số.",
   "bi.compile": "Dịch một định nghĩa câu hỏi thành SQL. Thành viên trở lên.",

@@ -389,10 +389,15 @@ unread document again ([ADR 0024](adr/0024-extracted-text-is-readable-by-dbt.md)
 
 ### Transform and reporting
 
-A tenant's models are rows in `app.model`. For each build the worker renders a throwaway dbt
-project with `raw.records` and `raw.documents` as sources, plus the macros it ships, such as
-`parse_amount`. It then runs `dbt build` as a subprocess, connected as that tenant's dbt login
-([ADR 0007](adr/0007-dbt-runs-as-a-subprocess-in-the-worker.md)). Models materialise as tables in
+A tenant's models are rows in `app.model`, and its own macros rows in `app.macro`. For each
+build the worker renders a throwaway dbt project with `raw.records` and `raw.documents` as
+sources, the macros it ships, such as `parse_amount`, and every macro of the tenant under
+`macros/tenant/`. A tenant's macro is saved only as one whole definition under a name that
+cannot replace one dbt or the platform relies on
+([ADR 0086](adr/0086-a-tenant-writes-its-own-macros.md)). The worker then runs `dbt build` as a
+subprocess, connected as that tenant's dbt login
+([ADR 0007](adr/0007-dbt-runs-as-a-subprocess-in-the-worker.md)), with an allowlisted
+environment, so a model's `env_var()` reads none of the worker's secrets. Models materialise as tables in
 `analytics_slug`, and test failures are stored in `dq_slug`. Deleting a model drops what it built
 in both, as the same login, before its row goes; if the drop does not happen, the row stays
 ([ADR 0077](adr/0077-deleting-a-model-drops-what-it-built.md)).

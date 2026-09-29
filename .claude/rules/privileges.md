@@ -55,9 +55,10 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
 - The worker's reach into `app` is exactly what its verbs need, column-scoped where a column
   is all it writes: `SELECT, INSERT, UPDATE, DELETE` on `app.connection_secret` (it seals,
   refreshes and revokes), `SELECT` on `app.connection_detail` (the chosen scope),
-  `SELECT` + `UPDATE (last_used_at)` on `app.ingest_key`, and `SELECT` +
+  `SELECT` + `UPDATE (last_used_at)` on `app.ingest_key`, `SELECT` +
   `UPDATE (columns)` on `app.model` (it reads the SQL to build and records the columns a
-  build produced). Nothing on `app.app_user`, the auth tables -- the `auth_*` four,
+  build produced), and `SELECT` on `app.macro` (it renders the tenant's own macros into the
+  build, `410_macros.sql`, ADR 0086). Nothing on `app.app_user`, the auth tables -- the `auth_*` four,
   `auth_jwks` and the `oauth_*` tables Better Auth keeps as `/mcp`'s authorization server
   (`310_mcp_oauth.sql`, ADR 0061) -- `app.access_token` (a person's own tokens for `/mcp`, ADR
   0060 -- the worker admits ingest keys, never a person), the questions or the dashboards. A new worker verb that needs a table adds its grant in the migration that

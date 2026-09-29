@@ -66,9 +66,17 @@ export const procedureSentences: SentenceTable = {
   "models.delete":
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
   "models.build": "Build one model with dbt and wait for the answer. Admins.",
-  "models.reference": "Reference material for a model's author.",
+  "models.reference":
+    "Reference material for a model's author: the sources, the platform's macros and the customer's own.",
   "models.check":
     "Check a model's SQL before saving it, running nothing: certain errors, suspicions, and what could not be checked.",
+  "macros.list": "The customer's own dbt macros, each with what it is for and its parameters.",
+  "macros.get": "One of the customer's dbt macros and its definition.",
+  "macros.check":
+    "Check a macro's definition before saving it, running nothing: what would be refused, suspicions, and what could not be checked.",
+  "macros.save":
+    "Store a dbt macro, one whole {% macro %} definition that every model can call; runs nothing. Admins.",
+  "macros.delete": "Delete a dbt macro; refused while a model or another macro calls it. Admins.",
   "bi.answer": "Answer a question definition. Members and above.",
   "bi.runQuestion": "Run a saved question with parameters.",
   "bi.compile": "Compile a question definition to SQL. Members and above.",

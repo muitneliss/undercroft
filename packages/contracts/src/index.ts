@@ -116,6 +116,7 @@ export {
   TEST_KINDS,
   TestKind,
 } from "./models.ts";
+export { MacroDescription, MacroName, MAX_MACRO_SQL_BYTES } from "./macros.ts";
 export { documentKeyOf, documentPrefixOf, RawDocument } from "./rawDocument.ts";
 export {
   DEFAULT_SEARCH_HITS,

@@ -1,6 +1,6 @@
 ---
 name: undercroft-model-builder
-description: Guide a person through building an Undercroft dbt model, over its MCP tools or its CLI. Use when a person wants to save a query as a model -- a raw-lake query, a report question's SQL, or SQL they paste -- or to build a model of their own, such as a staging table over one source, a cleaned or joined table, or a table for a dashboard. It interviews the person before writing any SQL, reads the lake instead of guessing, checks the model with models.check, and asks before it saves and again before it builds. Needs the undercroft skill for how to reach the platform.
+description: Guide a person through building an Undercroft dbt model, over its MCP tools or its CLI. Use when a person wants to save a query as a model -- a raw-lake query, a report question's SQL, or SQL they paste -- or to build a model of their own, such as a staging table over one source, a cleaned or joined table, or a table for a dashboard. It interviews the person before writing any SQL, reads the lake instead of guessing, reuses the customer's own dbt macros and proposes one when an expression would repeat, checks the model with models.check, and asks before it saves and again before it builds. Needs the undercroft skill for how to reach the platform.
 ---
 
 # Build an Undercroft model
@@ -29,35 +29,43 @@ These hold for the whole workflow. None of them bends because the person is in a
 3. **Missing stays missing.** An absent value is `NULL`, never `0`, `''` or a made-up
    default. Use the macros `models.reference` lists, such as the one for reading an amount,
    rather than writing your own cast.
-4. **Check before you show.** Run `models.check` on every draft. A finding with severity
+4. **Reuse before you rewrite.** Before you write an expression, look in `macros.list` for a
+   macro of the customer's that does it, and call it. When the same expression would appear
+   in a second model, or the person asks, propose a macro instead of a second copy: write it
+   following `references/macro-patterns.md`, run `macros.check`, show the person the
+   definition, its description and the models that will call it, and save it with
+   `macros.save` and `create: true` only after their yes. Then call it from the model.
+5. **Check before you show.** Run `models.check` on every draft. A finding with severity
    `error` must be fixed before the person sees the draft as ready. Every `warning` is shown
    to the person with its message, and so is the list of what the check could not verify.
-5. **The person says yes to the save.** Show the name, the whole SQL and the tests, and ask.
+6. **The person says yes to the save.** Show the name, the whole SQL and the tests, and ask.
    Save only after a yes to that exact model.
-6. **Never overwrite silently.** Save with `create: true`. When the name is taken, the save
+7. **Never overwrite silently.** Save with `create: true`. When the name is taken, the save
    is refused with `CONFLICT`: read the existing model with `models.get`, show the person
    both, and let them choose another name or say, in words, that the existing model named X
    is to be replaced.
-7. **The person says yes to the build, separately.** A build replaces the table every report
+8. **The person says yes to the build, separately.** A build replaces the table every report
    on it reads. Ask again before `models.build`, even after the save was agreed.
-8. **Never delete.** This workflow does not call `models.delete`, and never removes a report
-   or a dashboard. If the person wants a model gone, tell them it is a separate, destructive
-   act -- it drops the table the model built and the failing rows its tests stored -- and let
-   them ask for it on its own.
-9. **Stop at a refusal.** `PERMISSION_DENIED`, `WRITES_DISABLED` and `HUMAN_REQUIRED` end the
-   workflow. Tell the person what was refused and who can change it. Never work around one,
-   for example by running the model's SQL through `lake.query` instead.
-10. **Success is the build's answer.** The model exists when `models.build` says `ok` with
+9. **Never delete.** This workflow does not call `models.delete` or `macros.delete`, and
+   never removes a report or a dashboard. If the person wants a model gone, tell them it is a
+   separate, destructive act -- it drops the table the model built and the failing rows its
+   tests stored -- and let them ask for it on its own. A macro is the same: its own act, its
+   own yes, and refused while any model or other macro still calls it.
+10. **Stop at a refusal.** `PERMISSION_DENIED`, `WRITES_DISABLED` and `HUMAN_REQUIRED` end
+    the workflow. Tell the person what was refused and who can change it. Never work around
+    one, for example by running the model's SQL through `lake.query` instead.
+11. **Success is the build's answer.** The model exists when `models.build` says `ok` with
     its tests passed. Until then, say what happened, not what you hoped.
 
 ## Who can do what
 
 - Anyone who can see the customer may run `models.list`, `models.get`, `models.reference`
-  and `models.check`.
-- Reading the raw lake (`lake.records`, `lake.querySchema`, `lake.query`) and saving and
-  building a model (`models.save`, `models.build`) need the `admin` role.
-- Over MCP, `lake.query`, `models.save` and `models.build` need a connection with a write
-  grant. With the CLI, they need a profile that allows writes. `lake.query` counts as a
+  and `models.check`, and `macros.list`, `macros.get` and `macros.check`.
+- Reading the raw lake (`lake.records`, `lake.querySchema`, `lake.query`), saving and
+  building a model (`models.save`, `models.build`) and saving a macro (`macros.save`) need
+  the `admin` role.
+- Over MCP, `lake.query`, `models.save`, `models.build` and `macros.save` need a connection
+  with a write grant. With the CLI, they need a profile that allows writes. `lake.query` counts as a
   write even though it only reads, because it runs SQL somebody wrote.
 
 If the person lacks one of these, say so at the start, before the interview. Do not find out
@@ -68,8 +76,9 @@ halfway through.
 ### 1. Find the ground
 
 - Take the tenant from `tenants.list`. If the person has more than one, ask which.
-- Read `models.list` for the models that already exist, and `models.reference` for the
-  sources and macros every project carries.
+- Read `models.list` for the models that already exist, `macros.list` for the customer's own
+  macros and what each is for, and `models.reference` for the sources and the macros every
+  project carries.
 - Read `lake.summary` for the sources and entities the lake holds, and how many records
   each has.
 
@@ -101,7 +110,9 @@ table?". Finish by writing the brief back to the person and getting their agreem
 ### 4. Draft
 
 Write the model from the brief, following `references/model-patterns.md`. For a saved query,
-the same page lists what to change so it can be a model.
+the same page lists what to change so it can be a model. Call the customer's macros where
+they do what the brief needs; an expression another model already repeats is a macro to
+propose (guardrail 4), not a second copy.
 
 ### 5. Check
 
@@ -127,7 +138,7 @@ Ask whether to save it. Changes go back to step 4.
 ### 7. Save
 
 Call `models.save` with `create: true`. With the CLI, dry-run it first. On `CONFLICT`, follow
-guardrail 6. On success, the model is stored and nothing has run yet: say exactly that.
+guardrail 7. On success, the model is stored and nothing has run yet: say exactly that.
 
 ### 8. Confirm the build, then build
 

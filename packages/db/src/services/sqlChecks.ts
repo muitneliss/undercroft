@@ -94,10 +94,22 @@ const TOKEN_RULES: readonly TokenRule[] = [
   qualified,
 ];
 
-function tokenFindings(tokens: readonly Token[]): Finding[] {
+/**
+ * What a macro's SQL is held to. A macro is a fragment spliced into whichever model calls it,
+ * so the rules about a whole query (`not-select`, a top-level `limit`) do not apply to it; the
+ * two that do are the ones that would break or turn every caller into a write.
+ */
+const FRAGMENT_RULES: readonly TokenRule[] = [semicolon, writeWord];
+
+function tokenFindings(tokens: readonly Token[], rules = TOKEN_RULES): Finding[] {
   return tokens.flatMap((_, index) =>
-    TOKEN_RULES.map((rule) => rule(tokens, index)).filter((found) => found !== null),
+    rules.map((rule) => rule(tokens, index)).filter((found) => found !== null),
   );
+}
+
+/** The findings of a macro's SQL, Jinja already blanked. */
+export function fragmentFindings(tokens: readonly Token[]): Finding[] {
+  return tokenFindings(tokens, FRAGMENT_RULES);
 }
 
 /**

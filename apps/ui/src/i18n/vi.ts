@@ -1227,9 +1227,13 @@ export const vi = {
     addColumn: "Thêm",
     noTests: "Chưa có kiểm tra nào.",
     referenceHead: "Tham khảo",
-    referenceLead: "Nguồn và các macro mà mọi mô hình đều dùng được. Chỉ đọc.",
+    referenceLead:
+      "Nguồn, các macro của nền tảng và các macro riêng của khách hàng mà mọi mô hình đều dùng được. Chỉ đọc.",
     sourcesHead: "sources.yml",
     macrosHead: "Macro",
+    tenantMacrosHead: "Macro của khách hàng",
+    tenantMacrosNone:
+      "Khách hàng này chưa có macro riêng. Macro được lưu bằng macros.save, qua CLI, MCP hoặc một trợ lý.",
     deleteHead: "Xoá mô hình",
     deleteLead:
       "Xoá {{name}} cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu. Báo cáo đang đọc bảng này sẽ không còn dữ liệu.",

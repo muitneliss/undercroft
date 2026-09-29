@@ -23,6 +23,7 @@ export const en = {
     keys: "Ingest keys.",
     lake: "The raw lake.",
     models: "dbt models.",
+    macros: "The customer's own dbt macros, which every model can call.",
     documentKinds: "The customer's catalogue of document kinds.",
     people: "Who has access, and invitations.",
     runs: "Runs.",

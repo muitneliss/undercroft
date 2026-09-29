@@ -89,6 +89,7 @@
 - [ADR 0083 Xero's Whole-Read Budget Is Sized for the Starter Tier](sources/adr-0083-xero-s-whole-read-budget-is-sized-for-the-starter-tier.md)
 - [ADR 0084 A Gmail Harvest Lands Each Messages Body](sources/adr-0084-a-gmail-harvest-lands-each-messages-body.md)
 - [ADR 0085 A Document Is Classified Into Its Tenants Own Catalogue Of Kinds](sources/adr-0085-a-document-is-classified-into-its-tenants-own-catalogue-of-kinds.md)
+- [ADR 0086 A Tenant Writes Its Own Macros](sources/adr-0086-a-tenant-writes-its-own-macros.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)

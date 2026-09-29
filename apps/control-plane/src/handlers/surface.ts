@@ -145,6 +145,12 @@ export const EFFECTS: EffectTable = {
   "models.build": "write",
   "models.delete": "destructive",
 
+  // As `models.check`: a POST for the text, reading only the tenant's names. Deleting a macro
+  // deletes text the customer wrote, like deleting a model (ADR 0086).
+  "macros.check": "read",
+  "macros.save": "write",
+  "macros.delete": "destructive",
+
   // Edits change a draft; `publish` is the one that costs, since the worker then classifies every
   // text again (ADR 0085). Removing a kind is undone by adding it back, so it is a write.
   "documentKinds.add": "write",

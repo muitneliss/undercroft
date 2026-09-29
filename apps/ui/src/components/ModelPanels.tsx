@@ -147,7 +147,11 @@ export function TestsForm({
   );
 }
 
-/** The platform's source and macros, disclosed on demand. Read-only by construction. */
+/**
+ * The platform's source and macros, and the customer's own macros, disclosed on demand.
+ * Read-only by construction: a customer's macro is written through `macros.save` (the CLI, MCP
+ * or an agent), and this panel only shows what a model here may call (ADR 0086).
+ */
 export function Reference({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const reference = trpc.models.reference.useQuery({ tenantId });
@@ -170,6 +174,17 @@ export function Reference({ tenantId }: { tenantId: string }): React.JSX.Element
               <pre key={macro.name} className="payload__text">
                 {macro.sql}
               </pre>
+            ))}
+            <span className="label">{t("models.tenantMacrosHead")}</span>
+            {reference.data.tenantMacros.length === 0 ? (
+              <p className="prose">{t("models.tenantMacrosNone")}</p>
+            ) : null}
+            {reference.data.tenantMacros.map((macro) => (
+              <div key={macro.name} className="stack">
+                <code>{macro.name}</code>
+                <p className="prose">{macro.description}</p>
+                <pre className="payload__text">{macro.sql}</pre>
+              </div>
             ))}
           </>
         ) : null}

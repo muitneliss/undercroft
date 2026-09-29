@@ -186,6 +186,10 @@ export const vi = {
       "Chưa xoá mô hình {{name}}: dịch vụ xử lý chưa gỡ được bảng mà mô hình đã dựng, nên mô hình vẫn còn nguyên. Hãy thử lại sau ít phút.",
     modelDependedOn:
       "Chưa xoá mô hình {{name}}: {{dependents}} đang đọc dữ liệu từ bảng của nó. Hãy xoá các mô hình đó, hoặc sửa để chúng không đọc {{name}} nữa rồi dựng lại, sau đó thử lại.",
+    macroNameTaken: "Đã có một macro tên {{name}}. Hãy mở macro đó để sửa, hoặc chọn tên khác.",
+    /** Dependents are models and macros alike, by name: whichever still calls it. */
+    macroDependedOn:
+      "Chưa xoá macro {{name}}: {{dependents}} vẫn còn gọi nó. Hãy bỏ các lời gọi đó trước, rồi thử lại.",
     dqNotRead: "Không đọc được các dòng không đạt kiểm tra của bước này.",
     /** Postgres's own sentence follows the colon; it quotes the author's SQL and nothing else. */
     queryFailed: "Câu truy vấn không chạy được: {{message}}",
@@ -304,6 +308,16 @@ export const vi = {
    */
   modelCheck: {
     finding: {
+      "not-one-macro":
+        "Một macro là đúng một khối {% macro tên(...) %} ... {% endmacro %}. Ngoài khối đó chỉ được có chú thích, và không có khối thứ hai.",
+      "name-mismatch":
+        "Định nghĩa mang tên {{subject}}, khác với tên đang dùng để lưu. Hãy đặt cả hai cùng một tên.",
+      "reserved-name":
+        "{{subject}} là tên đã được dành riêng: một macro trùng tên sẽ âm thầm thay thế macro mà dbt hoặc nền tảng đang dựa vào. Hãy chọn tên khác.",
+      "forbidden-block":
+        "Macro không được chứa khối {{subject}}. Khối đó thay đổi cách cả dự án được dựng, chứ không phải thứ để mô hình gọi.",
+      "unbound-name":
+        "{{subject}} không phải tham số của macro này, cũng không phải thứ dbt định nghĩa. dbt sẽ thay nó bằng chuỗi rỗng mà không báo lỗi.",
       empty: "Mô hình chưa có câu SQL nào.",
       semicolon:
         "Bỏ dấu chấm phẩy. dbt bọc mô hình trong CREATE TABLE ... AS, nên dấu chấm phẩy làm câu lệnh kết thúc sớm và bản dựng thất bại.",
@@ -329,7 +343,7 @@ export const vi = {
       "top-level-limit":
         "limit ở ngoài cùng khiến mô hình chỉ lưu một phần dữ liệu. Chỉ giữ nếu thực sự muốn vậy.",
       "unknown-macro":
-        "{{subject}} không phải macro dự án này có, cũng không phải hàm của dbt. Các macro có sẵn nằm trong models.reference.",
+        "{{subject}} không phải macro của dự án này -- của nền tảng hay của riêng khách hàng -- cũng không phải hàm của dbt. Các macro có sẵn nằm trong models.reference.",
       "dynamic-reference":
         "Tên truyền vào {{subject}} không được viết thẳng ra, nên không kiểm tra được nó có tồn tại không.",
       "test-column-unmentioned":

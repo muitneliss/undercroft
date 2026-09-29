@@ -232,3 +232,6 @@
 ## [2026-09-29] ingest | File formats a Gmail or Drive connection can land
 ## [2026-09-29] ingest | ADR 0085 A Document Is Classified Into Its Tenants Own Catalogue Of Kinds
 ## [2026-09-29] ingest | Runbook Deployment
+## [2026-09-29] ingest | ADR 0086 A Tenant Writes Its Own Macros
+## [2026-09-29] ingest | Architecture
+## [2026-09-29] ingest | ADR 0086 A Tenant Writes Its Own Macros

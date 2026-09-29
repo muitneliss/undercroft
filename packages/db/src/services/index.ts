@@ -12,6 +12,7 @@ export {
   parseRunResults,
   PASSWORD_VAR,
   type ProjectInput,
+  type ProjectMacro,
   type ProjectModel,
   relationsOfModel,
   renderProject,
@@ -20,9 +21,17 @@ export {
 } from "./dbtProject.ts";
 export { grantExpiryFor } from "./grantExpiry.ts";
 export {
+  callersOf,
+  type MacroDefinition,
+  type MacroRefusal,
+  readMacroDefinition,
+} from "./macroDefinition.ts";
+export {
+  checkMacro,
   checkModel,
   type Finding,
   type FindingCode,
+  type MacroCheckInput,
   type ModelCheck,
   type ModelCheckInput,
   type Severity,

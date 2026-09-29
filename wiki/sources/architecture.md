@@ -1,12 +1,12 @@
 ---
 title: Architecture
 type: source
-date: 2026-09-28
+date: 2026-09-29
 tags: []
 source: docs/architecture.md
 source_path: docs/architecture.md
-source_hash: 0c79d9fe630bfe21d03d78b13a204d29a47f97337e85dbe79ad858b6d62ccebe
-ingested: 2026-09-28
+source_hash: eb19ddb1bff202ab2f5d8192d1af1bc34e31ea63fc45f6de04f107278876d704
+ingested: 2026-09-29
 ---
 
 # Architecture
@@ -15,7 +15,7 @@ ingested: 2026-09-28
 
 `docs/architecture.md` is the **map of the whole system**: which processes run, what each owns, how data moves between them, and who may touch what. It names the decision behind each part and links to it rather than restating it -- why lives in the ADRs, how in the runbooks, and the working conventions in `CLAUDE.md` and `.claude/rules/`. It carries Mermaid diagrams for the system context, the runtime topology, the code dependency graph, the layers, the data layers and the database roles, a state diagram of a run, and sequence diagrams for each key flow.
 
-**The data layers.** A provider API or an ingest-key script writes through `LakeStore.put` into the raw lake on MinIO -- create-only, content-addressed, with `_blobs/` by sha256, a manifest per version and a `_journal/` per stream. Everything below is a projection that may be dropped and rebuilt ([[ADR 0001 Raw Lake Is the Only Durable Layer]], [[ADR 0002 One Generic Raw Table, No Business Schema]]): `raw.records` (projected from the journal by `loadStreamToRaw` from `raw.load_cursor`), `raw.documents` and `raw.document_text`, then each tenant's `analytics_<slug>` and `dq_<slug>` built by dbt as `undercroft_dbt_<slug>`, read by the Reports division as `undercroft_bi_<slug>`. Deleting a model drops what it built in both schemas, as the same dbt login, before its row goes, and keeps the row when the drop does not happen ([[ADR 0077 Deleting a Model Drops What It Built]]).
+**The data layers.** A provider API or an ingest-key script writes through `LakeStore.put` into the raw lake on MinIO -- create-only, content-addressed, with `_blobs/` by sha256, a manifest per version and a `_journal/` per stream. Everything below is a projection that may be dropped and rebuilt ([[ADR 0001 Raw Lake Is the Only Durable Layer]], [[ADR 0002 One Generic Raw Table, No Business Schema]]): `raw.records` (projected from the journal by `loadStreamToRaw` from `raw.load_cursor`), `raw.documents` and `raw.document_text`, then each tenant's `analytics_<slug>` and `dq_<slug>` built by dbt as `undercroft_dbt_<slug>`, read by the Reports division as `undercroft_bi_<slug>`. Deleting a model drops what it built in both schemas, as the same dbt login, before its row goes, and keeps the row when the drop does not happen ([[ADR 0077 Deleting a Model Drops What It Built]]). A tenant's own macros live in `app.macro` beside `app.model` and are rendered under `macros/tenant/` into every build, each one whole definition under a name that cannot replace one dbt or the platform relies on; dbt runs with an allowlisted environment, so a model's `env_var()` reads none of the worker's secrets ([[ADR 0086 A Tenant Writes Its Own Macros]]).
 
 **The runtime.** One compose project on one Dokploy stack. The **control plane** (:3000) is the only public surface: the SPA, `/trpc`, `/mcp`, `/api/auth` with the OAuth authorization server, the assistant, and a 60-second alert tick; it holds no sealing key and never reads the lake. The **worker** (:8081, compose network only) owns everything that touches data: ingest, extract, dbt, customer-written SQL, the lake write API `POST /v1/lake/records`, and sealing credentials ([[ADR 0016 The Worker Seals the Control Plane Consents]]). **Kestra** is only a clock -- `ingest_due` every five minutes and `extract_due` hourly ask the worker what is due. Postgres, MinIO, Kestra's Postgres and the one-shots `db-migrate`, `kestra-flows` and `minio-init` complete the stack, each with a memory limit.
 
