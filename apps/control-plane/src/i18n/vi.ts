@@ -225,6 +225,9 @@ export const vi = {
     /** A preset sent WITH an expression: refused rather than silently dropping the expression. */
     cronWithoutCustom:
       "Chỉ lịch tuỳ chỉnh mới nhận biểu thức cron; hãy chọn “custom” hoặc bỏ cron.",
+    /** A re-sync asked of a source whose lists no change filter reads: nothing to catch up on. */
+    resyncNothingToRead:
+      "{{source}} không đọc danh sách nào qua bộ lọc thay đổi, nên đọc lại toàn bộ không có gì để bắt kịp.",
     /**
      * HubSpot's `scope-insufficient`. Worded apart from Google's because the remedy is: a
      * private app has no consent screen to leave ticked, it has read permissions an admin grants

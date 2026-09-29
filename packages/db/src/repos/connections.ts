@@ -62,6 +62,13 @@ export interface Connection {
    * after, and the table's CHECK keeps one beside every `custom` (290_connection_cron.sql).
    */
   readonly cron: string | null;
+  /**
+   * How often this connection's lists are read WHOLE again, in the same words as `cadence`, and
+   * the expression of a `custom` one. `paused` by default: a re-sync is opted into (ADR 0081,
+   * 370_connection_resync.sql).
+   */
+  readonly resyncCadence: Cadence;
+  readonly resyncCron: string | null;
 }
 
 function credentialToJson(c: Credential): string {
@@ -84,7 +91,8 @@ function credentialFromJson(blob: string): Credential {
 export async function listConnections(exec: SqlExecutor, tenantId: string): Promise<Connection[]> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope, cadence, cron
+            external_account_id AS "externalAccountId", scope, cadence, cron,
+            resync_cadence AS "resyncCadence", resync_cron AS "resyncCron"
      FROM ops.connection WHERE tenant_id = $1 ORDER BY source`,
     [tenantId],
   );
@@ -98,7 +106,8 @@ export async function getConnection(
 ): Promise<Connection | null> {
   const { rows } = await exec.query<Connection>(
     `SELECT tenant_id AS "tenantId", source, status,
-            external_account_id AS "externalAccountId", scope, cadence, cron
+            external_account_id AS "externalAccountId", scope, cadence, cron,
+            resync_cadence AS "resyncCadence", resync_cron AS "resyncCron"
      FROM ops.connection WHERE tenant_id = $1 AND source = $2`,
     [tenantId, source],
   );
@@ -126,6 +135,60 @@ export async function setCadence(
     [tenantId, source, setting.cadence, setting.cron],
   );
   return rows.length > 0;
+}
+
+/**
+ * Record how often a source's lists are read whole again. `false` means there is no such
+ * connection. The same shape and the same reasons as {@link setCadence}: both columns in one
+ * statement, and which pairs are legal is the table's CHECK.
+ */
+export async function setResync(
+  exec: SqlExecutor,
+  tenantId: string,
+  source: string,
+  setting: { readonly cadence: Cadence; readonly cron: string | null },
+): Promise<boolean> {
+  const { rows } = await exec.query<{ source: string }>(
+    `UPDATE ops.connection SET resync_cadence = $3, resync_cron = $4, updated_at = now()
+     WHERE tenant_id = $1 AND source = $2
+     RETURNING source`,
+    [tenantId, source, setting.cadence, setting.cron],
+  );
+  return rows.length > 0;
+}
+
+/** One list's last completed whole read, as the worker recorded it in `raw.sync_cursor`. */
+export interface WholeRead {
+  readonly source: string;
+  readonly entity: string;
+  /** The start of the run that last read the list whole, or `null` when none is recorded. */
+  readonly at: string | null;
+  /** What that read cost in requests, or `null` when none has completed since it was counted. */
+  readonly requests: number | null;
+}
+
+/**
+ * Every list's last whole read for one tenant: what a card says about re-syncing. Reads only the
+ * columns 370 grants the app, and names the tenant in full because the table has no row-level
+ * security (220).
+ */
+export async function listWholeReads(exec: SqlExecutor, tenantId: string): Promise<WholeRead[]> {
+  const { rows } = await exec.query<{
+    source: string;
+    entity: string;
+    at: Date | string | null;
+    requests: number | null;
+  }>(
+    `SELECT source, entity, whole_read_at AS at, whole_read_requests AS requests
+     FROM raw.sync_cursor WHERE tenant_id = $1 ORDER BY source, entity`,
+    [tenantId],
+  );
+  return rows.map((row) => ({
+    source: row.source,
+    entity: row.entity,
+    at: row.at === null ? null : new Date(row.at).toISOString(),
+    requests: row.requests,
+  }));
 }
 
 /**
@@ -531,6 +594,8 @@ export async function listConnectionViews(
     scope: string;
     cadence: Cadence;
     cron: string | null;
+    resyncCadence: Cadence;
+    resyncCron: string | null;
     accountLabel: string | null;
     selectionJson: string | null;
     chosenAt: Date | string | null;
@@ -545,6 +610,8 @@ export async function listConnectionViews(
   }>(
     `SELECT c.tenant_id AS "tenantId", c.source, c.status,
             c.external_account_id AS "externalAccountId", c.scope, c.cadence, c.cron,
+            c.resync_cadence      AS "resyncCadence",
+            c.resync_cron         AS "resyncCron",
             d.account_label       AS "accountLabel",
             d.selection::text     AS "selectionJson",
             d.chosen_at           AS "chosenAt",
@@ -579,23 +646,37 @@ export async function listConnectionViews(
     scope: row.scope,
     cadence: row.cadence,
     cron: row.cron,
+    resyncCadence: row.resyncCadence,
+    resyncCron: row.resyncCron,
     accountLabel: row.accountLabel ?? "",
     selectionJson: row.selectionJson ?? "{}",
     chosenAt: row.chosenAt === null ? null : new Date(row.chosenAt).toISOString(),
     credentialExpiresAt:
       row.credentialExpiresAt === null ? null : new Date(row.credentialExpiresAt).toISOString(),
-    lastRun:
-      row.lastRunId === null || row.lastRunStatus === null || row.lastRunStartedAt === null
-        ? null
-        : {
-            id: row.lastRunId,
-            status: row.lastRunStatus,
-            startedAt: new Date(row.lastRunStartedAt).toISOString(),
-            endedAt:
-              row.lastRunEndedAt === null ? null : new Date(row.lastRunEndedAt).toISOString(),
-            seen: row.lastRunSeen ?? 0,
-            refused: row.lastRunRefused ?? 0,
-            error: row.lastRunError,
-          },
+    lastRun: lastRunOf(row),
   }));
+}
+
+/** The newest run's columns of a card row, as a `LastRun`, or `null` when there has been none. */
+function lastRunOf(row: {
+  lastRunId: string | null;
+  lastRunStatus: LastRun["status"] | null;
+  lastRunStartedAt: Date | string | null;
+  lastRunEndedAt: Date | string | null;
+  lastRunSeen: number | null;
+  lastRunRefused: number | null;
+  lastRunError: string | null;
+}): LastRun | null {
+  if (row.lastRunId === null || row.lastRunStatus === null || row.lastRunStartedAt === null) {
+    return null;
+  }
+  return {
+    id: row.lastRunId,
+    status: row.lastRunStatus,
+    startedAt: new Date(row.lastRunStartedAt).toISOString(),
+    endedAt: row.lastRunEndedAt === null ? null : new Date(row.lastRunEndedAt).toISOString(),
+    seen: row.lastRunSeen ?? 0,
+    refused: row.lastRunRefused ?? 0,
+    error: row.lastRunError,
+  };
 }

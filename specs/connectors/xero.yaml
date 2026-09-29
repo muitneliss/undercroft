@@ -70,6 +70,14 @@ defaults:
     maxRetryAfterMs: 120000 # a malformed header must not park a run for hours
   guards:
     failOnEmpty: true
+  # Of the 5,000 a day, reading lists whole -- a first read, a changed request, a re-sync -- may
+  # spend 4,000. The other 1,000 are the reserve every "what changed" read and Run now is left.
+  # Xero reports what the day has left in `X-DayLimit-Remaining` on every response, counting
+  # retries and every other app on the organisation, and that is the count trusted. A list the
+  # budget cuts is read whole on the next run with room; the run says so (ADR 0081).
+  wholeReadBudget:
+    requestsPerDay: 4000
+    remainingHeader: x-daylimit-remaining
 
 # Xero filters server-side on a HEADER, not a query parameter: `If-Modified-Since` carries
 # the last watermark and the endpoint returns only what changed after it. Client filtering
@@ -84,15 +92,16 @@ defaults:
 # read the same way into `source_updated_at`, where the raw text once failed the whole run
 # (#265). See `packages/connector-runtime/src/incremental.ts`.
 #
-# `wholeReadAfterHours: 24` on every list read that way, because the header cannot see every
-# change. Xero documents that a due date or `SentToContact` moved on a partially paid document,
-# and a contact's `Balances`, `IsSupplier` and `IsCustomer`, do not move `UpdatedDateUTC`, and
-# Fivetran documents a line's `AccountCode` too. So each list is read whole, with no header, on
-# the first run that starts a day (less one scheduler tick) after the run that last read it
-# whole, and the lake records every record nobody edited as unchanged. That is the cadence
-# Fivetran re-reads Xero contacts at. Xero refuses a read that has to process more than 100,000
-# documents, so an organisation that large already fails its first read, and still would
-# (#314, ADR 0080).
+# The header cannot see every change. Xero documents that a due date or `SentToContact` moved on
+# a partially paid document, and a contact's `Balances`, `IsSupplier` and `IsCustomer`, do not
+# move `UpdatedDateUTC`, and Fivetran documents a line's `AccountCode` too. A connection can
+# therefore opt into a RE-SYNC, a schedule of its own beside its sync cadence, on which each of
+# these lists is read whole again. That schedule is the connection's, set on its card, and not
+# this file's: ADR 0081, which supersedes the 24 hours ADR 0080 wrote in here (#314).
+#
+# `pageSize: "500"` on every list that takes it, half of Xero's maximum of 1,000: a whole read
+# of a list costs a fifth of the requests it did at 100, and a page is still small enough to
+# decode at once.
 #
 # `unitdp: "4"` on every list whose endpoint takes it in Xero's OpenAPI document: /Invoices,
 # /CreditNotes, /Overpayments, /Prepayments, /Items and /BankTransactions. Without it Xero ROUNDS each line's
@@ -104,7 +113,7 @@ defaults:
 # repairs the documents read before (ADR 0072).
 entities:
   - name: contacts
-    request: { kind: list, path: /Contacts, query: { pageSize: "100" } }
+    request: { kind: list, path: /Contacts, query: { pageSize: "500" } }
     readScope: accounting.contacts.read
     envelopePath: Contacts
     idPath: ContactID
@@ -115,10 +124,9 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: invoices
-    request: { kind: list, path: /Invoices, query: { pageSize: "100", unitdp: "4" } }
+    request: { kind: list, path: /Invoices, query: { pageSize: "500", unitdp: "4" } }
     readScope: accounting.invoices.read
     envelopePath: Invoices
     idPath: InvoiceID
@@ -129,10 +137,9 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: payments
-    request: { kind: list, path: /Payments, query: { pageSize: "100" } }
+    request: { kind: list, path: /Payments, query: { pageSize: "500" } }
     readScope: accounting.payments.read
     envelopePath: Payments
     idPath: PaymentID
@@ -143,12 +150,11 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   # Each entity names its own id field. A single hardcoded "InvoiceID" would silently key
   # credit notes on nothing.
   - name: credit_notes
-    request: { kind: list, path: /CreditNotes, query: { pageSize: "100", unitdp: "4" } }
+    request: { kind: list, path: /CreditNotes, query: { pageSize: "500", unitdp: "4" } }
     readScope: accounting.invoices.read
     envelopePath: CreditNotes
     idPath: CreditNoteID
@@ -159,7 +165,6 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   # The lists below are the rest of what the scopes above reach (issues 271, 277 and 308). They do not
   # all read like the four above, and each difference is Xero's OpenAPI document's, not a choice:
@@ -192,10 +197,9 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: purchase_orders
-    request: { kind: list, path: /PurchaseOrders, query: { pageSize: "100" } }
+    request: { kind: list, path: /PurchaseOrders, query: { pageSize: "500" } }
     readScope: accounting.invoices.read
     envelopePath: PurchaseOrders
     idPath: PurchaseOrderID
@@ -207,7 +211,6 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: repeating_invoices
     request: { kind: list, path: /RepeatingInvoices }
@@ -239,10 +242,9 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: overpayments
-    request: { kind: list, path: /Overpayments, query: { pageSize: "100", unitdp: "4" } }
+    request: { kind: list, path: /Overpayments, query: { pageSize: "500", unitdp: "4" } }
     readScope: accounting.payments.read
     envelopePath: Overpayments
     idPath: OverpaymentID
@@ -254,10 +256,9 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: prepayments
-    request: { kind: list, path: /Prepayments, query: { pageSize: "100", unitdp: "4" } }
+    request: { kind: list, path: /Prepayments, query: { pageSize: "500", unitdp: "4" } }
     readScope: accounting.payments.read
     envelopePath: Prepayments
     idPath: PrepaymentID
@@ -269,7 +270,6 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: batch_payments
     request: { kind: list, path: /BatchPayments }
@@ -285,7 +285,6 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: contact_groups
     request: { kind: list, path: /ContactGroups }
@@ -321,7 +320,6 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: tracking_categories
     request: { kind: list, path: /TrackingCategories, query: { includeArchived: "true" } }
@@ -361,7 +359,7 @@ entities:
   # stay in the lake as AUTHORISED -- money that moved in no ledger. So it is read whole every
   # run, deleted ones included, and a deletion lands as a new version whose `Status` says so.
   - name: bank_transactions
-    request: { kind: list, path: /BankTransactions, query: { pageSize: "100", unitdp: "4" } }
+    request: { kind: list, path: /BankTransactions, query: { pageSize: "500", unitdp: "4" } }
     readScope: accounting.banktransactions.read
     envelopePath: BankTransactions
     idPath: BankTransactionID
@@ -373,7 +371,6 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24
 
   - name: bank_transfers
     request: { kind: list, path: /BankTransfers, query: { includeDeleted: "true" } }
@@ -384,7 +381,7 @@ entities:
     guards: { failOnEmpty: false }
 
   - name: manual_journals
-    request: { kind: list, path: /ManualJournals, query: { pageSize: "100" } }
+    request: { kind: list, path: /ManualJournals, query: { pageSize: "500" } }
     readScope: accounting.manualjournals.read
     envelopePath: ManualJournals
     idPath: ManualJournalID
@@ -396,4 +393,3 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
-      wholeReadAfterHours: 24

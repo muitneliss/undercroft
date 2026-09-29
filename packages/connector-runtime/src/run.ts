@@ -23,7 +23,7 @@ import { finishListing } from "./listing.ts";
 import { type RawRecordOut, type Reader, type RunContext, createReader } from "./reader.ts";
 import { readBatch, readPages } from "./reads.ts";
 
-export type { RawRecordOut, RunContext } from "./reader.ts";
+export type { RawRecordOut, RequestBudget, RunContext } from "./reader.ts";
 
 /** Dispatch on the one thing that changes the shape of a read: how the request is made. */
 async function* readRequest(
@@ -57,6 +57,14 @@ export interface ReadEnd {
    * only what it read.
    */
   readonly named: ReadonlySet<string> | null;
+  /**
+   * The request budget refused the next page, so the read stopped short of the end. What it
+   * read is kept, `listed` is `null`, and no end-of-entity guard ran: an empty first page is not
+   * an empty source when the page was never asked for.
+   */
+  readonly exhausted: boolean;
+  /** Requests the read made, every attempt counted: what reading this entity cost. */
+  readonly requests: number;
 }
 
 /**
@@ -70,12 +78,17 @@ export async function* readEntity(
 ): AsyncGenerator<RawRecordOut, ReadEnd> {
   const reader = await createReader(spec, entity, ctx);
   const stopped = yield* readRequest(reader, ctx);
+  const cost = { exhausted: reader.exhausted, requests: reader.requests };
   if (stopped) {
-    // `maxRecords` truncated the read on purpose, so the end-of-entity guards -- which
-    // exist to catch truncation -- have nothing to say about it. Nor has the listing: a
+    // `maxRecords` or the budget truncated the read on purpose, so the end-of-entity guards --
+    // which exist to catch truncation -- have nothing to say about it. Nor has the listing: a
     // truncated read did not name everything.
-    return { listed: null, named: reader.named };
+    return { listed: null, named: reader.named, ...cost };
   }
   checkGuards(reader);
-  return { listed: finishListing(entity, reader.since, reader.named), named: reader.named };
+  return {
+    listed: finishListing(entity, reader.since, reader.named),
+    named: reader.named,
+    ...cost,
+  };
 }

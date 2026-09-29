@@ -15,6 +15,8 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import { messages } from "../i18n/index.ts";
+import type { SpecReads } from "../services/connections.ts";
+import { loadSpecReads } from "../specs.ts";
 import { appRouter } from "./router.ts";
 import type { Context } from "./trpc.ts";
 
@@ -44,7 +46,7 @@ afterEach(async () => {
   await db.close();
 });
 
-function caller() {
+function caller(specReads: SpecReads = new Map()) {
   const ctx: Context = {
     exec: db,
     user: { userId: ADMIN.userId, email: ADMIN.email },
@@ -63,7 +65,7 @@ function caller() {
         provider: "google" as const,
       }),
     worker: null,
-    specReads: new Map(),
+    specReads,
     googlePicker: null,
   };
   return appRouter.createCaller(ctx);
@@ -107,5 +109,34 @@ describe("connections.setCadence with a cron expression", () => {
       (card) => card.source === "hubspot",
     );
     expect(hubspot).toMatchObject({ cadence: "custom", cron: "30 7 * * 1-5" });
+  });
+});
+
+describe("connections.setResync", () => {
+  it("refuses a source with nothing to re-sync in the reader's words, with a code beside them", async () => {
+    // HubSpot reads through a client-side filter, so a full re-sync could catch up on nothing
+    // (ADR 0081). The code is what the CLI and an agent match on.
+    let refused: unknown = null;
+    try {
+      await caller(loadSpecReads()).connections.setResync({
+        tenantId: TENANT,
+        source: "hubspot",
+        cadence: "daily",
+      });
+    } catch (error) {
+      refused = error;
+    }
+
+    if (!(refused instanceof TRPCError)) {
+      throw refused;
+    }
+    expect(refused.code).toBe("BAD_REQUEST");
+    expect(refused.message).toBe(
+      messages(DEFAULT_LOCALE)("error.resyncNothingToRead", { source: "hubspot" }),
+    );
+    expect((refused.cause as { facts?: unknown } | undefined)?.facts).toEqual({
+      source: "hubspot",
+      reason: "not-resyncable",
+    });
   });
 });

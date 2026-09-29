@@ -7,10 +7,11 @@
  * step is still `readPages`: it pages the same way, and only what it does with each page
  * differs -- the page names the records and a batch read fetches them (`batchRead.ts`, ADR 0054).
  *
- * Each returns `true` when a guard stopped it mid-stream, because `maxRecords` must NOT then run
- * the end-of-entity guards -- `failOnExactCount` fires on a truncated read, and truncating is
- * exactly what `maxRecords` just did. `yield*` carries that value out, so the caller cannot
- * forget to ask.
+ * Each returns `true` when it stopped mid-stream -- `maxRecords` reached, or the request budget
+ * refused the next page -- because a truncated read must NOT then run the end-of-entity guards:
+ * `failOnExactCount` fires on a truncated read, and `failOnEmpty` on a whole read the budget
+ * stopped before its first page. `yield*` carries that value out, so the caller cannot forget to
+ * ask.
  */
 
 import type { ConnectorEntity } from "@undercroft/contracts";
@@ -61,6 +62,9 @@ export async function* readBatch(
   }
 
   for (let offset = 0; offset < ids.length; offset += request.chunkSize) {
+    if (!reader.admit()) {
+      return true;
+    }
     const chunk = ids.slice(offset, offset + request.chunkSize);
     const parsed = await post(renderBatchBody(request.bodyTemplate, chunk));
     const records: unknown[] = [];
@@ -153,7 +157,7 @@ export async function* readPages(
   return false;
 }
 
-/** One partition's pages. `true` when `maxRecords` stopped it. */
+/** One partition's pages. `true` when `maxRecords` or the budget stopped it. */
 async function* readPartition(
   reader: Reader,
   request: PagedRequest,
@@ -169,6 +173,9 @@ async function* readPartition(
   let pageIndex = 0;
 
   for (;;) {
+    if (!reader.admit()) {
+      return true;
+    }
     const currentUrl = url;
     const parsed = await reader.fetchJson({ url, method: request.method, headers: reader.headers });
 

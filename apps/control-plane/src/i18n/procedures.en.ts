@@ -31,6 +31,8 @@ export const procedureSentences: SentenceTable = {
   "connections.setToken": "Connect a source with a pasted token. Admins.",
   "connections.setCadence":
     "Set how often a source is read: hourly, every_6h, daily, paused, or custom with --cron, a five-field cron expression in Singapore time that fires at most every five minutes. Admins.",
+  "connections.setResync":
+    "Set how often a source's lists are read in full again, to catch edits its change filter misses: the same choices as set-cadence, paused (off) by default. A full re-read spends at most the spec's daily share of the provider's requests; what does not fit continues on the next run. Admins.",
   "connections.disconnect": "End a source's grant. Admins.",
   "keys.list": "The customer's ingest keys. Admins.",
   "keys.mint": "Mint an ingest key; its token is returned this once. Admins.",

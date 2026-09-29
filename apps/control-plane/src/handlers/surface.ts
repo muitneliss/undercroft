@@ -120,6 +120,7 @@ export const EFFECTS: EffectTable = {
   "connections.setScope": "write",
   "connections.setToken": "write",
   "connections.setCadence": "write",
+  "connections.setResync": "write",
   "connections.disconnect": "destructive",
 
   "keys.mint": "write",

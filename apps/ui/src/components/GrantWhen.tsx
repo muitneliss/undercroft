@@ -7,17 +7,11 @@
  * outcome and count, the instant the next one is due -- and an absent fact renders as
  * absent rather than as reassurance.
  *
- * The cadence is a `<select>` for an admin and a word for everyone else. A PRESET saves on
- * change: there is one field, so a Save plate would be a second step for a decision already
- * made. "Custom (cron)" does not, because choosing it is the start of a decision rather than
- * the end of one: it opens a field for the expression, with Save beside it and, below it, the
- * next three instants the expression fires at, in Singapore time. Those dates are the
- * confirmation -- there is deliberately no sentence paraphrasing the cron (ADR 0059) -- and
- * while the expression cannot be kept, the refusal stands where they would and Save is off.
- *
- * What the select shows is derived, never stored twice: the server's cadence, or "custom"
- * while this card holds a draft in the store (`cronDraft`). So choosing a preset after
- * starting a draft drops the draft, and the select falls back to what the server holds.
+ * Each schedule is a `<select>` for an admin and a word for everyone else (`ScheduleControl`).
+ * There are two: how often the source syncs, and -- for a source whose lists are read through a
+ * change filter -- how often it re-syncs in full, off until an admin opts in (ADR 0081). The
+ * re-sync row also says when the last full re-sync finished and, when one spans more than a day
+ * of the provider's requests, how many days it takes.
  *
  * Running is a state, not a spinner. The mark is the half-printed pending geometry and the
  * word says so; the list behind this card polls while it is true, so the mark flips on its
@@ -27,19 +21,13 @@
 import { useTranslation } from "react-i18next";
 
 import type { Connection } from "@/api/types.ts";
+import { type ScheduleEdit, ScheduleControl } from "@/components/ScheduleControl.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
-import {
-  type CadenceChoice,
-  CADENCES,
-  describeCadence,
-  isPresetCadence,
-  previewCron,
-  TICK_MINUTES,
-} from "@/lib/cadence.ts";
+import { type CadenceChoice, describeCadence, describeResync } from "@/lib/cadence.ts";
 import { formatCount } from "@/lib/money.ts";
 import { nextRunNote, runMark, runMarkLabel } from "@/lib/runs.ts";
 import { expiryNote, relativeTime } from "@/lib/when.ts";
-import { cronDraftFor, useUiStore } from "@/store.ts";
+import { useUiStore } from "@/store.ts";
 
 export function GrantWhen({
   tenantId,
@@ -48,44 +36,45 @@ export function GrantWhen({
   busy,
   saving,
   onCadence,
+  resyncSaving,
+  onResync,
 }: {
   /** Whose schedule this is: a cron draft belongs to one tenant's card and no other's. */
   tenantId: string;
   connection: Connection;
-  /** Whether the reader may change the cadence. Courtesy; the server refuses regardless. */
+  /** Whether the reader may change the schedules. Courtesy; the server refuses regardless. */
   canEdit: boolean;
   busy: boolean;
   /** Whether the cadence chosen here is on its way to the server. */
   saving: boolean;
   onCadence: (choice: CadenceChoice) => void;
+  /** Whether the re-sync chosen here is on its way to the server. */
+  resyncSaving: boolean;
+  onResync: (choice: CadenceChoice) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const run = connection.lastRun;
   const status = run?.status ?? null;
+  const sync: ScheduleEdit = {
+    schedule: "sync",
+    value: { cadence: connection.cadence, cron: connection.cron },
+    label: t("grant.cadenceLabel"),
+    describe: (cadence) => describeCadence(t, cadence),
+    onChoose: onCadence,
+  };
 
   return (
     <>
       <span className="label">{t("grant.schedule")}</span>
-      {canEdit ? (
-        <CadenceControl
-          tenantId={tenantId}
-          connection={connection}
-          busy={busy}
-          saving={saving}
-          onCadence={onCadence}
-        />
-      ) : (
-        <>
-          <span className="datum datum--quiet">{describeCadence(t, connection.cadence)}</span>
-          {connection.cron === null ? null : (
-            <span className="datum datum--quiet grant__run">
-              <code className="mono">{connection.cron}</code>
-              <span>{t("grant.cronZone")}</span>
-            </span>
-          )}
-        </>
-      )}
+      <Schedule
+        tenantId={tenantId}
+        source={connection.source}
+        edit={sync}
+        canEdit={canEdit}
+        busy={busy}
+        saving={saving}
+      />
       {saving ? (
         <span className="datum datum--quiet" role="status">
           {t("grant.cadenceSaving")}
@@ -108,156 +97,124 @@ export function GrantWhen({
       <span className="label">{t("grant.nextRun")}</span>
       <span className="datum datum--quiet">{nextRunNote(t, locale, connection)}</span>
       <span className="datum datum--quiet">{expiryNote(t, connection.expiresAt)}</span>
+
+      <Resync
+        tenantId={tenantId}
+        connection={connection}
+        canEdit={canEdit}
+        busy={busy}
+        saving={resyncSaving}
+        onResync={onResync}
+      />
     </>
   );
 }
 
-/** An admin's select, and -- while it reads "custom" -- the expression field under it. */
-function CadenceControl({
+/** One schedule: the control for an admin, the words -- and a custom expression -- for anyone else. */
+function Schedule({
   tenantId,
-  connection,
+  source,
+  edit,
+  canEdit,
   busy,
   saving,
-  onCadence,
+}: {
+  tenantId: string;
+  source: string;
+  edit: ScheduleEdit;
+  canEdit: boolean;
+  busy: boolean;
+  saving: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  if (canEdit) {
+    return (
+      <ScheduleControl
+        tenantId={tenantId}
+        source={source}
+        edit={edit}
+        busy={busy}
+        saving={saving}
+      />
+    );
+  }
+  return (
+    <>
+      <span className="datum datum--quiet">{edit.describe(edit.value.cadence)}</span>
+      {edit.value.cron === null ? null : (
+        <span className="datum datum--quiet grant__run">
+          <code className="mono">{edit.value.cron}</code>
+          <span>{t("grant.cronZone")}</span>
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * The full re-sync, for a source that has one (ADR 0081): its schedule, what it is for, when the
+ * last one finished, and -- when one needs more than a day of the provider's requests -- how many
+ * days it takes. Nothing at all for a source whose lists no change filter reads.
+ */
+function Resync({
+  tenantId,
+  connection,
+  canEdit,
+  busy,
+  saving,
+  onResync,
 }: {
   tenantId: string;
   connection: Connection;
+  canEdit: boolean;
   busy: boolean;
   saving: boolean;
-  onCadence: (choice: CadenceChoice) => void;
-}): React.JSX.Element {
+  onResync: (choice: CadenceChoice) => void;
+}): React.JSX.Element | null {
   const { t } = useTranslation();
-  const draft = useUiStore((state) => cronDraftFor(state, tenantId, connection.source));
-  const setCronDraft = useUiStore((state) => state.setCronDraft);
-  const dropCronDraft = useUiStore((state) => state.dropCronDraft);
-  const selected = draft === null ? connection.cadence : "custom";
+  const locale = useUiStore((state) => state.locale);
+  const { resync } = connection;
+  if (resync === null) {
+    return null;
+  }
+  const edit: ScheduleEdit = {
+    schedule: "resync",
+    value: { cadence: resync.cadence, cron: resync.cron },
+    label: t("grant.resyncLabel"),
+    describe: (cadence) => describeResync(t, cadence),
+    onChoose: onResync,
+  };
 
   return (
     <>
-      <select
-        aria-label={t("grant.cadenceLabel")}
-        aria-busy={saving}
-        className="input input--select"
-        disabled={busy}
-        value={selected}
-        onChange={(event): void => {
-          const chosen = event.target.value;
-          if (chosen === "custom") {
-            // Seeded with what is stored, so reopening a custom schedule edits it rather than
-            // starting from nothing.
-            setCronDraft(tenantId, connection.source, connection.cron ?? "");
-            return;
-          }
-          if (!isPresetCadence(chosen)) {
-            return;
-          }
-          dropCronDraft(tenantId, connection.source);
-          if (chosen !== connection.cadence) {
-            onCadence({ cadence: chosen });
-          }
-        }}
-      >
-        {CADENCES.map((cadence) => (
-          <option key={cadence} value={cadence}>
-            {describeCadence(t, cadence)}
-          </option>
-        ))}
-      </select>
-      {selected === "custom" ? (
-        <CronField
-          tenantId={tenantId}
-          connection={connection}
-          expression={draft ?? connection.cron ?? ""}
-          busy={busy}
-          onCadence={onCadence}
-        />
+      <span className="label">{t("grant.resync")}</span>
+      <Schedule
+        tenantId={tenantId}
+        source={connection.source}
+        edit={edit}
+        canEdit={canEdit}
+        busy={busy}
+        saving={saving}
+      />
+      {saving ? (
+        <span className="datum datum--quiet" role="status">
+          {t("grant.resyncSaving")}
+        </span>
       ) : null}
-    </>
-  );
-}
-
-/** The expression, its Save, and what it will do: the next fires, or why it cannot be kept. */
-function CronField({
-  tenantId,
-  connection,
-  expression,
-  busy,
-  onCadence,
-}: {
-  tenantId: string;
-  connection: Connection;
-  expression: string;
-  busy: boolean;
-  onCadence: (choice: CadenceChoice) => void;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const locale = useUiStore((state) => state.locale);
-  const setCronDraft = useUiStore((state) => state.setCronDraft);
-  const preview = previewCron(t, locale, expression);
-  const fieldId = `cron-${connection.source}`;
-  const hintId = `${fieldId}-hint`;
-  const reasonId = `${fieldId}-reason`;
-  // Saving what is already stored would be a write, an audit row and a refetch that change
-  // nothing; the plate stays off until there is something to save.
-  const unchanged =
-    preview.state === "ok" && connection.cadence === "custom" && preview.cron === connection.cron;
-
-  return (
-    <div className="stack stack--tight">
-      {/* `row row--field`, never a bare `.row`: the row holds a `.field` (ADR 0027). */}
-      <div className="row grant__cron row--field">
-        <label className="field" htmlFor={fieldId}>
-          <span className="label">{t("grant.cronLabel")}</span>
-          <input
-            aria-describedby={preview.state === "refused" ? `${hintId} ${reasonId}` : hintId}
-            autoComplete="off"
-            className="input mono"
-            disabled={busy}
-            id={fieldId}
-            placeholder="30 7 * * 1-5"
-            spellCheck={false}
-            type="text"
-            value={expression}
-            onChange={(event): void => {
-              setCronDraft(tenantId, connection.source, event.target.value);
-            }}
-          />
-        </label>
-        <button
-          className="plate plate--primary"
-          disabled={busy || preview.state !== "ok" || unchanged}
-          type="button"
-          onClick={(): void => {
-            if (preview.state === "ok") {
-              onCadence({ cadence: "custom", cron: preview.cron });
-            }
-          }}
-        >
-          {t("grant.cronSave")}
-        </button>
-      </div>
-      <p className="field__hint" id={hintId}>
-        {t("grant.cronHint", { minutes: TICK_MINUTES })}
-      </p>
-      {/* Described by the field rather than announced: a live region here would speak at every
-          keystroke of an expression that is invalid until its last character. */}
-      {preview.state === "refused" ? (
-        <p className="note" id={reasonId}>
-          {preview.reason}
+      <span className="datum datum--quiet">
+        {resync.lastWholeReadAt === null
+          ? t("grant.resyncNever")
+          : t("grant.resyncLast", { when: relativeTime(resync.lastWholeReadAt, locale) })}
+      </span>
+      {resync.days !== null && resync.days > 1 && resync.budget !== null ? (
+        <p className="note">
+          {t("grant.resyncDays", {
+            count: resync.days,
+            budget: formatCount(resync.budget, locale),
+          })}
         </p>
       ) : null}
-      {preview.state === "ok" ? (
-        <>
-          <span className="label">{t("grant.cronPreview")}</span>
-          <ol className="grant__fires stack stack--tight">
-            {preview.fires.map((fire) => (
-              <li className="datum datum--quiet" key={fire}>
-                {fire}
-              </li>
-            ))}
-          </ol>
-        </>
-      ) : null}
-    </div>
+      <p className="field__hint">{t("grant.resyncHint")}</p>
+    </>
   );
 }

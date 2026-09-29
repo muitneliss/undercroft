@@ -102,6 +102,7 @@ export function connection(source: string, over: Partial<Connection> = {}): Conn
     nextRunAt: null,
     lastRun: null,
     expiresAt: null,
+    resync: null,
     ...over,
   };
 }

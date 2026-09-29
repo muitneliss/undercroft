@@ -185,7 +185,7 @@ describe("holdsUnsavedWork", () => {
   });
 
   it("counts a schedule being written", () => {
-    useUiStore.getState().setCronDraft("CASE-0042", "gmail", "0 9 * * *");
+    useUiStore.getState().setCronDraft("CASE-0042", "gmail", "sync", "0 9 * * *");
 
     expect(holdsUnsavedWork(useUiStore.getState())).toBe(true);
   });

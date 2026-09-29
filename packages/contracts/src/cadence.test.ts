@@ -12,6 +12,7 @@ import {
   nextRunAt,
   type ScheduleFacts,
   upcomingFires,
+  wholeReadDue,
 } from "./cadence.ts";
 
 const NOW = new Date("2026-03-01T10:00:00.000Z");
@@ -168,5 +169,32 @@ describe("cadenceSetting", () => {
       ok: false,
       reason: "cron-without-custom",
     });
+  });
+});
+
+describe("wholeReadDue", () => {
+  // ADR 0081: a re-sync reads a list whole on the connection's own schedule, measured from the
+  // start of the run that last read it whole.
+  const LAST = "2026-03-01T02:03:00.000Z";
+
+  it("a daily re-sync is due a day after the last whole read, one scheduler tick early", () => {
+    // The next daily run can start up to a tick short of 24 hours later; exactly, it would wait
+    // another day.
+    const daily = { cadence: "daily", cron: null } as const;
+    expect(wholeReadDue(daily, LAST, new Date("2026-03-02T01:58:00.000Z"))).toBe(true);
+    expect(wholeReadDue(daily, LAST, new Date("2026-03-02T01:57:59.000Z"))).toBe(false);
+  });
+
+  it("a custom re-sync is due at its first fire after the last whole read, with no slack", () => {
+    // 02:00 Singapore every Sunday; 2026-03-01 is a Sunday, so the next fire is 03-08 02:00 +08.
+    const weekly = { cadence: "custom", cron: "0 2 * * 0" } as const;
+    expect(wholeReadDue(weekly, LAST, new Date("2026-03-07T18:00:00.000Z"))).toBe(true);
+    expect(wholeReadDue(weekly, LAST, new Date("2026-03-07T17:59:59.000Z"))).toBe(false);
+  });
+
+  it("a paused re-sync is never due, even for a list never read whole", () => {
+    const paused = { cadence: "paused", cron: null } as const;
+    expect(wholeReadDue(paused, null, NOW)).toBe(false);
+    expect(wholeReadDue({ cadence: "daily", cron: null }, null, NOW)).toBe(true);
   });
 });

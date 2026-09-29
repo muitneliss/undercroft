@@ -190,7 +190,7 @@ function pageUrl(list: XeroList, page: number | null): string {
     url.searchParams.set(name, value);
   }
   if (list.paging === "page-size") {
-    url.searchParams.set("pageSize", "100");
+    url.searchParams.set("pageSize", "500");
   }
   if (list.unitdp === true) {
     url.searchParams.set("unitdp", "4");

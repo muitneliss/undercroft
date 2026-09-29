@@ -30,6 +30,7 @@ import {
   withRetry,
 } from "@undercroft/core";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
+import { admitUnder, type RequestBudget } from "./budget.ts";
 import { alreadyRead, checkIncremental, incrementalAt, sinceCarriedIn } from "./incremental.ts";
 import { startNaming } from "./listing.ts";
 import { EntityNotGranted, refusedScopes } from "./refusal.ts";
@@ -53,6 +54,8 @@ export interface RawRecordOut {
    */
   readonly incrementalAt: string | null;
 }
+
+export type { RequestBudget } from "./budget.ts";
 
 export interface RunContext {
   readonly fetcher: Fetcher;
@@ -85,6 +88,8 @@ export interface RunContext {
    * `guards.ts` keys the relaxation on this value being present, never on the spec.
    */
   readonly since?: string;
+  /** How many requests this read may make; absent, as many as it takes. */
+  readonly budget?: RequestBudget;
 }
 
 type Guards = ConnectorSpec["defaults"]["guards"];
@@ -104,6 +109,12 @@ export interface Reader {
   /** The watermark this read is actually carrying, or `null` for a full read. */
   readonly since: string | null;
   seen: number;
+  /** Requests made so far, every attempt counted. */
+  requests: number;
+  /** Set when the budget refused the next request, which ends the read as a truncated one. */
+  exhausted: boolean;
+  /** Whether the budget admits one more request; records the refusal when it does not. */
+  readonly admit: () => boolean;
   /**
    * Every id the source has named so far, filtered or not, or `null` when nobody will read them:
    * neither a listing nor a relation. Only `run.ts` hands it on, once the read is over
@@ -240,12 +251,19 @@ export async function createReader(
     },
     since,
     seen: 0,
+    requests: 0,
+    exhausted: false,
+    admit: admitUnder(ctx.budget, () => {
+      reader.exhausted = true;
+    }),
     named: startNaming(entity, since, ctx.keepIds === true),
     fetchJson: async (request: HttpRequest): Promise<unknown> =>
       await withRetry(
         async () => {
           await pacer.acquire();
           const response = await ctx.fetcher.send(request);
+          reader.requests += 1;
+          ctx.budget?.spent(response.headers);
           // Read before `raiseForStatus`, which keeps only the first 500 characters of a body.
           const refused = answered ? null : refusedScopes(spec, entity, response);
           if (refused !== null) {

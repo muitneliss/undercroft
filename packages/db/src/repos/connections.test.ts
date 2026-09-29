@@ -6,6 +6,7 @@ import {
   getConnection,
   readCredential,
   setCadence,
+  setResync,
   upsertConnection,
   writeCredential,
 } from "./connections.ts";
@@ -104,5 +105,30 @@ describe("cadence", () => {
     expect(await setCadence(db, "CASE-1", "hubspot", { cadence: "hourly", cron: null })).toBe(
       false,
     );
+  });
+});
+
+describe("re-sync", () => {
+  beforeEach(async () => {
+    await db.become("undercroft_app");
+  });
+
+  it("a connection re-reads nothing whole until an admin turns it on", async () => {
+    // Opt-in (ADR 0081): a connection made before the column existed keeps what it had, nothing.
+    expect(await getConnection(db, "CASE-1", "xero")).toMatchObject({
+      resyncCadence: "paused",
+      resyncCron: null,
+    });
+    await setResync(db, "CASE-1", "xero", { cadence: "custom", cron: "0 2 * * 0" });
+    expect(await getConnection(db, "CASE-1", "xero")).toMatchObject({
+      resyncCadence: "custom",
+      resyncCron: "0 2 * * 0",
+    });
+  });
+
+  it("the table refuses a custom re-sync with no expression", async () => {
+    await expect(
+      setResync(db, "CASE-1", "xero", { cadence: "custom", cron: null }),
+    ).rejects.toThrow("connection_resync_cron_iff_custom");
   });
 });

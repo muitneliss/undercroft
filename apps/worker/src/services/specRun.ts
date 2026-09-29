@@ -14,6 +14,7 @@
 
 import { createFetcher, type RunContext } from "@undercroft/connector-runtime";
 import {
+  type Cadence,
   type ConnectionScope,
   type ConnectorEntity,
   type ConnectorSpec,
@@ -21,8 +22,9 @@ import {
   partitionByGrant,
   type UngrantedRead,
 } from "@undercroft/contracts";
-import { getConnection, readConnectionDetail } from "@undercroft/db/repos";
+import { findRunById, getConnection, readConnectionDetail } from "@undercroft/db/repos";
 
+import { type DayBudget, dayBudgetFor } from "./dayBudget.ts";
 import { withChosenProperties } from "./hubspot/properties.ts";
 import type { RunDeps } from "./runTypes.ts";
 import { resolveToken } from "./runTypes.ts";
@@ -38,7 +40,12 @@ import { readSpec } from "./specs.ts";
 async function chosenFor(
   deps: Pick<RunDeps, "exec">,
   input: { source: string; tenantId: string },
-): Promise<{ accountId: string | null; scope: ConnectionScope | null; granted: string }> {
+): Promise<{
+  accountId: string | null;
+  scope: ConnectionScope | null;
+  granted: string;
+  resync: ResyncSetting;
+}> {
   const connection = await getConnection(deps.exec, input.tenantId, input.source);
   const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
   const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
@@ -47,7 +54,18 @@ async function chosenFor(
     accountId: accountId === "" ? null : accountId,
     scope,
     granted: connection?.scope ?? "",
+    // No connection -- a spec that needs none -- re-syncs nothing, as a new connection does not.
+    resync:
+      connection === null
+        ? { cadence: "paused", cron: null }
+        : { cadence: connection.resyncCadence, cron: connection.resyncCron },
   };
+}
+
+/** How often the connection's lists are read whole again: its re-sync, ADR 0081. */
+export interface ResyncSetting {
+  readonly cadence: Cadence;
+  readonly cron: string | null;
 }
 
 /**
@@ -79,6 +97,10 @@ export interface SpecRun {
   readonly entities: readonly ConnectorEntity[];
   /** The lists the scope chose that the grant cannot read, in spec order. Never requested. */
   readonly ungranted: readonly UngrantedRead[];
+  /** What decides whether a list is read whole this run: the re-sync, from this run's start. */
+  readonly resync: ResyncSetting & { readonly runStartedAt: Date };
+  /** What whole reads may spend of the provider's day, or `null` when the spec rations none. */
+  readonly day: DayBudget | null;
 }
 
 /**
@@ -91,10 +113,15 @@ export interface SpecRun {
  */
 export async function openSpecRun(
   deps: RunDeps,
-  input: { source: string; tenantId: string },
+  input: { source: string; tenantId: string; runId: string },
 ): Promise<SpecRun> {
   const spec = readSpec(deps.specsDir, input.source);
   const chosen = await chosenFor(deps, input);
+  const run = await findRunById(deps.exec, input.runId);
+  if (run === null) {
+    // The ledger opened this run before anything read; a run with no row is a defect upstream.
+    throw new Error(`run ${input.runId} has no ledger row to read its start from`);
+  }
 
   const ctx: RunContext = {
     fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),
@@ -113,5 +140,12 @@ export async function openSpecRun(
     grantedScope: chosen.granted,
   });
 
-  return { spec, ctx, entities: granted, ungranted };
+  return {
+    spec,
+    ctx,
+    entities: granted,
+    ungranted,
+    resync: { ...chosen.resync, runStartedAt: new Date(run.startedAt) },
+    day: dayBudgetFor(spec),
+  };
 }

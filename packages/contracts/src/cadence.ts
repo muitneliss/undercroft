@@ -315,3 +315,43 @@ export function isDue(
   const next = nextRunAt(facts, now);
   return next !== null && new Date(next).getTime() <= now.getTime();
 }
+
+/**
+ * Whether a run that started at `runStartedAt` should read a list whole, given the connection's
+ * re-sync schedule and when the run that last read that list whole started. ADR 0081.
+ *
+ * The same rule a sync cadence follows (`followingRunFor`), applied to whole reads instead of
+ * runs, so "daily" and "0 2 * * 0" mean the same thing on both schedules. `paused` -- the default,
+ * because a re-sync is opted into -- and an expression that no longer parses are never due. A list
+ * never read whole is always due: nothing vouches for it.
+ *
+ * A PRESET GETS ONE SCHEDULER TICK OF SLACK; a cron gets none. A preset measures the gap from the
+ * last whole read's run start, and the tick is how late a run may start past the moment it became
+ * due, so two runs of a daily sync can start a few minutes less than a day apart. Measured exactly,
+ * the second would miss "daily" and the list would be read whole every second day. A cron is due at
+ * an instant, and a run that starts after it has waited for it.
+ */
+export function wholeReadDue(
+  setting: { readonly cadence: Cadence; readonly cron: string | null },
+  lastWholeReadAt: string | null,
+  runStartedAt: Date,
+): boolean {
+  const following = followingRunFor(setting.cadence, setting.cron);
+  if (following === null) {
+    return false;
+  }
+  if (lastWholeReadAt === null) {
+    return true;
+  }
+  const last = new Date(lastWholeReadAt);
+  if (Number.isNaN(last.getTime())) {
+    // A stored time that does not parse is a defect; reading whole writes a readable one.
+    return true;
+  }
+  const due = following(last);
+  if (due === null) {
+    return false;
+  }
+  const slack = setting.cadence === "custom" ? 0 : SCHEDULER_TICK_MS;
+  return due.getTime() - slack <= runStartedAt.getTime();
+}

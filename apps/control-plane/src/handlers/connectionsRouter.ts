@@ -6,12 +6,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import {
-  type BrowseListing,
-  Cadence,
-  type CronRefusal,
-  SCHEDULER_TICK_MINUTES,
-} from "@undercroft/contracts";
+import { type BrowseListing, Cadence } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
@@ -20,6 +15,7 @@ import { providerName } from "../services/oauthProviders.ts";
 import type { WorkerFailure } from "../services/workerRefusals.ts";
 import { refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
+import { scheduleRefusal } from "./scheduleRefusal.ts";
 
 /**
  * Why a browse was refused, and what the person or agent reading it can do about it.
@@ -90,49 +86,6 @@ function scopeRefusal(locale: Locale, source: string): TRPCError {
     code: "BAD_REQUEST",
     message: messages(locale)("error.scopeNotUnderstood", { source }),
   });
-}
-
-/** The sentence for each way an expression is refused. A record, so a new refusal is a type error. */
-const CRON_REFUSAL_KEY: Readonly<
-  Record<
-    CronRefusal,
-    "error.cronFields" | "error.cronInvalid" | "error.cronNever" | "error.cronTooFrequent"
-  >
-> = {
-  fields: "error.cronFields",
-  invalid: "error.cronInvalid",
-  never: "error.cronNever",
-  "too-frequent": "error.cronTooFrequent",
-};
-
-/**
- * Why a schedule was not saved. BAD_REQUEST, because in each case the request is what has to
- * change; the sentence says how, and `details.reason` says which as a code an agent matches.
- */
-function cadenceRefusal(
-  locale: Locale,
-  at: { source: string; cron: string },
-  outcome: connections.SetCadenceOutcome & { ok: false },
-): TRPCError {
-  const t = messages(locale);
-  switch (outcome.reason) {
-    case "no-connection":
-      return new TRPCError({ code: "NOT_FOUND" });
-    case "cron-without-custom":
-      return refusal("BAD_REQUEST", t("error.cronWithoutCustom"), {
-        source: at.source,
-        reason: "cron-without-custom",
-      });
-    default:
-      return refusal(
-        "BAD_REQUEST",
-        t(CRON_REFUSAL_KEY[outcome.refusal], {
-          cron: at.cron,
-          minutes: String(SCHEDULER_TICK_MINUTES),
-        }),
-        { source: at.source, reason: `cron-${outcome.refusal}` },
-      );
-  }
 }
 
 export const connectionsRouter = router({
@@ -297,7 +250,34 @@ export const connectionsRouter = router({
         actor: ctx.user.email,
       });
       if (!result.ok) {
-        throw cadenceRefusal(ctx.locale, { source: input.source, cron: input.cron ?? "" }, result);
+        throw scheduleRefusal(ctx.locale, { source: input.source, cron: input.cron ?? "" }, result);
+      }
+      return { ok: true };
+    }),
+
+  /**
+   * How often a source's lists are read WHOLE again: its re-sync, off until an admin opts in
+   * (ADR 0081). The same flat shape and the same words as `setCadence`, and one more refusal: a
+   * source that reads no list through a change filter the source runs has nothing to re-sync.
+   */
+  setResync: requireRole("admin")
+    .input(
+      z.object({
+        source: z.string().min(1),
+        cadence: Cadence,
+        cron: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await connections.setResync(ctx.exec, ctx.specReads, {
+        tenantId: ctx.tenantId,
+        source: input.source,
+        cadence: input.cadence,
+        cron: input.cron,
+        actor: ctx.user.email,
+      });
+      if (!result.ok) {
+        throw scheduleRefusal(ctx.locale, { source: input.source, cron: input.cron ?? "" }, result);
       }
       return { ok: true };
     }),

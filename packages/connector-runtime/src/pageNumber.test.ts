@@ -1,7 +1,7 @@
 import { describe, expect, test as it } from "bun:test";
 import { type ConnectorSpec, parseSpec } from "@undercroft/contracts";
 import { TestClock } from "@undercroft/core";
-import type { RawRecordOut } from "./run.ts";
+import type { RawRecordOut, ReadEnd, RequestBudget } from "./run.ts";
 import { readEntity } from "./run.ts";
 import { InMemoryFetcher } from "./testing.ts";
 
@@ -125,5 +125,71 @@ describe("the first page names its page", () => {
 
     expect(fetcher.calls[0]?.url).toBe(`${BASE}/Invoices?pageSize=100&page=1`);
     expect(fetcher.calls[0]?.headers?.["If-Modified-Since"]).toBe("2019-11-14T18:10:38Z");
+  });
+});
+
+describe("a request budget ends a read part-way, as a truncated read", () => {
+  // ADR 0081: a whole read may spend only its share of the provider's day. The caller decides
+  // how much; the runtime asks before each page and reports what each answer said.
+  function budgetOf(pages: number, seen: string[]): RequestBudget {
+    let left = pages;
+    return {
+      admit: (): boolean => {
+        left -= 1;
+        return left >= 0;
+      },
+      spent: (headers): void => {
+        seen.push(headers["x-daylimit-remaining"] ?? "");
+      },
+    };
+  }
+
+  async function drain(
+    spec: ConnectorSpec,
+    fetcher: InMemoryFetcher,
+    budget: RequestBudget,
+  ): Promise<{ ids: string[]; end: ReadEnd }> {
+    const gen = readEntity(spec, spec.entities[0]!, {
+      fetcher,
+      clock: new TestClock(),
+      token: () => Promise.resolve("t"),
+      budget,
+    });
+    const ids: string[] = [];
+    for (;;) {
+      const next = await gen.next();
+      if (next.done === true) {
+        return { ids, end: next.value };
+      }
+      ids.push(next.value.sourceRecordId);
+    }
+  }
+
+  it("keeps what the admitted pages held, asks for no page past them, and says why it stopped", async () => {
+    const fetcher = new InMemoryFetcher()
+      .on("GET", `${BASE}/Invoices?pageSize=100&page=1`, {
+        body: { Invoices: [{ InvoiceID: "a" }] },
+        headers: { "x-daylimit-remaining": "4001" },
+      })
+      .on("GET", `${BASE}/Invoices?pageSize=100&page=2`, {
+        body: { Invoices: [{ InvoiceID: "b" }] },
+        headers: { "x-daylimit-remaining": "4000" },
+      });
+    const remaining: string[] = [];
+
+    const { ids, end } = await drain(xeroLikeSpec(), fetcher, budgetOf(2, remaining));
+
+    expect(ids).toEqual(["a", "b"]);
+    expect(fetcher.calls).toHaveLength(2);
+    expect(remaining).toEqual(["4001", "4000"]);
+    expect(end).toMatchObject({ exhausted: true, requests: 2, listed: null });
+  });
+
+  it("is not an empty source when the budget refused the first page", async () => {
+    // `failOnEmpty` would read a whole read that asked for nothing as a credential problem.
+    const { ids, end } = await drain(xeroLikeSpec(), new InMemoryFetcher(), budgetOf(0, []));
+
+    expect(ids).toEqual([]);
+    expect(end).toMatchObject({ exhausted: true, requests: 0 });
   });
 });

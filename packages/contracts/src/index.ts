@@ -65,6 +65,7 @@ export {
   SCHEDULER_TICK_MINUTES,
   SCHEDULER_TICK_MS,
   upcomingFires,
+  wholeReadDue,
 } from "./cadence.ts";
 export {
   FILE_FORMATS,

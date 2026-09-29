@@ -40,9 +40,12 @@ import {
   getConnection,
   listConnections,
   listConnectionViews,
+  listWholeReads,
   setCadence as writeCadence,
   setExternalAccount,
+  setResync as writeResync,
   setStatus,
+  type WholeRead,
   writeConnectionDetail,
 } from "@undercroft/db/repos";
 
@@ -83,7 +86,17 @@ export type CardStatus = "disconnected" | "connected" | "needs_scope" | "needs_r
  * judges a grant by the same `readScope` the run does. A kind with no spec here -- Gmail and
  * Drive, which read under one scope and have no lists to share it out over -- is judged whole.
  */
-export type SpecReads = ReadonlyMap<string, readonly Pick<ConnectorEntity, "name" | "readScope">[]>;
+export type SpecReads = ReadonlyMap<string, SpecRead>;
+
+/** What the card reads of one spec: its lists, and how many whole-read requests a day it allows. */
+export interface SpecRead {
+  readonly entities: readonly Pick<ConnectorEntity, "name" | "readScope" | "incremental">[];
+  /**
+   * The spec's `wholeReadBudget.requestsPerDay`, or `null` for a spec that rations no whole
+   * reads -- whose re-sync, however large, never has to wait for another day (ADR 0081).
+   */
+  readonly wholeReadsPerDay: number | null;
+}
 
 /** The status a card shows, and the lists its connection would read that its grant cannot. */
 export interface CardGrant {
@@ -173,6 +186,32 @@ export interface ConnectionCardView {
    * rule is `nextRunAt` in `@undercroft/contracts`, the same one the due list applies.
    */
   readonly nextRunAt: string | null;
+  /**
+   * Reading this connection's lists WHOLE again, on a schedule of its own: a watermark vouches
+   * only for what a source's change filter can see, and Xero documents edits its filter never
+   * returns (ADR 0081). `null` for a source with no list read through such a filter -- there is
+   * nothing to re-sync, and the card offers no schedule for it.
+   */
+  readonly resync: ResyncView | null;
+}
+
+export interface ResyncView {
+  /** `paused` until an admin opts in, in the same words as `cadence`. */
+  readonly cadence: Cadence;
+  readonly cron: string | null;
+  /**
+   * The start of the run that last read the stalest of these lists whole, or `null` while any
+   * of them has none recorded: the whole connection is only as fresh as its oldest list.
+   */
+  readonly lastWholeReadAt: string | null;
+  /**
+   * How many days one re-sync of every list takes at the provider's daily limit, from what each
+   * list's last complete whole read cost; `null` until every list has completed one, or for a
+   * spec that rations nothing. Above 1, the card warns that a re-sync spans days.
+   */
+  readonly days: number | null;
+  /** The whole-read requests a day the spec allows, which `days` is measured against; `null` for none. */
+  readonly budget: number | null;
 }
 
 /**
@@ -249,7 +288,7 @@ function grantShortfall(
   if (missing.length === 0) {
     return [];
   }
-  const lists = specs.get(sourceKind(row.source));
+  const lists = specs.get(sourceKind(row.source))?.entities;
   if (lists === undefined) {
     return null;
   }
@@ -321,13 +360,67 @@ export async function list(
   now: Date = new Date(),
 ): Promise<ConnectionCardView[]> {
   const rows = await listConnectionViews(exec, tenantId);
+  const wholeReads = await listWholeReads(exec, tenantId);
 
   return KNOWN_SOURCES.flatMap((kind): ConnectionCardView[] => {
     const accounts = accountsOf(rows, kind);
     return accounts.length === 0
       ? [unconnected(kind)]
-      : accounts.map((row) => presentCard(kind, row, specs, now));
+      : accounts.map((row) => ({
+          ...presentCard(kind, row, specs, now),
+          resync: presentResync(row, specs, wholeReads),
+        }));
   });
+}
+
+/**
+ * The lists of this connection a re-sync reads whole: the ones it reads, as its scope and grant
+ * narrow them -- the run's own rule -- that are read through a change filter the source runs. A
+ * client-side filter pages the whole source anyway, so HubSpot's lists have nothing to re-sync.
+ */
+function resyncedLists(
+  row: { source: string; selectionJson: string; scope: string },
+  specs: SpecReads,
+): readonly string[] {
+  const lists = specs.get(sourceKind(row.source))?.entities ?? [];
+  const { granted } = partitionByGrant(lists, {
+    scope: parseScope(row.source, row.selectionJson),
+    grantedScope: row.scope,
+  });
+  return granted
+    .filter(
+      (read) => read.incremental !== undefined && read.incremental.strategy !== "client-filter",
+    )
+    .map((read) => read.name);
+}
+
+/** What the card says about re-syncing one connection, or `null` when it has nothing to re-sync. */
+function presentResync(
+  row: ConnectionView,
+  specs: SpecReads,
+  wholeReads: readonly WholeRead[],
+): ResyncView | null {
+  const names = resyncedLists(row, specs);
+  if (names.length === 0) {
+    return null;
+  }
+  const held = new Map(
+    wholeReads.filter((read) => read.source === row.source).map((read) => [read.entity, read]),
+  );
+  const reads = names.map((name) => held.get(name));
+  const times = reads.map((read) => read?.at ?? null);
+  const costs = reads.map((read) => read?.requests ?? null);
+  const perDay = specs.get(sourceKind(row.source))?.wholeReadsPerDay ?? null;
+  return {
+    cadence: row.resyncCadence,
+    cron: row.resyncCron,
+    lastWholeReadAt: times.includes(null) ? null : (times.toSorted()[0] ?? null),
+    days:
+      perDay === null || costs.includes(null)
+        ? null
+        : Math.ceil(costs.reduce((sum: number, cost) => sum + (cost ?? 0), 0) / perDay),
+    budget: perDay,
+  };
 }
 
 /** A kind nobody has connected: one blank card, offering the consent. */
@@ -346,16 +439,17 @@ function unconnected(kind: KnownSource): ConnectionCardView {
     cadence: "daily",
     cron: null,
     nextRunAt: null,
+    resync: null,
   };
 }
 
-/** One stored connection as its card shows it. */
+/** One stored connection as its card shows it, but for its re-sync ({@link presentResync}). */
 function presentCard(
   kind: KnownSource,
   row: ConnectionView,
   specs: SpecReads,
   now: Date,
-): ConnectionCardView {
+): Omit<ConnectionCardView, "resync"> {
   return {
     kind,
     source: row.source,
@@ -434,6 +528,60 @@ export async function setCadence(
   } catch {
     // Swallowed like every other audit write here: a failed insert must not lose a cadence
     // an admin has already saved.
+  }
+  return { ok: true };
+}
+
+export type SetResyncOutcome = SetCadenceOutcome | { ok: false; reason: "not-resyncable" };
+
+/**
+ * Record how often a source's lists are read whole again. Admin-only at the handler, for the
+ * reason a cadence is: on a large organisation a re-sync spends most of a day's requests.
+ *
+ * The same words and the same check as {@link setCadence}, and one more refusal: a source that
+ * reads no list through a change filter the source runs has nothing a re-sync could catch up on,
+ * and a schedule stored for it would be a promise that changes nothing. ADR 0081.
+ */
+export async function setResync(
+  exec: SqlExecutor,
+  specs: SpecReads,
+  input: {
+    tenantId: string;
+    source: string;
+    cadence: Cadence;
+    cron?: string | undefined;
+    actor: string;
+  },
+): Promise<SetResyncOutcome> {
+  const lists = specs.get(sourceKind(input.source))?.entities ?? [];
+  if (
+    !lists.some(
+      (read) => read.incremental !== undefined && read.incremental.strategy !== "client-filter",
+    )
+  ) {
+    return { ok: false, reason: "not-resyncable" };
+  }
+  const decided = cadenceSetting(input);
+  if (!decided.ok) {
+    return decided;
+  }
+  const { setting } = decided;
+  if (!(await writeResync(exec, input.tenantId, input.source, setting))) {
+    return { ok: false, reason: "no-connection" };
+  }
+  try {
+    await recordAudit(exec, {
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "connection.resync_set",
+      detail: JSON.stringify({
+        source: input.source,
+        cadence: setting.cadence,
+        cron: setting.cron,
+      }),
+    });
+  } catch {
+    // Swallowed as the cadence's is: a failed audit insert must not lose a saved schedule.
   }
   return { ok: true };
 }
