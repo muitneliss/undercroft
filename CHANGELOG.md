@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.48.0](https://github.com/muitneliss/undercroft/compare/v1.47.0...v1.48.0) (2026-09-29)
+
+
+### Features
+
+* **worker:** read ACRA Business Profiles in the BP-COMPANY-2024-1 template, from a configured template table ([#313](https://github.com/muitneliss/undercroft/issues/313)) ([#321](https://github.com/muitneliss/undercroft/issues/321)) ([4703ec5](https://github.com/muitneliss/undercroft/commit/4703ec5831508a098e5cee3afc0c1e304e03f8d7))
+* **xero:** re-sync a connection's lists whole on its own opt-in schedule, within Xero's daily request budget ([#324](https://github.com/muitneliss/undercroft/issues/324)) ([a861d90](https://github.com/muitneliss/undercroft/commit/a861d90d6b2af60e7502a5bd45f8c10f30ebd36d))
+
 ## [1.47.0](https://github.com/muitneliss/undercroft/compare/v1.46.1...v1.47.0) (2026-09-29)
 
 
