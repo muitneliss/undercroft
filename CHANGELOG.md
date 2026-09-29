@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.0](https://github.com/muitneliss/undercroft/compare/v1.52.1...v1.53.0) (2026-09-29)
+
+
+### Features
+
+* **worker:** tenant logins reach Postgres through a pooler, and runs take a turn, for a thousand tenants (ADR 0088) ([#342](https://github.com/muitneliss/undercroft/issues/342)) ([5c886ca](https://github.com/muitneliss/undercroft/commit/5c886ca93fd7e6ed2a5c9299f2d364bbb3461eba))
+
 ## [1.52.1](https://github.com/muitneliss/undercroft/compare/v1.52.0...v1.52.1) (2026-09-29)
 
 
