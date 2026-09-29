@@ -1,123 +1,92 @@
 ---
-title: "Tích hợp Gmail: đọc email và file đính kèm bằng SQL"
-description: "Tích hợp Gmail để đưa email theo label và file đính kèm vào raw data lake, trích xuất text và truy vấn bằng SQL trong Postgres cho đội kỹ thuật, tài chính."
+title: "Tích hợp Gmail: đưa email vào phân tích doanh nghiệp"
+description: "Tích hợp Gmail giúp giữ nội dung thư và tài liệu đính kèm để tra cứu, phân tích. Tìm hiểu cách Undercroft xử lý dữ liệu, lợi ích và giới hạn cần biết."
 translationKey: "gmail-integration"
 pubDate: "2026-09-29"
-tags: ["Gmail", "Integration", "SQL", "ELT"]
+tags: ["Gmail", "Integration", "ELT"]
 keywords:
   [
     "tích hợp Gmail",
-    "kết nối Gmail API",
-    "trích xuất hóa đơn từ email",
     "lưu email vào database",
-    "Gmail SQL",
+    "trích xuất hóa đơn từ email",
+    "phân tích dữ liệu email",
+    "OCR file đính kèm",
   ]
 hero: "../../../assets/posts/gmail-integration/hero.png"
-heroAlt: "Sơ đồ tích hợp Gmail từ label đã chọn qua collector, raw data lake và trích xuất text đến raw.document_text và SQL"
+heroAlt: "Sơ đồ tích hợp Gmail đưa email đã chọn qua raw data lake, trích xuất nội dung và model để tạo report"
 integration: "gmail"
 ---
 
-Tích hợp Gmail giúp đội tài chính và vận hành gom chứng từ từ email mà vẫn giữ nội dung trao đổi đi kèm. Hóa đơn có thể nằm trong PDF, biên nhận trong ảnh, còn lý do điều chỉnh lại ở phần thân thư. Undercroft đọc email theo label đã chọn, lưu body và file đính kèm được phép vào raw data lake, rồi trích xuất text sang Postgres để truy vấn bằng SQL.
+Tích hợp Gmail hữu ích khi thông tin cần cho công việc nằm rải rác trong email. Hóa đơn ở file đính kèm, lý do điều chỉnh ở nội dung thư, còn người làm report phải hỏi đồng nghiệp để tìm đủ cả hai. Tải riêng file về máy thường không giải quyết được phần ngữ cảnh bị bỏ lại.
 
-Đây là bước chuẩn bị dữ liệu cho phân tích. Nhóm của bạn vẫn quyết định cách nhận diện chứng từ, kiểm tra thông tin và viết dbt model. [Undercroft là data platform open-source](https://github.com/muitneliss/undercroft), nên đội kỹ thuật có thể xem trực tiếp collector và các giới hạn trong repository.
+Với đội tài chính và vận hành, vấn đề là thời gian tìm kiếm và khó kiểm tra nguồn thông tin. Undercroft đưa email đã chọn vào data platform để lưu giữ, tra cứu và phân tích. Nhóm triển khai vẫn quyết định thông tin nào đủ căn cứ để đưa lên report.
 
-## Tích hợp Gmail đưa dữ liệu vào Postgres như thế nào?
+## Vì sao cần đưa email vào dữ liệu phân tích?
 
-Luồng chính là Gmail API → collector → raw data lake → trích xuất text → `raw.document_text` → SQL. Message record được đưa vào `raw.records`; `raw.documents` ghi nhận các document đã lưu. Bytes đã thu thập nằm trong lake, còn các bảng Postgres là projection có thể dựng lại.
+Gmail giúp quản lý trao đổi, nhưng một cuộc trao đổi chưa phải dữ liệu nghiệp vụ đã được kiểm tra. Tìm cụm “hóa đơn” có thể gặp hóa đơn thật, thư nhắc thanh toán hoặc câu trả lời trích lại thư cũ. Đếm kết quả tìm kiếm sẽ dễ đếm sai sự việc.
 
-Gmail dùng first-party collector trong worker thay vì connector YAML. Connector thông thường đọc JSON; email còn có file nhị phân và cần gom kết quả từ nhiều label. Collector xử lý những việc này ngay trong worker, nơi có quyền mở credential đã được niêm phong.
+Có thể hình dung email như tập hồ sơ kèm lời giải thích. Đưa hồ sơ vào nơi tra cứu chung giúp nhóm đối chiếu thuận tiện hơn. Nếu sổ kế toán nằm ở Xero, [tích hợp Xero](/tich-hop-xero-postgres/) cung cấp dữ liệu có cấu trúc, còn email bổ sung ngữ cảnh cho những chỗ cần làm rõ.
 
-Ingest và trích xuất là hai run riêng. PDF đã lưu thành công vẫn có thể đang chờ đọc text. Bài về [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích lớp lưu trữ này; bài [ETL và ELT](/etl-va-elt-la-gi/) giải thích vì sao model nghiệp vụ được xây sau khi dữ liệu đã về.
+## Tích hợp Gmail trong Undercroft hoạt động thế nào?
 
-## Email được tách thành những phần nào?
+Undercroft thu thập thư theo label bạn chọn, giữ nội dung thư và các loại file đính kèm được phép trong raw data lake. Sau đó, hệ thống trích xuất nội dung đọc được vào Postgres để nhóm xây model phục vụ phân tích.
 
-Một message đi theo ba nhánh. Record giữ sáu header `From`, `To`, `Cc`, `Subject`, `Date`, `Message-ID`, cùng ID và thông tin thu thập. Body và `snippet` của Gmail không được đưa vào payload của record.
+Cách làm này giống giữ hồ sơ gốc bên cạnh bản tổng hợp. Bản tổng hợp có thể sửa khi cách hiểu nghiệp vụ thay đổi; tài liệu đã thu thập vẫn là căn cứ để xem lại. Dữ liệu phục vụ phân tích có thể dựng lại từ phần đã lưu.
 
-![Email tách thành header lưu dưới dạng record, body lưu thành một document và các file đính kèm lưu thành những document riêng](../../../assets/posts/gmail-integration/flow.png)
+Đó là lý do [raw data lake bất biến](/raw-data-lake-bat-bien/) có giá trị khi cần kiểm tra nguồn. Cách làm cũng theo tư duy [ELT](/etl-va-elt-la-gi/): đưa dữ liệu về trước, áp dụng cách hiểu nghiệp vụ sau, thay vì chỉ giữ kết quả đã rút gọn.
 
-Body là document có ID `<messageId>:body`. Collector ưu tiên phần `text/plain` không có filename; nếu thiếu thì lấy `text/html`. Charset được xử lý khi lưu và body được giữ dưới dạng UTF-8. Phần text có filename vẫn là attachment.
+## Nội dung thư và file đính kèm được giữ ra sao?
 
-Lựa chọn loại attachment không loại trừ body. Body của message được đọc vẫn đi vào lake, rồi text mới đến `raw.document_text.text`. Body hoặc attachment vượt 25 MiB bị từ chối. Cách lưu này không tạo một file `.eml` nguyên thư chứa thêm bản sao của mọi attachment.
+Một nhà cung cấp có thể giải thích thay đổi ngay trong thư nhưng vẫn gửi kèm tài liệu cũ. Undercroft giữ nội dung thư thành tài liệu riêng, bên cạnh các file đính kèm. Việc chọn loại file không loại bỏ nội dung thư đã chọn.
 
-## Cần làm gì để kết nối Gmail API theo label?
+![Email tách thành nội dung thư và file đính kèm, cùng được đưa vào raw data lake để giữ bằng chứng gốc](../../../assets/posts/gmail-integration/flow.png)
 
-Người vận hành cấu hình OAuth client riêng cho ingestion, tách khỏi client đăng nhập. Đăng nhập bằng Google không đồng nghĩa với cho phép thu thập email. [Runbook Google ingestion](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/google-ingestion-setup.md) ghi các biến cấu hình và callback cần thiết.
+Hệ thống đọc được nội dung từ PDF, tài liệu Word được hỗ trợ và workbook Excel hiện đại. Với bản scan và ảnh được hỗ trợ, OCR nhận diện chữ tiếng Việt và tiếng Anh. Tuy nhiên, file có mật khẩu, bị hỏng hoặc không có bộ đọc phù hợp vẫn có thể không trích xuất được.
 
-Sau khi deployment đã sẵn sàng:
+Thu thập thành công chưa đồng nghĩa với đọc thành công. Hệ thống ghi lý do không đọc được và cho biết khi nội dung trích xuất chưa đầy đủ. Nhờ vậy, nhóm có thể phân biệt tài liệu đang chờ xử lý với tài liệu cần tìm cách bổ sung.
 
-1. Admin của tenant mở Gmail trong Sources và chọn **Connect**.
-2. Hoàn tất OAuth consent cho mailbox muốn kết nối.
-3. Chọn label, loại attachment cần lấy và lưu lựa chọn.
-4. Chọn **Run now**, rồi kiểm tra số lượng và lý do từ chối trong Journal.
+## Có tự biến email thành dữ liệu hóa đơn không?
 
-Nhiều label được hiểu là lấy message thuộc bất kỳ label nào đã chọn. Collector truy vấn từng label rồi gom ID, tránh cách truyền nhiều label vào một request khiến Gmail chỉ trả message có đủ tất cả label. Chưa lưu lựa chọn thì run thất bại, không tự chuyển sang toàn mailbox.
+Undercroft không cung cấp sẵn schema hóa đơn quyết định mọi dòng hàng, số tiền và trạng thái thanh toán. Nhóm của bạn dùng dbt model để tổ chức dữ liệu và áp dụng quy tắc nghiệp vụ. Số tiền không đọc được phải để thiếu; không nên coi một lời nhắc thanh toán là bằng chứng đã trả tiền.
 
-Quyền OAuth là `gmail.readonly`. Giới hạn theo label do collector thực thi, không phải token Google chỉ có quyền đọc vài label. Cần phân biệt phạm vi cấp quyền với phạm vi thực tế thu thập.
+Tính năng phân loại tùy chọn có thể gợi ý loại tài liệu theo danh mục do tổ chức quản lý. Kết quả không đủ tin cậy hoặc đã lỗi thời không được coi là kết luận được chấp nhận. Tính năng này gửi nội dung đến nhà cung cấp AI bên ngoài khi được bật, nên cần cân nhắc trước khi sử dụng.
 
-## Có thể trích xuất hóa đơn từ email ở định dạng nào?
+Nhãn “hóa đơn” chỉ mô tả tài liệu, không xác nhận số tiền hay phê duyệt giao dịch. Nội dung được trích lại trong thư trả lời cũng cần quy tắc xử lý để tránh đếm trùng.
 
-File đã về lake chưa chắc đã có text. Bytes được giữ nguyên; reader tạo text hoặc ghi rõ lý do không đọc được. [Danh mục file format](https://github.com/muitneliss/undercroft/blob/main/docs/reference/file-formats.md) là nguồn tra cứu đầy đủ.
+## Có kiểm soát được phạm vi thu thập và quyền đọc không?
 
-| Loại file             | Nội dung đọc được và giới hạn                                 |
-| --------------------- | ------------------------------------------------------------- |
-| PDF                   | Đọc text layer; chuyển sang OCR nếu có dưới 80 ký tự hiển thị |
-| JPEG, PNG, WebP       | OCR tiếng Việt và tiếng Anh; ảnh dưới 20 KB bị từ chối        |
-| DOCX, DOC được hỗ trợ | Đọc text; file hỏng hoặc có mật khẩu nhận lý do riêng         |
-| XLSX, XLSM            | Đọc từng hàng của mọi sheet; không chạy macro                 |
-| CSV, TXT, XML         | Giữ text; không tự tách CSV thành các hàng dữ liệu            |
-| XLS cũ                | Lưu bytes nhưng ghi `legacy-xls-unsupported`, không đọc cell  |
+Bạn chọn label và loại file phù hợp với công việc. Khi chọn nhiều label, thư thuộc bất kỳ label nào trong số đó đều được lấy. Nếu chưa lưu lựa chọn, hệ thống từ chối thu thập; đăng nhập bằng Google cũng không tự cấp quyền lấy email.
 
-MIME type được ưu tiên khi xác định loại file. Extension chỉ được xét khi provider trả `application/octet-stream`. ZIP, RAR, HEIC và TIFF không có trong các lựa chọn được cung cấp; chế độ lấy mọi loại file vẫn có thể lưu chúng, nhưng thiếu reader sẽ nhận `unsupported-content-type`.
+Quyền đọc mailbox do Google cấp rộng hơn các label đã chọn. Phạm vi thu thập theo label do Undercroft thực thi, không phải Google chỉ cho phép đọc từng label đó. Trong platform, BI không được đọc trực tiếp nội dung raw data; model của nhóm quyết định phần nào đến report.
 
-## Lưu email vào database rồi truy vấn SQL ra sao?
+Các lần sync thường bỏ qua thư đã giữ. Mở rộng loại file có thể bổ sung attachment trước đây bị bỏ qua, còn thu hẹp lựa chọn không xóa dữ liệu đã thu thập.
 
-Mỗi kết quả trích xuất ghi `method` cho cách đọc, hoặc `reason` cho lý do không đọc được. `truncated` cho biết text đã bị cắt ở giới hạn của reader. Nhờ vậy, model có thể phân biệt thiếu dữ liệu với document thực sự không chứa thông tin cần tìm.
+## Khi nào cách làm này phù hợp với doanh nghiệp?
 
-SQL minh họa dưới đây dùng tên bảng và cột có thật. Chạy bằng dbt login của tenant; BI login không được đọc trực tiếp schema `raw`:
+Cách làm phù hợp khi nhóm thường xuyên cần tra cứu bằng chứng, kết hợp email với nguồn khác và có người phụ trách model. Lợi ích là giảm việc gom tài liệu thủ công, giữ ngữ cảnh và có thể xem lại cách hình thành một kết quả.
 
-```sql
-SELECT source, document_id, method, truncated, left(text, 240) AS excerpt
-FROM raw.document_text
-WHERE (source = 'gmail' OR source LIKE 'gmail.%')
-  AND reason IS NULL
-  AND text ILIKE '%hóa đơn%'
-LIMIT 20;
-```
+Đổi lại, đội kỹ thuật phải vận hành platform self-hosted; đội nghiệp vụ phải thống nhất ý nghĩa của report và cách xử lý thiếu dữ liệu. Open-source giúp kiểm tra cách hệ thống hoạt động, nhưng không thay thế những trách nhiệm này.
 
-Kết quả chỉ chứng minh text chứa cụm từ tìm kiếm. Thư nhắc thanh toán hoặc câu trả lời trích lại thư cũ cũng có thể khớp. Đây chưa phải danh sách hóa đơn đã kiểm tra.
+Nếu cần dịch vụ duyệt hóa đơn dùng ngay, công cụ sao lưu nguyên mailbox hoặc cam kết đọc đúng mọi file, đây chưa phải lựa chọn phù hợp. Với nhu cầu chỉ chuyển tiếp vài tài liệu, một data platform có thể làm công việc phức tạp thêm.
 
-Mailbox đầu dùng source `gmail`; các mailbox sau dùng `gmail.<account key>`. Vì vậy, chỉ lọc `source = 'gmail'` sẽ bỏ sót tài khoản khác. Macro dbt `gmail_letters()` có thể gom các bản thư theo `Message-ID` và báo header khác nhau; phần nội dung được trích dẫn trong reply vẫn cần model xử lý.
+## Nên bắt đầu từ đâu?
 
-## Có tự phân loại và tạo bảng hóa đơn không?
-
-Undercroft cung cấp text để bạn xây model, không có sẵn business schema hóa đơn với dòng hàng và trạng thái thanh toán đã xác nhận. Nhóm triển khai phải định nghĩa các trường và cách kiểm tra. Số tiền không đọc được cần để thiếu, không thay bằng 0.
-
-Classification là bước tùy chọn. Khi worker có TypeSafe API key, admin có thể khởi tạo catalogue loại document rồi publish. Bước khởi tạo gửi text mẫu đến TypeSafe Jev; classification sau đó dùng catalogue đã publish. Cần tính đến luồng gửi text này khi quyết định bật tính năng.
-
-View `raw.document_kinds` cung cấp kind và confidence. `accepted_kind` là NULL khi confidence dưới 0.90 hoặc kết quả thuộc catalogue đã bị thay thế. Nhãn invoice không xác nhận số tiền hay phê duyệt giao dịch. Nếu cần dữ liệu kế toán có cấu trúc bên cạnh email, xem [tích hợp Xero vào Postgres](/tich-hop-xero-postgres/).
-
-## Quyền riêng tư và các lần sync sau được xử lý thế nào?
-
-Metadata trong `raw.documents` chỉ giữ ID, type, timestamp và count. Filename cùng thông tin mô tả do người viết nằm trong lake manifest có kiểm soát truy cập. Text là ngoại lệ được phép chứa nội dung document; BI không có quyền đọc schema `raw`, nên dữ liệu chỉ đến dashboard qua model khách hàng viết.
-
-Run thông thường bỏ qua message đã giữ. Khi thêm loại attachment, collector chỉ đọc lại message trong các label đã chọn có phần còn thiếu vừa được cho phép. Bỏ loại file không xóa dữ liệu đã lưu. Connection có trước tính năng body sẽ đọc lại thư một lần để lấy body, không tải lại attachment đã có.
-
-Trích xuất có kiểm tra backlog mỗi giờ và chạy riêng với sync. Khi report thiếu chứng từ, hãy kiểm tra cả Journal lẫn kết quả trích xuất trước khi sửa model: file chưa về, file chưa đọc và file không đọc được là ba tình huống khác nhau.
+Hãy chọn một câu hỏi công việc thường mất thời gian tìm email để trả lời. Bạn có thể xem [Undercroft](https://undercroft.lowbit.link), tìm hiểu [repository open-source](https://github.com/muitneliss/undercroft) và giao đội kỹ thuật tham khảo [hướng dẫn kết nối Google](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/google-ingestion-setup.md). Khi đánh giá, hãy xem kết quả có truy ngược về tài liệu được không và phần còn thiếu có được nhận diện rõ không.
 
 ## Câu hỏi thường gặp
 
 ### Tích hợp Gmail có lấy toàn bộ inbox không?
 
-Collector lấy hợp của các label đã chọn và từ chối khi chưa có lựa chọn. Quyền `gmail.readonly` rộng hơn phạm vi đó; label là giới hạn thu thập của ứng dụng.
+Undercroft thu thập theo label đã chọn và từ chối khi chưa có lựa chọn. Quyền đọc mailbox do Google cấp rộng hơn phạm vi thu thập này.
 
-### Có lưu body khi không lấy loại attachment đó không?
+### Có lưu nội dung email mà không lấy file đính kèm không?
 
-Có, body được thu thập độc lập với lựa chọn attachment. Nó là document trong lake và trở thành text sau trích xuất, không nằm trong message record.
+Nội dung thư được thu thập độc lập với lựa chọn loại file đính kèm. Sau khi trích xuất, phần đọc được có thể dùng để tra cứu và phân tích.
 
-### Có OCR hóa đơn scan và ảnh biên nhận không?
+### Có đọc được hóa đơn scan gửi qua Gmail không?
 
-Có, PDF thiếu text layer và các ảnh được hỗ trợ có thể được đọc bằng OCR tiếng Việt và tiếng Anh. File có mật khẩu, ảnh quá nhỏ hoặc OCR thất bại nhận lý do rõ ràng.
+OCR hỗ trợ tiếng Việt và tiếng Anh cho bản scan và ảnh phù hợp. Nội dung đọc được vẫn cần kiểm tra trước khi dùng làm dữ liệu hóa đơn.
 
-### Sync thành công nghĩa là SQL đã đọc được mọi chứng từ chưa?
+### Sync thành công thì report đã đủ dữ liệu chưa?
 
-Chưa, vì trích xuất chạy riêng và có thể còn document đang chờ hoặc bị từ chối. Kiểm tra `method`, `reason` và `truncated` trước khi dùng dữ liệu trong model.
+Chưa, vì thu thập và trích xuất là các bước riêng. Report có thể còn thiếu tài liệu đang chờ đọc hoặc không đọc được.

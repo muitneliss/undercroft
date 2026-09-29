@@ -1,6 +1,6 @@
 ---
-title: "ETL và ELT là gì? Khác biệt và lý do giữ raw data"
-description: "ETL và ELT là gì, khi nào dùng mỗi cách? Tìm hiểu qua Undercroft vì sao giữ raw data trước giúp build lại model khi quy tắc nghiệp vụ thay đổi."
+title: "ETL và ELT là gì? Chọn cách phù hợp cho báo cáo"
+description: "ETL và ELT là gì, khác nhau ở đâu và khi nào nên chọn? Hiểu vai trò của raw data, trách nhiệm của đội dữ liệu và cách Undercroft hỗ trợ báo cáo thay đổi."
 translationKey: "etl-vs-elt"
 pubDate: "2026-09-29"
 tags: ["ETL", "ELT", "Data integration", "dbt"]
@@ -15,117 +15,79 @@ keywords:
     "dbt",
   ]
 hero: "../../../assets/posts/etl-vs-elt/hero.png"
-heroAlt: "ETL và ELT là gì: sơ đồ so sánh transform trước khi load với load và giữ raw data trước khi transform"
+heroAlt: "ETL và ELT là gì: sơ đồ so sánh xử lý trước khi lưu với giữ raw data rồi xây dựng model"
 ---
 
-ETL và ELT là gì, và khác biệt đó ảnh hưởng thế nào khi sửa một report? ETL thực hiện transform trước khi load vào nơi phục vụ phân tích. ELT load trước rồi mới transform. Với đội tài chính và vận hành, câu hỏi thực tế là: khi đổi cách tính một chỉ tiêu, dữ liệu ban đầu còn đủ để tính lại không?
+ETL và ELT là gì thường trở thành câu hỏi thực tế khi doanh nghiệp muốn đổi một report. Trước đây chỉ cần tổng đơn hàng theo tháng, nay đội vận hành muốn biết từng đơn chậm ở đâu. Nếu chỉ giữ số tổng, đội dữ liệu phải tìm lại chi tiết từ nguồn, mà nguồn có thể đã thay đổi.
 
-Undercroft là ví dụ cho cách giữ raw data trước: REST API → raw data lake trên S3 hoặc MinIO → Postgres → dbt model → BI. Mỗi lớp có một nhiệm vụ riêng, để việc sửa quy tắc nghiệp vụ không buộc connector phải đổi theo.
+Điều cần cân nhắc là áp dụng quy tắc nghiệp vụ lúc nào và giữ lại gì sau đó. Undercroft chọn giữ raw data làm nền tảng, để khi đổi cách nhìn, đội phụ trách còn đầu vào để tính lại.
 
-## ETL là gì và một ETL pipeline hoạt động ra sao?
+## ETL và ELT là gì, khác nhau ở đâu?
 
-ETL viết tắt của **extract, transform, load**. Bước extract đọc dữ liệu từ nguồn. Bước transform chọn trường, chuẩn hóa hoặc tổng hợp. Bước load đưa kết quả vào nơi phục vụ phân tích, chẳng hạn data warehouse.
+**ETL là extract, transform, load:** đọc dữ liệu từ nguồn, xử lý theo mục đích đã thống nhất, rồi đưa kết quả vào nơi phục vụ phân tích. Chẳng hạn, dữ liệu từng đơn hàng được gom thành tổng theo tháng trước khi chuyển đến đội làm report.
 
-Ví dụ, một ETL pipeline đọc đơn hàng, phân nhóm theo tháng rồi chỉ lưu số đơn của từng tháng. Đội vận hành có ngay dữ liệu đúng cấu trúc để làm dashboard, không cần xử lý từng đơn khi mở report.
+**ELT là extract, load, transform:** đưa dữ liệu vào môi trường phân tích trước, rồi áp dụng quy tắc nghiệp vụ qua các model. Model thể hiện cách doanh nghiệp muốn phân loại, kết hợp và tính toán dữ liệu.
 
-Đổi lại, nếu sau đó cần đếm theo ngày, số tổng theo tháng không đủ. Đội kỹ thuật phải tìm dữ liệu chi tiết đã lưu ở chỗ khác hoặc đọc lại nguồn. Nguồn có thể đã sửa hoặc xóa dữ liệu cũ.
+Có thể hình dung ETL như gửi bản tổng hợp sau cuộc họp; ELT như chuyển cả ghi chép cho đội phân tích để họ tổng hợp theo từng câu hỏi. Việc có giữ ghi chép gốc hay không vẫn là quyết định riêng.
 
-ETL không bắt buộc phải bỏ raw data. Hình đầu bài minh họa trường hợp ETL chỉ giữ kết quả đã transform. Một ETL pipeline có raw data archive riêng vẫn có thể tính lại; khả năng đó đến từ việc giữ đầu vào.
+Hình đầu bài minh họa ETL bỏ raw data và ELT giữ lại. Đây chỉ là ví dụ: ETL cũng có thể lưu raw data riêng để dùng về sau.
 
-## ELT là gì và khác ETL ở bước nào?
+| Câu hỏi                   | ETL                             | ELT                           |
+| ------------------------- | ------------------------------- | ----------------------------- |
+| Xử lý nghiệp vụ lúc nào?  | Trước khi đưa vào nơi phân tích | Sau khi đưa vào nơi phân tích |
+| Đầu vào của report là gì? | Dữ liệu đã chuẩn bị             | Model xây từ dữ liệu đã lưu   |
+| Muốn tính lại cần gì?     | Giữ đầu vào hoặc đọc lại nguồn  | Đầu vào còn đủ chi tiết       |
 
-ELT viết tắt của **extract, load, transform**. Dữ liệu được load vào môi trường phân tích trước, rồi SQL hoặc công cụ như dbt mới áp dụng quy tắc nghiệp vụ.
+## Vì sao cách giữ dữ liệu ảnh hưởng đến report?
 
-Connector lo cách đọc nguồn; model lo định nghĩa chỉ tiêu. Nếu cùng một tập đơn hàng phục vụ cả tài chính và vận hành, mỗi đội có thể dùng model riêng với cách chọn ngày và trạng thái được viết rõ trong SQL.
+ETL giúp nơi nhận có dữ liệu đã chuẩn bị đúng mục đích. Cách này hữu ích khi yêu cầu ổn định, hoặc nơi nhận chỉ nên chứa thông tin đã chọn lọc. Đổi lại, phần chi tiết bị bỏ đi có thể chính là thứ cần cho câu hỏi tiếp theo.
 
-Load trước không có nghĩa là bỏ kiểm tra. Data pipeline vẫn cần xác định record, xử lý lỗi đọc và kiểm soát quyền truy cập. Raw data cũng chưa phải dữ liệu sẵn sàng cho dashboard: model vẫn phải quy định kiểu dữ liệu, quan hệ và cách xử lý giá trị thiếu.
+ELT thuận tiện khi tài chính và vận hành cùng dùng một nguồn nhưng cần cách tính khác nhau. Mỗi đội có thể có model phù hợp mà không bắt phần đọc nguồn gánh mọi định nghĩa. Tuy nhiên, vẫn phải thống nhất ý nghĩa chỉ tiêu; dữ liệu vào thành công chưa chứng minh report đúng.
 
-## ETL và ELT là gì, khác nhau ở điểm nào?
+## Undercroft áp dụng ELT như thế nào?
 
-Điểm chính là vị trí của transform so với bước load vào nơi phục vụ phân tích. Không thể chỉ nhìn ba chữ cái để kết luận cách nào nhanh hoặc rẻ hơn.
+Undercroft là data platform open-source. Connector đọc nguồn và đưa dữ liệu thu được vào raw data lake. Nội dung đã lưu không bị ghi đè tại chỗ; nội dung giống nhau không cần lưu thêm bản sao.
 
-| Câu hỏi                            | ETL                               | ELT                                |
-| ---------------------------------- | --------------------------------- | ---------------------------------- |
-| Áp dụng quy tắc nghiệp vụ lúc nào? | Trước khi load                    | Sau khi load                       |
-| Dữ liệu đi vào trước có dạng gì?   | Đã được xử lý                     | Còn gần với cấu trúc nguồn         |
-| Sửa cách tính ở đâu?               | Bước transform phía trước         | Model phía sau                     |
-| Muốn tính lại cần gì?              | Đầu vào đã giữ hoặc đọc lại nguồn | Đầu vào đã load và còn đủ chi tiết |
-| Đội phụ trách phải quản lý gì?     | Transform và cấu trúc đầu ra      | Raw data, quyền đọc và model       |
+Postgres giúp đội dữ liệu khai thác các bản ghi đã thu thập. Đội phụ trách dùng dbt xây model theo quy tắc của doanh nghiệp, rồi đưa kết quả lên report và dashboard. Bài [data integration là gì](/data-integration-la-gi-rest-api/) giải thích thêm vai trò của việc kết nối và thu thập.
 
-Chi phí thực tế còn phụ thuộc lượng dữ liệu, SQL và hạ tầng. Khi đánh giá, hãy yêu cầu một ví dụ đổi quy tắc rồi xem cần sửa những đâu, dữ liệu nào còn giữ và dữ liệu nào phải lấy lại.
+Undercroft không cung cấp sẵn business schema định nghĩa khách hàng hay hóa đơn cho mọi doanh nghiệp. Đội sử dụng có quyền quyết định cách hiểu của mình, đồng thời phải chịu trách nhiệm xây model và kiểm tra kết quả.
 
-## Khi nào nên dùng ETL, khi nào nên dùng ELT?
+## Khi đổi cách tính, có phải lấy dữ liệu lại không?
 
-ETL phù hợp khi nơi nhận chỉ nên chứa một tập trường đã chọn, khi cần xử lý trước ranh giới đó, hoặc khi hệ thống phía sau đòi hỏi schema ổn định. Nếu cần phân tích lại về sau, hãy quyết định riêng việc giữ raw data.
+Giả sử doanh nghiệp mở rộng tiêu chí khách hàng còn hoạt động, tính cả những người đã lâu chưa đặt hàng. Nếu còn chi tiết đơn hàng, đội dữ liệu có thể sửa model và tính lại. Nếu chỉ giữ nhãn hoạt động theo tiêu chí cũ, nhãn đó không cho biết lần mua gần nhất.
 
-ELT phù hợp khi nhiều đội dùng chung nguồn nhưng có cách nhìn khác nhau, hoặc định nghĩa chỉ tiêu thường thay đổi. Đội quen SQL có thể quản lý logic trong model thay vì đưa mọi yêu cầu vào connector.
+![Quy tắc nghiệp vụ thay đổi dẫn đến model và report mới, trong khi raw data lake được giữ nguyên](../../../assets/posts/etl-vs-elt/flow.png)
 
-Chẳng hạn, vận hành đếm đơn hoàn tất còn tài chính cần phân nhóm theo một ngày nghiệp vụ khác. Nếu các trường liên quan còn nguyên, có thể viết hai model. Nếu chỉ giữ một số tổng, yêu cầu thứ hai có thể buộc phải đọc lại nguồn.
+Trong Undercroft, các lớp phục vụ phân tích có thể được dựng lại từ đầu vào còn giữ. Sơ đồ thể hiện quan hệ này, không yêu cầu bỏ mọi model mỗi lần sửa. Bài [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích vì sao lớp dữ liệu gốc cần được bảo vệ.
 
-Trong một hệ thống cũng có thể có cả hai cách. Điều cần thống nhất là dữ liệu nào phải giữ, ai sở hữu quy tắc và cách áp dụng quy tắc mới cho dữ liệu cũ.
+Tính lại được cũng chưa có nghĩa là tính đúng. Người hiểu nghiệp vụ vẫn cần đối chiếu định nghĩa mới và giải thích vì sao kết quả khác trước.
 
-## Undercroft tổ chức ELT pipeline như thế nào?
+## Khi nào nên chọn ELT, khi nào không phù hợp?
 
-[Undercroft](https://github.com/muitneliss/undercroft) là data platform open-source, hiện ở giai đoạn pre-alpha. Kiến trúc đặt raw data lake bất biến dưới các lớp dùng để truy vấn.
+ELT đáng cân nhắc khi câu hỏi thường thay đổi, nhiều đội dùng chung nguồn và có người duy trì model. ETL có thể hợp hơn khi cần xử lý hoặc loại bớt thông tin trước khi đưa đến nơi nhận. Một hệ thống cũng có thể dùng cả hai cách.
 
-Luồng record gồm năm bước:
+Giữ raw data kéo theo chi phí lưu trữ, quản lý quyền đọc và thời gian lưu. Lake chỉ giữ những gì đã thu thập: thông tin chưa lấy hoặc bản ghi đã bị xóa trước lần sync không tự xuất hiện lại. Có lịch sử được lưu cũng chưa đồng nghĩa có report lịch sử; vẫn cần model sử dụng đúng đầu vào.
 
-1. **Đọc REST API bằng connector.** YAML mô tả cách đọc nguồn; Xero và HubSpot là các ví dụ có trong repository. Bài [data integration với REST API và YAML connector](/data-integration-la-gi-rest-api/) giải thích phần này.
-2. **Ghi vào S3 hoặc MinIO.** Lake chỉ tạo mới, không ghi đè object đã có. Nội dung giống nhau không cần thêm một blob khác.
-3. **Đưa vào Postgres.** Record từ các nguồn dùng chung bảng `raw.records`, phần nội dung là `jsonb`. Đây là lớp biểu diễn dữ liệu đã giữ trong lake để phục vụ truy vấn.
-4. **Build dbt model.** Worker gọi `dbt build` dưới dạng subprocess. Người dùng viết SQL định nghĩa các bảng phân tích của mình.
-5. **Đọc model qua BI.** Reports có question và dashboard. BI login của từng tenant đọc model phân tích của tenant đó, không đọc trực tiếp schema `raw`.
+Undercroft theo hướng self-hosted và hiện ở giai đoạn pre-alpha. Doanh nghiệp cần người vận hành và người duy trì model; nếu muốn dịch vụ ổn định do bên khác quản lý hoặc report nghiệp vụ dùng ngay, đây có thể chưa phù hợp.
 
-Undercroft không cung cấp business schema mặc định cho khách hàng hay hóa đơn. Nhờ vậy, nền tảng không áp một định nghĩa chung lên mọi doanh nghiệp; người viết model cũng phải tự chịu trách nhiệm về quy tắc và kiểm tra dữ liệu.
+## Nên bắt đầu tìm hiểu Undercroft từ đâu?
 
-Bài [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích kỹ hơn lý do giữ lớp này. Postgres phục vụ truy vấn, còn lake giữ đầu vào để có thể dựng lại các lớp dữ liệu phía trên.
-
-## Đổi quy tắc nghiệp vụ thì build lại model ra sao?
-
-Giả sử công ty minh họa Acme định nghĩa khách hàng hoạt động là có đơn trong 30 ngày gần nhất. Đội vận hành đổi khoảng thời gian thành 90 ngày. Đây là ví dụ do người dùng tự định nghĩa, không phải model có sẵn của Undercroft.
-
-Nếu chỉ lưu cờ đúng hoặc sai theo quy tắc cũ, không thể suy ra ngày đặt đơn gần nhất. Nếu đã giữ ngày và mã liên quan, model có thể tính lại với điều kiện mới.
-
-Đoạn SQL dưới đây chỉ minh họa thay đổi điều kiện. `customer_activity` và các cột là model giả định mà đội phải tự xây dựng, không phải bảng Undercroft cung cấp.
-
-```sql
--- Illustrative: replace the previous 30-day condition.
-select customer_id,
-       last_order_date >= date '2026-09-29' - interval '90 days'
-         as is_active
-from customer_activity;
-```
-
-Ngày đánh giá được cố định để dễ đối chiếu. Nếu thiếu `last_order_date`, phép so sánh cho kết quả chưa biết, không tự suy đoán khách hàng có hoạt động.
-
-![Quy tắc nghiệp vụ thay đổi dẫn đến sửa SQL, dùng raw data giữ nguyên để build lại model qua Postgres và dbt cho BI](../../../assets/posts/etl-vs-elt/flow.png)
-
-Trong kiến trúc Undercroft, có thể drop và build lại dữ liệu dẫn xuất mà vẫn giữ lake. Khi chỉ sửa model, có thể dùng lớp dữ liệu hiện có trong Postgres; không cần dựng lại mọi bảng. Sơ đồ thể hiện quan hệ phụ thuộc, không phải thao tác bắt buộc cho mỗi lần sửa.
-
-Đội phụ trách cần giữ định nghĩa model, kiểm tra đủ đầu vào, sửa SQL rồi build và đối chiếu kết quả cùng các model phụ thuộc. Build thành công chưa chứng minh quy tắc mới đúng với nghiệp vụ.
-
-## Giữ raw data có bảo đảm khôi phục mọi lịch sử không?
-
-Không. Lake chỉ giữ những gì đã đọc được. Trường chưa lấy, record bị xóa trước lần sync hoặc phiên bản trung gian chưa quan sát được không thể xuất hiện nhờ sửa SQL.
-
-`raw.records` biểu diễn lần quan sát mới nhất của mỗi record. Có phiên bản trong lake không đồng nghĩa mọi model đã có sẵn góc nhìn lịch sử; vẫn cần đầu vào phù hợp và logic sử dụng chúng.
-
-Khả năng build lại còn phụ thuộc dữ liệu giữ lại và định nghĩa model. Vì vậy, “build lại mọi model” là nguyên tắc tổ chức dữ liệu dẫn xuất, không phải lời hứa giữ lịch sử vô hạn hay tự khôi phục quy tắc chưa được ghi lại.
+Hãy chọn một report từng phải đổi cách tính và xác định dữ liệu cần giữ để tính lại. Xem [Undercroft](https://undercroft.lowbit.link) và [repository của dự án](https://github.com/muitneliss/undercroft), rồi trao đổi với đội kỹ thuật về người phụ trách vận hành, model và đối chiếu kết quả.
 
 ## Câu hỏi thường gặp
 
 ### ELT có luôn tốt hơn ETL không?
 
-Không; ETL phù hợp khi cần transform trước nơi nhận, còn ELT thuận tiện cho model dựa trên đầu vào đã load. Nên chọn theo ranh giới dữ liệu và cách đội quản lý thay đổi.
+Không; lựa chọn phụ thuộc nơi cần xử lý và dữ liệu nơi nhận được phép giữ. ELT linh hoạt cho phân tích về sau, còn ETL phù hợp khi cần chuẩn bị dữ liệu từ trước.
 
 ### ETL có bắt buộc bỏ raw data không?
 
-Không; ETL có thể giữ raw data archive riêng. Khả năng tính lại phụ thuộc vào đầu vào còn giữ, không chỉ thứ tự ETL hay ELT.
+Không; ETL có thể giữ raw data riêng. Khả năng tính lại phụ thuộc đầu vào còn đủ, không chỉ thứ tự xử lý.
 
-### dbt có thay connector trong data pipeline không?
+### dbt dùng trong ETL hay ELT?
 
-Trong Undercroft, dbt đảm nhiệm transform sau khi dữ liệu đã vào lake và Postgres. Connector đọc nguồn, nên hai phần có nhiệm vụ khác nhau.
+Trong Undercroft, dbt đảm nhiệm phần xử lý sau khi dữ liệu đã được thu thập và lưu. Nó xây model phân tích, không thay connector đọc nguồn.
 
-### Build lại model có cần gọi REST API lần nữa không?
+### Có raw data thì khôi phục được mọi lịch sử không?
 
-Không cần nếu đầu vào cần thiết đã được giữ và có thể dùng để dựng lại model. Nếu quy tắc mới cần trường chưa từng lấy, phải đọc thêm nguồn và có thể nguồn không còn dữ liệu đó.
+Không; raw data chỉ phản ánh những gì đã thu thập và còn được giữ. Muốn phân tích quá khứ vẫn cần đủ đầu vào và model phù hợp.

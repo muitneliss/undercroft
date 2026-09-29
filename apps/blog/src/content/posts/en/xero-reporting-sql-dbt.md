@@ -1,123 +1,95 @@
 ---
-title: "Xero reporting with SQL and dbt: build your own views"
-description: "Build custom Xero reporting with SQL and dbt: P&L, receivables ageing and cash views, using exact decimals and keeping missing amounts visibly missing."
+title: "Xero reporting: build reports your team can explain"
+description: "Make Xero reporting reflect your business with shared definitions, reusable dbt models and visible data gaps. Learn where Undercroft fits and what it requires."
 translationKey: "xero-reporting"
 pubDate: "2026-09-29"
-tags: ["Xero", "dbt", "SQL", "BI"]
-keywords: ["xero reporting", "xero custom reports", "xero dashboard", "xero bi", "xero dbt"]
+tags: ["Xero", "dbt", "BI"]
+keywords:
+  ["xero reporting", "xero custom reports", "xero dashboard", "xero receivables ageing", "xero dbt"]
 hero: "../../../assets/posts/xero-reporting/hero.png"
-heroAlt: "Xero reporting sketch showing invoices flowing into raw.records, dbt models and a dashboard bar chart"
+heroAlt: "Xero reporting sketch showing source data flowing through a raw lake and models into a report"
 ---
 
-Xero reporting becomes a modelling problem when your team needs its own account groupings, receivables buckets or cash views. A chart needs a definition of what each row means, which transactions belong in the total and how missing amounts affect the answer. SQL and dbt give engineers and finance teams a place to make those decisions explicit and reusable.
+Xero reporting becomes harder when the business needs answers that depend on its own definitions. Finance wants overdue balances, operations wants cash received, and management wants costs grouped around how the company works. If each team makes its own spreadsheet adjustments, meetings become arguments about whose total to trust. The problem is agreeing what the figures mean and applying that meaning consistently.
 
-[Undercroft](https://github.com/muitneliss/undercroft) is an open-source data platform that lands source data in an immutable raw data lake, projects records into Postgres and runs user-authored dbt models. Its Reports division provides BI over those models. It is currently pre-alpha and ships no business schema: the P&L, receivables and cash models described here are designs you build, not installed Xero report templates.
+Custom reporting gives those decisions a shared home. Undercroft supports this approach by keeping source data, running business rules your team defines, and presenting the results through BI. It is an open-source platform in pre-alpha, with no ready-made financial reports. That makes it an option for teams prepared to own their reporting logic.
 
-## How does custom Xero reporting work with SQL and dbt?
+## What makes custom Xero reporting trustworthy?
 
-The path is Xero data → raw data lake on S3 or MinIO → `raw.records` in Postgres → dbt models → BI. The lake is the durable layer; Postgres holds projections that can be rebuilt. That separation lets you revise reporting logic without treating the first interpretation of a source record as permanent.
+A useful report connects a business question to a clear definition. “What do customers owe?” needs a reporting date, a treatment of payments and credits, and a decision about what counts as overdue. Without that agreement, a precise-looking total can answer a different question from the one the reader intended.
 
-The connector declares entities such as invoices, payments, credit notes, accounts, tracking categories, bank transactions, bank transfers and manual journals. The available data still depends on the connection's granted scopes and completed reads. A declared entity is not evidence that a particular tenant has received it.
+Think of the definition as a recipe. The ingredients are source records, the method is the calculation, and the finished dish is the report. Changing the chart cannot repair missing ingredients or an ambiguous method. Finance owns the meaning; engineering makes it repeatable.
 
-For the ingestion side, see [connecting Xero to Postgres](/en/xero-integration-postgres/). For why transformation comes after landing the data, see the [ETL versus ELT workflow](/en/etl-vs-elt/). This post starts where those workflows leave you: deciding what the raw records should mean in a report.
+Agree what each item being counted represents. An invoice and an invoice line are different things. Counting the full invoice amount again for every line can inflate a total even when the calculation runs successfully.
 
-## Which data do P&L, receivables and cash views need?
+## How does Undercroft turn source data into reports?
 
-Start with the decision a reader wants to make, then define the grain: what one row represents. “One invoice” and “one invoice line” are different grains. Joining invoice totals to several lines and then summing those totals can multiply revenue without producing a SQL error.
+Undercroft keeps collected Xero data in an immutable raw data lake, then makes it available for modelling in Postgres. Your team uses dbt to turn agreed business rules into reusable models: prepared datasets that reports can read. The built-in Reports area can present those models as saved questions, charts and dashboards with shared filters.
 
-| Custom view        | Candidate inputs to inspect                                               | Definition to agree first                               |
-| ------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Management P&L     | Invoice lines, credit notes, accounts, bank transactions, manual journals | Period, account mapping, signs and included adjustments |
-| Receivables ageing | Invoices, contacts, payments, credit notes                                | Reporting date, outstanding balance and overdue buckets |
-| Cash movement      | Payments, bank transactions, bank transfers                               | Cash event, account scope and duplicate treatment       |
+![Sketch showing source data passing through shared business rules to become a report](../../../assets/posts/xero-reporting/flow.png)
 
-These are modelling starting points, not a promise of complete financial statements. In particular, the connector reads manual journals but does not read the `/Journals` system journal. An invoice-led management P&L therefore needs an explicit coverage review before anyone presents it as a complete ledger-derived result.
+The separation matters when your understanding changes. You can revise a cost grouping and rebuild the reporting layer from the retained evidence. The original collected data remains separate from the interpretation. Keeping [raw data in an immutable lake](/en/immutable-raw-data-lake/) explains this principle; the [ETL versus ELT comparison](/en/etl-vs-elt/) explains why transformation can follow collection.
 
-Write down the reporting currency too. Keep currencies separate unless the model explicitly converts them using dated rates. A column called `total` with no currency or conversion rule is not a sufficient reporting contract.
+Repeated rules can be shared across models, reducing the chance that reports disagree because someone copied an old calculation. The trade-off is that changing a shared rule can affect several reports, so it needs review.
 
-## How should you organise Xero dbt models?
+## Which business questions need different definitions?
 
-Use staging for source-specific interpretation, intermediate models for reusable business calculations and marts for the rows reports consume. The names below illustrate a project you could author; Undercroft does not create these models automatically.
+Profitability, receivables and cash are related, but they describe different events. Treating them as variations of the same total hides decisions that readers need to understand.
 
-![dbt lineage diagram showing stg_invoices in staging, int_receivables in intermediate and fct_receivables in the mart](../../../assets/posts/xero-reporting/flow.png)
+| Business question    | Definition to agree                                    | Common source of confusion                                         |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------------------------ |
+| How did we perform?  | Period, account groupings and included adjustments     | A management view may omit parts of the ledger                     |
+| What remains unpaid? | Reporting date, outstanding balance and overdue groups | Today's balance does not establish a past balance                  |
+| What cash moved?     | Payment timing and which accounts are included         | Related payment records or internal transfers can be counted twice |
 
-A staging model such as `stg_invoices` selects the source and entity, preserves record identifiers and exposes the fields you have actually inspected. Use dbt's `source()` for raw records and `ref()` for upstream models. Undercroft's model checker refuses direct table references in models because they hide dependencies from dbt.
+Undercroft's Xero connector includes invoices, payments, credits, bank activity and manual adjustments. It does not collect the complete system journal, so those inputs alone do not establish a complete ledger-derived financial statement. Check coverage before presenting a management report as one.
 
-An intermediate model such as `int_receivables` could apply agreed balance and ageing rules. A mart such as `fct_receivables` could then expose one row per invoice for the dashboard. Keep invoice-level balances separate from line-level analysis until the join's grain is clear.
+Availability also depends on the access granted and the data actually collected. A successful sync does not prove that every input a particular report needs has arrived. The [Xero integration overview](/en/xero-integration-postgres/) explains the collection side of that boundary.
 
-The following SQL is illustrative. It assumes you have authored `int_receivables` with the named columns, one row per invoice, and a fixed-precision `amount_due`. It is not a shipped model or a query to run against unknown payload fields.
+## Why should missing money stay visibly missing?
 
-```sql
-select
-    currency,
-    ageing_bucket,
-    count(*) as invoice_count,
-    count(*) filter (where amount_due is null) as missing_amounts,
-    sum(amount_due) as known_amount_due
-from {{ ref('int_receivables') }}
-group by currency, ageing_bucket
-```
+A genuine zero means the amount is known. A missing amount means the evidence is unavailable or unreadable. Turning the latter into zero makes uncertainty disappear while leaving a reassuringly tidy total.
 
-The name `known_amount_due` matters: SQL sums the readable values even when some rows are missing amounts. Showing the missing count alongside that subtotal avoids presenting a partial answer as a complete balance. Decide separately whether an incomplete group should display any total at all.
+Undercroft uses decimal arithmetic for money and preserves unreadable amounts as missing. Your custom models must carry that distinction into the report. If only some amounts are available, label their sum as partial and show that records are missing, or withhold the total until the gap is resolved.
 
-## How do exact decimals and missing amounts change the report?
+Currencies also need explicit treatment. Keep them separate unless the report defines a conversion using dated exchange rates. Accurate arithmetic cannot decide which rate or reporting period the business intended.
 
-Undercroft's money contract uses strings at boundaries, `big.js` for application arithmetic and `numeric(18,4)` in Postgres. Monetary values must not pass through JavaScript `Number()` or `parseFloat()`. Fixed precision preserves decimal arithmetic within the configured scale; it does not recover precision already lost upstream.
+Reconciliation needs room for “not yet verified” as well as agreement and disagreement. A comparison without enough evidence has not passed simply because no difference was found.
 
-The dbt `parse_amount` macro returns a fixed-precision value or `NULL` when it cannot read the amount. Use the macro supplied by `models.reference` rather than inventing a cast. An unreadable amount must not become zero through `coalesce(amount, 0)` or a similar fallback.
+## Can a dashboard prove the figures are complete?
 
-There are three different outcomes to communicate: a genuine zero, an unavailable value and a partial aggregate. `formatMoney` renders a missing amount as an em dash, and truncates the display to two decimal places while keeping the stored amount. A custom report still needs to preserve that meaning in its SQL and presentation.
+A dashboard can make coverage visible, but it cannot establish completeness by displaying a result. Put unresolved records and missing information beside the financial measures. Review the result against a trusted finance reference and investigate differences before relying on it.
 
-Comparisons also distinguish `ok`, `mismatch` and `unverified`. Missing evidence or different currencies cannot establish agreement. During reconciliation, “nothing failed” is not enough if one side of the comparison was never available.
+Undercroft supports model checks for repeated records and missing required values, but a built result can still have failed checks. Those checks help identify data problems; they do not certify the business definition.
 
-## How do you define a useful P&L and receivables ageing view?
+Historical reporting needs particular care. Today's outstanding balance cannot by itself tell you what was owed at an earlier month-end. Retained raw data can support reconstruction only when it contains the relevant evidence and your models account for the changes. A data lake does not automatically provide historical receivables snapshots.
 
-For a management P&L, agree the period, account-to-report mapping and treatment of each included transaction type before aggregating. Keep unmapped accounts visible for review. Silently dropping them produces a cleaner table at the cost of an unexplained gap in coverage.
+## When is this approach worth the work?
 
-Use source identifiers to retain a route back to the records contributing to a result. Then compare a bounded period and currency with the finance team's reference, investigating differences by category. Decimal arithmetic prevents one class of error; it does not validate account mappings, signs or period selection.
+It fits when standard reports leave recurring business questions unanswered and finance can work with engineers who know SQL and dbt. The benefit is reusable definitions, a route back to source evidence and room to revise the interpretation as the business changes.
 
-For receivables, establish whether the request is for current outstanding amounts or a historical position. Today's invoice balance alone cannot establish what was outstanding at a previous month-end. A historical view needs evidence of the relevant changes and explicit reconstruction logic; keeping raw data does not automatically supply a ready-made ageing snapshot.
+The cost is ownership. Someone must maintain the models, review shared calculations and investigate gaps. A self-hosted deployment also needs operational care. Undercroft's pre-alpha status adds change and uncertainty to that responsibility.
 
-Define buckets against an agreed reporting date, and decide how unknown due dates appear. Leave those invoices in an identifiable missing-date group rather than classifying them as current. Test boundary examples such as due today, one day overdue and the first day of each later bucket.
+If existing reports already answer the question, extending the reporting stack may add little value. If you need finished financial statements immediately or have nobody to maintain custom models, this approach is unlikely to fit.
 
-## How can you build a cash view without counting money twice?
+## How can you get started?
 
-Treat a cash view as its own model. An invoice date, a payment date and a bank transaction date answer different questions. Inspect the actual records before choosing which date controls each cash movement.
-
-The connector includes bank transactions and transfers as well as payments, giving your model more inputs than invoices alone. You must still define how related records match and which representation contributes to a total. Model internal transfers separately from external receipts and payments so the chosen cash measure has a clear account scope.
-
-For an older connection, inspect which bank and journal scopes were granted. The repository describes missing grants explicitly; reconnecting can add access, but a successful run by itself does not prove that every input your cash view requires was collected.
-
-## How do you check models and publish a Xero dashboard?
-
-The model-builder skill starts with a brief, then reads the lake rather than guessing payload keys. Its workflow provides a useful sequence for Xero custom reports:
-
-1. Agree the purpose, grain, sources, columns, filters and model name.
-2. Inspect `lake.summary`, sample `lake.records` and review existing models and macros.
-3. Draft the SQL, run `models.check`, resolve errors and review warnings and unverified items.
-4. Approve the exact model before saving, then approve its build separately.
-5. Inspect the build result, preview and failing rows before relying on the output.
-
-Column tests support `unique` and `not_null`. A test failure does not stop the table from being built; failing rows are available through `dq.failures`. These checks help verify grain and required fields, but do not establish financial completeness.
-
-Tenant-owned dbt macros let repeated expressions live in one place. Look for an existing macro before copying a classification or normalisation expression. Admins can author macros through CLI or MCP; the web model reference panel displays them read-only. A broken macro can fail the tenant's whole build because dbt parses the project, so check and review changes carefully.
-
-Once models are built, Reports can save questions using SQL or a visual definition and arrange them on a dashboard with shared filters. Questions run as the tenant's read-only login over its analytics schema. For a Xero BI view, place coverage indicators beside financial charts so readers can see when an apparently precise number is incomplete.
+Choose a recurring question and agree what would make its answer trustworthy. Explore [Undercroft](https://undercroft.lowbit.link) and review the [project repository](https://github.com/muitneliss/undercroft) to assess its maturity and operating model. Use a small reporting scope to evaluate whether the available evidence and your team's capacity match the ambition.
 
 ## FAQ
 
-### Does Undercroft include ready-made Xero custom reports?
+### Does Undercroft include ready-made Xero reports?
 
-No. It ships a connector and a modelling workflow, while your team authors the business schema and report definitions for its own P&L, receivables and cash views.
+No, your team defines the models and reporting rules. The platform provides data collection, modelling and BI, while finance decides what the results should mean.
 
-### Can I use SQL for a Xero dashboard?
+### Can I build a custom Xero dashboard?
 
-Yes: built dbt models can feed saved SQL questions in Reports, which dashboards arrange into tiles. Model SQL uses `source()` and `ref()`; report SQL reads the built analytics tables.
+Yes, the built-in Reports area can arrange saved questions over your built models into dashboards. The useful starting point is a shared definition of the measure and its coverage.
 
-### Will missing Xero amounts appear as zero?
+### Can I report historical Xero receivables?
 
-The platform's amount parser returns `NULL` for unreadable amounts, and its money formatter shows missing values as an em dash. Your custom SQL must preserve that distinction and disclose incomplete aggregates.
+Only if the collected evidence supports the position at the requested date and your models reconstruct it. Current balances and a raw data lake alone do not guarantee that history.
 
-### Can an AI agent build a Xero dbt model?
+### Can an AI agent help build Xero reports?
 
-The published model-builder skill guides an agent through the brief, data inspection and model checks over MCP or CLI. Saving and building require the person's approval and the relevant permissions; a draft is not a successful build.
+Undercroft's model-builder workflow guides an AI agent through understanding the request, inspecting data and checking a proposed model. Saving and building require approval and appropriate permissions; human review still determines whether the result answers the business question.

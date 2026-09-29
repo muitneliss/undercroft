@@ -1,6 +1,6 @@
 ---
-title: "Undercroft: data platform mã nguồn mở cho self-hosted ELT"
-description: "Tìm hiểu Undercroft, data platform mã nguồn mở theo giấy phép MIT: ingestion, raw data lake, dbt và BI trong một stack; so sánh với Fivetran và Airbyte."
+title: "Data platform mã nguồn mở: khi nào nên chọn Undercroft?"
+description: "Chọn data platform mã nguồn mở theo nhu cầu thực tế: hiểu cách Undercroft giữ raw data, xây model và report, cùng trách nhiệm khi self-hosted."
 translationKey: "open-source-data-platform"
 pubDate: "2026-09-29"
 tags: ["Open Source", "ELT", "Data Platform", "BI"]
@@ -13,121 +13,77 @@ keywords:
     "open source ELT",
   ]
 hero: "../../../assets/posts/open-source-data-platform/hero.png"
-heroAlt: "Sơ đồ data platform mã nguồn mở trên server của bạn: API đi qua connector, raw data lake, Postgres, dbt và report"
+heroAlt: "Sơ đồ data platform mã nguồn mở nối API qua connector, raw data lake, Postgres, dbt và report trên server của bạn"
 ---
 
-Một data platform mã nguồn mở cần giúp cả kỹ sư lẫn đội finance/ops trả lời được: dữ liệu lấy từ đâu, được giữ ở đâu và đi qua những phép tính nào trước khi lên dashboard. Undercroft gom ingestion, raw data lake, Postgres, dbt và BI vào một stack self-hosted, với code được phát hành theo giấy phép MIT.
+Một data platform mã nguồn mở có thể giúp doanh nghiệp chủ động hơn với dữ liệu, nhưng giá trị thực tế phải thể hiện ở công việc hằng ngày. Khi mỗi phòng ban giữ một bản xuất riêng, cuộc họp dễ biến thành buổi đối chiếu số liệu. Người quản lý cần biết con số đến từ đâu; kỹ sư cần sửa cách tính mà không phải thu thập lại mọi thứ.
 
-Đây là một hướng để cân nhắc khi tìm giải pháp thay thế Fivetran hoặc thay thế Airbyte. Tuy nhiên, [repository Undercroft](https://github.com/muitneliss/undercroft) ghi rõ trạng thái **pre-alpha**, chưa có gì ổn định. Nên đánh giá bằng nguồn dữ liệu và report cụ thể trước khi giao một quy trình quan trọng cho hệ thống.
+Undercroft nối việc lấy dữ liệu, giữ raw data, xây model và đọc report trong cùng một sản phẩm self-hosted. Tuy nhiên, dự án đang ở giai đoạn **pre-alpha**, chưa ổn định. Nên bắt đầu bằng một nhu cầu có phạm vi rõ ràng trước khi cân nhắc cho công việc quan trọng.
 
-## Data platform mã nguồn mở Undercroft giải quyết phần việc nào?
+## Data platform mã nguồn mở cho doanh nghiệp quyền chủ động gì?
 
-Undercroft nối cả chuỗi từ việc lấy dữ liệu đến lúc đọc report. Connector đọc nguồn, raw data lake giữ đầu vào, Postgres phục vụ truy vấn, dbt xây các bảng phân tích và khu vực Reports hiển thị câu hỏi đã lưu cùng dashboard.
+Open-source cho phép đội kỹ thuật xem và điều chỉnh phần mềm; Undercroft dùng giấy phép MIT. Self-hosted nghĩa là doanh nghiệp vận hành hệ thống và kiểm soát nơi lưu dữ liệu. Quyền chủ động ấy đi cùng trách nhiệm duy trì hoạt động.
 
-Repository có connector YAML cho Xero và HubSpot. Gmail và Google Drive dùng collector riêng vì lấy nội dung file cần xử lý bytes. Dữ liệu từ script cũng có thể đi qua lake write API và dùng chung đường ghi create-only.
+Điều cần đánh giá là khả năng tách dữ liệu đã nhận khỏi cách tính đang dùng. Khi thay đổi chỉ tiêu, đội ngũ có còn căn cứ để kiểm tra kết quả không? Ai chịu trách nhiệm giải thích số liệu, và ai xử lý khi sync thất bại?
 
-Phần còn lại thuộc về đội sử dụng: định nghĩa chỉ tiêu và viết model. Undercroft không có sẵn business schema để quyết định thay bạn thế nào là khách hàng hay doanh thu.
+## ELT giúp thay đổi cách làm report như thế nào?
 
-![Sơ đồ so sánh các công cụ ingestion, storage, dbt và BI riêng biệt với connector, raw data lake, Postgres, dbt và report trong một Undercroft stack](../../../assets/posts/open-source-data-platform/flow.png)
+ELT là lấy dữ liệu, lưu lại, rồi xử lý cho mục đích phân tích. Có thể hình dung như giữ tài liệu gốc bên cạnh bản tổng hợp: cách tổng hợp thay đổi thì vẫn còn đầu vào để đối chiếu.
 
-Hình minh hoạ hai cách tổ chức stack, không khẳng định các công cụ riêng lẻ thiếu khả năng tích hợp.
+Trong Undercroft, connector lấy dữ liệu từ nguồn, raw data lake giữ những gì đã nhận, còn Postgres phục vụ phân tích. Đội kỹ thuật viết dbt model để áp dụng quy tắc nghiệp vụ. BI có sẵn trong sản phẩm hiển thị các câu hỏi đã lưu và dashboard dựa trên model đó.
 
-## Raw data được giữ ở đâu trước khi lên dashboard?
+![Sơ đồ so sánh việc ghép công cụ thu thập, lưu trữ, dbt và BI riêng với luồng dữ liệu trong Undercroft](../../../assets/posts/open-source-data-platform/flow.png)
 
-Theo [tài liệu kiến trúc](https://github.com/muitneliss/undercroft/blob/main/docs/architecture.md), worker ghi dữ liệu vào raw data lake trên S3 hoặc MinIO trước. Stack server trong repository dùng MinIO. Với record, Postgres giữ bản projection trong bảng chung `raw.records`; document có phần lưu danh mục và extracted text riêng.
+Cách tổ chức này giảm phần việc ghép các công cụ với nhau. Doanh nghiệp vẫn phải thống nhất ý nghĩa của từng chỉ tiêu. Bài [ETL và ELT khác nhau ở đâu](/etl-va-elt-la-gi/) giải thích thêm vì sao thứ tự lưu và xử lý ảnh hưởng đến khả năng sửa cách tính.
 
-Đường ghi lake là create-only và content-addressed. Nội dung giống nhau được deduplicate; nội dung thay đổi tạo version manifest mới thay vì ghi đè bản trước. Khi sửa SQL, đội kỹ thuật có thể dùng raw data còn giữ để xây lại các bảng phân tích.
+## Vì sao cần giữ raw data khi đã có dashboard?
 
-Điều này không khôi phục được dữ liệu chưa từng lấy từ nguồn. Nó cũng không thay thế kế hoạch bảo vệ storage: runbook ghi rõ raw data lake chưa nằm trong backup set. Người vận hành vẫn phải tính đến độ bền, replication và phục hồi. Bài [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích kỹ hơn ranh giới này.
+Một dashboard có thể đúng theo quy tắc hôm nay nhưng chưa trả lời được câu hỏi tháng sau. Đội vận hành muốn đổi cách phân nhóm; người phụ trách tài chính muốn dùng một mốc ngày khác. Nếu chỉ giữ kết quả cuối, việc kiểm tra lại sẽ khó hơn.
 
-## Self-hosted ELT đi từ nguồn đến report như thế nào?
+Undercroft giữ nội dung đã thu thập mà không ghi đè nội dung trước đó. Nội dung giống nhau chỉ được lưu một lần; nội dung thay đổi được giữ thành phiên bản mới. Khi cần sửa model, đội kỹ thuật có thể xây lại kết quả từ raw data còn lưu.
 
-Luồng chính gồm năm bước:
+Điều này không khôi phục được dữ liệu chưa từng lấy về. Raw data lake bất biến cũng không tự bảo vệ trước sự cố mất ổ đĩa. Bản triển khai được tài liệu hoá chưa đưa raw data lake vào phạm vi sao lưu, nên doanh nghiệp cần phương án bảo vệ riêng. Xem thêm về [raw data lake bất biến](/raw-data-lake-bat-bien/).
 
-1. Connector đọc API bằng quyền đã được cấp.
-2. Worker ghi record hoặc document vào raw data lake.
-3. Dữ liệu được đưa vào các projection trong Postgres.
-4. dbt chạy model của tenant để tạo bảng phân tích.
-5. Reports truy vấn bằng BI login chỉ đọc của tenant đó.
+## Có BI sẵn thì còn cần đội kỹ thuật làm gì?
 
-Với đội finance/ops, lợi ích là tách được đầu vào khỏi cách tính. Khi đổi quy tắc phân nhóm, kỹ sư sửa model trên dữ liệu đã giữ. Cả hai đội vẫn phải thống nhất ngày nào dùng cho kỳ report, trạng thái nào được tính và xử lý giá trị thiếu ra sao.
+Undercroft không có sẵn schema nghiệp vụ hay định nghĩa chung cho mọi doanh nghiệp. Người sử dụng cần thống nhất trạng thái nào được tính, ngày nào quyết định kỳ report và cách thể hiện dữ liệu thiếu. Kỹ sư đưa những quyết định đó vào model.
 
-Ví dụ, một số tiền không đọc được phải khác số tiền bằng không. Nguyên tắc của Undercroft là giữ trạng thái thiếu thay vì tự đoán. Raw data là căn cứ để kiểm tra, không tự trở thành kết luận nghiệp vụ.
+Một khoản tiền chưa đọc được phải khác khoản tiền bằng không. Nguyên tắc của Undercroft là để phần thiếu hiện rõ thay vì đoán. Report chỉ đọc kết quả đã qua model, với quyền chỉ đọc; dữ liệu giữa các tổ chức được phân tách bằng quyền truy cập.
 
-## Undercroft khác Fivetran và Airbyte ở những điểm nào?
+Bài [xây report Xero với SQL và dbt](/bao-cao-xero-sql-dbt/) minh hoạ phần việc này. Kết nối thành công chưa đủ để có một chỉ tiêu đáng tin.
 
-Trong bài toán ELT, Fivetran và Airbyte tập trung vào data movement giữa nguồn và destination. Undercroft cung cấp thêm raw data lake, môi trường dbt trên Postgres và BI trong cùng sản phẩm. Bảng dưới so sánh phạm vi đó, không bao quát mọi sản phẩm khác của hai hãng.
+## Có nên dùng Undercroft thay thế Fivetran hoặc Airbyte?
 
-| Tiêu chí        | Undercroft                                                         | Fivetran                                          | Airbyte                                                                                 |
-| --------------- | ------------------------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Triển khai      | Self-hosted                                                        | SaaS; có hybrid processing                        | Self-managed và managed                                                                 |
-| Giấy phép       | MIT cho repository Undercroft                                      | Dịch vụ thương mại                                | Core và connector dùng ELv2; Protocol dùng MIT; sản phẩm thương mại có điều khoản riêng |
-| Nơi giữ dữ liệu | Raw data lake trên S3/MinIO đã cấu hình; projection trong Postgres | Destination do bạn chọn; nơi xử lý tuỳ deployment | Destination do bạn chọn; nơi chạy tuỳ deployment                                        |
-| Phạm vi so sánh | Ingestion, raw data lake, dbt, BI                                  | Data movement và khả năng transformation          | Replication từ nguồn đến destination                                                    |
-| Connector       | Xero, HubSpot; collector Gmail, Drive                              | Hàng trăm connector                               | Hàng trăm connector                                                                     |
+Hãy bắt đầu từ phần việc còn thiếu. Nếu đã có data warehouse và BI phù hợp, doanh nghiệp có thể chỉ cần công cụ đưa dữ liệu vào đó. Nếu muốn quản lý cả raw data, model và report cùng nhau, phạm vi của Undercroft đáng để đánh giá.
 
-Không nên gọi Fivetran là dịch vụ chỉ chạy trong cloud của hãng: [tài liệu deployment](https://fivetran.com/docs/deployment-models) có cả hybrid processing trong mạng của khách hàng. Fivetran cũng có [dbt và transformation orchestration](https://fivetran.com/docs/transformations). Khác biệt ở cách ghép và vận hành toàn bộ stack.
+Các nguồn hiện có gồm Xero, HubSpot, Gmail và Google Drive. Vẫn cần kiểm tra đúng loại dữ liệu mà công việc yêu cầu. Có REST API không đồng nghĩa nguồn đó đã được hỗ trợ; thêm connector còn đòi hỏi hiểu quyền truy cập và cách nguồn biểu diễn thay đổi.
 
-Airbyte có [lựa chọn self-hosted và managed](https://airbyte.com/why-open-source). [Danh mục giấy phép](https://github.com/airbytehq/airbyte/blob/master/docs/community/licenses/README.md) phân biệt ELv2, MIT và sản phẩm thương mại; không nên hiểu toàn bộ Airbyte có cùng giấy phép MIT như Undercroft.
+Khi so sánh với Fivetran hoặc Airbyte, hãy đặt độ phù hợp của nguồn, công sức vận hành và khả năng dùng với hệ thống hiện có lên trước danh sách tính năng. Đó mới là những yếu tố quyết định lượng việc đội ngũ phải gánh.
 
-## Khi nào nên chọn Fivetran hoặc Airbyte?
+## Khi nào Undercroft chưa phù hợp?
 
-Hai sản phẩm có lợi thế rõ về độ rộng connector. Fivetran mô tả khả năng kết nối [hàng trăm nguồn](https://www.fivetran.com/data-movement/hybrid-deployment); Airbyte cũng có catalogue hàng trăm connector. Nếu nguồn bắt buộc đã được hỗ trợ, đội kỹ thuật có thể tránh được nhiều công việc tự viết và bảo trì connector.
+Undercroft chưa phù hợp nếu cần một hệ thống ổn định để giao ngay quy trình quan trọng. Giai đoạn pre-alpha là hạn chế thực tế. Sản phẩm cũng khó đáp ứng đội chỉ muốn dashboard dùng ngay mà không có người xây model.
 
-Fivetran phù hợp để cân nhắc khi muốn nhà cung cấp vận hành ingestion. Airbyte đáng xem khi ưu tiên self-managed replication và hệ sinh thái connector rộng. Nếu doanh nghiệp đã có data warehouse, dbt và BI phù hợp, chỉ bổ sung ingestion có thể hợp lý hơn thay cả stack.
+Self-hosted cần người phụ trách quyền truy cập, lỗi sync, nâng cấp và phục hồi. Giấy phép open-source không xoá chi phí hạ tầng hay thời gian kỹ sư. Undercroft hợp hơn với đội coi trọng việc giữ đầu vào, muốn tự định nghĩa phân tích và có khả năng vận hành thử.
 
-Undercroft đáng thử khi nguồn hiện có đáp ứng nhu cầu và đội muốn quản lý raw data, model, report trong cùng hệ thống. Connector còn thiếu vẫn là công việc thật: phải kiểm tra auth, pagination, quyền đọc và cách API biểu diễn thay đổi.
+## Nên bắt đầu đánh giá Undercroft từ đâu?
 
-## Có thể thêm REST API bằng YAML không?
-
-Có, nếu API phù hợp với connector contract. Đoạn dưới lấy từ `specs/connectors/hubspot.yaml`, thể hiện nguồn và cách lấy bearer token từ connection; đây chỉ là trích đoạn, chưa phải connector hoàn chỉnh:
-
-```yaml
-apiVersion: "undercroft.dev/v1"
-kind: "Connector"
-id: "hubspot"
-displayName: "HubSpot CRM"
-baseUrl: "https://api.hubapi.com"
-auth:
-  kind: "bearer"
-  token: { from: "connection" }
-  grantRefusal: "hubspot-missing-scopes"
-```
-
-Các phần khác khai báo entity, pagination và quy tắc đọc. Bảng raw chung giúp thêm nguồn REST mà không cần migration tạo business schema. Để nguồn xuất hiện trong sản phẩm, vẫn cần đóng gói spec, bổ sung nguồn được hỗ trợ và phát hành phiên bản.
-
-Bài [data integration với REST API và YAML](/data-integration-la-gi-rest-api/) giải thích chi tiết. YAML giảm phần code lặp lại, không đồng nghĩa mọi API đều được hỗ trợ ngay.
-
-## dbt và BI phân chia quyền giữa các tenant ra sao?
-
-Mỗi tenant có dbt login và schema phân tích riêng. Row-level security giới hạn việc đọc raw data theo login. Reports dùng BI login chỉ đọc, truy cập schema phân tích của tenant; BI không được đọc trực tiếp schema `raw`. Thiết kế này được ghi trong [ADR 0018](https://github.com/muitneliss/undercroft/blob/main/docs/adr/0018-per-tenant-roles-and-row-level-security.md).
-
-Reports là BI do Undercroft cung cấp trong control plane, không còn Metabase trong stack. Member và admin tạo câu hỏi đã lưu, dashboard; viewer đọc nội dung được tạo cho họ.
-
-Kỹ sư vẫn cần viết model và cùng người sử dụng kiểm tra kết quả. Hướng dẫn [report Xero bằng SQL và dbt](/bao-cao-xero-sql-dbt/) minh hoạ phần việc từ payload đến bảng phân tích. Có BI trong stack giúp nối luồng sử dụng, không có nghĩa sẵn mọi chỉ tiêu finance/ops.
-
-## Đội kỹ thuật phải vận hành những gì khi self-hosted?
-
-Triển khai được tài liệu hoá là một Docker Compose stack trên Dokploy, gồm nhiều service. Control plane là bề mặt public; worker, Postgres, MinIO và scheduler trao đổi trong mạng nội bộ. Một stack vẫn cần người theo dõi tài nguyên và xử lý lỗi.
-
-Dokploy lấy compose file từ `main`, còn application image đi theo release. Việc kiểm tra deployment đối chiếu image digest đang chạy. Rollback image không tự rollback compose file, nên phải đọc [deployment runbook](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/deployment.md) trước khi nâng cấp hoặc quay lại phiên bản cũ.
-
-Giấy phép MIT không xoá chi phí server, storage hay thời gian vận hành. Một thử nghiệm hữu ích là lấy một nguồn, dựng một model và đối chiếu một report đã thống nhất; sau đó kiểm tra lỗi sync và cách phục hồi. Kết quả ấy có giá trị hơn số lượng tính năng trên bảng so sánh.
+Khám phá [Undercroft](https://undercroft.lowbit.link) và [repository](https://github.com/muitneliss/undercroft), rồi chọn một nguồn cùng một report đã thống nhất cách tính. Đánh giá khả năng giải thích kết quả và phục hồi sau lỗi sync. Đọc [hướng dẫn triển khai](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/deployment.md) để cân nhắc công sức vận hành trước khi mở rộng.
 
 ## Câu hỏi thường gặp
 
-### Undercroft có thể thay thế Fivetran không?
+### Data platform mã nguồn mở có miễn phí không?
 
-Có thể cân nhắc nếu các nguồn được hỗ trợ đáp ứng nhu cầu và đội muốn self-hosted cả ingestion, raw data lake, dbt, BI. Undercroft hiện là pre-alpha và có ít connector hơn nhiều.
+Undercroft phát hành code theo giấy phép MIT. Doanh nghiệp vẫn cần chi phí lưu trữ, hạ tầng và người xây model, vận hành hệ thống.
 
-### Khi nào nên dùng Undercroft để thay thế Airbyte?
+### Undercroft có thay thế Airbyte hoặc Fivetran được không?
 
-Khi mục tiêu là quản lý cả model và report trong cùng stack với ingestion. Nếu cần nhiều connector để đưa dữ liệu vào destination đang có, Airbyte vẫn đáng ưu tiên đánh giá.
+Có thể cân nhắc nếu nguồn được hỗ trợ đáp ứng nhu cầu và bạn muốn cả model lẫn report trong cùng sản phẩm. Cần đánh giá riêng mức độ phù hợp vì Undercroft vẫn là pre-alpha.
 
-### Undercroft có sẵn business model không?
+### Undercroft có dashboard sẵn không?
 
-Không có business schema đi kèm sản phẩm. Đội sử dụng viết dbt model để định nghĩa các bảng và phép tính phù hợp.
+Sản phẩm có BI để tạo câu hỏi đã lưu và dashboard. Đội sử dụng vẫn phải xây model và thống nhất chỉ tiêu, không có sẵn mọi report nghiệp vụ.
 
-### Self-hosted có nghĩa dữ liệu không bao giờ ra ngoài server?
+### Self-hosted có chạy hoàn toàn offline không?
 
-Không: connector vẫn gọi API bên ngoài, và các dịch vụ ngoài được cấu hình có thể tạo thêm request. Self-hosted cho bạn quyền vận hành stack và storage, không phải cam kết hệ thống chạy offline.
+Không, connector vẫn cần kết nối tới dịch vụ nguồn bên ngoài. Self-hosted cho bạn quyền vận hành hệ thống và nơi lưu dữ liệu, không phải cam kết mọi hoạt động đều offline.
