@@ -49,6 +49,15 @@ export const procedureSentences: SentenceTable = {
   "lake.query": "Run one SELECT over the raw lake. Admins.",
   "lake.search": "Full-text search over the raw lake. Admins.",
   "lake.querySchema": "The tables and columns lake query can read. Admins.",
+  "documentKinds.list":
+    "The customer's catalogue of document kinds, what is published, and how many documents a publish would classify.",
+  "documentKinds.add":
+    "Add a kind to the catalogue's draft; from the generic catalogue, or your own with a description. Admins.",
+  "documentKinds.update": "Rewrite a kind's description in the catalogue's draft. Admins.",
+  "documentKinds.remove":
+    "Remove a kind from the catalogue's draft; other cannot be removed. Admins.",
+  "documentKinds.publish":
+    "Publish the catalogue's draft, so every document is classified against it again. Admins.",
   "models.list": "The customer's dbt models.",
   "models.get": "One dbt model and its SQL.",
   "models.save": "Store a dbt model; runs nothing. Admins.",

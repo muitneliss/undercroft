@@ -44,6 +44,7 @@ export const vi = {
     keys: "Khoá nạp dữ liệu.",
     lake: "Hồ dữ liệu thô.",
     models: "Các mô hình dbt.",
+    documentKinds: "Catalogue loại tài liệu của khách hàng.",
     people: "Người có quyền truy cập và lời mời.",
     runs: "Các lần chạy.",
     session: "Phiên hiện tại.",

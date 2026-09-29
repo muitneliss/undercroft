@@ -111,3 +111,15 @@ export {
   tenantRolesFor,
 } from "./tenantRoles.ts";
 export { tenantExists } from "./tenants.ts";
+export {
+  type CatalogueKind,
+  countReadableDocuments,
+  deleteKind,
+  type DocumentKindOrigin,
+  insertKinds,
+  insertVersion,
+  latestVersion,
+  listKinds,
+  type PublishedVersion,
+  updateKindDescription,
+} from "./documentKinds.ts";

@@ -49,6 +49,7 @@ const PLACE = {
   runs: "contents",
   lake: "contents",
   models: "contents",
+  documentKinds: "contents",
   dq: "contents",
   bi: "contents",
   biQuestions: "contents",

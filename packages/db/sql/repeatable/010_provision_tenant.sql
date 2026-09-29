@@ -92,7 +92,10 @@ BEGIN
     -- whole of adding a grant; see this file's header for why it used to take three edits
     -- and still miss a database.
     EXECUTE format('GRANT USAGE ON SCHEMA raw TO %I', v_dbt);
-    EXECUTE format('GRANT SELECT ON raw.records, raw.documents, raw.document_text TO %I', v_dbt);
+    EXECUTE format(
+        'GRANT SELECT ON raw.records, raw.documents, raw.document_text, raw.document_kind,
+             raw.document_kind_definition, raw.document_kinds TO %I',
+        v_dbt);
     EXECUTE format('GRANT EXECUTE ON FUNCTION raw.tenant_of(name) TO %I', v_dbt);
     EXECUTE format(
         'GRANT EXECUTE ON FUNCTION raw.search_cap(), raw.fold(text), raw.search_tsv(text),

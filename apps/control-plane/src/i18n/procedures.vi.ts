@@ -62,6 +62,14 @@ export const procedureSentences: SentenceTable = {
   "lake.query": "Chạy một câu SELECT trên hồ dữ liệu thô. Quản trị.",
   "lake.search": "Tìm kiếm toàn văn trên hồ dữ liệu thô. Quản trị.",
   "lake.querySchema": "Các bảng và cột mà lake query đọc được. Quản trị.",
+  "documentKinds.list":
+    "Catalogue loại tài liệu của khách hàng, phiên bản đã publish, và số tài liệu một lần publish sẽ phân loại.",
+  "documentKinds.add":
+    "Thêm một loại vào bản nháp catalogue; từ catalogue chung, hoặc loại riêng kèm mô tả. Quản trị.",
+  "documentKinds.update": "Sửa mô tả của một loại trong bản nháp catalogue. Quản trị.",
+  "documentKinds.remove": "Xoá một loại khỏi bản nháp catalogue; không xoá được other. Quản trị.",
+  "documentKinds.publish":
+    "Publish bản nháp catalogue, để mọi tài liệu được phân loại lại theo nó. Quản trị.",
   "models.list": "Các mô hình dbt của khách hàng.",
   "models.get": "Một mô hình dbt và SQL của nó.",
   "models.save": "Lưu một mô hình dbt; không chạy gì. Quản trị.",

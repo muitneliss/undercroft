@@ -18,6 +18,8 @@
  * the value that is stored; it never changes meaning once a result carries it.
  */
 
+import { z } from "zod";
+
 export interface DocumentKind {
   /** The stored value: lowercase, underscores. */
   readonly kind: string;
@@ -171,3 +173,22 @@ export const DOCUMENT_KINDS: readonly DocumentKind[] = [
   },
   { kind: "other", description: "None of the above." },
 ];
+
+/**
+ * The classifier model a definition is published for. Pinned rather than `jev-latest`, which
+ * moves when the provider ships: a result must say which model gave it, and a new model is a
+ * new definition -- a deliberate re-classification with its cost stated, not drift.
+ */
+export const DOCUMENT_KIND_MODEL = "jev-1.13.0";
+
+/** The kind every catalogue has and no admin may remove: without it a document is forced. */
+export const OTHER_KIND = "other";
+
+/** A kind as stored: what a model filters and groups on, so shaped like a dbt identifier. */
+export const DocumentKindName = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]*$/u)
+  .max(63);
+
+/** What the classifier is told a kind means. */
+export const DocumentKindDescription = z.string().trim().min(1).max(500);

@@ -86,6 +86,14 @@ export const en = {
     tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",
     tenantRoleCollision:
       "The tenant ID {{tenantId}} is too close to another customer's (it differs only in case or punctuation). Choose one that differs in more than that.",
+    documentKindExists:
+      "This catalogue already has a kind named {{kind}}. Edit its description instead.",
+    documentKindNeedsDescription:
+      "{{kind}} is not in the generic catalogue, so it needs a description: the classifier is told what it means.",
+    documentKindRequired:
+      "{{kind}} cannot be removed. Without it every document would be forced into one of the other kinds.",
+    documentKindsEmpty:
+      "The catalogue has no kind besides other, so publishing it would classify every document as nothing. Add a kind or initialise the catalogue first.",
     modelNameTaken:
       "A model named {{name}} already exists. Open it to edit, or choose another name.",
     buildInProgress:
