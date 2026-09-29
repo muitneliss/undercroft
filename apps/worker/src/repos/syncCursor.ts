@@ -49,8 +49,11 @@ export interface CursorReading {
 
 /** What is held for a stream under the format and request a read is about to use. */
 export interface StoredCursor {
-  /** The watermark, in the source's own rendering. */
-  readonly watermark: string;
+  /**
+   * The watermark, in the source's own rendering, or `null` for a list read whole that held no
+   * stamp: nothing to send, so the next read is whole again (390).
+   */
+  readonly watermark: string | null;
   /** The start of the run that last read the stream whole, or `null` when none is recorded. */
   readonly wholeReadAt: string | null;
 }
@@ -68,7 +71,10 @@ export async function readSyncCursor(
   identity: StreamIdentity,
   reading: CursorReading,
 ): Promise<StoredCursor | null> {
-  const { rows } = await exec.query<{ watermark: string; wholeReadAt: Date | string | null }>(
+  const { rows } = await exec.query<{
+    watermark: string | null;
+    wholeReadAt: Date | string | null;
+  }>(
     `SELECT watermark, whole_read_at AS "wholeReadAt" FROM raw.sync_cursor
       WHERE source = $1 AND tenant_id = $2 AND entity = $3 AND format = $4 AND request_key = $5`,
     [identity.source, identity.tenantId, identity.entity, reading.format, reading.requestKey],
@@ -96,7 +102,7 @@ export async function readSyncCursor(
 export async function writeSyncCursor(
   exec: SqlExecutor,
   identity: StreamIdentity,
-  cursor: CursorReading & { readonly watermark: string },
+  cursor: CursorReading & { readonly watermark: string | null },
   wholeRead: { readonly runId: string; readonly requests: number } | null,
 ): Promise<void> {
   await exec.query(
