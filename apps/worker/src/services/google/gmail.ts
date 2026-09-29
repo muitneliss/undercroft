@@ -1,9 +1,13 @@
 /**
- * Gmail: message headers into `raw.records`, matching attachments into the lake.
+ * Gmail: message headers into `raw.records`; each message's body, and the attachments the
+ * choice allows, into the lake.
  *
- * What is promised on the consent card is what this reads and no more: "message headers and
- * the attachment types you allow, from the mailbox you connect", scoped to chosen labels or
- * deliberately to the whole mailbox. Bodies are never fetched.
+ * What is promised on the consent card is what this reads and no more: "message headers, the
+ * text of each message, and the attachment types you allow, from the mailbox you connect",
+ * scoped to chosen labels or deliberately to the whole mailbox. Until ADR 0080 bodies were never
+ * fetched; now the body lands as a DOCUMENT of its message, never in the record, so it takes the
+ * road text already takes -- the lake, then `raw.document_text` -- and reaches no dashboard
+ * except through a model the customer wrote (`pii.md`).
  *
  * FOUR THINGS HERE ARE EASY TO GET WRONG AND EXPENSIVE TO GET WRONG.
  *
@@ -41,25 +45,24 @@
  * the ceiling (`planReads` in `gmailAttachments.ts`), and then only those parts are offered.
  * ADR 0076.
  *
- * Headers are extracted rather than stored whole, and that is now the ONLY thing keeping a
- * body out of the lake: `format=full` returns bodies and every header, where `format=metadata`
- * returned neither. Nothing here reads `body.data` or `snippet`, `headerMap` keeps the six
- * headers the consent names, and `messageRecord` builds its payload from extracted fields
- * rather than the response -- so what is fetched is wider than before while what is STORED is
- * byte-for-byte what it was. Both halves are pinned by tests; neither is safe to relax.
+ * Headers are extracted rather than stored whole, and that is what keeps the body and the rest of
+ * the headers OUT OF THE RECORD: `format=full` returns bodies and every header. `headerMap` keeps
+ * the six headers the consent names and `messageRecord` builds its payload from extracted fields
+ * rather than the response, so `raw.records` -- which dbt reads directly -- holds what it always
+ * held. The body goes only where `bodyDocument` puts it. `snippet` is read nowhere: it is a
+ * second, truncated copy of the body with no part of its own to be named by.
  */
 
-import { type GmailScope, landedType } from "@undercroft/contracts";
-import { canonicalJson, decodeBase64Url, getPath, getStringPath } from "@undercroft/core";
+import type { GmailScope } from "@undercroft/contracts";
+import { canonicalJson, getPath, getStringPath } from "@undercroft/core";
 
-import type { DocumentToLand } from "../landDocument.ts";
 import type { RecordToLand } from "../land.ts";
 import type { RunJournal } from "../runJournal.ts";
 import type { GoogleApi } from "./api.ts";
-import { type AttachmentPart, type PlannedRead, planReads, sortParts } from "./gmailAttachments.ts";
+import { type PlannedRead, planReads, sortParts } from "./gmailAttachments.ts";
+import { attachmentDocument, bodyDocument, GMAIL_BASE } from "./gmailDocuments.ts";
 import type { AlreadyHeld, Harvest, HarvestItem } from "./harvest.ts";
 
-const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const ENTITY = "messages";
 /** Page size. Gmail caps at 500; 100 keeps a page's follow-up fetches bounded. */
 const PAGE_SIZE = "100";
@@ -208,11 +211,13 @@ function itemOf(
   const headers = headerMap(message);
   const internalDate = str(message, "internalDate");
   const sorted = sortParts(messageId, message, planned.lookAt, fileTypes);
+  const facts = { messageId, headers, labelIds, sourceUpdatedAt: isoFromEpochMillis(internalDate) };
   return {
     record: messageRecord(messageId, message, labelIds, internalDate),
-    documents: sorted.offered.map((part) =>
-      attachment(api, { messageId, headers, labelIds, internalDate }, part),
-    ),
+    documents: [
+      ...(sorted.body === null ? [] : [bodyDocument(api, facts, sorted.body)]),
+      ...sorted.offered.map((part) => attachmentDocument(api, facts, part)),
+    ],
     leftBehind: sorted.leftBehind,
     ...(planned.landedBefore === null ? {} : { reread: { documentsLanded: planned.landedBefore } }),
   };
@@ -243,53 +248,6 @@ function messageRecord(
       snippetOmitted: true,
       internalDate,
     }),
-  };
-}
-
-/** What a message says about itself that its attachments need. */
-interface MessageFacts {
-  readonly messageId: string;
-  readonly headers: Record<string, string>;
-  readonly labelIds: string[];
-  readonly internalDate: string;
-}
-
-/**
- * One matching attachment as a document to land.
- *
- * The split between `metadata` and `manifest` is the whole point and it is load-bearing:
- * `metadata` reaches `raw.documents`, which dbt and BI can read, so it carries opaque ids,
- * enumerations and counts only. Every name a human wrote goes in `manifest`, which lives in
- * the access-controlled object store. `pii.md`, ADR 0015.
- */
-function attachment(api: GoogleApi, facts: MessageFacts, part: AttachmentPart): DocumentToLand {
-  const { messageId, headers, labelIds, internalDate } = facts;
-  const { attachmentId } = part;
-
-  return {
-    // (messageId, partIndex), never attachmentId. See the module docstring.
-    documentId: part.documentId,
-    // An attachment Gmail could only call `application/octet-stream` is filed under what its
-    // extension says when the catalogue knows it -- a `.oa` as JSON. `fileFormats.ts`.
-    contentType: landedType({ mimeType: part.mimeType, name: part.filename }),
-    declaredBytes: part.size,
-    metadata: { labelIds, partIndex: String(part.index), messageId },
-    manifest: {
-      filename: part.filename,
-      subject: headers.Subject ?? "",
-      from: headers.From ?? "",
-      to: headers.To ?? "",
-      messageId,
-    },
-    sourceUpdatedAt: isoFromEpochMillis(internalDate),
-    fetchBytes: async (): Promise<Uint8Array> => {
-      const body = await api.getJson(
-        `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
-        "attachments",
-        0,
-      );
-      return decodeBase64Url(str(body, "data"));
-    },
   };
 }
 
@@ -358,9 +316,9 @@ async function collectLabelIds(
  * while the suite stayed green because its fixture answered a metadata request with parts.
  *
  * `metadataHeaders` is dropped because it does nothing at this format; `headerMap` keeps the
- * same six headers on the way in instead. What comes back that we do NOT want -- bodies,
- * snippet, the full header set -- is never read and never landed, which is the part that
- * matters and the part `headerMap` and `messageRecord` are pinned on.
+ * same six headers on the way in instead. The body parts it returns become the body document
+ * (ADR 0080); the snippet and the rest of the header set are never read and never landed, and
+ * that half is what `headerMap` and `messageRecord` are pinned on.
  */
 function messageUrl(messageId: string): string {
   const url = new URL(`${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}`);

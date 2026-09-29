@@ -33,6 +33,12 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   that `undercroft_bi` is revoked the whole `raw` schema, so it is reachable only through a
   model the customer wrote — **never grant the BI role anything in `raw`**.
 
+  **A Gmail message's body is a document for this purpose, and nothing more (ADR 0080).** It
+  lands in the lake as `<messageId>:body` and reaches Postgres only as that document's
+  `raw.document_text.text`. **Never put a body, or the `snippet`, in `raw.records`**: its Gmail
+  payload stays the six headers the consent names, because `raw.records` is read by dbt
+  directly and by `undercroft_app`.
+
   Since ADR 0026 an **excerpt** of that text also crosses to the browser, for an admin who
   searched the lake. It reaches them the way the Lake Console's rows already do — read by the
   tenant's own dbt login inside the worker, never by the control plane, which is still denied

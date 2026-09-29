@@ -1238,7 +1238,8 @@ export const en = {
       "Companies, contacts, deals, quotes, line items and products (archived products included) from your CRM, with their standard properties and any further ones you choose; the owners, deactivated ones included; the deal pipelines and their stages; and the links between them: each deal's companies, contacts, quotes and line items, each quote's line items, contacts and companies, and each contact's companies. HubSpot keeps no change time on a link, so its source-side change time is always empty.",
     xeroReads:
       "Contacts, invoices, credit notes, quotes, purchase orders, items and payments from one organisation you choose.",
-    gmailReads: "Message headers and the attachment types you allow, from the mailbox you connect.",
+    gmailReads:
+      "Message headers, message text and the attachment types you allow, from the mailbox you connect.",
     driveReads:
       "The documents inside the folders you select, in the file types you allow. No other folder is read.",
   },

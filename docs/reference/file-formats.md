@@ -56,6 +56,12 @@ those parts.
   what it left behind is not known. On a mailbox that ran before that release, the first run after
   it reads every held message again. At Gmail's pace that is about 3 messages a second.
 - **Each mailbox is its own source**, so changing one mailbox's choice reads nothing in another.
+- **A message's body lands whatever the choice.** It is its own document, `<message id>:body`,
+  stored as UTF-8 from its `text/plain` part, or from its `text/html` part when it has no plain
+  one. Its text then reaches `raw.document_text` like any other document's. On a mailbox that ran
+  before the release that lands bodies, the first run after it reads every held message again
+  once, for its body alone; attachments already landed are not fetched again.
+  [ADR 0080](../adr/0080-a-gmail-harvest-lands-each-messages-body.md) records why.
 
 The run's Journal says how many held messages it read again and how many attachments that added,
 and `runs get` returns the same two numbers as `reread` on the run's `messages` entity. A message
