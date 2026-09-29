@@ -201,6 +201,13 @@ export const vi = {
      * SQL they never wrote.
      */
     searchNotRun: "Không tìm kiếm được. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",
+    /**
+     * The worker answered, and the customer's database login had no connection free in time --
+     * a build holding it, or many queries at once (ADR 0088). Not an outage and not the
+     * reader's fault, so it says neither; it says to ask again shortly.
+     */
+    workerBusy:
+      "Cơ sở dữ liệu của khách hàng này đang bận (đang dựng mô hình hoặc có nhiều truy vấn cùng lúc). Hãy thử lại sau ít giây.",
     paramMissing: "Câu hỏi cần một giá trị cho {{name}}. Hãy đặt bộ lọc đó rồi chạy lại.",
     workerUnavailable:
       "Hiện chưa lấy được danh sách từ Google. Dịch vụ xử lý không phản hồi; hãy thử lại sau ít phút.",

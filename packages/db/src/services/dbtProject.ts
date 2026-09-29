@@ -35,11 +35,18 @@ export const PASSWORD_VAR = "UNDERCROFT_DBT_PASSWORD";
 
 /**
  * How many dbt threads one build gets. A tenant's project is small; the box is shared. Each
- * thread holds a connection as the tenant's dbt login, whose limit of eight
- * (`repeatable/010_provision_tenant.sql`) leaves room for sessions beside a build: raise
- * one, raise the other.
+ * thread holds a connection as the tenant's dbt login, through the pooler (ADR 0088), which
+ * gives one login at most eight (`MAX_USER_CONNECTIONS` in the compose files) under the login's
+ * own limit of ten (`repeatable/010_provision_tenant.sql`). A build takes about five of the
+ * eight and sessions beside it queue for the rest: raise one, raise the others.
  */
 const THREADS = 4;
+/**
+ * dbt's own login wait and retries. The pooler may queue a first login for a few seconds while
+ * it opens a server connection; dbt's defaults (10 s, one retry) would fail the build instead.
+ */
+const CONNECT_TIMEOUT_S = 30;
+const CONNECT_RETRIES = 3;
 /** dbt reports execution time in seconds; the ledger keeps milliseconds. */
 const MS_PER_SECOND = 1000;
 
@@ -281,6 +288,8 @@ function profilesYml(slug: string, database: DatabaseAddress): string {
       password: "{{ env_var('${PASSWORD_VAR}') }}"
       schema: analytics_${slug}
       threads: ${String(THREADS)}
+      connect_timeout: ${String(CONNECT_TIMEOUT_S)}
+      retries: ${String(CONNECT_RETRIES)}
 `;
 }
 

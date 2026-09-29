@@ -142,6 +142,7 @@ flowchart TB
         cp["control-plane :3000<br/>Hono: SPA, /trpc, /mcp,<br/>/api/auth, /api/assistant<br/>60 s alert tick"]
         worker["worker :8081<br/>ingest, extract, dbt,<br/>queries, lake write API,<br/>credential sealing"]
         kestra["kestra :8080<br/>ingest_due every 5 min<br/>extract_due hourly"]
+        pgb["pgbouncer<br/>session pool per tenant login"]
         pg[("postgres 17<br/>app, ops, raw,<br/>analytics_slug, dq_slug")]
         kpg[("kestra-postgres")]
         minio[("MinIO<br/>bucket undercroft-raw")]
@@ -157,7 +158,9 @@ flowchart TB
     cp -->|"bearer service token"| worker
     kestra -->|"bearer service token"| worker
     kestra --> kpg
-    worker -->|"undercroft_worker and<br/>per-tenant logins"| pg
+    worker -->|"undercroft_worker"| pg
+    worker -->|"per-tenant logins, dbt"| pgb
+    pgb -->|"at most 50 backends"| pg
     worker -->|"S3 API"| minio
     migrate -->|"bootstrap superuser"| pg
     flows -->|"PUT flows"| kestra
@@ -166,17 +169,18 @@ flowchart TB
     worker -.->|"OTLP"| otel
 ```
 
-| Service           | Image                                                                                                | Owns                                                                                                                                               | Memory |
-| ----------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `control-plane`   | `deploy/Dockerfile.control-plane`                                                                    | The public surface: the SPA, `/trpc`, `/mcp`, sign-in and OAuth, the assistant, and the alert tick. Holds no sealing key and never reads the lake. | 512m   |
-| `worker`          | `deploy/Dockerfile.worker`, with dbt, poppler and Tesseract                                          | Everything that touches data: ingest, extract, dbt, customer-written SQL, the lake write API, and sealing and unsealing credentials.               | 3g     |
-| `kestra`          | `kestra/kestra`                                                                                      | The clock. Two flows ask the worker what is due and start it. It holds no business logic.                                                          | 2g     |
-| `postgres`        | `postgres:17-alpine`                                                                                 | Control-plane state, the run ledger, the raw projection, and each tenant's models.                                                                 | 1g     |
-| `minio`           | `pgsty/minio` community build ([ADR 0050](adr/0050-the-raw-lake-runs-a-community-build-of-minio.md)) | The raw lake.                                                                                                                                      | 1g     |
-| `kestra-postgres` | `postgres:17-alpine`                                                                                 | Kestra's own repository and queue.                                                                                                                 | 512m   |
-| `db-migrate`      | control-plane image, one-shot                                                                        | Applies `packages/db/sql` as the bootstrap superuser and sets the platform roles' passwords.                                                       | 256m   |
-| `kestra-flows`    | control-plane image, one-shot                                                                        | Pushes `flows/*.yml` into Kestra on every deploy.                                                                                                  | 128m   |
-| `minio-init`      | `pgsty/mc`, one-shot                                                                                 | Creates the `undercroft-raw` bucket and, on the server, denies anonymous access.                                                                   | 128m   |
+| Service           | Image                                                                                                | Owns                                                                                                                                                                                          | Memory |
+| ----------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `control-plane`   | `deploy/Dockerfile.control-plane`                                                                    | The public surface: the SPA, `/trpc`, `/mcp`, sign-in and OAuth, the assistant, and the alert tick. Holds no sealing key and never reads the lake.                                            | 512m   |
+| `worker`          | `deploy/Dockerfile.worker`, with dbt, poppler and Tesseract                                          | Everything that touches data: ingest, extract, dbt, customer-written SQL, the lake write API, and sealing and unsealing credentials.                                                          | 3g     |
+| `kestra`          | `kestra/kestra`                                                                                      | The clock. Two flows ask the worker what is due and start it. It holds no business logic.                                                                                                     | 2g     |
+| `postgres`        | `postgres:17-alpine`                                                                                 | Control-plane state, the run ledger, the raw projection, and each tenant's models.                                                                                                            | 1g     |
+| `pgbouncer`       | `edoburu/pgbouncer`                                                                                  | The queue in front of Postgres for every tenant login: at most 8 backends per login, 50 for all ([ADR 0088](adr/0088-tenant-logins-reach-postgres-through-a-pooler-and-runs-take-a-turn.md)). | 128m   |
+| `minio`           | `pgsty/minio` community build ([ADR 0050](adr/0050-the-raw-lake-runs-a-community-build-of-minio.md)) | The raw lake.                                                                                                                                                                                 | 1g     |
+| `kestra-postgres` | `postgres:17-alpine`                                                                                 | Kestra's own repository and queue.                                                                                                                                                            | 512m   |
+| `db-migrate`      | control-plane image, one-shot                                                                        | Applies `packages/db/sql` as the bootstrap superuser and sets the platform roles' passwords.                                                                                                  | 256m   |
+| `kestra-flows`    | control-plane image, one-shot                                                                        | Pushes `flows/*.yml` into Kestra on every deploy.                                                                                                                                             | 128m   |
+| `minio-init`      | `pgsty/mc`, one-shot                                                                                 | Creates the `undercroft-raw` bucket and, on the server, denies anonymous access.                                                                                                              | 128m   |
 
 Every service declares a memory limit, and `task ci:compose-check` fails the build when one
 does not. Only the control plane is reachable from the internet, through Dokploy's proxy.
@@ -726,6 +730,11 @@ flowchart LR
   is first used, the builds and sessions that overlap it share it, and it changes again once
   none is left; only the worker may call it, and the password is never stored
   ([ADR 0087](adr/0087-a-tenant-login-is-leased-not-rotated-per-session.md)).
+- Tenant logins reach Postgres through PgBouncer, pooled per login so row-level security still
+  sees the tenant's own login. PgBouncer learns a live tenant login's stored secret from
+  `ops.pgbouncer_auth` and nothing about a platform role's; the worker bounds how many runs of
+  each kind it does at once, and a login with no connection free in time is answered as busy
+  ([ADR 0088](adr/0088-tenant-logins-reach-postgres-through-a-pooler-and-runs-take-a-turn.md)).
 - The BI roles are revoked the whole `raw` schema, so the text a customer's documents contain
   reaches a dashboard only through a model that customer wrote
   ([ADR 0005](adr/0005-the-role-and-grant-model.md), `.claude/rules/privileges.md`). The

@@ -8,7 +8,7 @@
 import { TRPCError } from "@trpc/server";
 import type { QueryParams, TableResult } from "@undercroft/contracts";
 import type { Locale } from "@undercroft/core/locale";
-import { messages } from "../i18n/index.ts";
+import { type MessageKey, messages } from "../i18n/index.ts";
 import * as bi from "../services/bi.ts";
 import type { Context } from "./trpc.ts";
 
@@ -29,6 +29,18 @@ export function tokenRefusalKey(
     }
   }
 }
+/**
+ * The refusal for something the worker did not run: "busy, try again shortly" when the
+ * customer's database login had no connection free in time (ADR 0088), else the call site's
+ * own sentence for a worker that did not answer. One place, so every screen says busy alike.
+ */
+export function notRun(locale: Locale, reason: string, sentence: MessageKey): TRPCError {
+  return new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message: messages(locale)(reason === "busy" ? "error.workerBusy" : sentence),
+  });
+}
+
 /**
  * Which refusal a question that was not answered gets. A parameter with no value and SQL
  * Postgres refused are both BAD_REQUEST -- the request was the fault, and the sentence says
@@ -53,10 +65,7 @@ export function answerRefusal(
     case "question-not-found":
       return new TRPCError({ code: "NOT_FOUND" });
     default:
-      return new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: messages(locale)("error.queryNotRun"),
-      });
+      return notRun(locale, outcome.reason, "error.queryNotRun");
   }
 }
 /** A saved question answered through the worker, or the refusal it earns. */

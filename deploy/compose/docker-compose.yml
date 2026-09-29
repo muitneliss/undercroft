@@ -73,6 +73,51 @@ services:
         limits:
           memory: 1g
 
+  # The pooler every tenant login goes through, as on the server (ADR 0088; the server file
+  # says why each setting is what it is). Here it listens on the host too, for a natively run
+  # worker (`task dev:worker`) and the Docker-tier suite (`task ci:itest`).
+  pgbouncer:
+    <<: *restart
+    image: edoburu/pgbouncer:v1.25.2-p0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${UNDERCROFT_PG_DB:-undercroft}
+      DB_USER: undercroft_worker
+      DB_PASSWORD: ${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}
+      AUTH_TYPE: scram-sha-256
+      AUTH_DBNAME: ${UNDERCROFT_PG_DB:-undercroft}
+      AUTH_QUERY: SELECT * FROM ops.pgbouncer_auth($$1)
+      LISTEN_PORT: "5432"
+      POOL_MODE: session
+      SERVER_RESET_QUERY: DISCARD ALL
+      MAX_CLIENT_CONN: "2000"
+      DEFAULT_POOL_SIZE: "8"
+      MAX_USER_CONNECTIONS: "8"
+      MAX_DB_CONNECTIONS: ${UNDERCROFT_PGBOUNCER_MAX_DB_CONNECTIONS:-50}
+      SERVER_IDLE_TIMEOUT: "15"
+      SERVER_LIFETIME: "3600"
+      SERVER_LOGIN_RETRY: "2"
+      QUERY_WAIT_TIMEOUT: "10"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -p 5432 -U undercroft_worker -d ${UNDERCROFT_PG_DB:-undercroft}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:${UNDERCROFT_PORT_PGBOUNCER:-16432}:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
   kestra-postgres:
     <<: *restart
     image: postgres:17-alpine
@@ -184,6 +229,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Every tenant session and dbt build goes through it (ADR 0088).
+      pgbouncer:
+        condition: service_healthy
       minio:
         condition: service_healthy
       # The worker needs the buckets before it lands anything; waiting on the one-shot
@@ -231,7 +279,14 @@ services:
       UNDERCROFT_TYPESAFE_API_KEY: ${UNDERCROFT_TYPESAFE_API_KEY:-}
       # dbt runs as a subprocess here (ADR 0007) as each TENANT'S OWN login (ADR 0018). The
       # worker mints that login's password right before a build and hands it to the child
-      # by environment; no variable here carries a dbt password any more.
+      # by environment; no variable here carries a dbt password any more. Every tenant login
+      # goes through the pooler (ADR 0088), and each kind of run waits its turn in the worker;
+      # kept in step with docker-compose.server.yml, where the numbers are explained.
+      UNDERCROFT_TENANT_POSTGRES_URL: postgres://pgbouncer:5432/${UNDERCROFT_PG_DB:-undercroft}
+      UNDERCROFT_MAX_CONCURRENT_BUILDS: ${UNDERCROFT_MAX_CONCURRENT_BUILDS:-4}
+      UNDERCROFT_MAX_CONCURRENT_INGESTS: ${UNDERCROFT_MAX_CONCURRENT_INGESTS:-8}
+      UNDERCROFT_MAX_CONCURRENT_EXTRACTS: ${UNDERCROFT_MAX_CONCURRENT_EXTRACTS:-2}
+      UNDERCROFT_MAX_CONCURRENT_SEMANTIC: ${UNDERCROFT_MAX_CONCURRENT_SEMANTIC:-2}
     deploy:
       resources:
         limits:

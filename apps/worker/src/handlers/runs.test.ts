@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Fetcher } from "@undercroft/connector-runtime";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { createStampSource, InMemoryByteFetcher, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
@@ -15,6 +16,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { drainJobs } from "../services/jobs.ts";
+import { createSlots } from "../services/slots.ts";
 import { noDatabase } from "../testing.ts";
 import { createLakeApi } from "./lake.ts";
 
@@ -97,6 +99,26 @@ function post(app: ReturnType<typeof api>, path: string, body: unknown) {
     headers: { "content-type": "application/json", authorization: "Bearer svc-token" },
     body: JSON.stringify(body),
   });
+}
+
+/** The events a run has written to its journal so far, in order. */
+async function eventsOf(runId: string): Promise<string[]> {
+  const { rows } = await db.query<{ event: string }>(
+    "SELECT event FROM ops.run_event WHERE run_id = $1 ORDER BY id",
+    [runId],
+  );
+  return rows.map((r) => r.event);
+}
+
+/** Poll until `holds` is true: the public state a background run reaches, not a sleep. */
+async function until(holds: () => boolean | Promise<boolean>): Promise<void> {
+  for (let tries = 0; tries < 500; tries += 1) {
+    if (await holds()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("the awaited state never came");
 }
 
 async function statusOf(runId: string): Promise<string | undefined> {
@@ -244,6 +266,58 @@ describe("POST /v1/runs/ingest", () => {
     const { runId } = (await res.json()) as { runId: string };
     await drainJobs();
     expect(await statusOf(runId)).toBe("failed");
+  });
+
+  // ADR 0088: a Kestra tick at a thousand tenants started a thousand ingests in one process.
+  it("with one ingest at a time, a second tenant's ingest waits, accepted, and reads nothing until the first is done", async () => {
+    await db.asSuperuser(async (tx) => {
+      await tx.query("INSERT INTO ops.tenant (id) VALUES ('CASE-2')");
+      await tx.query(
+        "INSERT INTO ops.connection (tenant_id, source, status) VALUES ('CASE-2','demo','connected')",
+      );
+      await tx.query(
+        "INSERT INTO app.connection_secret (tenant_id, source, ciphertext, key_version) VALUES ('CASE-2','demo',$1,1)",
+        [sealDemoToken()],
+      );
+    });
+    const listing = { body: { results: [{ id: "1" }], paging: {} } };
+    const recorded = new InMemoryFetcher()
+      .on("GET", `${BASE}/things`, listing)
+      .on("GET", `${BASE}/things`, listing);
+    const gate = Promise.withResolvers<void>();
+    let reads = 0;
+    const fetcher: Fetcher = {
+      send: async (request) => {
+        reads += 1;
+        if (reads === 1) {
+          await gate.promise;
+        }
+        return recorded.send(request);
+      },
+    };
+    const app = createLakeApi({
+      lake,
+      exec: db,
+      serviceToken: "svc-token",
+      specsDir,
+      env: { UNDERCROFT_SECRET_KEY: KEY },
+      fetcher,
+      turns: { ingest: createSlots(1) },
+    });
+
+    const first = await post(app, "/v1/runs/ingest", { source: "demo", tenantId: "CASE-1" });
+    await until(() => reads === 1);
+    const second = await post(app, "/v1/runs/ingest", { source: "demo", tenantId: "CASE-2" });
+    expect(second.status).toBe(202);
+    const { runId: waiting } = (await second.json()) as { runId: string };
+    await until(async () => (await eventsOf(waiting)).includes("run_waiting"));
+    expect(reads).toBe(1);
+
+    gate.resolve();
+    await drainJobs();
+    const { runId: held } = (await first.json()) as { runId: string };
+    expect([await statusOf(held), await statusOf(waiting)]).toEqual(["ok", "ok"]);
+    expect(reads).toBe(2);
   });
 });
 

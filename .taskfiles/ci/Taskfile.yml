@@ -69,10 +69,10 @@ tasks:
       - bun run verify
 
   itest:
-    desc: The Docker-backed integration tier (needs deploy/compose/.env and Postgres).
+    desc: The Docker-backed integration tier (needs deploy/compose/.env, Postgres and the tenant pooler).
     deps: [":dev:env"]
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} up -d --wait postgres
+      - docker compose -f {{.COMPOSE_FILE}} up -d --wait postgres pgbouncer
       - UNDERCROFT_ITEST=1 bun test integration
 
   compose-check:

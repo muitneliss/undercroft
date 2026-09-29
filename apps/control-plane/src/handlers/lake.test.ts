@@ -10,6 +10,7 @@ import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
+import { messages } from "../i18n/index.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
 import { appRouter } from "./router.ts";
@@ -210,6 +211,20 @@ describe("lake.search", () => {
       caller(admin, "a@example.test", worker).lake.search({ tenantId: TENANT, q: "hop dong" }),
     );
     expect(code).toBe("PRECONDITION_FAILED");
+  });
+
+  // ADR 0088: a login with no connection free in time is not an outage and not the reader's
+  // fault, and the sentence used to say the processing service was not answering.
+  it("a worker whose tenant login is busy is worded as busy, to try again shortly", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const worker = new InMemoryWorkerClient().failing("busy");
+    const refusal = await caller(admin, "a@example.test", worker)
+      .lake.search({ tenantId: TENANT, q: "hop dong" })
+      .then(
+        () => null,
+        (error: unknown) => (error instanceof TRPCError ? error.message : String(error)),
+      );
+    expect(refusal).toBe(messages(DEFAULT_LOCALE)("error.workerBusy"));
   });
 
   it("refuses a blank question before it reaches the worker", async () => {

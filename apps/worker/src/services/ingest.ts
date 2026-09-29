@@ -54,6 +54,7 @@ import {
   RunStopped,
 } from "./runTypes.ts";
 import { createRunJournal, type RunJournal } from "./runJournal.ts";
+import { turnsFor } from "./slots.ts";
 
 /** A run for the same (tenant, source) is already in progress. `runId` names it. */
 export class RunInProgress extends UndercroftError {
@@ -171,16 +172,26 @@ async function execute(
   const { runId } = input;
   const ledger: Ledger = { entities: [], refusals: [] };
   try {
-    if (isGoogleSource(input.source)) {
-      await runGoogleIngest(
-        deps,
-        { source: input.source, tenantId: input.tenantId, runId },
-        ledger,
-        journal,
-      );
-    } else {
-      await runSpecIngest(deps, input, ledger, journal);
-    }
+    // Its turn first, once the run is in the ledger (ADR 0088); a stop while it waits lands
+    // in the catch below and closes the run saying nothing was read.
+    await turnsFor(deps.turns, "ingest").run(
+      async () => {
+        if (isGoogleSource(input.source)) {
+          await runGoogleIngest(
+            deps,
+            { source: input.source, tenantId: input.tenantId, runId },
+            ledger,
+            journal,
+          );
+        } else {
+          await runSpecIngest(deps, input, ledger, journal);
+        }
+      },
+      {
+        ...(deps.stop === undefined ? {} : { stop: deps.stop }),
+        onWait: (waiting) => journal.info("run_waiting", { waiting }),
+      },
+    );
     await settle(deps.exec, runId, ledger, { status: "ok" });
     journal.info("run_closed", { status: "ok", ...totals(ledger) });
   } catch (error) {

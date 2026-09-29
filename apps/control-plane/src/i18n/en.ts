@@ -122,6 +122,8 @@ export const en = {
       "The query could not be run. The processing service did not answer; try again in a few minutes.",
     searchNotRun:
       "The search could not be run. The processing service did not answer; try again in a few minutes.",
+    workerBusy:
+      "This customer's database is busy (a model build, or many queries at once). Try again in a few seconds.",
     paramMissing: "The question needs a value for {{name}}. Set that filter and run again.",
     workerUnavailable:
       "The list could not be fetched from Google just now. The processing service did not answer; try again in a few minutes.",

@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { answerRefusal, answerSaved } from "./answers.ts";
+import { answerRefusal, answerSaved, notRun } from "./answers.ts";
 import {
   ChartConfig,
   DashboardFilters,
@@ -205,10 +205,7 @@ export const biRouter = router({
     }
     const outcome = await bi.schema(ctx.worker, { tenantId: input.tenantId });
     if (!outcome.ok) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: messages(ctx.locale)("error.queryNotRun"),
-      });
+      throw notRun(ctx.locale, outcome.reason, "error.queryNotRun");
     }
     return outcome.value;
   }),

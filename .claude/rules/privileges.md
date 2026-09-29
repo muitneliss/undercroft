@@ -45,6 +45,12 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   failed the whole build. Overlapping holders share one password, and one that needs it longer
   calls `ops.extend_tenant_password` (`420_extend_tenant_password.sql`), which moves only
   `VALID UNTIL`. The lease lives in `apps/worker/src/services/tenantSession.ts`. ADR 0087.
+- **NEVER let the pooler learn more than a live tenant login's secret.** Tenant logins reach
+  Postgres through PgBouncer, which asks `ops.pgbouncer_auth` (`430_pgbouncer_auth.sql`) as
+  `undercroft_worker` at each client login: it answers only for a login in `ops.tenant_role`
+  whose password has not expired, never for a platform role. And **NEVER force a `user=` on the
+  pooler's database entry**: row-level security keys on the login that reaches Postgres, so the
+  pool must be per login. ADR 0088.
 
 ## Follow
 
@@ -59,7 +65,10 @@ analytics`. The `FOR ROLE` clause is load-bearing: without it a default attaches
   (`080_tenant_isolation.sql`) are `SECURITY DEFINER`, owned by that bootstrap role, and are
   the only code that creates a role, a schema or a default privilege.
   `ops.extend_tenant_password` is `SECURITY DEFINER` too, and changes only a tenant login's
-  expiry.
+  expiry; so is `ops.pgbouncer_auth`, which only reads one tenant login's stored secret.
+- A tenant login's `CONNECTION LIMIT` is 10, two above the pooler's per-login cap of 8
+  (`MAX_USER_CONNECTIONS` in the compose files); `provision_tenant` restates it for tenants
+  created before it changed. Raise them together. ADR 0088.
 - The worker's reach into `app` is exactly what its verbs need, column-scoped where a column
   is all it writes: `SELECT, INSERT, UPDATE, DELETE` on `app.connection_secret` (it seals,
   refreshes and revokes), `SELECT` on `app.connection_detail` (the chosen scope),

@@ -285,17 +285,57 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
     });
   });
 
-  // A build holds four connections, one per dbt thread, and a dbt login limited to four
-  // refused every raw-lake query run during it ("too many connections"). A tenant created
-  // under the old limit has to get the new one too, not only the tenants created after it.
-  it("a dbt login created with no room beside a build gets it when re-provisioned", async () => {
+  // A tenant login's limit must sit above the pooler's per-login cap of eight (ADR 0088): at or
+  // below it, the pooler's own reconnects are refused "too many connections" instead of queued.
+  // A tenant created under an old limit has to get the new one too, not only the ones after it.
+  it("tenant logins created under an old limit get room above the pooler's cap when re-provisioned", async () => {
     await db.exec("ALTER ROLE undercroft_dbt_case_0042 CONNECTION LIMIT 4");
+    await db.exec("ALTER ROLE undercroft_bi_case_0042 CONNECTION LIMIT 4");
     await db.query("SELECT ops.provision_tenant('CASE-0042')");
 
-    const { rows } = await db.query<{ rolconnlimit: number }>(
-      "SELECT rolconnlimit FROM pg_roles WHERE rolname = 'undercroft_dbt_case_0042'",
+    const { rows } = await db.query<{ rolname: string; rolconnlimit: number }>(
+      "SELECT rolname, rolconnlimit FROM pg_roles WHERE rolname LIKE 'undercroft_%_case_0042' ORDER BY rolname",
     );
-    expect(rows[0]?.rolconnlimit).toBe(8);
+    expect(rows).toEqual([
+      { rolname: "undercroft_bi_case_0042", rolconnlimit: 10 },
+      { rolname: "undercroft_dbt_case_0042", rolconnlimit: 10 },
+    ]);
+  });
+
+  // ADR 0088: PgBouncer asks this, as the worker, at every tenant client login. It may learn a
+  // live tenant login's secret and nothing else -- not a platform role's, not an expired one's.
+  it("the pooler learns a live tenant login's secret and no other", async () => {
+    function auth(login: string) {
+      return db.asRole("undercroft_worker", (tx) =>
+        tx.query<{ usename: string; passwd: string }>("SELECT * FROM ops.pgbouncer_auth($1)", [
+          login,
+        ]),
+      );
+    }
+    await db.asRole("undercroft_worker", (tx) =>
+      tx.query("SELECT ops.rotate_tenant_password('CASE-0042', 'dbt')"),
+    );
+    const { rows: stored } = await db.query<{ rolpassword: string }>(
+      "SELECT rolpassword FROM pg_authid WHERE rolname = 'undercroft_dbt_case_0042'",
+    );
+
+    expect((await auth("undercroft_dbt_case_0042")).rows).toEqual([
+      { usename: "undercroft_dbt_case_0042", passwd: stored[0]?.rolpassword ?? "" },
+    ]);
+    expect((await auth("undercroft_app")).rows).toEqual([]);
+
+    await db.exec("ALTER ROLE undercroft_dbt_case_0042 VALID UNTIL '2000-01-01'");
+    expect((await auth("undercroft_dbt_case_0042")).rows).toEqual([]);
+  });
+
+  it("only the worker may ask the pooler's question", async () => {
+    const ask = "SELECT * FROM ops.pgbouncer_auth('undercroft_bi_case_0042')";
+    await db.asRole("undercroft_app", async (tx) => {
+      await expectDenied(() => tx.query(ask));
+    });
+    await db.asRole("undercroft_bi_case_0042", async (tx) => {
+      await expectDenied(() => tx.query(ask));
+    });
   });
 
   it("a reference that folds to an existing tenant's slug is refused before any role exists", async () => {

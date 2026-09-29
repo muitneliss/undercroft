@@ -21,6 +21,7 @@ import { z } from "zod";
 
 import { messages } from "../i18n/index.ts";
 import * as lake from "../services/lake.ts";
+import { notRun } from "./answers.ts";
 import { requireRole, router, tenantProcedure } from "./trpc.ts";
 
 export const lakeRouter = router({
@@ -121,10 +122,7 @@ export const lakeRouter = router({
             }),
           });
         }
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: messages(ctx.locale)("error.queryNotRun"),
-        });
+        throw notRun(ctx.locale, outcome.reason, "error.queryNotRun");
       }
       return outcome.value;
     }),
@@ -165,10 +163,7 @@ export const lakeRouter = router({
         // No `query-failed` branch: there is no author's SQL here for Postgres to have an
         // opinion about. A search that did not run is a precondition, like every other
         // refusal from a worker that answered.
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: messages(ctx.locale)("error.searchNotRun"),
-        });
+        throw notRun(ctx.locale, outcome.reason, "error.searchNotRun");
       }
       return outcome.value;
     }),
@@ -183,10 +178,7 @@ export const lakeRouter = router({
     }
     const outcome = await ctx.worker.readRawSchema({ tenantId: input.tenantId });
     if (!outcome.ok) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: messages(ctx.locale)("error.queryNotRun"),
-      });
+      throw notRun(ctx.locale, outcome.reason, "error.queryNotRun");
     }
     return outcome.value;
   }),
