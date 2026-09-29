@@ -3,8 +3,9 @@
  *
  * A full ingest is minutes, and an HTTP connection held open for minutes survives neither
  * a worker restart nor a scheduler restart and leaves no id behind. So the verb opens the
- * run, answers with its id, and the work continues here -- in this process, with no queue.
- * The state lives in `ops.run`, not in this module.
+ * run, answers with its id, and the work continues here, in this process -- once it has a turn:
+ * each kind of run is bounded to so many at once and the rest wait, already in the ledger
+ * (`slots.ts`, ADR 0088). The state lives in `ops.run`, not in this module.
  *
  * The accepted cost is that a restart ENDS what is in flight; ADR 0051 is what keeps it from
  * also erasing it. A stop the process is told about (a deploy's SIGTERM) aborts `RunDeps.stop`,
@@ -19,29 +20,13 @@
  */
 
 import { type BuildModelResponse, MAX_PREVIEW_ROWS, type TableResult } from "@undercroft/contracts";
-import { describeError, newRunId } from "@undercroft/core";
-import {
-  closeRun,
-  getRun,
-  MAX_ERROR_CHARS,
-  openRun,
-  recordSteps,
-  type RunTrigger,
-  SOURCE_OF_TRANSFORM,
-  stepsFor,
-  tenantRolesFor,
-} from "@undercroft/db/repos";
+import { getRun, type RunTrigger, stepsFor, tenantRolesFor } from "@undercroft/db/repos";
 
 import { RunInProgress, startIngest } from "./ingest.ts";
 import type { RunDeps } from "./runTypes.ts";
 import { readRelation } from "./preview.ts";
-import { createRunJournal, type RunJournal } from "./runJournal.ts";
-import {
-  runTransform,
-  type Spawn,
-  type TransformDeps,
-  type TransformOutcome,
-} from "./transform.ts";
+import type { Spawn, TransformDeps } from "./transform.ts";
+import { startTransform, type TransformOpening } from "./transformRun.ts";
 import type { SemanticAsk } from "./semantic/definition.ts";
 
 export interface JobDeps extends RunDeps {
@@ -94,125 +79,33 @@ export async function startIngestJob(
 ): Promise<{ runId: string }> {
   const started = await startIngest(deps, input);
   const job = started.done.then(async () => {
-    if (input.chain && deps.dbt !== undefined) {
+    // A worker that is stopping opens no new build: it would only wait for a turn and be
+    // closed as stopped, one more failed line in the ledger per ingest that settled in time.
+    if (!input.chain || deps.dbt === undefined || deps.stop?.aborted === true) {
+      return;
+    }
+    try {
       await runTransformRun(deps, {
         tenantId: input.tenantId,
         trigger: input.trigger,
         triggeredBy: input.triggeredBy,
         parentRunId: started.runId,
       });
+    } catch (error) {
+      if (!(error instanceof RunInProgress)) {
+        throw error;
+      }
+      // The tenant's build is already running or waiting, and it will read what this ingest
+      // landed; said here, because it used to vanish without a line anywhere.
+      deps.log?.info("transform_not_chained", {
+        runId: started.runId,
+        tenantId: input.tenantId,
+        runningRunId: error.runId,
+      });
     }
   });
   track(job);
   return { runId: started.runId };
-}
-
-interface TransformOpening {
-  readonly tenantId: string;
-  readonly trigger: RunTrigger;
-  readonly triggeredBy?: string;
-  readonly parentRunId?: string | null;
-  readonly select?: string;
-  /** A build the editor is waiting on gets a shorter deadline than a scheduled one. */
-  readonly timeoutMs?: number;
-}
-
-/**
- * Open a transform run and start the build, returning the id before dbt has spawned.
- *
- * `source` is `*`: a transform is per tenant, and the same partial index that keeps two
- * ingests of one source apart keeps two builds of one tenant apart. A non-zero dbt exit is
- * a failed run carrying the last lines of its output -- never the whole log, which can
- * echo row values from a failing test. `done` settles with whether the build succeeded;
- * it never rejects, because the failure is already in the ledger.
- *
- * What refuses, refuses before a row exists: no dbt in this deployment, or a build for
- * this tenant already running.
- */
-async function startTransform(
-  deps: JobDeps,
-  input: TransformOpening,
-): Promise<{ runId: string; done: Promise<boolean> }> {
-  const { dbt } = deps;
-  if (dbt === undefined) {
-    throw new Error("transform is not configured");
-  }
-  const runId = newRunId();
-  const opened = await openRun(deps.exec, {
-    id: runId,
-    tenantId: input.tenantId,
-    source: SOURCE_OF_TRANSFORM,
-    verb: "transform",
-    trigger: input.trigger,
-    triggeredBy: input.triggeredBy ?? "",
-    parentRunId: input.parentRunId ?? null,
-    releaseTag: deps.releaseTag ?? "",
-  });
-  if (!opened.ok) {
-    throw new RunInProgress("transform", input.tenantId, opened.runId);
-  }
-  const log = deps.log?.child({ runId, tenantId: input.tenantId, source: SOURCE_OF_TRANSFORM });
-  const journal = createRunJournal({
-    exec: deps.exec,
-    runId,
-    ...(log === undefined ? {} : { log }),
-  });
-  journal.info("run_opened", { verb: "transform", trigger: input.trigger });
-
-  const done = runTransform(dbt, {
-    tenantId: input.tenantId,
-    ...selectOf(input),
-    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
-  }).then(
-    (outcome) => settleTransform(deps, runId, journal, outcome),
-    async (error: unknown) => {
-      await closeRun(deps.exec, runId, { status: "failed", error: messageOf(error) });
-      journal.error("run_failed", describeError(error));
-      await journal.flush();
-      return false;
-    },
-  );
-  return { runId, done };
-}
-
-/** Write what the build did -- its steps, its outcome, and what it says for itself. */
-async function settleTransform(
-  deps: JobDeps,
-  runId: string,
-  journal: RunJournal,
-  outcome: TransformOutcome,
-): Promise<boolean> {
-  await recordSteps(deps.exec, runId, outcome.steps);
-  await closeRun(deps.exec, runId, {
-    status: outcome.ok ? "ok" : "failed",
-    testsFailed: outcome.testsFailed,
-    ...(outcome.error === null ? {} : { error: outcome.error.slice(0, MAX_ERROR_CHARS) }),
-  });
-  // A build with nothing to build is the commonest green run with nothing in it, and the
-  // screen showed it as a success with five zeroes and no explanation at all.
-  if (outcome.models === 0) {
-    journal.warn("no_models");
-  } else {
-    journal.info("dbt_finished", {
-      models: outcome.steps.filter((s) => s.kind === "model").length,
-      tests: outcome.steps.filter((s) => s.kind === "test").length,
-      testsFailed: outcome.testsFailed,
-    });
-  }
-  journal.info("run_closed", {
-    status: outcome.ok ? "ok" : "failed",
-    steps: outcome.steps.length,
-    testsFailed: outcome.testsFailed,
-  });
-  await journal.flush();
-  return outcome.ok;
-}
-
-function selectOf(input: TransformOpening): { select?: string } {
-  if (input.select === undefined) {
-    return {};
-  }
-  return { select: input.select };
 }
 
 /** Run the transform as a run in the ledger and wait for it: open, build, close. */
@@ -338,19 +231,4 @@ export async function dqFailures(
     limit: input.limit,
   });
   return { ok: true, value };
-}
-
-/**
- * The fault, as the ledger keeps it. A `ConnectorError` raised by `runTransform` carries
- * dbt's last lines in its cause; that tail is the useful part and the message alone says
- * only that it exited non-zero.
- */
-function messageOf(error: unknown): string {
-  if (!(error instanceof Error)) {
-    return String(error).slice(0, MAX_ERROR_CHARS);
-  }
-  if (error.cause instanceof Error) {
-    return `${error.message}: ${error.cause.message}`.slice(0, MAX_ERROR_CHARS);
-  }
-  return error.message.slice(0, MAX_ERROR_CHARS);
 }

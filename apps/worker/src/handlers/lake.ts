@@ -19,7 +19,7 @@ import { registerAnalyticsRoutes } from "./analytics.ts";
 import { registerConnectionRoutes } from "./connections.ts";
 import { authenticate } from "../services/auth.ts";
 import type { XeroClient } from "../services/connections.ts";
-import type { Refresher, Transactor } from "../services/runTypes.ts";
+import type { Refresher, RunDeps, Transactor } from "../services/runTypes.ts";
 import { startExtractJob } from "../services/extract/job.ts";
 import { startIngestJob, startTransformJob } from "../services/jobs.ts";
 import { landRecords, publishedResponse } from "../services/land.ts";
@@ -28,7 +28,11 @@ import type { SemanticAsk } from "../services/semantic/definition.ts";
 import type { Spawn, TransformDeps } from "../services/transform.ts";
 import { failureOf } from "./errors.ts";
 
-export interface LakeApiDeps {
+/**
+ * `stop` is aborted when the process is stopping and `turns` bounds how many runs of each kind it
+ * does at once (ADR 0088); both are handed to every run this API starts, as `RunDeps` says.
+ */
+export interface LakeApiDeps extends Pick<RunDeps, "stop" | "turns"> {
   readonly lake: LakeStore;
   readonly exec: SqlExecutor;
   readonly serviceToken: string;
@@ -70,8 +74,6 @@ export interface LakeApiDeps {
   readonly semanticAsk?: SemanticAsk;
   /** The Xero client, for revoking a grant. Absent means a disconnect only forgets our copy. */
   readonly xero?: XeroClient;
-  /** Aborted when the process is stopping; handed to every run this API starts. `RunDeps.stop`. */
-  readonly stop?: AbortSignal;
 }
 
 /** Sent by the Kestra flows with `{{ execution.id }}`, so a failed execution leads to its trace. */

@@ -10,6 +10,7 @@ import { MAX_MODEL_SQL_BYTES, ModelName, ModelTests } from "@undercroft/contract
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import * as models from "../services/models.ts";
+import { notRun } from "./answers.ts";
 import { wordCheck } from "./checkWords.ts";
 import { requireRole, router, tenantProcedure } from "./trpc.ts";
 
@@ -124,12 +125,13 @@ export const modelsRouter = router({
         actorId: ctx.user.userId,
       });
       if (!outcome.ok) {
-        throw new TRPCError({
-          code: outcome.reason === "in-progress" ? "CONFLICT" : "PRECONDITION_FAILED",
-          message: messages(ctx.locale)(
-            outcome.reason === "in-progress" ? "error.buildInProgress" : "error.buildNotStarted",
-          ),
-        });
+        if (outcome.reason === "in-progress") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: messages(ctx.locale)("error.buildInProgress"),
+          });
+        }
+        throw notRun(ctx.locale, outcome.reason, "error.buildNotStarted");
       }
       return outcome.value;
     }),

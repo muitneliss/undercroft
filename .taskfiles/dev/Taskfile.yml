@@ -13,6 +13,7 @@ vars:
   ENV_FILE: "{{.ROOT_DIR}}/deploy/compose/.env"
   DBT_VENV: "{{.ROOT_DIR}}/.dbt-venv"
   PG_PORT: '{{.UNDERCROFT_PORT_POSTGRES | default "15432"}}'
+  PGBOUNCER_PORT: '{{.UNDERCROFT_PORT_PGBOUNCER | default "16432"}}'
   PG_DB: '{{.UNDERCROFT_PG_DB | default "undercroft"}}'
   PG_USER: '{{.UNDERCROFT_PG_USER | default "undercroft"}}'
   MINIO_PORT: '{{.UNDERCROFT_PORT_MINIO | default "19000"}}'
@@ -31,14 +32,14 @@ tasks:
       - echo "wrote {{.ENV_FILE}} -- fill in the secrets before 'task dev:run' (see docs/runbook/sign-in-setup.md)"
 
   up:
-    desc: Start infra only (Postgres, MinIO, Kestra). The apps run natively -- see dev:run.
+    desc: Start infra only (Postgres and its tenant pooler, MinIO, Kestra). The apps run natively -- see dev:run.
     run: once
     deps: [env]
     cmds:
       # minio-init is one-shot and exits 0 on success; `--wait` only tolerates that for a
       # service something else declares `service_completed_successfully` on (that's `worker`,
       # which isn't in this list), so it runs as its own attached step instead.
-      - docker compose -f {{.COMPOSE_FILE}} up -d --wait minio postgres kestra-postgres kestra
+      - docker compose -f {{.COMPOSE_FILE}} up -d --wait minio postgres pgbouncer kestra-postgres kestra
       - docker compose -f {{.COMPOSE_FILE}} up minio-init
 
   up-all:
@@ -72,7 +73,7 @@ tasks:
   logs:
     desc: Follow the infra containers' logs. App logs print directly in dev:run's terminal.
     cmds:
-      - docker compose -f {{.COMPOSE_FILE}} logs -f minio postgres kestra-postgres kestra
+      - docker compose -f {{.COMPOSE_FILE}} logs -f minio postgres pgbouncer kestra-postgres kestra
 
   dbt-setup:
     desc: Provision a local dbt venv matching deploy/Dockerfile.worker's pinned versions.
@@ -179,6 +180,8 @@ tasks:
     deps: [migrate, dbt-setup]
     env:
       UNDERCROFT_POSTGRES_DSN: "postgres://undercroft_worker:{{.UNDERCROFT_WORKER_PG_PASSWORD}}@localhost:{{.PG_PORT}}/{{.PG_DB}}"
+      # Every tenant login through the pooler, as on the server (ADR 0088).
+      UNDERCROFT_TENANT_POSTGRES_URL: "postgres://localhost:{{.PGBOUNCER_PORT}}/{{.PG_DB}}"
       UNDERCROFT_S3_ENDPOINT: "http://localhost:{{.MINIO_PORT}}"
       UNDERCROFT_S3_BUCKET_RAW: "{{.UNDERCROFT_S3_BUCKET_RAW}}"
       UNDERCROFT_S3_ACCESS_KEY: "{{.UNDERCROFT_S3_ACCESS_KEY}}"

@@ -57,9 +57,16 @@ export function createPool(connectionString: string, options: PoolOptions = {}):
 export interface RoleLogin {
   readonly user: string;
   readonly password: string;
-  /** Connections at most. A tenant role's limit is four; a session needs one. */
+  /** Connections at most. A session needs one. */
   readonly max?: number;
 }
+
+/**
+ * How long a tenant login may wait for its connection before it gives up. Tenant logins go
+ * through the pooler (ADR 0088), which queues a login for at most 10 s; `pg` alone would wait
+ * forever, and a request that hangs reads as a worker that stopped answering.
+ */
+const ROLE_CONNECT_TIMEOUT_MS = 10_000;
 
 /**
  * A pool that logs in as one tenant's role, to the same server the platform DSN names.
@@ -92,7 +99,11 @@ export function createRolePool(connectionString: string, login: RoleLogin): pg.P
   const url = new URL(connectionString);
   url.username = login.user;
   url.password = login.password;
-  return new pg.Pool({ connectionString: url.toString(), max: login.max ?? 1 });
+  return new pg.Pool({
+    connectionString: url.toString(),
+    max: login.max ?? 1,
+    connectionTimeoutMillis: ROLE_CONNECT_TIMEOUT_MS,
+  });
 }
 
 export interface DatabaseAddress {

@@ -33,6 +33,7 @@ import {
 import { RunInProgress } from "../ingest.ts";
 import { type JobDeps, track } from "../jobs.ts";
 import { createRunJournal } from "../runJournal.ts";
+import { turnsFor } from "../slots.ts";
 import { type ExtractResult, runExtract } from "./runExtract.ts";
 
 /** `NodeJS.ProcessEnv` holds `string | undefined`; a child's environment holds strings. */
@@ -132,17 +133,27 @@ export async function startExtractJob(
   });
   journal.info("run_opened", { verb: "extract", trigger: input.trigger });
 
+  // Its turn first, once the run is in the ledger (ADR 0088): poppler and tesseract are what
+  // this process can least afford many of at once.
+  const extracted = turnsFor(deps.turns, "extract").run(
+    () =>
+      runExtract(
+        {
+          exec: deps.exec,
+          lake: deps.lake,
+          spawn: extractSpawn,
+          journal,
+          ...(deps.env === undefined ? {} : { env: definedOnly(deps.env) }),
+        },
+        { tenantId: input.tenantId, source: input.source, runId },
+      ),
+    {
+      ...(deps.stop === undefined ? {} : { stop: deps.stop }),
+      onWait: (waiting) => journal.info("run_waiting", { waiting }),
+    },
+  );
   track(
-    runExtract(
-      {
-        exec: deps.exec,
-        lake: deps.lake,
-        spawn: extractSpawn,
-        journal,
-        ...(deps.env === undefined ? {} : { env: definedOnly(deps.env) }),
-      },
-      { tenantId: input.tenantId, source: input.source, runId },
-    ).then(
+    extracted.then(
       async (result) => {
         await settle(deps.exec, runId, journal, result);
         await journal.flush();

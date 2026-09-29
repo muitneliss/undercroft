@@ -81,5 +81,6 @@ export function jobDepsFor(deps: LakeApiDeps, source: string, specsDir: string):
     ...(deps.extractSpawn === undefined ? {} : { extractSpawn: deps.extractSpawn }),
     ...(deps.semanticAsk === undefined ? {} : { semanticAsk: deps.semanticAsk }),
     ...(deps.stop === undefined ? {} : { stop: deps.stop }),
+    ...(deps.turns === undefined ? {} : { turns: deps.turns }),
   };
 }

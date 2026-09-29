@@ -103,6 +103,73 @@ services:
         limits:
           memory: 1g
 
+  # Every TENANT login reaches Postgres through this pooler; the platform's own roles do not
+  # (ADR 0088). Postgres has 100 connections for every customer and the platform together, and
+  # each connection is a server process: a thousand tenants cannot each open their own. Here a
+  # tenant's session or dbt build waits its turn instead of being refused "too many
+  # connections", and all tenants together hold at most MAX_DB_CONNECTIONS backends.
+  #
+  # Session pooling, not transaction: each tenant session is one short-lived client already, and
+  # dbt's temp tables and a tenant's own `SET` need a session; DISCARD ALL wipes it between two
+  # clients of the same login. Pools are per login -- no `user=` is forced -- because row-level
+  # security keys on which login is connected.
+  #
+  # Tenant passwords rotate (ADR 0087), so no password file lists them: PgBouncer asks
+  # `ops.pgbouncer_auth` (430) as `undercroft_worker` at each client login and logs in to
+  # Postgres with the client's own SCRAM proof. That is safe only because the worker never
+  # rotates a login something still holds -- which is also why `MIN_POOL_SIZE` stays unset.
+  #
+  # The timeouts are one chain: a client waits at most 10s here, a query then runs at most 15s,
+  # and the control plane gives up on a query at 30s. MAX_USER_CONNECTIONS (8) sits two below
+  # each tenant login's own CONNECTION LIMIT (10, `010_provision_tenant.sql`); change them
+  # together. Everything is set here, from the one secret the worker already has.
+  pgbouncer:
+    <<: *restart
+    image: edoburu/pgbouncer:v1.25.2-p0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: undercroft-postgres
+      DB_PORT: "5432"
+      DB_NAME: ${UNDERCROFT_PG_DB:-undercroft}
+      DB_USER: undercroft_worker
+      DB_PASSWORD: ${UNDERCROFT_WORKER_PG_PASSWORD:?set in .env}
+      AUTH_TYPE: scram-sha-256
+      AUTH_DBNAME: ${UNDERCROFT_PG_DB:-undercroft}
+      # `$$` is a literal `$` to compose: PgBouncer binds the login's name to $1.
+      AUTH_QUERY: SELECT * FROM ops.pgbouncer_auth($$1)
+      LISTEN_PORT: "5432"
+      POOL_MODE: session
+      SERVER_RESET_QUERY: DISCARD ALL
+      MAX_CLIENT_CONN: "2000"
+      DEFAULT_POOL_SIZE: "8"
+      MAX_USER_CONNECTIONS: "8"
+      MAX_DB_CONNECTIONS: ${UNDERCROFT_PGBOUNCER_MAX_DB_CONNECTIONS:-50}
+      SERVER_IDLE_TIMEOUT: "15"
+      SERVER_LIFETIME: "3600"
+      SERVER_LOGIN_RETRY: "2"
+      QUERY_WAIT_TIMEOUT: "10"
+    healthcheck:
+      # The worker's own login is in PgBouncer's password file, so this is answered by
+      # PgBouncer itself, with no backend opened.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -p 5432 -U undercroft_worker -d ${UNDERCROFT_PG_DB:-undercroft}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      default:
+        aliases:
+          - undercroft-pgbouncer
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
   kestra-postgres:
     <<: *restart
     image: postgres:17-alpine
@@ -224,6 +291,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Every tenant session and dbt build goes through it (ADR 0088).
+      pgbouncer:
+        condition: service_healthy
       minio:
         condition: service_healthy
       # The worker needs the buckets to exist before it lands anything, so it waits for the
@@ -274,8 +344,17 @@ services:
       # their due list; the same key the control plane gates the assistant with.
       UNDERCROFT_TYPESAFE_API_KEY: ${UNDERCROFT_TYPESAFE_API_KEY:-}
       # dbt runs as a subprocess in this image (ADR 0007) as each TENANT'S OWN login (ADR
-      # 0018). The worker points the generated profile at the server its own DSN names and
-      # mints the login's password right before a build; no variable here carries one.
+      # 0018), and every tenant login -- dbt's and the worker's own sessions -- goes through
+      # the pooler (ADR 0088): this is where they connect, with no credential in it. The worker
+      # leases the login's password right before a build; no variable here carries one.
+      UNDERCROFT_TENANT_POSTGRES_URL: postgres://undercroft-pgbouncer:5432/${UNDERCROFT_PG_DB:-undercroft}
+      # How many of each kind of run this worker does at once; the rest wait their turn in the
+      # worker (ADR 0088). Builds hold ~5 tenant connections each; extracts run poppler and
+      # tesseract. Conservative defaults, meant to be tuned against the host.
+      UNDERCROFT_MAX_CONCURRENT_BUILDS: ${UNDERCROFT_MAX_CONCURRENT_BUILDS:-4}
+      UNDERCROFT_MAX_CONCURRENT_INGESTS: ${UNDERCROFT_MAX_CONCURRENT_INGESTS:-8}
+      UNDERCROFT_MAX_CONCURRENT_EXTRACTS: ${UNDERCROFT_MAX_CONCURRENT_EXTRACTS:-2}
+      UNDERCROFT_MAX_CONCURRENT_SEMANTIC: ${UNDERCROFT_MAX_CONCURRENT_SEMANTIC:-2}
       # Traces and log lines to the host's shared otel-lgtm collector (ADR 0058). Set in
       # Dokploy's environment by a person, like every value here; unset is export OFF, and
       # the trace ids are still stamped on every response and log line.

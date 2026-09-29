@@ -181,6 +181,30 @@ export function grantedBy(source: string | null | undefined): "consent" | "token
  *
  * `source` is the run's, and only a missing permission's remedy depends on it.
  */
+/** How the run ended: closed, broke, or stopped by the worker shutting down. */
+function endSentence(
+  t: TFunction,
+  event: "run_closed" | "run_failed" | "run_stopped",
+  detail: Record<string, unknown>,
+  n: (key: string) => string,
+): string {
+  if (event === "run_closed") {
+    return detail.status === "ok"
+      ? t("journal.event.runClosedOk")
+      : t("journal.event.runClosedFailed");
+  }
+  if (event === "run_failed") {
+    return t("journal.event.runFailed", { errorType: String(detail.errorType ?? "") });
+  }
+  // Its own sentence rather than `runFailed`'s, because the reader's question is different:
+  // not "what broke" but "did the deploy lose anything" -- and the counts answer it.
+  return t("journal.event.runStopped", {
+    created: n("created"),
+    changed: n("changed"),
+    refused: n("refused"),
+  });
+}
+
 /**
  * A whole read the day's request budget cut short, or a list that waited for a day with room
  * (ADR 0082): what a reader needs to know is that the list is not finished and when it will be.
@@ -229,6 +253,8 @@ export function eventSentence(
     case "whole_read_paused":
     case "whole_read_waiting":
       return wholeReadSentence(t, event.event, entity, n);
+    case "run_waiting":
+      return t("journal.event.runWaiting", { waiting: n("waiting") });
     case "no_models":
       return t("journal.event.noModels");
     case "dbt_finished":
@@ -238,19 +264,9 @@ export function eventSentence(
         testsFailed: n("testsFailed"),
       });
     case "run_closed":
-      return event.detail.status === "ok"
-        ? t("journal.event.runClosedOk")
-        : t("journal.event.runClosedFailed");
     case "run_failed":
-      return t("journal.event.runFailed", { errorType: String(event.detail.errorType ?? "") });
-    // Its own sentence rather than `runFailed`'s, because the reader's question is different:
-    // not "what broke" but "did the deploy lose anything" -- and the counts answer it.
     case "run_stopped":
-      return t("journal.event.runStopped", {
-        created: n("created"),
-        changed: n("changed"),
-        refused: n("refused"),
-      });
+      return endSentence(t, event.event, event.detail, n);
     case "events_truncated":
       return t("journal.event.truncated", { at: n("at") });
     default:

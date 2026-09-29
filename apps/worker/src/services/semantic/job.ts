@@ -37,6 +37,7 @@ import {
 import { RunInProgress } from "../ingest.ts";
 import { type JobDeps, track } from "../jobs.ts";
 import { createRunJournal } from "../runJournal.ts";
+import { turnsFor } from "../slots.ts";
 import { type Catalogue, type ClassifyDeps, type ClassifyTally, classifyPass } from "./classify.ts";
 import type { SemanticAsk } from "./definition.ts";
 import { initialiseCatalogue, mayInitialise } from "./initialise.ts";
@@ -117,10 +118,22 @@ async function openSemanticRun(
   return { runId, journal };
 }
 
-/** Run `work` in the background; whatever it throws closes the run failed with the reason. */
-function runTracked(deps: JobDeps, runId: string, journal: Journal, work: Promise<void>): void {
+/**
+ * Run `work` in the background once it has its turn (ADR 0088); whatever it throws -- a stop
+ * while it waited included -- closes the run failed with the reason.
+ */
+function runTracked(
+  deps: JobDeps,
+  runId: string,
+  journal: Journal,
+  work: () => Promise<void>,
+): void {
+  const turned = turnsFor(deps.turns, "semantic").run(work, {
+    ...(deps.stop === undefined ? {} : { stop: deps.stop }),
+    onWait: (waiting) => journal.info("run_waiting", { waiting }),
+  });
   track(
-    work.then(
+    turned.then(
       () => journal.flush(),
       async (error: unknown) => {
         await closeRun(deps.exec, runId, { status: "failed", error: messageOf(error) });
@@ -189,7 +202,7 @@ export async function startSemanticJob(
 ): Promise<{ runId: string }> {
   const { runId, journal } = await openSemanticRun(deps, { ...input, verb: "semantic" });
   const scope = { tenantId: input.tenantId, source: input.source };
-  runTracked(deps, runId, journal, classifyRun(deps, runId, journal, scope));
+  runTracked(deps, runId, journal, () => classifyRun(deps, runId, journal, scope));
   return { runId };
 }
 
@@ -252,6 +265,6 @@ export async function startSemanticInitJob(
     trigger: "manual",
     triggeredBy: input.triggeredBy,
   });
-  runTracked(deps, runId, journal, initialiseRun(deps, runId, journal, input.tenantId));
+  runTracked(deps, runId, journal, () => initialiseRun(deps, runId, journal, input.tenantId));
   return { ok: true, runId };
 }

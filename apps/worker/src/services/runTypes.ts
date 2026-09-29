@@ -18,6 +18,8 @@ import { ConnectionRegistryError, setStatus } from "@undercroft/db/repos";
 import { accessToken } from "@undercroft/db/services";
 import type { LakeStore } from "@undercroft/lake";
 
+import type { RunTurns } from "./slots.ts";
+
 /**
  * Run `fn` inside one transaction on one connection.
  *
@@ -85,6 +87,11 @@ export interface RunDeps {
    * Wired from `server.ts`, the only module that may know a process exists (`layering.md`).
    */
   readonly stop?: AbortSignal;
+  /**
+   * How many runs of each kind this process does at once; a run waits its turn after it is
+   * opened (`slots.ts`, ADR 0088). Absent, or a kind absent from it, means no limit.
+   */
+  readonly turns?: RunTurns;
 }
 
 export interface IngestResult {

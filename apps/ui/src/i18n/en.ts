@@ -932,6 +932,8 @@ export const en = {
         "The day's requests for full reads ran out after {{requests}}, so {{entity}} was not read to the end; the rest is read on the next run.",
       wholeReadWaiting:
         "{{entity}} has to be read in full, but today's requests for full reads are spent, so it is read on the next run.",
+      runWaiting:
+        "Waiting for its turn: the worker is running as many of these as it allows, and this one is number {{waiting}} in line.",
       noModels: "This customer has no models yet, so there was nothing to build.",
       dbtFinished: "dbt built {{models}} models and ran {{tests}} tests, {{testsFailed}} failing.",
       runClosedOk: "Finished successfully.",

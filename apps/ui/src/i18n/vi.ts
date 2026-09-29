@@ -1130,6 +1130,9 @@ export const vi = {
       /** A list that must be read whole, not read at all this run: the day had nothing left. */
       wholeReadWaiting:
         "{{entity}} cần được đọc toàn bộ nhưng hôm nay đã hết lượt gọi dành cho việc này, nên sẽ đọc ở lần chạy sau.",
+      /** A run already in the ledger, queued behind others of its kind in the worker (ADR 0088). */
+      runWaiting:
+        "Đang chờ tới lượt: worker đang chạy đủ số việc cùng loại, việc này xếp hàng thứ {{waiting}}.",
       noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
       dbtFinished:
         "dbt dựng {{models}} mô hình, chạy {{tests}} kiểm tra, {{testsFailed}} không đạt.",

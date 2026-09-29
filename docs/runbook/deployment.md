@@ -19,6 +19,7 @@ Everything else talks over the compose network and publishes nothing.
 | `minio`                      | compose network only | Raw lake, on the `pgsty/minio` community build (ADR 0050)                                       |
 | `minio-init`                 | one-shot, exits 0    | Creates the lake's bucket                                                                       |
 | `postgres`                   | compose network only | Curated + control-plane schema                                                                  |
+| `pgbouncer`                  | compose network only | The pool every tenant login goes through (ADR 0088); the platform's roles connect directly      |
 | `kestra` + `kestra-postgres` | compose network only | Scheduling: `ingest_due` every 5 minutes, `extract_due` hourly, `semantic_due` every 30 minutes |
 | `kestra-init`                | one-shot, exits 0    | Hands Kestra's volumes to uid 1000; without it Kestra crash-loops                               |
 | `db-migrate`                 | one-shot, exits 0    | Applies `packages/db/sql`, sets the two platform roles' passwords                               |
@@ -227,6 +228,24 @@ each question runs as the tenant's own login, whose password the worker mints ri
 Dokploy's environment, with the `undercroft-bi.lowbit.link` domain, if they are still there.
 CI never writes the blob.
 
+**Capacity is set in the compose files, and can be tuned from Dokploy** (ADR 0088). All are
+optional and default when unset:
+
+| Variable                                  | Default | What it bounds                                                        |
+| ----------------------------------------- | ------- | --------------------------------------------------------------------- |
+| `UNDERCROFT_PGBOUNCER_MAX_DB_CONNECTIONS` | 50      | Postgres backends every tenant login together may hold via the pooler |
+| `UNDERCROFT_MAX_CONCURRENT_BUILDS`        | 4       | dbt builds the worker runs at once; the rest wait their turn          |
+| `UNDERCROFT_MAX_CONCURRENT_INGESTS`       | 8       | ingests at once                                                       |
+| `UNDERCROFT_MAX_CONCURRENT_EXTRACTS`      | 2       | extracts at once (poppler and tesseract)                              |
+| `UNDERCROFT_MAX_CONCURRENT_SEMANTIC`      | 2       | classification runs at once                                           |
+
+Postgres keeps its 100 connections: 50 for tenants through the pooler, about 30 for the
+platform's own pools, 3 reserved for the superuser. Raise the pooler's number only with
+Postgres's `max_connections` and its memory limit. A worker limit that is not a whole number
+of at least 1 stops the worker at boot rather than meaning "unlimited". The pooler needs no
+variable of its own: it logs in to Postgres as `undercroft_worker`, with
+`UNDERCROFT_WORKER_PG_PASSWORD`.
+
 **Each service connects as its own role.** `db-migrate` is the one service that connects as
 the bootstrap superuser: it applies the schema and then sets `undercroft_app`'s and
 `undercroft_worker`'s passwords from `UNDERCROFT_APP_PG_PASSWORD` and
@@ -430,9 +449,10 @@ Three Kestra behaviours that waste time otherwise:
   rather than silently, and `bun run migrate` is what prevents it.
 - **A real login is proven in the Docker tier, not the gate.** PGlite has no authentication,
   so the offline suites stand in a `SET ROLE` for a login. `task ci:itest` brings up the
-  compose Postgres and opens a connection _as_ a tenant's role against it, proving it sees
-  only its tenant and that `RESET ROLE` gives it nothing more. Run it after any change to
-  `packages/db/sql`.
+  compose Postgres and the tenant pooler and opens connections _as_ a tenant's role, proving it
+  sees only its tenant, that `RESET ROLE` gives it nothing more, and that through the pooler
+  only the current password gets in. CI does not run it: run it after any change to
+  `packages/db/sql` or to the `pgbouncer` service.
 - The raw lake is not in a backup set — it is object storage with its own durability story,
   and the one layer that cannot be regenerated. Versioning and replication, not a nightly
   dump. Recorded rather than quietly omitted.

@@ -62,6 +62,10 @@ export type LandRecordsResponse = z.infer<typeof LandRecordsResponse>;
  *
  * `relation_depended_on` is a model's drop refused because a relation another model owns reads
  * from one it would drop; `details` names the dependents (ADR 0077).
+ *
+ * `tenant_busy` (503) is a request that found no database connection in time for the tenant's
+ * login -- the pooler's queue ran out, or a limit was reached (ADR 0088). Nothing was wrong
+ * with it; asked again in a moment, it runs.
  */
 export const ApiError = z.object({
   code: z.enum([
@@ -83,6 +87,7 @@ export const ApiError = z.object({
     "query_failed",
     "relation_depended_on",
     "not_found",
+    "tenant_busy",
     "internal_error",
   ]),
   message: z.string(),

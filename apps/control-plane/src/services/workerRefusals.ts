@@ -42,7 +42,13 @@ export type WorkerFailure =
    */
   | "account-mismatch"
   /** The author's SQL did not run. The outcome carries Postgres's sentence about it. */
-  | "query-failed";
+  | "query-failed"
+  /**
+   * The worker's 503: the tenant's database login had no connection to give in time (ADR
+   * 0088). Not `unreachable` -- the worker answered -- and not `refused` -- nothing was wrong
+   * with the request. Asked again in a moment, it runs.
+   */
+  | "busy";
 
 /** The worker's answer for SQL that did not run, whose body names why. */
 export const BAD_REQUEST = 400;
@@ -54,6 +60,8 @@ export const CONFLICT = 409;
 const UNPROCESSABLE = 422;
 /** The worker's answer to a credential for an account its connection is not pinned to. */
 const PRECONDITION_FAILED = 412;
+/** The worker's answer when the tenant's login had no connection to give in time. */
+const SERVICE_UNAVAILABLE = 503;
 
 /** The refusals a status alone names. Anything else is `refused`: the worker said no. */
 export const REFUSAL_BY_STATUS: ReadonlyMap<number, WorkerFailure> = new Map([
@@ -61,6 +69,7 @@ export const REFUSAL_BY_STATUS: ReadonlyMap<number, WorkerFailure> = new Map([
   [UNPROCESSABLE, "credential-rejected"],
   [CONFLICT, "in-progress"],
   [PRECONDITION_FAILED, "account-mismatch"],
+  [SERVICE_UNAVAILABLE, "busy"],
 ]);
 
 /**

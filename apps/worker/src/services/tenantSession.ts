@@ -30,6 +30,8 @@ import {
   tenantRolesFor,
 } from "@undercroft/db/repos";
 
+import { isNoCapacity, TenantBusy } from "./tenantBusy.ts";
+
 export interface SessionTarget {
   readonly tenantId: string;
   readonly kind: TenantRoleKind;
@@ -61,8 +63,12 @@ export class TenantNotProvisioned extends Error {
 const PASSWORD_LIFETIME_MS = 60 * 60 * 1000;
 /** Headroom on every expiry, for the time between deciding and authenticating. */
 const EXPIRY_MARGIN_MS = 60 * 1000;
-/** A pooled session authenticates once, when it opens; its login has to outlive only that. */
-const SESSION_LOGIN_MS = 60 * 1000;
+/**
+ * A pooled session authenticates once, when it opens; its login has to outlive only that. But
+ * the pooler logs in to Postgres lazily, when the session's first query gets a turn -- up to its
+ * `QUERY_WAIT_TIMEOUT` later (ADR 0088) -- so this is two minutes, not the seconds it takes.
+ */
+const SESSION_LOGIN_MS = 2 * 60 * 1000;
 
 interface Lease {
   readonly password: string;
@@ -133,14 +139,22 @@ export function createTenantSessions(deps: {
       }
       return withPassword(target, SESSION_LOGIN_MS, async (password) => {
         const pool = createRolePool(deps.dsn, { user: roleFor(roles, target.kind), password });
-        // One checked-out client, so a BEGIN and the statements after it share a connection;
-        // through the pool each statement could take a different one and a transaction
-        // would frame nothing.
-        const client = await pool.connect();
         try {
-          return await fn(asExecutor(client));
+          // One checked-out client, so a BEGIN and the statements after it share a connection;
+          // through the pool each statement could take a different one and a transaction
+          // would frame nothing.
+          const client = await pool.connect();
+          try {
+            return await fn(asExecutor(client));
+          } finally {
+            client.release();
+          }
+        } catch (error) {
+          // The pooler hands out a server connection at the first query, not at login, so a
+          // refusal for want of one can surface from inside `fn` -- wrapped, by the query
+          // runner, as the author's failed query. Said once, here, for every caller.
+          throw isNoCapacity(error) ? new TenantBusy({ cause: error }) : error;
         } finally {
-          client.release();
           await pool.end();
         }
       });

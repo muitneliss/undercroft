@@ -29,6 +29,7 @@ import { googleRefresher } from "./services/google/refresh.ts";
 import type { Refresher } from "./services/runTypes.ts";
 import { closeAbandonedRuns } from "./services/ledger.ts";
 import { drainJobsBy } from "./services/shutdown.ts";
+import { createSlots, type RunTurns } from "./services/slots.ts";
 import { createTenantSessions } from "./services/tenantSession.ts";
 import { realSpawn } from "./services/transform.ts";
 import { xeroRefresher } from "./services/xero/refresh.ts";
@@ -40,6 +41,26 @@ function required(name: string): string {
     throw new Error(`${name} is required`);
   }
   return value;
+}
+
+/** Editor builds at once, apart from the scheduled ones (`services/jobs.ts`). */
+const EDITOR_BUILDS = 2;
+
+/**
+ * A run limit from the environment, for one kind of run. Unset or empty is no limit; anything
+ * else must be a whole number of at least 1, or the process refuses to start -- a typo that
+ * quietly meant "unlimited" is the outage the limit exists to prevent.
+ */
+function limitFrom(name: string, kind: keyof RunTurns): Partial<RunTurns> {
+  const raw = process.env[name] ?? "";
+  if (raw === "") {
+    return {};
+  }
+  const limit = Number.parseInt(raw, 10);
+  if (String(limit) !== raw.trim()) {
+    throw new Error(`${name} must be a whole number, not ${JSON.stringify(raw)}`);
+  }
+  return { [kind]: createSlots(limit) };
 }
 
 /**
@@ -87,6 +108,8 @@ log.info(telemetry.exporting ? "telemetry_exporting" : "telemetry_export_off");
 
 const dsn = required("UNDERCROFT_POSTGRES_DSN");
 const pool = createPool(dsn);
+/** Where tenant logins connect: the pooler (ADR 0088), or this process's own server. */
+const tenantDsn = process.env.UNDERCROFT_TENANT_POSTGRES_URL || dsn;
 const store = new S3ObjectStore({
   bucket: required("UNDERCROFT_S3_BUCKET_RAW"),
   ...(process.env.UNDERCROFT_S3_ENDPOINT === undefined
@@ -158,15 +181,27 @@ const app = createLakeApi({
   specsDir:
     process.env.UNDERCROFT_SPECS_DIR ??
     join(import.meta.dirname, "..", "..", "..", "specs", "connectors"),
-  // A tenant's project is generated per build from `app.model` and `app.macro` and pointed at
-  // the same server this process is on; the worker becomes the tenant to build and to read.
+  // A tenant's project is generated per build from `app.model` and `app.macro`; the worker
+  // becomes the tenant to build and to read. Every tenant login -- dbt's and the worker's own
+  // sessions -- connects to the pooler rather than to Postgres (ADR 0088), at the credential-
+  // less URL the compose file sets; unset, it is the server this process's own DSN names.
   // The child sees only an allowlisted part of this environment (`CHILD_ENV` in
   // `services/transform.ts`): `PATH` finds the `dbt` the image installed, and no secret of
   // this process can be read by a model's `env_var()`.
   dbt: {
-    database: connectionOf(dsn),
-    sessions: createTenantSessions({ exec: asExecutor(pool), dsn }),
+    database: connectionOf(tenantDsn),
+    sessions: createTenantSessions({ exec: asExecutor(pool), dsn: tenantDsn }),
     env: process.env,
+  },
+  // How many runs of each kind at once; the rest wait their turn, already in the ledger. The
+  // compose files set the numbers and say why; unset, a kind has no limit, as before ADR 0088.
+  turns: {
+    ...limitFrom("UNDERCROFT_MAX_CONCURRENT_BUILDS", "build"),
+    ...limitFrom("UNDERCROFT_MAX_CONCURRENT_INGESTS", "ingest"),
+    ...limitFrom("UNDERCROFT_MAX_CONCURRENT_EXTRACTS", "extract"),
+    ...limitFrom("UNDERCROFT_MAX_CONCURRENT_SEMANTIC", "semantic"),
+    // A person at the model editor waits on these: two, apart from the scheduled builds.
+    editorBuild: createSlots(EDITOR_BUILDS),
   },
   // The child environment every spawned reader inherits. `PATH` is the load-bearing part:
   // without it `Bun.spawn` cannot find `pdftotext` even where the image installed it, and

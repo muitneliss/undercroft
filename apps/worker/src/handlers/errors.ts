@@ -27,6 +27,7 @@ import {
   UnknownTenant,
 } from "../services/ingest.ts";
 import { QueryFailed } from "../services/queryRunner.ts";
+import { TenantBusy } from "../services/tenantBusy.ts";
 import { TenantNotProvisioned } from "../services/tenantSession.ts";
 
 const INTERNAL: Failure = {
@@ -37,7 +38,7 @@ const INTERNAL: Failure = {
 };
 
 export interface Failure {
-  readonly status: 400 | 404 | 409 | 502 | 500;
+  readonly status: 400 | 404 | 409 | 502 | 503 | 500;
   readonly code: ApiError["code"];
   readonly message: string;
   /** Structured detail a caller acts on -- the id of the run in progress -- never a payload. */
@@ -55,6 +56,11 @@ export function failureOf(error: unknown): Failure {
   }
   if (error instanceof TenantNotProvisioned) {
     return { status: 404, code: "not_found", message: error.message, details: [] };
+  }
+  // No connection to give in time (ADR 0088): nobody's fault, and gone in a moment. A 503, so
+  // the control plane says "busy, try again" rather than that the request or the worker broke.
+  if (error instanceof TenantBusy) {
+    return { status: 503, code: "tenant_busy", message: error.message, details: [] };
   }
   // The id of the run in progress rides in `details`, so a caller can watch it without
   // parsing a sentence.
