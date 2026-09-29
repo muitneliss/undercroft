@@ -1,4 +1,4 @@
-# 80. A Gmail harvest lands each message's body, as a document of that message
+# 84. A Gmail harvest lands each message's body, as a document of that message
 
 - Status: Accepted
 - Date: 2026-09-29

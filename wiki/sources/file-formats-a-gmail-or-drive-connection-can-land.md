@@ -5,7 +5,7 @@ date: 2026-09-29
 tags: []
 source: docs/reference/file-formats.md
 source_path: docs/reference/file-formats.md
-source_hash: 1f4e9dc0ae483b995f3d0460dca86740606e800b3ef7dee00709cf9d01c649d6
+source_hash: e1a3ad328a0d98dc3e6320ac0724668522fb445186f42ab3c31a1e4c30705fb9
 ingested: 2026-09-29
 ---
 
@@ -32,4 +32,4 @@ The reference page for every file type the connection picker offers, kept in ste
 
 **When the choice changes.** A Gmail mark lists each attachment part it left behind (document id, bare MIME type, extension, declared size; never a filename). A held message is read again only when the current choice allows one of those parts and it is under the ceiling, and then only those parts land. Adding a type, or an upgrade that admits a new spelling such as `image/jpg`, lands those attachments on held mail by the end of the first run that finishes; removing a type deletes and reads nothing; an over-ceiling attachment never causes a re-read; a message marked before the list existed is read once more; each mailbox is its own source. The Journal and `runs get` (`reread` on the `messages` entity) say how many were read again. See [[ADR 0076 A Harvest Records What It Left Behind]].
 
-**A message's body.** Since [[ADR 0080 A Gmail Harvest Lands Each Messages Body]] every Gmail message's body lands whatever the file-type choice, as its own document `<message id>:body`: the `text/plain` part, else the `text/html` one, stored as UTF-8. Its text reaches `raw.document_text` like any document's. On a mailbox that ran before that release, the first run after it reads every held message again once, for its body alone; attachments already landed are not fetched again.
+**A message's body.** Since [[ADR 0084 A Gmail Harvest Lands Each Messages Body]] every Gmail message's body lands whatever the file-type choice, as its own document `<message id>:body`: the `text/plain` part, else the `text/html` one, stored as UTF-8. Its text reaches `raw.document_text` like any document's. On a mailbox that ran before that release, the first run after it reads every held message again once, for its body alone; attachments already landed are not fetched again.

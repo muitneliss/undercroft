@@ -325,7 +325,7 @@ export interface DigestTotals {
  * Which texts a measurement reads: attachments and files, mail bodies, or both.
  *
  * Apart because they answer different questions. A mail's body is its own document since ADR
- * 0080, under an id ending `:body` (`bodyDocumentId` in `services/google/gmailAttachments.ts`,
+ * 0084, under an id ending `:body` (`bodyDocumentId` in `services/google/gmailAttachments.ts`,
  * which this layer may not import); what a file IS and what a message SAYS are measured best
  * one at a time, and a sample of both is weighted by whichever the tenant holds more of.
  */
