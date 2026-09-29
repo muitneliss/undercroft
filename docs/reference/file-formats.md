@@ -61,7 +61,7 @@ those parts.
   one. Its text then reaches `raw.document_text` like any other document's. On a mailbox that ran
   before the release that lands bodies, the first run after it reads every held message again
   once, for its body alone; attachments already landed are not fetched again.
-  [ADR 0080](../adr/0080-a-gmail-harvest-lands-each-messages-body.md) records why.
+  [ADR 0084](../adr/0084-a-gmail-harvest-lands-each-messages-body.md) records why.
 
 The run's Journal says how many held messages it read again and how many attachments that added,
 and `runs get` returns the same two numbers as `reread` on the run's `messages` entity. A message

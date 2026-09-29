@@ -17,7 +17,7 @@
  * widened choice does. Both ask the ceiling through the sink's own `overCeiling`, so a part too
  * large to land is never a reason to read its message again. ADR 0076, #292.
  *
- * THE BODY IS A PART TOO, and the one the file-type choice does not govern. Since ADR 0080 a
+ * THE BODY IS A PART TOO, and the one the file-type choice does not govern. Since ADR 0084 a
  * message's text lands as a document of its own under `<messageId>:body`, so it takes the same
  * road as an attachment -- the lake, the catalogue, the extract verb -- and the same mark. A
  * message held from before that release has a body nobody landed, so its mark lists the body as
@@ -248,7 +248,7 @@ export interface SortedParts {
   readonly offered: readonly AttachmentPart[];
   /**
    * The message's text, when it has one and this read looks at it: always on a first read, and on
-   * a read again only when the mark lists it. Offered whatever the choice, since ADR 0080.
+   * a read again only when the mark lists it. Offered whatever the choice, since ADR 0084.
    */
   readonly body: BodyPart | null;
   /** Refused by the choice or over the ceiling: kept on the mark, so a wider choice finds it. */

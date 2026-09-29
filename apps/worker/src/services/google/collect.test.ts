@@ -997,7 +997,7 @@ describe("gmail: a file type chosen after its messages were held", () => {
   });
 });
 
-describe("gmail: a message's text (ADR 0080)", () => {
+describe("gmail: a message's text (ADR 0084)", () => {
   const TEXT = "Please settle invoice 17 by Friday.";
   function b64(text: string | Uint8Array): string {
     return Buffer.from(text).toString("base64url");

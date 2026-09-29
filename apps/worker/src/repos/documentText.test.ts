@@ -664,7 +664,7 @@ describe("a tenant's texts, one per digest", () => {
 
 describe("a tenant's texts, by part", () => {
   it("samples a mail body only when asked for bodies, and a file only when asked for files", async () => {
-    // Since ADR 0080 a message's body is a document of its own. What a file IS and what a mail
+    // Since ADR 0084 a message's body is a document of its own. What a file IS and what a mail
     // SAYS are measured apart, so neither sample may carry the other.
     await land("m1:body");
     await land("m1:002", OTHER_SHA);

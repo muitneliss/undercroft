@@ -1,4 +1,4 @@
--- List every held Gmail message's body as left behind, so the next harvest lands it. ADR 0080.
+-- List every held Gmail message's body as left behind, so the next harvest lands it. ADR 0084.
 --
 -- Until this release a harvest landed a message's headers and chosen attachments and never its
 -- body. Now the body lands as a document of its own (`<messageId>:body`), but a message is read

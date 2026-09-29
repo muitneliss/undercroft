@@ -1,17 +1,17 @@
 ---
-title: ADR 0080 A Gmail Harvest Lands Each Messages Body
+title: ADR 0084 A Gmail Harvest Lands Each Messages Body
 type: source
 date: 2026-09-29
 tags: []
-source: docs/adr/0080-a-gmail-harvest-lands-each-messages-body.md
-source_path: docs/adr/0080-a-gmail-harvest-lands-each-messages-body.md
-source_hash: f60437d99e24b861977a2ec7f50eafc9c8a86a755ed5aee8a279574afed3aec8
+source: docs/adr/0084-a-gmail-harvest-lands-each-messages-body.md
+source_path: docs/adr/0084-a-gmail-harvest-lands-each-messages-body.md
+source_hash: 2db31e1ca380a75b586993e83efbcebc292301ea94195b6727e7cf277c78607d
 ingested: 2026-09-29
 ---
 
-# ADR 0080 A Gmail Harvest Lands Each Messages Body
+# ADR 0084 A Gmail Harvest Lands Each Messages Body
 
-# ADR 0080 A Gmail harvest lands each message's body, as a document of that message
+# ADR 0084 A Gmail harvest lands each message's body, as a document of that message
 
 Status: Accepted, 2026-09-29. Reverses the promise a Gmail connection made since it was built ("message headers and the attachment types you allow", bodies never fetched), which lived on the consent card and in `gmail.ts` rather than in an ADR. Extends [[ADR 0024: A document's text is readable by dbt]] and [[ADR 0076 A Harvest Records What It Left Behind]].
 

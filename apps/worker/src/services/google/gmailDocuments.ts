@@ -71,7 +71,7 @@ export function attachmentDocument(
 }
 
 /**
- * A message's text as a document to land, beside its attachments. ADR 0080.
+ * A message's text as a document to land, beside its attachments. ADR 0084.
  *
  * A DOCUMENT, NOT A FIELD ON THE RECORD. `raw.records` is read by dbt directly, while a
  * document's text reaches Postgres only through `raw.document_text`, the one table `pii.md`

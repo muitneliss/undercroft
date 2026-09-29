@@ -4,7 +4,7 @@
  *
  * What is promised on the consent card is what this reads and no more: "message headers, the
  * text of each message, and the attachment types you allow, from the mailbox you connect",
- * scoped to chosen labels or deliberately to the whole mailbox. Until ADR 0080 bodies were never
+ * scoped to chosen labels or deliberately to the whole mailbox. Until ADR 0084 bodies were never
  * fetched; now the body lands as a DOCUMENT of its message, never in the record, so it takes the
  * road text already takes -- the lake, then `raw.document_text` -- and reaches no dashboard
  * except through a model the customer wrote (`pii.md`).
@@ -317,7 +317,7 @@ async function collectLabelIds(
  *
  * `metadataHeaders` is dropped because it does nothing at this format; `headerMap` keeps the
  * same six headers on the way in instead. The body parts it returns become the body document
- * (ADR 0080); the snippet and the rest of the header set are never read and never landed, and
+ * (ADR 0084); the snippet and the rest of the header set are never read and never landed, and
  * that half is what `headerMap` and `messageRecord` are pinned on.
  */
 function messageUrl(messageId: string): string {
