@@ -13,6 +13,11 @@
  * without saying what you would do with it. ADR 0034, and ADR 0052 and ADR 0072 for the
  * request.
  *
+ * A watermark can also be refused for its AGE. A source may document changes its filter never
+ * reports -- Xero does -- so the mark vouches only for what the filter can see, and a stream whose
+ * spec bounds that is read whole once its last whole read is too old (ADR 0080). The same `null`
+ * answers it, for the same reason.
+ *
  * This deliberately does NOT mirror `writeCursor`'s `GREATEST`. That guard exists because two
  * loaders overlap on one stream by construction and a rewound LOAD cursor drags a projection
  * back behind rows that are already there. Nothing overlaps here -- `run_one_running` in
@@ -43,22 +48,45 @@ export interface CursorReading {
 }
 
 /**
+ * How recent this stream's last whole read must be for its watermark to be trusted: no older
+ * than `maxAgeMs` before the start of run `runId`. `whole_read_at` is a run's start too, so both
+ * ends are on the clock the cadence measures gaps with. ADR 0080.
+ */
+export interface WholeReadBound {
+  readonly runId: string;
+  readonly maxAgeMs: number;
+}
+
+/**
  * The watermark to send for this stream, or `null` for a full read.
  *
- * `null` covers every honest reason to read everything -- this stream has never run, or the
- * stored watermark was written under a different format or for a different request -- because a
- * caller does the same thing in each case and a distinction it cannot act on is one more thing
- * to get wrong.
+ * `null` covers every honest reason to read everything -- this stream has never run, the stored
+ * watermark was written under a different format or for a different request, or a `bound` was
+ * given and the last whole read is older than it (or was never recorded) -- because a caller
+ * does the same thing in each case and a distinction it cannot act on is one more thing to get
+ * wrong.
  */
 export async function readSyncCursor(
   exec: SqlExecutor,
   identity: StreamIdentity,
   reading: CursorReading,
+  bound?: WholeReadBound,
 ): Promise<string | null> {
   const { rows } = await exec.query<{ watermark: string }>(
     `SELECT watermark FROM raw.sync_cursor
-      WHERE source = $1 AND tenant_id = $2 AND entity = $3 AND format = $4 AND request_key = $5`,
-    [identity.source, identity.tenantId, identity.entity, reading.format, reading.requestKey],
+      WHERE source = $1 AND tenant_id = $2 AND entity = $3 AND format = $4 AND request_key = $5
+        AND ($6::text IS NULL OR whole_read_at > (
+              SELECT started_at - $7::bigint * interval '1 millisecond'
+                FROM ops.run WHERE id = $6))`,
+    [
+      identity.source,
+      identity.tenantId,
+      identity.entity,
+      reading.format,
+      reading.requestKey,
+      bound?.runId ?? null,
+      bound?.maxAgeMs ?? null,
+    ],
   );
   return rows[0]?.watermark ?? null;
 }
@@ -69,19 +97,26 @@ export async function readSyncCursor(
  * The format and the request key travel WITH the watermark rather than beside it in the
  * caller's head: they are one fact, and a row holding a value under yesterday's format or
  * yesterday's request is what {@link readSyncCursor} refuses to answer with.
+ *
+ * `wholeReadBy` is the run that read the stream whole, sending no watermark, and its start
+ * becomes `whole_read_at`; `null` for a read that sent one, which keeps the time already held.
  */
 export async function writeSyncCursor(
   exec: SqlExecutor,
   identity: StreamIdentity,
   cursor: CursorReading & { readonly watermark: string },
+  wholeReadBy: string | null,
 ): Promise<void> {
   await exec.query(
     `INSERT INTO raw.sync_cursor
-       (source, tenant_id, entity, watermark, format, request_key, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, now())
+       (source, tenant_id, entity, watermark, format, request_key, whole_read_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, (SELECT started_at FROM ops.run WHERE id = $7), now())
      ON CONFLICT (source, tenant_id, entity) DO UPDATE
        SET watermark = EXCLUDED.watermark, format = EXCLUDED.format,
-           request_key = EXCLUDED.request_key, updated_at = now()`,
+           request_key = EXCLUDED.request_key,
+           whole_read_at = CASE WHEN $7::text IS NULL THEN raw.sync_cursor.whole_read_at
+                                ELSE EXCLUDED.whole_read_at END,
+           updated_at = now()`,
     [
       identity.source,
       identity.tenantId,
@@ -89,6 +124,7 @@ export async function writeSyncCursor(
       cursor.watermark,
       cursor.format,
       cursor.requestKey,
+      wholeReadBy,
     ],
   );
 }

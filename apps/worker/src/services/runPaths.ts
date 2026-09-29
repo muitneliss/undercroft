@@ -18,16 +18,13 @@
 
 import {
   EntityNotGranted,
-  laterStamp,
   type ReadEnd,
   readEntity,
   type RunContext,
-  requestKey,
 } from "@undercroft/connector-runtime";
 import { type ConnectorEntity, type ConnectorSpec, sourceKind } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
 
-import { readSyncCursor, writeSyncCursor } from "../repos/syncCursor.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type CollectResult, runGoogleCollect } from "./google/collect.ts";
 import type { LandSummary, RefusalWriter } from "./landing.ts";
@@ -39,6 +36,7 @@ import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken, RunStopped } from "./runTypes.ts";
 import type { RunJournal } from "./runJournal.ts";
 import { openSpecRun } from "./specRun.ts";
+import { openStreamCursor } from "./streamCursor.ts";
 
 /**
  * The Google path, reported in the same shape as a spec run.
@@ -256,23 +254,16 @@ async function ingestEntity(
   journal.info("entity_started", { entity: entity.name });
 
   const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
-  const { incremental } = entity;
-  // The mark is read, and written back, only under the request this run sends: a request that has
-  // changed since -- a spec edit or a scope -- finds none and reads everything once (ADR 0072).
-  const reading =
-    incremental === undefined
-      ? null
-      : { format: incremental.format, requestKey: requestKey(spec, entity) };
-  const since = reading === null ? null : await readSyncCursor(deps.exec, stream, reading);
+  const cursor = await openStreamCursor(deps.exec, { spec, entity, stream, runId: input.runId });
 
   const sink = createRecordSink(
     { lake: deps.lake, exec: deps.exec, refuse: intoLedger(run.ledger) },
     { source: input.source, tenantId: input.tenantId, runId: input.runId },
   );
+  const { since } = cursor;
   const entityCtx: RunContext = { ...ctx, ...(since === null ? {} : { since }) };
 
   let read = 0;
-  let mark: string | null = null;
   let stopped = false;
   const end: Ended<ReadEnd> = {};
   for await (const record of keepingEnd(readEntity(spec, entity, entityCtx), end)) {
@@ -283,9 +274,7 @@ async function ingestEntity(
       payloadText: record.payloadText,
     });
     read += 1;
-    if (incremental !== undefined) {
-      mark = laterStamp(incremental.format, mark, record.incrementalAt);
-    }
+    cursor.observe(record.incrementalAt);
     // Coalesced by the journal: a line per record would be the run written twice.
     journal.progress("records_read", { entity: entity.name, read });
     if (deps.stop?.aborted === true) {
@@ -305,9 +294,7 @@ async function ingestEntity(
   if (stopped) {
     throw new RunStopped();
   }
-  if (reading !== null && mark !== null) {
-    await writeSyncCursor(deps.exec, stream, { ...reading, watermark: mark });
-  }
+  await cursor.save();
   await settleRemovals(deps.exec, spec, stream, end.value);
   return end.value?.named ?? null;
 }

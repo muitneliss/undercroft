@@ -10,7 +10,7 @@ worked.
 
 ## 0. What is different about Xero
 
-Three things, each of which the code handles and each of which you will meet while testing:
+Four things, each of which the code handles and each of which you will meet while testing:
 
 - **Xero rotates the refresh token.** Every refresh issues a new pair and kills the one just
   spent. The worker writes the new pair back under a row lock before it uses the access token,
@@ -22,6 +22,20 @@ Three things, each of which the code handles and each of which you will meet whi
 - **The grant lapses sixty days after its last use.** Every successful refresh moves that date
   forward; runs stopping is what lets it arrive. The platform warns the customer's
   administrators a week before, and the card says "reconnect" once it has passed.
+- **Some Xero edits are invisible to the run that follows them.** After its first run, each paged
+  list asks only for what changed since the last one (`If-Modified-Since`). Xero documents edits
+  that header never returns: a due date or the sent flag moved on a partially paid transaction,
+  such as an invoice or bill, and a contact's `Balances`, `IsSupplier` and `IsCustomer`. A line's
+  `AccountCode` is another. So each such list is read whole again once a day. The run does this
+  itself, without a reconnect, on its first run that starts a day (less one five-minute tick)
+  after the list was last read whole. Such an edit reaches Raw lake within 24 hours plus one
+  run interval: at most 25 hours on the hourly cadence, 30 every six hours, and one day on the
+  daily cadence, which reads whole on every run. A whole read lands every record nobody edited
+  as unchanged. The first run after this shipped read every list whole once.
+  [ADR 0080](../adr/0080-a-list-whose-change-filter-cannot-see-every-change-is-read-whole-on-a-bound.md).
+  `Balances` is Xero's own figure, converted to the base currency, and it moves with every
+  payment and every due date that passes, so it can be up to that bound out of date. Derive
+  outstanding and overdue amounts from invoices in a model instead.
 
 The whole surface is gated on `UNDERCROFT_XERO_CLIENT_ID`, `UNDERCROFT_XERO_CLIENT_SECRET` and
 `UNDERCROFT_PUBLIC_URL`; an empty value counts as unset. With any of them unset, Xero reads

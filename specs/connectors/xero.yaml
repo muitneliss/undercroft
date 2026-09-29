@@ -84,6 +84,16 @@ defaults:
 # read the same way into `source_updated_at`, where the raw text once failed the whole run
 # (#265). See `packages/connector-runtime/src/incremental.ts`.
 #
+# `wholeReadAfterHours: 24` on every list read that way, because the header cannot see every
+# change. Xero documents that a due date or `SentToContact` moved on a partially paid document,
+# and a contact's `Balances`, `IsSupplier` and `IsCustomer`, do not move `UpdatedDateUTC`, and
+# Fivetran documents a line's `AccountCode` too. So each list is read whole, with no header, on
+# the first run that starts a day (less one scheduler tick) after the run that last read it
+# whole, and the lake records every record nobody edited as unchanged. That is the cadence
+# Fivetran re-reads Xero contacts at. Xero refuses a read that has to process more than 100,000
+# documents, so an organisation that large already fails its first read, and still would
+# (#314, ADR 0080).
+#
 # `unitdp: "4"` on every list whose endpoint takes it in Xero's OpenAPI document: /Invoices,
 # /CreditNotes, /Overpayments, /Prepayments, /Items and /BankTransactions. Without it Xero ROUNDS each line's
 # `UnitAmount` (an item's `UnitPrice`) to 2 decimals, so a bill line priced 0.2248 landed as 0.22,
@@ -105,6 +115,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: invoices
     request: { kind: list, path: /Invoices, query: { pageSize: "100", unitdp: "4" } }
@@ -118,6 +129,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: payments
     request: { kind: list, path: /Payments, query: { pageSize: "100" } }
@@ -131,6 +143,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   # Each entity names its own id field. A single hardcoded "InvoiceID" would silently key
   # credit notes on nothing.
@@ -146,6 +159,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   # The lists below are the rest of what the scopes above reach (issues 271, 277 and 308). They do not
   # all read like the four above, and each difference is Xero's OpenAPI document's, not a choice:
@@ -178,6 +192,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: purchase_orders
     request: { kind: list, path: /PurchaseOrders, query: { pageSize: "100" } }
@@ -192,6 +207,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: repeating_invoices
     request: { kind: list, path: /RepeatingInvoices }
@@ -223,6 +239,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: overpayments
     request: { kind: list, path: /Overpayments, query: { pageSize: "100", unitdp: "4" } }
@@ -237,6 +254,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: prepayments
     request: { kind: list, path: /Prepayments, query: { pageSize: "100", unitdp: "4" } }
@@ -251,6 +269,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: batch_payments
     request: { kind: list, path: /BatchPayments }
@@ -266,6 +285,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: contact_groups
     request: { kind: list, path: /ContactGroups }
@@ -301,6 +321,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: tracking_categories
     request: { kind: list, path: /TrackingCategories, query: { includeArchived: "true" } }
@@ -352,6 +373,7 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
 
   - name: bank_transfers
     request: { kind: list, path: /BankTransfers, query: { includeDeleted: "true" } }
@@ -374,3 +396,4 @@ entities:
       sourcePath: UpdatedDateUTC
       format: ms-json-date
       send: rfc3339-seconds
+      wholeReadAfterHours: 24
