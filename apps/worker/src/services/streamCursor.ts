@@ -47,8 +47,8 @@ export interface StreamCursor {
   /** Take one record's incremental value into account. */
   readonly observe: (incrementalAt: string | null) => void;
   /**
-   * Write back how far a read that got to the end got. A read the budget cut short, and one that
-   * carried no stamp at all, write nothing.
+   * Write back how far a read that got to the end got. A read the budget cut short writes
+   * nothing, and so does one that asked for changes and found none.
    */
   readonly save: (end: ReadEnd) => Promise<void>;
 }
@@ -95,7 +95,10 @@ export async function openStreamCursor(
       mark = laterStamp(incremental.format, mark, incrementalAt);
     },
     save: async (end): Promise<void> => {
-      if (end.exhausted || mark === null) {
+      // A read that asked for changes and found none keeps what is held. A WHOLE read that found
+      // no stamp -- an empty list -- still happened, and is recorded with no watermark, so the
+      // card can say when it was read and what it cost (390).
+      if (end.exhausted || (mark === null && since !== null)) {
         return;
       }
       const wholeRead = since === null ? { runId: at.runId, requests: end.requests } : null;

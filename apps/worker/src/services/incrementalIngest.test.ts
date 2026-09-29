@@ -22,6 +22,7 @@ import { requestKey } from "@undercroft/connector-runtime";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { parseSpec } from "@undercroft/contracts";
 import { createStampSource, TestClock } from "@undercroft/core";
+import { listWholeReads } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
@@ -381,6 +382,22 @@ describe("a connection re-syncs its lists whole on its own schedule, within the 
     const next = whole([{ id: "1", changedAt: "400" }]);
     await ingest(next);
     expect(next.calls.map((call) => call.url)).toEqual([`${BASE}/things`]);
+  });
+
+  it("a list that holds nothing is still recorded as read whole, with what the read cost", async () => {
+    // Found on production after v1.48.0: a Xero organisation with no purchase orders never got a
+    // cursor row, so its card said no full re-sync had ever finished, and never how long one takes.
+    writeFileSync(
+      join(specsDir, "demo.yaml"),
+      BUDGETED.replace("    idPath: id\n", "    idPath: id\n    guards: { failOnEmpty: false }\n"),
+    );
+
+    await ingest(whole([]));
+
+    const reads = await listWholeReads(db, "CASE-1");
+    expect(reads.map((read) => [read.entity, read.at !== null, read.requests])).toEqual([
+      ["things", true, 1],
+    ]);
   });
 
   it("a list with nothing to fall back on waits, unread, while the day has no room", async () => {
