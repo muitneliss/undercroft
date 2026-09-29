@@ -32,7 +32,7 @@
 
 import type { DocumentsToVerify } from "@tradetrust-tt/tt-verify";
 
-import { acraBusinessProfile } from "./acraBusinessProfile.ts";
+import { acraBusinessProfile, type ProfileIssuer } from "./acraBusinessProfile.ts";
 import type { OaIssuer, OpenAttestationDeps } from "./openAttestationVerify.ts";
 
 /** The one version this reader verifies. A new version is a new branch, never a default. */
@@ -92,12 +92,63 @@ export async function readOpenAttestation(
       identityProofLocation: issuer.location,
     })),
   };
+  const openAttestation = { version: OA_V2_SCHEMA, verification };
   const profile = acraBusinessProfile(data, issuers);
-  const body =
-    profile === null
-      ? { openAttestation: { version: OA_V2_SCHEMA, verification }, data }
-      : { openAttestation: { version: OA_V2_SCHEMA, verification }, acraBusinessProfile: profile };
-  return { ok: true, text: JSON.stringify(body, null, 2) };
+  return {
+    ok: true,
+    text:
+      profile === null ? written({ openAttestation, data }) : asProfile(openAttestation, profile),
+  };
+}
+
+/** The one layout a verified text has, whether read from bytes or laid out again. */
+function written(body: Record<string, unknown>): string {
+  return JSON.stringify(body, null, 2);
+}
+
+function asProfile(openAttestation: unknown, profile: Record<string, unknown>): string {
+  return written({ openAttestation, acraBusinessProfile: profile });
+}
+
+/**
+ * A stored reading laid out again under today's templates, or `null` when that changes nothing.
+ *
+ * WHY FROM THE TEXT AND NOT THE BYTES. A profile read before its template was known is stored as
+ * its unwrapped `data`, beside the verification that admitted it. Laying that out again needs
+ * nothing the text does not hold, so it is done without the lake, the verifier or the DNS -- and
+ * that is the point: re-reading from the bytes would put a verified text at the mercy of a DNS
+ * lookup, and a lookup that failed would replace it with a refusal (ADR 0081). The verification
+ * is this worker's own, written only after every check passed; it is consulted, not re-earned.
+ *
+ * A text that is not such a reading -- a profile already, a refusal, anything unparseable, a
+ * document from another issuer or in a template still unknown -- comes back `null`, and its row
+ * is left exactly as it is.
+ */
+export function relaid(stored: string): string | null {
+  let body: unknown;
+  try {
+    body = JSON.parse(stored);
+  } catch {
+    return null;
+  }
+  if (!(isRecord(body) && isRecord(body.openAttestation) && isRecord(body.data))) {
+    return null;
+  }
+  const { verification } = body.openAttestation;
+  if (!(isRecord(verification) && verification.verified === true)) {
+    return null;
+  }
+  const issuers: ProfileIssuer[] = Array.isArray(verification.issuers)
+    ? verification.issuers.map((issuer) => ({
+        location:
+          isRecord(issuer) && typeof issuer.identityProofLocation === "string"
+            ? issuer.identityProofLocation
+            : "",
+      }))
+    : [];
+  // No issuer recorded means none was proven at ACRA, not that every one was.
+  const profile = issuers.length === 0 ? null : acraBusinessProfile(body.data, issuers);
+  return profile === null ? null : asProfile(body.openAttestation, profile);
 }
 
 interface SignedV2 {

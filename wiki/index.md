@@ -85,6 +85,7 @@
 - [ADR 0079 Xero Reads Bank Transactions Transfers And Manual Journals](sources/adr-0079-xero-reads-bank-transactions-transfers-and-manual-journals.md)
 - [ADR 0080 A Gmail Harvest Lands Each Messages Body](sources/adr-0080-a-gmail-harvest-lands-each-messages-body.md)
 - [ADR 0080 A List Whose Change Filter Cannot See Every Change Is Read Whole on a Bound](sources/adr-0080-a-list-whose-change-filter-cannot-see-every-change-is-read-whole-on-a-bound.md)
+- [ADR 0081: ACRA templates are a configured table, and a reading is laid out again from itself](sources/adr-0081-acra-templates-are-a-configured-table-and-a-reading-is-laid-out-again-from-itself.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)

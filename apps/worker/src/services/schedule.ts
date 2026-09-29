@@ -26,8 +26,13 @@ import { isDue } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import { type DueCandidate, listDueCandidates } from "@undercroft/db/repos";
 
+import { staleLayoutScopes } from "../repos/documentLayout.ts";
 import { pendingScopes } from "../repos/documentText.ts";
-import { CURRENT_READER_VERSION } from "./extract/extractText.ts";
+import {
+  CURRENT_LAYOUT_VERSION,
+  CURRENT_READER_VERSION,
+  RELAYABLE_METHODS,
+} from "./extract/extractText.ts";
 
 export interface DuePair {
   readonly tenantId: string;
@@ -58,6 +63,20 @@ export async function listDue(exec: SqlExecutor, now: Date = new Date()): Promis
  * a scheduler asking an older question than `runExtract` answers would start runs that find
  * nothing, which is the one thing this function exists not to do.
  */
-export function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
-  return pendingScopes(exec, { readerVersion: CURRENT_READER_VERSION });
+export async function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
+  const [unread, unlaid] = await Promise.all([
+    pendingScopes(exec, { readerVersion: CURRENT_READER_VERSION }),
+    // A text written under an older layout is outstanding work too, and a scope may hold
+    // nothing else: the tenant whose only change is that its templates became known.
+    staleLayoutScopes(exec, {
+      methods: RELAYABLE_METHODS,
+      layoutVersion: CURRENT_LAYOUT_VERSION,
+    }),
+  ]);
+  const due = new Map(
+    [...unread, ...unlaid].map((pair) => [`${pair.tenantId}\u0000${pair.source}`, pair]),
+  );
+  return [...due.values()].sort(
+    (a, b) => a.tenantId.localeCompare(b.tenantId) || a.source.localeCompare(b.source),
+  );
 }

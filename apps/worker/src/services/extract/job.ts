@@ -76,9 +76,10 @@ async function settle(
   await recordEntities(exec, runId, [
     {
       entity: "documents",
-      landed: result.read + refused,
+      landed: result.read + refused + result.relaid,
       created: result.read,
-      changed: 0,
+      // Texts laid out again from themselves: changed, and not read.
+      changed: result.relaid,
       unchanged: 0,
       refused,
     },
