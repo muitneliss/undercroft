@@ -4,7 +4,7 @@
 #
 # Two rules because ast-grep binds one language per rule: `.tsx` parses as `tsx`,
 # `.ts` as `typescript`. Both are scoped to the two React trees -- apps/ui, and the desktop
-# app's wizard (apps/desktop, ADR 0097), whose client state lives in its own Zustand store --
+# app's wizard (apps/desktop, ADR 0098), whose client state lives in its own Zustand store --
 # because `useState` is a React concern and the backend apps have no React. See
 # .claude/rules/state.md and docs/adr/0009.
 #

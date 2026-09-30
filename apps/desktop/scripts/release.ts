@@ -1,5 +1,5 @@
 /**
- * Checksum the desktop app's release artifacts and attach them to a GitHub release (ADR 0097).
+ * Checksum the desktop app's release artifacts and attach them to a GitHub release (ADR 0098).
  *
  *   release.ts <dir>               write <dir>/undercroft-desktop-SHA256SUMS
  *   release.ts <dir> --upload TAG  ...and attach it and the artifacts to release TAG

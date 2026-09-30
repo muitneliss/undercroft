@@ -110,12 +110,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Build the desktop app (ADR 0097) on one runner per platform: Electrobun builds only for the
+  # Build the desktop app (ADR 0098) on one runner per platform: Electrobun builds only for the
   # system it runs on, and publishes no macOS x64 core, so macOS is Apple Silicon alone. Each
   # runner hands its `artifacts/` to the job below as a workflow artifact rather than uploading
   # to the release itself, so one job writes one checksum file for the whole app.
   #
-  # Nothing is signed or notarized: ADR 0097 records why, and `docs/runbook/install.md` tells a
+  # Nothing is signed or notarized: ADR 0098 records why, and `docs/runbook/install.md` tells a
   # person what their system says about an unsigned app and how to verify the download instead.
   build-desktop:
     needs: release-please

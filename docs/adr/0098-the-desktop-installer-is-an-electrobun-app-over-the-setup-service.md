@@ -1,4 +1,4 @@
-# 97. The desktop installer is an Electrobun app over the setup service
+# 98. The desktop installer is an Electrobun app over the setup service
 
 - Status: Accepted
 - Date: 2026-09-30

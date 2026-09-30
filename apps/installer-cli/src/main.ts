@@ -42,7 +42,7 @@ const arch: Arch = process.arch === "arm64" ? "arm64" : "x64";
 
 /**
  * Where an install lives when `--dir` does not say. The setup package decides, so the desktop
- * app finds the same install this wizard wrote (ADR 0097).
+ * app finds the same install this wizard wrote (ADR 0098).
  */
 function defaultDir(): string {
   return defaultInstallDir(platform, {

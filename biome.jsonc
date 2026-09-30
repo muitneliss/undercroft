@@ -448,7 +448,7 @@
     // and its terminal ARE the platform, the same as for the servers. `apps/installer-cli` is
     // compiled into a Bun executable per platform (ADR 0095), and a process runner, the install
     // folder and a terminal prompt are what it is for. `apps/desktop`'s main process runs on
-    // Bun inside the Electrobun app (ADR 0097) and is named by its layers; its webview,
+    // Bun inside the Electrobun app (ADR 0098) and is named by its layers; its webview,
     // `apps/desktop/src/view`, is a browser and keeps the rule, like `apps/ui/src`.
     //
     // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
@@ -555,7 +555,7 @@
       "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } }
     },
 
-    // The desktop wizard's sheet (ADR 0097). Four rules, four reasons, each checked against it:
+    // The desktop wizard's sheet (ADR 0098). Four rules, four reasons, each checked against it:
     {
       "includes": ["apps/desktop/src/view/index.css"],
       "linter": {
@@ -844,9 +844,7 @@
     // per span, and the skeleton's widths are derived so the placeholder does not look ruled.
     // The two run gauges are the same shape of fact: `scaleX` IS the fraction of the work
     // that is done, read off `ops.run_event` once a second, and a class can only carry a
-    // value somebody wrote into the sheet beforehand (ADR 0032). The lineage drawing's grid
-    // tracks and each node's cell are the tenant's graph laid out, computed per render from
-    // `models.lineage` (ADR 0092) -- the same kind of fact.
+    // value somebody wrote into the sheet beforehand (ADR 0032).
     // ADR 0012 records this rule's autofix DELETING the `flexGrow` that gives the rail its
     // proportions, which is the failure mode to keep in mind if it is ever turned back on --
     // here the same fix would delete the measurement and leave a full bar on every run.
@@ -857,7 +855,6 @@
         "apps/ui/src/components/QuestionCard.tsx",
         "apps/ui/src/components/RunFlow.tsx",
         "apps/ui/src/components/RunProgress.tsx",
-        "apps/ui/src/components/LineageDrawing.tsx",
         "apps/ui/src/routes/SignIn.tsx"
       ],
       "linter": { "rules": { "nursery": { "noInlineStyles": "off" } } }

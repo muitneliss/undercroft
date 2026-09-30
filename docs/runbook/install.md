@@ -8,7 +8,7 @@ records why. This page is how to install, operate, back up and remove it.
 The wizard comes two ways, and both install the same thing into the same place:
 
 - **The desktop app**, a window and a tray icon, for anyone who would rather not open a
-  terminal. [The desktop app](#the-desktop-app) below; [ADR 0097](../adr/0097-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
+  terminal. [The desktop app](#the-desktop-app) below; [ADR 0098](../adr/0098-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
   records its design.
 - **The terminal wizard**, `undercroft-installer`, which also runs unattended for a script or a
   server. [Install](#install) below.
@@ -213,7 +213,7 @@ toolchain.
 
 Nothing Undercroft publishes is code-signed: not the desktop app and not the terminal wizard's
 binaries. Each is built by the public release workflow from the public source at the release's
-tag, and each release publishes SHA-256 checksums beside them. [ADR 0097](../adr/0097-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
+tag, and each release publishes SHA-256 checksums beside them. [ADR 0098](../adr/0098-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
 records why, and what would change it.
 
 **Check a download against its checksum** before you open it. Download the checksum file from

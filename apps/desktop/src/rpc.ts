@@ -1,5 +1,5 @@
 /**
- * What the wizard's webview and the app's main process say to each other (ADR 0097).
+ * What the wizard's webview and the app's main process say to each other (ADR 0098).
  *
  * Types only, and no Electrobun import: this module is the contract, and both sides are checked
  * against it. `main.ts` hands it to `BrowserView.defineRPC<DesktopRpc>` and `view/bridge.ts` to

@@ -35,7 +35,7 @@ tasks:
       Build the desktop app (apps/desktop, Electrobun) for THIS operating system into
       apps/desktop/artifacts/: a .dmg on macOS, a Setup .zip on Windows, a .tar.gz on Linux, and
       the updater's files. Needs the network the first time (Hutch fetches the pinned toolchain).
-      ADR 0097.
+      ADR 0098.
     cmds:
       - bun run build:desktop
 

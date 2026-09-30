@@ -1,5 +1,5 @@
 /**
- * Build the desktop app for this machine with Electrobun's pinned toolchain (ADR 0097).
+ * Build the desktop app for this machine with Electrobun's pinned toolchain (ADR 0098).
  *
  *   build.ts            a release build (`--env=stable`) into `apps/desktop/artifacts/`
  *   build.ts --dev      a development build into `apps/desktop/build/`, which `--run` also opens

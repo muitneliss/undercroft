@@ -1,4 +1,4 @@
-# The desktop app (ADR 0097), built and walked on each platform it ships for.
+# The desktop app (ADR 0098), built and walked on each platform it ships for.
 #
 # `task ci:verify` checks everything in apps/desktop that can be checked without Electrobun's
 # SDK and a window. This checks the rest where it runs: the three modules that import the SDK

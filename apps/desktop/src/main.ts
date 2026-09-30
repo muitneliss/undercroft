@@ -3,7 +3,7 @@
  *
  * It alone reads the environment and the platform, takes the global `fetch` and a real clock,
  * builds the one `Desktop` service, and binds it to the three things Electrobun gives the app:
- * the wizard's window (with its RPC, `rpc.ts`), the tray, and the updater (ADR 0097). Everything
+ * the wizard's window (with its RPC, `rpc.ts`), the tray, and the updater (ADR 0098). Everything
  * below receives those as values (`layering.md`); `handlers/shell.ts` is the port they are
  * written against, implemented here.
  *

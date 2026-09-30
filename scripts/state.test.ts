@@ -39,7 +39,7 @@ const FIXTURES: Record<string, string> = {
       return <span>quiet</span>;
     }
   `,
-  // The desktop app's wizard is React too, with its own store (ADR 0097).
+  // The desktop app's wizard is React too, with its own store (ADR 0098).
   "apps/desktop/src/view/steps/Qux.tsx": `
     import { useState } from "react";
     export function Qux(): React.JSX.Element {

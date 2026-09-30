@@ -5,13 +5,15 @@ date: 2026-09-30
 tags: []
 source: docs/runbook/install.md
 source_path: docs/runbook/install.md
-source_hash: 10e8c155f104ef41b856eff7045a5307b5ac605a3d3afc7255915a94278bad5a
+source_hash: 74eacc544db9702a19de830926760b391bc825e4429ba20525d5ceaf35149b71
 ingested: 2026-09-30
 ---
 
 # Runbook: Installing Undercroft
 
-How to install, operate, back up and remove a self-installed Undercroft; the decisions are [[ADR 0095: Undercroft installs through a setup wizard that drives Docker]] and, for the desktop app, [[ADR 0097: The desktop installer is an Electrobun app over the setup service]]. The wizard comes two ways that install the same thing into the same folder: the desktop app (a window and a tray icon) and the terminal wizard `undercroft-installer`, which also runs unattended. Needs Docker (the wizard offers winget, Homebrew or a download, or `get.docker.com`), at least 8 GB for Docker, about 15 GB of disk, and for a server an https reverse proxy plus a sign-in method ([[Runbook Sign-In Setup]]). Docker Desktop needs a paid subscription for companies above 250 employees or USD 10 million revenue.
+# Runbook: Installing Undercroft
+
+How to install, operate, back up and remove a self-installed Undercroft; the decisions are [[ADR 0095: Undercroft installs through a setup wizard that drives Docker]] and, for the desktop app, [[ADR 0098: The desktop installer is an Electrobun app over the setup service]]. The wizard comes two ways that install the same thing into the same folder: the desktop app (a window and a tray icon) and the terminal wizard `undercroft-installer`, which also runs unattended. Needs Docker (the wizard offers winget, Homebrew or a download, or `get.docker.com`), at least 8 GB for Docker, about 15 GB of disk, and for a server an https reverse proxy plus a sign-in method ([[Runbook Sign-In Setup]]). Docker Desktop needs a paid subscription for companies above 250 employees or USD 10 million revenue.
 
 Terminal wizard. macOS and Linux: `curl -fsSL https://github.com/muitneliss/undercroft/releases/latest/download/install.sh | sh`, which verifies the binary against `undercroft-installer-SHA256SUMS`, keeps it as `~/.local/bin/undercroft-installer` (`UNDERCROFT_BIN_DIR`), and runs it; `UNDERCROFT_VERSION=vX.Y.Z` pins a release. Windows: double-click `undercroft-installer-windows-x64.exe` (unsigned; SmartScreen's More info, Run anyway). The wizard asks language, desktop or server, checks Docker, then port, server address, administrator, sign-in method and bind address, then optional Gmail/Drive or Xero clients (HubSpot needs nothing), installs, waits for `/api/health`, prints redirect URIs, and on a desktop opens the browser. A desktop install must be opened at exactly `http://localhost:<port>`: the owner's sign-in refuses `127.0.0.1` ([[ADR 0094: A local install signs its owner in on loopback]]); the `undercroft` CLI signs the owner in the same way, with no code, at the same address, and a desktop install's last lines (and the desktop app's Done step) print the two commands ([[ADR 0096: The CLI signs in to a local install the way the browser does]]). Every answer is also a flag; `--yes` asks nothing and never installs Docker; `--dry-run` writes nothing.
 

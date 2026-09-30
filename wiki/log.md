@@ -264,3 +264,8 @@
 ## [2026-09-30] ingest | Runbook: Installing Undercroft
 ## [2026-09-30] ingest | ADR 0097: The desktop installer is an Electrobun app over the setup service
 ## [2026-09-30] ingest | Runbook: Installing Undercroft
+## [2026-09-30] ingest | ADR 0097 Lineage Is Drawn on a Board the Reader Arranges
+## [2026-09-30] ingest | Design: Operator and reader paths
+## [2026-09-30] rename | ADR 0097: The desktop installer is an Electrobun app over the setup service → ADR 0098: The desktop installer is an Electrobun app over the setup service
+## [2026-09-30] ingest | ADR 0098: The desktop installer is an Electrobun app over the setup service
+## [2026-09-30] ingest | Runbook: Installing Undercroft

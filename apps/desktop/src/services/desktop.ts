@@ -1,5 +1,5 @@
 /**
- * The install this desktop app looks after, as decisions over `@undercroft/setup` (ADR 0097).
+ * The install this desktop app looks after, as decisions over `@undercroft/setup` (ADR 0098).
  *
  * The setup package owns every install decision -- secrets, the `.env`, the compose file,
  * `orphaned-data`, health -- and this service adds only what a window and a tray need on top:

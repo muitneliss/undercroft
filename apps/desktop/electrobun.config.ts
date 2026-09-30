@@ -1,5 +1,5 @@
 /**
- * How Electrobun's toolchain (Hutch) builds the desktop app (ADR 0097).
+ * How Electrobun's toolchain (Hutch) builds the desktop app (ADR 0098).
  *
  * - **The main process is Bun, not Cottontail** (Electrobun 2's default). It imports
  *   `@undercroft/setup` as it is -- `node:child_process`, `node:crypto`, the compose file embedded
@@ -13,7 +13,7 @@
  *   reachable at that URL a patch could only ever bridge one release, and the full archive is
  *   what every other client downloads anyway.
  * - **Nothing is signed.** The artifacts are built from public source in public CI and published
- *   with their SHA-256 checksums; ADR 0097 records why, and what a person sees because of it.
+ *   with their SHA-256 checksums; ADR 0098 records why, and what a person sees because of it.
  */
 
 import type { ElectrobunConfig } from "electrobun";

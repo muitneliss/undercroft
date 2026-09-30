@@ -3,7 +3,7 @@
  *
  * UI-agnostic by construction. Nothing here reads the environment, writes to a terminal or
  * words a sentence; every front end -- the terminal wizard in `apps/installer-cli` and the
- * desktop app in `apps/desktop` (ADR 0097) -- hands in how to run a program, fetch and tell the
+ * desktop app in `apps/desktop` (ADR 0098) -- hands in how to run a program, fetch and tell the
  * time, and words the codes it gets back in its reader's language.
  */
 

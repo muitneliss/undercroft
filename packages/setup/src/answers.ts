@@ -12,7 +12,7 @@
  *   proves an address: a mail key for one-time codes, or a Google client.
  *
  * `validateAnswers` returns problems as CODES, never sentences. This package is below every
- * front end -- the terminal wizard and the desktop app (ADR 0097) -- and each words a problem in
+ * front end -- the terminal wizard and the desktop app (ADR 0098) -- and each words a problem in
  * the reader's language itself.
  *
  * This module imports nothing, and `@undercroft/setup/answers` exports it alone, so the desktop

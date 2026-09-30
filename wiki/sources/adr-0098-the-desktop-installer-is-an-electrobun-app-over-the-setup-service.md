@@ -1,17 +1,19 @@
 ---
-title: 'ADR 0097: The desktop installer is an Electrobun app over the setup service'
+title: 'ADR 0098: The desktop installer is an Electrobun app over the setup service'
 type: source
 date: 2026-09-30
 tags: []
 source: >-
-  docs/adr/0097-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md
+  docs/adr/0098-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md
 source_path: >-
-  docs/adr/0097-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md
-source_hash: 07baa3f8999e5c7c8845b8306489e640e575cfd66f6f365463645e660659df48
+  docs/adr/0098-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md
+source_hash: efca0f471641a4118cb0bd10927e616eafce2f568acb79c7360194096969e85c
 ingested: 2026-09-30
 ---
 
-# ADR 0097: The desktop installer is an Electrobun app over the setup service
+# ADR 0098: The desktop installer is an Electrobun app over the setup service
+
+# ADR 0098: The desktop installer is an Electrobun app over the setup service
 
 `apps/desktop` is the graphical front end [[ADR 0095: Undercroft installs through a setup wizard that drives Docker]] named: an Electrobun 2 app pinned exactly (`electrobun` 2.0.2 in `package.json`; Hutch 0.27.1 and Cottontail 0.7.1 in the `hutch.config.ts` pragma), a window running the same wizard as the terminal one and a tray icon that operates the install afterwards. Electrobun 2 no longer ships its SDK through npm: the `electrobun` package bootstraps Hutch, which projects the SDK into `.hutch/devkit` and builds the app, and its default main-process runtime is Cottontail.
 

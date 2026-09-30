@@ -38,7 +38,7 @@ The UI has exactly two homes for state, and `useState` is neither.
 
 ## The desktop app's wizard
 
-`apps/desktop/src/view` (ADR 0097) is React too, and the same ban holds there, enforced by the
+`apps/desktop/src/view` (ADR 0098) is React too, and the same ban holds there, enforced by the
 same rule. It has no tRPC cache: its "server" is the app's own main process, asked over
 Electrobun's RPC, and every answer is recorded in its one store, `apps/desktop/src/view/store.ts`
 (state in `wizard.ts`, the rules for moving between steps in `rules.ts`). A component reads the

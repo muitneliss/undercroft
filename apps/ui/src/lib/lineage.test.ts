@@ -7,7 +7,8 @@
 import { describe, expect, test as it } from "bun:test";
 
 import type { ModelLineage } from "@/api/types.ts";
-import { layout, upstreamOf } from "./lineage.ts";
+import { upstreamOf, upstreamPaths } from "./lineage.ts";
+import { layout } from "./lineageLayout.ts";
 
 function model(name: string): ModelLineage["nodes"][number] {
   return { kind: "model", id: `model:${name}`, name, undeclared: [] };
@@ -54,6 +55,24 @@ describe("upstreamOf", () => {
         .placed.map((p) => p.node.id)
         .sort(),
     ).toEqual(["model:x", "model:y"]);
+  });
+});
+
+describe("upstreamPaths", () => {
+  it("stops writing paths at its limit and says there are more, rather than look complete", () => {
+    // Three raw tables into one model: three paths, asked for two.
+    const wide: ModelLineage = {
+      nodes: [
+        { kind: "raw", id: "raw:r1", name: "r1" },
+        { kind: "raw", id: "raw:r2", name: "r2" },
+        { kind: "raw", id: "raw:r3", name: "r3" },
+        model("m"),
+      ],
+      edges: [edge("raw:r1", "model:m"), edge("raw:r2", "model:m"), edge("raw:r3", "model:m")],
+    };
+    const { paths, more } = upstreamPaths(wide, "model:m", 2);
+    expect(paths).toHaveLength(2);
+    expect(more).toBe(true);
   });
 });
 

@@ -90,7 +90,7 @@ tasks:
     desc: >-
       Checksum the desktop app's artifacts gathered under DIR into undercroft-desktop-SHA256SUMS
       and attach both to the GitHub release TAG. Usage: task cd:desktop-release DIR=... TAG=v1.2.3
-      -- needs GH_TOKEN. ADR 0097.
+      -- needs GH_TOKEN. ADR 0098.
     requires:
       vars: [DIR, TAG]
     cmds:
