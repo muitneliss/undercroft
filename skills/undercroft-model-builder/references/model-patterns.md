@@ -13,12 +13,38 @@ server you are on; when it disagrees with this page, it is right.
     `deleted_at` (set when the source deleted it).
   - `{{ source('undercroft', 'documents') }}` -- the catalogue of files and attachments, one
     row each. The bytes are not in Postgres.
+- **Each document's kind**, as `raw.document_kinds`, by its name: it is not one of the declared
+  sources, so a model names it directly, the one raw relation it does. One row per live
+  document that has been classified, keyed by `source` and `document_id` like `documents`.
+  `accepted_kind` is the kind confirmed under the customer's current catalogue, else NULL;
+  `last_accepted_kind` keeps the kind an earlier catalogue confirmed until the current one has
+  answered, and `current` says which of the two a row holds. The `undercroft` skill's page on
+  document kinds says what each column means.
 - **Other models**, through dbt's `ref()`: `{{ ref('stg_hubspot_deals') }}`.
 
 The project's own login reads only its own customer's rows, so a model never filters on
-`tenant_id` to stay in bounds. Never name a raw table or another model's table directly
+`tenant_id` to stay in bounds. Apart from `raw.document_kinds`, never name a raw table or
+another model's table directly
 (`raw.records`, `analytics_case_0042.stg_deals`, or a bare `stg_deals`): `models.check`
 refuses it, because dbt would not know what the model depends on.
+
+A document's kind, for a table a dashboard can read. A document nobody has classified yet
+keeps a NULL kind, which is what it is -- never `'other'`, never a guess:
+
+```sql
+select
+    d.source,
+    d.document_id,
+    d.content_type,
+    k.last_accepted_kind as kind,
+    k.current as kind_is_current,
+    k.version as kind_version
+from {{ source('undercroft', 'documents') }} as d
+left join raw.document_kinds as k
+    on k.source = d.source
+    and k.document_id = d.document_id
+where d.deleted_at is null
+```
 
 A model is one query. No `;`, no `insert`, `update` or `create`: dbt makes the table from the
 query's result.
