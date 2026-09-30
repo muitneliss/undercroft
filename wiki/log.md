@@ -242,3 +242,5 @@
 ## [2026-09-29] ingest | Runbook Deployment
 ## [2026-09-29] ingest | ADR 0089 The Blog Is A Static Astro Site On GitHub Pages
 ## [2026-09-29] ingest | ADR 0089 The Blog Is A Static Astro Site On GitHub Pages
+## [2026-09-30] ingest | Design: Operator and reader paths
+## [2026-09-30] ingest | Design: Operator and reader paths

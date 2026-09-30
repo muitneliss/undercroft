@@ -95,6 +95,7 @@
 - [ADR 0089 The Blog Is A Static Astro Site On GitHub Pages](sources/adr-0089-the-blog-is-a-static-astro-site-on-github-pages.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
+- [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)
 - [Design: The CLI's home page and sign-in, drawn in text](sources/design-the-cli-s-home-page-and-sign-in-drawn-in-text.md)
 - [File formats a Gmail or Drive connection can land](sources/file-formats-a-gmail-or-drive-connection-can-land.md)
 - [Public home and customer index](sources/public-home-and-customer-index.md)
