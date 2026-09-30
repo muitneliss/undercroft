@@ -10,7 +10,7 @@ import favicon from "../../../ui/public/favicon.svg?url";
 import appleTouch from "../../../ui/public/apple-touch-icon.png?url";
 import Mark from "../../../ui/public/mark.svg";
 import cover from "../assets/cover.png";
-import { DEFAULT_LANG, type Lang, PRODUCT_URL, REPO_URL, STRINGS, langPrefix } from "../site.ts";
+import { CONTACT_EMAIL, DEFAULT_LANG, type Lang, PRODUCT_URL, REPO_URL, STRINGS, langPrefix } from "../site.ts";
 import type { JsonLd } from "../structuredData.ts";
 import "../styles/blog.css";
 
@@ -118,6 +118,7 @@ const home = `${langPrefix(lang)}/`;
     </main>
     <footer class="colophon">
       <span>{s.footer}</span>
+      <a class="colophon__mail" href={`mailto:${CONTACT_EMAIL}`} aria-label={s.contact}>{CONTACT_EMAIL}</a>
       <a href={`${home}rss.xml`}>{s.rss}</a>
       <a href={REPO_URL}>GitHub</a>
     </footer>

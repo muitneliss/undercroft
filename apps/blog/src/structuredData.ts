@@ -2,7 +2,7 @@
  * schema.org JSON-LD, built from the same facts the page renders so the two cannot disagree.
  * The publisher is the product, not a person: every post speaks for Undercroft.
  */
-import { PRODUCT_URL, REPO_URL } from "./site.ts";
+import { CONTACT_EMAIL, PRODUCT_URL, REPO_URL } from "./site.ts";
 
 /** A schema.org node; its shape is schema.org's, not ours to type field by field. */
 export type JsonLd = Record<string, unknown>;
@@ -12,6 +12,7 @@ export function organization(logoUrl: string): JsonLd {
     "@type": "Organization",
     name: "Undercroft",
     url: PRODUCT_URL,
+    email: CONTACT_EMAIL,
     logo: { "@type": "ImageObject", url: logoUrl },
     sameAs: [REPO_URL],
   };
