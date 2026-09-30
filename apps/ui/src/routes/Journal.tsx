@@ -9,7 +9,8 @@
  * The open run lives in the URL (`/journal/:runId`), not in the store: a run's detail is a
  * thing an operator pastes to a colleague mid-call, and a reload must land on the same row.
  * So does the account the ledger is narrowed to (`?source=`), which is what a source card opens
- * (ADR 0091): Back, Forward and a pasted link restore the same list, and the leaf says which
+ * (ADR 0091) and what the account select above the table writes for a tenant with two accounts
+ * or more: Back, Forward and a pasted link restore the same list, and the leaf says which
  * account it is showing and offers every run back.
  * Pages come from the query cache as an infinite query keyed on the ledger's own cursor.
  * There is no `useState` and nothing here needs one.
@@ -19,9 +20,9 @@
  * switching here shows the mark flip when the run ends.
  */
 
-import { Fragment } from "react";
+import { Fragment, useId } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
@@ -29,7 +30,13 @@ import { RunDetail } from "@/components/RunDetail.tsx";
 import { RunRow } from "@/components/RunRow.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import { journalEmptyBody, journalPath, journalSource, sourceLabel } from "@/lib/runs.ts";
+import {
+  type AccountName,
+  journalEmptyBody,
+  journalPath,
+  journalSource,
+  sourceLabel,
+} from "@/lib/runs.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -38,6 +45,8 @@ const PAGE = 50;
 const RUNNING_POLL_MS = 5000;
 /** The journal's columns, which the hinge row spans. */
 const COLUMNS = 8;
+/** How many connections a tenant holds before the ledger offers a choice between them. */
+const ACCOUNTS_TO_CHOOSE = 2;
 
 export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
@@ -84,14 +93,13 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
         <h1>{t("journal.title")}</h1>
         <p className="prose prose--lead">{t("journal.lead", { tenantId })}</p>
 
-        {source === null ? null : (
-          <SourceFilter
-            tenantId={tenantId}
-            openId={openId}
-            label={sourceLabel(source, accounts)}
-            empty={items.length === 0}
-          />
-        )}
+        <LedgerFilter
+          tenantId={tenantId}
+          openId={openId}
+          source={source}
+          accounts={accounts}
+          empty={items.length === 0}
+        />
 
         {openElsewhere ? <RunDetail tenantId={tenantId} runId={openId} /> : null}
 
@@ -155,6 +163,101 @@ function OlderRuns({
       <button className="plate" type="button" disabled={fetching} onClick={onMore}>
         {fetching ? t("journal.loadingOlder") : t("journal.older")}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Which account's runs the ledger reads: the choice of one, for a tenant with two or more, and
+ * the statement of which one it is showing, with the way back to every run.
+ *
+ * One component for the two because they are one question -- the address's `?source=` -- and
+ * the page above it only needs to know that the ledger can be narrowed, not how.
+ */
+function LedgerFilter({
+  tenantId,
+  openId,
+  source,
+  accounts,
+  empty,
+}: {
+  tenantId: string;
+  openId: string | null;
+  source: string | null;
+  accounts: readonly AccountName[];
+  /** Whether the narrowed ledger holds no run at all. */
+  empty: boolean;
+}): React.JSX.Element {
+  return (
+    <>
+      {accounts.length >= ACCOUNTS_TO_CHOOSE ? (
+        <AccountSelect tenantId={tenantId} openId={openId} source={source} accounts={accounts} />
+      ) : null}
+      {source === null ? null : (
+        <SourceFilter
+          tenantId={tenantId}
+          openId={openId}
+          label={sourceLabel(source, accounts)}
+          empty={empty}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The choice of which account's runs the ledger reads, for a tenant with two or more.
+ *
+ * With one account, "every account" and "that account" are the same list, so the select is not
+ * drawn at all rather than offered as a control that changes nothing. Choosing navigates: the
+ * address stays the filter's only home (`?source=`, ADR 0091), and the open run stays open, as
+ * it does when the filter is cleared. An account the address names that is no longer connected
+ * is still an option, under the name the ledger gives it, so the select never reads "every
+ * account" over a list narrowed to one.
+ */
+function AccountSelect({
+  tenantId,
+  openId,
+  source,
+  accounts,
+}: {
+  tenantId: string;
+  openId: string | null;
+  source: string | null;
+  accounts: readonly AccountName[];
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const selectId = useId();
+  const connected = accounts.map((account) => account.source);
+  const options =
+    source === null || connected.includes(source) ? connected : [...connected, source];
+
+  return (
+    <div className="row row--field">
+      <div className="field">
+        <label className="label" htmlFor={selectId}>
+          {t("journal.accountLabel")}
+        </label>
+        <select
+          className="input input--select"
+          id={selectId}
+          value={source ?? ""}
+          onChange={(event): void => {
+            const chosen = event.target.value;
+            void navigate(
+              journalPath(tenantId, { source: chosen === "" ? null : chosen, runId: openId }),
+            );
+          }}
+        >
+          <option value="">{t("journal.allAccounts")}</option>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {sourceLabel(option, accounts)}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
