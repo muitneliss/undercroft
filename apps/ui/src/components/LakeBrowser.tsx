@@ -205,40 +205,42 @@ function RecordsTable({
   return (
     <div className="stack">
       {narrowing}
-      <Table>
-        <TableCaption>{t("lake.rowsCaption", { count: items.length })}</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead scope="col">{t("lake.colRecordId")}</TableHead>
-            <TableHead scope="col">{t("lake.colObserved")}</TableHead>
-            <TableHead scope="col">{t("lake.colLoaded")}</TableHead>
-            <TableHead scope="col">{t("lake.colRun")}</TableHead>
-            <TableHead scope="col">{t("lake.colAtSource")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((row) => (
-            <TableRow key={row.sourceRecordId}>
-              <TableCell>
-                <span className="datum">{row.sourceRecordId}</span>
-                <PayloadFold payload={row.payload} />
-              </TableCell>
-              <TableCell className="datum datum--quiet">
-                {formatDateTime(row.observedAt, locale)}
-              </TableCell>
-              <TableCell className="datum datum--quiet">
-                {formatDateTime(row.loadedAt, locale)}
-              </TableCell>
-              <TableCell className="datum datum--quiet">
-                <Link to={`${journal}/${row.runId}`}>{row.runId}</Link>
-              </TableCell>
-              <TableCell className="datum datum--quiet">
-                {atSource(t, row.deletedAt, locale)}
-              </TableCell>
+      <div className="table-scroll">
+        <Table>
+          <TableCaption>{t("lake.rowsCaption", { count: items.length })}</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">{t("lake.colRecordId")}</TableHead>
+              <TableHead scope="col">{t("lake.colObserved")}</TableHead>
+              <TableHead scope="col">{t("lake.colLoaded")}</TableHead>
+              <TableHead scope="col">{t("lake.colRun")}</TableHead>
+              <TableHead scope="col">{t("lake.colAtSource")}</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {items.map((row) => (
+              <TableRow key={row.sourceRecordId}>
+                <TableCell>
+                  <span className="datum">{row.sourceRecordId}</span>
+                  <PayloadFold payload={row.payload} />
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  {formatDateTime(row.observedAt, locale)}
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  {formatDateTime(row.loadedAt, locale)}
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  <Link to={`${journal}/${row.runId}`}>{row.runId}</Link>
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  {atSource(t, row.deletedAt, locale)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
       {rows.hasNextPage ? (
         <div className="row">
           <button
@@ -307,39 +309,41 @@ function DocumentsTable({
   return (
     <div className="stack">
       {narrowing}
-      <Table>
-        <TableCaption>{t("lake.docsCaption", { count: items.length })}</TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead scope="col">{t("lake.colDocumentId")}</TableHead>
-            <TableHead scope="col">{t("lake.colContentType")}</TableHead>
-            <TableHead scope="col" className="num">
-              {t("lake.colBytes")}
-            </TableHead>
-            <TableHead scope="col">{t("lake.colObserved")}</TableHead>
-            <TableHead scope="col">{t("lake.colRun")}</TableHead>
-            <TableHead scope="col">{t("lake.colAtSource")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((row) => (
-            <TableRow key={row.documentId}>
-              <TableCell className="datum">{row.documentId}</TableCell>
-              <TableCell className="datum datum--quiet">{row.contentType}</TableCell>
-              <TableCell className="num datum">{formatBytes(row.bytes, locale)}</TableCell>
-              <TableCell className="datum datum--quiet">
-                {formatDateTime(row.observedAt, locale)}
-              </TableCell>
-              <TableCell className="datum datum--quiet">
-                <Link to={`${journal}/${row.runId}`}>{row.runId}</Link>
-              </TableCell>
-              <TableCell className="datum datum--quiet">
-                {atSource(t, row.deletedAt, locale)}
-              </TableCell>
+      <div className="table-scroll">
+        <Table>
+          <TableCaption>{t("lake.docsCaption", { count: items.length })}</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">{t("lake.colDocumentId")}</TableHead>
+              <TableHead scope="col">{t("lake.colContentType")}</TableHead>
+              <TableHead scope="col" className="num">
+                {t("lake.colBytes")}
+              </TableHead>
+              <TableHead scope="col">{t("lake.colObserved")}</TableHead>
+              <TableHead scope="col">{t("lake.colRun")}</TableHead>
+              <TableHead scope="col">{t("lake.colAtSource")}</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {items.map((row) => (
+              <TableRow key={row.documentId}>
+                <TableCell className="datum">{row.documentId}</TableCell>
+                <TableCell className="datum datum--quiet">{row.contentType}</TableCell>
+                <TableCell className="num datum">{formatBytes(row.bytes, locale)}</TableCell>
+                <TableCell className="datum datum--quiet">
+                  {formatDateTime(row.observedAt, locale)}
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  <Link to={`${journal}/${row.runId}`}>{row.runId}</Link>
+                </TableCell>
+                <TableCell className="datum datum--quiet">
+                  {atSource(t, row.deletedAt, locale)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
       {rows.hasNextPage ? (
         <div className="row">
           <button

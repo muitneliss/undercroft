@@ -106,38 +106,40 @@ export function LakeSummary({
       ) : null}
 
       {entries.length > 0 ? (
-        <Table>
-          <TableCaption>{t("lake.indexCaption", { count: entries.length })}</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col">{t("lake.colSource")}</TableHead>
-              <TableHead scope="col">{t("lake.colHolds")}</TableHead>
-              <TableHead scope="col" className="num">
-                {t("lake.colHeld")}
-              </TableHead>
-              <TableHead scope="col">{t("lake.colAlso")}</TableHead>
-              <TableHead scope="col">{t("lake.colLatest")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.map((entry) => (
-              <IndexRow
-                key={streamKey(entry.stream)}
-                entry={entry}
-                source={sourceLabel(entry.stream.source, connections)}
-                locale={locale}
-                open={sameStream(entry.stream, openStream ?? null)}
-                refusalsOpen={
-                  entry.stream.kind === "documents" && openRefusals === entry.stream.source
-                }
-                onToggleRefusals={(): void => {
-                  toggleRefusals(tenantId, entry.stream.source);
-                }}
-                {...(hrefFor === undefined ? {} : { href: hrefFor(entry.stream) })}
-              />
-            ))}
-          </TableBody>
-        </Table>
+        <div className="table-scroll">
+          <Table>
+            <TableCaption>{t("lake.indexCaption", { count: entries.length })}</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">{t("lake.colSource")}</TableHead>
+                <TableHead scope="col">{t("lake.colHolds")}</TableHead>
+                <TableHead scope="col" className="num">
+                  {t("lake.colHeld")}
+                </TableHead>
+                <TableHead scope="col">{t("lake.colAlso")}</TableHead>
+                <TableHead scope="col">{t("lake.colLatest")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entries.map((entry) => (
+                <IndexRow
+                  key={streamKey(entry.stream)}
+                  entry={entry}
+                  source={sourceLabel(entry.stream.source, connections)}
+                  locale={locale}
+                  open={sameStream(entry.stream, openStream ?? null)}
+                  refusalsOpen={
+                    entry.stream.kind === "documents" && openRefusals === entry.stream.source
+                  }
+                  onToggleRefusals={(): void => {
+                    toggleRefusals(tenantId, entry.stream.source);
+                  }}
+                  {...(hrefFor === undefined ? {} : { href: hrefFor(entry.stream) })}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       ) : null}
     </>
   );
