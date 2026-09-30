@@ -1756,6 +1756,14 @@
     width: auto;
   }
 
+  /* ...except under its own caption. The edge above is the schedule column's, whose data are
+     set against its right; a `.field` is a caption stacked on its control, and there flex-end
+     sent the select to the far side of the band, a column's width from the words that name it
+     (an ingest key's "Expires after" sat alone at the right of the leaf). */
+  .field > .input--select {
+    align-self: flex-start;
+  }
+
   .grant__actions {
     display: flex;
     gap: var(--s-2);
