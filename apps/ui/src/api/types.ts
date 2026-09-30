@@ -103,6 +103,12 @@ export type ConnectedApp = inferRouterOutputs<AppRouter>["account"]["apps"]["lis
 export type LakeSummary = inferRouterOutputs<AppRouter>["lake"]["summary"];
 
 /**
+ * What one run wrote into a stream against the rows that still name it, as `lake.records` and
+ * `lake.documents` answer it beside a page narrowed to that run -- `null` when it cannot be said.
+ */
+export type RunWrites = inferRouterOutputs<AppRouter>["lake"]["records"]["ofRun"];
+
+/**
  * One search hit, as `lake.search` returns it: a record's or a document's, never both.
  *
  * Inferred rather than imported from `@undercroft/contracts` for the reason the docstring at

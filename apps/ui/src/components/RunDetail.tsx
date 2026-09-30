@@ -11,9 +11,17 @@
  * an empty refusals table would say "refusals" over a run that refused nothing -- and a run
  * that recorded nothing beyond its outcome says so in one line. `RunFlow` is the one
  * exception: it always has at least its own outcome to draw, so it is never gated on `bare`.
+ *
+ * An ingest run also names the scope it read with, as the run recorded it (ADR 0091) -- an em
+ * dash for a run from before that was recorded, never the connection's scope today. And for an
+ * admin its created and changed counts are doors into the raw lake, onto the rows that run
+ * wrote; a member or viewer reads the same figures with no link, because the rows behind them
+ * are an admin's (the `lake.*` role gate) and a link that answered FORBIDDEN would be a promise
+ * this leaf breaks.
  */
 
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import { REFUSAL_RETENTION_DAYS } from "@undercroft/contracts/runs";
 
@@ -25,9 +33,10 @@ import { RunFlow } from "@/components/RunFlow.tsx";
 import { RunProgress } from "@/components/RunProgress.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
+import { lakeStreamPath, streamOfEntity } from "@/lib/lake.ts";
 import { formatCount, orMissing } from "@/lib/money.ts";
 import { feedEntries, runGauges } from "@/lib/runFeed.ts";
-import { triggerLabel } from "@/lib/runs.ts";
+import { runScopeSummary, triggerLabel } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -132,6 +141,15 @@ function RunFacts({
         <Fact label={t("journal.release")} value={orMissing(detail.releaseTag)} quiet={true} />
       </div>
 
+      {/* What this run read with, as it recorded it when it read. Only an ingest reads a
+          scope; an em dash is a run that recorded none, and printing the connection's scope
+          today in its place would claim this run read with it. ADR 0091. */}
+      {detail.kind === "ingest" ? (
+        <div className="row">
+          <Fact label={t("journal.scopeAtStart")} value={orMissing(runScopeSummary(t, detail))} />
+        </div>
+      ) : null}
+
       {/* How deep the queue was when this run drew its batch -- the line that tells a large
           refusal count from a fault. A run refusing 245 of 500 with 2,337 behind it is
           draining a backlog; the same 245 with nothing behind it is something to look at. */}
@@ -147,6 +165,35 @@ function RunFacts({
 }
 
 /**
+ * A count, and -- where the reader may follow it -- the door to what it counts (ADR 0039).
+ *
+ * A zero is never a door: it counts nothing, and a link onto an empty page says there was
+ * something to see. Created and changed open the same page, the rows that still name the run,
+ * because a row does not record which of the two it was; that page says how many a later run
+ * has since written again.
+ */
+function CountDoor({
+  count,
+  href,
+  title,
+  locale,
+}: {
+  count: number;
+  href: string | null;
+  title: string;
+  locale: ReturnType<typeof useUiStore.getState>["locale"];
+}): React.ReactNode {
+  const figure = formatCount(count, locale);
+  return href === null || count === 0 ? (
+    figure
+  ) : (
+    <Link to={href} title={title}>
+      {figure}
+    </Link>
+  );
+}
+
+/**
  * What the run counted, and what it would not read.
  *
  * Each table is gated on having rows, because an empty one says "refusals" over a run that
@@ -157,11 +204,24 @@ function RunFacts({
 function RunCounts({
   detail,
   locale,
+  tenantId,
+  canOpenRows,
 }: {
   detail: RunDetailView;
   locale: ReturnType<typeof useUiStore.getState>["locale"];
+  tenantId: string;
+  /** Whether the reader may page raw rows: an admin. Courtesy; the server refuses regardless. */
+  canOpenRows: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  // Where a count opens, or nothing. A run still going has no settled count to open, and a
+  // transform has no source whose rows it wrote.
+  const { source } = detail;
+  const hrefFor =
+    canOpenRows && source !== null && detail.status !== "running"
+      ? (entity: string): string =>
+          lakeStreamPath(tenantId, streamOfEntity(source, entity), detail.id)
+      : null;
 
   return (
     <>
@@ -193,8 +253,22 @@ function RunCounts({
               <tr key={row.entity}>
                 <td className="datum">{row.entity}</td>
                 <td className="num">{formatCount(row.landed, locale)}</td>
-                <td className="num">{formatCount(row.created, locale)}</td>
-                <td className="num">{formatCount(row.changed, locale)}</td>
+                <td className="num">
+                  <CountDoor
+                    count={row.created}
+                    href={hrefFor?.(row.entity) ?? null}
+                    title={t("journal.openWritten", { entity: row.entity })}
+                    locale={locale}
+                  />
+                </td>
+                <td className="num">
+                  <CountDoor
+                    count={row.changed}
+                    href={hrefFor?.(row.entity) ?? null}
+                    title={t("journal.openWritten", { entity: row.entity })}
+                    locale={locale}
+                  />
+                </td>
                 <td className="num">{formatCount(row.unchanged, locale)}</td>
                 <td className="num">{formatCount(row.refused, locale)}</td>
               </tr>
@@ -255,6 +329,8 @@ export function RunDetail({
     { tenantId, runId },
     { refetchInterval: (query) => runDetailRefetchInterval(query.state.data) },
   );
+  // Whose leaf this is, for the counts' doors. Cached from the book's own head.
+  const tenant = trpc.tenants.get.useQuery({ tenantId });
   // The feed is read on its own and faster: it is the part that changes while somebody is
   // watching, where the detail beside it only changes when the run ends.
   const running = run.data?.status === "running";
@@ -317,7 +393,12 @@ export function RunDetail({
         <RunEvents entries={entries} locale={locale} live={running} source={detail.source} />
       ) : null}
 
-      <RunCounts detail={detail} locale={locale} />
+      <RunCounts
+        detail={detail}
+        locale={locale}
+        tenantId={tenantId}
+        canOpenRows={tenant.data?.role === "admin"}
+      />
 
       {detail.steps.length > 0 ? <StepsTable steps={detail.steps} locale={locale} /> : null}
 

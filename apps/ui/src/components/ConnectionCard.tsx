@@ -24,7 +24,14 @@
  *
  * A card is ONE account (ADR 0043). What the connection is -- `connection.kind` -- decides its
  * name and its access statement; which one it is -- `connection.source` -- decides its heading
- * id, so two mailboxes' cards could never share one.
+ * id, so two mailboxes' cards could never share one. It is also the door to that account's runs:
+ * the journal, filtered to this source (ADR 0091).
+ *
+ * WRITE PLATES ARE ABSENT, NOT DISABLED, FOR A READER THE SERVER REFUSES THEM TO. Connect,
+ * Reconnect, the token form, Choose what to sync, Change what syncs and Disconnect are an
+ * admin's, like Run now; a member or viewer used to see all of them greyed out, which is a
+ * promise the leaf cannot keep drawn as a control nobody here may press. `canRun` is the one
+ * question, asked once in `GrantActions`. Hiding is courtesy; the server refuses regardless.
  */
 
 import type { ReactNode } from "react";
@@ -44,8 +51,8 @@ import {
   scopeSummary,
   ungrantedNotes,
 } from "@/lib/connectionState.ts";
-import { divisionPath } from "@/lib/divisions.ts";
 import { orMissing } from "@/lib/money.ts";
+import { journalPath } from "@/lib/runs.ts";
 import { expiryNote } from "@/lib/when.ts";
 
 /**
@@ -143,7 +150,9 @@ export function ConnectionCard({
           {card.state === "connected" ? (
             <>
               <span className="label">{t("grant.reads")}</span>
-              <span className="datum datum--quiet">{orMissing(scopeSummary(t, connection))}</span>
+              <span className="datum datum--quiet">
+                {orMissing(scopeSummary(t, connection.kind, connection.config))}
+              </span>
             </>
           ) : null}
 
@@ -164,6 +173,7 @@ export function ConnectionCard({
         />
 
         <GrantActions
+          tenantId={tenantId}
           connection={connection}
           card={card}
           name={name}
@@ -273,13 +283,16 @@ function GrantTiming({
 }
 
 /**
- * The one next action for this state, and the two that are always available once granted.
+ * The one next action for this state, the two that are always available once granted, and the
+ * door to this account's runs.
  *
- * Every state has exactly one primary plate. That is the point of the state machine in
+ * The first three are an admin's and are not drawn for anyone else (see the file's header); the
+ * door is every reader's. Every state has exactly one primary plate for an admin. That is the point of the state machine in
  * `@/lib/connectionState`: a row offering two equally-weighted next steps is a row whose
  * state nobody decided.
  */
 function GrantActions({
+  tenantId,
   connection,
   card,
   name,
@@ -292,6 +305,7 @@ function GrantActions({
   onDisconnect,
   onRun,
 }: {
+  tenantId: string;
   connection: Connection;
   card: Card;
   name: string;
@@ -314,16 +328,18 @@ function GrantActions({
 
   return (
     <div className="grant__actions">
-      <PrimaryAction
-        connection={connection}
-        card={card}
-        name={name}
-        tokenForm={tokenForm}
-        busy={busy}
-        connecting={pending === "connect"}
-        onConnect={onConnect}
-        onScope={onScope}
-      />
+      {canRun ? (
+        <PrimaryAction
+          connection={connection}
+          card={card}
+          name={name}
+          tokenForm={tokenForm}
+          busy={busy}
+          connecting={pending === "connect"}
+          onConnect={onConnect}
+          onScope={onScope}
+        />
+      ) : null}
 
       {/* Run now is a plain plate: the primary action on a granted source is nothing,
           and starting a read by hand is the exception rather than the routine. Disabled
@@ -335,16 +351,25 @@ function GrantActions({
         </button>
       ) : null}
 
-      {card.state === "connected" ? (
+      {card.state === "connected" && canRun ? (
         <button type="button" className="plate" onClick={onScope} disabled={busy}>
           {t("grant.changeScope")}
         </button>
       ) : null}
 
-      {card.state === "not_connected" ? null : (
+      {card.state === "not_connected" || !canRun ? null : (
         <button type="button" className="plate" onClick={onDisconnect} disabled={busy}>
           {pending === "disconnect" ? t("grant.disconnecting") : t("grant.disconnect")}
         </button>
+      )}
+
+      {/* A door, not a write: every role may read the journal, so every role gets it. Only on
+          an account that has run, because the list it opens would otherwise be empty. */}
+      {connection.lastRun === null ? null : (
+        <Link className="plate" to={journalPath(tenantId, { source: connection.source })}>
+          {t("grant.openRuns")}
+          <ArrowRight size={13} />
+        </Link>
       )}
     </div>
   );
@@ -453,10 +478,7 @@ function GrantSlips({
             {t("grant.runFailedHead")}
           </span>
           <p className="errata__body">{orMissing(failedRun.error)}</p>
-          <Link
-            className="plate plate--small"
-            to={`${divisionPath("journal", tenantId)}/${failedRun.id}`}
-          >
+          <Link className="plate plate--small" to={journalPath(tenantId, { runId: failedRun.id })}>
             {t("grant.openInJournal")}
           </Link>
         </div>

@@ -49,12 +49,12 @@ differs from the code on `main`, so a reader does not take a proposal for a desc
 None of it changes who may call what; each procedure keeps the gate its neighbours have, and
 reaches the CLI and MCP through the same router (ADR 0044, 0060) with no gate of its own.
 
-| Need                                | Today                                                               | Change                                                                                                                                |
-| ----------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| The Journal filtered to one account | `runs.list` takes only `limit` and `cursor`                         | An optional `source`, matched against `ops.run.source`                                                                                |
-| The scope a run started with        | Scope lives only on `ops.connection.scope`, which a save overwrites | A migration adds the scope to `ops.run`, written when the run starts; older rows stay NULL                                            |
-| A run's counts opening its records  | `lake.records` and `lake.documents` list by source and entity only  | An optional run id. `raw.records.run_id` names the run that last wrote each row, so the view can only show those, and counts the rest |
-| Lineage                             | Nothing reads a model's `ref()` and `source()` for display          | A read-only procedure built on `readJinja` (`packages/db/src/services/jinja.ts`), the same reader `models.check` already uses         |
+| Need                                | Today                                                                          | Change                                                                                                                                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The Journal filtered to one account | `runs.list` takes only `limit` and `cursor`                                    | An optional `source`, matched against `ops.run.source`                                                                                                                                        |
+| The scope a run started with        | Scope lives only on `app.connection_detail.selection`, which a save overwrites | A migration adds `app.run_scope`, one row per run written when the run first reads its scope, kept out of `ops.run` because BI can read every column there (ADR 0091); older runs have no row |
+| A run's counts opening its records  | `lake.records` and `lake.documents` list by source and entity only             | An optional run id. `raw.records.run_id` names the run that last wrote each row, so the view can only show those, and counts the rest                                                         |
+| Lineage                             | Nothing reads a model's `ref()` and `source()` for display                     | A read-only procedure built on `readJinja` (`packages/db/src/services/jinja.ts`), the same reader `models.check` already uses                                                                 |
 
 ### Behaviour a reader will notice change
 

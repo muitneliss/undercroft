@@ -233,14 +233,22 @@ function driveScope(t: TFunction, config: Connection["config"]): string | null {
  * Returns null when nothing is recorded rather than describing the widest
  * possible reading. A scope we cannot name is not a scope of everything, and the
  * caller renders the absence as MISSING.
+ *
+ * Asked of a kind and a scope rather than of a card, because a run's leaf names the scope that
+ * RUN read with (ADR 0091) in the same words, and one sentence per shape is what keeps the two
+ * from describing one scope two ways.
  */
-export function scopeSummary(t: TFunction, connection: Connection): string | null {
-  const labels = connection.config.labels ?? [];
-  const entities = connection.config.entities ?? [];
+export function scopeSummary(
+  t: TFunction,
+  kind: Source,
+  config: Connection["config"],
+): string | null {
+  const labels = config.labels ?? [];
+  const entities = config.entities ?? [];
 
-  switch (connection.kind) {
+  switch (kind) {
     case "drive":
-      return driveScope(t, connection.config);
+      return driveScope(t, config);
 
     case "gmail":
       // An empty label list is a recorded decision here, not a missing one: the
@@ -259,7 +267,7 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
     case "hubspot": {
       // Nothing chosen is a reading, not an absence: the spec's own properties, which is what a
       // HubSpot connection has always read. It gets words rather than a dash for that reason.
-      const chosen = Object.values(connection.config.properties ?? {}).reduce(
+      const chosen = Object.values(config.properties ?? {}).reduce(
         (count, names) => count + names.length,
         0,
       );
@@ -269,7 +277,7 @@ export function scopeSummary(t: TFunction, connection: Connection): string | nul
     }
 
     default: {
-      const exhaustive: never = connection.kind;
+      const exhaustive: never = kind;
       throw new Error(`unhandled source ${String(exhaustive)}`);
     }
   }

@@ -111,6 +111,7 @@ export {
   SOURCE_OF_TRANSFORM,
   stepsFor,
 } from "./runs.ts";
+export { type RecordedScope, recordedScope, scopeForRun } from "./runScope.ts";
 export {
   extendTenantPassword,
   isRoleCollision,

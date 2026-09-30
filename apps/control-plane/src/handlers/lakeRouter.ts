@@ -35,6 +35,10 @@ export const lakeRouter = router({
    * The rows themselves, admin-only: a payload is the source's data verbatim, and for a
    * CRM or a mailbox that is names and addresses. The role gate is the whole of the
    * decision; the service only pages.
+   *
+   * `runId` narrows the page to the rows that run wrote and still names, and answers beside it
+   * how many it wrote that a later run has since rewritten (`ofRun`, ADR 0091): what a run's
+   * counts open onto from its leaf. The gate is unchanged -- the same rows, fewer of them.
    */
   records: requireRole("admin")
     .input(
@@ -43,6 +47,7 @@ export const lakeRouter = router({
         entity: z.string().trim().min(1).max(128),
         limit: z.number().int().min(1).max(50).default(50),
         cursor: z.string().optional(),
+        runId: z.string().trim().min(1).max(128).optional(),
       }),
     )
     .query(({ ctx, input }) =>
@@ -51,6 +56,7 @@ export const lakeRouter = router({
         entity: input.entity,
         limit: input.limit,
         cursor: input.cursor ?? null,
+        runId: input.runId ?? null,
       }),
     ),
 
@@ -60,6 +66,7 @@ export const lakeRouter = router({
         source: z.string().trim().min(1).max(64),
         limit: z.number().int().min(1).max(50).default(50),
         cursor: z.string().optional(),
+        runId: z.string().trim().min(1).max(128).optional(),
       }),
     )
     .query(({ ctx, input }) =>
@@ -67,6 +74,7 @@ export const lakeRouter = router({
         source: input.source,
         limit: input.limit,
         cursor: input.cursor ?? null,
+        runId: input.runId ?? null,
       }),
     ),
 

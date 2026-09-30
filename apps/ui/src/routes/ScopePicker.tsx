@@ -53,6 +53,16 @@
  * **HubSpot** is a fourth, and the one whose empty choice is the NARROW reading: per CRM object,
  * the further properties to read beyond the spec's own, listed live from the portal (its own
  * properties included) through the worker. `HubspotChoice` says why. ADR 0052.
+ *
+ * ## What saving does to what the lake already holds is said beside Save
+ *
+ * Dropping a folder from a Drive pick and dropping a label from a Gmail scope look like the same
+ * gesture and are not: the next complete Drive read marks what the pick no longer reaches as
+ * deleted at source (ADR 0071, 0078), and a Gmail message that stops matching a label is left
+ * live, because it was relabelled, not deleted (`settleWalk.ts`). So the sentence beside Save
+ * says which, for this kind, and never that anything leaves the lake -- a mark at source is not
+ * an erasure. Xero and HubSpot get no sentence until what their next read does has been
+ * confirmed against the read itself.
  */
 
 import { useEffect } from "react";
@@ -73,6 +83,15 @@ import { isBrowsedLabel } from "@/lib/labelIndex.ts";
 import { sourceLabel } from "@/lib/runs.ts";
 import { type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
+
+/**
+ * What saving does to the records the lake already holds, for the kinds where that is known.
+ * See "What saving does" in the header.
+ */
+const HELD_KEY: Partial<Record<Source, "scopePicker.heldDrive" | "scopePicker.heldGmail">> = {
+  drive: "scopePicker.heldDrive",
+  gmail: "scopePicker.heldGmail",
+};
 
 /** Which lead each source's picker opens with. */
 const LEAD_KEY = {
@@ -259,6 +278,7 @@ export function ScopePicker({
   const chosen = draft?.source === source ? draft : NOTHING_CHOSEN;
   const unsaveable = saveHeldBack(kind, labels.isError, chosen);
   const account = connections.data.find((c) => c.source === source)?.externalAccountLabel ?? "";
+  const held = HELD_KEY[kind];
 
   return (
     <div className="sheet">
@@ -287,6 +307,8 @@ export function ScopePicker({
         {kind === "xero" && chosen.organisation === null ? (
           <p className="note">{t("scopePicker.chooseOrganisation")}</p>
         ) : null}
+
+        {held === undefined ? null : <p className="note">{t(held)}</p>}
 
         <button
           type="button"

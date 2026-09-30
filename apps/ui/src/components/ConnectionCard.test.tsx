@@ -141,6 +141,65 @@ describe("Run now", () => {
   });
 });
 
+describe("the write plates, by who is reading", () => {
+  /** Every plate a card may offer that writes: connect, reconnect, paste, choose, change, remove. */
+  const WRITES =
+    /^(?:Kết nối|Kết nối lại|Dán mã ứng dụng riêng|Chọn dữ liệu cần đồng bộ|Đổi dữ liệu đồng bộ|Ngắt kết nối)/u;
+
+  /** Each state that offers a write plate, as a member or viewer would see its card. */
+  function everyState(canRun: boolean): React.JSX.Element {
+    const states = [
+      connection("gmail", { status: "connected", lastRun: lastRun() }),
+      connection("drive"),
+      connection("xero", { status: "needs_scope" }),
+      connection("hubspot", { status: "needs_reconnect" }),
+    ];
+    return (
+      <MemoryRouter>
+        {states.map((c) => (
+          <ConnectionCard
+            key={c.source}
+            tenantId="CASE-0042"
+            connection={c}
+            onConnect={noop}
+            onScope={noop}
+            onDisconnect={noop}
+            onRun={noop}
+            onCadence={noop}
+            onResync={noop}
+            canRun={canRun}
+          />
+        ))}
+      </MemoryRouter>
+    );
+  }
+
+  it("are absent, not disabled, for a reader the server refuses them to", () => {
+    render(everyState(false));
+
+    expect(screen.queryAllByRole("button", { name: WRITES })).toEqual([]);
+    expect(screen.queryByText("Dán mã ứng dụng riêng")).toBeNull();
+  });
+
+  it("are drawn for an admin, as each card's state allows", () => {
+    render(everyState(true));
+
+    expect(screen.getByRole("button", { name: "Đổi dữ liệu đồng bộ" })).toBeDefined();
+    expect(screen.getAllByRole("button", { name: "Ngắt kết nối" }).length).toBe(3);
+    expect(screen.getByRole("button", { name: /Kết nối Google Drive/u })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Chọn dữ liệu cần đồng bộ/u })).toBeDefined();
+  });
+
+  it("leave every reader the door to the account's own runs", () => {
+    render(everyState(false));
+
+    // One account, not its kind: the journal opened here lists this source's runs alone.
+    expect(screen.getByRole("link", { name: /Các lần chạy/u }).getAttribute("href")).toBe(
+      "/tenants/CASE-0042/journal?source=gmail",
+    );
+  });
+});
+
 describe("how a source is connected", () => {
   it("HubSpot offers a token to paste, in the row, where Gmail offers its consent screen", () => {
     // HubSpot has no consent to run; sending the browser to a screen that does not exist
@@ -156,6 +215,7 @@ describe("how a source is connected", () => {
           onRun={noop}
           onCadence={noop}
           onResync={noop}
+          canRun={true}
           tokenForm={<input aria-label="the token form" />}
         />
         <ConnectionCard
@@ -167,6 +227,7 @@ describe("how a source is connected", () => {
           onRun={noop}
           onCadence={noop}
           onResync={noop}
+          canRun={true}
         />
       </MemoryRouter>,
     );

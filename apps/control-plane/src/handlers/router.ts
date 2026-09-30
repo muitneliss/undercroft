@@ -172,16 +172,24 @@ export const appRouter = router({
      * The ledger, newest first. Any member of the tenant may read it: whether a run happened
      * is the question the whole division exists to answer, and hiding it from a viewer would
      * hide the one thing they came to look at.
+     *
+     * `source` narrows it to one account's runs (ADR 0043): what a source card opens. The same
+     * 64 characters `lake.records` allows a source, which is more than any account name holds.
      */
     list: tenantProcedure
       .input(
         z.object({
           limit: z.number().int().min(1).max(100).default(50),
           cursor: z.string().optional(),
+          source: z.string().trim().min(1).max(64).optional(),
         }),
       )
       .query(({ ctx, input }) =>
-        runs.list(ctx.exec, input.tenantId, { limit: input.limit, cursor: input.cursor ?? null }),
+        runs.list(ctx.exec, input.tenantId, {
+          limit: input.limit,
+          cursor: input.cursor ?? null,
+          source: input.source ?? null,
+        }),
       ),
 
     // A run that is not this tenant's is NOT_FOUND, not FORBIDDEN, for the reason

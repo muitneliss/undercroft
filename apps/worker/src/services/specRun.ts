@@ -22,7 +22,7 @@ import {
   partitionByGrant,
   type UngrantedRead,
 } from "@undercroft/contracts";
-import { findRunById, getConnection, readConnectionDetail } from "@undercroft/db/repos";
+import { findRunById, getConnection, scopeForRun } from "@undercroft/db/repos";
 
 import { type DayBudget, dayBudgetFor } from "./dayBudget.ts";
 import { withChosenProperties } from "./hubspot/properties.ts";
@@ -39,7 +39,7 @@ import { readSpec } from "./specs.ts";
  */
 async function chosenFor(
   deps: Pick<RunDeps, "exec">,
-  input: { source: string; tenantId: string },
+  input: { source: string; tenantId: string; runId: string },
 ): Promise<{
   accountId: string | null;
   scope: ConnectionScope | null;
@@ -47,8 +47,10 @@ async function chosenFor(
   resync: ResyncSetting;
 }> {
   const connection = await getConnection(deps.exec, input.tenantId, input.source);
-  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
-  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
+  // The scope this run records as its own and reads with, the same row its leaf shows
+  // (ADR 0091) -- not the connection's scope as it stands, which a save may change mid-run.
+  const selectionJson = await scopeForRun(deps.exec, input);
+  const scope = selectionJson === null ? null : parseScope(input.source, selectionJson);
   const accountId = connection?.externalAccountId ?? null;
   return {
     accountId: accountId === "" ? null : accountId,
@@ -116,12 +118,13 @@ export async function openSpecRun(
   input: { source: string; tenantId: string; runId: string },
 ): Promise<SpecRun> {
   const spec = readSpec(deps.specsDir, input.source);
-  const chosen = await chosenFor(deps, input);
   const run = await findRunById(deps.exec, input.runId);
   if (run === null) {
     // The ledger opened this run before anything read; a run with no row is a defect upstream.
+    // Asked before the scope, which is recorded against that row and could not be without it.
     throw new Error(`run ${input.runId} has no ledger row to read its start from`);
   }
+  const chosen = await chosenFor(deps, input);
 
   const ctx: RunContext = {
     fetcher: deps.fetcher ?? createFetcher(spec.defaults.timeoutMs),

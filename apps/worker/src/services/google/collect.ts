@@ -80,7 +80,12 @@
 import { type DriveScope, type GmailScope, parseScope, sourceKind } from "@undercroft/contracts";
 import { newRunId } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
-import { readConnectionDetail, type RunRefusal, type RunReread } from "@undercroft/db/repos";
+import {
+  readConnectionDetail,
+  type RunRefusal,
+  type RunReread,
+  scopeForRun,
+} from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
 import { createDocumentSink } from "../documentSink.ts";
@@ -212,13 +217,21 @@ export interface CollectResult {
  * source and would mean a row written under the wrong one. Asked as "is it Gmail's or
  * Drive's" rather than "is it not Xero's", so a scope kind added later is refused here rather
  * than waved through as a Google one.
+ *
+ * A run in the ledger reads the scope it records (`scopeForRun`, ADR 0091), so the scope its
+ * leaf shows is the one this walk used, whatever is saved while it runs. A collect with no ledger
+ * row has nothing to record against and reads the connection's scope as it stands.
  */
 async function googleScope(
   deps: CollectDeps,
-  input: { source: string; tenantId: string },
+  input: { source: string; tenantId: string; runId?: string },
 ): Promise<GmailScope | DriveScope> {
-  const detail = await readConnectionDetail(deps.exec, input.tenantId, input.source);
-  const scope = detail === null ? null : parseScope(input.source, detail.selectionJson);
+  const selectionJson =
+    input.runId === undefined
+      ? ((await readConnectionDetail(deps.exec, input.tenantId, input.source))?.selectionJson ??
+        null)
+      : await scopeForRun(deps.exec, { ...input, runId: input.runId });
+  const scope = selectionJson === null ? null : parseScope(input.source, selectionJson);
   if (scope?.kind !== "gmail" && scope?.kind !== "drive") {
     throw new ScopeNotChosen(input.source, input.tenantId);
   }
