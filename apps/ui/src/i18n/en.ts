@@ -448,6 +448,17 @@ export const en = {
     deletedOn: "Deleted {{when}}",
     showPayload: "Show payload",
     noRows: "This stream has no records yet.",
+
+    runRows: "Only the rows that still carry run {{runId}}.",
+    runWrote_one: "This run wrote {{count, number}} row to this stream (new and changed).",
+    runWrote_other: "This run wrote {{count, number}} rows to this stream (new and changed).",
+    runRewritten_one:
+      "{{count, number}} of them has since been written again by a later run, so it carries that run's id now and is not listed here.",
+    runRewritten_other:
+      "{{count, number}} of them have since been written again by a later run, so they carry that run's id now and are not listed here.",
+    runNoneRewritten: "No later run has written any of them again; every one is listed here.",
+    runWholeStream: "Show the whole stream",
+    runNoRows: "No row carries this run's id any more.",
     older: "Older",
     loadingOlder: "Loading…",
   },
@@ -601,6 +612,7 @@ export const en = {
     running: "Running…",
     runFailedHead: "The last run failed",
     openInJournal: "Open in the journal",
+    openRuns: "Its runs",
     runNotStarted: "The run could not be started",
     cadenceNotSaved: "The schedule could not be saved",
     resync: "Full re-sync",
@@ -744,6 +756,10 @@ export const en = {
     removePickNamed: "Remove {{name}} from the selection",
     nothingToChoose: "There is nothing to choose from yet.",
     save: "Save selection",
+    heldDrive:
+      "On saving: files and folders the lake holds that this choice no longer reaches will be marked deleted at source by the next complete read. They stay in the lake, and are live again if a later choice reaches them.",
+    heldGmail:
+      "On saving: messages the lake holds stay live, including those that no longer match a chosen label. A message that stops matching a label is not marked deleted at source.",
     saving: "Saving…",
     notSaved: "The selection could not be saved.",
     pickerUnavailable:
@@ -921,6 +937,12 @@ export const en = {
       "{{count, number}} documents were waiting when this run started. A run reads at most 500.",
     backlogEmpty: "Nothing was waiting to be read when this run started.",
     release: "Build",
+
+    filteredTo: "Only the runs of {{source}}.",
+    showAllRuns: "Show every run",
+    filteredEmpty: "{{source}} has no runs yet.",
+    scopeAtStart: "Scope it read with",
+    openWritten: "Open the records this run wrote to {{entity}}, in the raw lake",
 
     reason: {
       imageTooSmall: "Image too small to be a document",

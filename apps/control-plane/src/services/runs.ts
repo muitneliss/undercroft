@@ -11,6 +11,7 @@
  * its own kind: read as an ingest, it put two identical lines on the journal for one source.
  */
 
+import { needsScope } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import {
   entitiesForRuns,
@@ -19,6 +20,8 @@ import {
   getRun,
   listRuns,
   reasonsFor,
+  type RecordedScope,
+  recordedScope,
   refusalsFor,
   type Run,
   type RunEntity,
@@ -30,6 +33,7 @@ import {
   stepsFor,
 } from "@undercroft/db/repos";
 import { record as recordAudit } from "../repos/auditLog.ts";
+import { type ConnectionCardView, configOf } from "./connections.ts";
 import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
 export type RunKind =
@@ -104,6 +108,34 @@ export interface RunDetail extends RunView {
   readonly parentRun: RunLink | null;
   /** The run this one chained into, once it exists -- `null` before or without one. */
   readonly childRun: RunLink | null;
+  /**
+   * The scope this run read with, in the shape the card summarises a connection's scope in --
+   * or `null` when there is none to name. ADR 0091.
+   *
+   * Recorded by the run itself as it read (`app.run_scope`), so a save since does not change
+   * it. `null` for every run that recorded none -- a run from before the recording existed, a
+   * lake-API batch, a transform -- and never filled in from the connection's scope today, which
+   * would date today's answer to the past (ADR 0039). `{}` is a scope too: a HubSpot connection
+   * nobody had scoped, which read the spec's own properties.
+   */
+  readonly scope: ConnectionCardView["config"] | null;
+}
+
+/**
+ * What a run recorded as its scope, as the card would summarise it, or `null` for nothing to
+ * name.
+ *
+ * A source that must be scoped and recorded nothing usable is `null` rather than `{}`: the card's
+ * summary reads `{}` for Gmail as "the whole mailbox", and a run that had no usable scope read
+ * nothing at all (the collector refuses it). Naming the widest reading for it would be the guess
+ * `parseScope` exists to refuse.
+ */
+function scopeOf(source: string, recorded: RecordedScope | null): RunDetail["scope"] {
+  if (recorded === null) {
+    return null;
+  }
+  const selectionJson = recorded.selectionJson ?? "{}";
+  return needsScope(source, selectionJson) ? null : configOf(source, selectionJson);
 }
 
 function kindOf(run: Run): RunKind {
@@ -170,10 +202,14 @@ function present(run: Run, entities: RunEntity[]): RunView {
   };
 }
 
+/**
+ * A page of the ledger: every run of the tenant, or one source's -- one account (ADR 0043), as
+ * the journal opened from that account's card asks for it.
+ */
 export async function list(
   exec: SqlExecutor,
   tenantId: string,
-  page: { limit: number; cursor?: string | null },
+  page: { limit: number; cursor?: string | null; source?: string | null },
 ): Promise<{ items: RunView[]; nextCursor: string | null }> {
   const { items, nextCursor } = await listRuns(exec, tenantId, page);
   const entities = await entitiesForRuns(
@@ -222,12 +258,13 @@ export async function get(
     return null;
   }
   const entities = (await entitiesForRuns(exec, [run.id])).get(run.id) ?? [];
-  const [refusals, reasonCounts, steps, childRun, parentRun] = await Promise.all([
+  const [refusals, reasonCounts, steps, childRun, parentRun, recorded] = await Promise.all([
     refusalsFor(exec, run.id),
     reasonsFor(exec, run.id),
     stepsFor(exec, run.id),
     findChildRun(exec, tenantId, run.id),
     run.parentRunId === null ? Promise.resolve(null) : getRun(exec, tenantId, run.parentRunId),
+    recordedScope(exec, run.id),
   ]);
   return {
     ...present(run, entities),
@@ -241,6 +278,7 @@ export async function get(
     steps,
     parentRun: parentRun === null ? null : toLink(parentRun),
     childRun: childRun === null ? null : toLink(childRun),
+    scope: scopeOf(run.source, recorded),
   };
 }
 

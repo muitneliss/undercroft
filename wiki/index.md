@@ -93,6 +93,7 @@
 - [ADR 0087 A Tenant Login Is Leased Not Rotated Per Session](sources/adr-0087-a-tenant-login-is-leased-not-rotated-per-session.md)
 - [ADR 0088 Tenant Logins Reach Postgres Through A Pooler And Runs Take A Turn](sources/adr-0088-tenant-logins-reach-postgres-through-a-pooler-and-runs-take-a-turn.md)
 - [ADR 0089 The Blog Is A Static Astro Site On GitHub Pages](sources/adr-0089-the-blog-is-a-static-astro-site-on-github-pages.md)
+- [ADR 0091 A Run Keeps the Scope It Read With and Its Counts Open Its Rows](sources/adr-0091-a-run-keeps-the-scope-it-read-with-and-its-counts-open-its-rows.md)
 - [ADR 0092 Lineage Draws Only Declared Relations](sources/adr-0092-lineage-draws-only-declared-relations.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)

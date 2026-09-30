@@ -563,6 +563,19 @@ export const vi = {
     deletedOn: "Đã xoá {{when}}",
     showPayload: "Xem nội dung",
     noRows: "Luồng này chưa có bản ghi nào.",
+
+    /**
+     * Các dòng một lần chạy đã ghi, mở từ con số ở lá của lần chạy đó. Một dòng chỉ mang mã
+     * của lần chạy ghi nó gần nhất, nên những dòng một lần chạy sau đã ghi lại thì không có ở
+     * đây — và trang nói có bao nhiêu, thay vì để danh sách ngắn hơn trông như toàn bộ. ADR 0091.
+     */
+    runRows: "Chỉ các dòng còn mang mã lần chạy {{runId}}.",
+    runWrote_other: "Lần chạy này đã ghi {{count, number}} dòng vào luồng này (mới và đổi).",
+    runRewritten_other:
+      "{{count, number}} dòng trong số đó đã được một lần chạy sau ghi lại, nên nay mang mã của lần chạy đó và không có trong danh sách này.",
+    runNoneRewritten: "Chưa lần chạy nào sau đó ghi lại dòng nào trong số này; tất cả đều ở đây.",
+    runWholeStream: "Xem cả luồng",
+    runNoRows: "Không còn dòng nào mang mã lần chạy này.",
     older: "Cũ hơn",
     loadingOlder: "Đang tải…",
   },
@@ -720,6 +733,8 @@ export const vi = {
     running: "Đang chạy…",
     runFailedHead: "Lần chạy gần nhất thất bại",
     openInJournal: "Xem trong nhật ký",
+    /** Mở Nhật ký, lọc theo đúng tài khoản trên thẻ này. */
+    openRuns: "Các lần chạy",
     runNotStarted: "Chưa chạy được",
     cadenceNotSaved: "Chưa lưu được tần suất",
     /**
@@ -922,6 +937,15 @@ export const vi = {
     removePickNamed: "Bỏ {{name}} khỏi lựa chọn",
     nothingToChoose: "Chưa có mục nào để chọn.",
     save: "Lưu lựa chọn",
+    /**
+     * Điều việc lưu làm với những gì hồ dữ liệu đang giữ, theo từng loại nguồn, và khớp đúng
+     * với lần đọc kế tiếp (settleWalk.ts). Không câu nào được ngụ ý là có gì bị xoá khỏi hồ:
+     * một dòng đánh dấu đã xoá ở nguồn vẫn còn nguyên trong hồ (ADR 0071, 0078).
+     */
+    heldDrive:
+      "Khi lưu: tệp và thư mục mà hồ dữ liệu đang giữ nhưng lựa chọn này không còn tới sẽ được đánh dấu là đã xoá ở nguồn trong lần đọc trọn vẹn kế tiếp. Chúng vẫn nằm trong hồ dữ liệu, và sẽ trở lại bình thường nếu một lựa chọn sau này tới được chúng.",
+    heldGmail:
+      "Khi lưu: thư mà hồ dữ liệu đang giữ vẫn giữ nguyên, kể cả thư không còn khớp nhãn nào đã chọn. Thư không còn khớp nhãn không bị đánh dấu là đã xoá ở nguồn.",
     saving: "Đang lưu…",
     notSaved: "Không lưu được lựa chọn.",
     pickerUnavailable:
@@ -1101,6 +1125,20 @@ export const vi = {
       "Còn {{count, number}} tài liệu chờ đọc khi lần chạy này bắt đầu. Mỗi lần chạy đọc tối đa 500 tài liệu.",
     backlogEmpty: "Không còn tài liệu nào chờ đọc khi lần chạy này bắt đầu.",
     release: "Bản dựng",
+
+    /**
+     * Nhật ký lọc theo một tài khoản — thứ thẻ nguồn mở ra. Bộ lọc nằm trên địa chỉ, nên
+     * Quay lại, Tiến tới và một đường dẫn dán vào đều mở đúng danh sách này. ADR 0091.
+     */
+    filteredTo: "Chỉ các lần chạy của {{source}}.",
+    showAllRuns: "Xem mọi lần chạy",
+    filteredEmpty: "{{source}} chưa có lần chạy nào.",
+    /**
+     * Phạm vi mà lần chạy đã đọc, ghi lại lúc nó đọc. Lần chạy cũ hơn không ghi lại thì in gạch
+     * ngang, không bao giờ in phạm vi hôm nay.
+     */
+    scopeAtStart: "Phạm vi lúc chạy",
+    openWritten: "Xem các bản ghi lần chạy này đã ghi vào {{entity}}, trong hồ dữ liệu thô",
 
     /**
      * Lời cho từng mã lý do mà worker ghi lại.

@@ -120,8 +120,10 @@ describe("scopeSummary for Xero", () => {
       config: { entities: ["invoices", "credit_notes"] },
     });
 
-    expect(scopeSummary(t, xero)).toBe("Hóa đơn, Giấy báo có");
-    expect(scopeSummary(translatorFor("en"), xero)).toBe("Invoices, Credit notes");
+    expect(scopeSummary(t, xero.kind, xero.config)).toBe("Hóa đơn, Giấy báo có");
+    expect(scopeSummary(translatorFor("en"), xero.kind, xero.config)).toBe(
+      "Invoices, Credit notes",
+    );
   });
 
   it("no entity chosen is every entity, said in words rather than as a dash", () => {
@@ -129,7 +131,7 @@ describe("scopeSummary for Xero", () => {
 
     // Every entity the picker offers, named -- not a sentence that listed four and went on
     // saying four after the spec declared thirteen.
-    expect(scopeSummary(t, xero)).toBe(
+    expect(scopeSummary(t, xero.kind, xero.config)).toBe(
       "Mọi loại dữ liệu: Liên hệ, Hóa đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, " +
         "Hóa đơn định kỳ, Giao dịch liên kết, Mặt hàng, Khoản trả thừa, Khoản trả trước, " +
         "Thanh toán theo lô, Nhóm liên hệ, Hệ thống tài khoản, Danh mục theo dõi, Thuế suất, " +
@@ -144,7 +146,7 @@ describe("scopeSummary for HubSpot", () => {
     // properties -- so the card may not render it as missing.
     const hubspot = connection("hubspot", { status: "connected", config: {} });
 
-    expect(scopeSummary(t, hubspot)).toBe(
+    expect(scopeSummary(t, hubspot.kind, hubspot.config)).toBe(
       "Các trường chuẩn của công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm",
     );
   });
@@ -155,8 +157,10 @@ describe("scopeSummary for HubSpot", () => {
       config: { properties: { companies: ["annualrevenue", "city"], deals: ["x_stage"] } },
     });
 
-    expect(scopeSummary(t, hubspot)).toBe("Các trường chuẩn, cùng 3 trường chọn thêm");
-    expect(scopeSummary(translatorFor("en"), hubspot)).toBe(
+    expect(scopeSummary(t, hubspot.kind, hubspot.config)).toBe(
+      "Các trường chuẩn, cùng 3 trường chọn thêm",
+    );
+    expect(scopeSummary(translatorFor("en"), hubspot.kind, hubspot.config)).toBe(
       "The standard properties, and 3 more chosen",
     );
   });

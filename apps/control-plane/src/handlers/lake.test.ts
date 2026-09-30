@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
+import { closeRun, openRun, recordEntities } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { messages } from "../i18n/index.ts";
@@ -131,7 +132,106 @@ describe("lake.records", () => {
     ).toBe("FORBIDDEN");
     expect(
       await caller(admin, "a@example.test").lake.documents({ tenantId: TENANT, source: "gmail" }),
-    ).toEqual({ items: [], nextCursor: null });
+    ).toEqual({ items: [], nextCursor: null, ofRun: null });
+  });
+});
+
+describe("the rows one run wrote", () => {
+  /** A run of HubSpot, closed with what it counted per entity -- or left running. */
+  async function run(
+    id: string,
+    counted: { entity: string; created: number; changed: number }[],
+    status: "ok" | "running" = "ok",
+  ): Promise<void> {
+    await openRun(db, {
+      id,
+      tenantId: TENANT,
+      source: "hubspot",
+      verb: "ingest",
+      trigger: "manual",
+    });
+    if (status === "running") {
+      return;
+    }
+    await recordEntities(
+      db,
+      id,
+      counted.map((c) => ({ ...c, landed: c.created + c.changed, unchanged: 0, refused: 0 })),
+    );
+    await closeRun(db, id, { status: "ok" });
+  }
+
+  /** `raw.records` as the loader leaves it: each row names the run that last wrote it. */
+  async function rows(lastWrittenBy: Record<string, string>): Promise<void> {
+    await db.asSuperuser(async (tx) => {
+      for (const [id, runId] of Object.entries(lastWrittenBy)) {
+        await tx.query(
+          `INSERT INTO raw.records (source, tenant_id, entity, source_record_id, payload,
+             content_sha256, observed_at, lake_key, lake_stamp, run_id)
+           VALUES ('hubspot', $1, 'contacts', $2, '{}'::jsonb, repeat('0', 64),
+                   '2026-09-18T08:00:00Z', 'k', 's', $3)`,
+          [TENANT, id, runId],
+        );
+      }
+    });
+  }
+
+  it("lists what the run still names, and says how many a later run has written again", async () => {
+    // r-a created three contacts; r-b changed c-2 afterwards, so c-2 names r-b now. The page is
+    // two rows long and must not pass for everything r-a wrote.
+    await run("r-a", [{ entity: "contacts", created: 3, changed: 0 }]);
+    await run("r-b", [{ entity: "contacts", created: 0, changed: 1 }]);
+    await rows({ "c-1": "r-a", "c-2": "r-b", "c-3": "r-a" });
+    const admin = await seedMember("a@example.test", "admin");
+
+    const page = await caller(admin, "a@example.test").lake.records({
+      tenantId: TENANT,
+      source: "hubspot",
+      entity: "contacts",
+      runId: "r-a",
+    });
+
+    expect(page.items.map((r) => r.sourceRecordId).sort()).toEqual(["c-1", "c-3"]);
+    expect(page.ofRun).toEqual({ runId: "r-a", wrote: 3, current: 2, rewritten: 1 });
+  });
+
+  it("says nothing it cannot compute: a run still going has no count to subtract from", async () => {
+    await run("r-live", [], "running");
+    await rows({ "c-1": "r-live" });
+    const admin = await seedMember("a@example.test", "admin");
+
+    const page = await caller(admin, "a@example.test").lake.records({
+      tenantId: TENANT,
+      source: "hubspot",
+      entity: "contacts",
+      runId: "r-live",
+    });
+
+    expect(page.items.map((r) => r.sourceRecordId)).toEqual(["c-1"]);
+    expect(page.ofRun).toBeNull();
+  });
+
+  it("counts a run's documents against the entity its ledger counts them under", async () => {
+    await run("r-docs", [{ entity: "documents", created: 2, changed: 0 }]);
+    await db.asSuperuser((tx) =>
+      tx.query(
+        `INSERT INTO raw.documents (source, tenant_id, document_id, lake_key, sha256, byte_length,
+           observed_at, run_id)
+         VALUES ('hubspot', $1, 'f-1', 'k1', repeat('1', 64), 10, now(), 'r-docs'),
+                ('hubspot', $1, 'f-2', 'k2', repeat('2', 64), 10, now(), 'r-later')`,
+        [TENANT],
+      ),
+    );
+    const admin = await seedMember("a@example.test", "admin");
+
+    const page = await caller(admin, "a@example.test").lake.documents({
+      tenantId: TENANT,
+      source: "hubspot",
+      runId: "r-docs",
+    });
+
+    expect(page.items.map((d) => d.documentId)).toEqual(["f-1"]);
+    expect(page.ofRun).toEqual({ runId: "r-docs", wrote: 2, current: 1, rewritten: 1 });
   });
 });
 

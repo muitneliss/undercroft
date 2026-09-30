@@ -15,12 +15,18 @@
  * `<details>` holds whether it is open -- a disclosure is not application state.
  *
  * Admin-only, decided by the route and enforced by the server; this file only draws.
+ *
+ * A run narrows the stream to the rows it wrote (`&run=`, what a run's counts open from its
+ * leaf; ADR 0091). A row names only the run that last wrote it, so the page says how many of the
+ * run's own count a later run has since written again, rather than passing the shorter list off
+ * as everything the run wrote -- and says nothing it cannot compute.
  */
 
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
+import type { RunWrites } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import {
@@ -33,13 +39,62 @@ import {
   TableRow,
 } from "@/components/ui/table.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import { parseStream, streamKey } from "@/lib/lake.ts";
+import {
+  type LakeStream,
+  lakeStreamPath,
+  parseRunFilter,
+  parseStream,
+  streamKey,
+} from "@/lib/lake.ts";
 import { formatBytes } from "@/lib/money.ts";
 import { formatDate, formatDateTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 const PAGE = 50;
+
+/**
+ * Which run the rows are narrowed to, what it wrote against what still names it, and the way back
+ * to the whole stream.
+ *
+ * `writes` is the server's, computed and never estimated; when it is `null` the figures could not
+ * be subtracted honestly (a run still going, a count the ledger does not hold), and this says
+ * only which run the page is narrowed to.
+ */
+function RunNarrowing({
+  tenantId,
+  stream,
+  runId,
+  writes,
+}: {
+  tenantId: string;
+  stream: LakeStream;
+  runId: string;
+  writes: RunWrites;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <div className="stack stack--tight">
+      <div className="row">
+        <p className="note">{t("lake.runRows", { runId })}</p>
+        <Link className="plate plate--small" to={lakeStreamPath(tenantId, stream)}>
+          {t("lake.runWholeStream")}
+        </Link>
+      </div>
+      {writes === null ? null : (
+        <div className="stack stack--tight" role="status">
+          <p className="prose">{t("lake.runWrote", { count: writes.wrote })}</p>
+          <p className="prose">
+            {writes.rewritten === 0
+              ? t("lake.runNoneRewritten")
+              : t("lake.runRewritten", { count: writes.rewritten })}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Present at the source, or deleted there on a date. Never a dash: both are facts. */
 function atSource(t: TFunction, deletedAt: string | null, locale: "vi" | "en"): string {
@@ -52,15 +107,17 @@ function RecordsTable({
   tenantId,
   source,
   entity,
+  runId,
 }: {
   tenantId: string;
   source: string;
   entity: string;
+  runId: string | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const rows = trpc.lake.records.useInfiniteQuery(
-    { tenantId, source, entity, limit: PAGE },
+    { tenantId, source, entity, limit: PAGE, ...(runId === null ? {} : { runId }) },
     { getNextPageParam: (page) => page.nextCursor ?? undefined },
   );
 
@@ -75,13 +132,29 @@ function RecordsTable({
     );
   }
   const items = rows.data.pages.flatMap((page) => page.items);
+  const stream: LakeStream = { kind: "records", source, entity };
+  const narrowing =
+    runId === null ? null : (
+      <RunNarrowing
+        tenantId={tenantId}
+        stream={stream}
+        runId={runId}
+        writes={rows.data.pages[0]?.ofRun ?? null}
+      />
+    );
   if (items.length === 0) {
-    return <p className="note">{t("lake.noRows")}</p>;
+    return (
+      <div className="stack">
+        {narrowing}
+        <p className="note">{runId === null ? t("lake.noRows") : t("lake.runNoRows")}</p>
+      </div>
+    );
   }
   const journal = divisionPath("journal", tenantId);
 
   return (
     <div className="stack">
+      {narrowing}
       <Table>
         <TableCaption>{t("lake.rowsCaption", { count: items.length })}</TableCaption>
         <TableHeader>
@@ -140,14 +213,16 @@ function RecordsTable({
 function DocumentsTable({
   tenantId,
   source,
+  runId,
 }: {
   tenantId: string;
   source: string;
+  runId: string | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
   const rows = trpc.lake.documents.useInfiniteQuery(
-    { tenantId, source, limit: PAGE },
+    { tenantId, source, limit: PAGE, ...(runId === null ? {} : { runId }) },
     { getNextPageParam: (page) => page.nextCursor ?? undefined },
   );
 
@@ -162,13 +237,29 @@ function DocumentsTable({
     );
   }
   const items = rows.data.pages.flatMap((page) => page.items);
+  const stream: LakeStream = { kind: "documents", source };
+  const narrowing =
+    runId === null ? null : (
+      <RunNarrowing
+        tenantId={tenantId}
+        stream={stream}
+        runId={runId}
+        writes={rows.data.pages[0]?.ofRun ?? null}
+      />
+    );
   if (items.length === 0) {
-    return <p className="note">{t("lake.noRows")}</p>;
+    return (
+      <div className="stack">
+        {narrowing}
+        <p className="note">{runId === null ? t("lake.noRows") : t("lake.runNoRows")}</p>
+      </div>
+    );
   }
   const journal = divisionPath("journal", tenantId);
 
   return (
     <div className="stack">
+      {narrowing}
       <Table>
         <TableCaption>{t("lake.docsCaption", { count: items.length })}</TableCaption>
         <TableHeader>
@@ -236,6 +327,7 @@ export function LakeBrowser({ tenantId }: { tenantId: string }): React.JSX.Eleme
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const chosen = parseStream(params);
+  const runId = parseRunFilter(params);
 
   if (chosen === null) {
     // Not an error and not empty: the reader has simply not opened a line yet. The index is
@@ -248,13 +340,19 @@ export function LakeBrowser({ tenantId }: { tenantId: string }): React.JSX.Eleme
       <p className="prose">{t("lake.browserLead")}</p>
       {chosen.kind === "records" ? (
         <RecordsTable
-          key={streamKey(chosen)}
+          key={`${streamKey(chosen)}|${runId ?? ""}`}
           tenantId={tenantId}
           source={chosen.source}
           entity={chosen.entity}
+          runId={runId}
         />
       ) : (
-        <DocumentsTable key={streamKey(chosen)} tenantId={tenantId} source={chosen.source} />
+        <DocumentsTable
+          key={`${streamKey(chosen)}|${runId ?? ""}`}
+          tenantId={tenantId}
+          source={chosen.source}
+          runId={runId}
+        />
       )}
     </div>
   );

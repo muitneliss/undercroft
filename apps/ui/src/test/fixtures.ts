@@ -46,6 +46,8 @@ export function runDetail(over: Partial<RunDetail> = {}): RunDetail {
     steps: [],
     parentRun: null,
     childRun: null,
+    // A run from before a run recorded its scope, which is every run older than ADR 0091.
+    scope: null,
     ...over,
   };
 }

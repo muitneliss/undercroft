@@ -273,7 +273,7 @@ describe("records", () => {
 
   it("a stream that never landed is an empty page", async () => {
     const page = await records(db, TENANT, { source: "xero", entity: "invoices", limit: 50 });
-    expect(page).toEqual({ items: [], nextCursor: null });
+    expect(page).toEqual({ items: [], nextCursor: null, ofRun: null });
   });
 });
 

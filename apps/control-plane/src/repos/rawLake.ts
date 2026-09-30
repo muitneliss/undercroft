@@ -312,30 +312,39 @@ function toRecord(r: RecordRow): RawRecord {
 }
 
 /**
- * One stream's rows, newest observation first, a page at a time.
+ * One stream's rows, newest observation first, a page at a time -- all of them, or only those
+ * that name one run.
  *
  * Keyed by `(observed_at, source_record_id)`: within one (tenant, source, entity) the
  * record id is unique, so the pair is a total order and a page boundary is exact.
+ *
+ * `runId` keeps the rows whose `run_id` is that run. A row names only the run that LAST wrote
+ * it (the upsert rewrites `run_id` only when the content changed), so this is what the run wrote
+ * and no later run has rewritten -- which is why the caller also asks {@link countRecordsOfRun}
+ * and says how many are missing, rather than passing this page off as the run's whole output.
  */
 export async function listRecords(
   exec: SqlExecutor,
   tenantId: string,
-  stream: { source: string; entity: string },
+  stream: { source: string; entity: string; runId?: string | null },
   page: { limit: number; cursor?: string | null },
 ): Promise<Page<RawRecord>> {
   const after = decodeCursor(page.cursor);
   const { rows } = await exec.query<RecordRow>(
-    after === null
-      ? `SELECT ${RECORD_COLUMNS} FROM raw.records
-         WHERE tenant_id = $1 AND source = $2 AND entity = $3
-         ORDER BY observed_at DESC, source_record_id DESC LIMIT $4`
-      : `SELECT ${RECORD_COLUMNS} FROM raw.records
-         WHERE tenant_id = $1 AND source = $2 AND entity = $3
-           AND (observed_at, source_record_id) < ($5::timestamptz, $6)
-         ORDER BY observed_at DESC, source_record_id DESC LIMIT $4`,
-    after === null
-      ? [tenantId, stream.source, stream.entity, page.limit + 1]
-      : [tenantId, stream.source, stream.entity, page.limit + 1, after.at, after.id],
+    `SELECT ${RECORD_COLUMNS} FROM raw.records
+     WHERE tenant_id = $1 AND source = $2 AND entity = $3
+       AND ($5::text IS NULL OR run_id = $5::text)
+       AND ($6::timestamptz IS NULL OR (observed_at, source_record_id) < ($6::timestamptz, $7::text))
+     ORDER BY observed_at DESC, source_record_id DESC LIMIT $4`,
+    [
+      tenantId,
+      stream.source,
+      stream.entity,
+      page.limit + 1,
+      stream.runId ?? null,
+      after?.at ?? null,
+      after?.id ?? null,
+    ],
   );
   const items = rows.slice(0, page.limit).map(toRecord);
   const last = items.at(-1);
@@ -344,6 +353,23 @@ export async function listRecords(
       ? encodeCursor(last.observedAt, last.sourceRecordId)
       : null;
   return { items, nextCursor };
+}
+
+/**
+ * How many of one stream's rows still name this run: what it wrote that no later run rewrote.
+ * Counted, over the same predicate `listRecords` pages with, so the figure and the rows agree.
+ */
+export async function countRecordsOfRun(
+  exec: SqlExecutor,
+  tenantId: string,
+  stream: { source: string; entity: string; runId: string },
+): Promise<number> {
+  const { rows } = await exec.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM raw.records
+     WHERE tenant_id = $1 AND source = $2 AND entity = $3 AND run_id = $4`,
+    [tenantId, stream.source, stream.entity, stream.runId],
+  );
+  return rows[0]?.n ?? 0;
 }
 
 interface DocumentRow {
@@ -374,7 +400,8 @@ function toDocument(r: DocumentRow): RawDocument {
 }
 
 /**
- * The document catalogue for one source, newest first, a page at a time.
+ * The document catalogue for one source, newest first, a page at a time -- all of it, or only
+ * the rows that name one run, as {@link listRecords} reads a run.
  *
  * The catalogue row only: content type, size, digest, when. Not the bytes, which are in the
  * object store, and not `metadata` -- opaque provider ids by contract (ADR 0015), but the
@@ -383,22 +410,24 @@ function toDocument(r: DocumentRow): RawDocument {
 export async function listDocuments(
   exec: SqlExecutor,
   tenantId: string,
-  source: string,
+  stream: { source: string; runId?: string | null },
   page: { limit: number; cursor?: string | null },
 ): Promise<Page<RawDocument>> {
   const after = decodeCursor(page.cursor);
   const { rows } = await exec.query<DocumentRow>(
-    after === null
-      ? `SELECT ${DOCUMENT_COLUMNS} FROM raw.documents
-         WHERE tenant_id = $1 AND source = $2
-         ORDER BY observed_at DESC, document_id DESC LIMIT $3`
-      : `SELECT ${DOCUMENT_COLUMNS} FROM raw.documents
-         WHERE tenant_id = $1 AND source = $2
-           AND (observed_at, document_id) < ($4::timestamptz, $5)
-         ORDER BY observed_at DESC, document_id DESC LIMIT $3`,
-    after === null
-      ? [tenantId, source, page.limit + 1]
-      : [tenantId, source, page.limit + 1, after.at, after.id],
+    `SELECT ${DOCUMENT_COLUMNS} FROM raw.documents
+     WHERE tenant_id = $1 AND source = $2
+       AND ($4::text IS NULL OR run_id = $4::text)
+       AND ($5::timestamptz IS NULL OR (observed_at, document_id) < ($5::timestamptz, $6::text))
+     ORDER BY observed_at DESC, document_id DESC LIMIT $3`,
+    [
+      tenantId,
+      stream.source,
+      page.limit + 1,
+      stream.runId ?? null,
+      after?.at ?? null,
+      after?.id ?? null,
+    ],
   );
   const items = rows.slice(0, page.limit).map(toDocument);
   const last = items.at(-1);
@@ -407,4 +436,18 @@ export async function listDocuments(
       ? encodeCursor(last.observedAt, last.documentId)
       : null;
   return { items, nextCursor };
+}
+
+/** How many of one source's catalogue rows still name this run. See {@link countRecordsOfRun}. */
+export async function countDocumentsOfRun(
+  exec: SqlExecutor,
+  tenantId: string,
+  stream: { source: string; runId: string },
+): Promise<number> {
+  const { rows } = await exec.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM raw.documents
+     WHERE tenant_id = $1 AND source = $2 AND run_id = $3`,
+    [tenantId, stream.source, stream.runId],
+  );
+  return rows[0]?.n ?? 0;
 }

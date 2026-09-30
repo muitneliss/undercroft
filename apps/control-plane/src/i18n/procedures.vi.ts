@@ -57,8 +57,10 @@ export const procedureSentences: SentenceTable = {
   "people.removeMember":
     "Gỡ quyền truy cập của một thành viên; không áp dụng cho admin cuối cùng. Quản trị.",
   "lake.summary": "Những gì đã nạp, theo từng luồng: số lượng và độ mới.",
-  "lake.records": "Các bản ghi thô của một thực thể. Quản trị.",
-  "lake.documents": "Các tài liệu thô của một nguồn. Quản trị.",
+  "lake.records":
+    "Các bản ghi thô của một thực thể, hoặc những bản ghi một lần chạy đã ghi. Quản trị.",
+  "lake.documents":
+    "Các tài liệu thô của một nguồn, hoặc những tài liệu một lần chạy đã ghi. Quản trị.",
   "lake.query": "Chạy một câu SELECT trên hồ dữ liệu thô. Quản trị.",
   "lake.search": "Tìm kiếm toàn văn trên hồ dữ liệu thô. Quản trị.",
   "lake.querySchema": "Các bảng và cột mà lake query đọc được. Quản trị.",
@@ -105,8 +107,8 @@ export const procedureSentences: SentenceTable = {
   "bi.dashboards.save": "Lưu một bảng điều khiển. Thành viên trở lên.",
   "bi.dashboards.delete": "Xoá một bảng điều khiển. Thành viên trở lên.",
   "dq.failures": "Các dòng mà một kiểm thử chất lượng dữ liệu đã lưu khi thất bại. Quản trị.",
-  "runs.list": "Sổ các lần chạy, mới nhất trước.",
-  "runs.get": "Một lần chạy, với các dòng bị từ chối và các bước dbt.",
+  "runs.list": "Sổ các lần chạy, mới nhất trước; mọi tài khoản, hoặc của một nguồn.",
+  "runs.get": "Một lần chạy, với phạm vi nó đã đọc, các dòng bị từ chối và các bước dbt.",
   "runs.events": "Những gì worker đang báo về một lần chạy.",
   "runs.trigger": "Chạy ngay việc đọc một nguồn. Quản trị.",
   "config.google": "Nửa công khai của ứng dụng Google, cho trình chọn Drive.",
