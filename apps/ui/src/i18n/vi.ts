@@ -483,6 +483,10 @@ export const vi = {
      * the reader is choosing is a place to go and not a query to run.
      */
     consoleOpen: "Mở bảng truy vấn",
+    kindsHead: "Loại tài liệu",
+    kindsLead:
+      "Mỗi tài liệu đọc được được phân loại theo danh mục loại tài liệu của {{tenantId}}: hoá đơn, hợp đồng, sao kê… Xem và sửa danh mục ở đây.",
+    kindsOpen: "Mở danh mục loại tài liệu",
     /**
      * Said to a reader who followed a pasted address they may not open. It names who can do
      * this rather than only saying that they cannot, so the next step is obvious.
@@ -558,6 +562,78 @@ export const vi = {
     noRows: "Luồng này chưa có bản ghi nào.",
     older: "Cũ hơn",
     loadingOlder: "Đang tải…",
+  },
+
+  /**
+   * The catalogue of document kinds (ADR 0085). Kind names (`invoice`, `other`) are printed as
+   * they are, like role names: they are the values the API takes and the column a model reads.
+   */
+  kinds: {
+    head: "Loại tài liệu",
+    title: "Danh mục loại tài liệu",
+    lead: "Mỗi tài liệu đọc được của {{tenantId}} được phân loại vào đúng một loại trong danh mục này. Một câu trả lời dưới độ tin cậy 0,90 để trống, không đoán.",
+    notLoaded: "Không tải được danh mục loại tài liệu của {{tenantId}}.",
+    back: "Về Hồ dữ liệu",
+    published: "Đang phân loại theo phiên bản {{version}}, publish lúc {{when}} bởi {{by}}.",
+    neverPublished: "Chưa publish phiên bản nào, nên chưa tài liệu nào được phân loại.",
+    unpublished:
+      "Bản nháp khác phiên bản đang dùng. Chỉ khi publish, các thay đổi mới có hiệu lực.",
+    readable_other: "{{count, number}} tài liệu đọc được",
+    caption_other: "{{count, number}} loại",
+    colKind: "Loại",
+    colDescription: "Mô tả",
+    colOrigin: "Nguồn gốc",
+    colShare: "Tỷ lệ trong mẫu",
+    colActions: "Thao tác",
+    originInitialised: "Từ mẫu",
+    originGeneric: "Danh mục chung",
+    originAdmin: "Admin tự thêm",
+    shareNone: "—",
+    edit: "Sửa",
+    save: "Lưu",
+    saving: "Đang lưu…",
+    cancel: "Huỷ",
+    remove: "Xoá",
+    removing: "Đang xoá…",
+    otherRequired: "Luôn có",
+    descriptionFor: "Mô tả của {{kind}}",
+    notSaved: "Chưa lưu được",
+    notRemoved: "Chưa xoá được",
+    emptyTitle: "Chưa có danh mục",
+    emptyBody:
+      "Khởi tạo sẽ lấy mẫu khoảng 450 tài liệu, phân loại chúng vào danh mục chung và giữ lại mọi loại chiếm từ 1% mẫu trở lên, cùng với other. Chưa publish gì: bạn xem lại, sửa rồi mới publish.",
+    emptyMember: "Chỉ admin của {{tenantId}} mới khởi tạo được danh mục.",
+    initialise: "Khởi tạo từ mẫu",
+    initialising: "Đang khởi tạo…",
+    initialiseStarted:
+      "Đã bắt đầu. Danh mục sẽ hiện ở đây khi lần chạy xong, thường trong vài phút.",
+    initialiseWatch: "Xem lần chạy",
+    notInitialised: "Chưa khởi tạo được",
+    addHead: "Thêm loại",
+    addGenericLabel: "Từ danh mục chung",
+    addGeneric: "Thêm",
+    addGenericNone: "Mọi loại trong danh mục chung đã có trong danh mục này.",
+    addCustomName: "Tên loại riêng",
+    addCustomNameHint:
+      "Chữ thường, số và dấu gạch dưới, bắt đầu bằng chữ cái. Ví dụ: visa_application.",
+    addCustomDescription: "Mô tả",
+    addCustomDescriptionHint:
+      "Một câu nói loại này là gì. Bộ phân loại chỉ đọc câu này, nên hãy viết rõ điều phân biệt nó với các loại khác.",
+    addCustom: "Thêm loại riêng",
+    adding: "Đang thêm…",
+    notAdded: "Chưa thêm được",
+    publishHead: "Publish",
+    publishLead:
+      "Publish sẽ gửi lại mọi tài liệu đọc được cho bộ phân loại, theo danh mục mới, và tính phí trên key của nền tảng. Sửa bao nhiêu lần cũng được; chỉ publish mới tốn.",
+    publishNothing: "Không có gì để publish: bản nháp giống phiên bản đang dùng.",
+    publish: "Publish danh mục",
+    publishConfirm_other: "Xác nhận: phân loại lại {{count, number}} tài liệu",
+    publishing: "Đang publish…",
+    publishCancel: "Thôi",
+    publishedNow:
+      "Đã publish phiên bản {{version}}. Việc phân loại chạy nền, mỗi nửa giờ một lượt.",
+    notPublished: "Chưa publish được",
+    adminOnly: "Chỉ admin của {{tenantId}} mới sửa và publish được danh mục.",
   },
 
   people: {

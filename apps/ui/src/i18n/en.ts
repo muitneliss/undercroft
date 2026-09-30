@@ -376,6 +376,10 @@ export const en = {
     consoleFromStream: "written from {{stream}}",
     consoleBack: "Raw lake",
     consoleOpen: "Open the SQL console",
+    kindsHead: "Document kinds",
+    kindsLead:
+      "Every readable document is classified against the catalogue of document kinds of {{tenantId}}: invoices, contracts, statements… See and edit the catalogue here.",
+    kindsOpen: "Open the document kinds",
     consoleAdminOnly:
       "Only an administrator of this customer runs queries over the raw lake. The counts of what has landed are still yours to read on the Raw lake page.",
     consoleRows_one: "{{count, number}} row",
@@ -444,6 +448,81 @@ export const en = {
     noRows: "This stream has no records yet.",
     older: "Older",
     loadingOlder: "Loading…",
+  },
+
+  /**
+   * The catalogue of document kinds (ADR 0085). Kind names (`invoice`, `other`) are printed as
+   * they are, like role names: they are the values the API takes and the column a model reads.
+   */
+  kinds: {
+    head: "Document kinds",
+    title: "Catalogue of document kinds",
+    lead: "Every readable document of {{tenantId}} is classified as exactly one kind in this catalogue. An answer below 0.90 confidence is left empty rather than guessed.",
+    notLoaded: "The catalogue of document kinds for {{tenantId}} could not be loaded.",
+    back: "Back to the lake",
+    published: "Classifying against version {{version}}, published {{when}} by {{by}}.",
+    neverPublished: "No version has been published yet, so no document has been classified.",
+    unpublished:
+      "The draft differs from the version in use. Changes take effect only when published.",
+    readable_one: "{{count, number}} readable document",
+    readable_other: "{{count, number}} readable documents",
+    caption_one: "{{count, number}} kind",
+    caption_other: "{{count, number}} kinds",
+    colKind: "Kind",
+    colDescription: "Description",
+    colOrigin: "Origin",
+    colShare: "Share of sample",
+    colActions: "Actions",
+    originInitialised: "From the sample",
+    originGeneric: "Generic catalogue",
+    originAdmin: "Added by an admin",
+    shareNone: "—",
+    edit: "Edit",
+    save: "Save",
+    saving: "Saving…",
+    cancel: "Cancel",
+    remove: "Remove",
+    removing: "Removing…",
+    otherRequired: "Always kept",
+    descriptionFor: "Description of {{kind}}",
+    notSaved: "Not saved",
+    notRemoved: "Not removed",
+    emptyTitle: "No catalogue yet",
+    emptyBody:
+      "Initialising samples about 450 documents, classifies them into the generic catalogue and keeps every kind seen in at least 1% of the sample, plus other. Nothing is published: you review, edit, then publish.",
+    emptyMember: "Only an admin of {{tenantId}} can initialise the catalogue.",
+    initialise: "Initialise from a sample",
+    initialising: "Initialising…",
+    initialiseStarted:
+      "Started. The catalogue will appear here when the run finishes, usually within a few minutes.",
+    initialiseWatch: "Watch the run",
+    notInitialised: "Not initialised",
+    addHead: "Add a kind",
+    addGenericLabel: "From the generic catalogue",
+    addGeneric: "Add",
+    addGenericNone: "Every kind in the generic catalogue is already in this one.",
+    addCustomName: "Name of a custom kind",
+    addCustomNameHint:
+      "Lower case, digits and underscores, starting with a letter. For example: visa_application.",
+    addCustomDescription: "Description",
+    addCustomDescriptionHint:
+      "One sentence saying what this kind is. The classifier reads only this, so say what sets it apart from the others.",
+    addCustom: "Add custom kind",
+    adding: "Adding…",
+    notAdded: "Not added",
+    publishHead: "Publish",
+    publishLead:
+      "Publishing sends every readable document to the classifier again, against the new catalogue, and is billed to the platform's key. Edit as often as you like; only publishing costs.",
+    publishNothing: "Nothing to publish: the draft is the version in use.",
+    publish: "Publish the catalogue",
+    publishConfirm_one: "Confirm: classify {{count, number}} document again",
+    publishConfirm_other: "Confirm: classify {{count, number}} documents again",
+    publishing: "Publishing…",
+    publishCancel: "Not now",
+    publishedNow:
+      "Published version {{version}}. Classification runs in the background, every half hour.",
+    notPublished: "Not published",
+    adminOnly: "Only an admin of {{tenantId}} can edit and publish the catalogue.",
   },
 
   people: {

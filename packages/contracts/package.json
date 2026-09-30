@@ -9,7 +9,8 @@
     "./bi": "./src/bi.ts",
     "./cadence": "./src/cadence.ts",
     "./runs": "./src/runs.ts",
-    "./sources": "./src/sourceInstance.ts"
+    "./sources": "./src/sourceInstance.ts",
+    "./documentKinds": "./src/documentKinds.ts"
   },
   "dependencies": {
     "croner": "10.0.1",

@@ -10,7 +10,7 @@
  * successful sign-in, which is the one path no offline test reaches. It shipped once.
  * As objects the halves compose by spreading an array, and that cannot be wrong.
  *
- * Split in three because a function may not exceed 50 lines (`noExcessiveLinesPerFunction`),
+ * Split in four because a function may not exceed 50 lines (`noExcessiveLinesPerFunction`),
  * which is the pressure that produced the components in the first place. ORDER is preserved
  * from that table: `path: "*"` stays last, with the half it has always lived in.
  *
@@ -47,6 +47,9 @@ const Lake = lazy(() => import("@/routes/Lake.tsx").then((module) => ({ default:
 const LakeQuery = lazy(() =>
   import("@/routes/LakeQuery.tsx").then((module) => ({ default: module.LakeQuery })),
 );
+const DocumentKinds = lazy(() =>
+  import("@/routes/DocumentKinds.tsx").then((module) => ({ default: module.DocumentKinds })),
+);
 const Models = lazy(() =>
   import("@/routes/Models.tsx").then((module) => ({ default: module.Models })),
 );
@@ -63,7 +66,7 @@ const Dashboard = lazy(() =>
   import("@/routes/Dashboard.tsx").then((module) => ({ default: module.Dashboard })),
 );
 
-/** The routes reached from the tab rail, and the one that stands outside it. */
+/** The journal, and the one route that stands outside the tab rail. */
 function divisionRoutes(signedInAs: string): RouteObject[] {
   return [
     {
@@ -82,6 +85,12 @@ function divisionRoutes(signedInAs: string): RouteObject[] {
         </Opened>
       ),
     },
+  ];
+}
+
+/** The lake division: its index, and the two pages it keeps a door to. */
+function lakeRoutes(signedInAs: string): RouteObject[] {
+  return [
     {
       path: "/tenants/:tenantId/lake",
       element: (
@@ -103,6 +112,18 @@ function divisionRoutes(signedInAs: string): RouteObject[] {
           {(tenantId): React.JSX.Element => (
             <Suspense fallback={<Skeleton rows={6} />}>
               <LakeQuery tenantId={tenantId} />
+            </Suspense>
+          )}
+        </Opened>
+      ),
+    },
+    {
+      path: "/tenants/:tenantId/lake/kinds",
+      element: (
+        <Opened division="lake" signedInAs={signedInAs}>
+          {(tenantId): React.JSX.Element => (
+            <Suspense fallback={<Skeleton rows={6} />}>
+              <DocumentKinds tenantId={tenantId} />
             </Suspense>
           )}
         </Opened>
@@ -231,5 +252,10 @@ function tenantRoutes(signedInAs: string): RouteObject[] {
  * one session query in `App`, and the running head shows it on every leaf.
  */
 export function appRoutes(signedInAs: string): RouteObject[] {
-  return [...divisionRoutes(signedInAs), ...modelRoutes(signedInAs), ...tenantRoutes(signedInAs)];
+  return [
+    ...divisionRoutes(signedInAs),
+    ...lakeRoutes(signedInAs),
+    ...modelRoutes(signedInAs),
+    ...tenantRoutes(signedInAs),
+  ];
 }
