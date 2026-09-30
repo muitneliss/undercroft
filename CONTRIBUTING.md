@@ -28,8 +28,10 @@ must pass with no Docker, no network and no credentials; `task ci:itest` adds th
 Docker-backed integration tier, which needs `deploy/compose/.env` and Postgres.
 
 CI also runs checks outside the gate: `ci:cli-pack-check` (Node 22 and npm),
-`ci:skill-check` (network), `ci:compose-check` (every service in both compose files declares
-a memory limit) and `ci:secrets-check`. Run the ones your change touches.
+`ci:skill-check` (network), `ci:visual` (Docker: the UI's screens against their reviewed
+baselines, [docs/runbook/visual-regression.md](docs/runbook/visual-regression.md)),
+`ci:compose-check` (every service in both compose files declares a memory limit) and
+`ci:secrets-check`. Run the ones your change touches.
 
 ## Ground rules
 

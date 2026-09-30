@@ -76,6 +76,22 @@ tasks:
       - docker compose -f {{.COMPOSE_FILE}} up -d --wait postgres pgbouncer
       - UNDERCROFT_ITEST=1 bun test integration
 
+  visual:
+    desc: >-
+      The visual-regression tier: apps/ui's *.vrt.test.tsx in Chromium, inside the Playwright
+      image, against the committed baselines. Needs Docker (and the network on its first run);
+      not part of ci:verify. Narrow with a filter: task ci:visual -- Tenants
+    cmds:
+      # Vitest, not Bun, and only for these files: ADR 0099. The script owns the container.
+      - bun run visual {{.CLI_ARGS}}
+
+  visual-update:
+    desc: >-
+      Retake the visual baselines in the same container and copy them into the checkout, for a
+      person to review against the design before committing. Usage as ci:visual.
+    cmds:
+      - bun run visual:update {{.CLI_ARGS}}
+
   compose-check:
     desc: Assert every compose service (dev, server and install variants) declares a memory limit.
     cmds:

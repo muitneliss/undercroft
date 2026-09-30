@@ -161,6 +161,7 @@ its ADR, and what exactly it accepts lives in a reference page.
     [Google ingestion](docs/runbook/google-ingestion-setup.md), [Xero](docs/runbook/xero-setup.md),
     [HubSpot](docs/runbook/hubspot-setup.md)
   - Running it: [deployment](docs/runbook/deployment.md)
+  - Changing it: [visual regression tests](docs/runbook/visual-regression.md) for the UI's screens
 - **Decisions:** [`docs/adr/`](docs/adr/). Each ADR records the options that were rejected
   and why.
 - **Reference:** [file formats a Gmail or Drive connection can land](docs/reference/file-formats.md),

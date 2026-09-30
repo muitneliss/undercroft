@@ -58,3 +58,7 @@ apps/blog/.astro/
 # publishes (`build/` is already ignored above). Each is rebuilt on every build.
 apps/desktop/.hutch/
 apps/desktop/artifacts/
+
+# The visual tier's diffs and failed captures (ADR 0099). CI uploads them; the baselines under
+# `__screenshots__` are the tracked half.
+apps/ui/.vitest-attachments/

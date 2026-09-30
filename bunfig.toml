@@ -4,5 +4,10 @@
 # installed for non-UI suites too. `setup.ts` restores Bun's native stream globals for exactly
 # that reason -- happy-dom's `TransformStream` does not interoperate with a native
 # `ReadableStream`, and the break surfaced in a server suite that renders nothing.
+#
+# `*.vrt.test.tsx` is the visual tier, which Vitest runs in Chromium (ADR 0099). Bun would match
+# it as a test by its name, so it is ignored here; `apps/ui/vitest.config.ts` includes that
+# pattern and nothing else, so no file is ever claimed by both runners.
 [test]
 preload = ["./apps/ui/src/test/setup.ts"]
+pathIgnorePatterns = ["**/*.vrt.test.tsx"]
