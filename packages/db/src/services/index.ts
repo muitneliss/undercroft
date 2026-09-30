@@ -37,3 +37,12 @@ export {
   type Severity,
   type UnverifiedCode,
 } from "./modelCheck.ts";
+export {
+  type Lineage,
+  type LineageEdge,
+  type LineageInput,
+  type LineageNode,
+  modelLineage,
+  type Undeclared,
+  type UndeclaredCode,
+} from "./modelLineage.ts";

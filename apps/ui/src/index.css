@@ -1140,6 +1140,12 @@
     overflow-wrap: anywhere;
   }
 
+  .lineage__item > p,
+  .lineage__item > ul {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
   .datum--quiet {
     color: var(--ink-2);
   }
@@ -1365,7 +1371,10 @@
     margin-left: calc(-1 * var(--hair));
   }
 
-  .langset .plate[aria-pressed="true"] {
+  /* The same inked face for a pair of views bound as one control (the Models division's list
+   and lineage): the face that is chosen is the page the reader is on. */
+  .langset .plate[aria-pressed="true"],
+  .langset .plate[aria-current="page"] {
     background: var(--ink);
     color: var(--leaf);
   }
@@ -3417,6 +3426,184 @@
     box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45);
   }
 
+  /* -- the models' build tally ------------------------------------------------------
+   *
+   * One count per last-build state, each a door that narrows the list to it, and the whole
+   * list's count last. A count is a figure over its status mark -- the mark's shape and word
+   * say which state, as on every row beneath -- and the count pressed is punched through the
+   * way a selected line of the lake index is. */
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-5);
+  }
+
+  .tally__count {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--s-2);
+    padding: var(--s-1) 0;
+    border-bottom: var(--hair) solid transparent;
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color var(--hinge);
+  }
+
+  .tally__count:hover,
+  .tally__count[aria-current="true"] {
+    border-bottom-color: var(--ink);
+  }
+
+  .tally__figure {
+    font-family: var(--face-mono);
+    font-size: 0.9375rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tally__count[aria-current="true"] .tally__figure {
+    font-weight: 700;
+  }
+
+  /* -- the models' lineage ------------------------------------------------------------
+   *
+   * Columns of nodes on a grid whose every row is one height, and an SVG stretched over it
+   * in (column, row) units drawing the declared edges. The strokes do not stretch with it.
+   * With a model selected, the nodes off its upstream chain are dimmed --
+   * and every node ON the chain also says so in words, because dimming is never the only
+   * thing that carries it. Below 760px the drawing steps aside for the text list. */
+  .lineage {
+    --lineage-row: 3.5rem;
+    overflow-x: auto;
+  }
+
+  .lineage__grid {
+    position: relative;
+    display: grid;
+    min-width: 36rem;
+  }
+
+  .lineage__edges {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .lineage__edge {
+    fill: none;
+    stroke: var(--rule-strong);
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+    transition: opacity var(--pass);
+  }
+
+  .lineage__edge--missing {
+    stroke-dasharray: 4 3;
+  }
+
+  .lineage__edge--chain {
+    stroke: var(--ink);
+    stroke-width: 2px;
+  }
+
+  .lineage__edge--dim {
+    opacity: 0.3;
+  }
+
+  /* One grid cell per node, positioned by `LineageDrawing`; the node is a slip inside it. */
+  .lineage__cell {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    padding: var(--s-1) 0;
+  }
+
+  /* A node is a slip of leaf on the board, as wide as `NODE_SHARE` of its column in
+   * `LineageDrawing.tsx`: the two numbers are one, and the edges end where the slip does. */
+  .lineage__node {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.125rem;
+    width: 82%;
+    min-width: 0;
+    padding: 0 var(--s-2);
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+    background: var(--leaf);
+    color: var(--ink);
+    text-decoration: none;
+    transition: opacity var(--pass);
+  }
+
+  .lineage__node--raw {
+    border-style: double;
+    border-width: 3px;
+  }
+
+  .lineage__node--missing {
+    border-style: dashed;
+    background: transparent;
+  }
+
+  .lineage__node--chain,
+  .lineage__node--selected {
+    border-color: var(--ink);
+  }
+
+  .lineage__node--selected {
+    box-shadow: inset 0 0 0 1px var(--ink);
+  }
+
+  /* Dimmed, not faded out: at 0.62 a dimmed name still clears 4.5:1 on the page, because
+   * it is still a link a reader may press. */
+  .lineage__node--dim {
+    opacity: 0.62;
+  }
+
+  a.lineage__node:hover {
+    background: color-mix(in srgb, var(--board) 8%, var(--leaf));
+  }
+
+  .lineage__name {
+    overflow: hidden;
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lineage__words {
+    overflow: hidden;
+    color: var(--ink-2);
+    font-family: var(--face-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* The text of the view: it wraps rather than clips, so every name is readable at any width. */
+  .lineage__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .lineage__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--s-3);
+    padding: var(--s-2) 0;
+    border-bottom: var(--hair) solid var(--rule);
+    overflow-wrap: anywhere;
+  }
+
   /* A sentence that is a state rather than an instruction to act on: the reader has not
    * opened a line yet, and the index is directly above. Quieter than a refusal. */
   .prose--quiet {
@@ -4274,6 +4461,12 @@
     .interleaf__punch {
       display: none;
     }
+    /* The drawing needs a desk's width to say anything; the lineage's text list, beneath it,
+     names every node of the selected chain and wraps, so it is the view on a phone. */
+    .lineage {
+      display: none;
+    }
+
     :root {
       --head-col: 0rem;
       --t-h1: 1.9rem;

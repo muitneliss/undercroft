@@ -303,3 +303,43 @@ describe("models.delete", () => {
     expect((await api.models.list({ tenantId: TENANT })).map((m) => m.name)).toEqual(["stg_deals"]);
   });
 });
+
+describe("models.lineage", () => {
+  it("a viewer reads what the saved models and macros declare, missing refs kept", async () => {
+    const admin = await seedMember("a@example.test", "admin");
+    const viewer = await seedMember("v@example.test", "viewer");
+    const api = caller(admin, "a@example.test");
+    await api.macros.save({
+      tenantId: TENANT,
+      name: "deals_base",
+      description: "The deals.",
+      sql: "{% macro deals_base() %}{{ source('undercroft', 'records') }}{% endmacro %}",
+      create: true,
+    });
+    await api.models.save({ ...DRAFT, sql: "select * from {{ deals_base() }} d", create: true });
+    await api.models.save({
+      ...DRAFT,
+      name: "mart",
+      sql: "select * from {{ ref('stg_deals') }} join {{ ref('stg_gone') }} using (id)",
+      create: true,
+    });
+
+    const graph = await caller(viewer, "v@example.test").models.lineage({ tenantId: TENANT });
+    expect(graph.edges).toEqual([
+      { from: "model:stg_deals", to: "model:mart", via: null },
+      { from: "missing:stg_gone", to: "model:mart", via: null },
+      { from: "raw:raw.records", to: "model:stg_deals", via: "deals_base" },
+    ]);
+  });
+
+  it("a person who is not a member is told the customer is not there", async () => {
+    const { rows } = await db.query<{ id: string }>(
+      "INSERT INTO app.app_user (email) VALUES ($1) RETURNING id",
+      ["x@example.test"],
+    );
+    const got = await refusal(() =>
+      caller(rows[0]?.id ?? "", "x@example.test").models.lineage({ tenantId: TENANT }),
+    );
+    expect(got.code).toBe("NOT_FOUND");
+  });
+});

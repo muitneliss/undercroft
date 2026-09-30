@@ -33,7 +33,14 @@ import {
   type Model,
   saveModel,
 } from "@undercroft/db/repos";
-import { checkModel, MACROS, type ModelCheck, SOURCES_YML } from "@undercroft/db/services";
+import {
+  checkModel,
+  type Lineage,
+  MACROS,
+  type ModelCheck,
+  modelLineage,
+  SOURCES_YML,
+} from "@undercroft/db/services";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
@@ -169,6 +176,20 @@ export async function check(
     existingModels: existing.map((model) => model.name),
     existingMacros: macros.map((macro) => macro.name),
   });
+}
+
+/**
+ * Which of the tenant's models read which, and which raw lake tables, read from the saved
+ * models' and macros' own declarations and from nothing else (`modelLineage.ts`, ADR 0092).
+ * Computed on every call rather than stored: a stored graph would be one more thing a save
+ * could leave stale, and the text it is read from is already here.
+ */
+export async function lineage(exec: SqlExecutor, tenantId: string): Promise<Lineage> {
+  const [models, macros] = await Promise.all([
+    listModels(exec, tenantId),
+    listMacros(exec, tenantId),
+  ]);
+  return modelLineage({ models, macros });
 }
 
 export interface Reference {
