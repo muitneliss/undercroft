@@ -4905,6 +4905,28 @@
       margin-right: 0;
     }
 
+    /* THE RIGHT-HAND END WRAPS BY WHOLE ITEMS. At a phone's measure the address, the language
+     pair, the fist and Sign out only just share a line, and at their desktop sizes they did
+     not: the address broke mid-word (`.datum` breaks anywhere, which a long ID in a cell
+     needs), the VI / EN pair folded into a column (`.langset` wraps, which People's three
+     counted views need), and Sign out took two lines. Here the address is set at the head's
+     own micro size, and nothing on this end breaks inside itself -- a longer address moves
+     to its own line whole rather than splitting. */
+    .runhead__right {
+      gap: var(--s-3);
+      flex-wrap: wrap;
+      white-space: nowrap;
+    }
+
+    .runhead__right .datum {
+      font-size: var(--t-micro);
+      overflow-wrap: normal;
+    }
+
+    .runhead__right .langset {
+      flex-wrap: nowrap;
+    }
+
     /* THE DIAL'S LINE FOLDS. `--head-col` is 0 here and the entity's name is not an
      optional margin head, so the leader cannot stay between the two ends of the line --
      it would start at the left edge and there would be nothing for it to lead from. Name
