@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.56.0](https://github.com/muitneliss/undercroft/compare/v1.55.0...v1.56.0) (2026-09-30)
+
+
+### Features
+
+* **auth:** a local install signs its owner in without a click (ADR 0094) ([#361](https://github.com/muitneliss/undercroft/issues/361)) ([bd14c24](https://github.com/muitneliss/undercroft/commit/bd14c24645bfe76534180055a70f2eb8cb85763b))
+* install Undercroft with a setup wizard that drives Docker (ADR 0095) ([#363](https://github.com/muitneliss/undercroft/issues/363)) ([b19ac6f](https://github.com/muitneliss/undercroft/commit/b19ac6f3efa1d05d1fcfa6abb8e476f4ac531776))
+
 ## [1.55.0](https://github.com/muitneliss/undercroft/compare/v1.54.0...v1.55.0) (2026-09-30)
 
 
