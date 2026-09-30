@@ -67,16 +67,22 @@ export function TabRail({
    * Only below the breakpoint: on a wide screen every tab is already in view. At once rather
    * than smoothly, because every other movement in the book is stepped (ADR 0014) and a smooth
    * scroll is an easing curve by another name. A ref, not state: it is the DOM node.
+   *
+   * The STRIP scrolls, sideways, and nothing else. `scrollIntoView` also scrolls every
+   * ancestor, the window included, to fit the raised current tab of the sticky strip -- so
+   * opening a division nudged the whole page a few pixels up, and a capture of it moved with it.
    */
   useEffect(() => {
     const strip = globalThis.matchMedia(FOOT_STRIP);
     function reveal(): void {
-      if (!strip.matches) {
+      const rail = railRef.current;
+      const tab = rail?.querySelector(`[data-division="${current}"]`);
+      if (!strip.matches || rail === null || tab === null || tab === undefined) {
         return;
       }
-      railRef.current
-        ?.querySelector(`[data-division="${current}"]`)
-        ?.scrollIntoView({ inline: "center", block: "nearest" });
+      const offset = tab.getBoundingClientRect().left - rail.getBoundingClientRect().left;
+      const centred = offset - (rail.clientWidth - tab.getBoundingClientRect().width) / 2;
+      rail.scrollTo({ left: rail.scrollLeft + centred });
     }
     reveal();
     strip.addEventListener("change", reveal);
