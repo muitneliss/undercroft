@@ -39,6 +39,7 @@ const QUESTIONS_VIEW = "questions";
 
 export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
+  const [search] = useSearchParams();
   const questions = trpc.bi.questions.list.useQuery({ tenantId });
   const dashboards = trpc.bi.dashboards.list.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
@@ -57,10 +58,13 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
   const canAuthor = tenant.data.role !== "viewer";
   const base = divisionPath("reports", tenantId);
   const nothing = questions.data.length === 0 && dashboards.data.length === 0;
+  const lists = reportLists(search, dashboards.data, questions.data);
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("reports.head")}</div>
+      {/* The search and the views sit in the division's own body, under the lead: a second
+          body beside the first has no gap above it, and set the field hard against the lead. */}
       <div className="body stack">
         <h1>{t("reports.title")}</h1>
         <p className="prose prose--lead">{t("reports.lead", { tenantId })}</p>
@@ -76,17 +80,20 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
               ) : undefined
             }
           />
-        ) : null}
+        ) : (
+          <>
+            <ReportSearch query={lists.query} />
+            <ReportViews
+              search={search}
+              showQuestions={lists.showQuestions}
+              dashboards={lists.dashboards.length}
+              questions={lists.questions.length}
+            />
+          </>
+        )}
       </div>
 
-      {nothing ? null : (
-        <ReportLists
-          dashboards={dashboards.data}
-          questions={questions.data}
-          base={base}
-          canAuthor={canAuthor}
-        />
-      )}
+      {nothing ? null : <ChosenBand lists={lists} base={base} canAuthor={canAuthor} />}
 
       {/* A customer with nothing yet still gets the dashboards band, because "make one" is
           the whole point of the page and an author should not have to guess where. */}
@@ -97,55 +104,55 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
   );
 }
 
-/**
- * The search, the two views of the lists, and the one list the address chose, narrowed to
- * the names the search matches.
- */
-function ReportLists({
-  dashboards,
-  questions,
+/** What the address asks of the two lists: the search, which list shows, and what matches. */
+interface ReportListsView {
+  readonly query: string;
+  readonly filtered: boolean;
+  readonly showQuestions: boolean;
+  /** Each list narrowed to the names the search matches. */
+  readonly dashboards: readonly DashboardItem[];
+  readonly questions: readonly QuestionItem[];
+}
+
+function reportLists(
+  search: URLSearchParams,
+  dashboards: readonly DashboardItem[],
+  questions: readonly QuestionItem[],
+): ReportListsView {
+  const query = search.get(REPORT_QUERY) ?? "";
+  return {
+    query,
+    filtered: query.trim() !== "",
+    showQuestions: search.get(VIEW) === QUESTIONS_VIEW,
+    dashboards: byName(dashboards, query),
+    questions: byName(questions, query),
+  };
+}
+
+/** The one list the address chose, narrowed to the names the search matches. */
+function ChosenBand({
+  lists,
   base,
   canAuthor,
 }: {
-  dashboards: readonly DashboardItem[];
-  questions: readonly QuestionItem[];
+  lists: ReportListsView;
   base: string;
   canAuthor: boolean;
 }): React.JSX.Element {
-  const [search] = useSearchParams();
-  const query = search.get(REPORT_QUERY) ?? "";
-  const showQuestions = search.get(VIEW) === QUESTIONS_VIEW;
-  const filtered = query.trim() !== "";
-  const matchedDashboards = byName(dashboards, query);
-  const matchedQuestions = byName(questions, query);
-
-  return (
-    <>
-      <div className="body stack">
-        <ReportSearch query={query} />
-        <ReportViews
-          search={search}
-          showQuestions={showQuestions}
-          dashboards={matchedDashboards.length}
-          questions={matchedQuestions.length}
-        />
-      </div>
-      {showQuestions ? (
-        <QuestionBand
-          items={matchedQuestions}
-          base={base}
-          canAuthor={canAuthor}
-          filtered={filtered}
-        />
-      ) : (
-        <DashboardBand
-          items={matchedDashboards}
-          base={base}
-          canAuthor={canAuthor}
-          filtered={filtered}
-        />
-      )}
-    </>
+  return lists.showQuestions ? (
+    <QuestionBand
+      items={lists.questions}
+      base={base}
+      canAuthor={canAuthor}
+      filtered={lists.filtered}
+    />
+  ) : (
+    <DashboardBand
+      items={lists.dashboards}
+      base={base}
+      canAuthor={canAuthor}
+      filtered={lists.filtered}
+    />
   );
 }
 
@@ -214,7 +221,7 @@ function ReportSearch({ query }: { query: string }): React.JSX.Element {
 
   return (
     <div className="row row--field">
-      <div className="field">
+      <div className="field field--grow">
         <label className="label" htmlFor={searchId}>
           {t("reports.searchLabel")}
         </label>
