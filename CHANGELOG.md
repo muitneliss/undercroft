@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.58.0](https://github.com/muitneliss/undercroft/compare/v1.57.0...v1.58.0) (2026-09-30)
+
+
+### Features
+
+* **ui:** match apps/ui to the [#368](https://github.com/muitneliss/undercroft/issues/368) mockup, with a Vitest visual-regression tier (ADR 0099) ([#371](https://github.com/muitneliss/undercroft/issues/371)) ([b302653](https://github.com/muitneliss/undercroft/commit/b30265361016989bfcc6d5ff8e55f9480d9f68ea))
+
+
+### Bug Fixes
+
+* **desktop:** end every process on quit, bind Cmd+Q, title the window in the chosen language ([#369](https://github.com/muitneliss/undercroft/issues/369)) ([844b667](https://github.com/muitneliss/undercroft/commit/844b66768132f299520528691f551e93e2fbaa1c))
+
 ## [1.57.0](https://github.com/muitneliss/undercroft/compare/v1.56.0...v1.57.0) (2026-09-30)
 
 
