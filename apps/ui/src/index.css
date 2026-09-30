@@ -3466,118 +3466,197 @@
 
   /* -- the models' lineage ------------------------------------------------------------
    *
-   * Columns of nodes on a grid whose every row is one height, and an SVG stretched over it
-   * in (column, row) units drawing the declared edges. The strokes do not stretch with it.
-   * With a model selected, the nodes off its upstream chain are dimmed --
-   * and every node ON the chain also says so in words, because dimming is never the only
-   * thing that carries it. Below 760px the drawing steps aside for the text list. */
-  .lineage {
-    --lineage-row: 3.5rem;
-    overflow-x: auto;
-  }
-
-  .lineage__grid {
-    position: relative;
-    display: grid;
-    min-width: 36rem;
-  }
-
-  .lineage__edges {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-    pointer-events: none;
-  }
-
-  .lineage__edge {
-    fill: none;
-    stroke: var(--rule-strong);
-    stroke-width: 1px;
-    vector-effect: non-scaling-stroke;
-    transition: opacity var(--pass);
-  }
-
-  .lineage__edge--missing {
-    stroke-dasharray: 4 3;
-  }
-
-  .lineage__edge--chain {
-    stroke: var(--ink);
-    stroke-width: 2px;
-  }
-
-  .lineage__edge--dim {
-    opacity: 0.3;
-  }
-
-  /* One grid cell per node, positioned by `LineageDrawing`; the node is a slip inside it. */
-  .lineage__cell {
-    position: relative;
+   * A board the reader pans, zooms and rearranges (`LineageCanvas`, ADR 0097), and beside it
+   * the selected node's details. Three strokes carry the selection: the upstream chain in
+   * solid ink, the downstream chain in dotted ink, a missing dependency's edge dashed and
+   * quiet -- and every card on a chain also says so in words, because a stroke or a dimming
+   * is never the only thing that carries it. Below 760px the board steps aside for the text
+   * list. */
+  .lineage-legend {
     display: flex;
-    min-width: 0;
-    padding: var(--s-1) 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-5);
+    margin: 0;
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 84;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
   }
 
-  /* A node is a slip of leaf on the board, as wide as `NODE_SHARE` of its column in
-   * `LineageDrawing.tsx`: the two numbers are one, and the edges end where the slip does. */
-  .lineage__node {
+  .lineage-legend__key {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+  }
+
+  .lineage-legend__key::before {
+    content: "";
+    width: 1.75rem;
+    border-top: 2px solid var(--ink);
+  }
+
+  .lineage-legend__key--downstream::before {
+    border-top-style: dotted;
+  }
+
+  .lineage-legend__key--missing::before {
+    border-top: var(--hair) dashed var(--rule-strong);
+  }
+
+  /* The board and the details, side by side on a desk; one above the other below 1100px. */
+  .lineage-bench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    gap: var(--s-4);
+    align-items: start;
+  }
+
+  /* The ground is the page stock inside one keyline, as the run map's is; here the dots are
+   * `@xyflow/react`'s own <Background>, because on a board that pans the grid must pan too. */
+  .lineage-board {
+    position: relative;
+    height: clamp(30rem, 72vh, 56rem);
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    background: var(--page);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+
+    --xy-background-pattern-color: var(--rule-strong);
+    --xy-controls-button-background-color: var(--leaf);
+    --xy-controls-button-background-color-hover: var(--page);
+    --xy-controls-button-color: var(--ink);
+    --xy-controls-button-color-hover: var(--ink);
+    --xy-controls-button-border-color: var(--rule);
+    --xy-controls-box-shadow: none;
+    --xy-minimap-background-color: var(--leaf);
+    --xy-minimap-mask-background-color: rgba(22, 21, 15, 0.08);
+    --xy-minimap-mask-stroke-color: var(--rule-strong);
+    --xy-minimap-mask-stroke-width: 1;
+  }
+
+  .lineage-board .react-flow {
+    background: transparent;
+  }
+
+  .lineage-board .react-flow__controls,
+  .lineage-board .react-flow__minimap {
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+  }
+
+  .lineage-board .react-flow__node-card {
+    cursor: grab;
+  }
+
+  .lineage-board .react-flow__node-card.dragging {
+    cursor: grabbing;
+  }
+
+  /* A column's heading: how far it stands from the raw lake, ruled like a table head. */
+  .lineage-head {
+    display: block;
+    padding-bottom: var(--s-2);
+    border-bottom: var(--hair) solid var(--rule-strong);
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    font-variation-settings: "wdth" 84;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  /* A card is a slip of leaf, `CARD_W` x `CARD_H` in `LineageCanvas.tsx`: the numbers are one,
+   * and the edges end where the slip does. Head, name, foot -- read in that order, like the
+   * header, the table name and the first row of a schema diagram. */
+  .lineage-card {
+    width: 248px;
+    height: 96px;
+  }
+
+  .lineage-card__face {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 0.125rem;
-    width: 82%;
-    min-width: 0;
-    padding: 0 var(--s-2);
+    justify-content: space-between;
+    gap: var(--s-1);
+    width: 100%;
+    height: 100%;
+    padding: var(--s-2) var(--s-3);
     border: var(--hair) solid var(--rule-strong);
     border-radius: var(--r-plate);
     background: var(--leaf);
     color: var(--ink);
-    text-decoration: none;
-    transition: opacity var(--pass);
+    font: inherit;
+    text-align: left;
+    cursor: inherit;
   }
 
-  .lineage__node--raw {
+  .lineage-card__face:hover {
+    background: color-mix(in srgb, var(--board) 8%, var(--leaf));
+  }
+
+  .lineage-card__face:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  .lineage-card--raw .lineage-card__face {
     border-style: double;
     border-width: 3px;
   }
 
-  .lineage__node--missing {
+  .lineage-card--missing .lineage-card__face {
     border-style: dashed;
     background: transparent;
   }
 
-  .lineage__node--chain,
-  .lineage__node--selected {
+  .lineage-card--chain .lineage-card__face,
+  .lineage-card--downstream .lineage-card__face {
     border-color: var(--ink);
   }
 
-  .lineage__node--selected {
-    box-shadow: inset 0 0 0 1px var(--ink);
+  .lineage-card--downstream .lineage-card__face {
+    border-style: dotted;
+    border-width: 2px;
+  }
+
+  .lineage-card--selected .lineage-card__face {
+    border: 2px solid var(--ink);
+    background: color-mix(in srgb, var(--ink) 7%, var(--leaf));
+  }
+
+  /* Its upstream cannot be read, so its left edge is ruled twice: no edge above it is drawn,
+   * and the card says why in words on its last line. */
+  .lineage-card--undeclared .lineage-card__face {
+    border-left: 4px double var(--ink-2);
   }
 
   /* Dimmed, not faded out: at 0.62 a dimmed name still clears 4.5:1 on the page, because
-   * it is still a link a reader may press. */
-  .lineage__node--dim {
+   * it is still a card a reader may press. */
+  .lineage-card--dim {
     opacity: 0.62;
   }
 
-  a.lineage__node:hover {
-    background: color-mix(in srgb, var(--board) 8%, var(--leaf));
+  .lineage-card__head,
+  .lineage-card__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2);
+    min-width: 0;
   }
 
-  .lineage__name {
+  .lineage-card__kind,
+  .lineage-card__where,
+  .lineage-card__note {
     overflow: hidden;
-    font-family: var(--face-mono);
-    font-size: var(--t-small);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .lineage__words {
-    overflow: hidden;
-    color: var(--ink-2);
     font-family: var(--face-display);
     font-size: 0.625rem;
     font-weight: 700;
@@ -3585,6 +3664,271 @@
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
+    color: var(--ink-2);
+  }
+
+  .lineage-card__where {
+    flex: none;
+    color: var(--ink);
+  }
+
+  .lineage-card__note--errata {
+    color: var(--errata-ink);
+  }
+
+  .lineage-card__name {
+    overflow: hidden;
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lineage-card .mark {
+    font-size: 0.625rem;
+  }
+
+  /* Present for @xyflow/react to anchor an edge to, and never seen: nothing connects here.
+   * `visibility`, never `display: none`, for the reason the run map's handles give. */
+  .lineage-board .react-flow__handle.lineage-card__port {
+    visibility: hidden;
+  }
+
+  .lineage-wire {
+    stroke: var(--rule-strong);
+    stroke-width: 1.25px;
+  }
+
+  .lineage-wire--chain,
+  .lineage-wire--downstream {
+    stroke: var(--ink);
+    stroke-width: 2px;
+  }
+
+  .lineage-wire--downstream {
+    stroke-dasharray: 2 4;
+    stroke-linecap: round;
+  }
+
+  .lineage-wire--missing {
+    stroke-dasharray: 6 4;
+  }
+
+  .lineage-wire--dim {
+    opacity: 0.25;
+  }
+
+  .lineage-mini {
+    fill: var(--rule-strong);
+  }
+
+  .lineage-mini--selected,
+  .lineage-mini--chain,
+  .lineage-mini--downstream {
+    fill: var(--ink);
+  }
+
+  .lineage-mini--dim {
+    fill: var(--rule);
+  }
+
+  .lineage-mini--head {
+    fill: transparent;
+  }
+
+  /* -- the details beside the board ---------------------------------------------- */
+
+  .lineage-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-4);
+    max-height: clamp(30rem, 72vh, 56rem);
+    overflow-y: auto;
+    padding: var(--s-4);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+    overflow-wrap: anywhere;
+  }
+
+  .lineage-detail__head {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-2);
+  }
+
+  /* A name is printed exactly as written: a model called `stg_Deals` is not `STG_DEALS`. */
+  .lineage-detail__name,
+  .lineage-trace__head {
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .lineage-legend .datum {
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .lineage-detail__name {
+    margin: 0;
+    font-family: var(--face-mono);
+    font-size: var(--t-prose);
+    font-weight: 600;
+  }
+
+  .lineage-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--s-2) var(--s-4);
+    margin: 0;
+  }
+
+  .lineage-facts dt {
+    font-family: var(--face-display);
+    font-size: var(--t-micro);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+
+  .lineage-facts dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2);
+    margin: 0;
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lineage-detail__list,
+  .lineage-schema {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .lineage-detail__list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--s-2);
+    padding: var(--s-1) 0;
+    border-bottom: var(--hair) solid var(--rule);
+  }
+
+  /* A neighbour is a press away from being the selection: a link in look, a button in kind. */
+  .lineage-detail__link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  .lineage-detail__link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  /* The columns a build produced, ruled like the rows of a schema diagram's table. */
+  .lineage-schema {
+    border: var(--hair) solid var(--rule-strong);
+    border-radius: var(--r-plate);
+  }
+
+  .lineage-schema li {
+    padding: var(--s-1) var(--s-3);
+    font-family: var(--face-mono);
+    font-size: var(--t-micro);
+  }
+
+  .lineage-schema li + li {
+    border-top: var(--hair) solid var(--rule);
+  }
+
+  .lineage-detail__sql summary {
+    cursor: pointer;
+  }
+
+  /* -- the trace beneath the board ----------------------------------------------- */
+
+  .lineage-trace {
+    padding-top: var(--s-4);
+    border-top: var(--hair) solid var(--rule-strong);
+  }
+
+  .lineage-trace__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-3);
+  }
+
+  .lineage-trace__head {
+    margin: 0;
+    font-family: var(--face-display);
+    font-size: var(--t-h2);
+    font-weight: 700;
+    font-variation-settings: "wdth" 88;
+    overflow-wrap: anywhere;
+  }
+
+  /* Names in a run, wrapping like a sentence: a chain is read across, not down. */
+  .lineage-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow-wrap: anywhere;
+  }
+
+  .lineage-names li {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-2);
+  }
+
+  .lineage-paths {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow-wrap: anywhere;
+  }
+
+  /* A path reads across, raw lake first, and wraps between hops rather than inside a name. */
+  .lineage-paths li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    row-gap: var(--s-1);
+    padding: var(--s-2) 0;
+    border-bottom: var(--hair) solid var(--rule);
+    font-family: var(--face-mono);
+    font-size: var(--t-small);
+  }
+
+  .lineage-paths__via {
+    margin-left: var(--s-1);
+  }
+
+  .lineage-paths__arrow::before {
+    content: "→";
+    margin: 0 var(--s-2);
+    color: var(--ink-2);
   }
 
   /* The text of the view: it wraps rather than clips, so every name is readable at any width. */
@@ -4449,6 +4793,13 @@
       justify-content: flex-start;
       grid-column: 1 / -1;
     }
+    /* The details go under the board, which keeps the leaf's whole width to be drawn on. */
+    .lineage-bench {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .lineage-detail {
+      max-height: none;
+    }
   }
 
   @media (max-width: 760px) {
@@ -4471,9 +4822,9 @@
     .interleaf__punch {
       display: none;
     }
-    /* The drawing needs a desk's width to say anything; the lineage's text list, beneath it,
-     names every node of the selected chain and wraps, so it is the view on a phone. */
-    .lineage {
+    /* The board needs a desk's width to say anything; the lineage's details and its text list
+     name every node of the selected chains and wrap, so they are the view on a phone. */
+    .lineage-board {
       display: none;
     }
 

@@ -1,16 +1,17 @@
 /**
  * What the Models division promises a reader walking it (#346): the build counts add up and
- * narrow the list through the address, and the lineage view highlights a model's declared
- * upstream chain in words, marks what it cannot read, and keeps a deleted ref.
+ * narrow the list through the address, and the lineage view traces a node's declared upstream
+ * chain and paths and its downstream in words, marks what it cannot read, keeps a deleted ref,
+ * and states the selected model's last build and columns beside the board (ADR 0097).
  *
  * No mocks: the real route, store, router, tRPC client and react-query, over a fetch that
- * answers the division's three queries and REFUSES every other path.
+ * answers the division's four queries and REFUSES every other path.
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpLink } from "@trpc/client";
 import { afterEach, describe, expect, test as it } from "bun:test";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 
 // The side effect is the point: without it every key renders as itself. See `@/i18n`.
@@ -21,17 +22,17 @@ import { trpc } from "@/trpc.ts";
 const TENANT = "CASE-0042";
 const WHEN = "2026-09-30T03:12:53.210Z";
 
-function built(name: string, status: string | null): unknown {
+function built(name: string, status: string | null, columns: string[] = []): unknown {
   return {
     name,
     updatedAt: WHEN,
     updatedBy: "u1",
-    lastBuild: status === null ? null : { runId: "r1", status, endedAt: WHEN, columns: [] },
+    lastBuild: status === null ? null : { runId: "run-7", status, endedAt: WHEN, columns },
   };
 }
 
 const MODELS = [
-  built("mart_pipeline", "success"),
+  built("mart_pipeline", "success", ["deal_id", "stage", "amount"]),
   built("stg_deals", "success"),
   built("stg_files", "error"),
   built("stg_notes", null),
@@ -91,6 +92,16 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
           if (path.endsWith("/models.lineage")) {
             return Promise.resolve(answer(LINEAGE));
           }
+          if (path.endsWith("/models.get")) {
+            const detail = MODELS[0] as Record<string, unknown>;
+            return Promise.resolve(
+              answer({
+                ...detail,
+                sql: "select * from {{ ref('stg_deals') }}",
+                tests: { columns: {} },
+              }),
+            );
+          }
           return Promise.resolve(Response.json({ error: { message: path } }, { status: 500 }));
         },
       }),
@@ -139,7 +150,10 @@ describe("the build counts", () => {
     expect(router.state.location.search).toBe("?build=never");
     expect(listedNames()).toEqual(["stg_notes", "stg_legacy"]);
 
-    void router.navigate(-1);
+    // Inside `act`: the router's own update would otherwise land between two of React's.
+    act(() => {
+      void router.navigate(-1);
+    });
     await waitFor(() => {
       expect(listedNames()).toHaveLength(MODELS.length);
     });
@@ -157,26 +171,45 @@ describe("the build counts", () => {
   });
 });
 
+/**
+ * The name of every card on the board, as the board states it to a screen reader. A card is
+ * the board's one pressable button -- the zoom plates and "reset layout" are plain ones.
+ */
+function cards(): string[] {
+  const board = within(screen.getByRole("figure"));
+  return [
+    ...board.queryAllByRole("button", { pressed: false }),
+    ...board.queryAllByRole("button", { pressed: true }),
+  ].map((card) => card.getAttribute("aria-label") ?? "");
+}
+
 describe("the lineage view", () => {
-  it("lists the selected model's whole upstream chain, in words, and not the rest", async () => {
+  it("traces the selected model's whole upstream chain and every path to it, and not the rest", async () => {
     mount(`/tenants/${TENANT}/models?view=lineage&model=mart_pipeline`);
-    const chain = await screen.findByRole("region", { name: /Thượng nguồn của mart_pipeline/u });
-    const names = within(chain)
-      .getAllByRole("listitem")
-      .map((item) => item.querySelector(".journal__what")?.textContent);
-    // The selected model first, then its chain; stg_notes reads raw.records too, but is not on it.
-    expect(names[0]).toBe("mart_pipeline");
-    expect(names.slice(1).sort()).toEqual([
-      "raw.documents",
-      "raw.records",
-      "stg_deals",
-      "stg_files",
+    const trace = await screen.findByRole("region", { name: /Thượng nguồn của mart_pipeline/u });
+    const [names, paths] = within(trace).getAllByRole("list");
+    // stg_notes reads raw.records too, but is not on the chain.
+    expect(
+      within(names as HTMLElement)
+        .getAllByRole("link")
+        .map((link) => link.textContent)
+        .sort(),
+    ).toEqual(["raw.documents", "raw.records", "stg_deals", "stg_files"]);
+    // Each path runs from the raw lake down to the model, naming the macro that declares a hop.
+    expect(
+      within(paths as HTMLElement)
+        .getAllByRole("listitem")
+        .map((path) => path.textContent)
+        .sort(),
+    ).toEqual([
+      "raw.documentsstg_filesmart_pipeline",
+      "raw.records(qua macro gmail_letters)stg_dealsmart_pipeline",
     ]);
-    expect(within(chain).getByText(/raw\.records \(qua macro gmail_letters\)/u)).toBeDefined();
-    // The drawing says it in words too: a node on the chain, and one off it.
-    const drawing = screen.getByRole("figure");
-    expect(within(drawing).getByRole("link", { name: /stg_deals.*Thượng nguồn/u })).toBeDefined();
-    expect(within(drawing).getByRole("link", { name: /^stg_notes$/u })).toBeDefined();
+    // The board says it in words too: a card on the chain, and one off it.
+    await waitFor(() => {
+      expect(cards()).toContain("stg_deals · Thượng nguồn · Dựng thành công");
+    });
+    expect(cards()).toContain("stg_notes · Chưa dựng");
   });
 
   it("marks an undeclared upstream and a deleted ref in words, with every model listed", async () => {
@@ -184,12 +217,55 @@ describe("the lineage view", () => {
     const all = await screen.findByRole("region", { name: "Mỗi mô hình và những gì nó đọc" });
     expect(within(all).getByText(/không phải chuỗi cố định/u)).toBeDefined();
     expect(within(all).getByText(/Đọc: raw\.records, stg_gone/u)).toBeDefined();
-    const drawing = screen.getByRole("figure");
-    expect(within(drawing).getByText("stg_gone").nextSibling?.textContent).toBe(
-      "Phụ thuộc bị thiếu",
+    expect(cards()).toContain("stg_gone · Phụ thuộc bị thiếu");
+    expect(cards().some((card) => card.startsWith("stg_legacy · Thượng nguồn chưa khai báo"))).toBe(
+      true,
     );
+  });
+
+  it("selects a raw lake table by its card, and names everything downstream of it", async () => {
+    const router = mount(`/tenants/${TENANT}/models?view=lineage`);
+    await screen.findByRole("region", { name: "Mỗi mô hình và những gì nó đọc" });
+    fireEvent.click(within(screen.getByRole("figure")).getByTitle("raw.records"));
+    expect(router.state.location.search).toBe("?view=lineage&model=raw.records");
+
+    const trace = await screen.findByRole("region", { name: /Thượng nguồn của raw\.records/u });
+    const downstream = within(trace).getAllByRole("list").at(-1) as HTMLElement;
     expect(
-      within(drawing).getByRole("link", { name: /stg_legacy.*Thượng nguồn chưa khai báo/u }),
-    ).toBeDefined();
+      within(downstream)
+        .getAllByRole("link")
+        .map((link) => link.textContent)
+        .sort(),
+    ).toEqual(["mart_pipeline", "stg_deals", "stg_notes"]);
+  });
+
+  it("states the selected model's last build, its columns and the run that built it", async () => {
+    mount(`/tenants/${TENANT}/models?view=lineage&model=mart_pipeline`);
+    const details = await screen.findByRole("complementary", { name: "mart_pipeline" });
+    expect(await within(details).findByText("Dựng thành công")).toBeDefined();
+    expect(
+      within(details)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent)
+        .filter((text) => ["deal_id", "stage", "amount"].includes(text ?? "")),
+    ).toEqual(["deal_id", "stage", "amount"]);
+    expect(within(details).getByRole("link", { name: "Mở lần chạy" }).getAttribute("href")).toBe(
+      `/tenants/${TENANT}/journal/run-7`,
+    );
+  });
+
+  it("narrows the board to what is related to the selection, and back", async () => {
+    mount(`/tenants/${TENANT}/models?view=lineage&model=stg_files&scope=related`);
+    await screen.findByRole("region", { name: /Thượng nguồn của stg_files/u });
+    expect(
+      cards()
+        .map((card) => card.split(" · ")[0] ?? "")
+        .sort((a, b) => a.localeCompare(b)),
+    ).toEqual(["mart_pipeline", "raw.documents", "stg_files"]);
+
+    fireEvent.click(screen.getByRole("link", { name: "Hiện mọi nút" }));
+    await waitFor(() => {
+      expect(cards()).toHaveLength(LINEAGE.nodes.length);
+    });
   });
 });
