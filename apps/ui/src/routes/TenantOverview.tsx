@@ -14,6 +14,9 @@
  * `AccountSwitcher` above the card says which accounts there are, how each is doing, and which
  * one the card is about, and offers the consent for one more.
  *
+ * Above the schedule, one count per state, each a door to the accounts it counted, and a search
+ * by source or account; both narrow the schedule from the address (`@/lib/sourceSchedule`).
+ *
  * Connecting navigates the whole window rather than opening a tab: the consent ends at
  * Google's screen and returns through a server redirect, so a same-tab journey is the one the
  * person is already on. A failed return lands back here with `?connect=failed`, read from the
@@ -37,13 +40,9 @@ import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { IngestKeys } from "@/components/IngestKeys.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { SourceSearch, SourceTally } from "@/components/SourceFilters.tsx";
 import { TokenForm } from "@/components/TokenForm.tsx";
-import {
-  groupByKind,
-  type KindAccounts,
-  offersAccounts,
-  selectedFor,
-} from "@/lib/connectionState.ts";
+import { offersAccounts, selectedFor } from "@/lib/connectionState.ts";
 import {
   connectFailedHeading,
   connectFailureKey,
@@ -53,6 +52,7 @@ import {
 import { divisionPath } from "@/lib/divisions.ts";
 import { chosenAccount, useUiStore } from "@/store.ts";
 import { type Actions, pendingFor } from "@/lib/sourceActions.ts";
+import { narrowSchedule, type ScheduleRow, scheduleFilter } from "@/lib/sourceSchedule.ts";
 import { trpc } from "@/trpc.ts";
 
 /** How often the list re-reads while a run is in progress. A run is minutes; this is not. */
@@ -146,6 +146,8 @@ function SourcesBand({
   failedReturn: FailedReturn | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
+  const filter = scheduleFilter(params);
   const utils = trpc.useUtils();
   const dropCronDraft = useUiStore((state) => state.dropCronDraft);
 
@@ -181,20 +183,30 @@ function SourcesBand({
     <>
       <div className="body stack">
         <h1>{t("sources.title")}</h1>
-        <p className="prose prose--lead">
+        <p className="prose prose--lead">{t("sources.lead")}</p>
+        <p className="prose">
           {list.length === 0 ? t("sources.none") : t("sources.count", { count: list.length })}
         </p>
+        {list.length === 0 ? null : <SourceTally tenantId={tenantId} list={list} filter={filter} />}
         <Refusals actions={actions} failedReturn={failedReturn} />
       </div>
 
       <div className="band-rule" />
 
       <div className="head">{t("sources.grantsHead")}</div>
-      <div className="body">
+      <div className="body stack">
         {list.length === 0 ? (
           <p className="note">{t("common.nothingToShow")}</p>
         ) : (
-          <SourceCards tenantId={tenantId} list={list} canRun={isAdmin} actions={actions} />
+          <>
+            <SourceSearch query={filter.query} />
+            <SourceCards
+              tenantId={tenantId}
+              rows={narrowSchedule(list, filter)}
+              canRun={isAdmin}
+              actions={actions}
+            />
+          </>
         )}
       </div>
     </>
@@ -271,19 +283,21 @@ function Refusals({
  *
  * One row per kind rather than per account, so the schedule keeps the shape of the four
  * vendors a customer recognises however many mailboxes they connect. A kind holding several
- * accounts gets a switcher above its card; see `SourceRow`.
+ * accounts gets a switcher above its card; see `SourceRow`. The rows arrive already narrowed
+ * by the address; a narrowing that leaves none says so rather than drawing an empty schedule.
  */
 function SourceCards({
   tenantId,
-  list,
+  rows,
   canRun,
   actions,
 }: {
   tenantId: string;
-  list: readonly Connection[];
+  rows: readonly ScheduleRow[];
   canRun: boolean;
   actions: Actions;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const { startOAuth, disconnect, runNow, setCadence, setResync } = actions;
   // One action at a time, across every card: the list is about to be invalidated and a
   // second request answers about a schedule that no longer exists. A consent that has been
@@ -298,9 +312,13 @@ function SourceCards({
     setResync.isPending ||
     !canRun;
 
+  if (rows.length === 0) {
+    return <p className="prose">{t("sources.noMatch")}</p>;
+  }
+
   return (
     <div className="schedule">
-      {groupByKind(list).map((group) => (
+      {rows.map((group) => (
         <SourceRow
           key={group.kind}
           tenantId={tenantId}
@@ -334,7 +352,7 @@ function SourceRow({
   actions,
 }: {
   tenantId: string;
-  group: KindAccounts;
+  group: ScheduleRow;
   canRun: boolean;
   busy: boolean;
   actions: Actions;
@@ -369,6 +387,7 @@ function SourceRow({
         key={connection.source}
         tenantId={tenantId}
         connection={connection}
+        oneOfSeveral={group.several}
         canRun={canRun}
         busy={busy}
         pending={pendingFor(actions, connection.source, false)}

@@ -269,9 +269,22 @@ export const vi = {
   },
 
   sources: {
-    title: "Các nguồn đã kết nối",
+    title: "Nguồn dữ liệu",
+    lead: "Biết dữ liệu đến từ đâu, kết nối nào cần xử lý và lần đọc tiếp theo được cấu hình ra sao.",
     none: "Khách hàng này chưa kết nối nguồn nào.",
     count_other: "Có {{count, number}} nguồn được ghi nhận.",
+    /**
+     * Các con số trên danh sách, mỗi con số mở đúng những tài khoản nó đếm (ADR 0039). "Cần xử lý"
+     * là kết nối chờ chọn phạm vi hoặc cần kết nối lại, không phải nguồn chưa ai kết nối.
+     */
+    tallyLabel: "Lọc danh sách theo trạng thái",
+    tallyConnections: "Kết nối",
+    tallyConnected: "Đã kết nối",
+    tallyAttention: "Cần xử lý",
+    tallyKinds: "Loại nguồn",
+    searchLabel: "Tìm nguồn hoặc tài khoản",
+    searchPlaceholder: "Tên nguồn, email…",
+    noMatch: "Không có nguồn nào khớp với bộ lọc.",
     grantsHead: "Quyền đã cấp",
     notLoaded:
       "Không tải được các quyền của khách hàng này, hoặc bạn không có quyền xem chúng. Không có gì bị thay đổi.",
@@ -781,7 +794,10 @@ export const vi = {
     reconnect: "Kết nối lại {{name}}",
     connecting: "Đang chuyển tới {{name}}…",
     changeScope: "Đổi dữ liệu đồng bộ",
-    disconnect: "Ngắt kết nối",
+    /** The first press only opens the fold; the second, naming the account, disconnects. */
+    disconnect: "Ngắt kết nối…",
+    disconnectLead: "Các bản ghi đã vào kho thô vẫn được giữ nguyên.",
+    disconnectConfirm: "Ngắt kết nối {{account}}",
     disconnecting: "Đang ngắt kết nối…",
     /** Only where the page cannot tell which source it was; see `connectFailedFor`. */
     connectFailed: "Chưa kết nối được nguồn này.",
@@ -941,6 +957,24 @@ export const vi = {
     removePickNamed: "Bỏ {{name}} khỏi lựa chọn",
     nothingToChoose: "Chưa có mục nào để chọn.",
     save: "Lưu lựa chọn",
+    /** The two steps: choose, then review what is saved beside what will apply, and save. */
+    stepsLabel: "Các bước chọn phạm vi",
+    stepChoose: "01 · Chọn phạm vi",
+    stepReview: "02 · Kiểm tra và lưu",
+    next: "Tiếp: kiểm tra thay đổi",
+    back: "Quay lại chỉnh",
+    /** On both steps: the draft goes back to what is stored, and the schedule opens. */
+    discard: "Huỷ thay đổi",
+    reviewHead: "Kiểm tra thay đổi",
+    colPart: "Phần của lựa chọn",
+    colSaved: "Đã lưu",
+    colWillApply: "Sẽ áp dụng",
+    rowReads: "Phạm vi đọc",
+    heldHead: "Bản ghi đã có trong kho sẽ ra sao",
+    /** Names in the saved choice that the draft drops. Only names; nothing inferred. */
+    leaving: "Rời khỏi phạm vi: {{names}}",
+    subfoldersDropped:
+      "Không còn đọc thư mục con: tệp nằm trong thư mục con của các thư mục đã chọn sẽ ở ngoài lựa chọn mới.",
     /**
      * Điều việc lưu làm với những gì hồ dữ liệu đang giữ, theo từng loại nguồn, và khớp đúng
      * với lần đọc kế tiếp (settleWalk.ts). Không câu nào được ngụ ý là có gì bị xoá khỏi hồ:

@@ -54,6 +54,14 @@
  * the further properties to read beyond the spec's own, listed live from the portal (its own
  * properties included) through the worker. `HubspotChoice` says why. ADR 0052.
  *
+ * ## Two steps: choose, then review and save
+ *
+ * Save is on a second step, `?step=review`, which sets what is saved beside what will apply
+ * (`@/lib/scopeChange`) and names what leaves the scope, so the consequence is read before the
+ * press rather than inferred from ticks. The step is in the address, so Back returns to the
+ * choices; the draft is in the store, so the choices are still there when it does. Discard, on
+ * either step, puts the draft back to what is stored and returns to the schedule.
+ *
  * ## What saving does to what the lake already holds is said beside Save
  *
  * Dropping a folder from a Drive pick and dropping a label from a Gmail scope look like the same
@@ -62,12 +70,13 @@
  * live, because it was relabelled, not deleted (`settleWalk.ts`). So the sentence beside Save
  * says which, for this kind, and never that anything leaves the lake -- a mark at source is not
  * an erasure. Xero and HubSpot get no sentence until what their next read does has been
- * confirmed against the read itself.
+ * confirmed against the read itself (ADR 0091); what leaves their scope is still named, because
+ * that is a fact of the choice and not a claim about the read.
  */
 
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { Connection, Source } from "@/api/types.ts";
 import { DriveChoice } from "@/components/DriveChoice.tsx";
@@ -75,23 +84,16 @@ import { Errata, type ServerError } from "@/components/Errata.tsx";
 import { FileTypeChoice } from "@/components/FileTypeChoice.tsx";
 import { GmailChoice } from "@/components/GmailChoice.tsx";
 import { HubspotChoice } from "@/components/HubspotChoice.tsx";
+import { type SaveHold, ScopeActions, ScopeReview, ScopeSteps } from "@/components/ScopeSteps.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { XeroChoice } from "@/components/XeroChoice.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import type { ListedItem } from "@/lib/hubspotProperties.ts";
 import { isBrowsedLabel } from "@/lib/labelIndex.ts";
 import { sourceLabel } from "@/lib/runs.ts";
+import { storedDraft } from "@/lib/scopeChange.ts";
 import { type ScopeDraft, useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
-
-/**
- * What saving does to the records the lake already holds, for the kinds where that is known.
- * See "What saving does" in the header.
- */
-const HELD_KEY: Partial<Record<Source, "scopePicker.heldDrive" | "scopePicker.heldGmail">> = {
-  drive: "scopePicker.heldDrive",
-  gmail: "scopePicker.heldGmail",
-};
 
 /** Which lead each source's picker opens with. */
 const LEAD_KEY = {
@@ -115,44 +117,64 @@ const NOTHING_CHOSEN: Omit<ScopeDraft, "source"> = {
   properties: {},
 };
 
+/** The step the address names. Anything but `review` is the choices, never a guess at a third. */
+const STEP_PARAM = "step";
+const REVIEW_STEP = "review";
+
+/** Which step the address is at, and where each step is: this screen's path, with or without it. */
+function useScopeStep(): { review: boolean; paths: { choose: string; review: string } } {
+  const [params] = useSearchParams();
+  const here = useLocation().pathname;
+  return {
+    review: params.get(STEP_PARAM) === REVIEW_STEP,
+    paths: { choose: here, review: `${here}?${STEP_PARAM}=${REVIEW_STEP}` },
+  };
+}
+
 /**
- * Seed the draft from what is already stored, once the grants arrive.
- *
- * An admin changing a selection should see what they chose last time, not an empty form that
- * silently means "everything".
+ * What the worker lists for this source to choose from, whether it is still coming, and why it
+ * did not come. Drive is chosen in Google's Picker on this screen; its server listing (ADR 0047)
+ * serves an agent at the CLI, which has no browser, and this screen does not ask for it.
  */
-function useStoredScope(source: string, connections: readonly Connection[] | undefined): void {
+function useBrowse(
+  tenantId: string,
+  source: string,
+  kind: Source,
+): { pending: boolean; items: readonly ListedItem[]; error: ServerError | null } {
+  const browsed = BROWSED.has(kind);
+  const listing = trpc.connections.browseScope.useQuery({ tenantId, source }, { enabled: browsed });
+  return {
+    pending: browsed && listing.isPending,
+    items: listing.data?.items ?? [],
+    error: listing.isError ? listing.error : null,
+  };
+}
+
+/** Seed the draft from what is already stored, once the grants arrive. */
+function useStoredScope(source: string, current: Connection | undefined): void {
   const setDraft = useUiStore((s) => s.setScopeDraft);
-  const current = connections?.find((c) => c.source === source);
 
   useEffect(() => {
-    if (current === undefined) {
-      return;
+    if (current !== undefined) {
+      setDraft(storedDraft(source, current));
     }
-    setDraft({
-      source,
-      labels: current.config.labels ?? [],
-      // Each pick read back as what it IS. This used to rebuild every pick as a folder from a
-      // list of bare ids, so an admin who re-saved without re-picking turned their chosen
-      // documents into folder picks -- which list nothing, and refuse.
-      files: current.config.files ?? [],
-      // The organisation already chosen, by the id a run sends and the name the card shows.
-      organisation:
-        current.externalAccountId === ""
-          ? null
-          : { id: current.externalAccountId, name: current.externalAccountLabel },
-      entities: current.config.entities ?? [],
-      // A connection never scoped at all has no `fileTypes` to read back; PDF-only is what
-      // every source has always meant until an admin visits this screen and says otherwise.
-      fileTypes: current.config.fileTypes ?? ["application/pdf"],
-      // A selection saved before sub-folders could be asked for read one level, and keeps
-      // reading one level until somebody here says otherwise. ADR 0031.
-      recurse: current.config.recurse ?? false,
-      // A HubSpot connection nobody has scoped reads the spec's properties alone, which is
-      // exactly what an empty choice here means.
-      properties: current.config.properties ?? {},
-    });
   }, [current, source, setDraft]);
+}
+
+/**
+ * Put the draft back to what is stored and return to the schedule. The draft is re-seeded
+ * rather than left behind, so the store holds nothing the reader chose to throw away.
+ */
+function useDiscard(tenantId: string, source: string, current: Connection | undefined): () => void {
+  const navigate = useNavigate();
+  const setDraft = useUiStore((s) => s.setScopeDraft);
+
+  return (): void => {
+    if (current !== undefined) {
+      setDraft(storedDraft(source, current));
+    }
+    void navigate(divisionPath("sources", tenantId));
+  };
 }
 
 /**
@@ -212,8 +234,9 @@ function useSaveScope(
 }
 
 /**
- * Whether Save must wait. Two things hold it back, and a HubSpot choice of any size is not one
- * of them -- its properties travel in a batch read's body, not in a URL (ADR 0054).
+ * Why Save must wait, or null when it need not. Two things hold it back, and a HubSpot choice of
+ * any size is not one of them -- its properties travel in a batch read's body, not in a URL
+ * (ADR 0054). A reason rather than a yes, so the plates can say which.
  *
  * A list that did not load: nothing was on screen to choose from, so the draft is not a choice
  * anybody made. For Gmail it is worse than empty -- no label is a RECORDED decision meaning the
@@ -228,8 +251,11 @@ function saveHeldBack(
   kind: Source,
   listFailed: boolean,
   chosen: Omit<ScopeDraft, "source">,
-): boolean {
-  return (BROWSED.has(kind) && listFailed) || (kind === "xero" && chosen.organisation === null);
+): SaveHold | null {
+  if (BROWSED.has(kind) && listFailed) {
+    return "list";
+  }
+  return kind === "xero" && chosen.organisation === null ? "organisation" : null;
 }
 
 /**
@@ -237,7 +263,8 @@ function saveHeldBack(
  *
  * `kind` decides the SHAPE of the choice -- the lead, which picker, what gets recorded -- and
  * `source` decides WHICH connection it is recorded against: since ADR 0043 a tenant may hold
- * two mailboxes, and they are scoped one at a time.
+ * two mailboxes, and they are scoped one at a time. The band is headed "Gmail · ops@acme.test"
+ * once the tenant holds two, because an admin scoping one of them has to be able to see WHICH.
  */
 export function ScopePicker({
   tenantId,
@@ -250,20 +277,17 @@ export function ScopePicker({
   kind: Source;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const { review, paths } = useScopeStep();
   const draft = useUiStore((s) => s.scopeDraft);
-
   const connections = trpc.connections.list.useQuery({ tenantId });
-  const labels = trpc.connections.browseScope.useQuery(
-    { tenantId, source },
-    // Drive is chosen in Google's Picker on this screen. Its server listing (ADR 0047) serves
-    // an agent at the CLI, which has no browser; this screen does not ask for it.
-    { enabled: BROWSED.has(kind) },
-  );
+  const listing = useBrowse(tenantId, source, kind);
   const setScope = useSaveScope(tenantId, kind, source);
+  const current = connections.data?.find((c) => c.source === source);
+  const discard = useDiscard(tenantId, source, current);
 
-  useStoredScope(source, connections.data);
+  useStoredScope(source, current);
 
-  if (connections.isPending || (BROWSED.has(kind) && labels.isPending)) {
+  if (connections.isPending || listing.pending) {
     return <Skeleton rows={4} />;
   }
 
@@ -276,61 +300,58 @@ export function ScopePicker({
   }
 
   const chosen = draft?.source === source ? draft : NOTHING_CHOSEN;
-  const unsaveable = saveHeldBack(kind, labels.isError, chosen);
-  const account = connections.data.find((c) => c.source === source)?.externalAccountLabel ?? "";
-  const held = HELD_KEY[kind];
+  const selection = selectionFor(kind, chosen, listing.items);
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("nav.sources")}</div>
-      <ScopeLead kind={kind} />
+      <ScopeLead kind={kind} review={review} />
 
       <div className="band-rule" />
 
-      {/* "Gmail · ops@acme.test" once the tenant holds two mailboxes: an admin scoping one of
-          them has to be able to see WHICH, and the vendor's name alone would not say. */}
       <div className="head">{sourceLabel(source, connections.data)}</div>
       <div className="body stack">
-        <SourceChoice
-          kind={kind}
-          source={source}
-          account={account}
-          items={labels.data?.items ?? []}
-          loadError={labels.isError ? labels.error : null}
-          chosen={chosen}
-        />
+        <ScopeSteps paths={paths} review={review} />
 
-        {setScope.isError ? (
-          <Errata heading={t("scopePicker.notSaved")} live={true} error={setScope.error} />
-        ) : null}
+        {review ? (
+          <ScopeReview
+            kind={kind}
+            saved={current?.config ?? {}}
+            chosen={chosen}
+            loadError={listing.error}
+          />
+        ) : (
+          <SourceChoice
+            kind={kind}
+            source={source}
+            account={current?.externalAccountLabel ?? ""}
+            items={listing.items}
+            loadError={listing.error}
+            chosen={chosen}
+          />
+        )}
 
-        {kind === "xero" && chosen.organisation === null ? (
-          <p className="note">{t("scopePicker.chooseOrganisation")}</p>
-        ) : null}
-
-        {held === undefined ? null : <p className="note">{t(held)}</p>}
-
-        <button
-          type="button"
-          className="plate plate--primary"
-          disabled={setScope.isPending || unsaveable}
-          onClick={(): void => {
-            setScope.mutate({
-              tenantId,
-              source,
-              selection: selectionFor(kind, chosen, labels.data?.items ?? []),
-            });
+        <ScopeActions
+          paths={paths}
+          review={review}
+          heldBack={saveHeldBack(kind, listing.error !== null, chosen)}
+          saving={setScope.isPending}
+          saveError={setScope.isError ? setScope.error : null}
+          onSave={(): void => {
+            setScope.mutate({ tenantId, source, selection });
           }}
-        >
-          {setScope.isPending ? t("scopePicker.saving") : t("scopePicker.save")}
-        </button>
+          onDiscard={discard}
+        />
       </div>
     </div>
   );
 }
 
-/** What this source is about to be asked, in the words its own consent card uses. */
-function ScopeLead({ kind }: { kind: Source }): React.JSX.Element {
+/**
+ * What this source is about to be asked, in the words its own consent card uses. The hints on
+ * what an empty choice means belong beside the choices, so the review step leaves them out.
+ */
+function ScopeLead({ kind, review }: { kind: Source; review: boolean }): React.JSX.Element {
   const { t } = useTranslation();
 
   return (
@@ -338,9 +359,15 @@ function ScopeLead({ kind }: { kind: Source }): React.JSX.Element {
       <h1>{t("scopePicker.title")}</h1>
       <p className="prose prose--lead">{t(LEAD_KEY[kind])}</p>
 
-      {kind === "gmail" ? <p className="note">{t("scopePicker.wholeMailboxHint")}</p> : null}
-      {kind === "xero" ? <p className="note">{t("scopePicker.xeroEntitiesHint")}</p> : null}
-      {kind === "hubspot" ? <p className="note">{t("scopePicker.hubspotStandardHint")}</p> : null}
+      {!review && kind === "gmail" ? (
+        <p className="note">{t("scopePicker.wholeMailboxHint")}</p>
+      ) : null}
+      {!review && kind === "xero" ? (
+        <p className="note">{t("scopePicker.xeroEntitiesHint")}</p>
+      ) : null}
+      {!review && kind === "hubspot" ? (
+        <p className="note">{t("scopePicker.hubspotStandardHint")}</p>
+      ) : null}
     </div>
   );
 }

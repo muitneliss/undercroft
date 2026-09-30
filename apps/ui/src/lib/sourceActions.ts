@@ -5,7 +5,7 @@
  * file may be once a card could save a second schedule (ADR 0082).
  */
 
-import type { GrantPending } from "@/components/ConnectionCard.tsx";
+import type { GrantPending } from "@/components/GrantActions.tsx";
 import type { trpc } from "@/trpc.ts";
 
 /** The mutations a grant can be acted on with, held in one place so a card gets all of them. */
