@@ -155,7 +155,8 @@ its ADR, and what exactly it accepts lives in a reference page.
   and why.
 - **Reference:** [file formats a Gmail or Drive connection can land](docs/reference/file-formats.md),
   [what an ingest run counts](docs/reference/run-counts.md).
-- **Design:** [the CLI's home page and sign-in](docs/design/cli-home-and-sign-in.md).
+- **Design:** [the CLI's home page and sign-in](docs/design/cli-home-and-sign-in.md),
+  [operator and reader paths](docs/design/operator-and-reader-paths.md).
 - **Blog:** [blog.undercroft.lowbit.link](https://blog.undercroft.lowbit.link), articles in
   Vietnamese and English on Xero, Gmail, Google Drive and HubSpot integration, ETL vs ELT and
   the raw lake. Its source is [`apps/blog`](apps/blog), and [how to write a post](apps/blog/WRITING.md).
