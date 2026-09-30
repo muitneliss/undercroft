@@ -10,9 +10,12 @@
  * 3. **The bundle.** The wizard's page, script, sheet, fonts and tray images are where the main
  *    process will look for them.
  * 4. **The app.** The built app is launched with `UNDERCROFT_DESKTOP_SMOKE`, walks itself to the
- *    Docker step (`src/handlers/smoke.ts`) and reports what that step's check found. On Linux
- *    with no display it runs under `xvfb-run`. `--no-launch` skips this step, and says so,
- *    for a machine that cannot open a window at all.
+ *    Docker step (`src/handlers/smoke.ts`) and reports what that step's check found. Then it
+ *    quits the way the tray's Quit does, and the check waits for the launcher to exit by itself:
+ *    the launcher exits only once the runtime it started has, so a quit that leaves any of the
+ *    app running fails here rather than on a person's machine. On Linux with no display it runs
+ *    under `xvfb-run`. `--no-launch` skips this step, and says so, for a machine that cannot
+ *    open a window at all.
  *
  * It needs the network the first time (the toolchain and the runtime are downloaded), and
  * nothing else: no Docker, no credentials. Docker's state is reported, not required.
@@ -30,6 +33,8 @@ const TSC = join(APP, "..", "..", "node_modules", "typescript", "bin", "tsc");
 /** The launcher Electrobun puts in every build: `launcher` on macOS and Linux, `.exe` on Windows. */
 const LAUNCHER = /(?:^|\/)launcher(?:\.exe)?$/u;
 const SMOKE_TIMEOUT_MS = 120_000;
+/** The walk lingers 3s after its report, then quits; the rest is shutdown. */
+const QUIT_TIMEOUT_MS = 30_000;
 const POLL_MS = 500;
 
 function fail(what: string, detail = ""): never {
@@ -121,6 +126,14 @@ async function launch(program: string): Promise<void> {
       fail("the smoke walk reported something unexpected", said);
     }
     process.stdout.write(`app: walked to the Docker step (${said})\n`);
+    const quit = await Promise.race([
+      app.exited.then(() => true),
+      Bun.sleep(QUIT_TIMEOUT_MS).then(() => false),
+    ]);
+    if (!quit) {
+      fail(`the app was still running ${QUIT_TIMEOUT_MS / 1000}s after the walk asked it to quit`);
+    }
+    process.stdout.write(`app: quit by itself (exit ${app.exitCode})\n`);
   } finally {
     app.kill();
     rmSync(staging, { recursive: true, force: true });

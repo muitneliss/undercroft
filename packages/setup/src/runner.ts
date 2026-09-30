@@ -12,7 +12,8 @@
  * would make every caller write the same catch.
  */
 
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
+import process from "node:process";
 
 /** The exit code a shell gives a command it cannot find, and what a missing program answers. */
 export const NOT_FOUND = 127;
@@ -25,6 +26,12 @@ export interface RunOptions {
    * Nothing is captured, so `stdout` and `stderr` come back empty.
    */
   readonly interactive?: boolean;
+  /**
+   * Stop the program when this aborts: it is asked to end, and made to if it has not within
+   * `STOP_GRACE_MS`. The run still resolves only once the program has exited, so a caller that
+   * awaits it knows the program is gone rather than left running on its own.
+   */
+  readonly signal?: AbortSignal;
 }
 
 export interface RunResult {
@@ -40,6 +47,45 @@ export type Runner = (
 ) => Promise<RunResult>;
 
 const LINE_BREAK = /\r?\n/u;
+
+/**
+ * How long a stopped program has to end by itself before it is killed. Asked with SIGTERM,
+ * `docker` hands the signal to its compose plugin and compose cancels a pull or an `up` and exits
+ * (measured on Docker 29: 0.1s, and no plugin process left behind). The grace is for a program
+ * that ignores the request; SIGKILL cannot be ignored.
+ */
+export const STOP_GRACE_MS = 5000;
+
+/** Ask `child` to end when `signal` aborts, then make it. Returns the undo, for when it exits. */
+function stopOnAbort(child: ChildProcess, signal: AbortSignal | undefined): () => void {
+  if (signal === undefined) {
+    return (): void => undefined;
+  }
+  let kill: ReturnType<typeof setTimeout> | undefined;
+  function stop(): void {
+    // Windows has no SIGTERM: Node ends only `docker` itself there, abruptly, and its compose
+    // plugin, a separate process, would run on holding the pipe this run waits to close. So the
+    // whole tree is ended at once; the gentler request is not on offer.
+    if (process.platform === "win32" && child.pid !== undefined) {
+      spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      return;
+    }
+    child.kill("SIGTERM");
+    kill = setTimeout(() => child.kill("SIGKILL"), STOP_GRACE_MS);
+  }
+  if (signal.aborted) {
+    stop();
+  } else {
+    signal.addEventListener("abort", stop, { once: true });
+  }
+  return (): void => {
+    clearTimeout(kill);
+    signal.removeEventListener("abort", stop);
+  };
+}
 
 /** Split a stream into lines, holding the unfinished tail until the next chunk completes it. */
 function lineSplitter(onLine: (line: string) => void): {
@@ -71,6 +117,7 @@ export const processRunner: Runner = (command, args, options = {}) =>
       stdio: options.interactive === true ? "inherit" : ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
+    const settled = stopOnAbort(child, options.signal);
     let stdout = "";
     let stderr = "";
     const onLine = options.onLine ?? ((): void => undefined);
@@ -87,6 +134,7 @@ export const processRunner: Runner = (command, args, options = {}) =>
       err.push(chunk);
     });
     child.on("error", (error: NodeJS.ErrnoException) => {
+      settled();
       resolve({
         code: error.code === "ENOENT" ? NOT_FOUND : 1,
         stdout,
@@ -94,6 +142,7 @@ export const processRunner: Runner = (command, args, options = {}) =>
       });
     });
     child.on("close", (code) => {
+      settled();
       out.end();
       err.end();
       resolve({ code: code ?? 1, stdout, stderr });
