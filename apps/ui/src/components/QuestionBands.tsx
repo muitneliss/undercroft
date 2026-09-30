@@ -116,14 +116,15 @@ export function QuestionHead({
       ) : (
         <p className="note">{draft.id === null ? t("bi.viewerNew") : t("bi.viewerNote")}</p>
       )}
-      {canAuthor ? (
-        <QuestionVerbs tenantId={tenantId} draft={draft} edit={edit} actions={actions} />
-      ) : null}
-      {draft.id === null ? null : (
-        <div className="row">
-          <CopyLink />
-        </div>
-      )}
+      {/* One toolbar, as on a dashboard: the author's verbs, then the link every role may copy
+          of a saved question, then what the draft's state says. */}
+      <div className="row">
+        {canAuthor ? (
+          <QuestionVerbs tenantId={tenantId} draft={draft} edit={edit} actions={actions} />
+        ) : null}
+        {draft.id === null ? null : <CopyLink />}
+        {canAuthor ? <DraftNote draft={draft} save={actions.save} /> : null}
+      </div>
       {actions.save.isError ? (
         <Errata heading={t("bi.notSaved")} live={true} error={actions.save.error} />
       ) : null}
@@ -158,9 +159,9 @@ function NameField({ name }: { name: string }): React.JSX.Element {
 }
 
 /**
- * Edit or Done, Save, Discard, and what the draft's state says about each. Done is not
- * offered on a question never saved, which has no reading page to return to; Discard is,
- * and leaves it. An untitled question is saved as "untitled".
+ * Edit or Done, Save and Discard, set into the head's toolbar. Done is not offered on a
+ * question never saved, which has no reading page to return to; Discard is, and leaves it.
+ * An untitled question is saved as "untitled".
  */
 function QuestionVerbs({
   tenantId,
@@ -178,7 +179,7 @@ function QuestionVerbs({
   const dirty = isQuestionDirty(draft);
 
   return (
-    <div className="row">
+    <>
       {draft.id === null ? null : (
         <button
           className="plate"
@@ -211,15 +212,27 @@ function QuestionVerbs({
           {t("bi.discard")}
         </button>
       ) : null}
-      {dirty ? (
-        <span className="datum datum--quiet">{t("bi.unsaved")}</span>
-      ) : save.isSuccess ? (
-        <span className="datum datum--quiet" role="status">
-          {t("bi.savedNote")}
-        </span>
-      ) : null}
-    </div>
+    </>
   );
+}
+
+/** What the draft's state says about Save, at the end of the toolbar. */
+function DraftNote({
+  draft,
+  save,
+}: {
+  draft: QuestionDraft;
+  save: Save;
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+  if (isQuestionDirty(draft)) {
+    return <span className="datum datum--quiet">{t("bi.unsaved")}</span>;
+  }
+  return save.isSuccess ? (
+    <span className="datum datum--quiet" role="status">
+      {t("bi.savedNote")}
+    </span>
+  ) : null;
 }
 
 /**
