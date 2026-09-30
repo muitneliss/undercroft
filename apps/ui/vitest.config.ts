@@ -66,7 +66,12 @@ export default mergeConfig(
             // capitals unevenly ("CUST OMERS") and ate the space in "3 customers" -- a picture
             // of the rasteriser, not of the page. Without hinting the glyphs sit where the
             // font's own metrics put them.
-            args: ["--font-render-hinting=none"],
+            //
+            // LCD (subpixel) antialiasing is off for the same reason: Chromium grants it to a
+            // layer or withdraws it by compositing state, so the customer index's select drew
+            // "Any role" with coloured fringes on one run and in grey on the next -- the same
+            // glyphs, a different picture. Greyscale is the one it can always give.
+            args: ["--font-render-hinting=none", "--disable-lcd-text"],
           },
           contextOptions: {
             // One device pixel per CSS pixel, so a 1440 px capture is 1440 px wide, like the
