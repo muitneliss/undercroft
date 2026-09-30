@@ -245,4 +245,5 @@
 ## [2026-09-30] ingest | Design: Operator and reader paths
 ## [2026-09-30] ingest | Design: Operator and reader paths
 ## [2026-09-30] ingest | Runbook Sign-In Setup
+## [2026-09-30] ingest | ADR 0092 Lineage Draws Only Declared Relations
 ## [2026-09-30] ingest | ADR 0090 Reports Computes No Figure It Cannot Stand Behind

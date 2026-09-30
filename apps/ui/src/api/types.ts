@@ -117,6 +117,13 @@ export type ModelItem = inferRouterOutputs<AppRouter>["models"]["list"][number];
 /** One model in full, as `models.get` returns it: the item plus its SQL and tests. */
 export type ModelDetail = inferRouterOutputs<AppRouter>["models"]["get"];
 
+/**
+ * What the models declare they read (ADR 0092): a node per model, raw lake table read and
+ * missing dependency, and an edge per declaration. Nothing in it is inferred.
+ */
+export type ModelLineage = inferRouterOutputs<AppRouter>["models"]["lineage"];
+export type LineageNode = ModelLineage["nodes"][number];
+
 /** What a build answered: the run, its steps, and the model's first rows. */
 export type BuildResult = inferRouterOutputs<AppRouter>["models"]["build"];
 

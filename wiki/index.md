@@ -94,6 +94,7 @@
 - [ADR 0088 Tenant Logins Reach Postgres Through A Pooler And Runs Take A Turn](sources/adr-0088-tenant-logins-reach-postgres-through-a-pooler-and-runs-take-a-turn.md)
 - [ADR 0089 The Blog Is A Static Astro Site On GitHub Pages](sources/adr-0089-the-blog-is-a-static-astro-site-on-github-pages.md)
 - [ADR 0090 Reports Computes No Figure It Cannot Stand Behind](sources/adr-0090-reports-computes-no-figure-it-cannot-stand-behind.md)
+- [ADR 0092 Lineage Draws Only Declared Relations](sources/adr-0092-lineage-draws-only-declared-relations.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)
