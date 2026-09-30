@@ -1,5 +1,6 @@
 /**
- * One model, open: its SQL in the editor, its tests as a form, and the three verbs.
+ * One model, open: what its last build left, its SQL in the editor, its tests as a form, what
+ * it declares it reads and what reads it, and the verbs.
  *
  * Save stores what is on screen and executes nothing. Build runs dbt for this model alone,
  * from the SAVED version, and answers with the run's steps and the table's first rows read
@@ -18,12 +19,14 @@
  * regardless.
  */
 
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { ModelDetail } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
+import { ModelDependencies } from "@/components/ModelDependencies.tsx";
+import { ModelFacts } from "@/components/ModelFacts.tsx";
 import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -93,6 +96,8 @@ function useModelActions(
       markModelSaved();
       await utils.models.get.invalidate({ tenantId, name });
       await utils.models.list.invalidate({ tenantId });
+      // What the saved SQL declares is what the dependencies band lists.
+      await utils.models.lineage.invalidate({ tenantId });
     },
   });
   const build = trpc.models.build.useMutation({
@@ -106,6 +111,7 @@ function useModelActions(
     onSuccess: async () => {
       setModelDraft(null);
       await utils.models.list.invalidate({ tenantId });
+      await utils.models.lineage.invalidate({ tenantId });
       void navigate(divisionPath("models", tenantId));
     },
   });
@@ -153,13 +159,19 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
 
       <EditorBand
         tenantId={tenantId}
-        name={name}
+        stored={model.data}
         draft={held}
         isAdmin={isAdmin}
         queryable={queryable}
         locale={locale}
         actions={{ save, build, busy }}
       />
+
+      <div className="band-rule" />
+      <div className="head">{t("models.dependenciesHead")}</div>
+      <div className="body stack">
+        <ModelDependencies tenantId={tenantId} name={name} />
+      </div>
 
       <div className="band-rule" />
       <div className="head">{t("models.testsHead")}</div>
@@ -192,7 +204,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
  */
 function EditorBand({
   tenantId,
-  name,
+  stored,
   draft,
   isAdmin,
   queryable,
@@ -200,7 +212,7 @@ function EditorBand({
   actions,
 }: {
   tenantId: string;
-  name: string;
+  stored: ModelDetail;
   draft: ModelDraft;
   isAdmin: boolean;
   queryable: boolean;
@@ -209,6 +221,13 @@ function EditorBand({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const setModelSql = useUiStore((state) => state.setModelSql);
+  const setModelDraft = useUiStore((state) => state.setModelDraft);
+  // Which CodeMirror instance is mounted, and nothing else. The editor is uncontrolled and
+  // ignores a later `value` (`SqlEditor`), so putting the stored text back means mounting a
+  // fresh one over it; a counter local to this band is that, and no other component could
+  // want it -- the text itself is still the store's.
+  const [mounted, remount] = useReducer((n: number) => n + 1, 0);
+  const { name } = stored;
   const { save, build } = actions;
   const onTable = new URLSearchParams({ [ON_TABLE]: name });
 
@@ -232,12 +251,13 @@ function EditorBand({
         ) : null}
       </div>
       <h1>{name}</h1>
+      <ModelFacts tenantId={tenantId} stored={stored} dirty={isDirty(draft)} locale={locale} />
 
       {isAdmin ? null : <p className="note">{t("models.readOnlyNote")}</p>}
 
       <Suspense fallback={<Skeleton rows={6} />}>
         <SqlEditor
-          key={`${tenantId}/${name}`}
+          key={`${tenantId}/${name}/${mounted}`}
           value={draft.sql}
           onChange={setModelSql}
           readOnly={!isAdmin}
@@ -246,7 +266,16 @@ function EditorBand({
       </Suspense>
 
       {isAdmin ? (
-        <ModelVerbs tenantId={tenantId} name={name} draft={draft} actions={actions} />
+        <ModelVerbs
+          tenantId={tenantId}
+          name={name}
+          draft={draft}
+          actions={actions}
+          discard={(): void => {
+            setModelDraft(draftFrom(tenantId, stored));
+            remount();
+          }}
+        />
       ) : null}
 
       {save.isError ? (
@@ -319,57 +348,69 @@ function DeleteBand({
 }
 
 /**
- * Save and Build, and what the state of the draft says about each.
+ * Save, Build and Discard, and what the state of the draft says about each.
  *
- * Build is disabled while the draft is dirty and says why in its title, because it runs the
- * SAVED version: a Build that quietly ran last night's SQL under this morning's text is a
- * result nobody could reproduce.
+ * Build is disabled while the draft is dirty and says why -- in its title and in a note a
+ * reader does not have to hover to find -- because it runs the SAVED version: a Build that
+ * quietly ran last night's SQL under this morning's text is a result nobody could reproduce.
+ * Discard is the other way out of that state: the draft goes back to what the server holds,
+ * SQL and tests alike.
  */
 function ModelVerbs({
   tenantId,
   name,
   draft,
   actions,
+  discard,
 }: {
   tenantId: string;
   name: string;
   draft: ModelDraft;
   actions: ModelActions;
+  discard: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { save, build, busy } = actions;
   const dirty = isDirty(draft);
 
   return (
-    <div className="row">
-      <button
-        className="plate plate--primary"
-        disabled={busy || !dirty}
-        type="button"
-        onClick={(): void => {
-          save.mutate({ tenantId, name, sql: draft.sql, tests: testsFor(draft), create: false });
-        }}
-      >
-        {save.isPending ? t("models.saving") : t("models.save")}
-      </button>
-      <button
-        className="plate"
-        disabled={busy || dirty}
-        title={dirty ? t("models.buildHint") : undefined}
-        type="button"
-        onClick={(): void => {
-          build.mutate({ tenantId, name });
-        }}
-      >
-        {build.isPending ? t("models.building") : t("models.build")}
-      </button>
-      {dirty ? (
-        <span className="datum datum--quiet">{t("models.unsaved")}</span>
-      ) : save.isSuccess ? (
-        <span className="datum datum--quiet" role="status">
-          {t("models.savedNote")}
-        </span>
-      ) : null}
-    </div>
+    <>
+      <div className="row">
+        <button
+          className="plate plate--primary"
+          disabled={busy || !dirty}
+          type="button"
+          onClick={(): void => {
+            save.mutate({ tenantId, name, sql: draft.sql, tests: testsFor(draft), create: false });
+          }}
+        >
+          {save.isPending ? t("models.saving") : t("models.save")}
+        </button>
+        <button
+          className="plate"
+          disabled={busy || dirty}
+          title={dirty ? t("models.buildHint") : undefined}
+          type="button"
+          onClick={(): void => {
+            build.mutate({ tenantId, name });
+          }}
+        >
+          {build.isPending ? t("models.building") : t("models.build")}
+        </button>
+        {dirty ? (
+          <button className="plate" disabled={busy} type="button" onClick={discard}>
+            {t("models.discard")}
+          </button>
+        ) : null}
+        {dirty ? (
+          <span className="datum datum--quiet">{t("models.unsaved")}</span>
+        ) : save.isSuccess ? (
+          <span className="datum datum--quiet" role="status">
+            {t("models.savedNote")}
+          </span>
+        ) : null}
+      </div>
+      {dirty ? <p className="note">{t("models.buildHint")}</p> : null}
+    </>
   );
 }
