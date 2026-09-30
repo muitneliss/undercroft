@@ -96,6 +96,7 @@
 - [ADR 0090 Reports Computes No Figure It Cannot Stand Behind](sources/adr-0090-reports-computes-no-figure-it-cannot-stand-behind.md)
 - [ADR 0091 A Run Keeps the Scope It Read With and Its Counts Open Its Rows](sources/adr-0091-a-run-keeps-the-scope-it-read-with-and-its-counts-open-its-rows.md)
 - [ADR 0092 Lineage Draws Only Declared Relations](sources/adr-0092-lineage-draws-only-declared-relations.md)
+- [ADR 0093: A document keeps its last accepted kind while a new catalogue is asked](sources/adr-0093-a-document-keeps-its-last-accepted-kind-while-a-new-catalogue-is-asked.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

@@ -1,5 +1,6 @@
 /**
- * A classifying pass: what it asks, what it stores, and what it asks again. ADR 0085.
+ * A classifying pass: what it asks, what it stores, and what it asks again. ADR 0085, and ADR
+ * 0093 for what a document shows while a new catalogue is being asked.
  *
  * Real PGlite, as the worker. The classifier is an in-memory table keyed by the text it is asked
  * about, and it REFUSES a text it was not given -- so a pass that sends a text it must not (one
@@ -9,7 +10,7 @@
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
-import { currentDefinition } from "../../repos/documentKindResults.ts";
+import { currentDefinition, syncDefinition } from "../../repos/documentKindResults.ts";
 import { classifyPass } from "./classify.ts";
 import { type ProviderReply, type SemanticAsk, SemanticProviderError } from "./definition.ts";
 import { catalogueOf } from "./job.ts";
@@ -93,7 +94,33 @@ async function pass(ask: SemanticAsk) {
   if (current === null) {
     throw new Error("nothing published");
   }
+  await syncDefinition(db, TENANT, current);
   return classifyPass({ exec: db, ask }, SCOPE, catalogueOf(current), "run-1");
+}
+
+/** A run starting under the newest catalogue: the view learns which version is current. */
+async function startNewest(): Promise<void> {
+  const current = await currentDefinition(db, TENANT);
+  if (current !== null) {
+    await syncDefinition(db, TENANT, current);
+  }
+}
+
+/** The document as a tenant's model reads it, through the view. */
+async function seen(): Promise<
+  { accepted: string | null; lastAccepted: string | null; current: boolean; version: number }[]
+> {
+  const { rows } = await db.query<{
+    accepted: string | null;
+    lastAccepted: string | null;
+    current: boolean;
+    version: number;
+  }>(
+    `SELECT accepted_kind AS accepted, last_accepted_kind AS "lastAccepted", current, version
+       FROM raw.document_kinds WHERE tenant_id = $1 ORDER BY document_id`,
+    [TENANT],
+  );
+  return rows;
 }
 
 async function stored(): Promise<{ status: string; kind: string | null; version: number }[]> {
@@ -162,5 +189,38 @@ describe("classifyPass", () => {
 
     expect(again.classified).toBe(2);
     expect((await stored()).map((row) => row.version)).toEqual([2, 2]);
+  });
+});
+
+describe("while a new catalogue is being asked", () => {
+  it("a document keeps its last accepted kind, marked as not current", async () => {
+    await land("f1", "a".repeat(64), INVOICE);
+    await publish(1, KINDS);
+    await pass(provider({ [INVOICE]: chose("invoice") }));
+
+    await publish(2, { ...KINDS, receipt: "A record of a payment received." });
+    await startNewest();
+
+    expect(await seen()).toEqual([
+      { accepted: null, lastAccepted: "invoice", current: false, version: 1 },
+    ]);
+  });
+
+  it("a provider failure under the new catalogue does not erase the answer it replaces", async () => {
+    await land("f1", "a".repeat(64), INVOICE);
+    await publish(1, KINDS);
+    await pass(provider({ [INVOICE]: chose("invoice") }));
+    await publish(2, { ...KINDS, receipt: "A record of a payment received." });
+
+    await pass(provider({ [INVOICE]: new SemanticProviderError("http-429") }));
+    const during = await seen();
+    await pass(provider({ [INVOICE]: chose("invoice") }));
+
+    expect(during).toEqual([
+      { accepted: null, lastAccepted: "invoice", current: false, version: 1 },
+    ]);
+    expect(await seen()).toEqual([
+      { accepted: "invoice", lastAccepted: "invoice", current: true, version: 2 },
+    ]);
   });
 });
