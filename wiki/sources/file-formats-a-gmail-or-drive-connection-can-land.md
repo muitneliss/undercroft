@@ -1,12 +1,12 @@
 ---
 title: File formats a Gmail or Drive connection can land
 type: source
-date: 2026-09-29
+date: 2026-09-30
 tags: []
 source: docs/reference/file-formats.md
 source_path: docs/reference/file-formats.md
-source_hash: e1a3ad328a0d98dc3e6320ac0724668522fb445186f42ab3c31a1e4c30705fb9
-ingested: 2026-09-29
+source_hash: 417960aa2dc916769d7684f9321bcdd9ccbefa7e1c034e25cf99239f13745aa4
+ingested: 2026-09-30
 ---
 
 # File formats a Gmail or Drive connection can land

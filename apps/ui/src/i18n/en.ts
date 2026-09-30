@@ -470,7 +470,7 @@ export const en = {
   kinds: {
     head: "Document kinds",
     title: "Catalogue of document kinds",
-    lead: "Every readable document of {{tenantId}} is classified as exactly one kind in this catalogue. An answer below 0.90 confidence is left empty rather than guessed.",
+    lead: "Every readable document of {{tenantId}} is classified as exactly one kind in this catalogue. An answer below 0.90 confidence is left empty.",
     notLoaded: "The catalogue of document kinds for {{tenantId}} could not be loaded.",
     back: "Back to the lake",
     published: "Classifying against version {{version}}, published {{when}} by {{by}}.",
@@ -953,7 +953,7 @@ export const en = {
       noBytesNote: "The source returned an empty file. Nothing to do.",
       legacyDoc: "A .doc from Word 95 or earlier, not read",
       legacyDocNote:
-        "Its text is in the codepage of whichever machine saved it, so reading it would be a guess. To read it, open it in Word and save it as .docx.",
+        "Its text is in the codepage of whichever machine saved it, so it cannot be read exactly. To read it, open it in Word and save it as .docx.",
       legacyXls: "Legacy .xls format, not read",
       legacyXlsNote:
         "No reader has been written for the pre-2007 binary workbook — a considered decision, not a fault.",
@@ -1167,7 +1167,7 @@ export const en = {
     notLoaded: "The lineage of {{tenantId}} could not be loaded.",
     empty:
       "Lineage is drawn from the models. Once there is one, every relation it declares shows here.",
-    lead: "Only relations read from the models' own declarations are drawn: a ref() between two models, and a raw lake table declared as a dbt source with source(), a macro's included. Nothing is inferred from similar names, filters or data, so no source account or report appears here. Select a model to highlight its whole upstream chain.",
+    lead: "Only relations read from the models' own declarations are drawn: a ref() between two models, and a raw lake table declared as a dbt source with source(), a macro's included, so source accounts and reports do not appear here. Select a model to highlight its whole upstream chain.",
     pickLabel: "Model",
     pickNone: "None",
     pick: "Highlight upstream",
