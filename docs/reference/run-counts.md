@@ -62,6 +62,42 @@ again when it changed, for instance when the file was moved. It then counts as C
   `created` is every record stored as a new version, first or not. The totals of the run it
   is recorded under still split New and Changed.
 
+## From a count to the records it counts
+
+For an admin, a run's New and Changed figures in the "By entity" table link to the Raw lake,
+opened on that entity's stream and narrowed to that run (`?run=` in the address). The same page
+is `lake records --run-id` (or `lake documents --run-id` for the `documents` entity) over the CLI
+and MCP. A member or viewer sees the same figures with no link, because the records themselves
+are an admin's.
+
+A record in the raw lake names only the run that last wrote it. So the page lists the records
+this run wrote that no later run has written again, and says how many it does not list:
+
+| Field       | Counts                                                                              |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `wrote`     | this run's New + Changed for the stream, from the table above                       |
+| `current`   | the records that still name this run; the ones listed                               |
+| `rewritten` | `wrote` − `current`: records a later run has changed since, which now name that run |
+
+These come back as `ofRun` beside the page. `ofRun` is `null`, and the page says only which run
+it is narrowed to, when the numbers cannot be subtracted honestly: the run is still going, it
+has no count for that stream (a lake API batch counts only on the run itself), or more records
+name it than it counted.
+
+## The scope a run read with
+
+An ingest run records the scope it read with as it reads it: the labels, folders, organisation
+or properties chosen for its account at that moment. The run detail shows it, and `runs get`
+returns it as `scope`. Saving a new scope afterwards does not change what an earlier run shows.
+A run recorded before this existed, and a run that reads no scope, shows an em dash, never
+today's scope. ADR 0091.
+
+## One account's runs
+
+A source card's "Its runs" opens the Journal filtered to that account (`?source=` in the
+address), and `runs list --source` does the same over the CLI and MCP. A second mailbox is its
+own account, so each card lists only its own runs.
+
 ## Where the numbers come from
 
 The worker decides each record's column when it writes the record to the raw lake, in

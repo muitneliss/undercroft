@@ -5,7 +5,15 @@
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
-import { closeRun, openRun, recordEntities, recordRefusals } from "@undercroft/db/repos";
+import {
+  closeRun,
+  openRun,
+  recordEntities,
+  recordRefusals,
+  scopeForRun,
+  upsertConnection,
+  writeConnectionDetail,
+} from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { messages } from "../i18n/index.ts";
@@ -130,6 +138,82 @@ describe("runs.list", () => {
     // A run still in progress reports no counts: a number still changing is not a number.
     expect(page.items[0]?.counts).toBeNull();
     expect(page.nextCursor).toBeNull();
+  });
+});
+
+describe("runs.list narrowed to one account", () => {
+  it("lists that account's runs and no other's, a second mailbox included", async () => {
+    // What a source card opens (ADR 0091). One account, never its kind: the second mailbox is
+    // its own source (ADR 0043) and a filter that matched by kind would list both under one card.
+    for (const [id, tenantId, source] of [
+      ["r-mail-1", "CASE-0042", "gmail"],
+      ["r-mail-2", "CASE-0042", "gmail.3fa9c1d2e0ab"],
+      ["r-mail-other", "CASE-0043", "gmail"],
+    ] as const) {
+      await openRun(db, { id, tenantId, source, verb: "ingest", trigger: "schedule" });
+    }
+    const viewer = await seedMember("v@example.test", "viewer", "CASE-0042");
+    const { runs } = caller(viewer, "v@example.test");
+
+    const first = await runs.list({ tenantId: "CASE-0042", source: "gmail" });
+    const second = await runs.list({ tenantId: "CASE-0042", source: "gmail.3fa9c1d2e0ab" });
+
+    expect(first.items.map((r) => r.id)).toEqual(["r-mail-1"]);
+    expect(second.items.map((r) => r.id)).toEqual(["r-mail-2"]);
+  });
+});
+
+describe("the scope a run read with", () => {
+  async function chooseLabels(labels: string[]): Promise<void> {
+    await writeConnectionDetail(db, {
+      tenantId: "CASE-0042",
+      source: "gmail",
+      selectionJson: JSON.stringify({
+        labels: labels.map((name, i) => ({ id: `Label_${i}`, name })),
+      }),
+    });
+  }
+
+  it("stays the scope it read with after the connection's scope is saved again", async () => {
+    await upsertConnection(db, { tenantId: "CASE-0042", source: "gmail" });
+    await chooseLabels(["Invoices", "Receipts"]);
+    await openRun(db, {
+      id: "r-mail",
+      tenantId: "CASE-0042",
+      source: "gmail",
+      verb: "ingest",
+      trigger: "schedule",
+    });
+    // What the collector asks as it starts reading (`google/collect.ts`).
+    await scopeForRun(db, { runId: "r-mail", tenantId: "CASE-0042", source: "gmail" });
+    await chooseLabels(["Statements"]);
+    const member = await seedMember("m@example.test", "member", "CASE-0042");
+
+    const run = await caller(member, "m@example.test").runs.get({
+      tenantId: "CASE-0042",
+      runId: "r-mail",
+    });
+
+    expect(run.scope?.labels).toEqual(["Invoices", "Receipts"]);
+  });
+
+  it("is null for a run that recorded none, never the connection's scope today", async () => {
+    // `r-ok` was opened in `beforeEach` and never read a scope -- every run from before ADR 0091
+    // is this run. The connection has a scope now, and the run must not borrow it.
+    await upsertConnection(db, { tenantId: "CASE-0042", source: "hubspot" });
+    await writeConnectionDetail(db, {
+      tenantId: "CASE-0042",
+      source: "hubspot",
+      selectionJson: JSON.stringify({ properties: { companies: ["annualrevenue"] } }),
+    });
+    const member = await seedMember("m@example.test", "member", "CASE-0042");
+
+    const run = await caller(member, "m@example.test").runs.get({
+      tenantId: "CASE-0042",
+      runId: "r-ok",
+    });
+
+    expect(run.scope).toBeNull();
   });
 });
 

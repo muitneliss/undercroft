@@ -22,7 +22,7 @@ import { join } from "node:path";
 import { InMemoryFetcher } from "@undercroft/connector-runtime/testing";
 import { createStampSource, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
-import { writeConnectionDetail } from "@undercroft/db/repos";
+import { recordedScope, writeConnectionDetail } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
@@ -200,6 +200,9 @@ describe("a HubSpot connection nobody has scoped", () => {
 
     const result = await ingest(fetcher);
 
+    // Recorded as read with no scope chosen -- a different fact from a run that recorded none.
+    expect(await recordedScope(db, result.runId)).toEqual({ selectionJson: null });
+
     // The three quote relations read nothing, because the portal has no quotes -- and ask
     // HubSpot nothing, which the recorded fetcher would have refused.
     expect(result.entities.map((entity) => entity.entity)).toEqual([
@@ -309,6 +312,26 @@ describe("a HubSpot scope", () => {
     // company 1 is below it and is not even asked for.
     expect(batchBodies(fetcher).map((body) => body.inputs)).toEqual([[{ id: "2" }]]);
     expect(again.entities.find((entity) => entity.entity === "companies")?.landed).toBe(1);
+  });
+
+  it("is recorded with the run it was read by, and a save afterwards does not rewrite it", async () => {
+    // ADR 0091: the run's leaf shows the scope the run read with. The run records it as it reads
+    // it, so the property asked for and the scope on record are one value; a later save is a
+    // statement about the next run, not this one.
+    await choose({ companies: ["annualrevenue"] });
+    const listed = [company("1", "2026-01-01T00:00:00.000Z")];
+    const fetcher = batchAnswers(hubspot(listed), [
+      company("1", "2026-01-01T00:00:00.000Z", { annualrevenue: "500" }),
+    ]);
+    const result = await ingest(fetcher);
+    await choose({ companies: ["x_onboarding_stage"] });
+
+    const recorded = await recordedScope(db, result.runId);
+
+    expect(batchBodies(fetcher)[0]?.properties).toContain("annualrevenue");
+    expect(JSON.parse(recorded?.selectionJson ?? "null")).toEqual({
+      properties: { companies: ["annualrevenue"] },
+    });
   });
 
   it("the truncation guards still hold on a widened read: an empty first read fails", async () => {

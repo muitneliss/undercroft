@@ -792,26 +792,31 @@ export async function findChildRun(
 }
 
 /**
- * A page of runs, newest first, keyed by an opaque cursor.
+ * A page of runs, newest first, keyed by an opaque cursor: every run of the tenant, or one
+ * source's.
  *
  * The cursor is `startedAt|id` in base64url: the pair the index is ordered by, so a page
  * boundary is exact even when two runs share a start instant. Opaque to the caller, which
  * only ever hands it back.
+ *
+ * `source` is matched exactly, as ONE account (ADR 0043): `gmail` does not bring
+ * `gmail.3fa9c1d2e0ab` with it, because the journal filtered from a card is that card's
+ * account's runs and no other's. `null` is every source. `run_tenant_source_started`
+ * (440_run_scope.sql) serves the filtered read.
  */
 export async function listRuns(
   exec: SqlExecutor,
   tenantId: string,
-  page: { limit: number; cursor?: string | null },
+  page: { limit: number; cursor?: string | null; source?: string | null },
 ): Promise<{ items: Run[]; nextCursor: string | null }> {
   const after = decodeCursor(page.cursor);
   const { rows } = await exec.query<RunRow>(
-    after === null
-      ? `SELECT ${RUN_COLUMNS} FROM ops.run WHERE tenant_id = $1
-         ORDER BY started_at DESC, id DESC LIMIT $2`
-      : `SELECT ${RUN_COLUMNS} FROM ops.run
-         WHERE tenant_id = $1 AND (started_at, id) < ($3::timestamptz, $4)
-         ORDER BY started_at DESC, id DESC LIMIT $2`,
-    after === null ? [tenantId, page.limit + 1] : [tenantId, page.limit + 1, after.at, after.id],
+    `SELECT ${RUN_COLUMNS} FROM ops.run
+     WHERE tenant_id = $1
+       AND ($3::text IS NULL OR source = $3::text)
+       AND ($4::timestamptz IS NULL OR (started_at, id) < ($4::timestamptz, $5::text))
+     ORDER BY started_at DESC, id DESC LIMIT $2`,
+    [tenantId, page.limit + 1, page.source ?? null, after?.at ?? null, after?.id ?? null],
   );
   const items = rows.slice(0, page.limit).map(toRun);
   const last = items.at(-1);

@@ -164,6 +164,50 @@ export function streamParams(stream: LakeStream): Record<string, string> {
 }
 
 /**
+ * The search parameter a run's filter rides in beside the stream: `?source=gmail&entity=messages&run=…`.
+ *
+ * In the address for the reason the stream is: the leaf a run's counts open is one an admin
+ * pastes to a colleague, and Back must return to the whole stream rather than to a store that
+ * forgot. ADR 0091.
+ */
+const RUN_PARAM = "run";
+
+/** The run the lake's rows are narrowed to, or `null` for the whole stream. */
+export function parseRunFilter(params: URLSearchParams): string | null {
+  const run = params.get(RUN_PARAM)?.trim() ?? "";
+  return run === "" ? null : run;
+}
+
+/**
+ * Where the lake division opens on one stream, optionally narrowed to one run's rows.
+ *
+ * What a run's created and changed counts link to from its leaf in the journal.
+ */
+export function lakeStreamPath(
+  tenantId: string,
+  stream: LakeStream,
+  runId: string | null = null,
+): string {
+  const params = new URLSearchParams(streamParams(stream));
+  if (runId !== null) {
+    params.set(RUN_PARAM, runId);
+  }
+  return `/tenants/${tenantId}/lake?${params.toString()}`;
+}
+
+/**
+ * The stream a run's ledger entity counts into.
+ *
+ * `documents` is how a Gmail or Drive run counts the source's catalogue beside its records
+ * (`docs/reference/run-counts.md`); every other entity is a record stream of that name.
+ */
+export function streamOfEntity(source: string, entity: string): LakeStream {
+  return entity === "documents"
+    ? { kind: "documents", source }
+    : { kind: "records", source, entity };
+}
+
+/**
  * Where the console is, optionally opened on one stream.
  *
  * Its own page rather than a band on the lake's index, because a console is not as tall as

@@ -8,6 +8,9 @@
  *
  * The open run lives in the URL (`/journal/:runId`), not in the store: a run's detail is a
  * thing an operator pastes to a colleague mid-call, and a reload must land on the same row.
+ * So does the account the ledger is narrowed to (`?source=`), which is what a source card opens
+ * (ADR 0091): Back, Forward and a pasted link restore the same list, and the leaf says which
+ * account it is showing and offers every run back.
  * Pages come from the query cache as an infinite query keyed on the ledger's own cursor.
  * There is no `useState` and nothing here needs one.
  *
@@ -18,7 +21,7 @@
 
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
@@ -26,7 +29,7 @@ import { RunDetail } from "@/components/RunDetail.tsx";
 import { RunRow } from "@/components/RunRow.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import { journalEmptyBody } from "@/lib/runs.ts";
+import { journalEmptyBody, journalPath, journalSource, sourceLabel } from "@/lib/runs.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -38,12 +41,13 @@ const COLUMNS = 8;
 
 export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
-  const locale = useUiStore((state) => state.locale);
   const params = useParams();
   const openId = params.runId ?? null;
+  const [search] = useSearchParams();
+  const source = journalSource(search);
 
   const runs = trpc.runs.list.useInfiniteQuery(
-    { tenantId, limit: PAGE },
+    { tenantId, limit: PAGE, ...(source === null ? {} : { source }) },
     {
       getNextPageParam: (page) => page.nextCursor ?? undefined,
       refetchInterval: (query) =>
@@ -52,7 +56,8 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
           : false,
     },
   );
-  // For the empty state only: when the first run comes. Cached from the Sources leaf.
+  // When the first run comes, for the empty state, and which mailbox a filtered source is, for
+  // a tenant with two. Cached from the Sources leaf.
   const connections = trpc.connections.list.useQuery({ tenantId });
 
   if (runs.isPending) {
@@ -67,7 +72,7 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
   }
 
   const items = runs.data.pages.flatMap((page) => page.items);
-  const base = divisionPath("journal", tenantId);
+  const accounts = connections.data ?? [];
   // A deep link to a run older than the pages loaded so far still opens it: the leaf is
   // drawn above the table rather than inside a row it cannot find.
   const openElsewhere = openId !== null && !items.some((run) => run.id === openId);
@@ -79,38 +84,114 @@ export function Journal({ tenantId }: { tenantId: string }): React.JSX.Element {
         <h1>{t("journal.title")}</h1>
         <p className="prose prose--lead">{t("journal.lead", { tenantId })}</p>
 
-        {openElsewhere ? <RunDetail tenantId={tenantId} runId={openId} /> : null}
-
-        {items.length === 0 ? (
-          <EmptyState
-            title={t("journal.emptyTitle")}
-            body={journalEmptyBody(t, locale, connections.data ?? [])}
-            action={
-              <Link className="plate" to={divisionPath("sources", tenantId)}>
-                {t("journal.goToSources")}
-              </Link>
-            }
+        {source === null ? null : (
+          <SourceFilter
+            tenantId={tenantId}
+            openId={openId}
+            label={sourceLabel(source, accounts)}
+            empty={items.length === 0}
           />
-        ) : (
-          <RunTable items={items} tenantId={tenantId} openId={openId} base={base} />
         )}
 
+        {openElsewhere ? <RunDetail tenantId={tenantId} runId={openId} /> : null}
+
+        {items.length === 0 && source === null ? (
+          <NoRunsYet tenantId={tenantId} accounts={accounts} />
+        ) : null}
+
+        {items.length > 0 ? (
+          <RunTable items={items} tenantId={tenantId} openId={openId} source={source} />
+        ) : null}
+
         {runs.hasNextPage ? (
-          <div className="row">
-            <button
-              className="plate"
-              type="button"
-              disabled={runs.isFetchingNextPage}
-              onClick={(): void => {
-                void runs.fetchNextPage();
-              }}
-            >
-              {runs.isFetchingNextPage ? t("journal.loadingOlder") : t("journal.older")}
-            </button>
-          </div>
+          <OlderRuns
+            fetching={runs.isFetchingNextPage}
+            onMore={(): void => {
+              void runs.fetchNextPage();
+            }}
+          />
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** A tenant with no run at all: when the first one comes, and the way to the sources. */
+function NoRunsYet({
+  tenantId,
+  accounts,
+}: {
+  tenantId: string;
+  accounts: Parameters<typeof journalEmptyBody>[2];
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = useUiStore((state) => state.locale);
+
+  return (
+    <EmptyState
+      title={t("journal.emptyTitle")}
+      body={journalEmptyBody(t, locale, accounts)}
+      action={
+        <Link className="plate" to={divisionPath("sources", tenantId)}>
+          {t("journal.goToSources")}
+        </Link>
+      }
+    />
+  );
+}
+
+/** The plate that reads the next page of the ledger, and says so while it does. */
+function OlderRuns({
+  fetching,
+  onMore,
+}: {
+  fetching: boolean;
+  onMore: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <div className="row">
+      <button className="plate" type="button" disabled={fetching} onClick={onMore}>
+        {fetching ? t("journal.loadingOlder") : t("journal.older")}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Which account the ledger is narrowed to, and the way back to every run.
+ *
+ * Said in words above the table rather than left in the address alone: a list that silently
+ * held one account's runs would read as the tenant's whole history. Clearing keeps the open
+ * run open, so the reader loses the filter and nothing else. An account with no runs says so
+ * here, rather than under the tenant's empty state, whose "first run" sentence is about every
+ * source at once.
+ */
+function SourceFilter({
+  tenantId,
+  openId,
+  label,
+  empty,
+}: {
+  tenantId: string;
+  openId: string | null;
+  /** The account as the ledger names it (`sourceLabel`). */
+  label: string;
+  empty: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <div className="row">
+        <p className="note">{t("journal.filteredTo", { source: label })}</p>
+        <Link className="plate plate--small" to={journalPath(tenantId, { runId: openId })}>
+          {t("journal.showAllRuns")}
+        </Link>
+      </div>
+      {empty ? <p className="note">{t("journal.filteredEmpty", { source: label })}</p> : null}
+    </>
   );
 }
 
@@ -126,12 +207,13 @@ function RunTable({
   items,
   tenantId,
   openId,
-  base,
+  source,
 }: {
   items: readonly Run[];
   tenantId: string;
   openId: string | null;
-  base: string;
+  /** The account the ledger is narrowed to, which every row's link keeps. */
+  source: string | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const locale = useUiStore((state) => state.locale);
@@ -171,7 +253,7 @@ function RunTable({
               run={run}
               locale={locale}
               open={run.id === openId}
-              href={`${base}/${run.id}`}
+              href={journalPath(tenantId, { source, runId: run.id })}
               accounts={accounts}
             />
             {run.id === openId ? (

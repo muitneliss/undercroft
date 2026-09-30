@@ -780,8 +780,13 @@ function chosenCount(scope: ConnectionScope): number {
   }
 }
 
-/** The shape `scopeSummary` in the UI reads. */
-function configOf(source: string, selectionJson: string): ConnectionCardView["config"] {
+/**
+ * A stored selection in the shape `scopeSummary` in the UI reads.
+ *
+ * One reading for the card's scope and for the scope a run recorded (`runs.get`, ADR 0091), so
+ * the two can only differ by the selection they were given, never by how it was summarised.
+ */
+export function configOf(source: string, selectionJson: string): ConnectionCardView["config"] {
   const scope = parseScope(source, selectionJson);
   if (scope === null) {
     return {};

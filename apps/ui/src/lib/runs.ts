@@ -17,8 +17,15 @@ import { parseSourceInstance } from "@undercroft/contracts/sources";
 import type { Locale } from "@undercroft/core/locale";
 import type { TFunction } from "i18next";
 
-import { type Connection, isSource, type RunView, SOURCE_LABEL } from "@/api/types.ts";
-import type { CardFacts } from "@/lib/connectionState.ts";
+import {
+  type Connection,
+  isSource,
+  type RunDetail,
+  type RunView,
+  SOURCE_LABEL,
+} from "@/api/types.ts";
+import { type CardFacts, scopeSummary } from "@/lib/connectionState.ts";
+import { divisionPath } from "@/lib/divisions.ts";
 import { MISSING } from "@/lib/money.ts";
 import { TICK_MINUTES } from "@/lib/cadence.ts";
 import { formatDateTime } from "@/lib/when.ts";
@@ -55,6 +62,56 @@ export function sourceLabel(source: string, accounts: readonly AccountName[] = [
   const address = siblings.find((account) => account.source === source)?.externalAccountLabel;
   const qualifier = address === undefined || address === "" ? instance.account : address;
   return qualifier === null ? name : `${name} · ${qualifier}`;
+}
+
+/**
+ * The search parameter the journal's account filter rides in: `/journal?source=gmail.3fa9c1d2e0ab`.
+ *
+ * In the address, never the store, for the reason the open run is (`Journal.tsx`): Back and
+ * Forward restore it and a pasted link opens the same list. A source, not a kind -- one account's
+ * runs (ADR 0043), which is what the card it is opened from is about.
+ */
+const SOURCE_PARAM = "source";
+
+/** The account the journal is filtered to, or `null` for every run. */
+export function journalSource(params: URLSearchParams): string | null {
+  const source = params.get(SOURCE_PARAM)?.trim() ?? "";
+  return source === "" ? null : source;
+}
+
+/**
+ * Where the journal is: all of it or one account's, optionally with one run open.
+ *
+ * One function for both halves of the address, so a run opened from a filtered list keeps the
+ * filter: a row that dropped it would put every account's runs round the one the reader opened.
+ */
+export function journalPath(
+  tenantId: string,
+  at: { source?: string | null; runId?: string | null } = {},
+): string {
+  const base = divisionPath("journal", tenantId);
+  const path = at.runId === undefined || at.runId === null ? base : `${base}/${at.runId}`;
+  return at.source === undefined || at.source === null
+    ? path
+    : `${path}?${new URLSearchParams({ [SOURCE_PARAM]: at.source }).toString()}`;
+}
+
+/**
+ * The scope a run read with, in the words the card uses for a connection's scope -- or `null`,
+ * which the leaf prints as MISSING, for a run that recorded none (ADR 0091).
+ *
+ * Never the connection's scope today in its place: that is a statement about now, and printed
+ * beside a run it would claim that run read with it.
+ */
+export function runScopeSummary(
+  t: TFunction,
+  run: Pick<RunDetail, "source" | "scope">,
+): string | null {
+  const kind = run.source === null ? undefined : parseSourceInstance(run.source)?.kind;
+  if (run.scope === null || kind === undefined || !isSource(kind)) {
+    return null;
+  }
+  return scopeSummary(t, kind, run.scope);
 }
 
 /**
