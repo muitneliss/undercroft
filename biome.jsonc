@@ -739,6 +739,14 @@
       "includes": ["apps/ui/src/styles/landing-cover.css"],
       "linter": { "rules": { "nursery": { "useBaseline": "off" } } }
     },
+    // The visual tier's motion stop (ADR 0099): four `!important` durations that must beat
+    // every duration the app's own rules set, whatever their specificity, so an animation that
+    // starts after the page settled is still at its end in the picture. A test-only sheet the
+    // app never loads; `noImportantStyles` stays on for every stylesheet that ships.
+    {
+      "includes": ["apps/ui/src/test/visual.css"],
+      "linter": { "rules": { "complexity": { "noImportantStyles": "off" } } }
+    },
     // Same parameter-property reasoning for the one error class here.
     {
       "includes": ["packages/contracts/src/loadSpec.ts"],

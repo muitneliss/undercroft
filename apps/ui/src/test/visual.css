@@ -1,0 +1,30 @@
+/*
+ * Motion, stopped at its end, for the visual tier only (ADR 0099). Loaded by
+ * `visual.setup.ts`; never by the app.
+ *
+ * A screen mounts at the previous test's width and `matches()` narrows it, so a row's
+ * `ink-set` fade or a hinge can START after the page has settled -- a frame after the media
+ * query flips -- and the capture lands mid-motion: a roster with every row at opacity 0 was
+ * written as a baseline once. Neither Playwright's `animations: "disabled"` nor finishing the
+ * animations that exist before the capture reaches one that starts later. A zero duration does:
+ * any animation, whenever it starts, is at its end at once, and every finite one in the book
+ * fills `both`, so its end is the resting state a reader sees. The two infinite ones (a run
+ * link's flow, a skeleton's line being set) fall back to their resting frame. Transitions
+ * likewise.
+ *
+ * `!important` is the point: the app's own rules name their durations with more specificity
+ * than any selector here could, and this sheet must win over all of them. An important
+ * declaration outranks every normal one whatever layer either sits in, so the layer is only
+ * this sheet's name.
+ */
+
+@layer visual {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
