@@ -4,10 +4,11 @@
  *
  * ADR 0020 keeps Reports on Chart.js's sixteen types and answers what a drawing cannot say
  * with a table. Until now that table was an author's control (switching the type), so a
- * viewer could read exact figures only off a tooltip. Here the rows are offered beneath
- * every drawing, in a fold rather than always open, because the drawing is what the author
- * chose to lead with. Pressing a point or a bar marks the row that drew it and opens the
- * fold; which point lives in the address, so nothing here holds state.
+ * viewer could read exact figures only off a tooltip. On the reading page the rows are the
+ * question's Data pane beside its drawing (`lib/questionPane.ts`), and pressing a point or a
+ * bar opens that pane with the rows that drew it marked. In the workbench there are no panes,
+ * so the rows sit folded beneath the drawing and the press opens the fold. Which point, and
+ * which pane, live in the address, so nothing here holds state.
  *
  * The CSV is built in the browser from the very result on screen (`lib/csv.ts`), so it is
  * exactly those rows and columns, for the parameters in use, under the reader's own run. A
@@ -26,6 +27,7 @@ import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { POINT, pointFromSearch, rowsAt, withPoint } from "@/lib/chartData.ts";
 import { resultCsvBlob } from "@/lib/csv.ts";
+import { type QuestionPane, withPane } from "@/lib/questionPane.ts";
 
 const ChartFrame = lazy(() =>
   import("@/components/charts/ChartFrame.tsx").then((module) => ({ default: module.ChartFrame })),
@@ -77,6 +79,29 @@ function CsvTake({ result, name }: { result: TableResult; name: string }): React
   );
 }
 
+/** The rows, open: the Data pane, with the rows a pressed point drew marked. */
+function MarkedRows({
+  result,
+  locale,
+  marked,
+}: {
+  result: TableResult;
+  locale: Locale;
+  marked: ReadonlySet<number>;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="stack stack--tight">
+      {marked.size > 0 ? (
+        <p className="note" role="status">
+          {t("bi.rowsMarked", { count: marked.size })}
+        </p>
+      ) : null}
+      <ResultTable result={result} locale={locale} marked={marked} />
+    </div>
+  );
+}
+
 /**
  * The rows that drew the chart, folded. The fold is keyed on the selected point, so pressing
  * a point re-opens it on the marked row even after the reader folded it away.
@@ -96,14 +121,7 @@ function DrawnRows({
   return (
     <details key={pointKey} className="tokenform" open={marked.size > 0}>
       <summary className="plate">{t("bi.rowsShow", { count: result.rows.length })}</summary>
-      <div className="stack stack--tight">
-        {marked.size > 0 ? (
-          <p className="note" role="status">
-            {t("bi.rowsMarked", { count: marked.size })}
-          </p>
-        ) : null}
-        <ResultTable result={result} locale={locale} marked={marked} />
-      </div>
+      <MarkedRows result={result} locale={locale} marked={marked} />
     </details>
   );
 }
@@ -113,16 +131,28 @@ export function ResultReading({
   chart,
   locale,
   name,
+  pane,
 }: {
   result: TableResult;
   chart: ChartConfig;
   locale: Locale;
   /** The question's name, which names the file. */
   name: string;
+  /** The reading page's pane; null in the workbench, which has none. */
+  pane: Exclude<QuestionPane, "definition"> | null;
 }): React.JSX.Element {
   const [search, setSearch] = useSearchParams();
   const point = pointFromSearch(search);
   const marked = new Set(point === null ? [] : rowsAt(result, chart, point));
+
+  if (pane === "data") {
+    return (
+      <>
+        <MarkedRows result={result} locale={locale} marked={marked} />
+        <CsvTake result={result} name={name} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -132,12 +162,21 @@ export function ResultReading({
           chart={chart}
           locale={locale}
           onSelect={(selected): void => {
-            setSearch((current) => withPoint(current, selected), { replace: true });
+            // On the reading page the press turns to the rows it drew, as a new entry in
+            // history so Back returns to the drawing; in the workbench it opens the fold.
+            setSearch(
+              (current) => {
+                const next = withPoint(current, selected);
+                return pane === null ? next : withPane(next, "data");
+              },
+              { replace: pane === null },
+            );
           }}
         />
       </Suspense>
-      {/* A question drawn as a table already is its rows. */}
-      {chart.type === "table" || result.rows.length === 0 ? null : (
+      {/* A question drawn as a table already is its rows; on the reading page they are the
+          Data pane, one press away. */}
+      {pane !== null || chart.type === "table" || result.rows.length === 0 ? null : (
         <DrawnRows
           result={result}
           locale={locale}

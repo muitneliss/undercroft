@@ -50,10 +50,23 @@ export function paramsFromSearch(search: URLSearchParams, names: readonly string
  * its refusal reaches the reader, attached to the tile it belongs to.
  */
 export function questionParams(definition: QuestionDefinition): string[] {
+  const text = questionSql(definition);
+  return text === null ? [] : paramNames(text);
+}
+
+/**
+ * The SQL a question runs, holes unbound, or null when its definition will not compile.
+ *
+ * The same `compile` the server's `bi.compile` calls, from the shared contract, so the text is
+ * what the server would answer -- which is what lets a viewer, who may not call `bi.compile`,
+ * read how a question is defined. Null rather than a throw, for the reason `questionParams`
+ * gives: the refusal belongs to the run, not to whatever merely asked.
+ */
+export function questionSql(definition: QuestionDefinition): string | null {
   try {
-    return paramNames(compile(definition));
+    return compile(definition);
   } catch {
-    return [];
+    return null;
   }
 }
 

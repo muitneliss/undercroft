@@ -1,0 +1,108 @@
+/* The Reports division's own pieces: the chart-type mark in the list, the type plates, the
+   question workbench's two leaves, a dashboard tile's foot, and a dashboard as printed.
+   Imported by the three Reports routes, so it rides in their chunk rather than the entry's;
+   every selector here names a Reports element, so it means nothing once loaded elsewhere. */
+@layer undercroft {
+  /* A saved question's chart type in the list: a mark in the cell's quiet ink, its word
+     kept for a screen reader (`ChartGlyph`). */
+  .glyph {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .glyph__mark {
+    width: 1.5rem;
+    height: 1rem;
+  }
+
+  /* More than two plates bound into one control, wrapping -- the chart types, a question's
+     panes: the borders overlap into one rule as the language pair's do, and the chosen face
+     is inked. */
+  .plateset {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: var(--s-1);
+  }
+
+  .plateset .plate {
+    border-radius: 0;
+  }
+
+  .plateset .plate + .plate {
+    margin-left: calc(-1 * var(--hair));
+  }
+
+  .plateset .plate[aria-pressed="true"],
+  .plateset .plate[aria-current="page"] {
+    background: var(--ink);
+    color: var(--leaf);
+  }
+
+  /* The question workbench: how it is defined on the left leaf, what it answers on the
+     right, so a change and its result are read side by side. */
+  .workbench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--s-5);
+    align-items: start;
+  }
+
+  .workbench__leaf {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-4);
+    min-width: 0;
+    padding: var(--s-4);
+    background: var(--leaf);
+    border: var(--hair) solid var(--rule);
+    border-radius: var(--r-leaf);
+  }
+
+  /* A tile's foot: the model table it reads, then the way to its rows. */
+  .grid__foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--s-2) var(--s-4);
+    align-items: baseline;
+    margin: 0;
+  }
+
+  .facts dd {
+    margin: 0;
+  }
+
+  @media (max-width: 760px) {
+    .workbench {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* A dashboard as printed: the tiles and the filter values they were drawn on, and none of
+     the controls around them. The book's own chrome is dropped by the one print block in
+     `index.css`, which owns those classes. The filter inputs stay, because the values in
+     them are what the figures mean; every plate goes, the filters' own included. */
+  @media print {
+    .sheet--dashboard .plate,
+    .sheet--dashboard .print-omit {
+      display: none;
+    }
+
+    .sheet--dashboard .grid {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sheet--dashboard .grid__tile {
+      min-height: 18rem;
+      break-inside: avoid;
+    }
+  }
+}

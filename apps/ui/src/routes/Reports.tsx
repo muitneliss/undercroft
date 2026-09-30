@@ -7,7 +7,10 @@
  * question is hidden from a viewer as courtesy; the server refuses regardless.
  *
  * One search finds either by name, accents ignored (`lib/reportSearch.ts`); the query lives
- * in the address, so a filtered list is a link. The time beside each is when its DEFINITION
+ * in the address, so a filtered list is a link. The two lists are two views of the division,
+ * chosen in the address too (`?view=`), and each view's plate counts the names the search
+ * matches in it, so a match in the list not shown is still visible. The time beside each is
+ * when its DEFINITION
  * was last saved, and is named so: it says nothing about how fresh the data under it is,
  * and a column headed "Updated" was read as exactly that.
  */
@@ -17,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
 import type { DashboardItem, QuestionItem } from "@/api/types.ts";
+import { ChartGlyph } from "@/components/ChartGlyph.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
@@ -27,13 +31,17 @@ import { relativeTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
+import "@/styles/reports.css";
+
+/** The search key the chosen list rides under. Dashboards are the default, and no key. */
+const VIEW = "view";
+const QUESTIONS_VIEW = "questions";
+
 export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
   const { t } = useTranslation();
   const questions = trpc.bi.questions.list.useQuery({ tenantId });
   const dashboards = trpc.bi.dashboards.list.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
-  const [search] = useSearchParams();
-  const query = search.get(REPORT_QUERY) ?? "";
 
   if (questions.isPending || dashboards.isPending || tenant.isPending) {
     return <Skeleton rows={4} />;
@@ -56,8 +64,6 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
       <div className="body stack">
         <h1>{t("reports.title")}</h1>
         <p className="prose prose--lead">{t("reports.lead", { tenantId })}</p>
-        {nothing ? null : <ReportSearch query={query} />}
-
         {nothing ? (
           <EmptyState
             title={t("reports.emptyTitle")}
@@ -74,20 +80,12 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
       </div>
 
       {nothing ? null : (
-        <>
-          <DashboardBand
-            items={byName(dashboards.data, query)}
-            base={base}
-            canAuthor={canAuthor}
-            filtered={query.trim() !== ""}
-          />
-          <QuestionBand
-            items={byName(questions.data, query)}
-            base={base}
-            canAuthor={canAuthor}
-            filtered={query.trim() !== ""}
-          />
-        </>
+        <ReportLists
+          dashboards={dashboards.data}
+          questions={questions.data}
+          base={base}
+          canAuthor={canAuthor}
+        />
       )}
 
       {/* A customer with nothing yet still gets the dashboards band, because "make one" is
@@ -96,6 +94,100 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
         <DashboardBand items={dashboards.data} base={base} canAuthor={true} filtered={false} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The search, the two views of the lists, and the one list the address chose, narrowed to
+ * the names the search matches.
+ */
+function ReportLists({
+  dashboards,
+  questions,
+  base,
+  canAuthor,
+}: {
+  dashboards: readonly DashboardItem[];
+  questions: readonly QuestionItem[];
+  base: string;
+  canAuthor: boolean;
+}): React.JSX.Element {
+  const [search] = useSearchParams();
+  const query = search.get(REPORT_QUERY) ?? "";
+  const showQuestions = search.get(VIEW) === QUESTIONS_VIEW;
+  const filtered = query.trim() !== "";
+  const matchedDashboards = byName(dashboards, query);
+  const matchedQuestions = byName(questions, query);
+
+  return (
+    <>
+      <div className="body stack">
+        <ReportSearch query={query} />
+        <ReportViews
+          search={search}
+          showQuestions={showQuestions}
+          dashboards={matchedDashboards.length}
+          questions={matchedQuestions.length}
+        />
+      </div>
+      {showQuestions ? (
+        <QuestionBand
+          items={matchedQuestions}
+          base={base}
+          canAuthor={canAuthor}
+          filtered={filtered}
+        />
+      ) : (
+        <DashboardBand
+          items={matchedDashboards}
+          base={base}
+          canAuthor={canAuthor}
+          filtered={filtered}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The two lists as a plate pair, as the Models division's views are. Each keeps the rest of
+ * the address -- the search above all -- so switching lists keeps what was typed.
+ */
+function ReportViews({
+  search,
+  showQuestions,
+  dashboards,
+  questions,
+}: {
+  search: URLSearchParams;
+  showQuestions: boolean;
+  /** How many names the search matches in each list. */
+  dashboards: number;
+  questions: number;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const toDashboards = new URLSearchParams(search);
+  toDashboards.delete(VIEW);
+  const toQuestions = new URLSearchParams(search);
+  toQuestions.set(VIEW, QUESTIONS_VIEW);
+
+  return (
+    <nav aria-label={t("reports.viewsLabel")} className="langset">
+      <Link
+        className="plate plate--small"
+        to={{ search: toDashboards.toString() }}
+        {...(showQuestions ? {} : { "aria-current": "page" as const })}
+      >
+        {t("reports.viewDashboards", { count: dashboards })}
+      </Link>
+      <Link
+        className="plate plate--small"
+        to={{ search: toQuestions.toString() }}
+        {...(showQuestions ? { "aria-current": "page" as const } : {})}
+      >
+        {t("reports.viewQuestions", { count: questions })}
+      </Link>
+    </nav>
   );
 }
 
@@ -226,7 +318,9 @@ function QuestionTable({
             <td className="datum datum--quiet">
               {question.definition.kind === "visual" ? t("bi.kindVisual") : t("bi.kindSql")}
             </td>
-            <td className="datum datum--quiet">{question.chart.type}</td>
+            <td className="datum datum--quiet">
+              <ChartGlyph type={question.chart.type} />
+            </td>
             <td className="datum datum--quiet">{relativeTime(question.updatedAt, locale)}</td>
           </tr>
         ))}
@@ -262,13 +356,15 @@ function DashboardBand({
         ) : (
           <DashboardTable items={items} base={base} />
         )}
-        {canAuthor ? (
-          <div className="row">
+        <div className="row">
+          {canAuthor ? (
             <Link className="plate" to={`${base}/dashboards/new`}>
               {t("bi.newDashboard")}
             </Link>
-          </div>
-        ) : null}
+          ) : (
+            <span className="label">{t("reports.readOnly")}</span>
+          )}
+        </div>
       </div>
     </>
   );
@@ -299,13 +395,15 @@ function QuestionBand({
         ) : (
           <QuestionTable items={items} base={base} />
         )}
-        {canAuthor ? (
-          <div className="row">
+        <div className="row">
+          {canAuthor ? (
             <Link className="plate plate--primary" to={`${base}/questions/new`}>
               {t("bi.newQuestion")}
             </Link>
-          </div>
-        ) : null}
+          ) : (
+            <span className="label">{t("reports.readOnly")}</span>
+          )}
+        </div>
       </div>
     </>
   );

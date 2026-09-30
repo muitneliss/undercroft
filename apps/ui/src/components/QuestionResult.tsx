@@ -1,168 +1,184 @@
 /**
- * Run, Save, and what came back.
- *
- * An author runs the definition on screen (`bi.answer`); a viewer runs the SAVED question by
- * id (`bi.runQuestion`), because a viewer must not be able to send a definition of their own.
- * That is why there are two mutations rather than one with a flag, and it is a boundary
- * rather than a convenience -- the server refuses either way.
+ * What a question answers, and the Run plate that asks it again: on the reading page in the
+ * pane the address names, and on the workbench's right leaf beside how it is drawn. Which
+ * way the answer is asked is `useQuestionAnswer`'s.
  *
  * The chart is drawn from the result's own columns, with `raw` values a reader may read, and
- * beneath it every role gets the rows that drew it and a CSV of them (`ResultReading`).
+ * every role gets the rows that drew it and a CSV of them (`ResultReading`).
  */
 
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { ChartOptions } from "@/components/ChartOptions.tsx";
 import { Errata } from "@/components/Errata.tsx";
-import type { BoundParams } from "@/components/QuestionBands.tsx";
+import { DefinitionFacts } from "@/components/QuestionDefinition.tsx";
 import { ResultReading } from "@/components/ResultReading.tsx";
+import { Skeleton } from "@/components/Skeleton.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
-import { withPoint } from "@/lib/chartData.ts";
-import { isQuestionDirty, type QuestionDraft } from "@/lib/questionDraft.ts";
+import type { QuestionAnswer } from "@/components/useQuestionAnswer.ts";
+import { questionSql } from "@/lib/params.ts";
+import type { QuestionDraft } from "@/lib/questionDraft.ts";
+import { paneFromSearch, QUESTION_PANES, type QuestionPane, withPane } from "@/lib/questionPane.ts";
 import { useUiStore } from "@/store.ts";
-import type { trpc } from "@/trpc.ts";
 
-type Answer = ReturnType<typeof trpc.bi.answer.useMutation>;
-type RunSaved = ReturnType<typeof trpc.bi.runQuestion.useMutation>;
-type Save = ReturnType<typeof trpc.bi.questions.save.useMutation>;
+const PANE_KEY = {
+  chart: "bi.paneChart",
+  data: "bi.paneData",
+  definition: "bi.paneDefinition",
+} as const satisfies Record<QuestionPane, string>;
 
-/** What Run and Save do, held together because one request at a time is a page-wide fact. */
-export interface QuestionActions {
-  readonly answer: Answer;
-  readonly runSaved: RunSaved;
-  readonly save: Save;
-  readonly busy: boolean;
+/** The Run plate and, when the question did not run, the server's own words for why. */
+function RunRow({ reading, busy }: { reading: QuestionAnswer; busy: boolean }): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <>
+      <div className="row">
+        <button
+          className="plate plate--primary"
+          disabled={busy || reading.running || !reading.runnable}
+          type="button"
+          onClick={reading.run}
+        >
+          {reading.running ? t("bi.running") : t("bi.run")}
+        </button>
+      </div>
+      {reading.error === null ? null : (
+        <Errata heading={t("bi.notRun")} live={true} error={reading.error} />
+      )}
+    </>
+  );
 }
 
 /**
- * Run, Save, and what came back.
- *
- * An author runs the definition on screen (`bi.answer`); a viewer runs the SAVED question by
- * id (`bi.runQuestion`), because a viewer must not be able to send a definition of their own.
- * That is why there are two mutations rather than one with a flag.
+ * The answer on the reading page, in the pane the address names: the drawing or its rows.
+ * A first read in flight is set as type rather than left blank.
  */
-export function ResultBand({
-  tenantId,
+function ReadingPane({
   draft,
-  canAuthor,
+  reading,
   locale,
-  bound,
-  actions,
+  pane,
 }: {
-  tenantId: string;
   draft: QuestionDraft;
-  canAuthor: boolean;
+  reading: QuestionAnswer;
   locale: "vi" | "en";
-  bound: BoundParams;
-  actions: QuestionActions;
+  pane: Exclude<QuestionPane, "definition">;
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+  if (reading.result === undefined) {
+    return reading.running ? <Skeleton rows={4} /> : null;
+  }
+  return (
+    <ResultReading
+      result={reading.result}
+      chart={draft.chart}
+      locale={locale}
+      name={draft.name === "" ? t("bi.untitled") : draft.name}
+      pane={pane}
+    />
+  );
+}
+
+/**
+ * The workbench's right leaf: Run, how the result is drawn, and the result itself -- the
+ * drawing with its rows folded beneath, as an author checks a change against its answer.
+ */
+export function ResultLeaf({
+  draft,
+  reading,
+  locale,
+  busy,
+}: {
+  draft: QuestionDraft;
+  reading: QuestionAnswer;
+  locale: "vi" | "en";
+  busy: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const setQuestionChart = useUiStore((state) => state.setQuestionChart);
-  const [, setSearch] = useSearchParams();
-  const { answer, runSaved, save, busy } = actions;
+  const { result } = reading;
 
-  const result = canAuthor ? answer.data : runSaved.data;
-  const runError = canAuthor ? answer.error : runSaved.error;
-  const running = answer.isPending || runSaved.isPending;
+  return (
+    <section aria-label={t("bi.resultHead")} className="workbench__leaf">
+      <span className="label">{t("bi.resultHead")}</span>
+      <RunRow reading={reading} busy={busy} />
+      {result === undefined ? (
+        reading.running ? (
+          <Skeleton rows={4} />
+        ) : null
+      ) : (
+        <>
+          <ChartOptions columns={result.columns} chart={draft.chart} onChange={setQuestionChart} />
+          <ResultReading
+            result={result}
+            chart={draft.chart}
+            locale={locale}
+            name={draft.name === "" ? t("bi.untitled") : draft.name}
+            pane={null}
+          />
+        </>
+      )}
+    </section>
+  );
+}
 
-  function run(): void {
-    if (bound.missing.length > 0) {
-      return;
-    }
-    // A selected point names a row of the answer it was chosen on, not of the next one.
-    setSearch((current) => withPoint(current, null), { replace: true });
-    if (canAuthor) {
-      answer.mutate({ tenantId, definition: draft.definition, params: bound.params });
-    } else if (draft.id !== null) {
-      runSaved.mutate({ tenantId, questionId: draft.id, params: bound.params });
-    }
-  }
+/**
+ * The reading page's answer: the three panes as a plate pair, Run, and the pane the address
+ * names. Every pane keeps the rest of the address, so a pane switch keeps the parameters,
+ * the way back to a dashboard and a selected point.
+ */
+export function ReadingBand({
+  tenantId,
+  draft,
+  savedAt,
+  locale,
+  reading,
+  busy,
+}: {
+  tenantId: string;
+  draft: QuestionDraft;
+  savedAt: string | null;
+  locale: "vi" | "en";
+  reading: QuestionAnswer;
+  busy: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const [search] = useSearchParams();
+  const pane = paneFromSearch(search);
 
   return (
     <>
       <Separator className="band-rule" />
       <div className="head">{t("bi.resultHead")}</div>
       <div className="body stack">
-        <div className="row">
-          <button
-            className="plate plate--primary"
-            disabled={busy || bound.missing.length > 0 || (!canAuthor && draft.id === null)}
-            type="button"
-            onClick={run}
-          >
-            {running ? t("bi.running") : t("bi.run")}
-          </button>
-          {canAuthor ? (
-            <SaveButton tenantId={tenantId} draft={draft} save={save} busy={busy} />
-          ) : null}
-        </div>
-        {runError === null || runError === undefined ? null : (
-          <Errata heading={t("bi.notRun")} live={true} error={runError} />
-        )}
-        {save.isError ? <Errata heading={t("bi.notSaved")} live={true} error={save.error} /> : null}
-        {result === undefined ? null : (
+        <nav aria-label={t("bi.panesLabel")} className="plateset">
+          {QUESTION_PANES.map((candidate) => (
+            <Link
+              key={candidate}
+              className="plate plate--small"
+              to={{ search: withPane(search, candidate).toString() }}
+              {...(candidate === pane ? { "aria-current": "page" as const } : {})}
+            >
+              {t(PANE_KEY[candidate])}
+            </Link>
+          ))}
+        </nav>
+        {pane === "definition" ? (
+          <DefinitionFacts
+            tenantId={tenantId}
+            draft={draft}
+            sql={questionSql(draft.definition)}
+            savedAt={savedAt}
+            locale={locale}
+          />
+        ) : (
           <>
-            {canAuthor ? (
-              <ChartOptions
-                columns={result.columns}
-                chart={draft.chart}
-                onChange={setQuestionChart}
-              />
-            ) : null}
-            <ResultReading
-              result={result}
-              chart={draft.chart}
-              locale={locale}
-              name={draft.name === "" ? t("bi.untitled") : draft.name}
-            />
+            <RunRow reading={reading} busy={busy} />
+            <ReadingPane draft={draft} reading={reading} locale={locale} pane={pane} />
           </>
         )}
       </div>
-    </>
-  );
-}
-
-/** Save, and whether there is anything to save. An untitled question is saved as "untitled". */
-function SaveButton({
-  tenantId,
-  draft,
-  save,
-  busy,
-}: {
-  tenantId: string;
-  draft: QuestionDraft;
-  save: Save;
-  busy: boolean;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const dirty = isQuestionDirty(draft);
-
-  return (
-    <>
-      <button
-        className="plate"
-        disabled={busy || !dirty}
-        type="button"
-        onClick={(): void => {
-          save.mutate({
-            tenantId,
-            ...(draft.id === null ? {} : { id: draft.id }),
-            name: draft.name === "" ? t("bi.untitled") : draft.name,
-            definition: draft.definition,
-            chart: draft.chart,
-          });
-        }}
-      >
-        {save.isPending ? t("bi.saving") : t("bi.save")}
-      </button>
-      {dirty ? (
-        <span className="datum datum--quiet">{t("bi.unsaved")}</span>
-      ) : save.isSuccess ? (
-        <span className="datum datum--quiet" role="status">
-          {t("bi.savedNote")}
-        </span>
-      ) : null}
     </>
   );
 }

@@ -91,6 +91,23 @@ export function isQuestionDirty(draft: QuestionDraft): boolean {
   );
 }
 
+/**
+ * The saved question's id when the draft would be answered exactly as it is saved, else null.
+ *
+ * Narrower than "not dirty" on purpose: an answer depends on the definition alone, so a draft
+ * whose name or chart has changed still reads the saved question's answer -- redrawing a
+ * result as a bar instead of a line must not throw the result away. A never-saved draft, or
+ * one whose definition differs from what is saved, has no saved answer to read.
+ */
+export function savedAnswerId(draft: QuestionDraft): string | null {
+  if (draft.id === null || draft.saved === null) {
+    return null;
+  }
+  return JSON.stringify(draft.definition) === JSON.stringify(draft.saved.definition)
+    ? draft.id
+    : null;
+}
+
 /** The builder's definition with `patch` applied; unchanged when the question is SQL. */
 export function patchVisual(
   draft: QuestionDraft,

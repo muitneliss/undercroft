@@ -10,27 +10,12 @@
 import { CHART_TYPES, type ChartConfig, type ChartType } from "@undercroft/contracts/bi";
 import { useTranslation } from "react-i18next";
 
+import { CHART_TYPE_KEY } from "@/lib/chartTypes.ts";
 import { isNumericType } from "@/lib/plot.ts";
 import { useId } from "react";
 
-const TYPE_KEY = {
-  table: "chart.table",
-  number: "chart.number",
-  bar: "chart.bar",
-  line: "chart.line",
-  area: "chart.area",
-  pie: "chart.pie",
-  doughnut: "chart.doughnut",
-  scatter: "chart.scatter",
-  bubble: "chart.bubble",
-  radar: "chart.radar",
-  combo: "chart.combo",
-  funnel: "chart.funnel",
-  gauge: "chart.gauge",
-  progress: "chart.progress",
-  pivot: "chart.pivot",
-  map: "chart.map",
-} as const;
+/** The drawings offered first. The rest of `CHART_TYPES` sits in the fold, in its order. */
+const COMMON_TYPES: readonly ChartType[] = ["table", "number", "bar", "line", "area"];
 
 const NONE = "";
 /** Types that take a maximum: the reading is a share of it. */
@@ -50,16 +35,16 @@ export function ChartOptions({
 
   return (
     <div className="stack stack--tight">
-      {/* Every child here renders a `.field`, one component deep -- see `TypeSelect`
+      <TypePlates
+        type={chart.type}
+        onPick={(type): void => {
+          onChange({ ...chart, type });
+        }}
+      />
+      {/* Every child here renders a `.field`, one component deep -- see `ColumnSelect`
           below. The class is written out because the markup should say so; the
           `:has(> .field)` net in index.css is what would carry it if it were not. */}
       <div className="row row--field">
-        <TypeSelect
-          type={chart.type}
-          onPick={(type): void => {
-            onChange({ ...chart, type });
-          }}
-        />
         <ColumnSelect
           label={t("chart.xLabel")}
           value={chart.x ?? NONE}
@@ -89,8 +74,14 @@ export function ChartOptions({
   );
 }
 
-/** Which of the sixteen drawings. The catalogue names them; `CHART_TYPES` orders them. */
-function TypeSelect({
+/**
+ * Which of the sixteen drawings (ADR 0020): the five a reader reaches for first as plates,
+ * the other eleven in a fold beneath them. All sixteen stay one press away -- the fold only
+ * orders them -- and it opens by itself when the question is already drawn as one of the
+ * eleven, so the chosen type is never hidden behind a closed fold. Keyed on that, so moving
+ * between the two sets re-seeds it rather than leaving it as the reader last left it.
+ */
+function TypePlates({
   type,
   onPick,
 }: {
@@ -98,32 +89,34 @@ function TypeSelect({
   onPick: (type: ChartType) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const chartTypeId = useId();
+  const others = CHART_TYPES.filter((candidate) => !COMMON_TYPES.includes(candidate));
+  const inFold = !COMMON_TYPES.includes(type);
 
-  return (
-    <div className="field">
-      <label className="label" htmlFor={chartTypeId}>
-        {t("chart.typeLabel")}
-      </label>
-      <select
-        className="input input--select"
-        id={chartTypeId}
-        value={type}
-        onChange={(event): void => {
-          const chosen = event.currentTarget.value;
-          const picked = CHART_TYPES.find((candidate) => candidate === chosen);
-          if (picked !== undefined) {
-            onPick(picked);
-          }
+  function plate(candidate: ChartType): React.JSX.Element {
+    return (
+      <button
+        key={candidate}
+        aria-pressed={candidate === type}
+        className="plate plate--small"
+        type="button"
+        onClick={(): void => {
+          onPick(candidate);
         }}
       >
-        {CHART_TYPES.map((candidate) => (
-          <option key={candidate} value={candidate}>
-            {t(TYPE_KEY[candidate])}
-          </option>
-        ))}
-      </select>
-    </div>
+        {t(CHART_TYPE_KEY[candidate])}
+      </button>
+    );
+  }
+
+  return (
+    <fieldset className="stack stack--tight">
+      <legend className="label">{t("chart.typeLabel")}</legend>
+      <div className="plateset">{COMMON_TYPES.map(plate)}</div>
+      <details key={inFold ? "fold-open" : "fold-shut"} className="tokenform" open={inFold}>
+        <summary className="plate plate--small">{t("chart.otherTypes")}</summary>
+        <div className="plateset">{others.map(plate)}</div>
+      </details>
+    </fieldset>
   );
 }
 

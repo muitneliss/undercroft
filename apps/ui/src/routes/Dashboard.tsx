@@ -7,8 +7,9 @@
  * mid-edit lands back in edit mode with the draft still held. Every tile reads its answer
  * through the query cache; nothing on this leaf runs a query itself.
  *
- * A member or an admin edits: the name, the filters, which questions are on and where.
- * A viewer reads what was made for them.
+ * A member or an admin edits: the name, the filters, which questions are on, where, and in
+ * what order they are read. Discard puts the draft back to what the server holds. A viewer
+ * reads what was made for them; every role can copy the dashboard's link or print it.
  */
 
 import { type DashboardFilter, IDENTIFIER } from "@undercroft/contracts/bi";
@@ -16,11 +17,12 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import type { QuestionView } from "@/api/types.ts";
+import type { DashboardView, QuestionView } from "@/api/types.ts";
 import { DashboardHead, DeleteBand, TilesBand } from "@/components/DashboardBands.tsx";
 import { FilterEditor } from "@/components/DashboardFilterEditor.tsx";
 import { DashboardFilters } from "@/components/DashboardFilters.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { ReadingOrder } from "@/components/ReadingOrder.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import {
   type DashboardDraft,
@@ -30,6 +32,8 @@ import {
 import { divisionPath } from "@/lib/divisions.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
+
+import "@/styles/reports.css";
 
 const NEW = "new";
 const EDIT = "edit";
@@ -99,6 +103,7 @@ export function Dashboard({ tenantId }: { tenantId: string }): React.JSX.Element
     <DashboardLeaf
       tenantId={tenantId}
       draft={held}
+      stored={dashboard.data ?? null}
       questions={questions.data}
       canAuthor={tenant.data.role !== "viewer"}
       locale={locale}
@@ -129,9 +134,44 @@ function filtersValid(filters: readonly DashboardFilter[]): boolean {
   );
 }
 
+/**
+ * Turning between reading and editing, and Discard: the two verbs that move the leaf rather
+ * than send anything. Edit mode is written to the address -- not the store, so a reload
+ * mid-edit lands back in it. Discard re-seeds the draft from what the server holds, or -- for
+ * a dashboard never saved -- drops it and leaves, there being nothing to return to.
+ */
+function useLeafTurns(
+  tenantId: string,
+  stored: DashboardView | null,
+): { onEdit: (on: boolean) => void; onDiscard: () => void } {
+  const [search, setSearch] = useSearchParams();
+  const setDashboardDraft = useUiStore((state) => state.setDashboardDraft);
+  const navigate = useNavigate();
+  return {
+    onEdit: (on): void => {
+      const next = new URLSearchParams(search);
+      if (on) {
+        next.set(EDIT, "1");
+      } else {
+        next.delete(EDIT);
+      }
+      setSearch(next);
+    },
+    onDiscard: (): void => {
+      if (stored === null) {
+        setDashboardDraft(null);
+        void navigate(divisionPath("reports", tenantId));
+      } else {
+        setDashboardDraft(draftFromDashboard(tenantId, stored));
+      }
+    },
+  };
+}
+
 function DashboardLeaf({
   tenantId,
   draft,
+  stored,
   questions,
   canAuthor,
   locale,
@@ -140,6 +180,8 @@ function DashboardLeaf({
 }: {
   tenantId: string;
   draft: DashboardDraft;
+  /** What the server holds, which Discard returns to; null for a dashboard never saved. */
+  stored: DashboardView | null;
   questions: QuestionView[];
   canAuthor: boolean;
   locale: "vi" | "en";
@@ -149,6 +191,7 @@ function DashboardLeaf({
   const { t } = useTranslation();
   const [search, setSearch] = useSearchParams();
   const markDashboardSaved = useUiStore((state) => state.markDashboardSaved);
+  const turns = useLeafTurns(tenantId, stored);
 
   const save = trpc.bi.dashboards.save.useMutation({
     onSuccess: async (saved) => {
@@ -158,13 +201,12 @@ function DashboardLeaf({
   });
   const remove = trpc.bi.dashboards.delete.useMutation({ onSuccess: onDeleted });
 
-  // Edit mode lives in the URL, not the store: a reload mid-edit lands back in it.
   const edit = canAuthor && search.get(EDIT) === "1";
   const valid = filtersValid(draft.filters);
   const busy = save.isPending || remove.isPending;
 
   return (
-    <div className="sheet">
+    <div className="sheet sheet--dashboard">
       <div className="head head--division">{t("reports.head")}</div>
 
       <DashboardHead
@@ -175,15 +217,8 @@ function DashboardLeaf({
         valid={valid}
         busy={busy}
         save={save}
-        onEdit={(on): void => {
-          const next = new URLSearchParams(search);
-          if (on) {
-            next.set(EDIT, "1");
-          } else {
-            next.delete(EDIT);
-          }
-          setSearch(next);
-        }}
+        onEdit={turns.onEdit}
+        onDiscard={turns.onDiscard}
       />
 
       {edit ? (
@@ -191,6 +226,7 @@ function DashboardLeaf({
           <div className="band-rule" />
           <div className="head">{t("dashboard.filtersEditHead")}</div>
           <FilterEditor filters={draft.filters} valid={valid} />
+          <ReadingOrder layout={draft.layout} questions={questions} locale={locale} />
         </>
       ) : null}
 
