@@ -27,6 +27,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
+import { lineagePath } from "@/lib/lineage.ts";
 import { draftFrom, isDirty, type ModelDraft, testsFor } from "@/lib/modelDraft.ts";
 import { ON_TABLE } from "@/lib/questionDraft.ts";
 import { useUiStore } from "@/store.ts";
@@ -216,6 +217,9 @@ function EditorBand({
       <div className="row">
         <Link className="plate plate--small" to={divisionPath("models", tenantId)}>
           {t("models.backToList")}
+        </Link>
+        <Link className="plate plate--small" to={lineagePath(tenantId, name)}>
+          {t("models.openLineage")}
         </Link>
         {queryable ? (
           <Link

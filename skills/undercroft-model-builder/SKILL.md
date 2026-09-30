@@ -59,8 +59,8 @@ These hold for the whole workflow. None of them bends because the person is in a
 
 ## Who can do what
 
-- Anyone who can see the customer may run `models.list`, `models.get`, `models.reference`
-  and `models.check`, and `macros.list`, `macros.get` and `macros.check`.
+- Anyone who can see the customer may run `models.list`, `models.get`, `models.reference`,
+  `models.check` and `models.lineage`, and `macros.list`, `macros.get` and `macros.check`.
 - Reading the raw lake (`lake.records`, `lake.querySchema`, `lake.query`), saving and
   building a model (`models.save`, `models.build`) and saving a macro (`macros.save`) need
   the `admin` role.
@@ -81,6 +81,8 @@ halfway through.
   project carries.
 - Read `lake.summary` for the sources and entities the lake holds, and how many records
   each has.
+- Before changing a model, read `models.lineage` for the models that `ref` it: they read
+  what it builds. It lists only what the models declare, and says so where it cannot read one.
 
 ### 2. Interview
 

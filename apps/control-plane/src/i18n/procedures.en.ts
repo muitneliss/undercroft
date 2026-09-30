@@ -66,6 +66,8 @@ export const procedureSentences: SentenceTable = {
   "models.delete":
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
   "models.build": "Build one model with dbt and wait for the answer. Admins.",
+  "models.lineage":
+    "Which models read which models and raw lake tables, from the models' and macros' own ref() and source() declarations; no relation is inferred.",
   "models.reference":
     "Reference material for a model's author: the sources, the platform's macros and the customer's own.",
   "models.check":

@@ -1282,6 +1282,13 @@ export const vi = {
     buildFailed: "Dựng lỗi",
     neverBuilt: "Chưa dựng",
     buildOther: "{{status}}",
+    buildOtherState: "Kết quả khác",
+    viewsLabel: "Cách xem các mô hình",
+    viewList: "Danh sách",
+    viewLineage: "Dòng dữ liệu",
+    tallyLabel: "Lọc danh sách theo lần dựng gần nhất",
+    tallyAll: "Mọi mô hình",
+    captionFiltered_other: "{{shown, number}} / {{count, number}} mô hình · {{state}}",
     newHead: "Tạo mô hình mới",
     newLead:
       "Mô hình mới bắt đầu từ một ví dụ hoàn chỉnh: bảng deals của HubSpot, chiếu ra từ raw.records. Đổi bộ lọc và các cột là thành mô hình của bạn.",
@@ -1292,6 +1299,7 @@ export const vi = {
     creating: "Đang tạo…",
     notCreated: "Chưa tạo được mô hình",
     editorNotLoaded: "Không tải được mô hình {{name}}.",
+    openLineage: "Xem thượng nguồn",
     backToList: "Mọi mô hình",
     unsaved: "Có thay đổi chưa lưu.",
     savedNote: "Đã lưu. Bảng chỉ đổi khi bạn Dựng.",
@@ -1340,6 +1348,41 @@ export const vi = {
   },
 
   /** A query result as a table: the same words for a preview, a failing-rows read, a question. */
+  lineage: {
+    notLoaded: "Không tải được dòng dữ liệu của {{tenantId}}.",
+    empty:
+      "Dòng dữ liệu được vẽ từ các mô hình. Khi đã có mô hình, mỗi quan hệ nó khai báo sẽ hiện ở đây.",
+    lead: "Chỉ vẽ quan hệ đọc từ khai báo của chính các mô hình: ref() giữa hai mô hình, và bảng hồ thô được khai báo làm nguồn dbt bằng source(), kể cả qua macro. Không suy từ tên giống nhau, bộ lọc hay dữ liệu, nên ở đây không có tài khoản nguồn hay báo cáo nào. Chọn một mô hình để tô cả chuỗi thượng nguồn của nó.",
+    pickLabel: "Mô hình",
+    pickNone: "Không chọn",
+    pick: "Tô thượng nguồn",
+    clear: "Bỏ chọn",
+    unknownModel: "Không có mô hình nào tên {{name}}.",
+    drawingLabel: "Sơ đồ dòng dữ liệu; các quan hệ này có cả dạng chữ ở bên dưới",
+    rawTable: "Bảng hồ thô",
+    missing: "Phụ thuộc bị thiếu",
+    undeclared: "Thượng nguồn chưa khai báo",
+    selected: "Đang chọn",
+    onChain: "Thượng nguồn",
+    rawTableLong: "Bảng hồ thô, được khai báo làm nguồn dbt. Mở trong Hồ thô.",
+    missingLong:
+      "Một ref tới mô hình không còn tồn tại. Lần dựng tới của mô hình ref nó sẽ lỗi và nói lý do.",
+    readsNothing: "Không khai báo đọc gì.",
+    reads: "Đọc: {{names}}",
+    readVia: "{{name}} (qua macro {{via}})",
+    allHead: "Mỗi mô hình và những gì nó đọc",
+    chainHead_other: "Thượng nguồn của {{name}}: {{count, number}} nút",
+    reasonDynamic:
+      "Một {{subject}}() có đối số không phải chuỗi cố định, nên không đọc được nó trỏ tới đâu.",
+    reasonDynamicVia: "Trong macro {{via}}: một {{subject}}() có đối số không phải chuỗi cố định.",
+    reasonUnknownMacro: "Gọi {{subject}}, một macro mà dự án không có.",
+    reasonUnknownMacroVia: "Trong macro {{via}}: gọi {{subject}}, một macro mà dự án không có.",
+    reasonDirect: "Gọi thẳng {{subject}}, không qua ref() hay source().",
+    reasonDirectVia: "Trong macro {{via}}: gọi thẳng {{subject}}, không qua ref() hay source().",
+    reasonQuery: "Chạy truy vấn từ Jinja bằng {{subject}}(); điều nó đọc nằm trong một chuỗi.",
+    reasonQueryVia:
+      "Trong macro {{via}}: chạy truy vấn từ Jinja bằng {{subject}}(); điều nó đọc nằm trong một chuỗi.",
+  },
   result: {
     caption_other: "{{count, number}} dòng",
     truncated: "Còn nhiều dòng hơn; chỉ hiện {{count, number}} dòng đầu.",
