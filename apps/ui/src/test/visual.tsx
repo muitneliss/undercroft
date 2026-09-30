@@ -52,6 +52,9 @@ const SHELL: Answers = {
   "config.signIn": { methods: ["email-otp"] },
 };
 
+/** How long a screen may take to settle: well inside the test's own 15 s, far past a chunk load. */
+const SETTLE_MS = 10_000;
+
 /** A mounted screen, and the one thing a visual test does with it. */
 export interface Screen {
   matches: (name: string, width: number) => Promise<void>;
@@ -100,6 +103,35 @@ function network(
   };
 }
 
+/** Two animation frames: long enough for a resize to be laid out and painted. */
+async function frames(): Promise<void> {
+  for (const _ of [1, 2]) {
+    await new Promise((resolve) => {
+      requestAnimationFrame(resolve);
+    });
+  }
+}
+
+/** How many times the viewport is refitted before the page is taken as it stands. */
+const FIT_TRIES = 8;
+
+/**
+ * Make the viewport exactly as tall as the page, and keep making it so until the page stops
+ * changing height. One read was not enough: the page narrowed from the previous test's width
+ * was once measured before it had grown, and a lineage at 390 px was captured 323 px short,
+ * cut off above its paths.
+ */
+async function fitToPage(width: number): Promise<void> {
+  for (let tries = 0; tries < FIT_TRIES; tries += 1) {
+    const height = document.documentElement.scrollHeight;
+    await page.viewport(width, height);
+    await frames();
+    if (document.documentElement.scrollHeight === height) {
+      return;
+    }
+  }
+}
+
 /** A query's input, which tRPC sends in the address; this tier answers queries, not mutations. */
 function inputOf(url: URL): unknown {
   const sent = url.searchParams.get("input");
@@ -119,6 +151,12 @@ function inputOf(url: URL): unknown {
  * every lazy division's fallback here announces itself. Motion needs no wait: `visual.css`
  * takes it out. The window is put back at its top before the picture, so a page something
  * scrolled on arrival is still drawn from its first line.
+ *
+ * The wait for settling is long on purpose. The first screen of a file to draw a chart or an
+ * editor fetches that lazy chunk, and inside the emulated container that took over the poll's
+ * default second -- the test then failed with the skeleton still busy, on a busy machine and
+ * not on an idle one. A picture of a skeleton is never what a test means; waiting costs
+ * nothing when the page settles sooner.
  */
 async function matches(
   name: string,
@@ -127,12 +165,15 @@ async function matches(
   refused: string[],
 ): Promise<void> {
   await page.viewport(width, 900);
+  await frames();
   await expect
-    .poll(() => client.isFetching() + document.querySelectorAll("[aria-busy='true']").length)
+    .poll(() => client.isFetching() + document.querySelectorAll("[aria-busy='true']").length, {
+      timeout: SETTLE_MS,
+    })
     .toBe(0);
   await document.fonts.ready;
   expect(refused, "procedures the fixtures do not answer").toEqual([]);
-  await page.viewport(width, document.documentElement.scrollHeight);
+  await fitToPage(width);
   globalThis.scrollTo(0, 0);
   await expect(page).toMatchScreenshot(name, { screenshotOptions: { animations: "disabled" } });
 }
