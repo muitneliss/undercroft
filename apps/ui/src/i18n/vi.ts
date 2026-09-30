@@ -203,9 +203,12 @@ export const vi = {
     lead: "Mở một hồ sơ để xem nguồn dữ liệu, nhật ký và báo cáo.",
     searchLabel: "Tìm khách hàng",
     searchPlaceholder: "Tìm tên khách hàng hoặc mã hồ sơ",
-    clearSearch: "Xóa tìm kiếm",
+    /** The filter by the reader's own role; the options are the role values, untranslated. */
+    roleLabel: "Vai trò của bạn",
+    roleAny: "Mọi vai trò",
+    clearFilters: "Xóa bộ lọc",
     noMatches:
-      "Không có khách hàng phù hợp. Thử tên hoặc mã khác, hoặc xóa tìm kiếm để xem tất cả.",
+      "Không có khách hàng phù hợp. Thử tên, mã hoặc vai trò khác, hoặc xóa bộ lọc để xem tất cả.",
     colAction: "Hành động",
     open: "Mở",
     openNamed: "Mở hồ sơ {{name}}",
@@ -653,6 +656,11 @@ export const vi = {
     colRemove: "Quyền truy cập",
     remove: "Gỡ…",
     removeConfirm: "Gỡ {{email}}",
+    /**
+     * The customer's only admin, whom the server refuses to demote or remove. Worded for every
+     * reader, so it says what cannot happen and what would change that, not who should act.
+     */
+    lastAdmin: "Admin cuối cùng — không hạ vai trò hay gỡ được cho đến khi có thêm một admin.",
     removing: "Đang gỡ…",
     removed: "{{email}} không còn quyền truy cập.",
     notRemoved: "Chưa gỡ được",
@@ -663,7 +671,8 @@ export const vi = {
     colInvitedAs: "Được mời với vai trò",
     colExpires: "Hết hạn",
     colWithdraw: "Thu hồi",
-    withdraw: "Thu hồi",
+    withdraw: "Thu hồi…",
+    withdrawConfirm: "Thu hồi lời mời gửi {{email}}",
     withdrawing: "Đang thu hồi…",
     notWithdrawn: "Chưa thu hồi được",
 
@@ -672,9 +681,18 @@ export const vi = {
     inviteHint:
       "Họ phải đăng nhập bằng đúng địa chỉ này. Lời mời không phải là mật khẩu — nó không cấp gì cho đến khi họ chứng minh mình kiểm soát hòm thư.",
     roleLabel: "Vai trò",
-    roleViewer: "viewer — chỉ xem",
-    roleMember: "member — có thể tạo câu hỏi và bảng điều khiển",
-    roleAdmin: "admin — có thể kết nối tài khoản và mời người khác",
+    /**
+     * What each role may do in this customer, one entry per role. Each says what the router's
+     * gates allow and refuse and nothing more (`requireRole` in `apps/control-plane/src/handlers`);
+     * a gate that moves makes its sentence false, so the two change in one commit.
+     */
+    rightsLabel: "Mỗi vai trò được làm gì trong {{tenantId}}",
+    rightsViewer:
+      "Xem các nguồn đã kết nối, nhật ký chạy, tổng quan hồ dữ liệu thô, các mô hình và macro, danh mục loại tài liệu, ai có quyền truy cập và ai đang được mời; mở và chạy các câu hỏi và bảng điều khiển đã lưu. Không soạn hay lưu được câu hỏi, và không thay đổi được gì khác.",
+    rightsMember:
+      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xóa câu hỏi và bảng điều khiển. Không kết nối tài khoản, không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không mời hay gỡ người khác.",
+    rightsAdmin:
+      "Mọi điều member làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại; lưu, xóa và dựng mô hình, lưu và xóa macro; sửa và publish danh mục loại tài liệu; tạo và thu hồi khóa nạp dữ liệu; mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đổi tên khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
     notInvited: "Chưa mời được",
     invitedAndEmailed: "Đã mời {{email}}. Email đã được gửi cho họ.",
     invitedNotEmailedHeading: "Đã mời, nhưng chưa gửi được email",
