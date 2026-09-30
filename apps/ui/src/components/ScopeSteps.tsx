@@ -105,7 +105,7 @@ export function ScopeReview({
       {loadError === null ? null : (
         <Errata heading={t("common.notLoaded")} live={true} error={loadError} />
       )}
-      <table className="table">
+      <table className="table--words table">
         <caption>{t("scopePicker.reviewHead")}</caption>
         <thead>
           <tr>
