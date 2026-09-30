@@ -139,7 +139,10 @@ None of these files is signed. [Check the download](#unsigned-downloads) against
   choose _Open_, then _Open_ again; or, on macOS 15 and later, open it once, then go to _System
   Settings > Privacy & Security_ and choose _Open Anyway_. From a terminal,
   `xattr -dr com.apple.quarantine /Applications/Undercroft.app` does the same. On its first
-  start the app unpacks itself into `~/Library/Application Support/link.lowbit.undercroft/`.
+  start the app unpacks itself into `~/Library/Application Support/link.lowbit.undercroft/`,
+  and a small _Undercroft Setup_ window saying _Installation complete_ stays behind the wizard
+  until you choose _Close_. It belongs to Electrobun, the framework the app is built with, which
+  gives the app no way to close it, and quitting Undercroft does not close it either.
 - **Windows.** Unzip the file and run the Setup program inside. SmartScreen says it does not
   recognise the app: choose _More info_, then _Run anyway_.
 - **Linux.** Unpack the `.tar.gz` and run the setup program inside. No extra step. The app needs
@@ -165,8 +168,9 @@ install, done. What differs in a window:
 - **Done** has _Open Undercroft_, which opens `http://localhost:<port>` for a desktop install,
   where you arrive signed in as the owner.
 
-Closing the window leaves Undercroft running. Opening the app again when it is installed
-starts Undercroft if it is stopped and opens it in your browser, without the wizard.
+Closing the window before anything is installed quits the app. Once there is an install,
+closing it leaves the app in the tray, and Undercroft running. Opening the app again when it is
+installed starts Undercroft if it is stopped and opens it in your browser, without the wizard.
 
 ### The tray
 
@@ -184,6 +188,14 @@ starts Undercroft if it is stopped and opens it in your browser, without the wiz
 
 After an update, _Start_ moves the install to the new release: the app installs its own
 release, as the terminal wizard does.
+
+**Quitting** -- _Quit_ in the tray, Cmd+Q, or the system quitting the app -- closes the app and
+leaves Undercroft running in Docker; _Stop_ is what stops Undercroft. A quit in the middle of an
+install or a start stops that step first, so no Docker command is left running without the app.
+Nothing is lost: _Start_, or opening the app again, runs the step again, and Docker keeps what it
+had already downloaded. A script that quits the app with
+`osascript -e 'tell application "Undercroft" to quit'` is told `User canceled (-128)`, and the
+app quits all the same.
 
 ### Removing the app
 
