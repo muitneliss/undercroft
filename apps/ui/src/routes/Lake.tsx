@@ -84,6 +84,11 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
               }
             : {})}
         />
+        {/* Why the index is all a member or viewer gets. Without it the bands an admin reads
+            below are simply absent, which reads as a lake with nothing more in it rather than
+            one whose rows are an admin's. Only once there is something landed to be kept from
+            them: over an empty lake the sentence would promise rows that do not exist. */}
+        {!isAdmin && streams.length > 0 ? <p className="note">{t("lake.adminOnlyNote")}</p> : null}
       </div>
 
       <div className="band-rule" />

@@ -467,6 +467,12 @@ export const en = {
     live: "Present",
     deletedOn: "Deleted {{when}}",
     showPayload: "Show payload",
+    copyPayload: "Copy original string",
+    payloadCopied: "Original string copied.",
+    copyBlocked:
+      "The browser blocked the clipboard. Select the payload above and copy it by hand; no data was changed.",
+    adminOnlyNote:
+      "You can read this summary. Raw records, content search and the SQL console require administrator access.",
     noRows: "This stream has no records yet.",
 
     runRows: "Only the rows that still carry run {{runId}}.",
@@ -981,6 +987,11 @@ export const en = {
     filteredEmpty: "{{source}} has no runs yet.",
     scopeAtStart: "Scope it read with",
     openWritten: "Open the records this run wrote to {{entity}}, in the raw lake",
+    accountLabel: "Source account",
+    allAccounts: "All accounts",
+    target: "Target",
+    otherRuns: "Other runs of this account",
+    inspectUpstream: "Inspect upstream",
 
     reason: {
       imageTooSmall: "Image too small to be a document",

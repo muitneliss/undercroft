@@ -12,7 +12,8 @@
  * A payload is printed from the string the server sent, never re-parsed: JSON.parse would
  * turn every number into a float, and a browser that shows `12345678901234567000` where the
  * source said `12345678901234567890` is worse than one that shows nothing. Native
- * `<details>` holds whether it is open -- a disclosure is not application state.
+ * `<details>` holds whether it is open -- a disclosure is not application state. The copy plate
+ * inside it hands the clipboard that same string, for the same reason.
  *
  * Admin-only, decided by the route and enforced by the server; this file only draws.
  *
@@ -22,6 +23,7 @@
  * as everything the run wrote -- and says nothing it cannot compute.
  */
 
+import { useMutation } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
@@ -93,6 +95,54 @@ function RunNarrowing({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One row's payload, folded, with the way to take the original string away.
+ *
+ * The copy is the server's string as it arrived, never parsed and re-printed -- a round trip
+ * through `JSON.parse` is exactly what this browser refuses for display. It is a mutation, as
+ * `OneTimeSecret`'s is, because the clipboard call is the one thing that knows whether it
+ * worked: a browser may refuse it (no permission, an insecure origin), and the fold then says so
+ * and points at the text above, which stays selectable. Its state is the fold's own and goes
+ * with it; nothing else wants to know a copy happened.
+ */
+function PayloadFold({ payload }: { payload: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  const copy = useMutation({
+    mutationFn: (text: string) => navigator.clipboard.writeText(text),
+  });
+
+  return (
+    <details className="payload">
+      <summary className="plate plate--small">{t("lake.showPayload")}</summary>
+      <div className="stack stack--tight">
+        <pre className="payload__text">{payload}</pre>
+        <div className="row">
+          <button
+            className="plate plate--small"
+            type="button"
+            disabled={copy.isPending}
+            onClick={(): void => {
+              copy.mutate(payload);
+            }}
+          >
+            {t("lake.copyPayload")}
+          </button>
+          {copy.isSuccess ? (
+            <p className="note" role="status">
+              {t("lake.payloadCopied")}
+            </p>
+          ) : null}
+          {copy.isError ? (
+            <p className="note" role="status">
+              {t("lake.copyBlocked")}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -171,10 +221,7 @@ function RecordsTable({
             <TableRow key={row.sourceRecordId}>
               <TableCell>
                 <span className="datum">{row.sourceRecordId}</span>
-                <details className="payload">
-                  <summary className="plate plate--small">{t("lake.showPayload")}</summary>
-                  <pre className="payload__text">{row.payload}</pre>
-                </details>
+                <PayloadFold payload={row.payload} />
               </TableCell>
               <TableCell className="datum datum--quiet">
                 {formatDateTime(row.observedAt, locale)}

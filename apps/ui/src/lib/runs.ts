@@ -22,6 +22,7 @@ import {
   isSource,
   type RunDetail,
   type RunView,
+  type Source,
   SOURCE_LABEL,
 } from "@/api/types.ts";
 import { type CardFacts, scopeSummary } from "@/lib/connectionState.ts";
@@ -112,6 +113,32 @@ export function runScopeSummary(
     return null;
   }
   return scopeSummary(t, kind, run.scope);
+}
+
+/**
+ * What a run acted on, where the book keeps it: the account an ingest read, or the one model a
+ * build from the editor built. `null` for a run with no single target -- a scheduled build of
+ * every model, a pass over documents -- which the leaf then does not name at all.
+ *
+ * A one-model build names its model nowhere but in the step dbt recorded for it: the editor's
+ * `--select` is not stored on the run, and `lastBuildPerModel` joins a model to its builds the
+ * same way. A build that recorded no single model step (dbt stopped before it compiled one) has
+ * a target this cannot name, so its `name` is `null` -- printed as MISSING, never guessed.
+ */
+export type RunTarget =
+  | { readonly kind: "source"; readonly source: string; readonly sourceKind: Source }
+  | { readonly kind: "model"; readonly name: string | null };
+
+export function runTarget(run: Pick<RunDetail, "kind" | "source" | "steps">): RunTarget | null {
+  if (run.kind === "build") {
+    const models = run.steps.filter((step) => step.kind === "model");
+    return { kind: "model", name: models.length === 1 ? (models[0]?.name ?? null) : null };
+  }
+  if (run.kind !== "ingest" || run.source === null) {
+    return null;
+  }
+  const sourceKind = parseSourceInstance(run.source)?.kind;
+  return isSource(sourceKind) ? { kind: "source", source: run.source, sourceKind } : null;
 }
 
 /**

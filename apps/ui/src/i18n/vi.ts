@@ -590,6 +590,20 @@ export const vi = {
     live: "Còn",
     deletedOn: "Đã xoá {{when}}",
     showPayload: "Xem nội dung",
+    /**
+     * Sao chép đúng chuỗi máy chủ gửi, không phân tích lại. Trình duyệt có thể chặn clipboard,
+     * nên trang nói điều đã thực sự xảy ra thay vì coi như đã chép.
+     */
+    copyPayload: "Sao chép chuỗi gốc",
+    payloadCopied: "Đã sao chép nguyên chuỗi.",
+    copyBlocked:
+      "Trình duyệt chặn clipboard. Hãy chọn nội dung ở trên và sao chép thủ công; không dữ liệu nào bị sửa.",
+    /**
+     * Nói với viewer và member vì sao họ chỉ thấy bảng tổng quan: không có câu này, các mục của
+     * quản trị viên chỉ đơn giản là vắng mặt, và đọc như hồ dữ liệu không còn gì thêm.
+     */
+    adminOnlyNote:
+      "Bạn xem được bảng tổng quan này. Bản ghi thô, tìm nội dung và truy vấn SQL chỉ dành cho quản trị viên.",
     noRows: "Luồng này chưa có bản ghi nào.",
 
     /**
@@ -1187,6 +1201,16 @@ export const vi = {
      */
     scopeAtStart: "Phạm vi lúc chạy",
     openWritten: "Xem các bản ghi lần chạy này đã ghi vào {{entity}}, trong hồ dữ liệu thô",
+    /** Ô chọn tài khoản phía trên bảng, chỉ hiện khi khách hàng có từ hai kết nối trở lên. */
+    accountLabel: "Tài khoản nguồn",
+    allAccounts: "Mọi tài khoản",
+    /**
+     * Lần chạy tác động lên cái gì: tài khoản nguồn của một lần đọc, hoặc mô hình của một lần
+     * dựng thử. Tên mô hình lấy từ bước dbt đã ghi; không có bước nào thì in gạch ngang.
+     */
+    target: "Đối tượng",
+    otherRuns: "Các lần chạy khác của tài khoản này",
+    inspectUpstream: "Xem thượng nguồn",
 
     /**
      * Lời cho từng mã lý do mà worker ghi lại.
