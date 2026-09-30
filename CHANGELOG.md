@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.54.0](https://github.com/muitneliss/undercroft/compare/v1.53.0...v1.54.0) (2026-09-30)
+
+
+### Features
+
+* **blog:** a bilingual Astro blog on GitHub Pages, found by the searches Undercroft answers (ADR 0089) ([#344](https://github.com/muitneliss/undercroft/issues/344)) ([22d26df](https://github.com/muitneliss/undercroft/commit/22d26dfe19c73f23fb64c47f00667e4c5259c7cb))
+* **ui:** the catalogue of document kinds, as a page of the lake (ADR 0085) ([#351](https://github.com/muitneliss/undercroft/issues/351)) ([0d5c2d6](https://github.com/muitneliss/undercroft/commit/0d5c2d62713810c94cf9459e94904d438a79180c))
+
 ## [1.53.0](https://github.com/muitneliss/undercroft/compare/v1.52.1...v1.53.0) (2026-09-29)
 
 
