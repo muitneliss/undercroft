@@ -5,10 +5,16 @@
  * and how it is drawn; a dashboard puts questions together under shared filters. Members
  * and admins author; a viewer reads what was made for them. The plate that starts a new
  * question is hidden from a viewer as courtesy; the server refuses regardless.
+ *
+ * One search finds either by name, accents ignored (`lib/reportSearch.ts`); the query lives
+ * in the address, so a filtered list is a link. The time beside each is when its DEFINITION
+ * was last saved, and is named so: it says nothing about how fresh the data under it is,
+ * and a column headed "Updated" was read as exactly that.
  */
 
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import type { DashboardItem, QuestionItem } from "@/api/types.ts";
 import { EmptyState } from "@/components/EmptyState.tsx";
@@ -16,6 +22,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { formatCount } from "@/lib/money.ts";
+import { byName, REPORT_QUERY } from "@/lib/reportSearch.ts";
 import { relativeTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -25,6 +32,8 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
   const questions = trpc.bi.questions.list.useQuery({ tenantId });
   const dashboards = trpc.bi.dashboards.list.useQuery({ tenantId });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
+  const [search] = useSearchParams();
+  const query = search.get(REPORT_QUERY) ?? "";
 
   if (questions.isPending || dashboards.isPending || tenant.isPending) {
     return <Skeleton rows={4} />;
@@ -47,6 +56,7 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
       <div className="body stack">
         <h1>{t("reports.title")}</h1>
         <p className="prose prose--lead">{t("reports.lead", { tenantId })}</p>
+        {nothing ? null : <ReportSearch query={query} />}
 
         {nothing ? (
           <EmptyState
@@ -65,16 +75,80 @@ export function Reports({ tenantId }: { tenantId: string }): React.JSX.Element {
 
       {nothing ? null : (
         <>
-          <DashboardBand items={dashboards.data} base={base} canAuthor={canAuthor} />
-          <QuestionBand items={questions.data} base={base} canAuthor={canAuthor} />
+          <DashboardBand
+            items={byName(dashboards.data, query)}
+            base={base}
+            canAuthor={canAuthor}
+            filtered={query.trim() !== ""}
+          />
+          <QuestionBand
+            items={byName(questions.data, query)}
+            base={base}
+            canAuthor={canAuthor}
+            filtered={query.trim() !== ""}
+          />
         </>
       )}
 
       {/* A customer with nothing yet still gets the dashboards band, because "make one" is
           the whole point of the page and an author should not have to guess where. */}
       {nothing && canAuthor ? (
-        <DashboardBand items={dashboards.data} base={base} canAuthor={true} />
+        <DashboardBand items={dashboards.data} base={base} canAuthor={true} filtered={false} />
       ) : null}
+    </div>
+  );
+}
+
+/** The one field that searches both lists by name, writing the address as it is typed. */
+function ReportSearch({ query }: { query: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  const searchId = useId();
+  const [, setSearch] = useSearchParams();
+
+  function write(value: string): void {
+    setSearch(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value === "") {
+          next.delete(REPORT_QUERY);
+        } else {
+          next.set(REPORT_QUERY, value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  return (
+    <div className="row row--field">
+      <div className="field">
+        <label className="label" htmlFor={searchId}>
+          {t("reports.searchLabel")}
+        </label>
+        <input
+          autoComplete="off"
+          className="input"
+          id={searchId}
+          placeholder={t("reports.searchPlaceholder")}
+          type="search"
+          value={query}
+          onChange={(event): void => {
+            write(event.currentTarget.value);
+          }}
+        />
+      </div>
+      {query === "" ? null : (
+        <button
+          className="plate"
+          type="button"
+          onClick={(): void => {
+            write("");
+          }}
+        >
+          {t("reports.clearSearch")}
+        </button>
+      )}
     </div>
   );
 }
@@ -99,7 +173,7 @@ function DashboardTable({
           <th scope="col" className="num">
             {t("bi.colTiles")}
           </th>
-          <th scope="col">{t("bi.colUpdated")}</th>
+          <th scope="col">{t("bi.colSaved")}</th>
         </tr>
       </thead>
       <tbody>
@@ -138,7 +212,7 @@ function QuestionTable({
           <th scope="col">{t("bi.colName")}</th>
           <th scope="col">{t("bi.colKind")}</th>
           <th scope="col">{t("bi.colChart")}</th>
-          <th scope="col">{t("bi.colUpdated")}</th>
+          <th scope="col">{t("bi.colSaved")}</th>
         </tr>
       </thead>
       <tbody>
@@ -166,7 +240,10 @@ function DashboardBand({
   items,
   base,
   canAuthor,
+  filtered,
 }: {
+  /** When `filtered`, a band with none says no name matched rather than that none exist. */
+  filtered: boolean;
   items: readonly DashboardItem[];
   base: string;
   canAuthor: boolean;
@@ -179,7 +256,9 @@ function DashboardBand({
       <div className="head">{t("bi.dashboardsHead")}</div>
       <div className="body stack">
         {items.length === 0 ? (
-          <p className="note">{t("bi.noDashboards")}</p>
+          <p className="note">
+            {filtered ? t("reports.noDashboardMatches") : t("bi.noDashboards")}
+          </p>
         ) : (
           <DashboardTable items={items} base={base} />
         )}
@@ -200,7 +279,10 @@ function QuestionBand({
   items,
   base,
   canAuthor,
+  filtered,
 }: {
+  /** When `filtered`, a band with none says no name matched rather than that none exist. */
+  filtered: boolean;
   items: readonly QuestionItem[];
   base: string;
   canAuthor: boolean;
@@ -213,7 +295,7 @@ function QuestionBand({
       <div className="head">{t("bi.questionsHead")}</div>
       <div className="body stack">
         {items.length === 0 ? (
-          <p className="note">{t("bi.noQuestions")}</p>
+          <p className="note">{filtered ? t("reports.noQuestionMatches") : t("bi.noQuestions")}</p>
         ) : (
           <QuestionTable items={items} base={base} />
         )}

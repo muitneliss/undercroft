@@ -518,7 +518,9 @@
         "apps/ui/src/components/Book.tsx",
         "apps/ui/src/components/LakeConsole.tsx",
         "apps/ui/src/components/QuestionBands.tsx",
-        "apps/ui/src/components/QuestionResult.tsx",
+        // `QuestionResult.tsx` was here until the drawing moved into `ResultReading.tsx`,
+        // which took `lazy` and `Suspense` with it; the rule is back on for the first.
+        "apps/ui/src/components/ResultReading.tsx",
         "apps/ui/src/components/QuestionCard.tsx",
         "apps/ui/src/components/charts/ChartFrame.tsx",
         "apps/ui/src/routes/Journal.tsx",

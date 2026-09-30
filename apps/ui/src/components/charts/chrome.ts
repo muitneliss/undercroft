@@ -37,12 +37,13 @@ import {
   RadialLinearScale,
   ScatterController,
   Tooltip,
+  type ActiveElement,
   type ChartOptions,
   type TooltipItem,
 } from "chart.js";
 import { FunnelController, TrapezoidElement } from "chartjs-chart-funnel";
 
-import type { Series } from "@/lib/chartData.ts";
+import type { ChartPoint, Series } from "@/lib/chartData.ts";
 import { formatCount, formatDecimal, MISSING } from "@/lib/money.ts";
 
 ChartJS.register(
@@ -120,7 +121,12 @@ function cartesianScales(locale: Locale): NonNullable<ChartOptions<"line">["scal
  * interface reads a chart is one edit rather than twelve.
  */
 export interface PlotOptions {
-  readonly base: { readonly responsive: boolean; readonly maintainAspectRatio: boolean };
+  readonly base: {
+    readonly responsive: boolean;
+    readonly maintainAspectRatio: boolean;
+    /** Present only where a reader's table can mark the row a point came from. */
+    readonly onClick?: (event: unknown, elements: ActiveElement[]) => void;
+  };
   readonly plugins: {
     readonly legend: { readonly display: boolean; readonly position: "bottom" };
     readonly tooltip: { readonly callbacks: { readonly label: ReturnType<typeof tooltipLabel> } };
@@ -128,9 +134,30 @@ export interface PlotOptions {
   readonly scales: NonNullable<ChartOptions<"line">["scales"]>;
 }
 
-export function plotOptions(series: Series, locale: Locale): PlotOptions {
+/**
+ * `onSelect` hears which point a reader pressed, for the page that prints the rows beneath
+ * the chart; a dashboard tile has no such table and passes none, so pressing does nothing.
+ */
+export function plotOptions(
+  series: Series,
+  locale: Locale,
+  onSelect?: (point: ChartPoint) => void,
+): PlotOptions {
   return {
-    base: { responsive: true, maintainAspectRatio: false },
+    base: {
+      responsive: true,
+      maintainAspectRatio: false,
+      ...(onSelect === undefined
+        ? {}
+        : {
+            onClick: (_event: unknown, elements: ActiveElement[]): void => {
+              const [hit] = elements;
+              if (hit !== undefined) {
+                onSelect({ dataset: hit.datasetIndex, index: hit.index });
+              }
+            },
+          }),
+    },
     plugins: {
       legend: { display: series.datasets.length > 1, position: "bottom" as const },
       tooltip: { callbacks: { label: tooltipLabel(series) } },

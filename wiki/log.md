@@ -249,3 +249,4 @@
 ## [2026-09-30] ingest | ADR 0091 A Run Keeps the Scope It Read With and Its Counts Open Its Rows
 ## [2026-09-30] ingest | What an ingest run counts
 ## [2026-09-30] ingest | Design: Operator and reader paths
+## [2026-09-30] ingest | ADR 0090 Reports Computes No Figure It Cannot Stand Behind

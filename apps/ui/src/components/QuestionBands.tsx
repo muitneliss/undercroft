@@ -24,8 +24,9 @@ import { Separator } from "@/components/ui/separator.tsx";
 import type { QuestionDraft } from "@/lib/questionDraft.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { withParam } from "@/lib/params.ts";
+import { dashboardBack } from "@/lib/reportLinks.ts";
 import { useUiStore } from "@/store.ts";
-import type { trpc } from "@/trpc.ts";
+import { trpc } from "@/trpc.ts";
 
 const SqlEditor = lazy(() =>
   import("@/components/SqlEditor.tsx").then((module) => ({ default: module.SqlEditor })),
@@ -41,6 +42,32 @@ export interface BoundParams {
 }
 
 type Remove = ReturnType<typeof trpc.bi.questions.delete.useMutation>;
+
+/**
+ * The way back to the dashboard this question was opened from, on the values it had.
+ *
+ * Named by the dashboard's own name when it can be read -- a return from the dashboard has
+ * it in the cache already -- and in general words otherwise, rather than waiting on it.
+ */
+function DashboardBackLink({ tenantId }: { tenantId: string }): React.JSX.Element | null {
+  const { t } = useTranslation();
+  const [search] = useSearchParams();
+  const back = dashboardBack(search, divisionPath("reports", tenantId));
+  const dashboard = trpc.bi.dashboards.get.useQuery(
+    { tenantId, id: back?.id ?? "" },
+    { enabled: back !== null && back.id !== NEW },
+  );
+  if (back === null) {
+    return null;
+  }
+  return (
+    <Link className="plate plate--small" to={back.href}>
+      {dashboard.data === undefined
+        ? t("bi.backToDashboard")
+        : t("bi.backToNamedDashboard", { name: dashboard.data.name })}
+    </Link>
+  );
+}
 
 /** The question's title and, for an author, the field that changes it. */
 export function QuestionHead({
@@ -58,11 +85,12 @@ export function QuestionHead({
 
   return (
     <div className="body stack">
-      <p className="prose">
+      <div className="row">
         <Link className="plate plate--small" to={divisionPath("reports", tenantId)}>
           {t("bi.backToReports")}
         </Link>
-      </p>
+        <DashboardBackLink tenantId={tenantId} />
+      </div>
       <h1>{draft.name === "" ? t("bi.untitled") : draft.name}</h1>
 
       {canAuthor ? (

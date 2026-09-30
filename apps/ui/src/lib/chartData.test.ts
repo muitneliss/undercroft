@@ -1,13 +1,14 @@
 /**
  * What series promise: the label and value columns are inferred from the result's types
  * when the chart does not say, a numeric string keeps every digit beside its plotted float,
- * a null is a gap and never a zero, and past seven series the rest fold into "Other".
+ * a null is a gap and never a zero, and past seven series the rest fold into "Other" -- and
+ * a selected point marks exactly the rows that drew it, the fold's included.
  */
 
 import { describe, expect, test as it } from "bun:test";
 
 import type { TableResult } from "@/api/types.ts";
-import { toSeries } from "./chartData.ts";
+import { rowsAt, toSeries } from "./chartData.ts";
 
 const BY_STAGE: TableResult = {
   columns: [
@@ -72,5 +73,28 @@ describe("toSeries", () => {
     expect(series.datasets[7]?.values).toEqual([15]);
     expect(series.datasets[7]?.raw).toEqual([null]);
     expect(series.datasets[2]?.raw).toEqual(["2"]);
+  });
+
+  it("names the rows that drew a selected point, and none for a drawing that does not map", () => {
+    const rows: TableResult["rows"] = [["2026-02", "s0", "1"]];
+    for (let i = 0; i < 9; i += 1) {
+      rows.push(["2026-01", `s${String(i)}`, String(i)]);
+    }
+    const wide: TableResult = {
+      columns: [
+        { name: "month", type: "text" },
+        { name: "customer", type: "text" },
+        { name: "total", type: "numeric" },
+      ],
+      rows,
+      truncated: false,
+    };
+    const split = { ...CHART, x: "month", series: "customer", y: ["total"] };
+
+    expect(rowsAt(wide, split, { dataset: 0, index: 0 })).toEqual([0]);
+    expect(rowsAt(wide, split, { dataset: 2, index: 1 })).toEqual([3]);
+    expect(rowsAt(wide, split, { dataset: 7, index: 1 })).toEqual([8, 9]);
+    expect(rowsAt(BY_STAGE, CHART, { dataset: 1, index: 1 })).toEqual([1]);
+    expect(rowsAt(BY_STAGE, { ...CHART, type: "scatter" }, { dataset: 0, index: 1 })).toEqual([]);
   });
 });

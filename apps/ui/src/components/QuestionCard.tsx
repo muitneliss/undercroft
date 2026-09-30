@@ -8,6 +8,10 @@
  * nothing -- a chart drawn over a guessed value looks exactly like a chart. A tile whose
  * question was deleted says so rather than vanishing, as the delete copy promised.
  *
+ * The title opens the question on the dashboard's current values for every parameter it
+ * takes, with the way back to the dashboard as it stands (`lib/reportLinks.ts`), so the
+ * reader who follows it runs the same figures with nothing re-entered.
+ *
  * The tile places itself on the grid inline from the saved layout; in edit mode it carries
  * the nine controls that move and size it, one cell at a time.
  */
@@ -16,7 +20,7 @@ import type { DashboardTile } from "@undercroft/contracts/bi";
 import type { Locale } from "@undercroft/core/locale";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import type { QuestionView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
@@ -25,6 +29,7 @@ import { CardContent, CardHeader } from "@/components/ui/card.tsx";
 import { TILE_ACTIONS, type TileAction } from "@/lib/dashboardLayout.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { paramsFromSearch, questionParams } from "@/lib/params.ts";
+import { tileQuestionHref } from "@/lib/reportLinks.ts";
 import { trpc } from "@/trpc.ts";
 
 // The charting library rides in its own chunk, fetched the first time a tile is drawn.
@@ -98,6 +103,7 @@ export function QuestionCard({
   onAction: (action: TileAction) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
   const names = question === null ? [] : questionParams(question.definition);
   const bound = paramsFromSearch(search, names);
   const answer = trpc.bi.questions.answer.useQuery(
@@ -120,7 +126,12 @@ export function QuestionCard({
         ) : (
           <Link
             className="label"
-            to={`${divisionPath("reports", tenantId)}/questions/${question.id}`}
+            to={tileQuestionHref({
+              questionPath: `${divisionPath("reports", tenantId)}/questions/${question.id}`,
+              names,
+              dashboardPath: pathname,
+              search,
+            })}
           >
             {question.name}
           </Link>
