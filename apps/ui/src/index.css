@@ -1379,9 +1379,10 @@
   }
 
   /* The same inked face for a pair of views bound as one control (the Models division's list
-   and lineage): the face that is chosen is the page the reader is on. */
+   and lineage, the scope picker's two steps): the face that is chosen is where the reader is. */
   .langset .plate[aria-pressed="true"],
-  .langset .plate[aria-current="page"] {
+  .langset .plate[aria-current="page"],
+  .langset .plate[aria-current="step"] {
     background: var(--ink);
     color: var(--leaf);
   }
@@ -1760,6 +1761,12 @@
     gap: var(--s-2);
     justify-content: flex-end;
     flex-wrap: wrap;
+  }
+
+  /* Disconnect's fold: shut, it is one plate in line with the others; only the leaf it hinges
+     open takes the actions cell's whole width. */
+  .grant__confirm:not([open]) {
+    flex-basis: auto;
   }
 
   /* A grant nobody has made yet is an unprinted leaf: it carries the access
