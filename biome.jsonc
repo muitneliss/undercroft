@@ -32,7 +32,11 @@
       "!apps/ui/public/geo",
       // Rewritten by release-please on every release, in its own compact JSON. Formatting it
       // turned main's gate red on the 1.20.0 release commit, and would on every release after.
-      "!.release-please-manifest.json"
+      "!.release-please-manifest.json",
+      // A self-contained HTML review mockup with synthetic fixtures (`design/ui-review/README.md`).
+      // It is the target `apps/ui` is matched to, not product code: nothing imports it and it
+      // ships nowhere, so the product's lint rules are not asked of it.
+      "!design/ui-review"
     ]
   },
 
