@@ -72,7 +72,7 @@ export const en = {
   error: {
     notInvited:
       "That address has not been invited. Ask an administrator for an invitation, and sign in with the exact address it was sent to.",
-    localSignInElsewhere: "Local sign-in works only at {{origin}}. Open the page there.",
+    localSignInElsewhere: "Local sign-in works only at {{origin}}. Use that address instead.",
     alreadyMember: "{{email}} already has access as {{role}}.",
     noOpenInvitation: "No open invitation with that id.",
     notMember: "{{email}} does not have access to this customer.",

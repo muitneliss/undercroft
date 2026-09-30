@@ -129,7 +129,7 @@ export const vi = {
     notInvited:
       "Địa chỉ đó chưa được mời. Hãy đề nghị quản trị viên gửi lời mời, và đăng nhập bằng đúng địa chỉ đã nhận lời mời.",
     /** The loopback sign-in reached through another host name; see `devSignIn.ts`. */
-    localSignInElsewhere: "Chỉ đăng nhập cục bộ được tại {{origin}}. Hãy mở trang ở địa chỉ đó.",
+    localSignInElsewhere: "Chỉ đăng nhập cục bộ được tại {{origin}}. Hãy dùng đúng địa chỉ đó.",
     alreadyMember: "{{email}} đã có quyền truy cập với vai trò {{role}}.",
     noOpenInvitation: "Không có lời mời nào đang mở với id đó.",
     notMember: "{{email}} không có quyền truy cập khách hàng này.",

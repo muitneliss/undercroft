@@ -35,6 +35,7 @@
  * refused by the same line, and told which address to use.
  */
 
+import { isLoopbackOrigin } from "@undercroft/core/loopback";
 import type { SqlExecutor } from "@undercroft/db";
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
@@ -43,17 +44,6 @@ import { messages } from "../i18n/index.ts";
 import { isAdmissible } from "../services/invite.ts";
 import type { Superadmins } from "../services/superadmin.ts";
 import { localeOf } from "./authLocale.ts";
-
-/** The hosts a browser on this machine reaches a local stack on, as `URL#hostname` spells them. */
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-/**
- * Whether `baseUrl` is served on this machine only. Shared with `mcpAuth.ts`, where the same
- * question decides whether plain HTTP may carry an OAuth resource.
- */
-export function isLoopbackOrigin(baseUrl: string): boolean {
-  return LOOPBACK_HOSTS.has(new URL(baseUrl).hostname);
-}
 
 export interface DevSignInConfig {
   readonly exec: SqlExecutor;

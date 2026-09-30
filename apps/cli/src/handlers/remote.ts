@@ -8,10 +8,8 @@
  * re-implemented or bypassed. There is no DSN, no service token and no second auth path.
  * `.ast-grep/rules/cli-boundary.yml` keeps it that way.
  *
- * Sign-in is the email one-time code the SPA uses (`/api/auth/email-otp/...`). Its two POSTs
- * carry no cookie and no browser fetch metadata, which is the case Better Auth's CSRF check
- * lets through without an Origin -- so the CLI needs no header it would have to fake. That
- * takes `node:http` rather than `fetch`; `postAuth` says why.
+ * Signing in, which is Better Auth's `/api/auth` rather than tRPC, is `authEndpoints.ts`; this
+ * module owns the connection, the tRPC wire and what counts as unreachable, which both share.
  *
  * ## Why tRPC's wire is spoken here rather than through `@trpc/client`
  *
@@ -37,8 +35,6 @@
  * into the response of another.
  */
 
-import { request as httpRequest } from "node:http";
-import { request as httpsRequest } from "node:https";
 import type { Locale } from "@undercroft/core/locale";
 import { BY_TRPC_CODE } from "virtual:surface";
 import type { Translate } from "../i18n/index.ts";
@@ -55,7 +51,7 @@ import { failure, type Outcome, type Refusal, success } from "../services/output
  * How long one request may take. Long enough for a model build, which the server waits on;
  * a stalled connection past it is reported as a TIMEOUT an agent may retry, not a hang.
  */
-const REQUEST_TIMEOUT_MS = 120_000;
+export const REQUEST_TIMEOUT_MS = 120_000;
 
 export interface Connection {
   readonly url: string;
@@ -94,7 +90,7 @@ function rootCause(error: unknown): unknown {
   return current;
 }
 
-function unreachable(t: Translate, connection: Connection, error: unknown): Refusal {
+export function unreachable(t: Translate, connection: Connection, error: unknown): Refusal {
   if (isTimeout(error) || isTimeout(rootCause(error))) {
     return failure(
       "TIMEOUT",
@@ -243,137 +239,4 @@ export function callProcedure<P extends ProcedurePath>(
   input: InputOf<P>,
 ): Promise<Outcome> {
   return callSpec(t, connection, procedure, input);
-}
-
-/** What a sign-in endpoint answered that the CLI reads: the status and the cookies it set. */
-interface AuthAnswer {
-  readonly status: number;
-  readonly setCookie: readonly string[];
-}
-
-/**
- * POST to a sign-in endpoint through `node:http`, carrying only the headers written here.
- *
- * NOT `fetch`, and the reason was found by running the CLI against a real server. Node's
- * `fetch` (undici) sends `Sec-Fetch-Mode: cors` on every request and will not be told
- * otherwise. Better Auth reads any `Sec-Fetch-*` header as "a browser sent this" and then
- * demands an Origin from its trusted list (`validateFormCsrf`, better-auth 1.7.5), so every
- * sign-in from `fetch` was refused `MISSING_OR_NULL_ORIGIN`. A CLI is not a browser: it holds
- * no ambient cookie a hostile page could ride on, and it should not forge an Origin to pass a
- * check written for one. A plain request takes Better Auth's non-browser branch, as `curl`
- * does. The suite proves it only because `createAuth` now runs that check under test as well.
- */
-function postAuth(
-  connection: Connection,
-  path: string,
-  body: Readonly<Record<string, string>>,
-): Promise<AuthAnswer> {
-  const url = new URL(`${connection.url}${path}`);
-  const payload = JSON.stringify(body);
-  const send = url.protocol === "https:" ? httpsRequest : httpRequest;
-  connection.trace(`POST ${connection.origin}${path}`);
-  return new Promise((resolve, reject) => {
-    const request = send(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "content-length": String(Buffer.byteLength(payload)),
-          "accept-language": connection.locale,
-        },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      },
-      (response) => {
-        // Drained, not read: the body is Better Auth's English and is never passed on.
-        response.resume();
-        response.on("error", reject);
-        response.on("end", () => {
-          resolve({
-            status: response.statusCode ?? 0,
-            setCookie: response.headers["set-cookie"] ?? [],
-          });
-        });
-      },
-    );
-    request.on("error", reject);
-    request.end(payload);
-  });
-}
-
-function isOk(status: number): boolean {
-  return status >= 200 && status < 300;
-}
-
-/** A sign-in endpoint's refusal, by status. Better Auth's own body is English and not passed on. */
-function authRefusal(t: Translate, connection: Connection, status: number): Refusal {
-  if (status === 404) {
-    return failure("NOT_FOUND", t("error.NOT_FOUND"), { status });
-  }
-  if (status === 429) {
-    return failure("NETWORK_ERROR", t("error.NETWORK_ERROR", { origin: connection.origin }), {
-      status,
-    });
-  }
-  if (status >= 500) {
-    return failure("INTERNAL_ERROR", t("error.INTERNAL_ERROR"), { status });
-  }
-  return failure("VALIDATION_FAILED", t("error.VALIDATION_FAILED"), { status });
-}
-
-/**
- * Ask for a one-time code.
- *
- * The server answers 200 whether or not the address has access -- answering honestly would
- * make the form an oracle for who can sign in -- so success here means "asked", never "sent".
- */
-export async function requestCode(
-  t: Translate,
-  connection: Connection,
-  email: string,
-): Promise<Outcome> {
-  try {
-    const answer = await postAuth(connection, "/api/auth/email-otp/send-verification-otp", {
-      email,
-      type: "sign-in",
-    });
-    return isOk(answer.status)
-      ? success({ codeRequested: true })
-      : authRefusal(t, connection, answer.status);
-  } catch (error) {
-    return unreachable(t, connection, error);
-  }
-}
-
-/**
- * Exchange the code for a session, answering with the cookie to keep.
- *
- * Only each `Set-Cookie`'s `name=value` is kept: the attributes after it describe the
- * cookie to a browser and mean nothing sent back in a `Cookie` header.
- */
-export async function signIn(
-  t: Translate,
-  connection: Connection,
-  email: string,
-  code: string,
-): Promise<{ readonly ok: true; readonly cookie: string } | Refusal> {
-  let answer: AuthAnswer;
-  try {
-    answer = await postAuth(connection, "/api/auth/sign-in/email-otp", { email, otp: code });
-  } catch (error) {
-    return unreachable(t, connection, error);
-  }
-  if (answer.status === 400 || answer.status === 401 || answer.status === 403) {
-    return failure("AUTHENTICATION_REQUIRED", t("error.codeRejected"), { status: answer.status });
-  }
-  if (!isOk(answer.status)) {
-    return authRefusal(t, connection, answer.status);
-  }
-  const cookie = answer.setCookie
-    .map((header) => header.split(";", 1)[0]?.trim() ?? "")
-    .filter((pair) => pair !== "")
-    .join("; ");
-  return cookie === ""
-    ? failure("INTERNAL_ERROR", t("error.INTERNAL_ERROR"))
-    : { ok: true, cookie };
 }

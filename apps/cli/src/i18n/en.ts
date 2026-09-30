@@ -32,7 +32,8 @@ export const en = {
   } satisfies Record<TopicKey, string>,
 
   command: {
-    authLogin: "Sign in with a one-time code sent to your email, as the web UI does.",
+    authLogin:
+      "Sign in with a one-time code sent to your email, as the web UI does. An install on this machine signs you in at once, with no code.",
     authLogout: "Sign out: end the session on the server, then forget it for this origin.",
     authStatus: "Say which server you are signed in to, and as which address.",
     configShow:
@@ -59,6 +60,8 @@ export const en = {
     inputJson: "JSON input written inline.",
     email: "The email address to sign in with.",
     code: "The six-digit code from the email.",
+    local:
+      "Sign in on this machine, with no email and no code, when the server runs on this machine and offers it.",
     profileUrl: "The server's base URL for this profile.",
     allowWrites:
       "Allow write commands on this profile. Only a person at a terminal can turn it on.",
@@ -79,6 +82,7 @@ export const en = {
     codeRequested:
       "If {{email}} has access, a code has been sent to it. Run again with --code to sign in.",
     signedIn: "Signed in to {{origin}} as {{email}}.",
+    signedInLocally: "Signed in to {{origin}} as {{email}}, on this machine, with no code.",
     signedOut: "Signed out of {{origin}}.",
     noRows: "No rows.",
   },
@@ -133,6 +137,10 @@ export const en = {
     CONFLICT: "The server refused because of its current state.",
     AUTHENTICATION_REQUIRED: "Not signed in to {{origin}}. Run `undercroft auth login`.",
     codeRejected: "The code was not accepted. Request a new one.",
+    localNotLoopback:
+      "Signing in on this machine works only with a server on this machine (localhost), and {{origin}} is not one. Sign in with your email.",
+    noLocalMethod:
+      "{{origin}} does not offer signing in on this machine. Sign in with your email: `undercroft auth login --email <address>`.",
     PERMISSION_DENIED: "You do not have permission to do this.",
     WRITES_DISABLED:
       "Profile “{{profile}}” does not allow writes. A person has to turn it on at a terminal: `undercroft config set-profile {{profile}} --allow-writes`.",

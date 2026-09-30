@@ -141,8 +141,12 @@ function localCommands(ctx: Context, catalogue: () => readonly Described[]): Loc
       id: "auth:login",
       description: "command.authLogin",
       flags: {
-        email: Flags.string({ description: t("flag.email") }),
-        code: Flags.string({ description: t("flag.code") }),
+        email: Flags.string({ description: t("flag.email"), exclusive: ["local"] }),
+        code: Flags.string({ description: t("flag.code"), exclusive: ["local"] }),
+        // A desktop install needs no flag: `auth login` signs in on this machine by itself when
+        // that is the only way in the server offers. `--local` is for a stack that offers it
+        // beside a mail key, where the web page shows it as a button (ADR 0094, ADR 0096).
+        local: Flags.boolean({ description: t("flag.local") }),
       },
       run: ({ flags }) => authLogin(ctx, flags),
     },

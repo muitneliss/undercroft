@@ -16,7 +16,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test as it } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
@@ -427,6 +427,61 @@ describe("a write needs a person's permission, per environment", () => {
       },
     });
     expect(plane.worker.triggered).toHaveLength(0);
+  });
+});
+
+describe("a desktop install signs its owner in on this machine (ADR 0096)", () => {
+  const OWNER = "owner@example.test";
+
+  beforeEach(async () => {
+    // What the installer writes (ADR 0094): one address as the local method AND a superadmin,
+    // no mail key, and nothing seeded -- a fresh install has no customer yet.
+    await plane.stop();
+    plane = await startControlPlane({
+      devSignInAs: OWNER,
+      superadmins: new Set([OWNER]),
+      email: false,
+    });
+  });
+
+  it("`auth login` with no address signs in, and the session reaches a superadmin-only call", async () => {
+    // Written as the owner's own `config set-profile ... --allow-writes` at a terminal leaves
+    // it: signing in grants nothing, so creating a customer needs the profile to allow it.
+    writeProfile("local", plane.origin, true);
+
+    const signed = await undercroft(["auth", "login", "--agent"]);
+    expect(envelope(signed)).toEqual({
+      ok: true,
+      data: { origin: plane.origin, email: OWNER, signedIn: true },
+    });
+
+    // `tenants.create` is the router's one superadmin-only procedure, and the first thing a
+    // fresh install's owner must do.
+    const created = await undercroft([
+      "tenants",
+      "create",
+      "--tenant-id",
+      "CASE-0001",
+      "--display-name",
+      "First",
+      "--agent",
+    ]);
+    expect(envelope(created)).toMatchObject({ ok: true, data: { id: "CASE-0001" } });
+  });
+
+  it("`--local` against a server not on this machine is refused before any request", async () => {
+    const refused = await undercroft([
+      "auth",
+      "login",
+      "--local",
+      "--url",
+      "https://undercroft.example.test",
+      "--agent",
+    ]);
+
+    expect(refused.exitCode).toBe(2);
+    expect(envelope(refused).error?.code).toBe("INVALID_ARGUMENT");
+    expect(existsSync(join(home, "credentials.json"))).toBe(false);
   });
 });
 

@@ -50,6 +50,11 @@ export interface ControlPlaneOptions {
   /** `UNDERCROFT_DEV_SIGN_IN_AS`. Off by default, as it is on every deployment. */
   readonly devSignInAs?: string;
   /**
+   * Whether the one-time code by email is offered. On by default; `false` is a desktop install,
+   * which has no mail key and offers the local method alone (ADR 0094).
+   */
+  readonly email?: boolean;
+  /**
    * Where the server logs. None by default. A suite that asserts a line hands in a real
    * `createLogger` whose `sink` keeps the lines in memory.
    */
@@ -154,7 +159,7 @@ export async function startControlPlane(options: ControlPlaneOptions = {}): Prom
     transactor: (fn) => fn(db),
     secret: "a-test-secret-that-is-long-enough-to-sign",
     baseUrl: origin,
-    email: sender,
+    ...(options.email === false ? {} : { email: sender }),
     superadmins,
     ...(options.devSignInAs === undefined ? {} : { devSignInAs: options.devSignInAs }),
   });

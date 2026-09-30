@@ -258,3 +258,6 @@
 ## [2026-09-30] ingest | Runbook Sign-In Setup
 ## [2026-09-30] ingest | Runbook Sign-In Setup
 ## [2026-09-30] ingest | ADR 0094: A local install signs its owner in on loopback
+## [2026-09-30] ingest | ADR 0096: The CLI signs in to a local install the way the browser does
+## [2026-09-30] ingest | Runbook: The undercroft CLI
+## [2026-09-30] ingest | Runbook: Installing Undercroft

@@ -36,11 +36,11 @@
  */
 
 import { mcp } from "@better-auth/mcp";
+import { isLoopbackOrigin } from "@undercroft/core/loopback";
 import type { AuthContext, BetterAuthPlugin } from "better-auth";
 import { jwt } from "better-auth/plugins";
 import { type AuthorizedApp, OFFERED_SCOPES, type OAuthApps } from "../services/connectedApps.ts";
 import { JWKS_TABLE, OAUTH_TABLES } from "./authSchema.ts";
-import { isLoopbackOrigin } from "./devSignIn.ts";
 import {
   type KeySet,
   type OAuthRefused,

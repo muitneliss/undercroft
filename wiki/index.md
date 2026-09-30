@@ -99,6 +99,7 @@
 - [ADR 0093: A document keeps its last accepted kind while a new catalogue is asked](sources/adr-0093-a-document-keeps-its-last-accepted-kind-while-a-new-catalogue-is-asked.md)
 - [ADR 0094: A local install signs its owner in on loopback](sources/adr-0094-a-local-install-signs-its-owner-in-on-loopback.md)
 - [ADR 0095: Undercroft installs through a setup wizard that drives Docker](sources/adr-0095-undercroft-installs-through-a-setup-wizard-that-drives-docker.md)
+- [ADR 0096: The CLI signs in to a local install the way the browser does](sources/adr-0096-the-cli-signs-in-to-a-local-install-the-way-the-browser-does.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

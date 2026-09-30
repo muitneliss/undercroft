@@ -121,6 +121,7 @@ export const en = {
 
   done: {
     desktop: "Undercroft is running at {{url}} — you are signed in as its owner.",
+    cli: "From the undercroft CLI: undercroft config set-profile local --url {{url}}, then undercroft auth login — no code needed.",
     server: "Undercroft is running on {{bind}}:{{port}}.",
     proxy: "Point your https reverse proxy at http://{{bind}}:{{port}}; everyone opens {{url}}.",
     admin: "The administrator {{email}} signs in at {{url}} and invites everyone else.",
