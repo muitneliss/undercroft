@@ -25,6 +25,7 @@ import { Errata } from "@/components/Errata.tsx";
 import { ArrowRight } from "@/components/Icon.tsx";
 import { LakeSummary } from "@/components/LakeSummary.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { kindsPath } from "@/lib/documentKinds.ts";
 import { consolePath, type LakeStream, parseStream, streamParams, streamsOf } from "@/lib/lake.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -83,6 +84,20 @@ export function Lake({ tenantId }: { tenantId: string }): React.JSX.Element {
               }
             : {})}
         />
+      </div>
+
+      <div className="band-rule" />
+      <div className="head">{t("lake.kindsHead")}</div>
+      <div className="body stack">
+        <p className="prose">{t("lake.kindsLead", { tenantId })}</p>
+        {/* A door, as the console's is: the catalogue is a page of this division, and every
+            member may read it, so the door is not behind the admin check below. */}
+        <div className="row">
+          <Link className="plate" to={kindsPath(tenantId)}>
+            {t("lake.kindsOpen")}
+            <ArrowRight />
+          </Link>
+        </div>
       </div>
 
       {isAdmin && streams.length > 0 ? (

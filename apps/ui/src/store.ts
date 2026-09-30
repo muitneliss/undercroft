@@ -382,6 +382,22 @@ interface UiState {
    * often it re-syncs in full (ADR 0082) -- and an expression typed for one must not open the
    * other's field.
    */
+  /**
+   * The catalogue row whose description an admin has open for editing, and whose tenant it is
+   * in; null when none is. One at a time, carrying its tenant for the reason `cronDraft`
+   * carries its: a row opened under one customer must never open under another. The text
+   * itself is not here -- the field is uncontrolled and read on Save -- so what persists across
+   * a re-render is only WHICH row, which is the part the reader chose. ADR 0085.
+   */
+  kindEditing: { readonly tenantId: string; readonly kind: string } | null;
+  setKindEditing: (editing: { tenantId: string; kind: string } | null) => void;
+  /**
+   * The tenant whose Publish has been pressed once and is waiting for the second press. A
+   * publish sends every readable text to the classifier again, so it is asked twice, and the
+   * second plate says how many texts it will send. Null when nothing is armed.
+   */
+  kindsPublishArmed: string | null;
+  armKindsPublish: (tenantId: string | null) => void;
   cronDraft: CronDraft | null;
   /** Hold `cron` as the draft for this card's `schedule`, replacing any other draft. */
   setCronDraft: (tenantId: string, source: string, schedule: CronSchedule, cron: string) => void;
@@ -939,6 +955,18 @@ function cronSlice(set: Setter): Pick<UiState, "cronDraft" | "setCronDraft" | "d
   };
 }
 
+/** The document-kind catalogue's one open row and its armed publish. See `kindEditing`. */
+function kindsSlice(
+  set: Setter,
+): Pick<UiState, "kindEditing" | "setKindEditing" | "kindsPublishArmed" | "armKindsPublish"> {
+  return {
+    kindEditing: null,
+    setKindEditing: (kindEditing): unknown => set({ kindEditing }),
+    kindsPublishArmed: null,
+    armKindsPublish: (kindsPublishArmed): unknown => set({ kindsPublishArmed }),
+  };
+}
+
 /** Which account of each multi-account kind is on show. See `selectedAccount`. */
 function accountSlice(set: Setter): Pick<UiState, "selectedAccount" | "selectAccount"> {
   return {
@@ -959,6 +987,7 @@ export const useUiStore = create<UiState>()(
       ...releaseSlice(set),
       ...accountSlice(set),
       ...cronSlice(set),
+      ...kindsSlice(set),
       ...scopeSlice(set),
       ...lakeSlice(set),
       ...modelSlice(set),
