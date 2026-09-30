@@ -1,6 +1,8 @@
 /**
- * What the Models division promises a reader walking it (#346): the build counts add up and
- * narrow the list through the address, and the lineage view traces a node's declared upstream
+ * What the Models division promises a reader walking it (#346): the build counts add up --
+ * and say so in figures -- and narrow the list through the address, a search and an order ride
+ * there beside them, each row names the run that built it and never prints a column count it
+ * does not know, and the lineage view traces a node's declared upstream
  * chain and paths and its downstream in words, marks what it cannot read, keeps a deleted ref,
  * and states the selected model's last build and columns beside the board (ADR 0097).
  *
@@ -16,6 +18,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 
 // The side effect is the point: without it every key renders as itself. See `@/i18n`.
 import "@/i18n/index.ts";
+import { MISSING } from "@/lib/money.ts";
 import { Models } from "@/routes/Models.tsx";
 import { trpc } from "@/trpc.ts";
 
@@ -121,11 +124,18 @@ function mount(url: string): ReturnType<typeof createMemoryRouter> {
   return router;
 }
 
+/** The name on each row, in the order listed: a row's first link (its second is its run). */
 function listedNames(): string[] {
-  const table = screen.getByRole("table");
-  return within(table)
-    .getAllByRole("link")
-    .map((link) => link.textContent ?? "");
+  const [, ...rows] = within(screen.getByRole("table")).getAllByRole("row");
+  return rows.map((row) => within(row).getAllByRole("link")[0]?.textContent ?? "");
+}
+
+/** One row's cells as text, found by the model's name. */
+function rowOf(name: string): string[] {
+  const row = within(screen.getByRole("table")).getByRole("link", { name }).closest("tr");
+  return within(row as HTMLElement)
+    .getAllByRole("cell")
+    .map((cell) => cell.textContent ?? "");
 }
 
 describe("the build counts", () => {
@@ -145,10 +155,11 @@ describe("the build counts", () => {
       "2Dựng thành công",
       "6Mọi mô hình",
     ]);
+    expect(screen.getByText("1 + 2 + 1 + 2 = 6 mô hình trong danh sách")).toBeDefined();
 
     fireEvent.click(within(tally).getByRole("link", { name: /Chưa dựng/u }));
     expect(router.state.location.search).toBe("?build=never");
-    expect(listedNames()).toEqual(["stg_notes", "stg_legacy"]);
+    expect(listedNames()).toEqual(["stg_legacy", "stg_notes"]);
 
     // Inside `act`: the router's own update would otherwise land between two of React's.
     act(() => {
@@ -168,6 +179,60 @@ describe("the build counts", () => {
     mount(`/tenants/${TENANT}/models?build=bogus`);
     await screen.findByRole("table");
     expect(listedNames()).toHaveLength(MODELS.length);
+  });
+});
+
+describe("the search and the order", () => {
+  it("lists what needs a person first, and by name when asked, keeping the build state", async () => {
+    const router = mount(`/tenants/${TENANT}/models`);
+    await screen.findByRole("table");
+    // Failed, never built, other, built -- then by name inside each.
+    expect(listedNames()).toEqual([
+      "stg_files",
+      "stg_legacy",
+      "stg_notes",
+      "stg_skipped",
+      "mart_pipeline",
+      "stg_deals",
+    ]);
+
+    fireEvent.click(screen.getByRole("link", { name: /Dựng thành công/u }));
+    fireEvent.change(screen.getByLabelText("Sắp xếp"), { target: { value: "name" } });
+    expect(new URLSearchParams(router.state.location.search).get("build")).toBe("ok");
+    expect(new URLSearchParams(router.state.location.search).get("sort")).toBe("name");
+    expect(listedNames()).toEqual(["mart_pipeline", "stg_deals"]);
+  });
+
+  it("counts only what the search finds, so the counts still add up, and a count keeps it", async () => {
+    const router = mount(`/tenants/${TENANT}/models?q=STG_N`);
+    const tally = await screen.findByRole("navigation", {
+      name: "Lọc danh sách theo lần dựng gần nhất",
+    });
+    expect(listedNames()).toEqual(["stg_notes"]);
+    expect(screen.getByText("0 + 1 + 0 + 0 = 1 mô hình trong danh sách")).toBeDefined();
+    expect(screen.getByText("1 / 6 mô hình")).toBeDefined();
+
+    fireEvent.click(within(tally).getByRole("link", { name: /Chưa dựng/u }));
+    const address = new URLSearchParams(router.state.location.search);
+    expect([address.get("q"), address.get("build")]).toEqual(["STG_N", "never"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Xoá lọc" }));
+    expect(router.state.location.search).toBe("");
+    expect(listedNames()).toHaveLength(MODELS.length);
+  });
+});
+
+describe("a row's last build", () => {
+  it("names the run that built it and the columns it made, and MISSING for what is not known", async () => {
+    mount(`/tenants/${TENANT}/models`);
+    await screen.findByRole("table");
+    const [run] = within(screen.getByRole("table")).getAllByRole("link", { name: "run-7" });
+    expect(run?.getAttribute("href")).toBe(`/tenants/${TENANT}/journal/run-7`);
+    expect(rowOf("mart_pipeline").slice(1, 4)).toEqual(["Dựng thành công", "run-7", "3"]);
+    // Built, but the server recorded no columns: not known, never "0".
+    expect(rowOf("stg_deals")[3]).toBe(MISSING);
+    // Never built: no run and no columns.
+    expect(rowOf("stg_notes").slice(2, 4)).toEqual([MISSING, MISSING]);
   });
 });
 
