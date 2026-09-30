@@ -39,7 +39,7 @@
     },
     "apps/cli": {
       "name": "@undercroft/cli",
-      "version": "1.55.0",
+      "version": "1.56.0",
       "dependencies": {
         "@clack/core": "1.5.1",
         "@clack/prompts": "1.8.1",
@@ -85,9 +85,26 @@
         "@modelcontextprotocol/client": "2.1.0",
       },
     },
+    "apps/desktop": {
+      "name": "@undercroft/desktop",
+      "version": "1.56.0",
+      "dependencies": {
+        "@undercroft/core": "workspace:*",
+        "@undercroft/setup": "workspace:*",
+        "electrobun": "2.0.2",
+        "i18next": "26.4.2",
+        "react": "19.0.8",
+        "react-dom": "19.0.8",
+        "zustand": "5.0.15",
+      },
+      "devDependencies": {
+        "@types/react": "19.0.1",
+        "@types/react-dom": "19.0.2",
+      },
+    },
     "apps/installer-cli": {
       "name": "@undercroft/installer-cli",
-      "version": "1.55.0",
+      "version": "1.56.0",
       "dependencies": {
         "@clack/prompts": "1.8.1",
         "@undercroft/core": "workspace:*",
@@ -1183,6 +1200,8 @@
 
     "@undercroft/db": ["@undercroft/db@workspace:packages/db"],
 
+    "@undercroft/desktop": ["@undercroft/desktop@workspace:apps/desktop"],
+
     "@undercroft/installer-cli": ["@undercroft/installer-cli@workspace:apps/installer-cli"],
 
     "@undercroft/lake": ["@undercroft/lake@workspace:packages/lake"],
@@ -1520,6 +1539,8 @@
     "ecc-jsbn": ["ecc-jsbn@0.1.2", "", { "dependencies": { "jsbn": "~0.1.0", "safer-buffer": "^2.1.0" } }, "sha512-eh9O+hwRHNbG4BLTjEl3nw044CkGm5X6LoaCf7LPp7UU8Qrt47JYNi6nPX8xjW97TKGKm1ouctg0QSpZe9qrnw=="],
 
     "ejs": ["ejs@6.0.1", "", { "bin": { "ejs": "bin/cli.js" } }, "sha512-UaaM14yby8U3k02ihS1Bmj5Kz2d7CCQM1scxpgs4Mhkq8F1wR2gl3+Ts4h5Ne4Mnt7M9m4Dw7jsuMr3+xO4vZA=="],
+
+    "electrobun": ["electrobun@2.0.2", "", { "bin": { "electrobun": "bin/electrobun.cjs" } }, "sha512-UDs2iTNs6qYCzdWiFch/0DtxrsijNDr1WFDQfRmSA3Iouv0iEzyCF5mh4uDxkwNnAbuwFyow36EiVTYP4DRzig=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.430", "", {}, "sha512-e1QEj72Y4zd8RlNZVmoTg+iCOSVwpk05IOiiQwdrkwCSVlZfPthevErhE+nckGd2YbsXfp1SkisznhGVIXP2NQ=="],
 

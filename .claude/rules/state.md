@@ -1,6 +1,6 @@
 ---
 description: One owner per piece of UI state; useState is banned
-paths: ["apps/ui/**/*.ts", "apps/ui/**/*.tsx"]
+paths: ["apps/ui/**/*.ts", "apps/ui/**/*.tsx", "apps/desktop/**/*.ts", "apps/desktop/**/*.tsx"]
 ---
 
 # UI state has one owner
@@ -35,6 +35,15 @@ The UI has exactly two homes for state, and `useState` is neither.
   second component would want the value, it belongs in the store.
 - **Derive, don't duplicate.** Prefer computing from the query cache or the store during
   render over storing a copy you then have to keep in sync.
+
+## The desktop app's wizard
+
+`apps/desktop/src/view` (ADR 0098) is React too, and the same ban holds there, enforced by the
+same rule. It has no tRPC cache: its "server" is the app's own main process, asked over
+Electrobun's RPC, and every answer is recorded in its one store, `apps/desktop/src/view/store.ts`
+(state in `wizard.ts`, the rules for moving between steps in `rules.ts`). A component reads the
+store through `useWizard`; the store is made once, after the main process answers `boot`, and
+handed down through one React context, never a `useState`.
 
 The reasoning behind adopting Zustand and banning `useState` is recorded in
 `docs/adr/0009-ui-state-in-zustand-no-usestate.md`.

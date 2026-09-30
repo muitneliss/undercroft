@@ -1,0 +1,54 @@
+# The desktop app (ADR 0098), built and walked on each platform it ships for.
+#
+# `task ci:verify` checks everything in apps/desktop that can be checked without Electrobun's
+# SDK and a window. This checks the rest where it runs: the three modules that import the SDK
+# typecheck against it, the app builds for this runner's system, the bundle holds what the app
+# loads, and the built app, launched, walks itself to the Docker step (`src/handlers/smoke.ts`).
+# A macOS runner has no Docker and an Ubuntu one does; the walk reports either, and needs neither.
+#
+# Its own workflow, on the paths that can change the app, because a macOS and a Windows runner
+# on every pull request is a cost the rest of the tree does not need to pay. It needs the
+# network: Hutch downloads the pinned toolchain and Electrobun's runtime for each platform.
+name: desktop
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "packages/setup/**"
+      - "packages/core/**"
+      - "apps/ui/public/fonts/**"
+      - "deploy/compose/docker-compose.install.yml"
+      - "bun.lock"
+      - ".taskfiles/**"
+      - ".github/workflows/desktop.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "packages/setup/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      # What an Electrobun app needs to run on Linux (Electrobun's cross-platform guide), and a
+      # virtual display for a runner that has none.
+      - if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-0
+          libayatana-appindicator3-1 librsvg2-2 xvfb
+      - run: bun install --frozen-lockfile
+      - run: task ci:desktop-check

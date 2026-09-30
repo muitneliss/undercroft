@@ -18,7 +18,7 @@ import type {
   ProblemCode,
   SignIn,
 } from "@undercroft/setup";
-import { validateAnswers } from "@undercroft/setup";
+import { DEFAULT_BIND, DEFAULT_PORT, validateAnswers } from "@undercroft/setup";
 
 export const COMMANDS = ["up", "down", "status", "logs", "update", "uninstall"] as const;
 export type CommandName = (typeof COMMANDS)[number];
@@ -104,15 +104,12 @@ export function parseInvocation(argv: readonly string[]): ParsedInvocation {
   return { ok: true, invocation: { command: first, operands: rest, flags: parsed.values } };
 }
 
-export const DEFAULT_PORT = 13_000;
 const PORT = /^\d{1,5}$/u;
 
 /** A port as typed; anything but digits is `NaN`, which `validateAnswers` reports. */
 export function portOf(raw: string): number {
   return PORT.test(raw) ? Number.parseInt(raw, 10) : Number.NaN;
 }
-
-const DEFAULT_BIND = "127.0.0.1";
 
 /** A client from its two flags when either is given, else what the install already had. */
 function client(

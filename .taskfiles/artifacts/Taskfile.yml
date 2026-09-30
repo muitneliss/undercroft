@@ -30,6 +30,23 @@ tasks:
     cmds:
       - bun run build:installer-cli
 
+  desktop:
+    desc: >-
+      Build the desktop app (apps/desktop, Electrobun) for THIS operating system into
+      apps/desktop/artifacts/: a .dmg on macOS, a Setup .zip on Windows, a .tar.gz on Linux, and
+      the updater's files. Needs the network the first time (Hutch fetches the pinned toolchain).
+      ADR 0098.
+    cmds:
+      - bun run build:desktop
+
+  desktop-icons:
+    desc: >-
+      Render the desktop app's icons (the .iconset, the Windows/Linux PNG, the tray images) from
+      apps/desktop/assets/icon.svg and apps/ui/public/mark.svg. macOS only (uses sips); the PNGs
+      are committed.
+    cmds:
+      - bun run build:desktop-icons
+
   spec-schema:
     desc: Emit the connector spec's JSON Schema to specs/schema/connector.v1.json.
     cmds:

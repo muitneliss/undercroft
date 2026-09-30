@@ -5,6 +5,14 @@ on a server for a team. It installs the same Docker compose stack the hosted ser
 pulled at one pinned release. [ADR 0095](../adr/0095-undercroft-installs-through-a-setup-wizard-that-drives-docker.md)
 records why. This page is how to install, operate, back up and remove it.
 
+The wizard comes two ways, and both install the same thing into the same place:
+
+- **The desktop app**, a window and a tray icon, for anyone who would rather not open a
+  terminal. [The desktop app](#the-desktop-app) below; [ADR 0098](../adr/0098-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
+  records its design.
+- **The terminal wizard**, `undercroft-installer`, which also runs unattended for a script or a
+  server. [Install](#install) below.
+
 ## Before you start
 
 | You need      | Why                                                                                                                                                                                                                            |
@@ -36,8 +44,9 @@ program somewhere else.
 
 Download `undercroft-installer-windows-x64.exe` from the
 [latest release](https://github.com/muitneliss/undercroft/releases/latest) and double-click
-it. The binary is not code-signed yet, so SmartScreen may say it does not recognise the app:
-choose _More info > Run anyway_. The window stays open at the end until you press Enter.
+it. The binary is not code-signed, so SmartScreen may say it does not recognise the app:
+choose _More info > Run anyway_, after [checking the download](#unsigned-downloads). The
+window stays open at the end until you press Enter.
 
 ### What the wizard asks
 
@@ -100,6 +109,142 @@ undercroft-installer --yes --mode server \
 `--dry-run` prints what would be installed and stops, without writing a file or calling
 Docker. `undercroft-installer --help` lists every flag. A flag given on a re-run changes that
 one answer and keeps the rest.
+
+## The desktop app
+
+The same wizard in a window, and afterwards a tray icon (the menu bar on macOS) that starts,
+stops and opens Undercroft. It drives the same setup code as the terminal wizard and uses the
+same install folder, so either one can look after an install the other made.
+
+### Download
+
+From the [latest release](https://github.com/muitneliss/undercroft/releases/latest):
+
+| Your machine          | File                                |
+| --------------------- | ----------------------------------- |
+| macOS (Apple Silicon) | `macos-arm64-Undercroft.dmg`        |
+| Windows (x64 and Arm) | `win-x64-Undercroft-Setup.zip`      |
+| Linux (x64)           | `linux-x64-Undercroft-Setup.tar.gz` |
+
+An Intel Mac has no desktop build (Electrobun, the framework it is built with, publishes none);
+use the [terminal wizard](#macos-and-linux). Windows on Arm runs the x64 build.
+
+None of these files is signed. [Check the download](#unsigned-downloads) against
+`undercroft-desktop-SHA256SUMS` before you open it.
+
+### First run
+
+- **macOS.** Open the `.dmg` and drag Undercroft into Applications. The first time you open it
+  macOS says it cannot verify the developer. Either right-click (or Control-click) the app and
+  choose _Open_, then _Open_ again; or, on macOS 15 and later, open it once, then go to _System
+  Settings > Privacy & Security_ and choose _Open Anyway_. From a terminal,
+  `xattr -dr com.apple.quarantine /Applications/Undercroft.app` does the same. On its first
+  start the app unpacks itself into `~/Library/Application Support/link.lowbit.undercroft/`.
+- **Windows.** Unzip the file and run the Setup program inside. SmartScreen says it does not
+  recognise the app: choose _More info_, then _Run anyway_.
+- **Linux.** Unpack the `.tar.gz` and run the setup program inside. No extra step. The app needs
+  GTK 3, WebKitGTK 4.1 and an app-indicator library, which most desktops already have; on
+  Ubuntu or Debian: `sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2`.
+
+### The wizard
+
+The same questions as [the terminal wizard](#what-the-wizard-asks), one step to a page:
+language, who it is for, Docker, settings, data sources (optional; _Skip for now_ moves on),
+install, done. What differs in a window:
+
+- **Docker.** The app cannot type a password into a terminal, so it installs Docker itself only
+  on Windows, with winget, which shows Windows' own permission prompt. Windows then needs a
+  restart to turn on WSL 2; _Restart Windows_ restarts it and the wizard opens again at the
+  Docker step. On macOS and Linux the step shows the command to run and a download button,
+  and _Check again_ looks once more.
+- **Settings** also asks for the install folder, the default being the same one the terminal
+  wizard uses.
+- **Data sources** shows, for Google and for Xero, the redirect URI to register before you have
+  a client to paste, and a link to the guide for registering one.
+- **Install** lists every image as Docker pulls it, then waits until Undercroft answers.
+- **Done** has _Open Undercroft_, which opens `http://localhost:<port>` for a desktop install,
+  where you arrive signed in as the owner.
+
+Closing the window leaves Undercroft running. Opening the app again when it is installed
+starts Undercroft if it is stopped and opens it in your browser, without the wizard.
+
+### The tray
+
+| Item              | Does                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| Open Undercroft   | Opens the install in your browser, at its exact address                                |
+| Start             | Starts the install at this app's release, then opens it                                |
+| Stop              | Stops everything. The data stays                                                       |
+| Status            | Each service's state                                                                   |
+| Settings…         | The wizard again, at Settings, with the install's answers. Passwords and keys are kept |
+| Logs folder       | The folder holding `install.log`, every line the app's installs printed                |
+| Check for updates | Downloads a newer app from the latest release and restarts into it                     |
+| Uninstall…        | Removes the containers, keeping the data or, asked twice, deleting everything          |
+| Quit              | Closes the app. Undercroft keeps running in Docker                                     |
+
+After an update, _Start_ moves the install to the new release: the app installs its own
+release, as the terminal wizard does.
+
+### Removing the app
+
+_Uninstall…_ in the tray removes Undercroft from Docker. Then delete the app as you would any
+other: on macOS, drag it from Applications to the Bin and delete
+`~/Library/Application Support/link.lowbit.undercroft/`. The app keeps its own few settings
+(the install folder, the language) in that folder; the install's secrets are only ever in the
+install folder's `.env`.
+
+### Building it yourself
+
+Rather than run a downloaded binary, build the app from this repository on the machine you
+will run it on. You need [Bun](https://bun.sh) and [Task](https://taskfile.dev):
+
+```sh
+git clone https://github.com/muitneliss/undercroft.git
+cd undercroft
+bun install
+task build:desktop
+```
+
+The installer for your system is written to `apps/desktop/artifacts/`. `task dev:desktop`
+builds a development copy and opens it instead. The first build downloads Electrobun's pinned
+toolchain.
+
+## Unsigned downloads
+
+Nothing Undercroft publishes is code-signed: not the desktop app and not the terminal wizard's
+binaries. Each is built by the public release workflow from the public source at the release's
+tag, and each release publishes SHA-256 checksums beside them. [ADR 0098](../adr/0098-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
+records why, and what would change it.
+
+**Check a download against its checksum** before you open it. Download the checksum file from
+the same release -- `undercroft-desktop-SHA256SUMS` for the desktop app,
+`undercroft-installer-SHA256SUMS` for the terminal wizard -- into the same folder, then:
+
+```sh
+# macOS
+grep ' macos-arm64-Undercroft.dmg$' undercroft-desktop-SHA256SUMS | shasum -a 256 -c
+# Linux
+grep ' linux-x64-Undercroft-Setup.tar.gz$' undercroft-desktop-SHA256SUMS | sha256sum -c
+```
+
+```powershell
+# Windows: the two lines must show the same hash
+(Get-FileHash .\win-x64-Undercroft-Setup.zip -Algorithm SHA256).Hash.ToLower()
+Select-String 'win-x64-Undercroft-Setup.zip' .\undercroft-desktop-SHA256SUMS
+```
+
+`install.sh` does this check for the terminal wizard by itself.
+
+**What your system says about an unsigned file:**
+
+- **macOS** marks a file downloaded in a browser as quarantined, and Gatekeeper then refuses to
+  open it until you say so ([First run](#first-run) above). A file downloaded with `curl` is
+  not marked, which is why `install.sh` runs the terminal wizard without a prompt. A terminal
+  wizard downloaded in a browser needs `xattr -d com.apple.quarantine undercroft-installer-darwin-*`
+  once.
+- **Windows** SmartScreen says it does not recognise the program: _More info_, then _Run
+  anyway_. Each release is a new file to SmartScreen, so it says so again after an update.
+- **Linux** has no such step.
 
 ## Where things are
 
@@ -168,13 +313,17 @@ mid-write.
 
 ## Changing the installer
 
-The install logic lives in `packages/setup` and the terminal wizard in `apps/installer-cli`.
+The install logic lives in `packages/setup`, the terminal wizard in `apps/installer-cli` and the
+desktop app in `apps/desktop`.
 The compose file is `deploy/compose/docker-compose.install.yml`. A test pins its services and
 images to `docker-compose.server.yml`, so change both together.
 
-| Task                                  | Does                                                                                 |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| `task ci:installer-check`             | Compiles this machine's installer and runs it with no Docker                         |
-| `task build:installer-cli`            | Compiles every platform's installer and the checksums into `apps/installer-cli/dist` |
-| `task cd:installer-upload TAG=vX.Y.Z` | Attaches them and `install.sh` to a release. The release workflow runs it            |
-| `task ci:compose-check`               | Checks every compose file, this one included, declares memory limits                 |
+| Task                                         | Does                                                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `task ci:installer-check`                    | Compiles this machine's installer and runs it with no Docker                                                |
+| `task ci:desktop-check`                      | Typechecks the desktop app against Electrobun, builds it, and launches it to walk itself to the Docker step |
+| `task build:desktop`                         | Builds the desktop app for this system into `apps/desktop/artifacts`                                        |
+| `task cd:desktop-release DIR=... TAG=vX.Y.Z` | Checksums every platform's desktop build and attaches them to a release. The release workflow runs it       |
+| `task build:installer-cli`                   | Compiles every platform's installer and the checksums into `apps/installer-cli/dist`                        |
+| `task cd:installer-upload TAG=vX.Y.Z`        | Attaches them and `install.sh` to a release. The release workflow runs it                                   |
+| `task ci:compose-check`                      | Checks every compose file, this one included, declares memory limits                                        |

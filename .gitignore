@@ -52,3 +52,9 @@ fixtures/live/
 # Astro's generated content types (`astro sync`, run by `task build:blog`). Rebuilt from the
 # posts on every build, so a tracked copy is only ever stale.
 apps/blog/.astro/
+
+# Electrobun's generated trees for the desktop app (ADR 0098): `.hutch/` is the SDK and
+# toolchain projection `electrobun prepare` writes, `artifacts/` what `task build:desktop`
+# publishes (`build/` is already ignored above). Each is rebuilt on every build.
+apps/desktop/.hutch/
+apps/desktop/artifacts/

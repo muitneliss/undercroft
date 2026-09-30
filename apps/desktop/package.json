@@ -1,0 +1,19 @@
+{
+  "name": "@undercroft/desktop",
+  "version": "1.56.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@undercroft/core": "workspace:*",
+    "@undercroft/setup": "workspace:*",
+    "electrobun": "2.0.2",
+    "i18next": "26.4.2",
+    "react": "19.0.8",
+    "react-dom": "19.0.8",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.2"
+  }
+}

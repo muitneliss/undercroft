@@ -447,7 +447,9 @@
     // `apps/cli` is bundled too, but for Node (`Bun.build` with `target: "node"`): its files
     // and its terminal ARE the platform, the same as for the servers. `apps/installer-cli` is
     // compiled into a Bun executable per platform (ADR 0095), and a process runner, the install
-    // folder and a terminal prompt are what it is for.
+    // folder and a terminal prompt are what it is for. `apps/desktop`'s main process runs on
+    // Bun inside the Electrobun app (ADR 0098) and is named by its layers; its webview,
+    // `apps/desktop/src/view`, is a browser and keeps the rule, like `apps/ui/src`.
     //
     // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
     // respectively, never in the browser.
@@ -455,6 +457,11 @@
       "includes": [
         "apps/cli/**",
         "apps/installer-cli/**",
+        "apps/desktop/src/main.ts",
+        "apps/desktop/src/services/**",
+        "apps/desktop/src/handlers/**",
+        "apps/desktop/scripts/**",
+        "apps/desktop/*.config.ts",
         "apps/control-plane/**",
         "apps/worker/**",
         "packages/**",
@@ -477,6 +484,9 @@
         "apps/*/src/*Cli.ts",
         "packages/*/src/*Cli.ts",
         "scripts/**",
+        // The desktop app's build, check and release scripts hand the Electrobun toolchain and
+        // the launched app their environment, as `scripts/**` does for the processes it runs.
+        "apps/desktop/scripts/**",
         // A build config IS a composition root: it is where the dev server is wired, and the
         // proxy target has to follow the same UNDERCROFT_API_PORT `task dev:api` binds. It is
         // already named above for `noNodejsModules`, for the same reason -- it runs on Node,
@@ -543,6 +553,33 @@
         "apps/blog/src/posts.ts"
       ],
       "linter": { "rules": { "correctness": { "noUnresolvedImports": "off" } } }
+    },
+
+    // The desktop wizard's sheet (ADR 0098). Four rules, four reasons, each checked against it:
+    {
+      "includes": ["apps/desktop/src/view/index.css"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            // Its modifiers are assembled at runtime -- `rail__step--${place}` in Wizard.tsx,
+            // `image--${state}` in InstallStep.tsx -- which the rule cannot see; 73 findings,
+            // every one a class some element carries.
+            "noUnusedClasses": "off",
+            // One sheet for one window. A cascade layer orders one sheet against another, and
+            // this page loads no other.
+            "useLayeredStyles": "off"
+          },
+          "style": {
+            // The tokens are `apps/ui/src/index.css`'s, copied verbatim so a reader can check
+            // them against it by eye; rewriting them in another notation would hide a drift
+            // between the two in the one place it could be seen.
+            "noHexColors": "off",
+            // The same argument as the UI's sheet below: the rail, the leaf and the fields are
+            // defined against each other, and cutting at 300 lines splits one argument.
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
     },
 
     // The stylesheet and the favicon. These five reasons were written at the top of
@@ -783,10 +820,11 @@
       "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
     },
 
-    // Five entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
+    // Seven entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
     // default export carrying `port` and `fetch` to start a server, and Vite reads a default
-    // export from its config, as Astro does from `astro.config.ts`. A named export is not an
-    // option a caller would accept. `embedded.d.ts` declares what Bun's text loader hands an
+    // export from its config, as Astro does from `astro.config.ts` and Electrobun's toolchain
+    // from `electrobun.config.ts` and `hutch.config.ts`. A named export is not an option a
+    // caller would accept. `embedded.d.ts` declares what Bun's text loader hands an
     // `import ... with { type: "text" }` -- a default export is the only shape it has.
     {
       "includes": [
@@ -794,6 +832,8 @@
         "apps/worker/src/server.ts",
         "apps/ui/vite.config.ts",
         "apps/blog/astro.config.ts",
+        "apps/desktop/electrobun.config.ts",
+        "apps/desktop/hutch.config.ts",
         "packages/setup/src/embedded.d.ts"
       ],
       "linter": { "rules": { "style": { "noDefaultExport": "off" } } }

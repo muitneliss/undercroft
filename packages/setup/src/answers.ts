@@ -12,8 +12,12 @@
  *   proves an address: a mail key for one-time codes, or a Google client.
  *
  * `validateAnswers` returns problems as CODES, never sentences. This package is below every
- * front end -- the terminal wizard now, a GUI later -- and each words a problem in the reader's
- * language itself.
+ * front end -- the terminal wizard and the desktop app (ADR 0098) -- and each words a problem in
+ * the reader's language itself.
+ *
+ * This module imports nothing, and `@undercroft/setup/answers` exports it alone, so the desktop
+ * app's webview can validate what a person typed as they type it without bundling the process
+ * runner, `node:crypto` and the file system that the package's root also exports.
  */
 
 export type Mode = "desktop" | "server";
@@ -65,6 +69,15 @@ export type Answers = DesktopAnswers | ServerAnswers;
  * mailbox that a later server install would hand administrator rights to.
  */
 export const DESKTOP_OWNER = "owner@undercroft.local";
+
+/** The port a new install is offered, by every front end. */
+export const DEFAULT_PORT = 13_000;
+
+/**
+ * The bind address a new server install is offered: loopback, for a reverse proxy on the same
+ * host. Publishing on every interface is a choice a person makes, never a default.
+ */
+export const DEFAULT_BIND = "127.0.0.1";
 
 export type Field =
   | "port"
@@ -237,4 +250,29 @@ export function installUrl(answers: Answers): string {
   return answers.mode === "desktop"
     ? `http://localhost:${answers.port}`
     : answers.publicUrl.replace(TRAILING_SLASH, "");
+}
+
+/** Where each OAuth client a person registers sends the browser back to. */
+export interface RedirectUris {
+  /** Better Auth's callback, for the Google client people sign in with (a server install). */
+  readonly googleSignIn: string;
+  /** The SECOND Google client's, for Gmail and Drive (ADR 0016). */
+  readonly googleIngest: string;
+  readonly xero: string;
+}
+
+/**
+ * The redirect URIs to register with each provider for an install opened at `url`
+ * (`installUrl`). A person registers them BEFORE they have a client to paste, so they are
+ * derived from the URL alone. The paths are the control plane's own: Better Auth's
+ * `/api/auth/callback/<provider>`, and `redirectUri` in
+ * `apps/control-plane/src/services/oauthProviders.ts`.
+ */
+export function redirectUris(url: string): RedirectUris {
+  const origin = url.replace(TRAILING_SLASH, "");
+  return {
+    googleSignIn: `${origin}/api/auth/callback/google`,
+    googleIngest: `${origin}/oauth/google/callback`,
+    xero: `${origin}/oauth/xero/callback`,
+  };
 }

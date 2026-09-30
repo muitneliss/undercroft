@@ -1,0 +1,524 @@
+/*
+ * The setup wizard's sheet: the product's printed-matter look, at the size of one window.
+ *
+ * WHY A SHEET OF ITS OWN. `apps/ui/src/index.css` is the control plane's whole book -- Tailwind
+ * layers, xyflow, seven section boards, the acetate solver -- and none of it is wanted in a
+ * seven-step form. The TOKENS are taken from it verbatim (ground, ink, rules, the chrome board,
+ * errata, the three faces and the type scale) so the wizard reads as the same product, and its
+ * fonts are the same files, copied in at build time from `apps/ui/public/fonts`
+ * (`electrobun.config.ts`). A token changed there is changed here by hand, which is the cost of
+ * not bundling the book; the list below is short on purpose so that stays cheap.
+ *
+ * The rules of that sheet hold here too: containers are hairline rules, never shadows; vermilion
+ * (`--errata`) marks a failure and nothing else; nothing eases -- a change of state is a frame,
+ * and every transition is `steps()`.
+ */
+
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("fonts/archivo-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("fonts/archivo-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/garamond-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/garamond-vietnamese.woff2") format("woff2");
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "Spline Sans Mono";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/mono-latin.woff2") format("woff2");
+}
+
+:root {
+  --face-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --face-prose: "EB Garamond", ui-serif, Georgia, serif;
+  --face-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --bone: #efe9d9;
+  --page: #f7f3e7;
+  --leaf: #fbf8f0;
+  --ink: #16150f;
+  --ink-2: #56513f;
+  --ink-3: #6b6450;
+  --rule: rgba(22, 21, 15, 0.16);
+  --rule-strong: rgba(22, 21, 15, 0.44);
+  --hair: 1px;
+
+  /* The installer's board is the sources section's chrome, the first hue of the wheel. */
+  --board: #eda600;
+  --board-ink: #4a3300;
+  --grass: #3e782b;
+  --errata: #cf2f16;
+  --errata-ink: #8c1c09;
+
+  --t-micro: 0.6875rem;
+  --t-small: 0.8125rem;
+  --t-body: 0.9375rem;
+  --t-prose: 1.0625rem;
+  --t-h2: 1.75rem;
+
+  --control-h: 2.25rem;
+  --gap: 0.75rem;
+  --frame: 80ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bone);
+  color: var(--ink);
+  font-family: var(--face-display);
+  font-size: var(--t-body);
+}
+
+#root {
+  height: 100%;
+}
+
+.wizard {
+  display: grid;
+  grid-template-columns: 13rem 1fr;
+  height: 100%;
+}
+
+/* -- the rail: the section board down the spine ----------------------------------------------- */
+
+.rail {
+  background: var(--board);
+  color: var(--board-ink);
+  padding: 1.5rem 1rem;
+  border-right: var(--hair) solid var(--rule-strong);
+}
+
+.rail__name {
+  margin: 0 0 1.5rem;
+  font-weight: 700;
+  font-stretch: 75%;
+  font-size: var(--t-h2);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.rail__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+
+.rail__step {
+  counter-increment: step;
+  padding: 0.4rem 0.5rem;
+  border-top: var(--hair) solid var(--rule);
+  font-size: var(--t-small);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.rail__step::before {
+  content: counter(step) " ";
+  font-family: var(--face-mono);
+}
+
+.rail__step--passed {
+  text-decoration: line-through;
+}
+
+.rail__step--current {
+  background: var(--leaf);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* -- the leaf: the current step --------------------------------------------------------------- */
+
+.leaf {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--page);
+}
+
+.leaf__head {
+  padding: 1.75rem 2rem 0.75rem;
+  border-bottom: var(--hair) solid var(--rule);
+}
+
+.leaf__title {
+  margin: 0;
+  font-size: var(--t-h2);
+  font-weight: 700;
+  font-stretch: 85%;
+}
+
+.leaf__lead {
+  margin: 0.5rem 0 0;
+  font-family: var(--face-prose);
+  font-size: var(--t-prose);
+  color: var(--ink-2);
+  max-width: 40rem;
+}
+
+.leaf__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.leaf__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap);
+  padding: 0.9rem 2rem;
+  border-top: var(--hair) solid var(--rule-strong);
+  background: var(--leaf);
+}
+
+/* -- fields ------------------------------------------------------------------------------------ */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.field__caption {
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+}
+
+.field__box {
+  height: var(--control-h);
+  padding: 0 0.6rem;
+  border: var(--hair) solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--leaf);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field__box--mono {
+  font-family: var(--face-mono);
+  font-size: var(--t-small);
+}
+
+.field__box:focus-visible,
+.button:focus-visible,
+.link:focus-visible,
+.plate:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.field__box[readonly] {
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.field__hint {
+  margin: 0;
+  font-family: var(--face-prose);
+  color: var(--ink-2);
+}
+
+.problems {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--errata-ink);
+}
+
+.problems li::before {
+  content: "✕ ";
+  color: var(--errata);
+}
+
+/* A control sits on the line of the field beside it (`.claude/rules/layout.md`). */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  align-items: center;
+}
+
+.row--field,
+.row:has(> .field) {
+  align-items: flex-end;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* -- plates: a choice of one ------------------------------------------------------------------- */
+
+.plates {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.plate {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border: var(--hair) solid var(--rule-strong);
+  background: var(--leaf);
+  cursor: pointer;
+  transition: background var(--frame) steps(2, end);
+}
+
+.plate input {
+  grid-row: span 2;
+  margin: 0.2rem 0 0;
+}
+
+.plate__label {
+  font-weight: 600;
+}
+
+.plate__hint {
+  font-family: var(--face-prose);
+  color: var(--ink-2);
+}
+
+.plate--chosen {
+  border-color: var(--ink);
+  box-shadow: inset 4px 0 0 var(--board);
+}
+
+/* -- cards: one connector ---------------------------------------------------------------------- */
+
+.card {
+  border: var(--hair) solid var(--rule-strong);
+  background: var(--leaf);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.card--on {
+  border-color: var(--ink);
+}
+
+.card__head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.card__title {
+  font-weight: 600;
+}
+
+/* -- words ------------------------------------------------------------------------------------- */
+
+.note {
+  margin: 0;
+  font-family: var(--face-prose);
+  font-size: var(--t-prose);
+  color: var(--ink-2);
+}
+
+.note--mono,
+.mono {
+  font-family: var(--face-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.uri {
+  margin: 0;
+}
+
+.status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.status--ok::before {
+  content: "✓ ";
+  color: var(--grass);
+}
+
+.errata {
+  margin: 0;
+  color: var(--errata-ink);
+  border-left: 3px solid var(--errata);
+  padding-left: 0.6rem;
+}
+
+.tail {
+  margin: 0;
+  padding: 0.6rem;
+  max-height: 12rem;
+  overflow: auto;
+  background: var(--leaf);
+  border: var(--hair) solid var(--rule);
+  font-family: var(--face-mono);
+  font-size: var(--t-micro);
+  white-space: pre-wrap;
+}
+
+.summary {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.images {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--hair) solid var(--rule);
+}
+
+.image {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 0.3rem 0;
+  border-bottom: var(--hair) solid var(--rule);
+}
+
+.image__state {
+  font-size: var(--t-small);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.image--pulled .image__state {
+  color: var(--grass);
+}
+
+.image--failed .image__state {
+  color: var(--errata-ink);
+}
+
+.line {
+  margin: 0;
+  min-height: 1.2em;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -- buttons ----------------------------------------------------------------------------------- */
+
+.button {
+  height: var(--control-h);
+  padding: 0 1rem;
+  border: var(--hair) solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--leaf);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--frame) steps(2, end);
+}
+
+.button:hover {
+  background: var(--bone);
+}
+
+.button:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.button--go {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--leaf);
+}
+
+.button--go:hover {
+  background: var(--ink-2);
+}
+
+.button--quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* A plate beside a field is struck to the box's height (`.claude/rules/layout.md`). A field that
+ * carries a hint or problems under its box would pull the bottom edge down with them, so the
+ * plate then sits on the box's line by its top instead: caption height, then the gap. */
+.row--field > .button {
+  height: var(--control-h);
+}
+
+.row--field > .field:has(.field__hint, .problems) + .button {
+  align-self: flex-start;
+  margin-top: calc(var(--t-micro) * 1.4 + 0.3rem);
+}

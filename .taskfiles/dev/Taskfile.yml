@@ -254,6 +254,14 @@ tasks:
       - task: :build:cli
       - node {{.ROOT_DIR}}/apps/cli/dist/undercroft.mjs {{.CLI_ARGS}}
 
+  desktop:
+    desc: >-
+      Build the desktop app for development and open it (electrobun dev). It drives the real
+      Docker on this machine, and the install it writes is a real one. ADR 0098.
+    interactive: true
+    cmds:
+      - bun run dev:desktop
+
   mcp-smoke:
     desc: >-
       Smoke-test a running /mcp with a personal access token: the 401 challenge, the tool list

@@ -3,8 +3,10 @@
 # (trpc.*.useQuery()). A local `useState` is a third, unowned source of truth.
 #
 # Two rules because ast-grep binds one language per rule: `.tsx` parses as `tsx`,
-# `.ts` as `typescript`. Both are scoped to apps/ui -- `useState` is a React concern,
-# and the backend apps have no React. See .claude/rules/state.md and docs/adr/0009.
+# `.ts` as `typescript`. Both are scoped to the two React trees -- apps/ui, and the desktop
+# app's wizard (apps/desktop, ADR 0098), whose client state lives in its own Zustand store --
+# because `useState` is a React concern and the backend apps have no React. See
+# .claude/rules/state.md and docs/adr/0009.
 #
 # `apps/ui/src/components/ui/**` is exempt in both rules below: shadcn's CLI copies
 # component source there verbatim, and some of that vendored wrapper code calls
@@ -20,6 +22,7 @@ message: >-
   (trpc.*.useQuery()). See .claude/rules/state.md.
 files:
   - "apps/ui/**"
+  - "apps/desktop/**"
 ignores:
   - "apps/ui/src/components/ui/**"
 rule:
@@ -37,6 +40,7 @@ message: >-
   (trpc.*.useQuery()). See .claude/rules/state.md.
 files:
   - "apps/ui/**"
+  - "apps/desktop/**"
 ignores:
   - "apps/ui/src/components/ui/**"
 rule:

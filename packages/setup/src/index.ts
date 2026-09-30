@@ -2,14 +2,16 @@
  * `@undercroft/setup`: installing Undercroft on one machine with Docker (ADR 0095).
  *
  * UI-agnostic by construction. Nothing here reads the environment, writes to a terminal or
- * words a sentence; every front end -- the terminal wizard in `apps/installer-cli`, and the GUI
- * wizard after it -- hands in how to run a program, fetch and tell the time, and words the
- * codes it gets back in its reader's language.
+ * words a sentence; every front end -- the terminal wizard in `apps/installer-cli` and the
+ * desktop app in `apps/desktop` (ADR 0098) -- hands in how to run a program, fetch and tell the
+ * time, and words the codes it gets back in its reader's language.
  */
 
 export {
   type Answers,
   type Connectors,
+  DEFAULT_BIND,
+  DEFAULT_PORT,
   DESKTOP_OWNER,
   type DesktopAnswers,
   type Field,
@@ -19,6 +21,8 @@ export {
   type OAuthClient,
   type Problem,
   type ProblemCode,
+  type RedirectUris,
+  redirectUris,
   type ServerAnswers,
   type SignIn,
   validateAnswers,
@@ -35,6 +39,7 @@ export {
   installDocker,
   type Platform,
 } from "./docker.ts";
+export { defaultInstallDir, type InstallDirInputs } from "./installDir.ts";
 export {
   COMPOSE_FILE_NAME,
   ENV_FILE,
