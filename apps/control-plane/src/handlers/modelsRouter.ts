@@ -161,6 +161,14 @@ export const modelsRouter = router({
     }),
 
   /**
+   * What each model declares it reads: other models by `ref()`, raw lake tables by
+   * `source()`, through any macro it calls. Any member may, as they may read the models it is
+   * read from. Declared relations only (ADR 0092): a model whose upstream its text cannot
+   * show carries why, and a ref to a deleted model stays as a missing dependency.
+   */
+  lineage: tenantProcedure.query(({ ctx, input }) => models.lineage(ctx.exec, input.tenantId)),
+
+  /**
    * The sources and macros every project carries, and the tenant's own macros, for the
    * editor's reference panel and for an agent choosing what to call.
    */

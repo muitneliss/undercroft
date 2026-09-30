@@ -80,6 +80,8 @@ export const procedureSentences: SentenceTable = {
   "models.delete":
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",
   "models.build": "Chạy dbt cho một mô hình và chờ kết quả. Quản trị.",
+  "models.lineage":
+    "Mô hình nào đọc mô hình nào và bảng hồ thô nào, theo đúng khai báo ref() và source() của chính các mô hình và macro; không suy đoán quan hệ nào.",
   "models.reference":
     "Tài liệu tham khảo cho người viết mô hình: các nguồn, macro của nền tảng và macro riêng của khách hàng.",
   "models.check":
