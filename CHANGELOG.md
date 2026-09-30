@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.57.0](https://github.com/muitneliss/undercroft/compare/v1.56.0...v1.57.0) (2026-09-30)
+
+
+### Features
+
+* **cli:** sign in to a desktop install without a code (ADR 0096) ([#364](https://github.com/muitneliss/undercroft/issues/364)) ([1562871](https://github.com/muitneliss/undercroft/commit/1562871b2a592f5598e2dee7bb0d8d9f3c0648e5))
+* **desktop:** install and run Undercroft from a desktop app with a tray (ADR 0098) ([#366](https://github.com/muitneliss/undercroft/issues/366)) ([0a0aade](https://github.com/muitneliss/undercroft/commit/0a0aade84352f9a68d808ea3a423a7d734161fdb))
+* **ui:** draw lineage on a board the reader pans, zooms and arranges (ADR 0097) ([#367](https://github.com/muitneliss/undercroft/issues/367)) ([d9529ce](https://github.com/muitneliss/undercroft/commit/d9529cef360da1294755e4df0c98303f45d50545))
+
 ## [1.56.0](https://github.com/muitneliss/undercroft/compare/v1.55.0...v1.56.0) (2026-09-30)
 
 
