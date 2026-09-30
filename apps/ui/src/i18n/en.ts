@@ -151,6 +151,7 @@ export const en = {
     startBody:
       "Every customer has a separate workspace for sources, runs and reports. Sign in to open the customers you have access to.",
     openWorkspace: "Open your workspace",
+    contactLead: "No invitation yet, or a question? Write to us.",
   },
 
   tenants: {

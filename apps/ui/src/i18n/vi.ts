@@ -196,6 +196,7 @@ export const vi = {
     startBody:
       "Mỗi khách hàng có một không gian riêng cho nguồn dữ liệu, các lần chạy và báo cáo. Đăng nhập để mở những hồ sơ bạn được cấp quyền.",
     openWorkspace: "Mở không gian làm việc",
+    contactLead: "Chưa có lời mời, hoặc cần hỏi thêm? Hãy viết cho chúng tôi.",
   },
 
   tenants: {

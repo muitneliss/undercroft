@@ -19,6 +19,8 @@ import "@/styles/home.css";
 
 const DOCUMENTATION = "https://github.com/muitneliss/undercroft#documentation";
 const MCP_SETUP = "https://github.com/muitneliss/undercroft/blob/main/docs/runbook/mcp-setup.md";
+/** The address multnelis answers at, the same one multnelis.org and the blog print. */
+const CONTACT_EMAIL = "contact@multnelis.org";
 const WORKFLOW_STEPS = [
   { title: "landing.workflowConnectTitle", body: "landing.workflowConnectBody" },
   { title: "landing.workflowAskTitle", body: "landing.workflowAskBody" },
@@ -176,6 +178,8 @@ export function Landing(): React.JSX.Element {
             <h2 id={startId}>{t("landing.startTitle")}</h2>
             <p>{t("landing.startBody")}</p>
             <Link to="/sign-in">{t("landing.openWorkspace")}</Link>
+            <p>{t("landing.contactLead")}</p>
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
           </section>
         </div>
       </main>

@@ -7,6 +7,8 @@
 export const SITE_URL = "https://blog.undercroft.lowbit.link";
 export const PRODUCT_URL = "https://undercroft.lowbit.link";
 export const REPO_URL = "https://github.com/muitneliss/undercroft";
+/** The address multnelis answers at, the same one multnelis.org prints. */
+export const CONTACT_EMAIL = "contact@multnelis.org";
 
 export const LANGS = ["vi", "en"] as const;
 export type Lang = (typeof LANGS)[number];
@@ -57,6 +59,7 @@ export const STRINGS = {
     notFoundBody: "Trang này không tồn tại hoặc đã được chuyển đi.",
     rss: "RSS",
     footer: "Undercroft · mã nguồn mở theo giấy phép MIT",
+    contact: `Liên hệ: ${CONTACT_EMAIL}`,
     dateLocale: "vi-VN",
   },
   en: {
@@ -86,6 +89,7 @@ export const STRINGS = {
     notFoundBody: "This page does not exist or has moved.",
     rss: "RSS",
     footer: "Undercroft · open source under the MIT licence",
+    contact: `Contact: ${CONTACT_EMAIL}`,
     dateLocale: "en-GB",
   },
 } as const satisfies Record<Lang, Record<string, unknown>>;

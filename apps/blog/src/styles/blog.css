@@ -293,6 +293,12 @@
     margin-right: auto;
   }
 
+  /* An address is copied letter for letter, so it keeps its own case. */
+  .colophon__mail {
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+
   /* -- the masthead ------------------------------------------------------------------------- */
 
   .masthead {
