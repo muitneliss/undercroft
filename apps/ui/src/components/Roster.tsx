@@ -11,22 +11,15 @@ import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
+import { isRole, ROLES, soleAdmin } from "@/lib/roles.ts";
 import type { trpc } from "@/trpc.ts";
 
 /**
- * The values the API takes, in the order the invitation form offers them. Printed as they
- * are, like the roster column beside them: `i18n.md` keeps role names untranslated.
- */
-const ROLES = ["viewer", "member", "admin"] as const;
-type Role = (typeof ROLES)[number];
-const ROLE_SET: ReadonlySet<string> = new Set(ROLES);
-
-function isRole(value: string): value is Role {
-  return ROLE_SET.has(value);
-}
-
-/**
  * A member's role: a word for everyone, a `<select>` for an admin.
+ *
+ * The customer's last admin is the exception: the row says so, to every reader, and offers no
+ * select, because every other value in it is a change the server refuses. Saying it in advance
+ * is courtesy; the refusal in `repos/membership.ts` is still the control.
  *
  * Controlled by the roster itself, not by the reader's choice: the value is the role the
  * server holds, so a change the server refuses -- the last admin stepping down -- leaves the
@@ -35,16 +28,26 @@ function isRole(value: string): value is Role {
  */
 function RoleCell({
   member,
+  last,
   isAdmin,
   setRole,
   tenantId,
 }: {
   member: { email: string; role: string };
+  last: boolean;
   isAdmin: boolean;
   setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
   tenantId: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  if (last) {
+    return (
+      <td>
+        {member.role}
+        <p className="field__hint">{t("people.lastAdmin")}</p>
+      </td>
+    );
+  }
   if (!isAdmin) {
     return <td>{member.role}</td>;
   }
@@ -160,7 +163,8 @@ function MembershipOutcome({
  * Who has access today, and -- for an admin -- the two ways to change that.
  *
  * Hidden rather than disabled for everyone else, like the invitation form; the procedures
- * refuse regardless of what the browser renders.
+ * refuse regardless of what the browser renders. The last admin's row keeps its Remove cell
+ * empty rather than dropping it, so the column still lines up with the rows that have one.
  */
 export function Roster({
   roster,
@@ -176,6 +180,7 @@ export function Roster({
   tenantId: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const last = soleAdmin(roster);
   return (
     <>
       {roster.length === 0 ? (
@@ -194,8 +199,15 @@ export function Roster({
             {roster.map((member) => (
               <tr key={member.userId}>
                 <td className="datum datum--quiet">{member.email}</td>
-                <RoleCell member={member} isAdmin={isAdmin} setRole={setRole} tenantId={tenantId} />
-                {isAdmin ? (
+                <RoleCell
+                  member={member}
+                  last={member === last}
+                  isAdmin={isAdmin}
+                  setRole={setRole}
+                  tenantId={tenantId}
+                />
+                {isAdmin && member === last ? <td /> : null}
+                {isAdmin && member !== last ? (
                   <RemoveCell email={member.email} remove={remove} tenantId={tenantId} />
                 ) : null}
               </tr>

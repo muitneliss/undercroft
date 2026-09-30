@@ -158,9 +158,11 @@ export const en = {
     lead: "Open a customer to see their data sources, journal and reports.",
     searchLabel: "Find a customer",
     searchPlaceholder: "Search by customer name or ID",
-    clearSearch: "Clear search",
+    roleLabel: "Your role",
+    roleAny: "Any role",
+    clearFilters: "Clear filters",
     noMatches:
-      "No matching customers. Try another name or ID, or clear the search to see everyone.",
+      "No matching customers. Try another name, ID or role, or clear the filters to see everyone.",
     colAction: "Action",
     open: "Open",
     openNamed: "Open {{name}}",
@@ -543,6 +545,7 @@ export const en = {
     colRemove: "Access",
     remove: "Remove…",
     removeConfirm: "Remove {{email}}",
+    lastAdmin: "Last admin — cannot be lowered or removed until another member is admin.",
     removing: "Removing…",
     removed: "{{email}} no longer has access.",
     notRemoved: "Not removed",
@@ -554,7 +557,8 @@ export const en = {
     colInvitedAs: "Invited as",
     colExpires: "Expires",
     colWithdraw: "Withdraw",
-    withdraw: "Withdraw",
+    withdraw: "Withdraw…",
+    withdrawConfirm: "Withdraw the invitation to {{email}}",
     withdrawing: "Withdrawing…",
     notWithdrawn: "Not withdrawn",
 
@@ -563,9 +567,13 @@ export const en = {
     inviteHint:
       "They must sign in with this exact address. An invitation is not a password — it grants nothing until they prove they control the mailbox.",
     roleLabel: "Role",
-    roleViewer: "viewer — can look",
-    roleMember: "member — can author questions and dashboards",
-    roleAdmin: "admin — can connect accounts and invite",
+    rightsLabel: "What each role may do in {{tenantId}}",
+    rightsViewer:
+      "Sees the connected sources, the run journal, the raw lake's summary, the models and macros, the document kinds, and who has access and who is invited; opens and runs saved questions and dashboards. Cannot write or save a question, or change anything else.",
+    rightsMember:
+      "Everything a viewer may do, and also: writes and runs new questions, saves and deletes questions and dashboards. Does not connect accounts, read the raw lake's contents, save or build models, or invite or remove anyone.",
+    rightsAdmin:
+      "Everything a member may do, and also: connects and disconnects accounts, chooses what they read and how often, starts a sync now; reads, searches and queries the raw lake's records and documents, and the rows a failed data-quality test stored; saves, deletes and builds models, saves and deletes macros; edits and publishes the document kinds; mints and revokes ingest keys; invites people, changes their role, removes them and withdraws invitations; renames the customer. Adding a new customer is for platform administrators only.",
     notInvited: "Not invited",
     invitedAndEmailed: "Invited {{email}}. They have been emailed.",
     invitedNotEmailedHeading: "Invited, but not emailed",

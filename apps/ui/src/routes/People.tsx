@@ -25,9 +25,51 @@ import { useTranslation } from "react-i18next";
 import { Errata } from "@/components/Errata.tsx";
 import { Roster } from "@/components/Roster.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { isRole, ROLES, type Role } from "@/lib/roles.ts";
 import { formatDate } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
+
+/**
+ * Withdrawing one open invitation: two presses, the second naming the address.
+ *
+ * The fold `RemoveCell` uses in the roster, for the same reason: the first plate opens it and
+ * sends nothing, the second says whose invitation goes. `<details>` holds whether it is open,
+ * so there is no `useState`. Every plate waits while one withdrawal is in flight, but only the
+ * row being withdrawn says so -- `variables` is which one was asked for.
+ */
+function WithdrawCell({
+  invitation,
+  revoke,
+  tenantId,
+}: {
+  invitation: { id: string; email: string };
+  revoke: ReturnType<typeof trpc.people.revokeInvitation.useMutation>;
+  tenantId: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <td>
+      <details className="tokenform">
+        <summary className="plate plate--small">{t("people.withdraw")}</summary>
+        <div className="hinge">
+          <button
+            className="plate plate--small plate--primary"
+            type="button"
+            disabled={revoke.isPending}
+            onClick={(): void => {
+              revoke.mutate({ tenantId, id: invitation.id });
+            }}
+          >
+            {revoke.isPending && revoke.variables.id === invitation.id
+              ? t("people.withdrawing")
+              : t("people.withdrawConfirm", { email: invitation.email })}
+          </button>
+        </div>
+      </details>
+    </td>
+  );
+}
 
 /** Invitations still open, and the refusal shown when one cannot be withdrawn. */
 function OpenInvitations({
@@ -69,22 +111,7 @@ function OpenInvitations({
                   time, so an invitation expiring at 07:00 SGT showed the previous day. */}
                 <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
                 {isAdmin ? (
-                  <td>
-                    <button
-                      className="plate plate--small"
-                      type="button"
-                      disabled={revoke.isPending}
-                      onClick={(): void => {
-                        revoke.mutate({ tenantId, id: invitation.id });
-                      }}
-                    >
-                      {/* Every plate waits, but only the row being withdrawn says so:
-                          `variables` is which one was asked for. */}
-                      {revoke.isPending && revoke.variables.id === invitation.id
-                        ? t("people.withdrawing")
-                        : t("people.withdraw")}
-                    </button>
-                  </td>
+                  <WithdrawCell invitation={invitation} revoke={revoke} tenantId={tenantId} />
                 ) : null}
               </tr>
             ))}
@@ -141,6 +168,41 @@ function InviteOutcome({
   );
 }
 
+/** Each role's sentence, keyed by the role so a fourth role is a type error until worded. */
+const RIGHTS = {
+  viewer: "people.rightsViewer",
+  member: "people.rightsMember",
+  admin: "people.rightsAdmin",
+} as const satisfies Record<Role, string>;
+
+/**
+ * What each role may do in this customer, beside the form that grants one.
+ *
+ * One catalogue entry per role, never assembled from role names (`i18n.md`), and each states
+ * what the router's gates allow and refuse and nothing more: `requireRole("member")` on asking
+ * and saving questions and dashboards, `requireRole("admin")` on every write to connections,
+ * models, macros, document kinds, keys, people and the customer's name, on starting a run and on
+ * reading the raw lake's contents. A gate that moves makes these sentences false, so a change
+ * to one is a change to both catalogues in the same commit. No test pins the two together:
+ * the sentences are prose, and a check that they match the router would have to parse them.
+ *
+ * Shown to every reader, not only an admin: a viewer who reads why a plate is absent has been
+ * told something true before the server had to refuse them.
+ */
+function RoleRights({ tenantId }: { tenantId: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <dl className="access" aria-label={t("people.rightsLabel", { tenantId })}>
+      {/* A flat list of pairs rather than a keyed `Fragment`, which Biome cannot resolve
+        out of React's types: `.access` lays `dt` and `dd` out as direct grid children. */}
+      {ROLES.flatMap((role) => [
+        <dt key={`${role}-role`}>{role}</dt>,
+        <dd key={`${role}-rights`}>{t(RIGHTS[role])}</dd>,
+      ])}
+    </dl>
+  );
+}
+
 /** Inviting somebody, which only an admin of this tenant may do. */
 function InvitePanel({
   isAdmin,
@@ -172,11 +234,7 @@ function InvitePanel({
             if (email === "") {
               return;
             }
-            invite.mutate({
-              tenantId,
-              email,
-              role: role === "admin" || role === "member" ? role : "viewer",
-            });
+            invite.mutate({ tenantId, email, role: isRole(role) ? role : "viewer" });
           }}
         >
           <div className="field">
@@ -209,14 +267,14 @@ function InvitePanel({
               disabled={invite.isPending}
               defaultValue="viewer"
             >
-              {/* The role names themselves stay in English in both catalogues: `viewer`,
-                `member` and `admin` are the values the API takes and the words the
-                roster column prints, so translating the option but not the row would
-                make the two disagree. What is translated is the explanation after the
-                dash, which is the part that has to be understood. */}
-              <option value="viewer">{t("people.roleViewer")}</option>
-              <option value="member">{t("people.roleMember")}</option>
-              <option value="admin">{t("people.roleAdmin")}</option>
+              {/* The values as they are, as in the roster's select: what each one grants is
+                the statement beside this form, and a second description here would be one
+                more place for the two to disagree. */}
+              {ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -231,6 +289,7 @@ function InvitePanel({
       ) : (
         <p className="note">{t("people.adminOnly", { tenantId })}</p>
       )}
+      <RoleRights tenantId={tenantId} />
     </>
   );
 }
