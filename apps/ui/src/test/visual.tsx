@@ -100,14 +100,18 @@ function network(
   };
 }
 
-/** Resolves once every finite animation on the page has finished or been cancelled. */
-async function animationsEnded(): Promise<void> {
-  const finite = document
-    .getAnimations()
-    .filter(
-      (animation) => animation.effect?.getComputedTiming().iterations !== Number.POSITIVE_INFINITY,
-    );
-  await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)));
+/**
+ * Jump every finite animation to its end state. Awaiting `finished` instead hung the question
+ * workbench at 1440 px for the whole test timeout -- its rows' fades stayed `running` and never
+ * advanced -- so the end state is set rather than waited for. An infinite animation has no end
+ * to jump to (`finish()` throws on one), and is left to the screenshot's own handling.
+ */
+function finishAnimations(): void {
+  for (const animation of document.getAnimations()) {
+    if (animation.effect?.getComputedTiming().iterations !== Number.POSITIVE_INFINITY) {
+      animation.finish();
+    }
+  }
 }
 
 /** A query's input, which tRPC sends in the address; this tier answers queries, not mutations. */
@@ -126,12 +130,10 @@ function inputOf(url: URL): unknown {
  * at the foot of the page rather than across the middle of it.
  *
  * Settled means no query in flight and nothing `aria-busy`, which is how every skeleton and
- * every lazy division's fallback here announces itself -- and every finite animation ended.
- * A screen mounts at the previous test's width and is narrowed here, so a row's `ink-set`
+ * every lazy division's fallback here announces itself -- and every finite animation at its
+ * end. A screen mounts at the previous test's width and is narrowed here, so a row's `ink-set`
  * fade can start as the picture is taken and land it with the rows half-inked; the
- * screenshot's own `animations: "disabled"` did not reliably catch that. An infinite
- * animation never ends, so only the finite ones are waited for; a cancelled one rejects its
- * `finished`, which is an end too.
+ * screenshot's own `animations: "disabled"` did not reliably catch that.
  */
 async function matches(
   name: string,
@@ -146,6 +148,6 @@ async function matches(
   await document.fonts.ready;
   expect(refused, "procedures the fixtures do not answer").toEqual([]);
   await page.viewport(width, document.documentElement.scrollHeight);
-  await animationsEnded();
+  finishAnimations();
   await expect(page).toMatchScreenshot(name, { screenshotOptions: { animations: "disabled" } });
 }
