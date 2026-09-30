@@ -2253,6 +2253,15 @@
     text-align: right;
   }
 
+  /* A table of words -- two readings set side by side, as the scope review's "Saved" and
+     "Will apply" -- has no figure and no verb in its last column. Set right, the reading it
+     is compared with ran against the far edge while its twin hung left of it, and the eye had
+     to cross the width of the leaf to compare one line with the other. */
+  .table--words td:last-child,
+  .table--words th:last-child {
+    text-align: start;
+  }
+
   /* -- a form hinged into a row ------------------------------------------------ */
 
   /* A plate that is a <summary>: the same die, the disclosure triangle removed. Open, it
