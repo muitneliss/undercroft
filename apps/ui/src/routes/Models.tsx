@@ -248,7 +248,10 @@ function ListFilters({ filters }: { filters: ModelListFilters }): React.JSX.Elem
   );
 }
 
-/** The caption: how many models, and -- when the list is narrowed -- how many of them show. */
+/**
+ * The caption: how many models show against how many there are -- always both, so the figure
+ * reads the same whether or not a search narrowed it -- and the state a pressed count chose.
+ */
 function caption(
   t: TFunction,
   filters: ModelListFilters,
@@ -261,9 +264,7 @@ function caption(
       state: stateLabel(t, filters.build),
     });
   }
-  return filters.query.trim() === ""
-    ? t("models.caption", { count: counts.total })
-    : t("models.captionMatched", { count: counts.total, shown: counts.shown });
+  return t("models.caption", { count: counts.total, shown: counts.shown });
 }
 
 function ModelList({

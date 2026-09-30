@@ -158,18 +158,18 @@ export const en = {
   },
 
   tenants: {
-    title: "Customer records",
-    lead: "Open a customer to see their data sources, journal and reports.",
-    searchLabel: "Find a customer",
-    searchPlaceholder: "Search by customer name or ID",
-    roleLabel: "Your role",
+    title: "Customer index",
+    lead: "One case book per customer. Choose the right book before reading or working with its data.",
+    searchLabel: "Find customer name or ID",
+    searchPlaceholder: "Name or CASE-…",
+    roleLabel: "Your access",
     roleAny: "Any role",
     clearFilters: "Clear filters",
     noMatches:
       "No matching customers. Try another name, ID or role, or clear the filters to see everyone.",
     colAction: "Action",
-    open: "Open",
-    openNamed: "Open {{name}}",
+    open: "Open book →",
+    openNamed: "Open book of {{name}}",
     guideHead: "Inside each record",
     guideBody:
       "Connect sources, inspect landed data and open reports through the customer's tabs. Each customer's data is stored and accessed separately.",
@@ -182,7 +182,7 @@ export const en = {
     captionFiltered_other: "{{shown, number}} of {{count, number}} customers",
     colCustomer: "Customer",
     colReference: "Tenant ID",
-    colRole: "Your role",
+    colRole: "Your access",
     addHead: "Add a customer",
     addNote:
       "Only a platform administrator can add a customer. Ask whoever runs this control plane to create the tenant ID.",
@@ -364,8 +364,8 @@ export const en = {
 
   lake: {
     head: "Lake",
-    title: "Raw lake",
-    lead: "What has actually landed for {{tenantId}}, before any transform.",
+    title: "Raw data lake",
+    lead: "Keep accounts, entities and payloads distinct. This is source evidence, not interpreted business metrics.",
     notLoaded: "The lake for {{tenantId}} could not be loaded.",
     emptyTitle: "Nothing has landed yet",
     emptyBody:
@@ -484,7 +484,7 @@ export const en = {
       "You can read this summary. Raw records, content search and the SQL console require administrator access.",
     noRows: "This stream has no records yet.",
 
-    runRows: "Only the rows that still carry run {{runId}}.",
+    runRows: "Only the rows that still carry {{runId}}.",
     runWrote_one: "This run wrote {{count, number}} row to this stream (new and changed).",
     runWrote_other: "This run wrote {{count, number}} rows to this stream (new and changed).",
     runRewritten_one:
@@ -612,7 +612,7 @@ export const en = {
     invitePlaceholder: "colleague@example.com",
     inviteHint:
       "They must sign in with this exact address. An invitation is not a password — it grants nothing until they prove they control the mailbox.",
-    roleLabel: "Role",
+    roleLabel: "Role in this customer",
     rightsLabel: "What each role may do in {{tenantId}}",
     rightsViewer:
       "Sees the connected sources, the run journal, the raw lake's summary, the models and macros, the document kinds, and who has access and who is invited; opens and runs saved questions and dashboards. Cannot write or save a question, or change anything else.",
@@ -645,13 +645,13 @@ export const en = {
     you: "You",
     removeLead:
       "Ends membership in this customer only. The person's sign-in and the customer's data stay.",
-    grantedWithin: "Access is granted within: {{name}} · {{tenantId}}",
+    grantedWithin: "Access is granted within: <name>{{name}}</name> · <id>{{tenantId}}</id>",
   },
 
   grant: {
-    markGranted: "Granted",
+    markGranted: "Connected",
     markPending: "Awaiting scope",
-    markLapsed: "Reconnect needed",
+    markLapsed: "Reconnect required",
     markAbsent: "Not granted",
     account: "Account",
     reads: "Reads",
@@ -746,7 +746,9 @@ export const en = {
   },
 
   scopePicker: {
-    title: "Choose what is read",
+    title: "Edit read scope",
+    /** Above both steps: the account the edit is for, then its source ID. */
+    accountFor: "Account for this edit",
     leadGmail:
       "Choose the labels to read. Only message headers and matching attachments in those labels are read; no other label is read.",
     leadDrive:
@@ -979,7 +981,7 @@ export const en = {
     detailNotLoaded: "This run's detail could not be loaded.",
     started: "Started",
     ended: "Ended",
-    trigger: "Started",
+    trigger: "Trigger",
     runId: "Run id",
     errorHead: "Error",
     entitiesHead: "By entity",
@@ -1160,10 +1162,8 @@ export const en = {
       "A model is one SELECT over raw.records, built into a table in this customer's analytics schema. Create the first one from the template below.",
     emptyBodyViewer:
       "A model is one SELECT over raw.records, built into a table in this customer's analytics schema. An admin can create the first one.",
-    caption_one: "{{count, number}} model",
-    caption_other: "{{count, number}} models",
-    captionMatched_one: "{{shown, number}} of {{count, number}} model",
-    captionMatched_other: "{{shown, number}} of {{count, number}} models",
+    caption_one: "{{shown, number}} / {{count, number}} model",
+    caption_other: "{{shown, number}} / {{count, number}} models",
     colName: "Name",
     colUpdated: "SQL updated",
     colBuild: "Last build",
@@ -1186,8 +1186,8 @@ export const en = {
     sortAttention: "Attention first",
     sortName: "Name A → Z",
     clearFilters: "Clear filters",
-    captionFiltered_one: "{{shown, number}} of {{count, number}} model · {{state}}",
-    captionFiltered_other: "{{shown, number}} of {{count, number}} models · {{state}}",
+    captionFiltered_one: "{{shown, number}} / {{count, number}} model · {{state}}",
+    captionFiltered_other: "{{shown, number}} / {{count, number}} models · {{state}}",
     newHead: "New model",
     newLead:
       "A new model starts from one worked example: HubSpot deals, projected out of raw.records. Change the filter and the columns and it is yours.",
@@ -1282,6 +1282,7 @@ export const en = {
     laneRaw: "Raw lake · declared dbt sources",
     laneInputs: "Raw lake and missing dependencies",
     lane: "Level {{step, number}}",
+    levelsHead: "All nodes by level",
     declaredSource: "▭ Declared dbt source",
     undeclaredMark: "? Upstream not declared",
     resetLayout: "Reset layout",

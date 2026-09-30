@@ -67,18 +67,6 @@
     flex-wrap: wrap;
   }
 
-  .facts {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: var(--s-2) var(--s-4);
-    align-items: baseline;
-    margin: 0;
-  }
-
-  .facts dd {
-    margin: 0;
-  }
-
   @media (max-width: 760px) {
     .workbench {
       grid-template-columns: minmax(0, 1fr);

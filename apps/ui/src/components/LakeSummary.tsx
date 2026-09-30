@@ -91,7 +91,7 @@ export function LakeSummary({
   return (
     <>
       <h1>{t("lake.title")}</h1>
-      <p className="prose prose--lead">{t("lake.lead", { tenantId })}</p>
+      <p className="prose prose--lead">{t("lake.lead")}</p>
 
       {nothing ? (
         <EmptyState
@@ -223,7 +223,7 @@ function IndexRow({
             />
           ) : null}
         </TableCell>
-        <TableCell className="datum datum--quiet">
+        <TableCell className="lake-index__newest datum datum--quiet">
           {relativeTime(entry.latestObservedAt, locale)}
         </TableCell>
       </TableRow>

@@ -33,6 +33,7 @@ import { REFUSAL_RETENTION_DAYS } from "@undercroft/contracts/runs";
 
 import type { RunDetail as RunDetailView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
+import { Fact, Facts } from "@/components/Facts.tsx";
 import { RefusalRollup } from "@/components/RefusalRollup.tsx";
 import { RunEvents } from "@/components/RunEvents.tsx";
 import { RunFlow } from "@/components/RunFlow.tsx";
@@ -110,26 +111,6 @@ function recordedNothing(detail: RunDetailView, events: readonly unknown[]): boo
   );
 }
 
-/** One label over one datum, the pair the run's fact row is made of. */
-function Fact({
-  label,
-  value,
-  quiet = false,
-}: {
-  label: string;
-  /** The datum, or a link to what it names. */
-  value: React.ReactNode;
-  /** A value read only when something is wrong -- an id, a build tag -- sits back one tone. */
-  quiet?: boolean;
-}): React.JSX.Element {
-  return (
-    <span className="stack stack--tight">
-      <span className="label">{label}</span>
-      <span className={quiet ? "datum datum--quiet" : "datum"}>{value}</span>
-    </span>
-  );
-}
-
 /**
  * The run's own facts, above everything it did: what it acted on, when, how long, who asked,
  * and which build.
@@ -154,37 +135,36 @@ function RunFacts({
 
   return (
     <>
-      <div className="row">
+      <Facts>
         {target === null ? null : (
-          <Fact
-            label={t("journal.target")}
-            value={<TargetDoor target={target} tenantId={tenantId} accounts={accounts} />}
-          />
+          <Fact label={t("journal.target")}>
+            <TargetDoor target={target} tenantId={tenantId} accounts={accounts} />
+          </Fact>
         )}
-        <Fact label={t("journal.started")} value={formatDateTime(detail.startedAt, locale)} />
-        <Fact label={t("journal.ended")} value={formatDateTime(detail.endedAt, locale)} />
-        <Fact
-          label={t("journal.colDuration")}
-          value={formatDuration(detail.startedAt, detail.endedAt, locale)}
-        />
-        <Fact label={t("journal.trigger")} value={triggerLabel(t, detail.trigger)} />
-        <Fact label={t("journal.runId")} value={detail.id} quiet={true} />
+        <Fact label={t("journal.started")}>{formatDateTime(detail.startedAt, locale)}</Fact>
+        <Fact label={t("journal.ended")}>{formatDateTime(detail.endedAt, locale)}</Fact>
+        <Fact label={t("journal.colDuration")}>
+          {formatDuration(detail.startedAt, detail.endedAt, locale)}
+        </Fact>
+        <Fact label={t("journal.trigger")}>{triggerLabel(t, detail.trigger)}</Fact>
+        <Fact label={t("journal.runId")} quiet={true}>
+          {detail.id}
+        </Fact>
         {/* Which build produced this run. Here rather than in a footer because the question
             it answers is asked ABOUT a run and beside its numbers: a run that behaves unlike
             the one an hour before it is very often a run on a different build, and that was
             invisible until it was recorded. An em dash when the image did not say -- the
             Absence Rule, applied to our own provenance. ADR 0039. */}
-        <Fact label={t("journal.release")} value={orMissing(detail.releaseTag)} quiet={true} />
-      </div>
-
-      {/* What this run read with, as it recorded it when it read. Only an ingest reads a
-          scope; an em dash is a run that recorded none, and printing the connection's scope
-          today in its place would claim this run read with it. ADR 0091. */}
-      {detail.kind === "ingest" ? (
-        <div className="row">
-          <Fact label={t("journal.scopeAtStart")} value={orMissing(runScopeSummary(t, detail))} />
-        </div>
-      ) : null}
+        <Fact label={t("journal.release")} quiet={true}>
+          {orMissing(detail.releaseTag)}
+        </Fact>
+        {/* What this run read with, as it recorded it when it read. Only an ingest reads a
+            scope; an em dash is a run that recorded none, and printing the connection's scope
+            today in its place would claim this run read with it. ADR 0091. */}
+        {detail.kind === "ingest" ? (
+          <Fact label={t("journal.scopeAtStart")}>{orMissing(runScopeSummary(t, detail))}</Fact>
+        ) : null}
+      </Facts>
 
       {/* How deep the queue was when this run drew its batch -- the line that tells a large
           refusal count from a fault. A run refusing 245 of 500 with 2,337 behind it is

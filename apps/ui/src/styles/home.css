@@ -118,6 +118,9 @@
     letter-spacing: normal;
     padding-block: var(--s-4);
     border-bottom: var(--hair) solid var(--rule);
+    /* A row head, not a column head: a long name wraps, as the table's caps heads never do,
+       so on a phone the name gives way rather than pushing "Open book" out of the box. */
+    white-space: normal;
     overflow-wrap: anywhere;
     max-width: 28rem;
   }
@@ -128,6 +131,11 @@
 
   .customer-index__table tbody th a:hover {
     text-decoration: underline;
+  }
+
+  /* "Open book →" is one plate: its arrow never wraps onto a line of its own. */
+  .customer-index__table .plate {
+    white-space: nowrap;
   }
 
   .customer-index__mobile-id {
@@ -158,6 +166,13 @@
 
     .landing > .colophon {
       padding-inline: var(--s-4);
+    }
+
+    /* On a phone the role filter goes under the search, each a full line, so neither
+       caption nor placeholder is cut off by the other beside it. */
+    .customer-index .field,
+    .customer-index .customer-index__role {
+      flex: 1 1 100%;
     }
 
     .customer-index__table {

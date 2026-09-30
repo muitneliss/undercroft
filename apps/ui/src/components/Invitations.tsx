@@ -9,8 +9,9 @@
 
 import type { Locale } from "@undercroft/core/locale";
 import { useId, useRef } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 
+import { Address } from "@/components/Address.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { byAddress, isRole, ROLES, type Role } from "@/lib/roles.ts";
 import { formatDate } from "@/lib/when.ts";
@@ -97,7 +98,9 @@ export function OpenInvitations({
           <tbody>
             {rows.map((invitation) => (
               <tr key={invitation.id}>
-                <td className="datum datum--quiet">{invitation.email}</td>
+                <td className="datum datum--quiet">
+                  <Address email={invitation.email} />
+                </td>
                 <td>{invitation.role}</td>
                 {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
                   the date in UTC while every other date on the schedule is in Singapore
@@ -272,7 +275,13 @@ export function InvitePanel({
           </div>
           {/* Which book the role opens, by name and by ID: an admin holding several customers'
             books is one wrong tab from inviting somebody into the wrong one. */}
-          <p className="note">{t("people.grantedWithin", { name: displayName, tenantId })}</p>
+          <p className="note">
+            <Trans
+              i18nKey="people.grantedWithin"
+              values={{ name: displayName, tenantId }}
+              components={{ name: <strong />, id: <span className="datum" /> }}
+            />
+          </p>
 
           <InviteOutcome invite={invite} />
 

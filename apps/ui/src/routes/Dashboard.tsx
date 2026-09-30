@@ -8,7 +8,8 @@
  * through the query cache; nothing on this leaf runs a query itself.
  *
  * A member or an admin edits: the name, the filters, which questions are on, where, and in
- * what order they are read. Discard puts the draft back to what the server holds. A viewer
+ * what order they are read -- and, only while editing, deletes it. Discard puts the draft back
+ * to what the server holds. A viewer
  * reads what was made for them; every role can copy the dashboard's link or print it.
  */
 
@@ -250,13 +251,17 @@ function DashboardLeaf({
         search={search}
       />
 
-      <DeleteBand
-        tenantId={tenantId}
-        draft={draft}
-        canAuthor={canAuthor}
-        busy={busy}
-        remove={remove}
-      />
+      {/* Only while editing, as on the question page: a reader who came to read the figures
+          is never one press from a fold that deletes them. */}
+      {edit ? (
+        <DeleteBand
+          tenantId={tenantId}
+          draft={draft}
+          canAuthor={canAuthor}
+          busy={busy}
+          remove={remove}
+        />
+      ) : null}
     </div>
   );
 }

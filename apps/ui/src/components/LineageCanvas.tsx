@@ -49,7 +49,7 @@ import {
   Wire,
   type WireEdge,
 } from "@/components/LineageCards.tsx";
-import { type Focus, nodeState } from "@/lib/lineage.ts";
+import { type Focus, laneLabel, nodeState } from "@/lib/lineage.ts";
 import { BoardContext } from "@/lib/lineageBoard.ts";
 import { layout } from "@/lib/lineageLayout.ts";
 
@@ -73,17 +73,6 @@ const HEAD_H = 32;
  */
 const FIT = { padding: 0.12, minZoom: 0.6, maxZoom: 1 } as const;
 
-/**
- * A column's heading. The first holds the raw lake tables, and a missing dependency too, which
- * has no chain below it to count; every later column is how many steps it stands from them.
- */
-function headLabel(t: TFunction, column: number, missing: boolean): string {
-  if (column > 0) {
-    return t("lineage.lane", { step: column });
-  }
-  return missing ? t("lineage.laneInputs") : t("lineage.laneRaw");
-}
-
 /** Every card at the place `layout` gives it, and a heading over every column that has one. */
 function toNodes(t: TFunction, graph: Graph, drawn: Graph): Node[] {
   const { placed, rows } = layout(graph, drawn);
@@ -104,7 +93,7 @@ function toNodes(t: TFunction, graph: Graph, drawn: Graph): Node[] {
     id: `head:${String(column)}`,
     type: "head",
     position: { x: column * PITCH_X, y: top - HEAD_GAP },
-    data: { label: headLabel(t, column, missing) },
+    data: { label: laneLabel(t, column, missing) },
     width: CARD_W,
     height: HEAD_H,
     draggable: false,

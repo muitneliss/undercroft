@@ -1,19 +1,19 @@
 ---
 title: Runbook Google Ingestion Setup
 type: source
-date: 2026-09-28
+date: 2026-09-30
 tags: []
 source: docs/runbook/google-ingestion-setup.md
 source_path: docs/runbook/google-ingestion-setup.md
-source_hash: 793e1530fc836e6af81e3c2ff6ab51f5c958927d1bf2f43a3374bcb403532b2e
-ingested: 2026-09-28
+source_hash: 2a13783b2c07e7c3c1c0dbfef3509e976186288215d689a94d5a44bb5dcc6a62
+ingested: 2026-09-30
 ---
 
 # Runbook Google Ingestion Setup
 
 Standing up the per-tenant Gmail and Drive consent from nothing, with a check after each step. This is not sign-in: signing in asks Google for `openid email profile` ([[Runbook Sign-In Setup]]); this asks for a customer's mailbox or documents, per tenant, and its credentials are sealed into `app.connection_secret` by the worker ([[ADR 0016 The Worker Seals the Control Plane Consents]]). Two different Google clients on purpose, because one client carrying both scope lists is one misconfiguration away from handing over a mailbox as a side effect of signing in.
 
-Verification is the long pole. `gmail.readonly` is a Google restricted scope: until the client is verified the app is capped at 100 test users behind an interstitial, and restricted scopes require a CASA security assessment repeated every twelve months. Drive's `drive.readonly` is restricted too, but adds no second assessment, since CASA covers the client and this client needs it for Gmail anyway. Drive used the non-restricted `drive.file` until [[ADR 0047: Drive reads with drive.readonly]]; under it a folder picked in the Picker does not grant the files already inside, so no folder could be read. Upgrading from before that ADR: every Drive connection holds a `drive.file` grant, reads "Reconnect needed" and fails each run with a reason naming the reconnect; add `drive.readonly` to the consent screen, then an admin reconnects each source once. The whole surface is gated on `UNDERCROFT_GOOGLE_INGEST_CLIENT_ID`; unset (or with `UNDERCROFT_PUBLIC_URL` unset), Connect says the deployment is not set up to connect Google accounts, so the feature can be deployed while verification runs.
+Verification is the long pole. `gmail.readonly` is a Google restricted scope: until the client is verified the app is capped at 100 test users behind an interstitial, and restricted scopes require a CASA security assessment repeated every twelve months. Drive's `drive.readonly` is restricted too, but adds no second assessment, since CASA covers the client and this client needs it for Gmail anyway. Drive used the non-restricted `drive.file` until [[ADR 0047: Drive reads with drive.readonly]]; under it a folder picked in the Picker does not grant the files already inside, so no folder could be read. Upgrading from before that ADR: every Drive connection holds a `drive.file` grant, reads "Reconnect required" and fails each run with a reason naming the reconnect; add `drive.readonly` to the consent screen, then an admin reconnects each source once. The whole surface is gated on `UNDERCROFT_GOOGLE_INGEST_CLIENT_ID`; unset (or with `UNDERCROFT_PUBLIC_URL` unset), Connect says the deployment is not set up to connect Google accounts, so the feature can be deployed while verification runs.
 
 The steps: create the ingest client with the redirect URI `<UNDERCROFT_PUBLIC_URL>/oauth/google/callback` and every browser origin under Authorized JavaScript origins (the Drive Picker requests a browser token with the same client id, and an unregistered origin fails with `origin_mismatch`), enable the Gmail, Drive and Picker APIs, add the scopes to the consent screen (`gmail.readonly` and `drive.readonly`, both restricted, plus `openid email`, and the Picker's own non-sensitive browser scope `drive.file`), set the ingest variables and the Picker's public values (the worker's optional `UNDERCROFT_GOOGLE_MIN_INTERVAL_MS` overrides the three-a-second request pacing, and a value that is not a positive whole number fails the run), connect a source from the customer's Sources leaf, choose a scope (labels for Gmail, files or folders for Drive) and save, then confirm in `psql` that `ops.connection` holds an opaque account id and never an address, that exactly one sealed credential exists and the control plane cannot open it, and that the mailbox address lives in `app.connection_detail` where BI has no USAGE.
 

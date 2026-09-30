@@ -130,7 +130,7 @@ describe("Run now", () => {
     expect(
       screen.getByText("Chưa được cấp quyền accounting.settings.read, nên chưa đọc Thuế suất."),
     ).toBeDefined();
-    expect(screen.queryByText("Cần kết nối lại")).toBeNull();
+    expect(screen.queryByText("Cần cấp lại quyền")).toBeNull();
   });
 
   it("is not offered to a reader who may not start one", () => {

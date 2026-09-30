@@ -319,6 +319,15 @@ describe("the lineage view", () => {
     );
   });
 
+  it("marks a neighbour that is a deleted ref in words, and a live one with none", async () => {
+    mount(`/tenants/${TENANT}/models?view=lineage&model=stg_notes`);
+    const details = await screen.findByRole("complementary", { name: "stg_notes" });
+    const gone = within(details).getByRole("button", { name: "stg_gone" }).closest("li");
+    const raw = within(details).getByRole("button", { name: "raw.records" }).closest("li");
+    expect(gone?.textContent).toContain("Ref tới mô hình không còn");
+    expect(raw?.textContent).not.toContain("Ref tới mô hình không còn");
+  });
+
   it("narrows the board to what is related to the selection, and back", async () => {
     mount(`/tenants/${TENANT}/models?view=lineage&model=stg_files&scope=related`);
     await screen.findByRole("region", { name: /Thượng nguồn của stg_files/u });

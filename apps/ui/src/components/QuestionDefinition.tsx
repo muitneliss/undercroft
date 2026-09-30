@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 
 import type { SchemaView } from "@/api/types.ts";
 import { Errata, type ServerError } from "@/components/Errata.tsx";
+import { Fact, Facts } from "@/components/Facts.tsx";
 import { QuestionBuilder } from "@/components/QuestionBuilder.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -97,24 +98,21 @@ export function DefinitionFacts({
 
   return (
     <>
-      <dl className="facts">
-        <dt className="label">{t("bi.factKind")}</dt>
-        <dd className="datum">{table === null ? t("bi.kindSql") : t("bi.kindVisual")}</dd>
-        <dt className="label">{t("bi.colSaved")}</dt>
-        <dd className="datum">{formatDateTime(savedAt, locale)}</dd>
+      <Facts>
+        <Fact label={t("bi.factKind")}>
+          {table === null ? t("bi.kindSql") : t("bi.kindVisual")}
+        </Fact>
+        <Fact label={t("bi.colSaved")}>{formatDateTime(savedAt, locale)}</Fact>
         {/* Only a question built in the form declares its table; SQL is never parsed for
             one (ADR 0092). */}
         {table === null ? null : (
-          <>
-            <dt className="label">{t("bi.factTable")}</dt>
-            <dd className="datum">
-              <Link to={`${divisionPath("models", tenantId)}/${encodeURIComponent(table)}`}>
-                {table}
-              </Link>
-            </dd>
-          </>
+          <Fact label={t("bi.factTable")}>
+            <Link to={`${divisionPath("models", tenantId)}/${encodeURIComponent(table)}`}>
+              {table}
+            </Link>
+          </Fact>
         )}
-      </dl>
+      </Facts>
       <span className="label">{t("bi.compiledHead")}</span>
       {sql === null ? (
         <p className="note">{t("bi.notCompiled")}</p>

@@ -26,7 +26,7 @@ CASA covers the OAuth client, and this client needs it for Gmail anyway. Drive u
 in Google's Picker does not grant the files already in it, so no folder could be read.
 
 **Upgrading from a release before ADR 0047:** every Drive connection holds a `drive.file`
-grant. Its card reads "Reconnect needed", and each of its runs fails with a reason that says to
+grant. Its card reads "Reconnect required", and each of its runs fails with a reason that says to
 reconnect the source. An admin reconnects the source once and approves read access on Google's
 screen. Add `drive.readonly` to the consent screen (step 3) before anyone does.
 

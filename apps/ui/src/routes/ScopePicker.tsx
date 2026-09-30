@@ -311,6 +311,7 @@ export function ScopePicker({
 
       <div className="head">{sourceLabel(source, connections.data)}</div>
       <div className="body stack">
+        <ScopeAccount source={source} account={current?.externalAccountLabel ?? ""} />
         <ScopeSteps paths={paths} review={review} />
 
         {review ? (
@@ -343,6 +344,20 @@ export function ScopePicker({
           onDiscard={discard}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Which account this edit is for, and its source ID: fixed for the whole edit, so it is said
+ * once above both steps rather than left for the reader to infer from the margin head.
+ */
+function ScopeAccount({ source, account }: { source: string; account: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="stack stack--tight">
+      <span className="label">{t("scopePicker.accountFor")}</span>
+      <p className="datum">{account === "" ? source : `${account} · ${source}`}</p>
     </div>
   );
 }

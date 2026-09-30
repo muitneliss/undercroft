@@ -9,6 +9,7 @@
 
 import { useTranslation } from "react-i18next";
 
+import { Address } from "@/components/Address.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { byAddress, isRole, ROLES, soleAdmin } from "@/lib/roles.ts";
@@ -200,11 +201,11 @@ function RosterTable({
             <td className="datum datum--quiet">
               {member.email.toLowerCase() === reader ? (
                 <span className="stack stack--tight">
-                  {member.email}
+                  <Address email={member.email} />
                   <span className="label">{t("people.you")}</span>
                 </span>
               ) : (
-                member.email
+                <Address email={member.email} />
               )}
             </td>
             <RoleCell

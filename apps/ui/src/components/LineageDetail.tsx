@@ -185,7 +185,8 @@ function Neighbours({
         <ul className="lineage-detail__list">
           {edges.map((edge) => {
             const id = edge[end];
-            const name = byId.get(id)?.name ?? id;
+            const node = byId.get(id);
+            const name = node?.name ?? id;
             return (
               <li key={id}>
                 <button
@@ -197,6 +198,11 @@ function Neighbours({
                 >
                   {name}
                 </button>
+                {/* A ref to a model that is gone says so here, as it does on the dependencies
+                    band and in the legend: its name alone reads as a model that exists. */}
+                {node?.kind === "missing" ? (
+                  <span className="label">{t("lineage.keyMissing")}</span>
+                ) : null}
                 {edge.via === null ? null : (
                   <span className="datum datum--quiet">{t("lineage.via", { via: edge.via })}</span>
                 )}

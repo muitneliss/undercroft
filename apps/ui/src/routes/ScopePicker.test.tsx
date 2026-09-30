@@ -154,7 +154,7 @@ describe("reviewing a mailbox's scope before saving", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Receipts" }));
     fireEvent.click(await next());
 
-    expect(await screen.findByText("Bản ghi đã có trong kho sẽ ra sao")).toBeDefined();
+    expect(await screen.findByText("Bản ghi kho đã có sẽ ra sao")).toBeDefined();
     expect(screen.getByText("Rời khỏi phạm vi: Receipts")).toBeDefined();
     expect(screen.getByText(/thư mà hồ dữ liệu đang giữ vẫn giữ nguyên/u)).toBeDefined();
     // Saved beside what will apply, in the card's own words.
@@ -170,7 +170,7 @@ describe("reviewing a mailbox's scope before saving", () => {
     expect(await screen.findByRole("checkbox", { name: "Receipts" })).toBeDefined();
     fireEvent.click(await next());
 
-    expect(await screen.findByText("Bản ghi đã có trong kho sẽ ra sao")).toBeDefined();
+    expect(await screen.findByText("Bản ghi kho đã có sẽ ra sao")).toBeDefined();
     expect(screen.queryByText(/Rời khỏi phạm vi/u)).toBeNull();
   });
 });

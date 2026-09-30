@@ -2,7 +2,7 @@
  * What a dashboard promises: while editing, its reading order can be changed as a list and
  * the change is what Save sends, and Discard returns to what is saved; a tile's foot opens
  * its question on the rows, and names a model table only when the question declares one
- * (ADR 0092: a SQL text is never parsed for a table).
+ * (ADR 0092: a SQL text is never parsed for a table); and Delete is offered only while editing.
  *
  * No mocks: the real route, store, router, tRPC client and react-query over an in-memory
  * server that answers the procedures named here and refuses every other
@@ -160,5 +160,19 @@ describe("a tile's foot", () => {
     // The SQL question reads mart_ledger, and the foot does not claim to know it.
     expect(within(ledger).queryByText(/mart_ledger/u)).toBeNull();
     expect(within(ledger).getByRole("link", { name: "Xem số liệu →" })).toBeDefined();
+  });
+});
+
+describe("deleting a dashboard", () => {
+  it("is not offered to an author who opened it to read", async () => {
+    mount(PATH, "admin");
+    expect(await screen.findByRole("region", { name: "Doanh thu" })).toBeDefined();
+    expect(screen.queryByText("Xoá bảng điều khiển")).toBeNull();
+  });
+
+  it("is offered, folded, once the author turns to editing", async () => {
+    mount(`${PATH}?edit=1`, "admin");
+    await readingOrder();
+    expect(screen.getAllByText("Xoá bảng điều khiển").length).toBeGreaterThan(0);
   });
 });

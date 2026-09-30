@@ -92,6 +92,7 @@ export function ScopeReview({
   loadError: ServerError | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const reviewId = useId();
   const heldId = useId();
   const change = scopeChange(t, kind, saved, chosen);
   const held = HELD_KEY[kind];
@@ -105,8 +106,8 @@ export function ScopeReview({
       {loadError === null ? null : (
         <Errata heading={t("common.notLoaded")} live={true} error={loadError} />
       )}
-      <table className="table--words table">
-        <caption>{t("scopePicker.reviewHead")}</caption>
+      <h2 id={reviewId}>{t("scopePicker.reviewHead")}</h2>
+      <table aria-labelledby={reviewId} className="table--words table">
         <thead>
           <tr>
             <th scope="col">
@@ -132,7 +133,9 @@ export function ScopeReview({
       {held === undefined ? (
         leaving
       ) : (
-        <section aria-labelledby={heldId} className="stack stack--tight">
+        // Set apart on a leaf, as the mockup sets it: this is the one consequence of Save that
+        // outlives the screen, and a note in the run of the page reads as one hint among many.
+        <section aria-labelledby={heldId} className="unprinted unprinted--band stack stack--tight">
           <h2 className="label" id={heldId}>
             {t("scopePicker.heldHead")}
           </h2>

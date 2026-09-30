@@ -210,17 +210,18 @@ export const vi = {
 
   tenants: {
     title: "Hồ sơ khách hàng",
-    lead: "Mở một hồ sơ để xem nguồn dữ liệu, nhật ký và báo cáo.",
-    searchLabel: "Tìm khách hàng",
-    searchPlaceholder: "Tìm tên khách hàng hoặc mã hồ sơ",
+    lead: "Mỗi khách hàng là một cuốn hồ sơ riêng. Chọn đúng hồ sơ trước khi đọc hoặc làm việc với dữ liệu.",
+    searchLabel: "Tìm tên hoặc mã khách hàng",
+    /** Short enough to stay whole in the field at 390 px. */
+    searchPlaceholder: "Tên hoặc CASE-…",
     /** The filter by the reader's own role; the options are the role values, untranslated. */
-    roleLabel: "Vai trò của bạn",
+    roleLabel: "Quyền của bạn",
     roleAny: "Mọi vai trò",
     clearFilters: "Xóa bộ lọc",
     noMatches:
       "Không có khách hàng phù hợp. Thử tên, mã hoặc vai trò khác, hoặc xóa bộ lọc để xem tất cả.",
     colAction: "Hành động",
-    open: "Mở",
+    open: "Mở hồ sơ →",
     openNamed: "Mở hồ sơ {{name}}",
     guideHead: "Trong mỗi hồ sơ",
     guideBody:
@@ -233,7 +234,7 @@ export const vi = {
     captionFiltered_other: "{{shown, number}} / {{count, number}} khách hàng",
     colCustomer: "Khách hàng",
     colReference: "Mã khách hàng",
-    colRole: "Vai trò của bạn",
+    colRole: "Quyền của bạn",
     addHead: "Thêm khách hàng",
     /**
      * Shown in place of the form to everyone who is not a platform administrator. It names
@@ -450,7 +451,7 @@ export const vi = {
   lake: {
     head: "Hồ dữ liệu",
     title: "Hồ dữ liệu thô",
-    lead: "Những gì thực sự đã về cho {{tenantId}}, trước mọi bước biến đổi.",
+    lead: "Tách bạch tài khoản, danh mục và payload. Đây là bằng chứng gốc, không phải bảng số liệu đã diễn giải.",
     notLoaded: "Không tải được hồ dữ liệu của {{tenantId}}.",
     emptyTitle: "Chưa có gì về",
     emptyBody:
@@ -748,7 +749,7 @@ export const vi = {
     invitePlaceholder: "dongnghiep@example.com",
     inviteHint:
       "Họ phải đăng nhập bằng đúng địa chỉ này. Lời mời không phải là mật khẩu — nó không cấp gì cho đến khi họ chứng minh mình kiểm soát hòm thư.",
-    roleLabel: "Vai trò",
+    roleLabel: "Vai trò trong khách hàng này",
     /**
      * What each role may do in this customer, one entry per role. Each says what the router's
      * gates allow and refuse and nothing more (`requireRole` in `apps/control-plane/src/handlers`);
@@ -787,14 +788,17 @@ export const vi = {
     /** Inside Remove's second press: what it ends, and what it leaves alone. */
     removeLead:
       "Chỉ kết thúc tư cách thành viên tại khách hàng này. Tài khoản đăng nhập và dữ liệu khách hàng vẫn giữ nguyên.",
-    /** Under the invitation's role: which customer the role is granted in. */
-    grantedWithin: "Quyền truy cập được cấp trong: {{name}} · {{tenantId}}",
+    /**
+     * Under the invitation's role: which customer the role is granted in. `<name>` is set bold
+     * and `<id>` as a datum (`Invitations.tsx`, through `Trans`), so keep both tags.
+     */
+    grantedWithin: "Khách hàng nhận quyền: <name>{{name}}</name> · <id>{{tenantId}}</id>",
   },
 
   grant: {
-    markGranted: "Đã cấp",
+    markGranted: "Đã kết nối",
     markPending: "Chờ chọn phạm vi",
-    markLapsed: "Cần kết nối lại",
+    markLapsed: "Cần cấp lại quyền",
     markAbsent: "Chưa cấp",
     account: "Tài khoản",
     reads: "Đọc",
@@ -932,7 +936,9 @@ export const vi = {
 
   /** What a live grant permits, in the customer's words. `@/lib/connectionState`. */
   scopePicker: {
-    title: "Chọn những gì được đọc",
+    title: "Chỉnh phạm vi",
+    /** Above both steps: the account the edit is for, then its source ID. */
+    accountFor: "Tài khoản cố định cho lần chỉnh này",
     leadGmail:
       "Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp đính kèm phù hợp trong những nhãn đó được đọc; không nhãn nào khác được đọc.",
     leadDrive:
@@ -1028,7 +1034,7 @@ export const vi = {
     colSaved: "Đã lưu",
     colWillApply: "Sẽ áp dụng",
     rowReads: "Phạm vi đọc",
-    heldHead: "Bản ghi đã có trong kho sẽ ra sao",
+    heldHead: "Bản ghi kho đã có sẽ ra sao",
     /** Names in the saved choice that the draft drops. Only names; nothing inferred. */
     leaving: "Rời khỏi phạm vi: {{names}}",
     subfoldersDropped:
@@ -1418,8 +1424,8 @@ export const vi = {
       "Một mô hình là một câu SELECT trên raw.records, dựng thành bảng trong lược đồ phân tích của khách hàng này. Hãy tạo mô hình đầu tiên từ mẫu bên dưới.",
     emptyBodyViewer:
       "Một mô hình là một câu SELECT trên raw.records, dựng thành bảng trong lược đồ phân tích của khách hàng này. Quản trị viên có thể tạo mô hình đầu tiên.",
-    caption_other: "{{count, number}} mô hình",
-    captionMatched_other: "{{shown, number}} / {{count, number}} mô hình",
+    /** Always the rows shown against every model, searched or not, as the design counts them. */
+    caption_other: "{{shown, number}} / {{count, number}} mô hình",
     colName: "Tên",
     colUpdated: "Cập nhật SQL",
     colBuild: "Lần dựng gần nhất",
@@ -1534,6 +1540,8 @@ export const vi = {
     laneRaw: "Hồ thô · nguồn dbt đã khai báo",
     laneInputs: "Hồ thô và phụ thuộc bị thiếu",
     lane: "Tầng {{step, number}}",
+    /** On a phone, under a trace: the board's columns as folded lists. */
+    levelsHead: "Mọi nút theo tầng",
     declaredSource: "▭ Nguồn dbt đã khai báo",
     undeclaredMark: "? Thượng nguồn chưa khai báo",
     resetLayout: "Sắp lại như ban đầu",

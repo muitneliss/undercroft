@@ -273,3 +273,4 @@
 ## [2026-09-30] ingest | Runbook: Visual regression tests
 ## [2026-09-30] ingest | ADR 0099: Screens are compared as pictures by Vitest, and nothing else uses it
 ## [2026-09-30] ingest | Runbook: Visual regression tests
+## [2026-09-30] ingest | Runbook Google Ingestion Setup

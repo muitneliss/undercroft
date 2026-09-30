@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { Errata } from "@/components/Errata.tsx";
+import { Fact, Facts } from "@/components/Facts.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { DIVISIONS, type DivisionId, divisionPath } from "@/lib/divisions.ts";
 import { trpc } from "@/trpc.ts";
@@ -35,16 +36,6 @@ const ANSWERS = {
   reports: "tenants.insideReports",
   people: "tenants.insidePeople",
 } as const satisfies Record<Exclude<DivisionId, "customers">, string>;
-
-/** One fact about the customer: a caption over a datum, as a run's facts are printed. */
-function Fact({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return (
-    <span className="stack stack--tight">
-      <span className="label">{label}</span>
-      <span className="datum">{value}</span>
-    </span>
-  );
-}
 
 /** Each division of the book, in ring order, with the question it answers. */
 function Directory({ tenantId }: { tenantId: string }): React.JSX.Element {
@@ -89,11 +80,11 @@ export function Customer({ tenantId }: { tenantId: string }): React.JSX.Element 
       <div className="body stack">
         <h1>{name}</h1>
         <p className="prose prose--lead">{t("tenants.aboutLead")}</p>
-        <div className="row">
-          <Fact label={t("tenants.colCustomer")} value={name} />
-          <Fact label={t("tenants.colReference")} value={tenantId} />
-          <Fact label={t("tenants.colRole")} value={tenant.data.role} />
-        </div>
+        <Facts>
+          <Fact label={t("tenants.colCustomer")}>{name}</Fact>
+          <Fact label={t("tenants.colReference")}>{tenantId}</Fact>
+          <Fact label={t("tenants.colRole")}>{tenant.data.role}</Fact>
+        </Facts>
         <div className="row">
           <Link className="plate plate--primary" to={sources}>
             {t("tenants.openSources")}
