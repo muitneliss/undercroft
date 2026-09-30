@@ -3,8 +3,9 @@
  * hand-drawn copy that drifts from the mark.
  *
  * - `assets/icon.svg` (the mark on the bone ground) becomes the macOS `icon.iconset` that Hutch
- *   compiles into the app's `.icns`, and `assets/icon.png`, which Hutch turns into the Windows
- *   `.ico` and uses as the Linux icon (`electrobun.config.ts`).
+ *   compiles into the app's `.icns`, `assets/icon.png` for Linux, and `assets/icon-windows.png`,
+ *   which Hutch turns into the Windows `.ico`. That one is 256 pixels: an ICO holds nothing
+ *   larger, and Hutch refuses a bigger PNG outright (`PngTooLarge`, on the first Windows build).
  * - `apps/ui/public/mark.svg` (the mark alone, one ink) becomes the macOS menu-bar icon: a
  *   template image, which macOS recolours for a light or dark menu bar from its alpha alone.
  *   Windows and Linux have no template images, so their tray shows the app icon instead.
@@ -31,6 +32,8 @@ const ICONSET_SIZES = [16, 32, 128, 256, 512] as const;
 const TRAY_POINTS = 18;
 const TRAY_PIXELS = 32;
 const LARGE = 1024;
+/** The largest image an ICO file can hold. */
+const ICO_MAX = 256;
 
 function render(source: string, size: number, target: string): void {
   const done = Bun.spawnSync(
@@ -53,6 +56,7 @@ for (const size of ICONSET_SIZES) {
   render(ICON, size * 2, join(ICONSET, `icon_${size}x${size}@2x.png`));
 }
 render(ICON, LARGE, join(APP, "assets", "icon.png"));
+render(ICON, ICO_MAX, join(APP, "assets", "icon-windows.png"));
 render(MARK, TRAY_POINTS, join(VIEW_ASSETS, "tray-Template.png"));
 render(MARK, TRAY_POINTS * 2, join(VIEW_ASSETS, "tray-Template@2x.png"));
 render(ICON, TRAY_PIXELS, join(VIEW_ASSETS, "tray.png"));

@@ -49,7 +49,7 @@ export default {
       ),
     },
     mac: { icons: "icon.iconset" },
-    win: { icon: "assets/icon.png" },
+    win: { icon: "assets/icon-windows.png" },
     linux: { icon: "assets/icon.png" },
   },
   runtime: {
