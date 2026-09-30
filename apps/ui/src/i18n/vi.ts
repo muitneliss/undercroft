@@ -1372,6 +1372,11 @@ export const vi = {
     total: "Tổng",
     pivotNeeds: "Bảng xoay cần một cột nhãn và một cột giá trị; cột Tách theo là các cột của bảng.",
     totalsPartial: "Còn nhiều dòng hơn; các tổng này chỉ tính trên {{count, number}} dòng đầu.",
+    incompleteMark: "chưa đủ",
+    incompleteNote:
+      "“chưa đủ”: tổng này bỏ qua ít nhất một giá trị bị thiếu, nên không phải tổng thật.",
+    boundMissing:
+      "Câu hỏi này chưa đặt giá trị tối đa, nên không vẽ tỉ lệ. Người soạn câu hỏi đặt nó ở mục Vẽ kết quả.",
   },
 
   reports: {
@@ -1384,6 +1389,11 @@ export const vi = {
       "Một câu hỏi là một truy vấn trên các mô hình đã dựng — dựng bằng biểu mẫu hoặc viết SQL — và cách vẽ nó. Bảng điều khiển ghép nhiều câu hỏi với bộ lọc chung. Hãy đặt câu hỏi đầu tiên.",
     emptyBodyViewer:
       "Một câu hỏi là một truy vấn trên các mô hình đã dựng và cách vẽ nó. Thành viên có vai trò member trở lên có thể đặt câu hỏi đầu tiên.",
+    searchLabel: "Tìm theo tên",
+    searchPlaceholder: "Tên bảng điều khiển hoặc câu hỏi",
+    clearSearch: "Xoá tìm kiếm",
+    noDashboardMatches: "Không có bảng điều khiển nào có tên khớp.",
+    noQuestionMatches: "Không có câu hỏi nào có tên khớp.",
   },
 
   /** The Reports division's words: the lists, the builder, the run, the save. */
@@ -1400,11 +1410,13 @@ export const vi = {
     colKind: "Kiểu",
     colChart: "Vẽ",
     colTiles: "Ô",
-    colUpdated: "Cập nhật",
+    colSaved: "Định nghĩa lưu lúc",
     kindVisual: "Biểu mẫu",
     kindSql: "SQL",
     questionNotLoaded: "Không tải được câu hỏi này.",
     backToReports: "Mọi báo cáo",
+    backToDashboard: "Về bảng điều khiển",
+    backToNamedDashboard: "Về {{name}}",
     nameLabel: "Tên câu hỏi",
     namePlaceholder: "Ví dụ: Doanh thu theo giai đoạn",
     untitled: "Câu hỏi chưa đặt tên",
@@ -1462,6 +1474,13 @@ export const vi = {
     running: "Đang chạy…",
     notRun: "Chưa chạy được",
     resultHead: "Kết quả",
+    rowsShow_other: "Các dòng đã vẽ biểu đồ ({{count, number}})",
+    rowsMarked_other: "Đã đánh dấu {{count, number}} dòng vẽ điểm đã chọn.",
+    csvDownload: "Tải CSV",
+    csvWhole_other: "Tệp gồm đúng {{count, number}} dòng đang hiện.",
+    csvTruncated_other:
+      "Kết quả bị cắt ở giới hạn dòng: tệp chỉ gồm {{count, number}} dòng đầu, không phải toàn bộ.",
+    csvFallbackName: "Kết quả",
     save: "Lưu",
     saving: "Đang lưu…",
     notSaved: "Chưa lưu được",

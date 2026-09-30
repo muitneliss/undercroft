@@ -5,10 +5,13 @@
  * The compiled SQL is shown beside the builder from the server's one compiler, so what the
  * author sees is exactly what will run; switching to SQL mode starts from that text and is
  * one way. Parameters -- `{{name}}` holes -- take their values from the URL, so a run with
- * a filter set is a link, and a run with a hole unfilled is refused before it is sent.
+ * a filter set is a link, and a run with a hole unfilled is refused before it is sent. A
+ * dashboard tile's title opens this page on the dashboard's values, carrying the way back
+ * (`lib/reportLinks.ts`).
  *
- * Run answers as the tenant's read-only login through the worker; the result is drawn by
- * the one result table, a numeric with every digit. A viewer may run a saved question and
+ * Run answers as the tenant's read-only login through the worker; the result is drawn as
+ * the question says, and beneath the drawing every role can open the rows that drew it and
+ * take them as CSV (`components/ResultReading.tsx`). A viewer may run a saved question and
  * see no builder; a member or an admin authors.
  */
 
@@ -28,7 +31,7 @@ import {
 import { ResultBand } from "@/components/QuestionResult.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
-import { paramsFromSearch } from "@/lib/params.ts";
+import { paramsFromSearch, questionParams } from "@/lib/params.ts";
 import {
   draftFromQuestion,
   newQuestionDraft,
@@ -183,7 +186,8 @@ function QuestionLeaf({
   );
   const sqlText =
     (draft.definition.kind === "sql" ? draft.definition.sql : null) ?? compiled.data?.sql ?? "";
-  const names = paramNames(sqlText);
+  // A viewer may not call `bi.compile`: read a visual question's holes as a tile does.
+  const names = sqlText === "" ? questionParams(draft.definition) : paramNames(sqlText);
   const bound = paramsFromSearch(search, names);
 
   const answer = trpc.bi.answer.useMutation();

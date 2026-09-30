@@ -1177,6 +1177,11 @@ export const en = {
     pivotNeeds:
       "A pivot needs a label column and a value column; Split by gives the table its columns.",
     totalsPartial: "More rows exist; these totals cover only the first {{count, number}} shown.",
+    incompleteMark: "incomplete",
+    incompleteNote:
+      "“incomplete”: this sum leaves out at least one missing value, so it is not the total.",
+    boundMissing:
+      "No maximum is set on this question, so no share is drawn. Its author sets one under Draw the result.",
   },
 
   reports: {
@@ -1189,6 +1194,11 @@ export const en = {
       "A question is a query over the built models — made in the builder or written as SQL — and how it is drawn. A dashboard puts questions together under shared filters. Ask the first one.",
     emptyBodyViewer:
       "A question is a query over the built models and how it is drawn. A member or an admin can ask the first one.",
+    searchLabel: "Search by name",
+    searchPlaceholder: "A dashboard's or a question's name",
+    clearSearch: "Clear search",
+    noDashboardMatches: "No dashboard's name matches.",
+    noQuestionMatches: "No question's name matches.",
   },
 
   bi: {
@@ -1206,11 +1216,13 @@ export const en = {
     colKind: "Kind",
     colChart: "Drawn as",
     colTiles: "Tiles",
-    colUpdated: "Updated",
+    colSaved: "Definition saved",
     kindVisual: "Builder",
     kindSql: "SQL",
     questionNotLoaded: "This question could not be loaded.",
     backToReports: "All reports",
+    backToDashboard: "Back to the dashboard",
+    backToNamedDashboard: "Back to {{name}}",
     nameLabel: "Question name",
     namePlaceholder: "For example: Revenue by stage",
     untitled: "Untitled question",
@@ -1268,6 +1280,18 @@ export const en = {
     running: "Running…",
     notRun: "Not run",
     resultHead: "Result",
+    rowsShow_one: "The row that drew this chart",
+    rowsShow_other: "The {{count, number}} rows that drew this chart",
+    rowsMarked_one: "Marked the row that drew the selected point.",
+    rowsMarked_other: "Marked the {{count, number}} rows that drew the selected point.",
+    csvDownload: "Download CSV",
+    csvWhole_one: "The file holds the one row shown.",
+    csvWhole_other: "The file holds exactly the {{count, number}} rows shown.",
+    csvTruncated_one:
+      "The result was cut at its row limit: the file holds only the first row, not all of them.",
+    csvTruncated_other:
+      "The result was cut at its row limit: the file holds only the first {{count, number}} rows, not all of them.",
+    csvFallbackName: "Result",
     save: "Save",
     saving: "Saving…",
     notSaved: "Not saved",

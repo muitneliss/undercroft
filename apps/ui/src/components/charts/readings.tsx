@@ -5,6 +5,10 @@
  * All four print the figure from `raw[]` -- the original digits -- while positioning the
  * needle, the bar or the trapezoid from `values[]`. A gauge whose reading came off its own
  * float would be a number nobody could reconcile with the table beside it.
+ *
+ * A gauge and a progress bar draw a share only against the bound the question's author set
+ * (`lib/readingBound.ts`, ADR 0090). With none they print the reading, say the bound is
+ * missing, and draw nothing -- a share against a bound nobody chose is a guess.
  */
 
 import type { ChartConfig } from "@undercroft/contracts/bi";
@@ -15,6 +19,7 @@ import { figure, type PlotOptions, TOKENS } from "@/components/charts/chrome.ts"
 import type { Series } from "@/lib/chartData.ts";
 import { needlePlugin } from "@/lib/gaugeNeedle.ts";
 import { colourFor } from "@/lib/plotPalette.ts";
+import { type ReadingShare, readingShare } from "@/lib/readingBound.ts";
 
 /** The first reading: a gauge's, a progress bar's, a KPI tile's. */
 function firstReading(series: Series): { value: number | null; raw: string | null; label: string } {
@@ -24,28 +29,6 @@ function firstReading(series: Series): { value: number | null; raw: string | nul
     raw: first?.raw[0] ?? null,
     label: first?.label ?? "",
   };
-}
-
-/**
- * What a gauge or a progress bar reads its share against.
- *
- * The configured maximum wins; otherwise the largest value plotted. A hundred is the last
- * resort, never a zero -- a bar divided by zero is a bar that is always full.
- */
-function maxOf(series: Series, chart: ChartConfig): number {
-  const configured = chart.options.max;
-  if (typeof configured === "number" && Number.isFinite(configured) && configured > 0) {
-    return configured;
-  }
-  let max = 0;
-  for (const dataset of series.datasets) {
-    for (const value of dataset.values) {
-      if (value !== null && value > max) {
-        max = value;
-      }
-    }
-  }
-  return max > 0 ? max : 100;
 }
 
 /** One figure, large, with what it is beneath it. A missing reading says so; it is not a 0. */
@@ -62,6 +45,27 @@ export function KpiTile({ series }: { series: Series }): React.JSX.Element {
   );
 }
 
+/**
+ * Why a gauge or a progress bar draws no share, printed where the share would be, with the
+ * reading beneath it. Nothing is drawn: an empty arc would itself read as a zero.
+ */
+function Unbounded({
+  share,
+  series,
+}: {
+  share: Exclude<ReadingShare, { kind: "share" }>;
+  series: Series;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="stack stack--tight">
+      {/* A missing reading is said once, by the tile beneath; a missing bound needs its own. */}
+      {share.kind === "noBound" ? <p className="note">{t("chart.boundMissing")}</p> : null}
+      <KpiTile series={series} />
+    </div>
+  );
+}
+
 /** A half-doughnut with a needle, and the reading printed under it. */
 export function GaugePlot({
   series,
@@ -72,9 +76,11 @@ export function GaugePlot({
   chart: ChartConfig;
   options: PlotOptions;
 }): React.JSX.Element {
-  const reading = firstReading(series);
-  const max = maxOf(series, chart);
-  const value = reading.value ?? 0;
+  const share = readingShare(firstReading(series).value, chart);
+  if (share.kind !== "share") {
+    return <Unbounded share={share} series={series} />;
+  }
+  const { value, max } = share;
 
   return (
     <div className="stack stack--tight">
@@ -96,7 +102,7 @@ export function GaugePlot({
             cutout: "70%",
             plugins: { legend: { display: false }, tooltip: { enabled: false } },
           }}
-          plugins={[needlePlugin(max === 0 ? 0 : value / max, TOKENS.ink)]}
+          plugins={[needlePlugin(value / max, TOKENS.ink)]}
         />
       </div>
       <KpiTile series={series} />
@@ -115,7 +121,11 @@ export function ProgressPlot({
   options: PlotOptions;
 }): React.JSX.Element {
   const reading = firstReading(series);
-  const max = maxOf(series, chart);
+  const share = readingShare(reading.value, chart);
+  if (share.kind !== "share") {
+    return <Unbounded share={share} series={series} />;
+  }
+  const { value, max } = share;
 
   return (
     <div className="stack stack--tight">
@@ -123,9 +133,7 @@ export function ProgressPlot({
         <Bar
           data={{
             labels: [reading.label],
-            datasets: [
-              { label: reading.label, data: [reading.value], backgroundColor: colourFor(0) },
-            ],
+            datasets: [{ label: reading.label, data: [value], backgroundColor: colourFor(0) }],
           }}
           options={{
             ...options.base,

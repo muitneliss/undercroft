@@ -77,13 +77,23 @@ function Cell({ text }: { text: string }): React.JSX.Element {
   );
 }
 
+/** No row marked: shared, so a caller that marks nothing allocates nothing. */
+const UNMARKED: ReadonlySet<number> = new Set();
+
 export function ResultTable({
   result,
   locale,
   fill = false,
+  marked = UNMARKED,
 }: {
   result: TableResult;
   locale: Locale;
+  /**
+   * The rows a reader's selection on the chart above came from, by index into `result.rows`.
+   * Marked `aria-current`, which a screen reader announces and which takes the same board
+   * wash the Journal gives its open row -- one way of saying "this line", not a second.
+   */
+  marked?: ReadonlySet<number>;
   /**
    * Take the whole of the pane, and let the frame do the talking.
    *
@@ -130,7 +140,7 @@ export function ResultTable({
           </TableHeader>
           <TableBody>
             {result.rows.map((row, rowIndex) => (
-              <TableRow key={rowIndex}>
+              <TableRow key={rowIndex} aria-current={marked.has(rowIndex) ? "true" : undefined}>
                 {row.map((cell, cellIndex) => (
                   <TableCell key={cellIndex} className="datum">
                     <Cell text={cellText(t, cell, locale)} />

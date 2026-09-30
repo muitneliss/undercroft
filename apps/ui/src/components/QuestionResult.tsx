@@ -6,25 +6,22 @@
  * That is why there are two mutations rather than one with a flag, and it is a boundary
  * rather than a convenience -- the server refuses either way.
  *
- * The chart is drawn from the result's own columns, with `raw` values a reader may read; the
- * charting library rides in its own chunk, fetched the first time a result is drawn.
+ * The chart is drawn from the result's own columns, with `raw` values a reader may read, and
+ * beneath it every role gets the rows that drew it and a CSV of them (`ResultReading`).
  */
 
-import { Suspense, lazy } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 
 import { ChartOptions } from "@/components/ChartOptions.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import type { BoundParams } from "@/components/QuestionBands.tsx";
-import { Skeleton } from "@/components/Skeleton.tsx";
+import { ResultReading } from "@/components/ResultReading.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
+import { withPoint } from "@/lib/chartData.ts";
 import { isQuestionDirty, type QuestionDraft } from "@/lib/questionDraft.ts";
 import { useUiStore } from "@/store.ts";
 import type { trpc } from "@/trpc.ts";
-
-const ChartFrame = lazy(() =>
-  import("@/components/charts/ChartFrame.tsx").then((module) => ({ default: module.ChartFrame })),
-);
 
 type Answer = ReturnType<typeof trpc.bi.answer.useMutation>;
 type RunSaved = ReturnType<typeof trpc.bi.runQuestion.useMutation>;
@@ -62,6 +59,7 @@ export function ResultBand({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const setQuestionChart = useUiStore((state) => state.setQuestionChart);
+  const [, setSearch] = useSearchParams();
   const { answer, runSaved, save, busy } = actions;
 
   const result = canAuthor ? answer.data : runSaved.data;
@@ -72,6 +70,8 @@ export function ResultBand({
     if (bound.missing.length > 0) {
       return;
     }
+    // A selected point names a row of the answer it was chosen on, not of the next one.
+    setSearch((current) => withPoint(current, null), { replace: true });
     if (canAuthor) {
       answer.mutate({ tenantId, definition: draft.definition, params: bound.params });
     } else if (draft.id !== null) {
@@ -110,9 +110,12 @@ export function ResultBand({
                 onChange={setQuestionChart}
               />
             ) : null}
-            <Suspense fallback={<Skeleton rows={4} />}>
-              <ChartFrame result={result} chart={draft.chart} locale={locale} />
-            </Suspense>
+            <ResultReading
+              result={result}
+              chart={draft.chart}
+              locale={locale}
+              name={draft.name === "" ? t("bi.untitled") : draft.name}
+            />
           </>
         )}
       </div>

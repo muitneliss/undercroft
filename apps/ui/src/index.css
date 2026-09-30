@@ -3520,6 +3520,16 @@
     background: var(--page);
   }
 
+  /* A pivot sum that left out a missing value (ADR 0090). A WORD beside the figure, not a
+   * colour on it: it has to survive a screen reader, a print and a copy into a spreadsheet,
+   * and a tint says nothing to any of the three. Set small and quiet so the digits stay the
+   * thing the column is scanned for. */
+  .pivot__incomplete {
+    margin-left: var(--s-2);
+    color: var(--ink-3);
+    font-size: var(--t-micro);
+  }
+
   /* -- a query's answer, as opposed to a schedule -------------------------------- */
 
   /* THE LAST COLUMN OF AN ANSWER IS JUST A COLUMN.

@@ -31,8 +31,8 @@ import {
 import { FunnelPlot, GaugePlot, KpiTile, ProgressPlot } from "@/components/charts/readings.tsx";
 import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { resolveColumns, type Series, toSeries } from "@/lib/chartData.ts";
-import { pivot } from "@/lib/pivot.ts";
+import { type ChartPoint, resolveColumns, type Series, toSeries } from "@/lib/chartData.ts";
+import { type PivotFigure, pivot } from "@/lib/pivot.ts";
 import { isNumericType } from "@/lib/plot.ts";
 
 // The geo plugin and the projection maths ride only with a map.
@@ -47,10 +47,13 @@ export function ChartFrame({
   result,
   chart,
   locale,
+  onSelect,
 }: {
   result: TableResult;
   chart: ChartConfig;
   locale: Locale;
+  /** Hears the point a reader pressed; see `plotOptions`. */
+  onSelect?: (point: ChartPoint) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   if (chart.type === "table") {
@@ -82,7 +85,7 @@ export function ChartFrame({
       result={result}
       chart={chart}
       series={series}
-      options={plotOptions(series, locale)}
+      options={plotOptions(series, locale, onSelect)}
     />
   );
 }
@@ -151,6 +154,10 @@ function Plot({
  * The figure is kept and qualified rather than withheld: a partial total is still worth
  * reading, it just may not be called the total. `ResultTable` says the same thing the same
  * way, for the rows it shows.
+ *
+ * A sum that left out a missing value is marked beside its figure, in words, and the note
+ * beneath says what the mark means (`lib/pivot.ts`, ADR 0090). The mark is text rather than
+ * a colour, so it survives a screen reader, a print and a copy into a spreadsheet.
  */
 function PivotTable({
   result,
@@ -166,6 +173,7 @@ function PivotTable({
     return <p className="note">{t("chart.pivotNeeds")}</p>;
   }
   const table = pivot(result, { rowsBy: x, colsBy: series, value }, t("chart.total"));
+  const incomplete = table.totals.some((cell) => cell.incomplete);
   return (
     <div className="stack stack--tight">
       <div className="result">
@@ -188,27 +196,40 @@ function PivotTable({
               <tr key={row.key}>
                 <td className="datum">{row.key}</td>
                 {row.cells.map((cell, i) => (
-                  <td key={i} className="num datum">
-                    {figure(cell)}
-                  </td>
+                  <PivotCell key={i} cell={cell} />
                 ))}
-                <td className="num datum">{figure(row.total)}</td>
+                <PivotCell cell={row.total} />
               </tr>
             ))}
             <tr>
               <td className="datum">{t("chart.total")}</td>
               {table.totals.map((cell, i) => (
-                <td key={i} className="num datum">
-                  {figure(cell)}
-                </td>
+                <PivotCell key={i} cell={cell} />
               ))}
             </tr>
           </tbody>
         </table>
       </div>
+      {incomplete ? <p className="note">{t("chart.incompleteNote")}</p> : null}
       {result.truncated ? (
         <p className="note">{t("chart.totalsPartial", { count: result.rows.length })}</p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One summed figure. An incomplete one carries its mark; a missing one is the em dash alone,
+ * because a mark on a dash would say "part of nothing".
+ */
+function PivotCell({ cell }: { cell: PivotFigure }): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <td className="num datum">
+      {figure(cell.sum)}
+      {cell.incomplete && cell.sum !== null ? (
+        <span className="pivot__incomplete">{t("chart.incompleteMark")}</span>
+      ) : null}
+    </td>
   );
 }

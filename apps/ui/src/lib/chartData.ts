@@ -230,3 +230,98 @@ export function toSeries(result: TableResult, chart: ChartConfig, otherLabel: st
   }
   return byColumns(result, xAt, y);
 }
+
+/** One drawn point: which dataset, and which position along the labels. */
+export interface ChartPoint {
+  readonly dataset: number;
+  readonly index: number;
+}
+
+/**
+ * The types whose points are `labels[index]` of `datasets[dataset]` as `toSeries` built
+ * them. A scatter or a bubble drops rows missing a coordinate, and a gauge, a progress bar
+ * and a KPI tile draw one reading, so none of them maps a point back to a row this way.
+ */
+const LABELLED_TYPES: ReadonlySet<ChartConfig["type"]> = new Set([
+  "bar",
+  "line",
+  "area",
+  "pie",
+  "doughnut",
+  "radar",
+  "combo",
+  "funnel",
+]);
+
+/**
+ * The rows of `result` that drew `point`, so the reader's table can mark them.
+ *
+ * Without a series column every row is one position, in order. With one, a position is an
+ * x label and a dataset is a series name -- or the fold, which drew every row whose series
+ * was not kept -- and more than one row may share both, which is why this answers a list.
+ * An answer of none marks nothing; it never marks a guess.
+ */
+export function rowsAt(result: TableResult, chart: ChartConfig, point: ChartPoint): number[] {
+  if (!LABELLED_TYPES.has(chart.type)) {
+    return [];
+  }
+  const { x, y, series } = resolveColumns(result, chart);
+  const xAt = index(result, x);
+  if (series === null || y[0] === undefined) {
+    return point.index >= 0 && point.index < result.rows.length ? [point.index] : [];
+  }
+  const seriesAt = index(result, series);
+  const { labels, names } = axesOf(result, xAt, seriesAt);
+  const label = labels[point.index];
+  if (label === undefined) {
+    return [];
+  }
+  const kept = names.slice(0, MAX_SERIES);
+  const named = kept[point.dataset];
+  function drew(name: string): boolean {
+    return named === undefined
+      ? point.dataset === kept.length && !kept.includes(name)
+      : name === named;
+  }
+  const rows: number[] = [];
+  result.rows.forEach((row, at) => {
+    if (
+      labelOf(xAt < 0 ? null : (row[xAt] ?? null)) === label &&
+      drew(labelOf(row[seriesAt] ?? null))
+    ) {
+      rows.push(at);
+    }
+  });
+  return rows;
+}
+
+/**
+ * The search key a selected point rides under, as `<dataset>.<index>`.
+ *
+ * In the address, like every other choice on a question's page, so nothing holds it but the
+ * URL (`.claude/rules/state.md`). It means something only against the result it was chosen
+ * on, so a new run drops it (`withPoint(search, null)`) rather than let it mark a row of a
+ * different answer.
+ */
+export const POINT = "point";
+
+/** Two integers, and nothing else: a hand-edited address marks nothing rather than a guess. */
+const POINT_TEXT = /^(?<dataset>\d{1,6})\.(?<index>\d{1,6})$/u;
+
+export function pointFromSearch(search: URLSearchParams): ChartPoint | null {
+  const groups = POINT_TEXT.exec(search.get(POINT) ?? "")?.groups;
+  if (groups?.dataset === undefined || groups.index === undefined) {
+    return null;
+  }
+  return { dataset: Number.parseInt(groups.dataset, 10), index: Number.parseInt(groups.index, 10) };
+}
+
+export function withPoint(search: URLSearchParams, point: ChartPoint | null): URLSearchParams {
+  const next = new URLSearchParams(search);
+  if (point === null) {
+    next.delete(POINT);
+  } else {
+    next.set(POINT, `${String(point.dataset)}.${String(point.index)}`);
+  }
+  return next;
+}
