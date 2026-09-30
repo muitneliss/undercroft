@@ -152,7 +152,14 @@ export interface KindResult {
   readonly reason: string | null;
 }
 
-/** Write a batch of answers, replacing whatever the digests held before. */
+/**
+ * Write a batch of answers, replacing whatever the digests held before -- with one exception.
+ *
+ * A provider failure does not replace an ANSWER given under another catalogue (ADR 0093). That
+ * answer is what `last_accepted_kind` shows while a new catalogue is asked, and a 429 is no
+ * reason for a document to lose it. Skipping the write leaves the row on the old hash, which is
+ * exactly what keeps the text due, so the next run asks it again as it would have anyway.
+ */
 export async function upsertKindResults(
   exec: SqlExecutor,
   tenantId: string,
@@ -174,7 +181,10 @@ export async function upsertKindResults(
             status = excluded.status, kind = excluded.kind, confidence = excluded.confidence,
             probabilities = excluded.probabilities, model = excluded.model,
             reason = excluded.reason, classified_at = excluded.classified_at,
-            run_id = excluded.run_id`,
+            run_id = excluded.run_id
+      WHERE NOT (excluded.status = 'provider-error'
+                 AND raw.document_kind.status = 'classified'
+                 AND raw.document_kind.definition_hash <> excluded.definition_hash)`,
     [
       tenantId,
       stamp.definitionHash,
