@@ -117,7 +117,8 @@ function inputOf(url: URL): unknown {
  *
  * Settled means no query in flight and nothing `aria-busy`, which is how every skeleton and
  * every lazy division's fallback here announces itself. Motion needs no wait: `visual.css`
- * sets every animation and transition at its end the moment it starts.
+ * takes it out. The window is put back at its top before the picture, so a page something
+ * scrolled on arrival is still drawn from its first line.
  */
 async function matches(
   name: string,
@@ -132,5 +133,6 @@ async function matches(
   await document.fonts.ready;
   expect(refused, "procedures the fixtures do not answer").toEqual([]);
   await page.viewport(width, document.documentElement.scrollHeight);
+  globalThis.scrollTo(0, 0);
   await expect(page).toMatchScreenshot(name, { screenshotOptions: { animations: "disabled" } });
 }
