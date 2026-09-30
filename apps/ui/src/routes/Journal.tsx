@@ -324,51 +324,55 @@ function RunTable({
   // query the page above already made, so asking for it here costs no request.
   const accounts = trpc.connections.list.useQuery({ tenantId }).data ?? [];
 
+  // In a scroller, so at a phone's width the eight columns scroll rather than being cut off at
+  // the leaf's edge, and the open run's leaf stays in view (`.table-scroll` in index.css).
   return (
-    <table className="table">
-      <caption>{t("journal.caption", { count: items.length })}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t("journal.colWhen")}</th>
-          <th scope="col">{t("journal.colWhat")}</th>
-          <th scope="col">{t("journal.colOutcome")}</th>
-          <th scope="col" className="num">
-            {t("journal.colLanded")}
-          </th>
-          <th scope="col" className="num">
-            {t("journal.colCreated")}
-          </th>
-          <th scope="col" className="num">
-            {t("journal.colChanged")}
-          </th>
-          <th scope="col" className="num">
-            {t("journal.colRefused")}
-          </th>
-          <th scope="col" className="num">
-            {t("journal.colDuration")}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((run) => (
-          <Fragment key={run.id}>
-            <RunRow
-              run={run}
-              locale={locale}
-              open={run.id === openId}
-              href={journalPath(tenantId, { source, runId: run.id })}
-              accounts={accounts}
-            />
-            {run.id === openId ? (
-              <tr className="table__hinge">
-                <td colSpan={COLUMNS}>
-                  <RunDetail tenantId={tenantId} runId={run.id} />
-                </td>
-              </tr>
-            ) : null}
-          </Fragment>
-        ))}
-      </tbody>
-    </table>
+    <div className="table-scroll">
+      <table className="table">
+        <caption>{t("journal.caption", { count: items.length })}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t("journal.colWhen")}</th>
+            <th scope="col">{t("journal.colWhat")}</th>
+            <th scope="col">{t("journal.colOutcome")}</th>
+            <th scope="col" className="num">
+              {t("journal.colLanded")}
+            </th>
+            <th scope="col" className="num">
+              {t("journal.colCreated")}
+            </th>
+            <th scope="col" className="num">
+              {t("journal.colChanged")}
+            </th>
+            <th scope="col" className="num">
+              {t("journal.colRefused")}
+            </th>
+            <th scope="col" className="num">
+              {t("journal.colDuration")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((run) => (
+            <Fragment key={run.id}>
+              <RunRow
+                run={run}
+                locale={locale}
+                open={run.id === openId}
+                href={journalPath(tenantId, { source, runId: run.id })}
+                accounts={accounts}
+              />
+              {run.id === openId ? (
+                <tr className="table__hinge">
+                  <td colSpan={COLUMNS}>
+                    <RunDetail tenantId={tenantId} runId={run.id} />
+                  </td>
+                </tr>
+              ) : null}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

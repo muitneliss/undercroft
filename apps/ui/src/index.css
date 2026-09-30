@@ -2262,6 +2262,40 @@
     text-align: start;
   }
 
+  /*
+   * A TABLE WIDER THAN ITS LEAF SCROLLS; IT DOES NOT SHRED ITS WORDS.
+   *
+   * `.datum` breaks anywhere, which is right for a long ID in a line of prose and wrong in a
+   * table: it lets the table's layout shrink every mono column to one character, so at a
+   * phone's width the lake's index read "invoi / ces" and the journal "minu / tes / ago",
+   * and a ledger with plates in it overflowed the leaf and was cut off at its edge. Inside
+   * this wrapper a datum breaks only where a word does, the table keeps a desk's measure,
+   * and the wrapper scrolls sideways instead -- the customer index's answer, made general.
+   *
+   * A leaf hinged into a row of such a table (a run's detail in the journal) is as wide as
+   * the view onto the table, not as the table, and stays in that view while the ledger
+   * scrolls under it: `100cqi` is the wrapper's own width, which is why it is a container.
+   */
+  .table-scroll {
+    overflow-x: auto;
+    container-type: inline-size;
+  }
+
+  .table-scroll > .table {
+    min-width: 40rem;
+  }
+
+  .table-scroll .datum {
+    overflow-wrap: break-word;
+  }
+
+  .table-scroll .table__hinge .hinge {
+    position: sticky;
+    left: 0;
+    width: 100cqi;
+    overflow-x: auto;
+  }
+
   /* -- a form hinged into a row ------------------------------------------------ */
 
   /* A plate that is a <summary>: the same die, the disclosure triangle removed. Open, it
