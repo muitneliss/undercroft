@@ -445,13 +445,16 @@
     // value of the rule here, so it is scoped rather than switched off.
     //
     // `apps/cli` is bundled too, but for Node (`Bun.build` with `target: "node"`): its files
-    // and its terminal ARE the platform, the same as for the servers.
+    // and its terminal ARE the platform, the same as for the servers. `apps/installer-cli` is
+    // compiled into a Bun executable per platform (ADR 0095), and a process runner, the install
+    // folder and a terminal prompt are what it is for.
     //
     // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
     // respectively, never in the browser.
     {
       "includes": [
         "apps/cli/**",
+        "apps/installer-cli/**",
         "apps/control-plane/**",
         "apps/worker/**",
         "packages/**",
@@ -780,16 +783,18 @@
       "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
     },
 
-    // Four entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
+    // Five entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
     // default export carrying `port` and `fetch` to start a server, and Vite reads a default
     // export from its config, as Astro does from `astro.config.ts`. A named export is not an
-    // option a caller would accept.
+    // option a caller would accept. `embedded.d.ts` declares what Bun's text loader hands an
+    // `import ... with { type: "text" }` -- a default export is the only shape it has.
     {
       "includes": [
         "apps/*/src/main.ts",
         "apps/worker/src/server.ts",
         "apps/ui/vite.config.ts",
-        "apps/blog/astro.config.ts"
+        "apps/blog/astro.config.ts",
+        "packages/setup/src/embedded.d.ts"
       ],
       "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
     },

@@ -1,0 +1,10 @@
+{
+  "//": "The one owner of installing Undercroft with Docker (ADR 0095). Its compose file is embedded as text from deploy/compose, which `src/embedded.d.ts` declares.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*"],
+  "references": [{ "path": "../core" }]
+}

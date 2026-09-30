@@ -24,7 +24,7 @@ recorded state, and starving a neighbour's service.
 - **NEVER invent a Dokploy endpoint name.** Fetch `settings.getOpenApiDocument` and search
   it. A plausible endpoint that does not exist fails in a way that reads like a permissions
   problem and costs an hour.
-- **NEVER add a service with no memory limit.** CI asserts this over _both_ compose files;
+- **NEVER add a service with no memory limit.** CI asserts this over _every_ compose file, the self-install one included;
   the host has no swap, so an unlimited container turns a spike into an OOM kill that takes a
   neighbour down.
 - **NEVER let CI write the panel's configuration** — not the compose source, not the

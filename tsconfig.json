@@ -9,10 +9,12 @@
     { "path": "./packages/crypto" },
     { "path": "./packages/telemetry" },
     { "path": "./packages/connector-runtime" },
+    { "path": "./packages/setup" },
     { "path": "./apps/worker" },
     { "path": "./apps/control-plane" },
     { "path": "./apps/ui" },
     { "path": "./apps/cli" },
+    { "path": "./apps/installer-cli" },
     { "path": "./apps/mcp-widgets" },
     { "path": "./scripts" }
   ]

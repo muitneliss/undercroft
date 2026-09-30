@@ -1,0 +1,12 @@
+{
+  "name": "@undercroft/installer-cli",
+  "version": "1.55.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@clack/prompts": "1.8.1",
+    "@undercroft/core": "workspace:*",
+    "@undercroft/setup": "workspace:*",
+    "i18next": "26.4.2"
+  }
+}
