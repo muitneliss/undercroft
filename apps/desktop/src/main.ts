@@ -11,6 +11,27 @@
  * the install at this app's release and opens it in the browser, already signed in on a desktop
  * install (ADR 0094). The tray's Settings reopens the wizard over the existing install.
  *
+ * ## Closing and quitting
+ *
+ * - **Closing the wizard's window** leaves the app in the tray once there is an install, which
+ *   the tray then operates. With nothing installed the tray has nothing to operate, so closing
+ *   the window quits.
+ * - **Quitting** -- Cmd+Q or the app menu's Quit, the tray's Quit, a system quit (AppleScript's
+ *   `quit`, logging out, SIGTERM) -- takes Electrobun's one quit path, and `before-quit` below is
+ *   this app's say in it: while a program the app started is running, the quit waits for
+ *   `processes.stop` and then goes ahead, so no `docker compose` outlives the app. It never asks
+ *   first: Electrobun does not say who is quitting, so a question meant for a person would stand
+ *   in front of a logout too. What the quit stops is not lost (`services/processes.ts`).
+ *   On macOS, Electrobun answers the system's quit request "cancelled" and then quits by itself,
+ *   so AppleScript reports `User canceled (-128)` for a quit that happens.
+ * - **Neither stops Undercroft.** The stack runs in Docker and keeps running; the tray's Stop
+ *   is what stops it.
+ *
+ * On macOS the first launch of a downloaded app also shows a small "Undercroft Setup" window
+ * saying the installation is complete. It is Electrobun's self-extractor, the process that
+ * unpacked this app and opened it, and it waits for its Close button; Electrobun 2.0.2 has no
+ * setting that closes it, and it is not this process's to close.
+ *
  * `UNDERCROFT_DESKTOP_SMOKE=<file>` is the CI smoke check's switch (`scripts/check.ts`): the app
  * opens the wizard and walks it to the Docker step by itself (`handlers/smoke.ts`), writes what
  * that step's check found to the file, and quits.
@@ -23,7 +44,15 @@ import process from "node:process";
 import { systemClock } from "@undercroft/core";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
 import { type Arch, defaultInstallDir, type Platform, processRunner } from "@undercroft/setup";
-import { ApplicationMenu, BrowserView, BrowserWindow, Tray, Updater, Utils } from "electrobun/main";
+import Electrobun, {
+  ApplicationMenu,
+  BrowserView,
+  BrowserWindow,
+  type ElectrobunEvent,
+  Tray,
+  Updater,
+  Utils,
+} from "electrobun/main";
 import pkg from "../package.json" with { type: "json" };
 import { requestHandlers } from "./handlers/requests.ts";
 import type { Shell, UpdateCheck, Updates } from "./handlers/shell.ts";
@@ -40,6 +69,7 @@ import type { DesktopRpc, InstallEvent } from "./rpc.ts";
 import { desktopService } from "./services/desktop.ts";
 import { dockerSetup } from "./services/dockerSetup.ts";
 import { filePrefs } from "./services/prefs.ts";
+import { processGroup } from "./services/processes.ts";
 
 const release = `v${pkg.version}`;
 const platform: Platform =
@@ -71,8 +101,10 @@ const prefs = filePrefs(join(Utils.paths.userData, "desktop.json"));
 function log(line: string): void {
   appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
 }
+/** Every program the app runs, so a quit can stop them first (`before-quit` below). */
+const processes = processGroup(processRunner);
 const desktop = desktopService({
-  run: processRunner,
+  run: processes.run,
   fetch: globalThis.fetch,
   clock: systemClock,
   platform,
@@ -85,7 +117,7 @@ const desktop = desktopService({
   log,
 });
 const docker = dockerSetup({
-  run: processRunner,
+  run: processes.run,
   clock: systemClock,
   platform,
   arch,
@@ -118,6 +150,7 @@ function showWizard(): void {
     release,
     relabel: (chosen) => {
       locale = chosen;
+      wizard?.window.setTitle(words()("app.windowTitle"));
       void refreshTray();
     },
     changed: () => void refreshTray(),
@@ -208,6 +241,9 @@ const updates: Updates = {
     if (!info.updateReady) {
       return info.error === "" ? "download incomplete" : info.error;
     }
+    // Restarting into the update is a quit, and `before-quit` would hold one back while a program
+    // runs -- which cancels the restart rather than delaying it. So stop them first.
+    await processes.stop();
     await Updater.applyUpdate();
     return null;
   },
@@ -248,9 +284,17 @@ tray.on("tray-clicked", (event) => {
 });
 
 // Cut, copy and paste reach a macOS webview only through the application menu's roles; without
-// them a person could not paste an OAuth client secret into the wizard.
+// them a person could not paste an OAuth client secret into the wizard. Electrobun 2.0.2 gives the
+// edit roles their shortcuts but not `quit`, so Cmd+Q is named here or it does nothing.
 ApplicationMenu.setApplicationMenu([
-  { submenu: [{ role: "hide" }, { role: "hideOthers" }, { type: "divider" }, { role: "quit" }] },
+  {
+    submenu: [
+      { role: "hide" },
+      { role: "hideOthers" },
+      { type: "divider" },
+      { role: "quit", accelerator: "q" },
+    ],
+  },
   {
     label: "Edit",
     submenu: [
@@ -264,6 +308,20 @@ ApplicationMenu.setApplicationMenu([
     ],
   },
 ]);
+
+// -- quitting -----------------------------------------------------------------------------------
+
+// Every quit reaches this, whoever asked (the module docstring). Electrobun does not await a
+// handler, so a quit that must wait is refused now and asked for again once the programs have
+// exited; the second request finds nothing running, unless something started meanwhile, which
+// is then stopped the same way.
+Electrobun.events.on("before-quit", (event: ElectrobunEvent<unknown, { allow: boolean }>) => {
+  if (!processes.running()) {
+    return;
+  }
+  event.response = { allow: false };
+  void processes.stop().then(() => Utils.quit());
+});
 
 // -- launch -------------------------------------------------------------------------------------
 
