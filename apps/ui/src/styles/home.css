@@ -96,6 +96,12 @@
     flex: 1;
   }
 
+  /* The role filter holds four short words; letting it grow like the search box would
+     split the row in half and push the clear plate onto a line of its own. */
+  .customer-index .customer-index__role {
+    flex: 0 0 auto;
+  }
+
   .customer-index__scroll {
     overflow-x: auto;
   }
