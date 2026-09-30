@@ -124,6 +124,7 @@ export const vi = {
 
   done: {
     desktop: "Undercroft đang chạy tại {{url}} — bạn được đăng nhập với tư cách chủ sở hữu.",
+    cli: "Từ CLI undercroft: undercroft config set-profile local --url {{url}}, rồi undercroft auth login — không cần mã.",
     server: "Undercroft đang chạy trên cổng {{bind}}:{{port}}.",
     proxy: "Trỏ reverse proxy https của bạn tới http://{{bind}}:{{port}}; mọi người mở {{url}}.",
     admin: "Quản trị viên {{email}} đăng nhập tại {{url}} rồi mời những người còn lại.",

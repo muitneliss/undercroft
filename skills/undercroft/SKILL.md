@@ -95,7 +95,8 @@ Each workflow is its own skill. Follow it when the person's request matches.
 
 - **Sign in.** Over MCP, the host sends the person through Undercroft's own sign-in and
   consent pages. With the CLI, the sign-in code arrives in their inbox:
-  `references/cli.md` has the two steps.
+  `references/cli.md` has the two steps. A desktop install on the person's own machine needs
+  no code, and `references/cli.md` says how.
 - **Allow writes.** An MCP connection carries a read or write grant the person chose. A CLI
   profile has `allowWrites`, off by default, which only a person at a terminal can turn on.
   A refusal for either reason is the person's decision to make. Never try to change it.

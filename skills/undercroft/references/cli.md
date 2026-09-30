@@ -57,6 +57,11 @@ code agrees with the code.
 - **Sign in.** Run `undercroft auth login --email <address> --agent` to have a code emailed.
   The person reads the code from their inbox and runs the second step, or tells you the code:
   `undercroft auth login --email <address> --code <code> --agent`.
+- **Sign in to a desktop install.** An install on the person's own machine, at
+  `http://localhost:<port>`, has no email sign-in. Run `undercroft auth login --agent` with no
+  address: when signing in on this machine is the only way in the server offers, that is what
+  it does, and there is no second step. It never turns on writes. A `PERMISSION_DENIED` names
+  the exact address to use, because `localhost` and `127.0.0.1` are two; tell the person.
 - **Allow writes.** Each environment profile has `allowWrites`, off by default, and only a
   person at a terminal can turn it on. When you get `WRITES_DISABLED`, tell the person which
   profile it named. Never try to change the profile yourself: in agent mode that returns

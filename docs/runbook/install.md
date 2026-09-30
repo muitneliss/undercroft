@@ -67,6 +67,9 @@ At the end it prints any redirect URIs you need to register with Google or Xero.
 owner's sign-in works only at that origin. At `http://127.0.0.1:<port>` the page refuses it and
 says where to go instead (ADR 0094).
 
+The [`undercroft` CLI](cli.md) signs the owner in the same way, with no code, at the same
+address. A desktop install's last lines print the two commands (ADR 0096).
+
 ### On a server
 
 The control plane is published on `127.0.0.1:<port>` unless you give another address to

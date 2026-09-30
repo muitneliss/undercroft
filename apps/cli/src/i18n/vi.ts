@@ -53,7 +53,8 @@ export const vi = {
   } satisfies Record<TopicKey, string>,
 
   command: {
-    authLogin: "Đăng nhập bằng mã một lần gửi tới email, như trên giao diện web.",
+    authLogin:
+      "Đăng nhập bằng mã một lần gửi tới email, như trên giao diện web. Bản cài trên chính máy này thì đăng nhập luôn, không cần mã.",
     authLogout: "Đăng xuất: huỷ phiên trên máy chủ rồi xoá phiên đã lưu cho địa chỉ này.",
     authStatus: "Cho biết bạn đang đăng nhập vào máy chủ nào, với địa chỉ nào.",
     configShow:
@@ -80,6 +81,8 @@ export const vi = {
     inputJson: "Đầu vào JSON viết trực tiếp.",
     email: "Địa chỉ email để đăng nhập.",
     code: "Mã sáu chữ số đã nhận qua email.",
+    local:
+      "Đăng nhập tại máy này, không cần email hay mã, khi máy chủ chạy trên chính máy này và cho phép cách đó.",
     profileUrl: "URL gốc của máy chủ cho hồ sơ này.",
     allowWrites: "Cho phép lệnh ghi trên hồ sơ này. Chỉ người dùng ở terminal mới bật được.",
     profileName: "Tên hồ sơ.",
@@ -99,6 +102,7 @@ export const vi = {
     codeRequested:
       "Nếu {{email}} có quyền truy cập, một mã đã được gửi tới đó. Chạy lại với --code để đăng nhập.",
     signedIn: "Đã đăng nhập vào {{origin}} với {{email}}.",
+    signedInLocally: "Đã đăng nhập vào {{origin}} với {{email}}, tại máy này, không cần mã.",
     signedOut: "Đã đăng xuất khỏi {{origin}}.",
     noRows: "Không có dòng nào.",
   },
@@ -160,6 +164,10 @@ export const vi = {
     CONFLICT: "Máy chủ từ chối vì trạng thái hiện tại không cho phép.",
     AUTHENTICATION_REQUIRED: "Chưa đăng nhập vào {{origin}}. Chạy `undercroft auth login`.",
     codeRejected: "Mã không được chấp nhận. Hãy yêu cầu mã mới.",
+    localNotLoopback:
+      "Chỉ đăng nhập tại máy này được với máy chủ chạy trên chính máy này (localhost); {{origin}} thì không. Hãy đăng nhập bằng email.",
+    noLocalMethod:
+      "{{origin}} không cho đăng nhập tại máy này. Hãy đăng nhập bằng email: `undercroft auth login --email <địa chỉ>`.",
     PERMISSION_DENIED: "Bạn không có quyền làm việc này.",
     WRITES_DISABLED:
       "Hồ sơ “{{profile}}” không cho phép ghi. Người dùng phải bật nó trong terminal: `undercroft config set-profile {{profile}} --allow-writes`.",

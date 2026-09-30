@@ -17,6 +17,7 @@
 
 import { saveCredential } from "../services/credentials.ts";
 import { failure, fromFailure, type Refusal, success } from "../services/output.ts";
+import { requestCode, signIn } from "./authEndpoints.ts";
 import type { Context } from "./context.ts";
 import { drawn, type Noted } from "./noted.ts";
 import {
@@ -32,7 +33,7 @@ import {
   railOutro,
   whileWaiting,
 } from "./prompts.ts";
-import { type Connection, requestCode, signIn } from "./remote.ts";
+import type { Connection } from "./remote.ts";
 
 export interface SignedAtTerminal {
   readonly noted: Noted;

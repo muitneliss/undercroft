@@ -75,6 +75,8 @@ function redirects(ctx: Context, answers: Answers, url: string): string[] {
 async function announce(ctx: Context, answers: Answers, url: string): Promise<void> {
   if (answers.mode === "desktop") {
     log.success(ctx.t("done.desktop", { url }));
+    // The CLI signs in on this machine too, at this exact origin (ADR 0096).
+    log.info(ctx.t("done.cli", { url }));
     if (ctx.invocation.flags.open) {
       await openBrowser(ctx, url);
     }

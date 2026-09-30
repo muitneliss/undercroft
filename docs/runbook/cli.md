@@ -52,6 +52,22 @@ undercroft runs list                     # asks which customer
 undercroft config set-profile prod --allow-writes   # only when you mean it, at your own terminal
 ```
 
+On an install the setup wizard made for one person (a desktop install, served at
+`http://localhost:<port>`), there is no email and no code. `auth login` asks the server which
+ways in it offers. When the only one is signing in on this machine, it does that and keeps the
+session as it keeps any other. It needs no flag, and works the same with `--agent`:
+
+```sh
+undercroft config set-profile local --url http://localhost:13000
+undercroft auth login                    # signed in as the install's owner, no code
+undercroft config set-profile local --allow-writes  # only when you mean it, as anywhere
+```
+
+On a developer's stack that also offers the emailed code, `auth login --local` chooses this way
+in. It works only for a server on this machine, and only at the exact address the install
+prints: `localhost` and `127.0.0.1` are two addresses, and the server refuses the other one.
+Signing in this way never turns on writes. [ADR 0096](../adr/0096-the-cli-signs-in-to-a-local-install-the-way-the-browser-does.md).
+
 `undercroft` on its own, at a terminal, is the home page: the title page with the sign-in form
 on it while you are signed out, and the contents page (every topic and how many commands it
 has) once you are in. A rejected code offers a new one instead of ending the run. A piped run
@@ -81,6 +97,8 @@ undercroft auth login --email ops@example.test --agent
 undercroft auth login --email ops@example.test --code 123456 --agent
 ```
 
+On a desktop install it takes one, `undercroft auth login --agent`, with no address.
+
 ## Where things live
 
 | What                | Where                                                                                               |
@@ -105,7 +123,7 @@ It never prints the session itself.
   (`task build:cli`) refuses: an input property may not share a global flag's name (`profile`,
   `url`, `yes` and the rest).
 - **A procedure the CLI calls by name** (`tenants.list` for the tenant prompt, `session.me` and
-  `session.signOut` for `auth`) goes through `callProcedure` in `handlers/remote.ts`, typed with
+  `session.signOut` for `auth`, `config.signIn` to learn the ways in) goes through `callProcedure` in `handlers/remote.ts`, typed with
   the router's own input and query/mutation kind. Renaming or reshaping one fails the CLI's
   typecheck.
 - **The gate** is `task ci:verify`, as everywhere. `apps/cli/src/cli.test.ts` builds the bundle
@@ -120,11 +138,14 @@ It never prints the session itself.
 
 ## When it goes wrong
 
-| Symptom                                          | Cause                                                                                                                              |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `CONFIG_REQUIRED`                                | No `--profile`, `--url` or default profile, a profile that does not exist, or an unreadable config file. Run `config set-profile`. |
-| `AUTHENTICATION_REQUIRED` right after signing in | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                                      |
-| `WRITES_DISABLED`                                | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                                        |
-| `NETWORK_ERROR` against a URL that is up         | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it.                  |
-| No colour in human mode                          | `--no-color`, or `NO_COLOR` set in the environment.                                                                                |
-| `npm install -g` fails with `EACCES`             | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                                         |
+| Symptom                                                    | Cause                                                                                                                              |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `CONFIG_REQUIRED`                                          | No `--profile`, `--url` or default profile, a profile that does not exist, or an unreadable config file. Run `config set-profile`. |
+| `AUTHENTICATION_REQUIRED` right after signing in           | A different origin: `localhost` and `127.0.0.1` are two. Check `config show`.                                                      |
+| `WRITES_DISABLED`                                          | The profile does not allow writes, or you used `--url`. A person turns it on at a terminal.                                        |
+| `PERMISSION_DENIED` from `auth login` on a desktop install | The profile says `127.0.0.1` and the install is at `localhost`, or the other way round. The message names the address to use.      |
+| `INVALID_ARGUMENT` from `auth login --local`               | The URL is not on this machine. Signing in without a code works only on loopback; use `--email`.                                   |
+| `auth login` asks for an email on a desktop install        | The server offers the emailed code as well, or is too old to say what it offers. Pass `--local`.                                   |
+| `NETWORK_ERROR` against a URL that is up                   | Nothing there answers `/trpc` as tRPC. Use the control plane's origin, or the Vite dev server that proxies to it.                  |
+| No colour in human mode                                    | `--no-color`, or `NO_COLOR` set in the environment.                                                                                |
+| `npm install -g` fails with `EACCES`                       | Node is installed system-wide. Use a Node you own (nvm, fnm, Homebrew) rather than `sudo`.                                         |

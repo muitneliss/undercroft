@@ -12,10 +12,19 @@ import type { Effect, JsonSchema } from "../manifest.ts";
 import { forgetCredential, saveCredential } from "../services/credentials.ts";
 import { failure, fromFailure, isFailure, success } from "../services/output.ts";
 import { planProfileChange, resolveTarget, writeConfig } from "../services/profiles.ts";
-import { type Context, connect, loadConfig, type ParsedFlags, stringFlag } from "./context.ts";
+import { requestCode, signIn } from "./authEndpoints.ts";
+import {
+  booleanFlag,
+  type Context,
+  connect,
+  loadConfig,
+  type ParsedFlags,
+  stringFlag,
+} from "./context.ts";
+import { offersOnlyLocal, signInOnThisMachine } from "./localSignIn.ts";
 import { type Noted, noted } from "./noted.ts";
 import { askText, CANCELLED } from "./prompts.ts";
-import { callProcedure, requestCode, signIn } from "./remote.ts";
+import { callProcedure } from "./remote.ts";
 import { signInAtTerminal } from "./terminalSignIn.ts";
 
 function missing(ctx: Context, names: string): Noted {
@@ -38,11 +47,15 @@ async function valueOrAsk(
 }
 
 /**
- * Sign in with an emailed code: ask for one, then exchange it for a session.
+ * Sign in: on this machine when the server is a desktop install, else with an emailed code.
  *
- * Two invocations in agent mode -- `--email` asks, `--email --code` signs in -- because the
- * code arrives in a person's mailbox, and waiting on stdin for it is what agent mode never
- * does. A person at a terminal is asked for each in turn instead, in `signInAtTerminal`.
+ * On this machine when `--local` says so, or when neither `--email` nor `--code` was given and
+ * the server offers nothing else (`handlers/localSignIn.ts`). An address given is a person
+ * choosing the code, and is not second-guessed.
+ *
+ * The code takes two invocations in agent mode -- `--email` asks, `--email --code` signs in --
+ * because it arrives in a person's mailbox, and waiting on stdin for it is what agent mode
+ * never does. A person at a terminal is asked for each in turn instead, in `signInAtTerminal`.
  */
 export async function authLogin(ctx: Context, flags: ParsedFlags): Promise<Noted> {
   const connected = connect(ctx, flags);
@@ -51,6 +64,14 @@ export async function authLogin(ctx: Context, flags: ParsedFlags): Promise<Noted
   }
   const { connection } = connected;
   const code = stringFlag(flags, "code");
+  const local =
+    booleanFlag(flags, "local") ||
+    (code === undefined &&
+      stringFlag(flags, "email") === undefined &&
+      (await offersOnlyLocal(ctx, connection)));
+  if (local) {
+    return (await signInOnThisMachine(ctx, connection)).noted;
+  }
   if (code === undefined && ctx.mode.prompts) {
     return (await signInAtTerminal(ctx, connection, stringFlag(flags, "email"))).noted;
   }
