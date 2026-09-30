@@ -1,126 +1,96 @@
 ---
-title: "Tích hợp HubSpot sang Postgres, kết hợp Xero bằng dbt"
-description: "Tích hợp HubSpot qua API để sync CRM và custom properties vào raw data lake, Postgres, rồi kết hợp dữ liệu Xero bằng dbt cho report theo khách hàng."
+title: "Tích hợp HubSpot: nối dữ liệu bán hàng với kế toán"
+description: "Tích hợp HubSpot để đối chiếu bán hàng với kế toán. Hiểu cách Undercroft giữ raw data, hỗ trợ report và những việc doanh nghiệp cần tự quyết định."
 translationKey: "hubspot-integration"
 pubDate: "2026-09-29"
-tags: ["HubSpot", "Integration", "Postgres", "dbt"]
+tags: ["HubSpot", "Integration", "Reporting", "ELT"]
 keywords:
   [
     "tích hợp HubSpot",
-    "kết nối HubSpot API",
     "HubSpot sang Postgres",
+    "báo cáo doanh thu HubSpot",
     "HubSpot custom properties",
-    "HubSpot API",
-    "HubSpot Xero dbt",
+    "tích hợp HubSpot Xero",
   ]
 hero: "../../../assets/posts/hubspot-integration/hero.png"
-heroAlt: "Sơ đồ tích hợp HubSpot: contacts, companies và deals đi qua raw data lake, Postgres rồi được dbt kết hợp với Xero để tạo report doanh thu theo khách hàng"
+heroAlt: "Sơ đồ tích hợp HubSpot đưa dữ liệu CRM và Xero qua raw data lake, Postgres rồi kết hợp để tạo report doanh thu theo khách hàng"
 integration: "hubspot"
 ---
 
-Tích hợp HubSpot với dữ liệu kế toán giúp đội sales, finance và ops trả lời câu hỏi chung: khách hàng có deal đã chốt thực sự mang lại bao nhiêu doanh thu? Undercroft đọc contacts, companies, deals và custom properties qua HubSpot API, lưu vào raw data lake rồi đưa sang Postgres. Từ đó, bạn viết dbt model để kết hợp CRM với Xero theo định nghĩa của doanh nghiệp.
+Tích hợp HubSpot với dữ liệu kế toán giúp doanh nghiệp nhìn rõ khoảng cách giữa bán được hàng và ghi nhận doanh thu. Cơ hội đã chốt chưa chắc đã thu tiền. Ghép các bản xuất dữ liệu cho từng cuộc họp vừa mất thời gian, vừa khó giải thích chênh lệch.
 
-Phần cần làm rõ ngay từ đầu là cách nhận diện khách hàng giữa hai hệ thống. Sync thành công chưa chứng minh một company trong HubSpot chính là một contact trong Xero. Undercroft cung cấp data pipeline; quy tắc ghép khách hàng và tính doanh thu thuộc về model của bạn.
+Undercroft đưa dữ liệu HubSpot vào raw data lake rồi sang Postgres để phân tích. Doanh nghiệp vẫn cần thống nhất cách nhận diện khách hàng và tính chỉ tiêu. Sync thành công mới xác nhận dữ liệu đã được đọc, chưa chứng minh report đúng ý nghĩa nghiệp vụ.
 
-## Tích hợp HubSpot sang Postgres hoạt động như thế nào?
+## Tích hợp HubSpot giúp trả lời câu hỏi kinh doanh nào?
 
-Dữ liệu đi theo đường HubSpot API → connector → raw data lake → Postgres → dbt. Connector HubSpot được mô tả bằng YAML: endpoint, quyền truy cập, pagination, properties và cách dùng watermark. Một runtime chung thực thi cấu hình đó.
+Đội bán hàng muốn biết nhóm khách nào thường chốt hợp đồng. Kế toán quan tâm phần đã xuất hóa đơn, còn người điều hành cần hiểu vì sao chưa thu được tiền. Những câu hỏi này cần dữ liệu chung nhưng dùng định nghĩa khác nhau.
 
-Raw data đi qua cùng một đường ghi create-only vào data lake. Postgres giữ projection để truy vấn bằng SQL; các phiên bản đã ghi vẫn nằm trong lake. Nhờ vậy, khi đổi cách tính một chỉ tiêu, bạn có thể sửa model mà không phải xem bảng của dashboard là bản dữ liệu duy nhất.
+Nền tảng phân tích chung giúp dùng lại quy tắc đã thống nhất và tìm nguyên nhân khi số liệu thay đổi. Khách hàng chưa đối chiếu được cần hiện rõ để xử lý, không bị bỏ qua cho report trông đầy đủ.
 
-Undercroft là data platform open-source, không cung cấp sẵn schema nghiệp vụ cho từng doanh nghiệp. Dữ liệu CRM vào lớp chung `raw.records`; dbt model do bạn viết mới tạo ra các bảng phục vụ BI. Có thể xem connector trong [repository Undercroft](https://github.com/muitneliss/undercroft), hoặc đọc thêm về [raw data lake bất biến](/raw-data-lake-bat-bien/) và [data integration bằng REST API connector](/data-integration-la-gi-rest-api/).
+## Vì sao giữ raw data trước khi làm report?
 
-## Connector đọc những dữ liệu CRM nào?
+Có thể hình dung raw data là tài liệu gốc, còn report là cách đọc theo một câu hỏi. Đổi câu hỏi không nên làm mất tài liệu. Undercroft giữ các phiên bản đã nhận trong data lake; Postgres là nơi làm việc với dữ liệu, còn dbt model thể hiện quy tắc phân tích.
 
-Contacts, companies và deals là ba nhóm chính. Connector còn đọc dữ liệu commerce, owners, pipelines và các association được khai báo. Mỗi nhóm phụ thuộc vào scope của private app.
+Đó là ELT: đưa dữ liệu vào trước, rồi tổ chức theo nhu cầu. Bạn có thể sửa model dựa trên dữ liệu đã giữ. Lịch sử chỉ gồm những gì hệ thống từng đọc, không bảo đảm có mọi thay đổi giữa các lần sync.
 
-| Nhóm dữ liệu                 | Nội dung tiêu biểu                     | Dùng trong model           |
-| ---------------------------- | -------------------------------------- | -------------------------- |
-| Contacts                     | Tên, email, company, owner ID          | Phân tích ở cấp contact    |
-| Companies                    | Tên, domain, industry, lifecycle stage | Nhóm khách hàng CRM        |
-| Deals                        | Stage, pipeline, amount, close date    | Theo dõi pipeline bán hàng |
-| Quotes, line items, products | Các object riêng                       | Chi tiết thương mại        |
-| Owners, deal pipelines       | Owner và các stage                     | Hiển thị nhãn dễ hiểu      |
-| Associations                 | Liên kết object, kèm kind và label     | Join theo quan hệ nguồn    |
+Bài về [raw data lake bất biến](/raw-data-lake-bat-bien/) giải thích giá trị của việc giữ dữ liệu nguồn. Phần so sánh [ETL và ELT](/etl-va-elt-la-gi/) giúp cân nhắc thời điểm xử lý dữ liệu.
 
-Đừng dùng trường company dạng text của contact để thay cho association. Connector đọc các liên kết như deal–company và contact–company, giúp model dựa vào quan hệ nguồn thay vì đoán từ tên.
+## Có thể đưa những dữ liệu HubSpot nào vào phân tích?
 
-Association cũng không có timestamp thay đổi trong response này. Vì thế, `source_updated_at` của association là NULL. Gán thời gian đọc hoặc timestamp của deal vào đây sẽ tạo ra một thời điểm có vẻ hợp lý nhưng không đúng ý nghĩa.
+Connector đọc người liên hệ, công ty, cơ hội bán hàng và các dữ liệu thương mại được hỗ trợ như báo giá, sản phẩm, chi tiết hàng bán. Nó cũng đọc người phụ trách, giai đoạn bán hàng và các quan hệ được hỗ trợ giữa bản ghi. Quan hệ có sẵn giúp xác định cơ hội thuộc công ty nào mà không phải đoán theo tên.
 
-## Kết nối HubSpot API và chọn custom properties ra sao?
+Bạn có thể chọn thêm custom properties cho các loại bản ghi được hỗ trợ. Tuy nhiên, điều đó không đồng nghĩa connector đọc được mọi loại đối tượng tự tạo trong HubSpot.
 
-HubSpot dùng private-app token, không có màn hình OAuth consent trong luồng kết nối này. Admin của HubSpot tạo token; admin của tenant trong Undercroft thêm token vào Sources.
+Quyền truy cập quyết định dữ liệu nào được đọc. Undercroft nêu rõ phần thiếu quyền và tiếp tục với phần được phép. Vì vậy, một lần sync thành công vẫn có thể thiếu dữ liệu mà report cần; dữ liệu trống chưa chắc có nghĩa là không phát sinh nghiệp vụ.
 
-1. Tạo private app trong HubSpot và cấp các read scope cần thiết. Ba scope chính là `crm.objects.contacts.read`, `crm.objects.companies.read` và `crm.objects.deals.read`.
-2. Trong Sources, chọn HubSpot rồi dán token. Worker thử đọc một company để kiểm tra trước khi lưu credential đã được mã hóa.
-3. Mở **Change what syncs** để chọn thêm properties, bao gồm custom properties của portal.
-4. Bấm **Run now**, rồi xem từng entity trong Journal để biết dữ liệu nào thực sự đã được đọc.
+## Dữ liệu trên dashboard có mới ngay sau khi sửa HubSpot không?
 
-Danh sách properties mặc định luôn được giữ lại. Bạn chỉ thêm, không bỏ bớt các trường bắt buộc của connector. Sáu object có thể chọn thêm properties là companies, contacts, deals, quotes, line items và products; owners, pipelines và associations không có lựa chọn này.
+Không. Undercroft đọc theo lịch hoặc khi có yêu cầu chạy. Với người liên hệ, công ty và cơ hội bán hàng, mỗi lần sync vẫn xem qua danh sách hiện có rồi xác định bản ghi cần lưu dựa trên thay đổi được nguồn thông báo. Ít thay đổi không có nghĩa là ít công đọc.
 
-Khi chọn thêm properties, request list lấy ID và thông tin pagination, sau đó batch read lấy tập properties đầy đủ qua POST body. Cách này tránh nhét toàn bộ tên properties vào URL. Chọn custom properties không đồng nghĩa connector hỗ trợ mọi custom object.
+Doanh nghiệp cần cân bằng độ mới với thời gian và khả năng đáp ứng của API. Cách này phù hợp với report chấp nhận độ trễ, nhưng không đáp ứng yêu cầu mọi chỉnh sửa xuất hiện tức thì.
 
-Nếu thiếu scope, Journal nêu rõ list không được đọc và scope cần bổ sung; các list được cấp quyền vẫn tiếp tục. Khi không đọc được list nào, run thất bại. Vì vậy, hãy kiểm tra Journal trước khi kết luận dữ liệu trống nghĩa là không có giao dịch.
+Khi kết hợp với Xero, cũng không nên mặc định hai nguồn mới ngang nhau. Một số chỉnh sửa kế toán cần đọc lại toàn bộ mới được phát hiện; việc đọc lại có thể phải chờ để giới hạn khối lượng xử lý.
 
-## Incremental sync có giảm số record phải đọc không?
+## Xóa dữ liệu trong HubSpot thì report thay đổi thế nào?
 
-Với contacts, companies và deals, incremental sync dùng client-side filter. Mỗi run vẫn đi qua toàn bộ live listing; watermark quyết định payload nào cần ghi vào lake. Record không đổi vẫn được tính là đã xuất hiện, dù payload của nó bị bỏ qua ở bước ghi.
+Sau khi đọc trọn danh sách và có đủ bằng chứng, Undercroft nhận ra bản ghi từng biết nay không còn xuất hiện. Bản ghi được đánh dấu đã loại bỏ trong Postgres, còn lịch sử vẫn được giữ trong raw data lake. Model cần xét trạng thái này khi tạo report về dữ liệu đang hoạt động.
 
-Do đó, một portal ít thay đổi vẫn có thể cần nhiều request. Tiết kiệm lượt ghi không đồng nghĩa chỉ gọi API cho record mới. Connector dùng object listing endpoint, không dùng search endpoint có giới hạn số kết quả trên mỗi query.
+![Một lần đọc HubSpot đầy đủ phát hiện bản ghi vắng mặt; Postgres đánh dấu đã loại bỏ, model bỏ khỏi kết quả đang hoạt động và raw data lake giữ lịch sử](../../../assets/posts/hubspot-integration/flow.png)
 
-Cấu hình hiện tại đặt mức 100 request mỗi phút và retry một số lỗi tạm thời, gồm 429, có tôn trọng `Retry-After`. Đây là cấu hình connector, không phải cam kết quota của mọi tài khoản HubSpot. HubSpot cũng không có mục full re-sync riêng trong Undercroft vì mỗi run đã đọc toàn bộ listing.
+Đọc dở dang không đủ để kết luận dữ liệu đã bị xóa. Kết quả trống cũng không khiến toàn bộ bản ghi bị coi là đã mất. Sự thận trọng này tránh kết luận sai khi gặp sự cố, nhưng có thể khiến report phản ánh việc xóa chậm hơn.
 
-## Record bị xóa trong HubSpot có biến mất khỏi report không?
+Thời điểm ghi nhận là lúc phát hiện sự vắng mặt, không phải giờ xóa chính xác trong HubSpot. Nếu dựng lại dữ liệu phân tích từ lake, hệ thống cần đọc nguồn đầy đủ để xác định lại trạng thái hiện tại.
 
-Có, nếu model lọc trạng thái removed và đã có một listing đầy đủ đủ điều kiện. Khi record từng được lưu không còn xuất hiện trong live listing, Undercroft đánh dấu `deleted_at` ở Postgres. Model lọc record đó ra khỏi tập dữ liệu đang hoạt động.
+## Ghép HubSpot với Xero có tự ra doanh thu đúng không?
 
-![Record B bị xóa trong HubSpot, vắng mặt sau khi đọc đủ listing, được đánh dấu removed ở Postgres và loại khỏi dbt active rows; raw data lake vẫn giữ lịch sử](../../../assets/posts/hubspot-integration/flow.png)
+Không thể chỉ nối dữ liệu rồi tin vào tổng cuối cùng. Trước hết, doanh nghiệp cần xác nhận khách hàng ở hai hệ thống là cùng một bên; tên gần giống chưa đủ bằng chứng. Cách ghép cũng phải tránh tính một giao dịch nhiều lần và giữ rõ những khách hàng chưa đối chiếu được.
 
-Run lỗi, dừng giữa chừng hoặc bị cắt ngắn không đủ bằng chứng để kết luận record đã mất. Listing trống cũng không khiến toàn bộ dữ liệu bị đánh dấu removed. Đây là điểm cần hiểu khi kiểm tra vì sao một lần sync chưa làm số lượng record giảm.
+Giá trị cơ hội bán hàng, doanh thu theo hóa đơn và tiền đã thu trả lời những câu hỏi khác nhau. Nhóm phụ trách cần thống nhất kỳ ghi nhận, cách xử lý điều chỉnh và tiền tệ. Khoản tiền thiếu phải khác số không; quy đổi cần có quy tắc rõ ràng. Bài [tích hợp Xero](/tich-hop-xero-postgres/) trình bày thêm về nguồn kế toán.
 
-Removal không xóa payload cuối cùng hay các phiên bản trong lake. `deleted_at` là lúc Undercroft nhận thấy record vắng mặt, không phải giờ xóa chính xác trong HubSpot. Nếu record được khôi phục và xuất hiện trong listing đầy đủ sau đó, trạng thái removed được gỡ ngay cả khi payload không đổi.
+## Khi nào doanh nghiệp nên chọn cách tiếp cận này?
 
-Các association được khai báo phụ thuộc parent sẽ được đánh dấu removed hoặc khôi phục theo parent. Properties `hs_merged_object_ids` trên contacts, companies và deals cung cấp thêm thông tin để model xử lý identity sau merge.
+Undercroft phù hợp khi bạn muốn giữ dữ liệu nguồn, tự quyết định logic report và có người xây dựng, duy trì model. Giá trị rõ hơn khi cần kết hợp CRM với nhiều hệ thống và câu hỏi phân tích thường thay đổi.
 
-Vẫn có độ trễ: record bị xóa sau bước list nhưng trước batch read có thể chỉ được nhận diện ở run đầy đủ tiếp theo. Khi rebuild projection trong Postgres, các record cũng trở lại trạng thái live cho đến khi một listing đầy đủ xác định lại removal.
+Nếu cần report doanh thu làm sẵn, ghép khách hàng tự động hoặc cập nhật tức thì, đây chưa phải lựa chọn phù hợp. Chọn self-hosted còn cần người vận hành. Khi report trong HubSpot đã đáp ứng đủ, thêm một data platform có thể chỉ làm tăng việc.
 
-## Kết hợp HubSpot với Xero bằng dbt cần chuẩn bị gì?
+## Nên bắt đầu từ đâu?
 
-Trước tiên, hãy thống nhất một mapping đã kiểm tra giữa HubSpot company ID và Xero contact ID. Không tự động coi hai tên gần giống nhau là cùng khách hàng. Record chưa ghép được cần xuất hiện trong danh sách cần xử lý, thay vì biến mất khỏi quá trình đối chiếu.
-
-Tiếp theo là định nghĩa doanh thu. Deal amount, tổng invoice và tiền đã thu trả lời những câu hỏi khác nhau. Model cần quy định status được tính, cách xử lý credit, ngày ghi nhận và currency. Chỉ quy đổi tiền tệ khi có quy tắc cùng tỷ giá theo ngày rõ ràng.
-
-SQL dưới đây chỉ minh họa cấu trúc join. Hai model được tham chiếu là model bạn tự viết, không phải bảng có sẵn trong Undercroft; `net_revenue` cần dùng kiểu decimal và tuân theo định nghĩa đã thống nhất.
-
-```sql
-select
-  m.hubspot_company_id,
-  r.currency,
-  sum(r.net_revenue) as revenue
-from {{ ref('customer_mapping') }} as m
-join {{ ref('xero_revenue') }} as r
-  on r.xero_contact_id = m.xero_contact_id
-group by m.hubspot_company_id, r.currency
-```
-
-Hãy kiểm tra mapping không nhân bản dòng kế toán. Inner join này chỉ lấy khách hàng đã có mapping, nên cần report riêng cho ID chưa ghép được. Giá trị tiền thiếu hoặc không đọc được phải khác với số không. Bài [tích hợp Xero sang Postgres](/tich-hop-xero-postgres/) trình bày nguồn kế toán; bài [report Xero bằng SQL và dbt](/bao-cao-xero-sql-dbt/) đi sâu hơn vào model.
-
-Cần kiểm tra độ mới của cả hai nguồn. Một số thay đổi trong Xero không làm timestamp mà change filter sử dụng thay đổi. Full re-sync của Xero mặc định tắt, phải bật theo connection, chạy trong sync run và chịu daily request budget. Run có thể thành công dù Journal báo một số list đang chờ budget; không nên mặc định CRM và kế toán luôn cùng thời điểm quan sát.
+Hãy chọn câu hỏi kinh doanh và thống nhất cách hiểu kết quả. Tìm hiểu [Undercroft](https://undercroft.lowbit.link), gửi [hướng dẫn kết nối HubSpot](https://github.com/muitneliss/undercroft/blob/main/docs/runbook/hubspot-setup.md) cho người phụ trách rồi cùng kiểm tra một report nhỏ.
 
 ## Câu hỏi thường gặp
 
 ### Có sync HubSpot custom properties sang Postgres được không?
 
-Có, chọn thêm properties trong **Change what syncs** cho sáu object được hỗ trợ. dbt model của bạn quyết định cách đưa những giá trị đó thành cột phục vụ truy vấn.
+Có, với các loại bản ghi được hỗ trợ. Model quyết định cách dùng những giá trị đó trong report.
 
-### Tích hợp HubSpot có cập nhật real-time không?
+### Tích hợp HubSpot có cập nhật tức thì không?
 
-Dữ liệu được đọc theo lịch sync hoặc khi bấm **Run now**. Độ mới phụ thuộc lịch và thời gian hoàn thành, không có cam kết mọi chỉnh sửa xuất hiện tức thì.
+Không, dữ liệu được đọc theo lịch hoặc yêu cầu chạy. Độ mới phụ thuộc thời điểm và thời gian hoàn thành sync.
 
-### Xóa contact trong HubSpot có xóa raw data không?
+### Xóa người liên hệ trong HubSpot có mất raw data không?
 
-Không, listing đầy đủ đủ điều kiện chỉ giúp đánh dấu removed trong Postgres; payload và lịch sử lake vẫn được giữ. Model phải lọc removal nếu chỉ muốn hiển thị record còn hoạt động.
+Không, lịch sử đã thu thập vẫn nằm trong raw data lake. Model cần xét trạng thái loại bỏ để tạo report chỉ gồm bản ghi còn hoạt động.
 
-### Undercroft có sẵn model doanh thu HubSpot–Xero không?
+### Có sẵn model doanh thu HubSpot và Xero không?
 
-Undercroft cung cấp đường đưa raw data vào Postgres và cho phép bạn viết dbt model. Mapping khách hàng, định nghĩa doanh thu và cách xử lý currency cần được thiết kế cho doanh nghiệp của bạn.
+Không, doanh nghiệp tự xây dựng dbt model. Cách ghép khách hàng, tính doanh thu và xử lý tiền tệ cần phản ánh nghiệp vụ của mình.

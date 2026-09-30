@@ -1,123 +1,92 @@
 ---
-title: "ETL vs ELT: differences and why raw data comes first"
-description: "ETL vs ELT explained with Undercroft: compare pipeline designs, choose when each fits, and see how keeping raw data lets you rebuild changing business models."
+title: "ETL vs ELT: which approach fits your reporting needs?"
+description: "ETL vs ELT explained for business and engineering teams: compare the trade-offs, understand raw data retention, and see where Undercroft fits."
 translationKey: "etl-vs-elt"
 pubDate: "2026-09-29"
 tags: ["ETL", "ELT", "Data integration", "dbt"]
 keywords:
   ["etl vs elt", "what is etl", "what is elt", "etl pipeline", "elt pipeline", "raw data", "dbt"]
 hero: "../../../assets/posts/etl-vs-elt/hero.png"
-heroAlt: "ETL vs ELT sketch comparing transformation before loading with loading and keeping raw data before transformation"
+heroAlt: "ETL vs ELT sketch showing transformation before loading and an alternative that keeps raw data before transformation"
 ---
 
-ETL vs ELT is a question about when you apply meaning to source data. ETL transforms data before loading it into an analytical destination; ELT loads it first and transforms it there. The practical difference appears when finance changes a reporting rule or operations asks a question the original pipeline never anticipated: do you still have the inputs needed to calculate a different answer?
+ETL vs ELT becomes a business question when a report needs to change. Finance may want a different definition of an active customer, while operations needs to examine orders individually instead of by month. If the data pipeline kept only yesterday's answers, answering today's questions can mean another extraction, another engineering request, or an explanation that the detail is gone.
 
-Undercroft provides a concrete example of keeping those inputs. Its flow is REST sources → immutable raw lake on S3 or MinIO → Postgres → user-authored dbt models → BI. Understanding the separate jobs of those layers makes the choice more useful than simply rearranging three letters.
+The choice concerns when business rules are applied to data. Just as important is what survives those rules. Undercroft approaches this by keeping captured source data underneath the models used for reporting, so changing an interpretation does not have to mean collecting everything again.
 
-## What is ETL, and how does an ETL pipeline work?
+## What does ETL vs ELT mean?
 
-ETL means **extract, transform, load**. Extract reads a source; transform selects, cleans, joins or aggregates its data; load writes the result to the destination. An ETL pipeline might read order records, assign them to reporting categories, and load monthly totals into a data warehouse.
+**ETL means extract, transform, load.** Data is collected from a source, prepared for a particular use, and then loaded into the place where people analyze it. Preparation might mean selecting relevant details, standardizing categories, or turning individual orders into monthly totals.
 
-This design gives the destination a defined shape. Consumers receive prepared fields, and the transformation stage can remove information that the destination should not hold. It fits a narrow reporting contract when the input rules and required outputs are understood before ingestion.
+**ELT means extract, load, transform.** Data reaches the analytical environment before those business transformations happen. Teams then create models: organized views of the data that express the definitions their reports need.
 
-The tradeoff is deciding early what matters. If the pipeline keeps only monthly totals, a later request for daily counts cannot be answered from those totals alone. The team needs retained detail somewhere else or must extract it again, assuming the source still provides it.
+Think of preparing a management briefing from interview notes. ETL resembles preparing the summary before delivering it; ELT resembles delivering the notes to the analysis team so it can prepare different summaries. Neither guarantees that the original notes will be kept. That is a separate decision.
 
-ETL does not inherently require deleting raw data. The hero illustrates an ETL design that discards it, alongside an ELT design that keeps it. An ETL pipeline with a separate raw archive can also support rebuilding; the archive, not the acronym, provides that option.
+The hero sketch illustrates ETL with raw data discarded and ELT with it retained. These are examples, not requirements: an ETL pipeline can also keep a raw archive.
 
-## What is ELT, and how does an ELT pipeline work?
+| Question                            | ETL                                   | ELT                                |
+| ----------------------------------- | ------------------------------------- | ---------------------------------- |
+| When are business rules applied?    | Before the analytical load            | After the analytical load          |
+| What arrives first?                 | Data prepared for an agreed purpose   | Source data for later modeling     |
+| Where does a new definition belong? | In the preparation stage              | In the downstream models           |
+| What makes recalculation possible?  | Retained inputs or another extraction | Retained inputs with enough detail |
 
-ELT means **extract, load, transform**. Source data reaches the analytical environment before business transformations run. Teams can then use SQL to turn the loaded records into models for different questions, without making the extraction code own every reporting definition.
+## Why does the order matter when reports change?
 
-An ELT pipeline separates capture from interpretation. A connector handles reading the source, while a model defines concepts such as an active account or a fulfilled order. Changing that definition normally changes the model rather than the connector, provided the required fields were captured.
+Applying rules early can simplify life for report readers. They receive data prepared for an agreed purpose, and information that should not reach the destination can be removed beforehand. For a stable reporting requirement, that can be a sensible boundary.
 
-“Load first” does not mean “skip validation.” Authentication, record identity, safe storage and handling failed reads still matter. Nor does loading raw data automatically make it suitable for a dashboard. Someone must define types, relationships, missing-value behavior and business rules before treating a result as a reliable metric.
+The difficulty appears when preparation removes detail that later matters. Monthly totals cannot explain which orders were delayed. A stored label saying a customer is active cannot reveal the activity that produced that label. Reconsidering either answer requires the underlying evidence.
 
-## ETL vs ELT: what are the main differences?
+ELT gives teams room to interpret the same inputs differently. Operations can study fulfillment while finance uses another grouping for its own analysis. The benefit is flexibility, provided the required inputs were captured and someone owns the meaning of each model.
 
-Both approaches move data toward analysis. Their main difference is where business transformation sits relative to the load into the analytical destination.
+That ownership matters in both approaches. Loading data successfully does not prove a metric is correct, and a polished dashboard cannot resolve conflicting definitions on its own.
 
-| Question                            | ETL                                          | ELT                                         |
-| ----------------------------------- | -------------------------------------------- | ------------------------------------------- |
-| When are business rules applied?    | Before the analytical load                   | After the analytical load                   |
-| What reaches the destination first? | Prepared data                                | Source-shaped data                          |
-| Where does transformation run?      | In an upstream processing stage              | In the analytical environment               |
-| What supports a changed definition? | Retained inputs or a fresh extraction        | Loaded inputs, if the needed detail remains |
-| What must the team manage?          | Upstream transformation and output contracts | Raw access, storage and downstream models   |
+## How does Undercroft use ELT?
 
-Neither label guarantees lower cost, faster queries or better quality. Those depend on data volume, transformation complexity, infrastructure and how the team operates it. A useful comparison asks which layer owns a rule, what information survives that rule, and what rebuilding would require.
+Undercroft is an open-source data platform built around preserving raw data before applying business definitions. Connectors read source systems and place captured data in a raw data lake. Existing captured content is not overwritten in place, and identical content does not need another stored copy.
 
-## When should you choose ETL or ELT?
+Postgres makes the captured records available for analysis. Your team uses dbt to build models that express its business rules, then presents their results through reports and dashboards. The platform supplies the path from collection to analysis; your team supplies the meaning.
 
-Consider ETL when the destination should receive a tightly limited dataset, when transformation needs to happen before that boundary, or when an existing downstream interface requires a stable schema. Keep an archive if future reinterpretation matters and retaining that data is appropriate.
+This separation is deliberate. Undercroft does not impose a standard business schema defining what every company's customer or invoice must mean. It suits teams whose reporting needs do not fit a universal template, but it also means useful business models require work.
 
-Consider ELT when several teams need different views of the same records, when definitions change frequently, or when analysts maintain SQL models. It is especially useful when today's report is unlikely to be the last question asked of a source.
+The [data integration overview](/en/data-integration-rest-api-yaml-connectors/) explains the role of collection. The [immutable raw data lake explanation](/en/immutable-raw-data-lake/) describes why keeping the inputs is the foundation for rebuilding results.
 
-For example, operations may count fulfilled orders while finance groups the same records by a different reporting date. Keeping the underlying fields allows separate models with explicit definitions. Storing only one team's aggregate can force the other team back to the source.
+## What happens when a business definition changes?
 
-A practical evaluation starts with three questions: which fields must survive, who maintains the rules, and how will a corrected rule be applied to older data? Your answers may lead to a mix of both patterns across different boundaries.
+Imagine a team broadening its definition of an active customer to include people whose last order was further in the past. If it retained the relevant order details, it can revise the model and recalculate the answer. If it kept only the previous active label, it cannot recover those details from the label alone.
 
-## How does Undercroft implement an ELT pipeline?
+![A changed business rule feeds revised models and BI reports while the raw lake stays unchanged](../../../assets/posts/etl-vs-elt/flow.png)
 
-The [Undercroft repository](https://github.com/muitneliss/undercroft) describes an open-source platform that is currently pre-alpha. Its architecture puts an immutable raw lake beneath the queryable layers, rather than making a curated table the only remaining copy of a source record.
+In Undercroft, the raw lake holds the retained inputs; the analytical layers above it can be rebuilt. The diagram shows that dependency, not a requirement to discard every existing model whenever a rule changes. A revised definition still needs review against the business question.
 
-The record flow has five steps:
+This can reduce repeated collection work and make disagreement easier to investigate. Teams can compare interpretations of the same captured evidence. For a practical reporting context, see [Xero reporting with SQL and dbt](/en/xero-reporting-sql-dbt/).
 
-1. **Extract from a REST source.** YAML connector specifications describe how to read it. Xero and HubSpot are included examples; the [data integration and YAML connector guide](/en/data-integration-rest-api-yaml-connectors/) explains that boundary.
-2. **Land data in S3 or MinIO.** Lake writes are create-only and content-addressed. Identical bytes do not need another blob, and existing objects are not overwritten in place.
-3. **Project records into Postgres.** Records from different sources share `raw.records`, with their bodies stored as `jsonb`. This is a queryable projection of the lake.
-4. **Build business models with dbt.** The worker invokes `dbt build` as a subprocess. Users author the SQL that defines their analytical tables.
-5. **Read the built models through BI.** The Reports division provides questions and dashboards. Its tenant BI login reads the tenant's analytical models, not the raw schema.
+## When is ELT a good fit, and when is it not?
 
-Undercroft ships no business schema. There is no platform-defined meaning of “customer” or “invoice” to inherit accidentally. That flexibility also leaves responsibility with the model author: a generic record store does not enforce your business contracts for you.
+ELT fits changing questions, shared sources, and teams able to maintain analytical models. ETL may fit better when the destination should receive only prepared data or when transformations must happen before data crosses that boundary. A system can use both patterns for different purposes.
 
-The [raw data lake explanation](/en/immutable-raw-data-lake/) covers why the lake is the durable layer. Postgres supplies projections for querying; it is not a replacement for captured source bytes.
+Keeping more inputs brings storage, access, and retention responsibilities. It also does not preserve events the platform never observed: missing details, records deleted before collection, and changes between observations may remain unavailable. Retained history needs models designed to use it; it does not automatically become a historical report.
 
-## What happens when a business rule changes?
+Undercroft's self-hosted approach also needs an operator, alongside people who maintain the models. It is currently pre-alpha, so teams requiring a stable managed service or ready-made business reports should weigh that mismatch carefully. Neither ETL nor ELT guarantees lower cost or faster analysis.
 
-Suppose the fictional company Acme originally labels a customer active after an order in the previous 30 days. Operations later chooses 90 days. This is an illustrative business model, not a schema or rule shipped by Undercroft.
+## How can you get started with Undercroft?
 
-If the only stored value is a Boolean calculated under the old rule, it does not reveal the last order date. If captured records retain the necessary dates and identifiers, a user-authored model can calculate the new answer from those inputs.
-
-This illustrative SQL shows only the changed condition. `customer_activity` and its columns stand for a model the team would have to define; they are not built-in Undercroft tables.
-
-```sql
--- Illustrative: replace the previous 30-day condition.
-select customer_id,
-       last_order_date >= date '2026-09-29' - interval '90 days'
-         as is_active
-from customer_activity;
-```
-
-The fixed evaluation date makes the example reviewable. A missing `last_order_date` leaves the comparison unknown rather than inventing evidence of activity.
-
-![A changed business rule updates SQL; retained raw data feeds Postgres and dbt to rebuild models for BI](../../../assets/posts/etl-vs-elt/flow.png)
-
-In Undercroft's design, derived data can be dropped and rebuilt while the raw lake remains. A model-only change can use the existing Postgres projection; if that projection needs reconstruction, the lake is the underlying source. The diagram shows this dependency, not a requirement to drop every table for every edit.
-
-Keep the model definitions, confirm the relevant inputs exist, revise the SQL, then build and check the affected outputs and their dependents. Rebuilding changes stored results; it does not prove the new definition is correct. For a finance-oriented application of this separation, see [Xero reporting with SQL and dbt](/en/xero-reporting-sql-dbt/).
-
-## What can keeping raw data fail to recover?
-
-A raw lake preserves observations, not everything that ever happened in the source. A field never requested, a record deleted before capture, or an unobserved intermediate version cannot be recreated by changing SQL.
-
-Also distinguish history in the lake from the ordinary query projection: `raw.records` represents the newest observation per record. Keeping versions underneath it does not automatically give every model a historical view. Historical analysis needs the right retained inputs and a model designed to use them.
-
-Retention and model definitions matter too. Rebuilding requires accessible data and the logic that interprets it. “Every model is rebuildable” describes the architecture's dependency on retained raw inputs; it is not a promise of unlimited history or automatic recovery of missing business knowledge.
+Start with a report whose definition has changed before, and identify the evidence needed to calculate it differently. Explore [Undercroft](https://undercroft.lowbit.link) and the [repository](https://github.com/muitneliss/undercroft) to assess the approach, then agree who would own collection, model definitions, and checking the results.
 
 ## FAQ
 
 ### Is ELT always better than ETL?
 
-No. ETL fits transformations required before the analytical destination, while ELT fits downstream modeling over retained inputs. Choose based on the data boundary, the team's skills and the cost of changing a rule.
+No; the right choice depends on where transformation belongs and what the destination should hold. ELT offers flexibility for downstream analysis, while ETL can deliver a deliberately limited, prepared dataset.
 
-### Does ETL always throw away raw data?
+### Does ETL always discard raw data?
 
-No; an ETL pipeline can keep an independent raw archive. Losing the inputs is a retention decision, although loading only transformed results makes that loss easy to overlook.
+No; ETL can keep a separate raw archive. Recalculation depends on retaining sufficient inputs, regardless of the order of transformation and loading.
 
-### Is dbt an ETL tool or an ELT tool?
+### Is dbt an ETL or ELT tool?
 
-In Undercroft, dbt handles the transformation part of ELT after data has reached the lake and Postgres. Connectors and lake writes handle extraction and landing; dbt does not replace them.
+In Undercroft, dbt handles transformation after data has been collected and loaded. It builds analytical models and does not replace the connectors that read source systems.
 
-### Can Undercroft rebuild models without calling the source API?
+### Can Undercroft rebuild reports without collecting data again?
 
-Models can be rebuilt from the required data already captured and retained, using the Postgres projection or reconstructing it from the lake. If a revised rule needs data that was never captured, another extraction may be necessary and may no longer be possible.
+It can rebuild the models behind reports when the necessary inputs have been retained and remain accessible. A new question that needs uncaptured data may require another extraction, and the source may no longer have it.
