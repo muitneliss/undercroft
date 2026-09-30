@@ -200,7 +200,7 @@ function ListFilters({ filters }: { filters: ModelListFilters }): React.JSX.Elem
 
   return (
     <div className="row row--field">
-      <div className="field">
+      <div className="field field--grow">
         <label className="label" htmlFor={searchId}>
           {t("models.searchLabel")}
         </label>
@@ -310,62 +310,66 @@ function ModelList({
     <>
       <BuildTally filters={filters} statuses={statuses} />
       <ListFilters filters={filters} />
-      <table className="table">
-        <caption>{caption(t, filters, { total: models.data.length, shown: shown.length })}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("models.colName")}</th>
-            <th scope="col">{t("models.colBuild")}</th>
-            <th scope="col">{t("models.colRun")}</th>
-            <th className="num" scope="col">
-              {t("models.colColumns")}
-            </th>
-            <th scope="col">{t("models.colUpdated")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((model) => {
-            const columns = builtColumnCount(model.lastBuild);
-            return (
-              <tr key={model.name}>
-                <td>
-                  <Link className="journal__what" to={`${base}/${model.name}`}>
-                    {model.name}
-                  </Link>
-                  {unsaved === model.name ? (
-                    <span className="datum datum--quiet journal__trigger">
-                      {t("models.unsaved")}
-                    </span>
-                  ) : null}
-                </td>
-                <td>
-                  <StatusMark
-                    mark={buildMark(model.lastBuild?.status ?? null)}
-                    label={buildMarkLabel(t, model.lastBuild?.status ?? null)}
-                  />
-                </td>
-                <td className="datum">
-                  {model.lastBuild === null ? (
-                    <span className="missing">{MISSING}</span>
-                  ) : (
-                    <Link to={journalPath(tenantId, { runId: model.lastBuild.runId })}>
-                      {model.lastBuild.runId}
+      <div className="table-scroll">
+        <table className="table">
+          <caption>
+            {caption(t, filters, { total: models.data.length, shown: shown.length })}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("models.colName")}</th>
+              <th scope="col">{t("models.colBuild")}</th>
+              <th scope="col">{t("models.colRun")}</th>
+              <th className="num" scope="col">
+                {t("models.colColumns")}
+              </th>
+              <th scope="col">{t("models.colUpdated")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((model) => {
+              const columns = builtColumnCount(model.lastBuild);
+              return (
+                <tr key={model.name}>
+                  <td>
+                    <Link className="journal__what" to={`${base}/${model.name}`}>
+                      {model.name}
                     </Link>
-                  )}
-                </td>
-                <td className="datum num">
-                  {columns === null ? (
-                    <span className="missing">{MISSING}</span>
-                  ) : (
-                    formatCount(columns, locale)
-                  )}
-                </td>
-                <td className="datum datum--quiet">{relativeTime(model.updatedAt, locale)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    {unsaved === model.name ? (
+                      <span className="datum datum--quiet journal__trigger">
+                        {t("models.unsaved")}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td>
+                    <StatusMark
+                      mark={buildMark(model.lastBuild?.status ?? null)}
+                      label={buildMarkLabel(t, model.lastBuild?.status ?? null)}
+                    />
+                  </td>
+                  <td className="datum">
+                    {model.lastBuild === null ? (
+                      <span className="missing">{MISSING}</span>
+                    ) : (
+                      <Link to={journalPath(tenantId, { runId: model.lastBuild.runId })}>
+                        {model.lastBuild.runId}
+                      </Link>
+                    )}
+                  </td>
+                  <td className="datum num">
+                    {columns === null ? (
+                      <span className="missing">{MISSING}</span>
+                    ) : (
+                      formatCount(columns, locale)
+                    )}
+                  </td>
+                  <td className="datum datum--quiet">{relativeTime(model.updatedAt, locale)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
