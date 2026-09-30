@@ -9,10 +9,13 @@
  * dashboard tile's title opens this page on the dashboard's values, carrying the way back
  * (`lib/reportLinks.ts`).
  *
- * Run answers as the tenant's read-only login through the worker; the result is drawn as
- * the question says, and beneath the drawing every role can open the rows that drew it and
- * take them as CSV (`components/ResultReading.tsx`). A viewer may run a saved question and
- * see no builder; a member or an admin authors.
+ * A saved question opens READ and drawn: its answer is fetched on arrival, as a dashboard
+ * tile's is (`components/QuestionResult.tsx`), under the tenant's read-only login through the
+ * worker. Its three panes -- the drawing, the rows that drew it, and how it is defined -- are
+ * chosen in the address (`?view=`, `lib/questionPane.ts`), so a link can open on any of them,
+ * and every role may read all three. A member or an admin turns to the two-leaf workbench
+ * with Edit question (`?edit=1`), the definition on one leaf and its answer on the other; a
+ * new question opens there, having nothing yet to read. A viewer never sees the workbench.
  */
 
 import { paramNames } from "@undercroft/contracts/bi";
@@ -20,16 +23,19 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import type { SchemaView } from "@/api/types.ts";
-import { Errata } from "@/components/Errata.tsx";
+import type { QuestionView, SchemaView } from "@/api/types.ts";
+import { Errata, type ServerError } from "@/components/Errata.tsx";
 import {
-  DefinitionBand,
   DeleteBand,
+  type HeadActions,
   ParamsBand,
   QuestionHead,
 } from "@/components/QuestionBands.tsx";
-import { ResultBand } from "@/components/QuestionResult.tsx";
+import { DefinitionLeaf } from "@/components/QuestionDefinition.tsx";
+import { ReadingBand, ResultLeaf } from "@/components/QuestionResult.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { Separator } from "@/components/ui/separator.tsx";
+import { useQuestionAnswer } from "@/components/useQuestionAnswer.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { paramsFromSearch, questionParams } from "@/lib/params.ts";
 import {
@@ -42,7 +48,10 @@ import {
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
+import "@/styles/reports.css";
+
 const NEW = "new";
+const EDIT = "edit";
 
 /**
  * Seed the draft once per question, and hand back the one held for it.
@@ -135,6 +144,7 @@ export function Question({ tenantId }: { tenantId: string }): React.JSX.Element 
     <QuestionLeaf
       tenantId={tenantId}
       draft={held}
+      stored={question.data ?? null}
       schema={schema.data}
       canAuthor={tenant.data.role !== "viewer"}
       locale={locale}
@@ -156,9 +166,87 @@ export function Question({ tenantId }: { tenantId: string }): React.JSX.Element 
   );
 }
 
+/**
+ * Turning between the reading page and the workbench, and Discard: the two verbs that move
+ * the leaf rather than send anything. Edit mode is written to the address; Discard re-seeds
+ * the draft from what the server holds, or -- for a question never saved -- drops it and
+ * leaves, there being nothing to return to.
+ */
+function useLeafTurns(
+  tenantId: string,
+  stored: QuestionView | null,
+): Pick<HeadActions, "onEdit" | "onDiscard"> {
+  const [search, setSearch] = useSearchParams();
+  const navigate = useNavigate();
+  const setQuestionDraft = useUiStore((state) => state.setQuestionDraft);
+
+  return {
+    onEdit: (on): void => {
+      const next = new URLSearchParams(search);
+      if (on) {
+        next.set(EDIT, "1");
+      } else {
+        next.delete(EDIT);
+      }
+      setSearch(next);
+    },
+    onDiscard: (): void => {
+      if (stored === null) {
+        setQuestionDraft(null);
+        void navigate(divisionPath("reports", tenantId));
+      } else {
+        setQuestionDraft(draftFromQuestion(tenantId, stored));
+      }
+    },
+  };
+}
+
+/**
+ * The draft's SQL as the author reads it beside the builder, and the server's refusal when
+ * it will not compile. The text comes from the server's one compiler, so what the author
+ * reads is exactly what will run; a question written as SQL is its own text and compiles
+ * nothing. A viewer may not call `bi.compile` and gets the empty text, and the route reads a
+ * visual question's holes as a tile does.
+ */
+function useCompiled(
+  tenantId: string,
+  draft: QuestionDraft,
+  canAuthor: boolean,
+): { sqlText: string; compileError: ServerError | null } {
+  const compiled = trpc.bi.compile.useQuery(
+    { tenantId, definition: draft.definition },
+    { enabled: canAuthor && draft.definition.kind === "visual" },
+  );
+  return {
+    sqlText:
+      (draft.definition.kind === "sql" ? draft.definition.sql : null) ?? compiled.data?.sql ?? "",
+    compileError: compiled.isError ? compiled.error : null,
+  };
+}
+
+/**
+ * Save. The answer cached for this question is the answer to the definition it HAD, so it is
+ * dropped before the draft reads as saved -- the page then never shows it as the new one's.
+ */
+function useSave(
+  tenantId: string,
+  onSaved: (id: string) => Promise<void>,
+): ReturnType<typeof trpc.bi.questions.save.useMutation> {
+  const utils = trpc.useUtils();
+  const markQuestionSaved = useUiStore((state) => state.markQuestionSaved);
+  return trpc.bi.questions.save.useMutation({
+    onSuccess: async (saved) => {
+      await utils.bi.questions.answer.reset({ tenantId, id: saved.id });
+      markQuestionSaved(saved.id);
+      await onSaved(saved.id);
+    },
+  });
+}
+
 function QuestionLeaf({
   tenantId,
   draft,
+  stored,
   schema,
   canAuthor,
   locale,
@@ -167,6 +255,8 @@ function QuestionLeaf({
 }: {
   tenantId: string;
   draft: QuestionDraft;
+  /** What the server holds, which Discard returns to; null for a question never saved. */
+  stored: QuestionView | null;
   schema: SchemaView;
   canAuthor: boolean;
   locale: "vi" | "en";
@@ -175,68 +265,68 @@ function QuestionLeaf({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [search] = useSearchParams();
-  const markQuestionSaved = useUiStore((state) => state.markQuestionSaved);
+  const turns = useLeafTurns(tenantId, stored);
 
-  // The compiled SQL comes from the server's one compiler, so what the author reads is
-  // exactly what will run. A question written as SQL is its own text and compiles nothing.
-  const visual = draft.definition.kind === "visual" ? draft.definition : null;
-  const compiled = trpc.bi.compile.useQuery(
-    { tenantId, definition: draft.definition },
-    { enabled: canAuthor && visual !== null },
-  );
-  const sqlText =
-    (draft.definition.kind === "sql" ? draft.definition.sql : null) ?? compiled.data?.sql ?? "";
-  // A viewer may not call `bi.compile`: read a visual question's holes as a tile does.
-  const names = sqlText === "" ? questionParams(draft.definition) : paramNames(sqlText);
+  // In the address, as a dashboard's is: a reload mid-edit lands back in the workbench.
+  const edit = canAuthor && (draft.id === null || search.get(EDIT) === "1");
+  const compiled = useCompiled(tenantId, draft, canAuthor);
+  const names =
+    compiled.sqlText === "" ? questionParams(draft.definition) : paramNames(compiled.sqlText);
   const bound = paramsFromSearch(search, names);
 
-  const answer = trpc.bi.answer.useMutation();
-  const runSaved = trpc.bi.runQuestion.useMutation();
-  const save = trpc.bi.questions.save.useMutation({
-    onSuccess: async (saved) => {
-      markQuestionSaved(saved.id);
-      await onSaved(saved.id);
-    },
-  });
+  const reading = useQuestionAnswer({ tenantId, draft, canAuthor, bound });
+  const save = useSave(tenantId, onSaved);
   const remove = trpc.bi.questions.delete.useMutation({ onSuccess: onDeleted });
 
   // One request at a time across every band: the list is about to be invalidated, and a
   // second in flight answers about a question that no longer looks like this one.
-  const busy = answer.isPending || runSaved.isPending || save.isPending || remove.isPending;
+  const busy = reading.running || save.isPending || remove.isPending;
+
+  const actions: HeadActions = { save, busy, ...turns };
 
   return (
     <div className="sheet">
       <div className="head head--division">{t("reports.head")}</div>
 
-      <QuestionHead tenantId={tenantId} draft={draft} canAuthor={canAuthor} />
-
-      <DefinitionBand
+      <QuestionHead
         tenantId={tenantId}
         draft={draft}
-        schema={schema}
         canAuthor={canAuthor}
-        sqlText={sqlText}
-        compileError={compiled.isError ? compiled.error : null}
+        edit={edit}
+        actions={actions}
       />
 
       <ParamsBand names={names} bound={bound} />
 
-      <ResultBand
-        tenantId={tenantId}
-        draft={draft}
-        canAuthor={canAuthor}
-        locale={locale}
-        bound={bound}
-        actions={{ answer, runSaved, save, busy }}
-      />
+      {edit ? (
+        <>
+          <Separator className="band-rule" />
+          <div className="head">{t("bi.workbenchHead")}</div>
+          <div className="body workbench">
+            <DefinitionLeaf tenantId={tenantId} draft={draft} schema={schema} {...compiled} />
+            <ResultLeaf draft={draft} reading={reading} locale={locale} busy={busy} />
+          </div>
+        </>
+      ) : (
+        <ReadingBand
+          tenantId={tenantId}
+          draft={draft}
+          savedAt={stored?.updatedAt ?? null}
+          locale={locale}
+          reading={reading}
+          busy={busy}
+        />
+      )}
 
-      <DeleteBand
-        tenantId={tenantId}
-        draft={draft}
-        canAuthor={canAuthor}
-        busy={busy}
-        remove={remove}
-      />
+      {edit ? (
+        <DeleteBand
+          tenantId={tenantId}
+          draft={draft}
+          canAuthor={canAuthor}
+          busy={busy}
+          remove={remove}
+        />
+      ) : null}
     </div>
   );
 }

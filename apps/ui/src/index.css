@@ -4990,4 +4990,18 @@
       grid-template-columns: minmax(0, 1fr);
     }
   }
+
+  /* A dashboard printed from the browser (its "Print / PDF" plate): the book's chrome --
+   the tab strip, the spine, the running head's controls, the interleaf and the colophon --
+   is not what was asked for. Scoped to the book holding a dashboard, so printing any other
+   leaf is untouched. What goes inside the dashboard's leaf is `styles/reports.css`'s. */
+  @media print {
+    .book:has(.sheet--dashboard) .rail,
+    .book:has(.sheet--dashboard) .colophon,
+    .book:has(.sheet--dashboard) .interleaf,
+    .book:has(.sheet--dashboard) .leaf__spine,
+    .book:has(.sheet--dashboard) .runhead__right {
+      display: none;
+    }
+  }
 }

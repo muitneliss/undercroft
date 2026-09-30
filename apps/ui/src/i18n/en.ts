@@ -1371,6 +1371,7 @@ export const en = {
       "“incomplete”: this sum leaves out at least one missing value, so it is not the total.",
     boundMissing:
       "No maximum is set on this question, so no share is drawn. Its author sets one under Draw the result.",
+    otherTypes: "Other types",
   },
 
   reports: {
@@ -1388,6 +1389,12 @@ export const en = {
     clearSearch: "Clear search",
     noDashboardMatches: "No dashboard's name matches.",
     noQuestionMatches: "No question's name matches.",
+    viewsLabel: "Report views",
+    viewDashboards_one: "Dashboard · {{count, number}}",
+    viewDashboards_other: "Dashboards · {{count, number}}",
+    viewQuestions_one: "Saved question · {{count, number}}",
+    viewQuestions_other: "Saved questions · {{count, number}}",
+    readOnly: "Read-only access",
   },
 
   bi: {
@@ -1491,6 +1498,21 @@ export const en = {
     deleteConfirm: "Delete question",
     deleting: "Deleting…",
     notDeleted: "Not deleted",
+    copyLink: "Copy link",
+    linkCopied: "Copied, with the filters. Recipients still need access.",
+    copyBlocked:
+      "The browser refused the copy. Copy the address bar instead; the filters are in it.",
+    editQuestion: "Edit question",
+    done: "Done",
+    discard: "Discard",
+    workbenchHead: "Compose",
+    panesLabel: "Question views",
+    paneChart: "Visualization",
+    paneData: "Data",
+    paneDefinition: "Definition",
+    factKind: "Made in",
+    factTable: "Model table",
+    notCompiled: "This definition does not compile to SQL; a run says why.",
   },
 
   dashboard: {
@@ -1547,6 +1569,19 @@ export const en = {
     deleteHead: "Delete dashboard",
     deleteLead: "Remove {{name}}. The questions on it stay in the reports.",
     deleteConfirm: "Delete dashboard",
+    print: "Print / PDF",
+    viewData: "View data →",
+    orderHead: "Reading order",
+    orderLead:
+      "The top-left tile is read first. Moving a tile earlier or later swaps it with its neighbour; every place on the grid keeps its size.",
+    orderCaption_one: "{{count, number}} tile in reading order",
+    orderCaption_other: "{{count, number}} tiles in reading order",
+    orderPlace: "Place",
+    orderEarlier: "Earlier ↑",
+    orderLater: "Later ↓",
+    orderEarlierNamed: "Move {{name}} earlier",
+    orderLaterNamed: "Move {{name}} later",
+    orderRemoveNamed: "Remove {{name}} from the dashboard",
   },
 
   source: {

@@ -539,7 +539,9 @@
         // AI SDK adds 182 kB to the entry chunk.
         "apps/ui/src/components/Book.tsx",
         "apps/ui/src/components/LakeConsole.tsx",
-        "apps/ui/src/components/QuestionBands.tsx",
+        // `QuestionBands.tsx` was here until the definition's leaf moved into
+        // `QuestionDefinition.tsx`, which took the lazy SQL editor with it.
+        "apps/ui/src/components/QuestionDefinition.tsx",
         // `QuestionResult.tsx` was here until the drawing moved into `ResultReading.tsx`,
         // which took `lazy` and `Suspense` with it; the rule is back on for the first.
         "apps/ui/src/components/ResultReading.tsx",

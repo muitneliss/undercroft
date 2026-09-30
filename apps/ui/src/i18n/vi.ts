@@ -1607,6 +1607,7 @@ export const vi = {
       "“chưa đủ”: tổng này bỏ qua ít nhất một giá trị bị thiếu, nên không phải tổng thật.",
     boundMissing:
       "Câu hỏi này chưa đặt giá trị tối đa, nên không vẽ tỉ lệ. Người soạn câu hỏi đặt nó ở mục Vẽ kết quả.",
+    otherTypes: "Các kiểu khác",
   },
 
   reports: {
@@ -1624,6 +1625,10 @@ export const vi = {
     clearSearch: "Xoá tìm kiếm",
     noDashboardMatches: "Không có bảng điều khiển nào có tên khớp.",
     noQuestionMatches: "Không có câu hỏi nào có tên khớp.",
+    viewsLabel: "Xem báo cáo",
+    viewDashboards_other: "Bảng điều khiển · {{count, number}}",
+    viewQuestions_other: "Câu hỏi · {{count, number}}",
+    readOnly: "Quyền chỉ xem",
   },
 
   /** The Reports division's words: the lists, the builder, the run, the save. */
@@ -1721,6 +1726,21 @@ export const vi = {
     deleteConfirm: "Xoá câu hỏi",
     deleting: "Đang xoá…",
     notDeleted: "Chưa xoá được",
+    copyLink: "Sao chép liên kết",
+    linkCopied: "Đã chép liên kết, kèm bộ lọc. Người nhận vẫn cần quyền xem.",
+    copyBlocked:
+      "Trình duyệt không cho chép. Hãy chép địa chỉ trên thanh địa chỉ; bộ lọc đã nằm trong đó.",
+    editQuestion: "Sửa câu hỏi",
+    done: "Xong sửa",
+    discard: "Bỏ thay đổi",
+    workbenchHead: "Soạn câu hỏi",
+    panesLabel: "Xem câu hỏi",
+    paneChart: "Biểu đồ",
+    paneData: "Số liệu",
+    paneDefinition: "Định nghĩa",
+    factKind: "Cách tạo",
+    factTable: "Bảng mô hình",
+    notCompiled: "Định nghĩa này không dựng được thành SQL; lần chạy sẽ nói vì sao.",
   },
 
   /** A dashboard: saved questions on a twelve-column grid under shared filters. */
@@ -1778,6 +1798,18 @@ export const vi = {
     deleteHead: "Xoá bảng điều khiển",
     deleteLead: "Xoá {{name}}. Các câu hỏi trên đó vẫn còn trong báo cáo.",
     deleteConfirm: "Xoá bảng điều khiển",
+    print: "Bản in / PDF",
+    viewData: "Xem số liệu →",
+    orderHead: "Thứ tự đọc",
+    orderLead:
+      "Ô trên cùng bên trái được đọc trước. Đưa một ô lên hay xuống là đổi chỗ nó với ô kề bên; mỗi vị trí trên lưới giữ nguyên kích thước.",
+    orderCaption_other: "{{count, number}} ô theo thứ tự đọc",
+    orderPlace: "Thứ tự",
+    orderEarlier: "Lên ↑",
+    orderLater: "Xuống ↓",
+    orderEarlierNamed: "Đưa {{name}} lên trước",
+    orderLaterNamed: "Đưa {{name}} xuống sau",
+    orderRemoveNamed: "Bỏ {{name}} khỏi bảng điều khiển",
   },
 
   /**
