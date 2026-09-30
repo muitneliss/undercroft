@@ -1407,6 +1407,15 @@
     min-width: 0;
   }
 
+  /* THE FIELD THAT TAKES THE ROW. A search sits in a row beside the controls that narrow it,
+   and at its own intrinsic width -- about twenty characters -- it cut its own placeholder
+   short ("A dashboard's or a q") and read as the least of the row's controls when it is the
+   first one a reader reaches for. It takes what the row leaves, as the design's filter rows
+   do, and wraps whole below a width where its placeholder would be cut. */
+  .field--grow {
+    flex: 1 1 18rem;
+  }
+
   .field__hint {
     font-family: var(--face-prose);
     font-size: 1rem;

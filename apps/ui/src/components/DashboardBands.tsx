@@ -100,39 +100,44 @@ export function DashboardHead({
         </p>
       )}
 
-      {canAuthor ? (
-        <DashboardVerbs
-          tenantId={tenantId}
-          draft={draft}
-          edit={edit}
-          valid={valid}
-          busy={busy}
-          save={save}
-          onEdit={onEdit}
-          onDiscard={onDiscard}
-        />
-      ) : null}
-      {draft.id === null ? null : (
-        <div className="row print-omit">
-          <button
-            className="plate"
-            type="button"
-            onClick={(): void => {
-              globalThis.print();
-            }}
-          >
-            {t("dashboard.print")}
-          </button>
-          <CopyLink />
-        </div>
-      )}
+      {/* One toolbar, as the design sets it: the author's verbs, then what every role may do
+          with the dashboard as it stands -- print it, or copy its address. */}
+      <div className="row print-omit">
+        {canAuthor ? (
+          <DashboardVerbs
+            tenantId={tenantId}
+            draft={draft}
+            edit={edit}
+            valid={valid}
+            busy={busy}
+            save={save}
+            onEdit={onEdit}
+            onDiscard={onDiscard}
+          />
+        ) : null}
+        {draft.id === null ? null : (
+          <>
+            <button
+              className="plate"
+              type="button"
+              onClick={(): void => {
+                globalThis.print();
+              }}
+            >
+              {t("dashboard.print")}
+            </button>
+            <CopyLink />
+          </>
+        )}
+        {canAuthor ? <DraftNote draft={draft} save={save} /> : null}
+      </div>
       {save.isError ? <Errata heading={t("bi.notSaved")} live={true} error={save.error} /> : null}
     </div>
   );
 }
 
 /**
- * Edit, Save, Discard, and what the draft's state says about each.
+ * Edit, Save and Discard, set into the head's toolbar.
  *
  * Save is disabled while a filter is unnamed or named twice, because the server would refuse
  * it -- a refusal after the press is a worse way to learn than a plate that will not go down.
@@ -162,7 +167,7 @@ function DashboardVerbs({
   const dirty = isDashboardDirty(draft);
 
   return (
-    <div className="row print-omit">
+    <>
       <button
         className="plate"
         type="button"
@@ -193,15 +198,27 @@ function DashboardVerbs({
           {t("bi.discard")}
         </button>
       ) : null}
-      {dirty ? (
-        <span className="datum datum--quiet">{t("bi.unsaved")}</span>
-      ) : save.isSuccess ? (
-        <span className="datum datum--quiet" role="status">
-          {t("bi.savedNote")}
-        </span>
-      ) : null}
-    </div>
+    </>
   );
+}
+
+/** What the draft's state says about Save, at the end of the toolbar. */
+function DraftNote({
+  draft,
+  save,
+}: {
+  draft: DashboardDraft;
+  save: Save;
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+  if (isDashboardDirty(draft)) {
+    return <span className="datum datum--quiet">{t("bi.unsaved")}</span>;
+  }
+  return save.isSuccess ? (
+    <span className="datum datum--quiet" role="status">
+      {t("bi.savedNote")}
+    </span>
+  ) : null;
 }
 
 /** The grid itself, and -- while editing -- the one question that can be added to it. */
