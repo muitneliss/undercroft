@@ -49,7 +49,11 @@ describe("upstreamOf", () => {
       edges: [edge("model:x", "model:y"), edge("model:y", "model:x")],
     };
     expect([...upstreamOf(cyclic, "model:x")].sort()).toEqual(["model:x", "model:y"]);
-    expect(layout(cyclic).placed.map((p) => p.node.id).sort()).toEqual(["model:x", "model:y"]);
+    expect(
+      layout(cyclic)
+        .placed.map((p) => p.node.id)
+        .sort(),
+    ).toEqual(["model:x", "model:y"]);
   });
 });
 

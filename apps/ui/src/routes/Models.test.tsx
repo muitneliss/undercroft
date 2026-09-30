@@ -10,7 +10,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpLink } from "@trpc/client";
 import { afterEach, describe, expect, test as it } from "bun:test";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 
 // The side effect is the point: without it every key renders as itself. See `@/i18n`.
@@ -39,12 +39,9 @@ const MODELS = [
   built("stg_skipped", "skipped"),
 ];
 
-const model = (name: string, undeclared: unknown[] = []): unknown => ({
-  kind: "model",
-  id: `model:${name}`,
-  name,
-  undeclared,
-});
+function model(name: string, undeclared: unknown[] = []): unknown {
+  return { kind: "model", id: `model:${name}`, name, undeclared };
+}
 
 /** Synthetic: the design contract's example, with a deleted ref added. */
 const LINEAGE = {
@@ -142,8 +139,10 @@ describe("the build counts", () => {
     expect(router.state.location.search).toBe("?build=never");
     expect(listedNames()).toEqual(["stg_notes", "stg_legacy"]);
 
-    await act(() => router.navigate(-1));
-    expect(listedNames()).toHaveLength(MODELS.length);
+    void router.navigate(-1);
+    await waitFor(() => {
+      expect(listedNames()).toHaveLength(MODELS.length);
+    });
   });
 
   it("opens narrowed from a pasted address, and ignores a state it does not know", async () => {
@@ -167,7 +166,12 @@ describe("the lineage view", () => {
       .map((item) => item.querySelector(".journal__what")?.textContent);
     // The selected model first, then its chain; stg_notes reads raw.records too, but is not on it.
     expect(names[0]).toBe("mart_pipeline");
-    expect(names.slice(1).sort()).toEqual(["raw.documents", "raw.records", "stg_deals", "stg_files"]);
+    expect(names.slice(1).sort()).toEqual([
+      "raw.documents",
+      "raw.records",
+      "stg_deals",
+      "stg_files",
+    ]);
     expect(within(chain).getByText(/raw\.records \(qua macro gmail_letters\)/u)).toBeDefined();
     // The drawing says it in words too: a node on the chain, and one off it.
     const drawing = screen.getByRole("figure");
