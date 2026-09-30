@@ -60,19 +60,29 @@ export function TabRail({
   /**
    * On a phone the strip is wider than the screen, and a division past its edge would open
    * with no tab in view saying which it is. So the current tab is brought into view whenever
-   * it changes.
+   * it changes -- and whenever the screen narrows past the breakpoint, since a window made
+   * narrow (or a tablet turned) moves the strip to the foot with its first tabs showing, and a
+   * page opened wide and then narrowed would otherwise never say where it is.
    *
    * Only below the breakpoint: on a wide screen every tab is already in view. At once rather
    * than smoothly, because every other movement in the book is stepped (ADR 0014) and a smooth
    * scroll is an easing curve by another name. A ref, not state: it is the DOM node.
    */
   useEffect(() => {
-    if (!globalThis.matchMedia(FOOT_STRIP).matches) {
-      return;
+    const strip = globalThis.matchMedia(FOOT_STRIP);
+    function reveal(): void {
+      if (!strip.matches) {
+        return;
+      }
+      railRef.current
+        ?.querySelector(`[data-division="${current}"]`)
+        ?.scrollIntoView({ inline: "center", block: "nearest" });
     }
-    railRef.current
-      ?.querySelector(`[data-division="${current}"]`)
-      ?.scrollIntoView({ inline: "center", block: "nearest" });
+    reveal();
+    strip.addEventListener("change", reveal);
+    return (): void => {
+      strip.removeEventListener("change", reveal);
+    };
   }, [current]);
 
   return (
