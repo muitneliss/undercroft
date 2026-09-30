@@ -34,7 +34,13 @@ import { trpc } from "@/trpc.ts";
 /** The instant every visual test is taken at; write fixture times relative to it. */
 export const VISUAL_NOW = "2026-09-29T09:30:00Z";
 
-/** What a procedure answers: its output, or a `Response` for a refusal the test means to show. */
+/**
+ * What a procedure answers: its output; a `Response` for a refusal the test means to show; or a
+ * function of the input the page sent, for a procedure one screen asks more than once (each
+ * dashboard tile reads its own answer). A tRPC output is JSON and is never a function, so the
+ * three cannot be confused. A function that answers `undefined` has not modelled that input,
+ * and the request is refused like an unnamed procedure.
+ */
 export type Answers = Readonly<Record<string, unknown>>;
 
 /**
@@ -53,6 +59,9 @@ export interface Screen {
 
 /** Mount the real app at `url`, in `locale`, answering tRPC from `answers`. */
 export function open(url: string, locale: Locale, answers: Answers): Screen {
+  // A screen opens on a fresh store, as a page load would: a draft an earlier test in the same
+  // file seeded would otherwise be the draft this one draws.
+  useUiStore.setState(useUiStore.getInitialState(), true);
   useUiStore.getState().setLocale(locale);
   const refused: string[] = [];
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -76,8 +85,10 @@ function network(
   refused: string[],
 ): (input: RequestInfo | URL) => Promise<Response> {
   return (input) => {
-    const procedure = new URL(String(input), location.href).pathname.split("/").at(-1) ?? "";
-    const answer = answers[procedure];
+    const url = new URL(String(input), location.href);
+    const procedure = url.pathname.split("/").at(-1) ?? "";
+    const given = answers[procedure];
+    const answer = typeof given === "function" ? given(inputOf(url)) : given;
     if (answer === undefined) {
       refused.push(procedure);
       const refusal = { error: { message: `unmodelled request: ${procedure}` } };
@@ -87,6 +98,16 @@ function network(
       answer instanceof Response ? answer.clone() : Response.json({ result: { data: answer } }),
     );
   };
+}
+
+/** A query's input, which tRPC sends in the address; this tier answers queries, not mutations. */
+function inputOf(url: URL): unknown {
+  const sent = url.searchParams.get("input");
+  if (sent === null) {
+    return undefined;
+  }
+  const parsed: unknown = JSON.parse(sent);
+  return parsed;
 }
 
 /**

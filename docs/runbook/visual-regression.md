@@ -38,8 +38,10 @@ await open("/tenants", "en", { "tenants.list": CUSTOMERS }).matches("customers-e
 ```
 
 - `open(url, locale, answers)` mounts the real app -- the shell, the router, react-query, the
-  tRPC client, `index.css` and the bundled fonts -- at `url`, in `"en"` or `"vi"`. `answers` maps
-  a procedure path to what it returns; `session.me` (signed in as `operator@example.test`, not a
+  tRPC client, `index.css` and the bundled fonts -- at `url`, in `"en"` or `"vi"`, on a fresh
+  store. `answers` maps a procedure path to what it returns, or to a function of the input the
+  page sent when one screen asks a procedure more than once (each dashboard tile reads its own
+  answer); a function that returns `undefined` leaves that input unanswered. `session.me` (signed in as `operator@example.test`, not a
   superadmin) and `config.signIn` are answered unless you override them. The reader's role is
   fixture data, as on the server: `tenants.list` per customer, `tenants.get` for the open book.
 - A procedure the page asks for and `answers` does not name fails the test, naming it. To show a
