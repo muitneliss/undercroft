@@ -118,21 +118,23 @@ describe("the public and signed-in home", () => {
     });
     const search = await screen.findByRole("searchbox");
     fireEvent.change(search, { target: { value: "  HO SO DO  " } });
+    // The name opens the customer's own page; Open beside it opens the book at Sources.
     expect(screen.getByRole("link", { name: "Hồ sơ Đỏ" }).getAttribute("href")).toBe(
-      "/tenants/CASE-0042",
+      "/tenants/CASE-0042/about",
     );
     expect(screen.queryByRole("link", { name: "Hồ sơ Xanh" })).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: translatorFor("vi")("tenants.clearFilters") }),
     );
     expect(screen.getByRole("link", { name: "Hồ sơ Xanh" }).getAttribute("href")).toBe(
-      "/tenants/CASE-0108",
+      "/tenants/CASE-0108/about",
     );
   });
 
   it("narrows the customers by the reader's role together with the search, counting only what it lists", async () => {
     // Public promise (#348): the role filter and the search narrow together, the count is the
-    // rows listed, and one clear restores every customer.
+    // rows listed -- against every customer while a filter narrows them -- and one clear
+    // restores every customer.
     renderAt("/tenants", {
       "session.me": answerSessionMe(),
       "tenants.list": Response.json({
@@ -153,11 +155,15 @@ describe("the public and signed-in home", () => {
       target: { value: "viewer" },
     });
     expect(listed()).toEqual(["Hồ sơ XanhCASE-0043"]);
-    expect(screen.getByRole("status").textContent).toBe(t("tenants.caption", { count: 1 }));
+    expect(screen.getByRole("status").textContent).toBe(
+      t("tenants.captionFiltered", { shown: 1, count: 2 }),
+    );
 
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "0042" } });
     expect(listed()).toEqual([]);
-    expect(screen.getByRole("status").textContent).toBe(t("tenants.caption", { count: 0 }));
+    expect(screen.getByRole("status").textContent).toBe(
+      t("tenants.captionFiltered", { shown: 0, count: 2 }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: t("tenants.clearFilters") }));
     expect(listed()).toEqual(["Hồ sơ ĐỏCASE-0042", "Hồ sơ XanhCASE-0043"]);

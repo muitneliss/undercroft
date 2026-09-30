@@ -14,6 +14,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { customerPagePath } from "@/lib/divisions.ts";
 import { foldForSearch } from "@/lib/labelIndex.ts";
 import { isRole, ROLES } from "@/lib/roles.ts";
 
@@ -128,7 +129,8 @@ function CustomerTable({ visible }: { visible: readonly Customer[] }): React.JSX
           {visible.map((customer) => (
             <tr key={customer.id}>
               <th scope="row">
-                <Link to={`/tenants/${encodeURIComponent(customer.id)}`}>
+                {/* The name opens the customer's own page; Open, beside it, opens the book. */}
+                <Link to={customerPagePath(customer.id)}>
                   {customer.displayName || customer.id}
                 </Link>
                 <span className="customer-index__mobile-id datum datum--quiet">{customer.id}</span>
@@ -169,11 +171,16 @@ export function CustomerIndex({
       (foldForSearch(customer.id).includes(query) ||
         foldForSearch(customer.displayName).includes(query)),
   );
+  // While a filter narrows the list the count says so, against every customer the reader has:
+  // "2" alone reads as all there is. The same condition that offers Clear.
+  const filtered = search !== "" || role !== "";
   return (
     <div className="customer-index stack">
       <CustomerFilters />
       <p className="note" role="status">
-        {t("tenants.caption", { count: visible.length })}
+        {filtered
+          ? t("tenants.captionFiltered", { shown: visible.length, count: customers.length })
+          : t("tenants.caption", { count: visible.length })}
       </p>
       {visible.length === 0 ? (
         <p className="prose">{t("tenants.noMatches")}</p>

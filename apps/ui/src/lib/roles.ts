@@ -10,6 +10,8 @@
  * is a sentence, and sentences live in the catalogues, one entry per role.
  */
 
+import { foldForSearch } from "@/lib/labelIndex.ts";
+
 export const ROLES = ["viewer", "member", "admin"] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -32,4 +34,20 @@ export function isRole(value: string): value is Role {
 export function soleAdmin<M extends { readonly role: string }>(members: readonly M[]): M | null {
   const admins = members.filter((member) => member.role === "admin");
   return admins.length === 1 ? (admins[0] ?? null) : null;
+}
+
+/**
+ * The rows of a roster or of the open invitations whose address holds what the reader typed,
+ * accents and case ignored as the customer search ignores them (`foldForSearch`). An empty
+ * search keeps every row.
+ *
+ * It narrows what is SHOWN and nothing else. `soleAdmin` is asked of the whole roster, never
+ * of these rows: a search that happens to show one of two admins has not made them the last.
+ */
+export function byAddress<R extends { readonly email: string }>(
+  rows: readonly R[],
+  search: string,
+): readonly R[] {
+  const needle = foldForSearch(search.trim());
+  return needle === "" ? rows : rows.filter((row) => foldForSearch(row.email).includes(needle));
 }

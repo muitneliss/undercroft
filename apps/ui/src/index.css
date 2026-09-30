@@ -1355,6 +1355,9 @@
 
   .langset {
     display: inline-flex;
+    /* Three views with counts (People) are wider than a phone's measure; they wrap onto a
+     second line rather than running off the leaf. Two short faces never reach the edge. */
+    flex-wrap: wrap;
   }
 
   .langset .plate {
@@ -1367,7 +1370,11 @@
 
   .langset .plate:last-child {
     border-radius: 0 var(--r-plate) var(--r-plate) 0;
-    /* The two borders overlap into one rule, so the pair reads as one control. */
+  }
+
+  /* Each border overlaps the one before it into one rule, so the set reads as one control --
+   between every pair of faces, not only before the last, or a third face doubles its rule. */
+  .langset .plate + .plate {
     margin-left: calc(-1 * var(--hair));
   }
 

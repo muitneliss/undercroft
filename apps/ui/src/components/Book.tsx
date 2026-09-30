@@ -188,7 +188,16 @@ export function Book({
               <span className="runhead__customer">
                 {tenant.data ? tenant.data.displayName : tenantId}
               </span>
-              <span className="datum datum--quiet">{tenantId}</span>
+              {/* The ID is the way back to the list of books, as the address on the right is
+                  the way to the reader's own page. */}
+              <Link
+                className="datum datum--quiet"
+                to="/tenants"
+                aria-label={t("app.switchCustomer", { tenantId })}
+                title={t("app.switchCustomer", { tenantId })}
+              >
+                {tenantId}
+              </Link>
             </span>
           ) : null}
 

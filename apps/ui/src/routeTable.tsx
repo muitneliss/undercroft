@@ -27,6 +27,7 @@ import { ScopeRoute } from "@/components/ScopeRoute.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { Account } from "@/routes/Account.tsx";
 import { Consent } from "@/routes/Consent.tsx";
+import { Customer } from "@/routes/Customer.tsx";
 import { People } from "@/routes/People.tsx";
 import { SignIn } from "@/routes/SignIn.tsx";
 import { TenantOverview } from "@/routes/TenantOverview.tsx";
@@ -205,7 +206,16 @@ function tenantRoutes(signedInAs: string): RouteObject[] {
       path: "/tenants/:tenantId/people",
       element: (
         <Opened division="people" signedInAs={signedInAs}>
-          {(tenantId): React.JSX.Element => <People tenantId={tenantId} />}
+          {(tenantId): React.JSX.Element => <People tenantId={tenantId} signedInAs={signedInAs} />}
+        </Opened>
+      ),
+    },
+    {
+      // One customer's own page, on the Customers board with that customer's book open.
+      path: "/tenants/:tenantId/about",
+      element: (
+        <Opened division="customers" signedInAs={signedInAs}>
+          {(tenantId): React.JSX.Element => <Customer tenantId={tenantId} />}
         </Opened>
       ),
     },
