@@ -86,6 +86,7 @@ function caller(userId: string, address: string) {
     worker: null,
     specReads: new Map(),
     googlePicker: null,
+    signInMethods: [],
   };
   return appRouter.createCaller(ctx);
 }

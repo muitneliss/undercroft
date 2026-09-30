@@ -192,4 +192,18 @@ describe("the public and signed-in home", () => {
       (await screen.findByLabelText(translatorFor("vi")("signIn.emailLabel"))).getAttribute("type"),
     ).toBe("email");
   });
+
+  it("offers the local sign-in as a button when the server offers it beside another way in", async () => {
+    // Public promise (ADR 0094): the SERVER decides whether the local method is shown -- this
+    // suite's bundle is not a development build -- and it signs nobody in by itself unless it
+    // is the only way in. Offered beside mail, it is one choice among the others.
+    renderAt("/sign-in", {
+      "config.signIn": Response.json({ result: { data: { methods: ["email-otp", "dev"] } } }),
+    });
+    const t = translatorFor("vi");
+
+    expect(await screen.findByRole("button", { name: t("signIn.dev") })).toBeDefined();
+    expect(screen.getByLabelText(t("signIn.emailLabel")).getAttribute("type")).toBe("email");
+    expect(screen.queryByText(t("signIn.signingInOwner"))).toBeNull();
+  });
 });

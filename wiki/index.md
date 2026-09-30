@@ -97,6 +97,7 @@
 - [ADR 0091 A Run Keeps the Scope It Read With and Its Counts Open Its Rows](sources/adr-0091-a-run-keeps-the-scope-it-read-with-and-its-counts-open-its-rows.md)
 - [ADR 0092 Lineage Draws Only Declared Relations](sources/adr-0092-lineage-draws-only-declared-relations.md)
 - [ADR 0093: A document keeps its last accepted kind while a new catalogue is asked](sources/adr-0093-a-document-keeps-its-last-accepted-kind-while-a-new-catalogue-is-asked.md)
+- [ADR 0094: A local install signs its owner in on loopback](sources/adr-0094-a-local-install-signs-its-owner-in-on-loopback.md)
 - [ADR 0095: Undercroft installs through a setup wizard that drives Docker](sources/adr-0095-undercroft-installs-through-a-setup-wizard-that-drives-docker.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)

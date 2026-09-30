@@ -225,6 +225,8 @@ export const MCP_EXCLUDED: ExclusionTable = {
   health: "a liveness probe for the load balancer; it says nothing about the caller's data",
   "config.google":
     "the public halves of the Google client, for the browser's Drive picker and nothing else",
+  "config.signIn":
+    "which ways in the sign-in page offers; a client already holding a credential is past it",
 };
 
 /**

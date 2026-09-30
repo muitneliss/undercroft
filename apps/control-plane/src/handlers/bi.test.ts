@@ -58,6 +58,7 @@ function caller(userId: string, email: string, worker: WorkerClient, locale: "vi
     worker,
     specReads: new Map(),
     googlePicker: null,
+    signInMethods: [],
   };
   return appRouter.createCaller(ctx);
 }

@@ -71,6 +71,7 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
     worker: null,
     specReads: new Map(),
     googlePicker: null,
+    signInMethods: [],
   };
   return appRouter.createCaller(ctx);
 }

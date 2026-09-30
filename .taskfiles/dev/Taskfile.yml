@@ -166,8 +166,9 @@ tasks:
       UNDERCROFT_EMAIL_FROM: "{{.UNDERCROFT_EMAIL_FROM}}"
       UNDERCROFT_EMAIL_API_URL: "{{.UNDERCROFT_EMAIL_API_URL}}"
       UNDERCROFT_SUPERADMINS: "{{.UNDERCROFT_SUPERADMINS}}"
-      # Only this task passes it, and the control plane refuses it unless the public URL
-      # above is loopback. See "Skip sign-in locally" in docs/runbook/sign-in-setup.md.
+      # The only task that passes it (a desktop install passes its own, ADR 0094), and the
+      # control plane refuses it unless the public URL above is loopback. See "Skip sign-in
+      # locally" in docs/runbook/sign-in-setup.md.
       UNDERCROFT_DEV_SIGN_IN_AS: "{{.UNDERCROFT_DEV_SIGN_IN_AS}}"
       # Empty in `.env` is export off; set, a local run's traces are told apart by the name.
       OTEL_EXPORTER_OTLP_ENDPOINT: "{{.OTEL_EXPORTER_OTLP_ENDPOINT}}"
