@@ -43,6 +43,11 @@ paths: ["**/*.test.ts", "**/*.test.tsx", "**/testing.ts"]
   past `SET ROLE`; that, and `FOR UPDATE` concurrency, are integration-tier against real
   Postgres.
 - The offline gate (`bun run verify`) must pass with no Docker, no network, no credentials.
+- **`*.vrt.test.tsx` is the one suite Bun does not run.** It is `apps/ui`'s visual tier, run by
+  Vitest in Chromium through `task ci:visual` (ADR 0099); no other file may use Vitest, and
+  `vi` is a banned import there too. Mount a screen with `open()` from `@/test/visual.tsx`,
+  whose fetch answers only the procedures you name; write times relative to `VISUAL_NOW`, the
+  instant the page's clock is stopped at. `docs/runbook/visual-regression.md` covers baselines.
 - **Never paste a `biome-ignore-all` header into a suite** — it is banned here exactly as in
   source, and `bun run lint:rules` fails on one. The twelve rules whose answer is "because it
   is a test" — `noBunModules`, `useExpect`, `noSecrets`, `useTopLevelRegex`,

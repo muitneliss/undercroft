@@ -114,8 +114,10 @@ describe("a tenant with two Gmail mailboxes", () => {
   it("lists each mailbox by its address, carrying that mailbox's own status", async () => {
     mount();
 
-    expect(await screen.findByRole("radio", { name: /ops@acme\.test.*Đã cấp/u })).toBeDefined();
-    expect(screen.getByRole("radio", { name: /sales@acme\.test.*Cần kết nối lại/u })).toBeDefined();
+    expect(await screen.findByRole("radio", { name: /ops@acme\.test.*Đã kết nối/u })).toBeDefined();
+    expect(
+      screen.getByRole("radio", { name: /sales@acme\.test.*Cần cấp lại quyền/u }),
+    ).toBeDefined();
   });
 
   it("choosing the second mailbox turns the card to that mailbox", async () => {

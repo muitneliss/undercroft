@@ -135,7 +135,10 @@ Python program, but it is an _invoked dependency in its own container_ — the s
 category as Postgres or Kestra. We never import it, ship it, or maintain it.
 
 Bun is the runtime, package manager, workspace manager and test runner. One toolchain;
-adding a second is how two definitions of green drift apart.
+adding a second is how two definitions of green drift apart. **One scoped exception:** the
+visual-regression tier, `apps/ui`'s `*.vrt.test.tsx`, runs on Vitest's browser mode in
+Chromium, because happy-dom cannot lay out or paint a page. Nothing else may use Vitest, and
+`vi` is a banned import (ADR 0099).
 
 ## Operations
 
@@ -143,14 +146,14 @@ Every operation goes through [Task](https://taskfile.dev) — never a bare `bun 
 shell/docker command typed by hand. `task --list-all` enumerates everything that exists; the
 surface is split by concern, one Taskfile per namespace under `.taskfiles/`:
 
-| Namespace | Lives in                | Covers                                                                                                                                                                                                                                                                    |
-| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                                                                                                                                                  |
-| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), the desktop app for this OS (`build:desktop`), generated assets/schemas, local Docker images                                                                                     |
-| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check`, `ci:skill-check` (network), `ci:desktop-check` (network, a display), `ci:compose-check` and `ci:secrets-check` are CI steps outside it; `ci:wiki-check` gates the wiki locally |
-| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` and `cd:desktop-release` attach the CLI and the desktop app to a release                                                                                                                                   |
-| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, and the `db:extract-accuracy` and `db:semantic-probe` measurements, for a database that isn't the local one                                                                                                                             |
-| `obs:*`   | `.taskfiles/obs/`       | `scripts/observe.ts`: read a trace from Tempo, its lines from Loki and a container's log over read-only SSH, credentials looked up at run time; the `debug-trace` skill drives it                                                                                         |
+| Namespace | Lives in                | Covers                                                                                                                                                                                                                                                                                                                                    |
+| --------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev:*`   | `.taskfiles/dev/`       | the local stack — `task dev:run` starts all of it, hot reload included; `task dev:cli -- <args>` builds and runs the CLI                                                                                                                                                                                                                  |
+| `build:*` | `.taskfiles/artifacts/` | the SPA bundle, the CLI bundle (`build:cli`) and its release tarball (`build:cli-pack`), the desktop app for this OS (`build:desktop`), generated assets/schemas, local Docker images                                                                                                                                                     |
+| `ci:*`    | `.taskfiles/ci/`        | the gate and its individual steps — `task ci:verify` is what CI runs; `ci:cli-pack-check`, `ci:skill-check` (network), `ci:desktop-check` (network, a display), `ci:visual` (Docker; `ci:visual-update` retakes its baselines), `ci:compose-check` and `ci:secrets-check` are CI steps outside it; `ci:wiki-check` gates the wiki locally |
+| `cd:*`    | `.taskfiles/cd/`        | `scripts/dokploy.ts`, one task per subcommand; `cd:cli-upload` and `cd:desktop-release` attach the CLI and the desktop app to a release                                                                                                                                                                                                   |
+| `db:*`    | `.taskfiles/db/`        | DSN-parameterised migrate/invite, and the `db:extract-accuracy` and `db:semantic-probe` measurements, for a database that isn't the local one                                                                                                                                                                                             |
+| `obs:*`   | `.taskfiles/obs/`       | `scripts/observe.ts`: read a trace from Tempo, its lines from Loki and a container's log over read-only SSH, credentials looked up at run time; the `debug-trace` skill drives it                                                                                                                                                         |
 
 Every `ci:*`/`build:*` task wraps an existing `package.json` script or `scripts/*.ts` file —
 Task is the mandated way to invoke it, never a second place that redefines what it does. A
@@ -163,7 +166,9 @@ added. See `.claude/rules/tooling.md` and ADR 0023.
 SPA build, then the test suite (it wraps `bun run verify`: one definition of the gate, Task
 is just how you invoke it). It must
 pass with **no Docker, no network and no credentials**. `task ci:itest` is the Docker-backed
-tier and is deliberately separate.
+tier and is deliberately separate. So is `task ci:visual`, the visual-regression tier: it
+renders `apps/ui`'s screens in the Playwright image and compares them with baselines a person
+reviewed (`docs/runbook/visual-regression.md`, ADR 0099).
 
 `bun run build:ui` is in the gate because `tsc` cannot see what a bundler refuses. Importing
 a module that reaches a Node built-in — `@undercroft/core`'s root barrel pulls `node:crypto`

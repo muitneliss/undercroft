@@ -15,6 +15,7 @@
  */
 
 import { PARAM_PREFIX } from "@/lib/params.ts";
+import { type QuestionPane, withPane } from "@/lib/questionPane.ts";
 
 /** The search key the way back rides under. */
 export const FROM = "from";
@@ -43,20 +44,25 @@ function withSearch(path: string, search: URLSearchParams): string {
 
 /**
  * Where a tile's title leads: `questionPath` with the dashboard's value for each of `names`,
- * the parameters that question takes, and the way back to `dashboardPath` as it stands.
+ * the parameters that question takes, and the way back to `dashboardPath` as it stands --
+ * opened on `pane` when one is named, as a tile's "View data" opens its rows.
  */
 export function tileQuestionHref(link: {
   readonly questionPath: string;
   readonly names: readonly string[];
   readonly dashboardPath: string;
   readonly search: URLSearchParams;
+  readonly pane?: QuestionPane;
 }): string {
-  const next = new URLSearchParams();
+  let next = new URLSearchParams();
   for (const name of link.names) {
     const value = link.search.get(`${PARAM_PREFIX}${name}`);
     if (value !== null && value !== "") {
       next.set(`${PARAM_PREFIX}${name}`, value);
     }
+  }
+  if (link.pane !== undefined) {
+    next = withPane(next, link.pane);
   }
   next.set(FROM, withSearch(link.dashboardPath, filterValues(link.search)));
   return withSearch(link.questionPath, next);

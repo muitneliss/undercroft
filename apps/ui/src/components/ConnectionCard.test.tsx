@@ -130,7 +130,7 @@ describe("Run now", () => {
     expect(
       screen.getByText("Chưa được cấp quyền accounting.settings.read, nên chưa đọc Thuế suất."),
     ).toBeDefined();
-    expect(screen.queryByText("Cần kết nối lại")).toBeNull();
+    expect(screen.queryByText("Cần cấp lại quyền")).toBeNull();
   });
 
   it("is not offered to a reader who may not start one", () => {
@@ -185,7 +185,7 @@ describe("the write plates, by who is reading", () => {
     render(everyState(true));
 
     expect(screen.getByRole("button", { name: "Đổi dữ liệu đồng bộ" })).toBeDefined();
-    expect(screen.getAllByRole("button", { name: "Ngắt kết nối" }).length).toBe(3);
+    expect(screen.getAllByText("Ngắt kết nối…").length).toBe(3);
     expect(screen.getByRole("button", { name: /Kết nối Google Drive/u })).toBeDefined();
     expect(screen.getByRole("button", { name: /Chọn dữ liệu cần đồng bộ/u })).toBeDefined();
   });
@@ -197,6 +197,44 @@ describe("the write plates, by who is reading", () => {
     expect(screen.getByRole("link", { name: /Các lần chạy/u }).getAttribute("href")).toBe(
       "/tenants/CASE-0042/journal?source=gmail",
     );
+  });
+});
+
+describe("Disconnect", () => {
+  // It ends a grant a customer made, so it asks first and names what it ends -- as Remove on
+  // the roster does. Both sides: the first press must not act, and the second must.
+  function adminCard(ended: string[]): void {
+    render(
+      card(
+        { externalAccountLabel: "ops@acme.test" },
+        {
+          canRun: true,
+          onDisconnect: (): void => {
+            ended.push("hubspot");
+          },
+        },
+      ),
+    );
+  }
+
+  it("the first press opens the fold and disconnects nothing", () => {
+    const ended: string[] = [];
+    adminCard(ended);
+
+    fireEvent.click(screen.getByText("Ngắt kết nối…"));
+
+    expect(ended).toEqual([]);
+    expect(screen.getByText("Các bản ghi đã vào kho thô vẫn được giữ nguyên.")).toBeDefined();
+  });
+
+  it("the second press names the account and disconnects it", () => {
+    const ended: string[] = [];
+    adminCard(ended);
+
+    fireEvent.click(screen.getByText("Ngắt kết nối…"));
+    fireEvent.click(screen.getByRole("button", { name: "Ngắt kết nối ops@acme.test" }));
+
+    expect(ended).toEqual(["hubspot"]);
   });
 });
 

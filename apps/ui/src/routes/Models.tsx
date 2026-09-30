@@ -9,7 +9,9 @@
  * switched divisions mid-edit should not find their work silently gone -- or silently kept.
  *
  * Above the list, one count per last-build state, and pressing one narrows the list to it with
- * the state in the address (`modelBuild.ts`). The division's second view is its lineage
+ * the state in the address (`modelBuild.ts`); beneath them, the list searched by name and put in
+ * order, both in the address too (`modelList.ts`). Each row names the run that last built it,
+ * so a failed build is one press from its steps. The division's second view is its lineage
  * (`ModelLineage`, ADR 0092), in the same address with `?view=lineage`: a view of Models and
  * not an eighth division, because the wheel is full (ADR 0019).
  *
@@ -18,6 +20,7 @@
  * message at the field and not a refusal from the server; the server refuses regardless.
  */
 
+import type { TFunction } from "i18next";
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -30,21 +33,28 @@ import { StatusMark } from "@/components/StatusMark.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import { LINEAGE_VIEW, lineagePath, VIEW_PARAM } from "@/lib/lineage.ts";
 import {
-  BUILD_PARAM,
   BUILD_STATES,
   type BuildState,
-  buildFilter,
   buildMark,
   buildMarkLabel,
-  buildState,
   buildTally,
+  builtColumnCount,
   stateLabel,
   stateMark,
 } from "@/lib/modelBuild.ts";
 import { isDirty } from "@/lib/modelDraft.ts";
+import {
+  isNarrowed,
+  MODEL_SORTS,
+  type ModelListFilters,
+  modelListFilters,
+  narrowModels,
+  withFilters,
+} from "@/lib/modelList.ts";
 import { isModelName } from "@/lib/modelName.ts";
 import { modelTemplate } from "@/lib/modelTemplate.ts";
-import { formatCount } from "@/lib/money.ts";
+import { formatCount, MISSING } from "@/lib/money.ts";
+import { journalPath } from "@/lib/runs.ts";
 import { relativeTime } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -118,46 +128,143 @@ export function Models({ tenantId }: { tenantId: string }): React.JSX.Element {
 
 /**
  * One count per last-build state above the list, and the list narrowed to the state the
- * address names. The counts are over every model, so they add up to the models listed when
- * nothing is pressed; pressing the count already pressed widens the list again.
+ * address names. The counts are over every model the search matches, so they add up to the
+ * models listed when no state is pressed -- and the line beneath them says so in figures, so a
+ * reader can check it rather than take it. Pressing the count already pressed widens the list
+ * again; a press keeps the search and the order (`modelList.ts`).
  */
 function BuildTally({
   statuses,
-  filter,
-  tenantId,
+  filters,
 }: {
   statuses: readonly (string | null)[];
-  filter: BuildState | null;
-  tenantId: string;
+  filters: ModelListFilters;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
   const locale = useUiStore((state) => state.locale);
   const tally = buildTally(statuses);
-  const base = divisionPath("models", tenantId);
+  const filter = filters.build;
+  function to(state: BuildState | null): string {
+    const search = withFilters(params, { build: state }).toString();
+    return search === "" ? "" : `?${search}`;
+  }
 
   return (
-    <nav aria-label={t("models.tallyLabel")} className="tally">
-      {BUILD_STATES.map((state) => (
+    <>
+      <nav aria-label={t("models.tallyLabel")} className="tally">
+        {BUILD_STATES.map((state) => (
+          <Link
+            className="tally__count"
+            key={state}
+            to={{ search: to(filter === state ? null : state) }}
+            {...(filter === state ? { "aria-current": "true" as const } : {})}
+          >
+            <span className="tally__figure">{formatCount(tally[state], locale)}</span>
+            <StatusMark label={stateLabel(t, state)} mark={stateMark(state)} />
+          </Link>
+        ))}
         <Link
           className="tally__count"
-          key={state}
-          to={filter === state ? base : `${base}?${BUILD_PARAM}=${state}`}
-          {...(filter === state ? { "aria-current": "true" as const } : {})}
+          to={{ search: to(null) }}
+          {...(filter === null ? { "aria-current": "true" as const } : {})}
         >
-          <span className="tally__figure">{formatCount(tally[state], locale)}</span>
-          <StatusMark label={stateLabel(t, state)} mark={stateMark(state)} />
+          <span className="tally__figure">{formatCount(statuses.length, locale)}</span>
+          <span className="label">{t("models.tallyAll")}</span>
         </Link>
-      ))}
-      <Link
-        className="tally__count"
-        to={base}
-        {...(filter === null ? { "aria-current": "true" as const } : {})}
-      >
-        <span className="tally__figure">{formatCount(statuses.length, locale)}</span>
-        <span className="label">{t("models.tallyAll")}</span>
-      </Link>
-    </nav>
+      </nav>
+      <p className="datum datum--quiet">
+        {t("models.tallySum", {
+          parts: BUILD_STATES.map((state) => formatCount(tally[state], locale)).join(" + "),
+          count: statuses.length,
+        })}
+      </p>
+    </>
   );
+}
+
+/**
+ * The search by name and the order, both written to the address as they change, and -- while
+ * anything narrows the list -- one clear. Replaced rather than pushed: a keystroke is not a
+ * page, and Back should leave the list, not unpick the search a letter at a time.
+ */
+function ListFilters({ filters }: { filters: ModelListFilters }): React.JSX.Element {
+  const { t } = useTranslation();
+  const searchId = useId();
+  const sortId = useId();
+  const [, setParams] = useSearchParams();
+
+  function write(change: Parameters<typeof withFilters>[1]): void {
+    setParams((current) => withFilters(current, change), { replace: true });
+  }
+
+  return (
+    <div className="row row--field">
+      <div className="field field--grow">
+        <label className="label" htmlFor={searchId}>
+          {t("models.searchLabel")}
+        </label>
+        <input
+          autoComplete="off"
+          className="input"
+          id={searchId}
+          placeholder="stg_deals"
+          type="search"
+          value={filters.query}
+          onChange={(event): void => {
+            write({ query: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field">
+        <label className="label" htmlFor={sortId}>
+          {t("models.sortLabel")}
+        </label>
+        <select
+          className="input input--select"
+          id={sortId}
+          value={filters.sort}
+          onChange={(event): void => {
+            const sort = MODEL_SORTS.find((known) => known === event.currentTarget.value);
+            write({ sort: sort ?? "attention" });
+          }}
+        >
+          <option value="attention">{t("models.sortAttention")}</option>
+          <option value="name">{t("models.sortName")}</option>
+        </select>
+      </div>
+      {isNarrowed(filters) ? (
+        <button
+          className="plate"
+          type="button"
+          onClick={(): void => {
+            write({ query: "", build: null, sort: "attention" });
+          }}
+        >
+          {t("models.clearFilters")}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The caption: how many models show against how many there are -- always both, so the figure
+ * reads the same whether or not a search narrowed it -- and the state a pressed count chose.
+ */
+function caption(
+  t: TFunction,
+  filters: ModelListFilters,
+  counts: { total: number; shown: number },
+): string {
+  if (filters.build !== null) {
+    return t("models.captionFiltered", {
+      count: counts.total,
+      shown: counts.shown,
+      state: stateLabel(t, filters.build),
+    });
+  }
+  return t("models.caption", { count: counts.total, shown: counts.shown });
 }
 
 function ModelList({
@@ -193,57 +300,77 @@ function ModelList({
   }
 
   const base = divisionPath("models", tenantId);
-  const filter = buildFilter(params);
-  const statuses = models.data.map((model) => model.lastBuild?.status ?? null);
-  const shown = models.data.filter(
-    (model) => filter === null || buildState(model.lastBuild?.status ?? null) === filter,
-  );
+  const filters = modelListFilters(params);
+  const { matched, shown } = narrowModels(models.data, filters);
+  const statuses = matched.map((model) => model.lastBuild?.status ?? null);
   // The one model whose draft is unsaved, if any: named on its row.
   const unsaved =
     draft !== null && draft.tenantId === tenantId && isDirty(draft) ? draft.name : null;
 
   return (
     <>
-      <BuildTally filter={filter} statuses={statuses} tenantId={tenantId} />
-      <table className="table">
-        <caption>
-          {filter === null
-            ? t("models.caption", { count: models.data.length })
-            : t("models.captionFiltered", {
-                count: models.data.length,
-                shown: shown.length,
-                state: stateLabel(t, filter),
-              })}
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">{t("models.colName")}</th>
-            <th scope="col">{t("models.colUpdated")}</th>
-            <th scope="col">{t("models.colBuild")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((model) => (
-            <tr key={model.name}>
-              <td>
-                <Link className="journal__what" to={`${base}/${model.name}`}>
-                  {model.name}
-                </Link>
-                {unsaved === model.name ? (
-                  <span className="datum datum--quiet journal__trigger">{t("models.unsaved")}</span>
-                ) : null}
-              </td>
-              <td className="datum datum--quiet">{relativeTime(model.updatedAt, locale)}</td>
-              <td>
-                <StatusMark
-                  mark={buildMark(model.lastBuild?.status ?? null)}
-                  label={buildMarkLabel(t, model.lastBuild?.status ?? null)}
-                />
-              </td>
+      <BuildTally filters={filters} statuses={statuses} />
+      <ListFilters filters={filters} />
+      <div className="table-scroll">
+        <table className="table">
+          <caption>
+            {caption(t, filters, { total: models.data.length, shown: shown.length })}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("models.colName")}</th>
+              <th scope="col">{t("models.colBuild")}</th>
+              <th scope="col">{t("models.colRun")}</th>
+              <th className="num" scope="col">
+                {t("models.colColumns")}
+              </th>
+              <th scope="col">{t("models.colUpdated")}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {shown.map((model) => {
+              const columns = builtColumnCount(model.lastBuild);
+              return (
+                <tr key={model.name}>
+                  <td>
+                    <Link className="journal__what" to={`${base}/${model.name}`}>
+                      {model.name}
+                    </Link>
+                    {unsaved === model.name ? (
+                      <span className="datum datum--quiet journal__trigger">
+                        {t("models.unsaved")}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td>
+                    <StatusMark
+                      mark={buildMark(model.lastBuild?.status ?? null)}
+                      label={buildMarkLabel(t, model.lastBuild?.status ?? null)}
+                    />
+                  </td>
+                  <td className="datum">
+                    {model.lastBuild === null ? (
+                      <span className="missing">{MISSING}</span>
+                    ) : (
+                      <Link to={journalPath(tenantId, { runId: model.lastBuild.runId })}>
+                        {model.lastBuild.runId}
+                      </Link>
+                    )}
+                  </td>
+                  <td className="datum num">
+                    {columns === null ? (
+                      <span className="missing">{MISSING}</span>
+                    ) : (
+                      formatCount(columns, locale)
+                    )}
+                  </td>
+                  <td className="datum datum--quiet">{relativeTime(model.updatedAt, locale)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

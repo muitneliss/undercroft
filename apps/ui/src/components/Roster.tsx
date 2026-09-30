@@ -9,9 +9,10 @@
 
 import { useTranslation } from "react-i18next";
 
+import { Address } from "@/components/Address.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
-import { isRole, ROLES, soleAdmin } from "@/lib/roles.ts";
+import { byAddress, isRole, ROLES, soleAdmin } from "@/lib/roles.ts";
 import type { trpc } from "@/trpc.ts";
 
 /**
@@ -105,7 +106,10 @@ function RemoveCell({
     <td>
       <details className="tokenform">
         <summary className="plate plate--small">{t("people.remove")}</summary>
-        <div className="hinge">
+        <div className="hinge stack stack--tight">
+          {/* Before the plate, so what the second press ends -- and what it leaves alone -- is
+              read before it is pressed. */}
+          <p className="note">{t("people.removeLead")}</p>
           <button
             className="plate plate--small plate--primary"
             type="button"
@@ -159,12 +163,79 @@ function MembershipOutcome({
   );
 }
 
+/** The roster as a table: every row it is handed, and the caption saying how many of how many. */
+function RosterTable({
+  rows,
+  caption,
+  last,
+  isAdmin,
+  setRole,
+  remove,
+  tenantId,
+  signedInAs,
+}: {
+  rows: readonly { userId: string; email: string; role: string }[];
+  caption: string;
+  last: { userId: string } | null;
+  isAdmin: boolean;
+  setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
+  remove: ReturnType<typeof trpc.people.removeMember.useMutation>;
+  tenantId: string;
+  signedInAs: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const reader = signedInAs.toLowerCase();
+  return (
+    <table className="table">
+      <caption>{caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{t("people.colAddress")}</th>
+          <th scope="col">{t("people.colRole")}</th>
+          {isAdmin ? <th scope="col">{t("people.colRemove")}</th> : null}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((member) => (
+          <tr key={member.userId}>
+            <td className="datum datum--quiet">
+              {member.email.toLowerCase() === reader ? (
+                <span className="stack stack--tight">
+                  <Address email={member.email} />
+                  <span className="label">{t("people.you")}</span>
+                </span>
+              ) : (
+                <Address email={member.email} />
+              )}
+            </td>
+            <RoleCell
+              member={member}
+              last={member === last}
+              isAdmin={isAdmin}
+              setRole={setRole}
+              tenantId={tenantId}
+            />
+            {isAdmin && member === last ? <td /> : null}
+            {isAdmin && member !== last ? (
+              <RemoveCell email={member.email} remove={remove} tenantId={tenantId} />
+            ) : null}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /**
  * Who has access today, and -- for an admin -- the two ways to change that.
  *
  * Hidden rather than disabled for everyone else, like the invitation form; the procedures
  * refuse regardless of what the browser renders. The last admin's row keeps its Remove cell
  * empty rather than dropping it, so the column still lines up with the rows that have one.
+ *
+ * `search` narrows the rows shown and nothing else: the last admin is found in the whole
+ * roster, so a search that shows one of two admins does not strip that one of its controls.
+ * `signedInAs` marks the reader's own row, compared without case because an address is.
  */
 export function Roster({
   roster,
@@ -172,49 +243,44 @@ export function Roster({
   setRole,
   remove,
   tenantId,
+  search,
+  signedInAs,
 }: {
   roster: readonly { userId: string; email: string; role: string }[];
   isAdmin: boolean;
   setRole: ReturnType<typeof trpc.people.setRole.useMutation>;
   remove: ReturnType<typeof trpc.people.removeMember.useMutation>;
   tenantId: string;
+  search: string;
+  signedInAs: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const last = soleAdmin(roster);
+  const rows = byAddress(roster, search);
+  const caption =
+    search.trim() === ""
+      ? t("people.caption", { count: roster.length })
+      : t("people.captionFiltered", { shown: rows.length, count: roster.length });
   return (
     <>
       {roster.length === 0 ? (
         <EmptyState title={t("people.emptyTitle")} body={t("people.emptyBody")} />
-      ) : (
-        <table className="table">
-          <caption>{t("people.caption", { count: roster.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("people.colAddress")}</th>
-              <th scope="col">{t("people.colRole")}</th>
-              {isAdmin ? <th scope="col">{t("people.colRemove")}</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {roster.map((member) => (
-              <tr key={member.userId}>
-                <td className="datum datum--quiet">{member.email}</td>
-                <RoleCell
-                  member={member}
-                  last={member === last}
-                  isAdmin={isAdmin}
-                  setRole={setRole}
-                  tenantId={tenantId}
-                />
-                {isAdmin && member === last ? <td /> : null}
-                {isAdmin && member !== last ? (
-                  <RemoveCell email={member.email} remove={remove} tenantId={tenantId} />
-                ) : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      ) : null}
+      {roster.length > 0 && rows.length === 0 ? (
+        <p className="prose">{t("people.noMatch")}</p>
+      ) : null}
+      {rows.length > 0 ? (
+        <RosterTable
+          rows={rows}
+          caption={caption}
+          last={last}
+          isAdmin={isAdmin}
+          setRole={setRole}
+          remove={remove}
+          tenantId={tenantId}
+          signedInAs={signedInAs}
+        />
+      ) : null}
 
       <MembershipOutcome setRole={setRole} remove={remove} />
     </>

@@ -968,6 +968,17 @@
     min-height: var(--control-h);
   }
 
+  /*
+   * A select written straight into the row -- the direction beside the column a question is
+   * ordered by -- is one of the row's controls, so it takes the row's line. `.input--select`
+   * carries an `align-self` of its own for the schedule's column, and below 1100px that sent
+   * this one to the TOP of the row, a caption's height above the select beside it.
+   */
+  .row--field > .input--select,
+  .row:has(> .field) > .input--select {
+    align-self: auto;
+  }
+
   .spread {
     display: flex;
     align-items: flex-start;
@@ -1138,6 +1149,13 @@
     font-variant-numeric: tabular-nums;
     color: var(--ink);
     overflow-wrap: anywhere;
+  }
+
+  /* An email address turns after its "@" (`components/Address.tsx`) and not mid-token: the
+   * column is sized to hold the longer half whole, and only a half wider than the column
+   * breaks, rather than pushing the plates beside it off the screen. */
+  .address {
+    overflow-wrap: break-word;
   }
 
   .lineage__item > p,
@@ -1355,6 +1373,9 @@
 
   .langset {
     display: inline-flex;
+    /* Three views with counts (People) are wider than a phone's measure; they wrap onto a
+     second line rather than running off the leaf. Two short faces never reach the edge. */
+    flex-wrap: wrap;
   }
 
   .langset .plate {
@@ -1367,14 +1388,19 @@
 
   .langset .plate:last-child {
     border-radius: 0 var(--r-plate) var(--r-plate) 0;
-    /* The two borders overlap into one rule, so the pair reads as one control. */
+  }
+
+  /* Each border overlaps the one before it into one rule, so the set reads as one control --
+   between every pair of faces, not only before the last, or a third face doubles its rule. */
+  .langset .plate + .plate {
     margin-left: calc(-1 * var(--hair));
   }
 
   /* The same inked face for a pair of views bound as one control (the Models division's list
-   and lineage): the face that is chosen is the page the reader is on. */
+   and lineage, the scope picker's two steps): the face that is chosen is where the reader is. */
   .langset .plate[aria-pressed="true"],
-  .langset .plate[aria-current="page"] {
+  .langset .plate[aria-current="page"],
+  .langset .plate[aria-current="step"] {
     background: var(--ink);
     color: var(--leaf);
   }
@@ -1386,6 +1412,15 @@
     flex-direction: column;
     gap: var(--s-2);
     min-width: 0;
+  }
+
+  /* THE FIELD THAT TAKES THE ROW. A search sits in a row beside the controls that narrow it,
+   and at its own intrinsic width -- about twenty characters -- it cut its own placeholder
+   short ("A dashboard's or a q") and read as the least of the row's controls when it is the
+   first one a reader reaches for. It takes what the row leaves, as the design's filter rows
+   do, and wraps whole below a width where its placeholder would be cut. */
+  .field--grow {
+    flex: 1 1 18rem;
   }
 
   .field__hint {
@@ -1748,11 +1783,25 @@
     width: auto;
   }
 
+  /* ...except under its own caption. The edge above is the schedule column's, whose data are
+     set against its right; a `.field` is a caption stacked on its control, and there flex-end
+     sent the select to the far side of the band, a column's width from the words that name it
+     (an ingest key's "Expires after" sat alone at the right of the leaf). */
+  .field > .input--select {
+    align-self: flex-start;
+  }
+
   .grant__actions {
     display: flex;
     gap: var(--s-2);
     justify-content: flex-end;
     flex-wrap: wrap;
+  }
+
+  /* Disconnect's fold: shut, it is one plate in line with the others; only the leaf it hinges
+     open takes the actions cell's whole width. */
+  .grant__confirm:not([open]) {
+    flex-basis: auto;
   }
 
   /* A grant nobody has made yet is an unprinted leaf: it carries the access
@@ -2167,6 +2216,39 @@
     user-select: all;
   }
 
+  /* -- facts --------------------------------------------------------------------
+   *
+   * What a run, a model or a customer IS, above what it did: ruled columns, each a caption
+   * over its value under a hairline, the way a schedule sets the particulars of an entry.
+   * Four to a line on a wide leaf, two on a phone; a long id breaks anywhere rather than
+   * pushing its column wider than the others. `components/Facts.tsx`. */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0 var(--s-4);
+    margin: 0;
+  }
+
+  .facts__fact {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    min-width: 0;
+    padding: var(--s-3) 0;
+    border-top: var(--hair) solid var(--rule);
+  }
+
+  .facts__fact dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 760px) {
+    .facts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   /* -- tables ------------------------------------------------------------------ */
 
   .table {
@@ -2229,6 +2311,49 @@
   .table th:last-child {
     padding-right: 0;
     text-align: right;
+  }
+
+  /* A table of words -- two readings set side by side, as the scope review's "Saved" and
+     "Will apply" -- has no figure and no verb in its last column. Set right, the reading it
+     is compared with ran against the far edge while its twin hung left of it, and the eye had
+     to cross the width of the leaf to compare one line with the other. */
+  .table--words td:last-child,
+  .table--words th:last-child {
+    text-align: start;
+  }
+
+  /*
+   * A TABLE WIDER THAN ITS LEAF SCROLLS; IT DOES NOT SHRED ITS WORDS.
+   *
+   * `.datum` breaks anywhere, which is right for a long ID in a line of prose and wrong in a
+   * table: it lets the table's layout shrink every mono column to one character, so at a
+   * phone's width the lake's index read "invoi / ces" and the journal "minu / tes / ago",
+   * and a ledger with plates in it overflowed the leaf and was cut off at its edge. Inside
+   * this wrapper a datum breaks only where a word does, the table keeps a desk's measure,
+   * and the wrapper scrolls sideways instead -- the customer index's answer, made general.
+   *
+   * A leaf hinged into a row of such a table (a run's detail in the journal) is as wide as
+   * the view onto the table, not as the table, and stays in that view while the ledger
+   * scrolls under it: `100cqi` is the wrapper's own width, which is why it is a container.
+   */
+  .table-scroll {
+    overflow-x: auto;
+    container-type: inline-size;
+  }
+
+  .table-scroll > .table {
+    min-width: 40rem;
+  }
+
+  .table-scroll .datum {
+    overflow-wrap: break-word;
+  }
+
+  .table-scroll .table__hinge .hinge {
+    position: sticky;
+    left: 0;
+    width: 100cqi;
+    overflow-x: auto;
   }
 
   /* -- a form hinged into a row ------------------------------------------------ */
@@ -3390,6 +3515,11 @@
    * tab. A reader who may not browse gets the identical line with no link: the counts are
    * theirs, the payload is not.
    */
+  /* "2 hours ago" is one reading; broken over two lines it reads as two. */
+  .lake-index__newest {
+    white-space: nowrap;
+  }
+
   .lake-index__link {
     display: inline-flex;
     align-items: center;
@@ -3426,42 +3556,74 @@
     box-shadow: inset 0 1px 2px rgba(22, 21, 15, 0.45);
   }
 
-  /* -- the models' build tally ------------------------------------------------------
+  /* -- a tally: one count per state, each a door ----------------------------------
    *
-   * One count per last-build state, each a door that narrows the list to it, and the whole
-   * list's count last. A count is a figure over its status mark -- the mark's shape and word
-   * say which state, as on every row beneath -- and the count pressed is punched through the
-   * way a selected line of the lake index is. */
+   * The models' build tally and the sources' count row. One count per state, each a door that
+   * narrows the list beneath to it (ADR 0039), and the whole list's count among them. Set as
+   * a ruled row of boxed cells, as a schedule sets its totals: the figure above, its caption
+   * or status mark beneath, a hairline between cells and the row closed above and below.
+   * The count pressed is inked where a pressed plate would be -- the page taken back to bone
+   * and a 2px ink rule along its foot -- and a count under the pointer takes the board's
+   * wash, as a table row does. Two to a line on a phone. */
   .tally {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-2) var(--s-5);
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    border-block: var(--hair) solid var(--rule-strong);
   }
 
   .tally__count {
-    display: inline-flex;
-    align-items: baseline;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     gap: var(--s-2);
-    padding: var(--s-1) 0;
-    border-bottom: var(--hair) solid transparent;
+    min-width: 0;
+    padding: var(--s-3);
+    border-right: var(--hair) solid var(--rule);
     color: var(--ink);
     text-decoration: none;
-    transition: border-color var(--hinge);
+    transition: background-color var(--hinge);
   }
 
-  .tally__count:hover,
+  .tally__count:last-child {
+    border-right: 0;
+  }
+
+  .tally__count:hover {
+    background: color-mix(in srgb, var(--board) 8%, transparent);
+  }
+
   .tally__count[aria-current="true"] {
-    border-bottom-color: var(--ink);
+    background: var(--bone);
+    box-shadow: inset 0 -2px 0 var(--ink);
   }
 
   .tally__figure {
     font-family: var(--face-mono);
-    font-size: 0.9375rem;
+    font-size: 1.25rem;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
+    line-height: 1.2;
   }
 
-  .tally__count[aria-current="true"] .tally__figure {
-    font-weight: 700;
+  @media (max-width: 760px) {
+    .tally {
+      grid-auto-flow: row;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tally__count:nth-child(2n) {
+      border-right: 0;
+    }
+
+    .tally__count:nth-child(n + 3) {
+      border-top: var(--hair) solid var(--rule);
+    }
+
+    /* An odd count out -- the models' "all" -- takes the whole last line, not half of it. */
+    .tally__count:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
   }
 
   /* -- the models' lineage ------------------------------------------------------------
@@ -3931,6 +4093,38 @@
     color: var(--ink-2);
   }
 
+  /* Every node by level, under a trace on a phone (`LineageTrace` `Levels`): the board's
+   * columns as folded lists, one node to a line. A node off both chains sits back a tone, as
+   * its card dims on the board; its words still say where it stands. On a desk the board is
+   * this list, so the fold is not drawn there. */
+  .lineage-levels {
+    display: none;
+  }
+
+  .lineage-levels > summary {
+    cursor: pointer;
+    padding: var(--s-2) 0;
+    border-top: var(--hair) solid var(--rule-strong);
+  }
+
+  .lineage-levels .lineage-names {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .lineage-levels .lineage-names li {
+    padding: var(--s-2) 0;
+    border-bottom: var(--hair) solid var(--rule);
+  }
+
+  .lineage-levels li[data-state="dim"] {
+    color: var(--ink-3);
+  }
+
+  .lineage-levels li[data-state="dim"] a {
+    color: inherit;
+  }
+
   /* The text of the view: it wraps rather than clips, so every name is readable at any width. */
   .lineage__list {
     margin: 0;
@@ -4343,6 +4537,15 @@
     border-radius: var(--r-leaf);
     padding: var(--s-6) var(--s-5);
     max-width: 58ch;
+  }
+
+  /* The same leaf laid across a band, set apart from the page it sits in: a consequence the
+   * reader must take in before pressing, such as what a scope change does to the records the
+   * lake already holds. Rule strong, because it closes a block rather than separating two. */
+  .unprinted--band {
+    max-width: none;
+    padding: var(--s-4) var(--s-5);
+    border-color: var(--rule-strong);
   }
 
   .unprinted__title {
@@ -4828,6 +5031,10 @@
       display: none;
     }
 
+    .lineage-levels {
+      display: block;
+    }
+
     :root {
       --head-col: 0rem;
       --t-h1: 1.9rem;
@@ -4889,6 +5096,28 @@
     .runhead__record {
       padding-left: 0;
       margin-right: 0;
+    }
+
+    /* THE RIGHT-HAND END WRAPS BY WHOLE ITEMS. At a phone's measure the address, the language
+     pair, the fist and Sign out only just share a line, and at their desktop sizes they did
+     not: the address broke mid-word (`.datum` breaks anywhere, which a long ID in a cell
+     needs), the VI / EN pair folded into a column (`.langset` wraps, which People's three
+     counted views need), and Sign out took two lines. Here the address is set at the head's
+     own micro size, and nothing on this end breaks inside itself -- a longer address moves
+     to its own line whole rather than splitting. */
+    .runhead__right {
+      gap: var(--s-3);
+      flex-wrap: wrap;
+      white-space: nowrap;
+    }
+
+    .runhead__right .datum {
+      font-size: var(--t-micro);
+      overflow-wrap: normal;
+    }
+
+    .runhead__right .langset {
+      flex-wrap: nowrap;
     }
 
     /* THE DIAL'S LINE FOLDS. `--head-col` is 0 here and the entity's name is not an
@@ -4981,6 +5210,20 @@
 
     .grant__head {
       grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* A dashboard printed from the browser (its "Print / PDF" plate): the book's chrome --
+   the tab strip, the spine, the running head's controls, the interleaf and the colophon --
+   is not what was asked for. Scoped to the book holding a dashboard, so printing any other
+   leaf is untouched. What goes inside the dashboard's leaf is `styles/reports.css`'s. */
+  @media print {
+    .book:has(.sheet--dashboard) .rail,
+    .book:has(.sheet--dashboard) .colophon,
+    .book:has(.sheet--dashboard) .interleaf,
+    .book:has(.sheet--dashboard) .leaf__spine,
+    .book:has(.sheet--dashboard) .runhead__right {
+      display: none;
     }
   }
 }

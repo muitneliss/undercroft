@@ -130,7 +130,7 @@ describe("choosing a language", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "English" }));
 
-    expect(await screen.findByRole("heading", { name: "Raw lake" })).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Raw data lake" })).toBeDefined();
     expect(document.documentElement.lang).toBe("en");
     // The store is the owner, and the button wrote to it rather than to i18next directly.
     expect(useUiStore.getState().locale).toBe("en");

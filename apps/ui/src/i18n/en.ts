@@ -21,6 +21,7 @@ export const en = {
     staleChunk: "This page belongs to a newer release",
     staleChunkBody:
       "Undercroft was updated after this tab was opened. Save anything you are still writing, then reload the page.",
+    switchCustomer: "{{tenantId}} · Switch customer",
   },
 
   lang: {
@@ -157,18 +158,18 @@ export const en = {
   },
 
   tenants: {
-    title: "Customer records",
-    lead: "Open a customer to see their data sources, journal and reports.",
-    searchLabel: "Find a customer",
-    searchPlaceholder: "Search by customer name or ID",
-    roleLabel: "Your role",
+    title: "Customer index",
+    lead: "One case book per customer. Choose the right book before reading or working with its data.",
+    searchLabel: "Find customer name or ID",
+    searchPlaceholder: "Name or CASE-…",
+    roleLabel: "Your access",
     roleAny: "Any role",
     clearFilters: "Clear filters",
     noMatches:
       "No matching customers. Try another name, ID or role, or clear the filters to see everyone.",
     colAction: "Action",
-    open: "Open",
-    openNamed: "Open {{name}}",
+    open: "Open book →",
+    openNamed: "Open book of {{name}}",
     guideHead: "Inside each record",
     guideBody:
       "Connect sources, inspect landed data and open reports through the customer's tabs. Each customer's data is stored and accessed separately.",
@@ -177,9 +178,11 @@ export const en = {
       "A customer is the unit everything else hangs off: their connected accounts, their synced records, and who can see them.",
     caption_one: "{{count, number}} customer",
     caption_other: "{{count, number}} customers",
+    captionFiltered_one: "{{shown, number}} of {{count, number}} customer",
+    captionFiltered_other: "{{shown, number}} of {{count, number}} customers",
     colCustomer: "Customer",
     colReference: "Tenant ID",
-    colRole: "Your role",
+    colRole: "Your access",
     addHead: "Add a customer",
     addNote:
       "Only a platform administrator can add a customer. Ask whoever runs this control plane to create the tenant ID.",
@@ -203,13 +206,36 @@ export const en = {
     renaming: "Saving…",
     renamed: "The display name has been changed.",
     notRenamed: "Not changed",
+
+    aboutLead: "The customer ID is permanent; an administrator can correct the display name.",
+    aboutNotLoaded:
+      "The book for {{tenantId}} could not be loaded, or you may not see it. Nothing has been changed.",
+    openSources: "Open data sources",
+    renameOnSources: "Correct the display name on Sources",
+    insideHead: "Inside this book",
+    insideLabel: "The divisions of {{tenantId}}",
+    insideSources: "Which account does the data come from?",
+    insideJournal: "Which runs succeeded or were refused?",
+    insideLake: "Which originals were preserved?",
+    insideModels: "How is the data transformed?",
+    insideReports: "Which questions do the figures answer?",
+    insidePeople: "Who can read and who can change things?",
   },
 
   sources: {
-    title: "Connected sources",
+    title: "Data sources",
+    lead: "See where data comes from, which connections need attention and how each read is scheduled.",
     none: "No sources are connected for this customer yet.",
     count_one: "{{count, number}} source on record.",
     count_other: "{{count, number}} sources on record.",
+    tallyLabel: "Narrow the list by state",
+    tallyConnections: "Connections",
+    tallyConnected: "Connected",
+    tallyAttention: "Needs attention",
+    tallyKinds: "Connector types",
+    searchLabel: "Find source or account",
+    searchPlaceholder: "Source name, email…",
+    noMatch: "No source matches this filter.",
     grantsHead: "Grants",
     notLoaded:
       "This customer’s grants could not be loaded, or you do not have access to them. Nothing has been changed.",
@@ -338,8 +364,8 @@ export const en = {
 
   lake: {
     head: "Lake",
-    title: "Raw lake",
-    lead: "What has actually landed for {{tenantId}}, before any transform.",
+    title: "Raw data lake",
+    lead: "Keep accounts, entities and payloads distinct. This is source evidence, not interpreted business metrics.",
     notLoaded: "The lake for {{tenantId}} could not be loaded.",
     emptyTitle: "Nothing has landed yet",
     emptyBody:
@@ -450,9 +476,15 @@ export const en = {
     live: "Present",
     deletedOn: "Deleted {{when}}",
     showPayload: "Show payload",
+    copyPayload: "Copy original string",
+    payloadCopied: "Original string copied.",
+    copyBlocked:
+      "The browser blocked the clipboard. Select the payload above and copy it by hand; no data was changed.",
+    adminOnlyNote:
+      "You can read this summary. Raw records, content search and the SQL console require administrator access.",
     noRows: "This stream has no records yet.",
 
-    runRows: "Only the rows that still carry run {{runId}}.",
+    runRows: "Only the rows that still carry {{runId}}.",
     runWrote_one: "This run wrote {{count, number}} row to this stream (new and changed).",
     runWrote_other: "This run wrote {{count, number}} rows to this stream (new and changed).",
     runRewritten_one:
@@ -580,7 +612,7 @@ export const en = {
     invitePlaceholder: "colleague@example.com",
     inviteHint:
       "They must sign in with this exact address. An invitation is not a password — it grants nothing until they prove they control the mailbox.",
-    roleLabel: "Role",
+    roleLabel: "Role in this customer",
     rightsLabel: "What each role may do in {{tenantId}}",
     rightsViewer:
       "Sees the connected sources, the run journal, the raw lake's summary, the models and macros, the document kinds, and who has access and who is invited; opens and runs saved questions and dashboards. Cannot write or save a question, or change anything else.",
@@ -596,12 +628,30 @@ export const en = {
     inviting: "Inviting…",
     sendInvitation: "Send invitation",
     adminOnly: "Only an admin of {{tenantId}} can invite someone.",
+
+    viewsLabel: "Ways to view people",
+    viewMembers_one: "Members · {{count, number}}",
+    viewMembers_other: "Members · {{count, number}}",
+    viewInvites_one: "Open invitations · {{count, number}}",
+    viewInvites_other: "Open invitations · {{count, number}}",
+    viewRoles: "Compare roles",
+    searchLabel: "Find an email address",
+    clearSearch: "Clear",
+    noMatch: "No address matches. Try another part of the address, or clear the search.",
+    captionFiltered_one: "{{shown, number}} of {{count, number}} person with access",
+    captionFiltered_other: "{{shown, number}} of {{count, number}} people with access",
+    waitingCaptionFiltered_one: "{{shown, number}} of {{count, number}} waiting to be accepted",
+    waitingCaptionFiltered_other: "{{shown, number}} of {{count, number}} waiting to be accepted",
+    you: "You",
+    removeLead:
+      "Ends membership in this customer only. The person's sign-in and the customer's data stay.",
+    grantedWithin: "Access is granted within: <name>{{name}}</name> · <id>{{tenantId}}</id>",
   },
 
   grant: {
-    markGranted: "Granted",
+    markGranted: "Connected",
     markPending: "Awaiting scope",
-    markLapsed: "Reconnect needed",
+    markLapsed: "Reconnect required",
     markAbsent: "Not granted",
     account: "Account",
     reads: "Reads",
@@ -650,7 +700,9 @@ export const en = {
     reconnect: "Reconnect {{name}}",
     connecting: "Opening {{name}}…",
     changeScope: "Change what syncs",
-    disconnect: "Disconnect",
+    disconnect: "Disconnect…",
+    disconnectLead: "Landed records stay in the raw lake.",
+    disconnectConfirm: "Disconnect {{account}}",
     disconnecting: "Disconnecting…",
     connectFailed: "This source could not be connected.",
     connectFailedFor: "{{name}} could not be connected.",
@@ -694,7 +746,9 @@ export const en = {
   },
 
   scopePicker: {
-    title: "Choose what is read",
+    title: "Edit read scope",
+    /** Above both steps: the account the edit is for, then its source ID. */
+    accountFor: "Account for this edit",
     leadGmail:
       "Choose the labels to read. Only message headers and matching attachments in those labels are read; no other label is read.",
     leadDrive:
@@ -759,6 +813,21 @@ export const en = {
     removePickNamed: "Remove {{name}} from the selection",
     nothingToChoose: "There is nothing to choose from yet.",
     save: "Save selection",
+    stepsLabel: "Scope steps",
+    stepChoose: "01 · Choose scope",
+    stepReview: "02 · Review & save",
+    next: "Next: review changes",
+    back: "Back to edit",
+    discard: "Discard changes",
+    reviewHead: "Review changes",
+    colPart: "Part of the choice",
+    colSaved: "Saved",
+    colWillApply: "Will apply",
+    rowReads: "What is read",
+    heldHead: "What happens to records already held",
+    leaving: "Leaving the scope: {{names}}",
+    subfoldersDropped:
+      "Subfolders no longer included: files inside subfolders of the chosen folders fall outside the new pick.",
     heldDrive:
       "On saving: files and folders the lake holds that this choice no longer reaches will be marked deleted at source by the next complete read. They stay in the lake, and are live again if a later choice reaches them.",
     heldGmail:
@@ -912,7 +981,7 @@ export const en = {
     detailNotLoaded: "This run's detail could not be loaded.",
     started: "Started",
     ended: "Ended",
-    trigger: "Started",
+    trigger: "Trigger",
     runId: "Run id",
     errorHead: "Error",
     entitiesHead: "By entity",
@@ -946,6 +1015,11 @@ export const en = {
     filteredEmpty: "{{source}} has no runs yet.",
     scopeAtStart: "Scope it read with",
     openWritten: "Open the records this run wrote to {{entity}}, in the raw lake",
+    accountLabel: "Source account",
+    allAccounts: "All accounts",
+    target: "Target",
+    otherRuns: "Other runs of this account",
+    inspectUpstream: "Inspect upstream",
 
     reason: {
       imageTooSmall: "Image too small to be a document",
@@ -1088,11 +1162,13 @@ export const en = {
       "A model is one SELECT over raw.records, built into a table in this customer's analytics schema. Create the first one from the template below.",
     emptyBodyViewer:
       "A model is one SELECT over raw.records, built into a table in this customer's analytics schema. An admin can create the first one.",
-    caption_one: "{{count, number}} model",
-    caption_other: "{{count, number}} models",
+    caption_one: "{{shown, number}} / {{count, number}} model",
+    caption_other: "{{shown, number}} / {{count, number}} models",
     colName: "Name",
-    colUpdated: "Updated",
+    colUpdated: "SQL updated",
     colBuild: "Last build",
+    colRun: "Build run",
+    colColumns: "Columns",
     buildOk: "Built",
     buildFailed: "Build failed",
     neverBuilt: "Never built",
@@ -1103,8 +1179,15 @@ export const en = {
     viewLineage: "Lineage",
     tallyLabel: "Narrow the list by last build",
     tallyAll: "All models",
-    captionFiltered_one: "{{shown, number}} of {{count, number}} model · {{state}}",
-    captionFiltered_other: "{{shown, number}} of {{count, number}} models · {{state}}",
+    tallySum_one: "{{parts}} = {{count, number}} model listed",
+    tallySum_other: "{{parts}} = {{count, number}} models listed",
+    searchLabel: "Find model",
+    sortLabel: "Sort",
+    sortAttention: "Attention first",
+    sortName: "Name A → Z",
+    clearFilters: "Clear filters",
+    captionFiltered_one: "{{shown, number}} / {{count, number}} model · {{state}}",
+    captionFiltered_other: "{{shown, number}} / {{count, number}} models · {{state}}",
     newHead: "New model",
     newLead:
       "A new model starts from one worked example: HubSpot deals, projected out of raw.records. Change the filter and the columns and it is yours.",
@@ -1120,7 +1203,11 @@ export const en = {
     openLineage: "Upstream lineage",
     backToList: "All models",
     unsaved: "Unsaved changes.",
+    saved: "Saved.",
     savedNote: "Saved. The table changes only when you Build.",
+    factSql: "SQL definition",
+    factColumns: "Built columns",
+    discard: "Discard draft",
     sqlLabel: "The model's SQL",
     readOnlyNote: "Only an admin can edit a model. You are reading the saved version.",
     save: "Save",
@@ -1128,7 +1215,8 @@ export const en = {
     notSaved: "Not saved",
     build: "Build",
     building: "Building…",
-    buildHint: "Build runs dbt for this model alone, from the saved version. Save first.",
+    buildHint:
+      "Build runs dbt for this model alone, from the saved version. Save or discard the draft first.",
     notBuilt: "Not built",
     buildOkHead: "Build succeeded",
     buildFailedHead: "Build failed",
@@ -1150,6 +1238,9 @@ export const en = {
     addColumnHint: "The column's name as in the SELECT. Suggestions come from the last build.",
     addColumn: "Add",
     noTests: "No tests yet.",
+    dependenciesHead: "Dependencies",
+    dependenciesLead:
+      "What the saved SQL declares: a ref() to another model and a source() on the raw lake, a macro's included. Nothing is inferred from similar names or from data.",
     referenceHead: "Reference",
     referenceLead:
       "The source, the platform's macros and the customer's own, which every model can use. Read-only.",
@@ -1160,7 +1251,7 @@ export const en = {
       "This customer has no macros of its own yet. One is saved with macros.save, from the CLI, MCP or an agent.",
     deleteHead: "Delete model",
     deleteLead:
-      "Delete {{name}} with the table it built and the rows its tests stored. A report reading that table will find nothing.",
+      "Delete {{name}} with the table it built and the rows its tests stored. A report reading that table will find nothing. Models that ref it keep the ref; lineage shows it as a missing dependency.",
     deleteConfirm: "Delete {{name}}",
     deleting: "Deleting…",
     notDeleted: "Not deleted",
@@ -1191,6 +1282,7 @@ export const en = {
     laneRaw: "Raw lake · declared dbt sources",
     laneInputs: "Raw lake and missing dependencies",
     lane: "Level {{step, number}}",
+    levelsHead: "All nodes by level",
     declaredSource: "▭ Declared dbt source",
     undeclaredMark: "? Upstream not declared",
     resetLayout: "Reset layout",
@@ -1325,6 +1417,7 @@ export const en = {
       "“incomplete”: this sum leaves out at least one missing value, so it is not the total.",
     boundMissing:
       "No maximum is set on this question, so no share is drawn. Its author sets one under Draw the result.",
+    otherTypes: "Other types",
   },
 
   reports: {
@@ -1342,6 +1435,12 @@ export const en = {
     clearSearch: "Clear search",
     noDashboardMatches: "No dashboard's name matches.",
     noQuestionMatches: "No question's name matches.",
+    viewsLabel: "Report views",
+    viewDashboards_one: "Dashboard · {{count, number}}",
+    viewDashboards_other: "Dashboards · {{count, number}}",
+    viewQuestions_one: "Saved question · {{count, number}}",
+    viewQuestions_other: "Saved questions · {{count, number}}",
+    readOnly: "Read-only access",
   },
 
   bi: {
@@ -1445,6 +1544,21 @@ export const en = {
     deleteConfirm: "Delete question",
     deleting: "Deleting…",
     notDeleted: "Not deleted",
+    copyLink: "Copy link",
+    linkCopied: "Copied, with the filters. Recipients still need access.",
+    copyBlocked:
+      "The browser refused the copy. Copy the address bar instead; the filters are in it.",
+    editQuestion: "Edit question",
+    done: "Done",
+    discard: "Discard",
+    workbenchHead: "Compose",
+    panesLabel: "Question views",
+    paneChart: "Visualization",
+    paneData: "Data",
+    paneDefinition: "Definition",
+    factKind: "Made in",
+    factTable: "Model table",
+    notCompiled: "This definition does not compile to SQL; a run says why.",
   },
 
   dashboard: {
@@ -1501,6 +1615,19 @@ export const en = {
     deleteHead: "Delete dashboard",
     deleteLead: "Remove {{name}}. The questions on it stay in the reports.",
     deleteConfirm: "Delete dashboard",
+    print: "Print / PDF",
+    viewData: "View data →",
+    orderHead: "Reading order",
+    orderLead:
+      "The top-left tile is read first. Moving a tile earlier or later swaps it with its neighbour; every place on the grid keeps its size.",
+    orderCaption_one: "{{count, number}} tile in reading order",
+    orderCaption_other: "{{count, number}} tiles in reading order",
+    orderPlace: "Place",
+    orderEarlier: "Earlier ↑",
+    orderLater: "Later ↓",
+    orderEarlierNamed: "Move {{name}} earlier",
+    orderLaterNamed: "Move {{name}} later",
+    orderRemoveNamed: "Remove {{name}} from the dashboard",
   },
 
   source: {

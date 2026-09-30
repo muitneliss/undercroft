@@ -203,6 +203,18 @@ export function edgeState(focus: Focus, from: string, to: string): NodeState {
 }
 
 /**
+ * A column's heading, on the board and in the text list's levels alike. The first holds the raw
+ * lake tables, and a missing dependency too, which has no chain below it to count; every later
+ * column is how many steps it stands from them.
+ */
+export function laneLabel(t: TFunction, column: number, missing: boolean): string {
+  if (column > 0) {
+    return t("lineage.lane", { step: column });
+  }
+  return missing ? t("lineage.laneInputs") : t("lineage.laneRaw");
+}
+
+/**
  * The words a node carries beside its name: what it is, and where it stands. The drawing and
  * the text list both print these, so a node on the selected chain says "upstream" or
  * "downstream" in words wherever it appears -- the dimming around it is never the only thing

@@ -1,0 +1,48 @@
+# The visual-regression tier (ADR 0099): apps/ui's screens, rendered in Chromium from fixtures,
+# compared with the baselines a person reviewed and committed.
+#
+# Its own workflow, on the paths that can change what a screen looks like, because it pulls the
+# Playwright image and emulates nothing here -- the runner IS the linux/amd64 the baselines are
+# taken on -- which is minutes a pull request that touches no screen should not pay. It needs
+# Docker and the network, which is why it is not in `task ci:verify`.
+#
+# The job runs exactly what a developer runs, `task ci:visual`. On a failure the capture and the
+# diff of every picture that moved (or had no baseline yet) are uploaded, so the reviewer sees
+# the change rather than a pixel count.
+name: visual
+
+on:
+  pull_request:
+    paths:
+      - "apps/ui/**"
+      - "packages/core/**"
+      - "packages/contracts/**"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "scripts/visual.ts"
+      - ".taskfiles/**"
+      - ".github/workflows/visual.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      # Only to run `scripts/visual.ts`, which drives Docker; the workspace is installed inside
+      # the container, from the same lockfile, so there is no `bun install` on the runner.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      - name: the screens match their reviewed baselines
+        run: task ci:visual
+      - name: upload the captures and diffs that did not match
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-diffs
+          path: apps/ui/.vitest-attachments/
+          if-no-files-found: ignore

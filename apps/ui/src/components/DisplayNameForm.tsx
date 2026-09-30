@@ -88,9 +88,13 @@ export function DisplayNameForm({
           />
         </div>
 
-        <button className="plate" disabled={rename.isPending} type="submit">
-          {rename.isPending ? t("tenants.renaming") : t("tenants.rename")}
-        </button>
+        {/* In a row, as the ingest key's Mint is: a bare plate in the form's column stretched
+            to the whole width of the leaf, a bar rather than a button. */}
+        <div className="row">
+          <button className="plate" disabled={rename.isPending} type="submit">
+            {rename.isPending ? t("tenants.renaming") : t("tenants.rename")}
+          </button>
+        </div>
       </form>
 
       {/* The server's own words. A refusal here is one the operator can act on -- the wrong

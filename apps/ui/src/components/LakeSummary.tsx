@@ -91,7 +91,7 @@ export function LakeSummary({
   return (
     <>
       <h1>{t("lake.title")}</h1>
-      <p className="prose prose--lead">{t("lake.lead", { tenantId })}</p>
+      <p className="prose prose--lead">{t("lake.lead")}</p>
 
       {nothing ? (
         <EmptyState
@@ -106,38 +106,40 @@ export function LakeSummary({
       ) : null}
 
       {entries.length > 0 ? (
-        <Table>
-          <TableCaption>{t("lake.indexCaption", { count: entries.length })}</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col">{t("lake.colSource")}</TableHead>
-              <TableHead scope="col">{t("lake.colHolds")}</TableHead>
-              <TableHead scope="col" className="num">
-                {t("lake.colHeld")}
-              </TableHead>
-              <TableHead scope="col">{t("lake.colAlso")}</TableHead>
-              <TableHead scope="col">{t("lake.colLatest")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.map((entry) => (
-              <IndexRow
-                key={streamKey(entry.stream)}
-                entry={entry}
-                source={sourceLabel(entry.stream.source, connections)}
-                locale={locale}
-                open={sameStream(entry.stream, openStream ?? null)}
-                refusalsOpen={
-                  entry.stream.kind === "documents" && openRefusals === entry.stream.source
-                }
-                onToggleRefusals={(): void => {
-                  toggleRefusals(tenantId, entry.stream.source);
-                }}
-                {...(hrefFor === undefined ? {} : { href: hrefFor(entry.stream) })}
-              />
-            ))}
-          </TableBody>
-        </Table>
+        <div className="table-scroll">
+          <Table>
+            <TableCaption>{t("lake.indexCaption", { count: entries.length })}</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">{t("lake.colSource")}</TableHead>
+                <TableHead scope="col">{t("lake.colHolds")}</TableHead>
+                <TableHead scope="col" className="num">
+                  {t("lake.colHeld")}
+                </TableHead>
+                <TableHead scope="col">{t("lake.colAlso")}</TableHead>
+                <TableHead scope="col">{t("lake.colLatest")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entries.map((entry) => (
+                <IndexRow
+                  key={streamKey(entry.stream)}
+                  entry={entry}
+                  source={sourceLabel(entry.stream.source, connections)}
+                  locale={locale}
+                  open={sameStream(entry.stream, openStream ?? null)}
+                  refusalsOpen={
+                    entry.stream.kind === "documents" && openRefusals === entry.stream.source
+                  }
+                  onToggleRefusals={(): void => {
+                    toggleRefusals(tenantId, entry.stream.source);
+                  }}
+                  {...(hrefFor === undefined ? {} : { href: hrefFor(entry.stream) })}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       ) : null}
     </>
   );
@@ -221,7 +223,7 @@ function IndexRow({
             />
           ) : null}
         </TableCell>
-        <TableCell className="datum datum--quiet">
+        <TableCell className="lake-index__newest datum datum--quiet">
           {relativeTime(entry.latestObservedAt, locale)}
         </TableCell>
       </TableRow>

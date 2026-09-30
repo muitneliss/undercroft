@@ -9,6 +9,10 @@
  * actually walks -- and every name downstream of it, what a failure here reaches. Where the
  * chain holds a missing dependency or an upstream that is not declared, it says so before the
  * names, because the paths stop there and must not read as complete.
+ *
+ * On a phone, where the board steps aside, a trace ends with every node by level, folded: the
+ * board's columns as lists, each node saying where it stands against the selection, so what the
+ * board would have shown around the chain is still there to read. On a desk the board is.
  */
 
 import type { TFunction } from "i18next";
@@ -21,6 +25,7 @@ import { NodeLink } from "@/components/LineageNode.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
 import {
   type Focus,
+  laneLabel,
   nodeState,
   nodeWords,
   PATH_LIMIT,
@@ -63,7 +68,10 @@ export function LineageTrace({
   return selected === null ? (
     <EveryModel graph={graph} tenantId={tenantId} />
   ) : (
-    <Trace focus={focus} graph={graph} selected={selected} tenantId={tenantId} />
+    <>
+      <Trace focus={focus} graph={graph} selected={selected} tenantId={tenantId} />
+      <Levels focus={focus} graph={graph} tenantId={tenantId} />
+    </>
   );
 }
 
@@ -183,6 +191,60 @@ function Path({
         ];
       })}
     </li>
+  );
+}
+
+/**
+ * Every node, column by column as the board lays them out, folded. Drawn on a phone only
+ * (`.lineage-levels`): on a desk the board beside it is this list. Each node carries its words
+ * -- what it is, and where it stands against the selection -- so the chain still reads without
+ * the board's ink and dimming.
+ */
+function Levels({
+  graph,
+  focus,
+  tenantId,
+}: {
+  graph: Graph;
+  focus: Focus;
+  tenantId: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const { placed, columns } = layout(graph);
+  const missing = placed.some((p) => p.column === 0 && p.node.kind === "missing");
+  const lanes = Array.from({ length: columns }, (_, column) =>
+    placed.filter((p) => p.column === column).map((p) => p.node),
+  );
+  return (
+    <details className="lineage-levels">
+      <summary className="label">{t("lineage.levelsHead")}</summary>
+      <div className="stack">
+        {lanes.map((nodes, column) => (
+          <section className="stack stack--tight" key={laneLabel(t, column, missing)}>
+            <h4 className="label">{laneLabel(t, column, missing)}</h4>
+            <ul className="lineage-names">
+              {nodes.map((node) => {
+                const state = nodeState(focus, node.id);
+                const words = nodeWords(t, node, state);
+                return (
+                  <li data-state={state} key={node.id}>
+                    <NodeLink
+                      className="journal__what"
+                      current={focus.selected?.id === node.id}
+                      node={node}
+                      tenantId={tenantId}
+                    >
+                      {node.name}
+                    </NodeLink>
+                    {words.length > 0 ? <span className="label">{words.join(" · ")}</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </details>
   );
 }
 

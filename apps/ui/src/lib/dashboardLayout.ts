@@ -90,6 +90,45 @@ export function inReadingOrder(layout: DashboardLayout): DashboardTile[] {
   return [...layout.tiles].sort((a, b) => a.y - b.y || a.x - b.x);
 }
 
+function placeOf(tile: DashboardTile): Omit<DashboardTile, "questionId"> {
+  return { x: tile.x, y: tile.y, w: tile.w, h: tile.h };
+}
+
+/**
+ * The layout with `questionId` one place earlier (`-1`) or later (`1`) in reading order.
+ *
+ * Reading order is not stored: it is where the tiles sit (`inReadingOrder`). So a move
+ * EXCHANGES the two questions' places -- each takes the other's cell, width and height --
+ * rather than nudging one tile's corner. Exchanging keeps the set of rectangles on the grid
+ * exactly as the author sized them, so a reorder never makes two tiles overlap, which
+ * moving one tile onto another's row would. The first tile moved earlier, or the last
+ * later, leaves the layout as it was.
+ */
+export function moveInReadingOrder(
+  layout: DashboardLayout,
+  questionId: string,
+  step: -1 | 1,
+): DashboardLayout {
+  const order = inReadingOrder(layout);
+  const at = order.findIndex((tile) => tile.questionId === questionId);
+  const moved = order[at];
+  const other = order[at + step];
+  if (moved === undefined || other === undefined) {
+    return layout;
+  }
+  return {
+    tiles: layout.tiles.map((tile) => {
+      if (tile.questionId === moved.questionId) {
+        return { questionId: tile.questionId, ...placeOf(other) };
+      }
+      if (tile.questionId === other.questionId) {
+        return { questionId: tile.questionId, ...placeOf(moved) };
+      }
+      return tile;
+    }),
+  };
+}
+
 /** The nine things a tile's controls can do to it, one cell at a time. */
 export const TILE_ACTIONS = [
   "left",

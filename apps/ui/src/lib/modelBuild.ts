@@ -85,3 +85,17 @@ export function buildFilter(params: URLSearchParams): BuildState | null {
   const value = params.get(BUILD_PARAM);
   return BUILD_STATES.find((state) => state === value) ?? null;
 }
+
+/**
+ * How many columns the model's table has, as its builds recorded them -- or `null`, which
+ * prints as MISSING, when that is not known.
+ *
+ * The columns are what the last SUCCESSFUL build found (`app.model.columns`), and the list is
+ * empty until one has succeeded. A SELECT always yields at least one column, so an empty list
+ * means "not known yet", never "zero": a model whose only build failed must not print 0.
+ */
+export function builtColumnCount(
+  lastBuild: { readonly columns: readonly string[] } | null,
+): number | null {
+  return lastBuild === null || lastBuild.columns.length === 0 ? null : lastBuild.columns.length;
+}

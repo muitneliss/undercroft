@@ -15,7 +15,7 @@
 import { describe, expect, test as it } from "bun:test";
 import { createMemoryRouter } from "react-router-dom";
 
-import { DIVISIONS, divisionPath } from "@/lib/divisions.ts";
+import { customerPagePath, DIVISIONS, divisionPath } from "@/lib/divisions.ts";
 import { consolePath } from "@/lib/lake.ts";
 import { appRoutes } from "@/routeTable.tsx";
 
@@ -89,6 +89,17 @@ describe("the lake's console", () => {
   /** And the index itself is untouched: the console did not swallow the division it sits in. */
   it("leaves the lake's own index where it was", () => {
     expect(opens("/tenants/CASE-0042/lake")).toBe("/tenants/:tenantId/lake");
+  });
+});
+
+describe("a customer's own page", () => {
+  /**
+   * One segment under the address that opens the book at Sources (pinned above, with the rail):
+   * the path the customer list links to must not fall to the catch-all, which would redirect the
+   * reader to the very list they pressed it on.
+   */
+  it("opens at its own route rather than falling to the catch-all", () => {
+    expect(opens(customerPagePath("CASE-0042"))).toBe("/tenants/:tenantId/about");
   });
 });
 

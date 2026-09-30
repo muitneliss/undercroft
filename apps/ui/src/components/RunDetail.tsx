@@ -10,7 +10,8 @@
  * every dbt step with its failing-row count. A section with nothing in it is not drawn --
  * an empty refusals table would say "refusals" over a run that refused nothing -- and a run
  * that recorded nothing beyond its outcome says so in one line. `RunFlow` is the one
- * exception: it always has at least its own outcome to draw, so it is never gated on `bare`.
+ * exception: it always has at least its own outcome to draw, so it is never gated on
+ * `recordedNothing`.
  *
  * An ingest run also names the scope it read with, as the run recorded it (ADR 0091) -- an em
  * dash for a run from before that was recorded, never the connection's scope today. And for an
@@ -18,6 +19,11 @@
  * wrote; a member or viewer reads the same figures with no link, because the rows behind them
  * are an admin's (the `lake.*` role gate) and a link that answered FORBIDDEN would be a promise
  * this leaf breaks.
+ *
+ * It also names what the run acted on and leads there (`RunTarget.tsx`): an ingest's account,
+ * opened on the Sources leaf with that account on show, and a one-model build's model, whose
+ * editor the target opens and whose declared upstream a plate at the foot draws. A build that
+ * recorded no model step names none -- the model is read off what dbt recorded, never guessed.
  */
 
 import { useTranslation } from "react-i18next";
@@ -27,16 +33,18 @@ import { REFUSAL_RETENTION_DAYS } from "@undercroft/contracts/runs";
 
 import type { RunDetail as RunDetailView } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
+import { Fact, Facts } from "@/components/Facts.tsx";
 import { RefusalRollup } from "@/components/RefusalRollup.tsx";
 import { RunEvents } from "@/components/RunEvents.tsx";
 import { RunFlow } from "@/components/RunFlow.tsx";
 import { RunProgress } from "@/components/RunProgress.tsx";
+import { RunDoors, TargetDoor } from "@/components/RunTarget.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StepsTable } from "@/components/StepsTable.tsx";
 import { lakeStreamPath, streamOfEntity } from "@/lib/lake.ts";
 import { formatCount, orMissing } from "@/lib/money.ts";
 import { feedEntries, runGauges } from "@/lib/runFeed.ts";
-import { runScopeSummary, triggerLabel } from "@/lib/runs.ts";
+import { type AccountName, runScopeSummary, runTarget, triggerLabel } from "@/lib/runs.ts";
 import { formatDateTime, formatDuration } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
@@ -87,27 +95,25 @@ function runDetailRefetchInterval(data: RunDetailView | undefined): number | fal
   return false;
 }
 
-/** One label over one datum, the pair the run's fact row is made of. */
-function Fact({
-  label,
-  value,
-  quiet = false,
-}: {
-  label: string;
-  value: string;
-  /** A value read only when something is wrong -- an id, a build tag -- sits back one tone. */
-  quiet?: boolean;
-}): React.JSX.Element {
+/**
+ * Whether the run recorded nothing beyond its outcome: no error, no count, no refusal, no step,
+ * no event and no run chained to either side -- the leaf then says so in one line.
+ */
+function recordedNothing(detail: RunDetailView, events: readonly unknown[]): boolean {
   return (
-    <span className="stack stack--tight">
-      <span className="label">{label}</span>
-      <span className={quiet ? "datum datum--quiet" : "datum"}>{value}</span>
-    </span>
+    detail.error === null &&
+    detail.entityCounts.length === 0 &&
+    detail.refusals.length === 0 &&
+    detail.steps.length === 0 &&
+    events.length === 0 &&
+    detail.parentRun === null &&
+    detail.childRun === null
   );
 }
 
 /**
- * The run's own facts, above everything it did: when, how long, who asked, and which build.
+ * The run's own facts, above everything it did: what it acted on, when, how long, who asked,
+ * and which build.
  *
  * Its own component because none of it is a decision -- the decisions (which sections exist,
  * whether the run is still going) stay in the leaf below, the same split `RunTable` makes in
@@ -116,39 +122,49 @@ function Fact({
 function RunFacts({
   detail,
   locale,
+  tenantId,
+  accounts,
 }: {
   detail: RunDetailView;
   locale: ReturnType<typeof useUiStore.getState>["locale"];
+  tenantId: string;
+  accounts: readonly AccountName[];
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const target = runTarget(detail);
 
   return (
     <>
-      <div className="row">
-        <Fact label={t("journal.started")} value={formatDateTime(detail.startedAt, locale)} />
-        <Fact label={t("journal.ended")} value={formatDateTime(detail.endedAt, locale)} />
-        <Fact
-          label={t("journal.colDuration")}
-          value={formatDuration(detail.startedAt, detail.endedAt, locale)}
-        />
-        <Fact label={t("journal.trigger")} value={triggerLabel(t, detail.trigger)} />
-        <Fact label={t("journal.runId")} value={detail.id} quiet={true} />
+      <Facts>
+        {target === null ? null : (
+          <Fact label={t("journal.target")}>
+            <TargetDoor target={target} tenantId={tenantId} accounts={accounts} />
+          </Fact>
+        )}
+        <Fact label={t("journal.started")}>{formatDateTime(detail.startedAt, locale)}</Fact>
+        <Fact label={t("journal.ended")}>{formatDateTime(detail.endedAt, locale)}</Fact>
+        <Fact label={t("journal.colDuration")}>
+          {formatDuration(detail.startedAt, detail.endedAt, locale)}
+        </Fact>
+        <Fact label={t("journal.trigger")}>{triggerLabel(t, detail.trigger)}</Fact>
+        <Fact label={t("journal.runId")} quiet={true}>
+          {detail.id}
+        </Fact>
         {/* Which build produced this run. Here rather than in a footer because the question
             it answers is asked ABOUT a run and beside its numbers: a run that behaves unlike
             the one an hour before it is very often a run on a different build, and that was
             invisible until it was recorded. An em dash when the image did not say -- the
             Absence Rule, applied to our own provenance. ADR 0039. */}
-        <Fact label={t("journal.release")} value={orMissing(detail.releaseTag)} quiet={true} />
-      </div>
-
-      {/* What this run read with, as it recorded it when it read. Only an ingest reads a
-          scope; an em dash is a run that recorded none, and printing the connection's scope
-          today in its place would claim this run read with it. ADR 0091. */}
-      {detail.kind === "ingest" ? (
-        <div className="row">
-          <Fact label={t("journal.scopeAtStart")} value={orMissing(runScopeSummary(t, detail))} />
-        </div>
-      ) : null}
+        <Fact label={t("journal.release")} quiet={true}>
+          {orMissing(detail.releaseTag)}
+        </Fact>
+        {/* What this run read with, as it recorded it when it read. Only an ingest reads a
+            scope; an em dash is a run that recorded none, and printing the connection's scope
+            today in its place would claim this run read with it. ADR 0091. */}
+        {detail.kind === "ingest" ? (
+          <Fact label={t("journal.scopeAtStart")}>{orMissing(runScopeSummary(t, detail))}</Fact>
+        ) : null}
+      </Facts>
 
       {/* How deep the queue was when this run drew its batch -- the line that tells a large
           refusal count from a fault. A run refusing 245 of 500 with 2,337 behind it is
@@ -331,6 +347,10 @@ export function RunDetail({
   );
   // Whose leaf this is, for the counts' doors. Cached from the book's own head.
   const tenant = trpc.tenants.get.useQuery({ tenantId });
+  // Which mailbox of two the target is (`sourceLabel`). The same cached query the ledger around
+  // this leaf already made, so it costs no request; while it is missing the target is named by
+  // the account's id, which is ugly but true.
+  const accounts = trpc.connections.list.useQuery({ tenantId }).data ?? [];
   // The feed is read on its own and faster: it is the part that changes while somebody is
   // watching, where the detail beside it only changes when the run ends.
   const running = run.data?.status === "running";
@@ -363,21 +383,13 @@ export function RunDetail({
   // why a reading is not a line.
   const gauges = runGauges(detail, events);
   const entries = feedEntries(events);
-  const bare =
-    detail.error === null &&
-    detail.entityCounts.length === 0 &&
-    detail.refusals.length === 0 &&
-    detail.steps.length === 0 &&
-    events.length === 0 &&
-    detail.parentRun === null &&
-    detail.childRun === null;
 
   return (
     <div className="hinge stack">
       <span className="hinge__punch hinge__punch--a" aria-hidden="true" />
       <span className="hinge__punch hinge__punch--b" aria-hidden="true" />
 
-      <RunFacts detail={detail} locale={locale} />
+      <RunFacts detail={detail} locale={locale} tenantId={tenantId} accounts={accounts} />
 
       {detail.error === null ? null : (
         <Errata heading={t("journal.errorHead")}>{detail.error}</Errata>
@@ -402,7 +414,11 @@ export function RunDetail({
 
       {detail.steps.length > 0 ? <StepsTable steps={detail.steps} locale={locale} /> : null}
 
-      {bare ? <p className="note">{t("journal.nothingRecorded")}</p> : null}
+      {recordedNothing(detail, events) ? (
+        <p className="note">{t("journal.nothingRecorded")}</p>
+      ) : null}
+
+      <RunDoors target={runTarget(detail)} tenantId={tenantId} runId={detail.id} />
     </div>
   );
 }

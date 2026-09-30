@@ -6,6 +6,10 @@
  * has its own head on the page, and the route above keeps what they share: the draft, the two
  * mutations, and whether the leaf is being edited -- which lives in the URL rather than in
  * the store, so a reload mid-edit lands back in edit mode.
+ *
+ * Every role can take the dashboard away: its address, which carries the filter values, and
+ * the browser's print, which the Reports stylesheet reduces to the filters and the tiles.
+ * Neither calls the server. What is only chrome on screen is marked `print-omit`.
  */
 
 import { useId } from "react";
@@ -13,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import type { QuestionView } from "@/api/types.ts";
+import { CopyLink } from "@/components/CopyLink.tsx";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { QuestionCard } from "@/components/QuestionCard.tsx";
@@ -42,6 +47,7 @@ export function DashboardHead({
   busy,
   save,
   onEdit,
+  onDiscard,
 }: {
   tenantId: string;
   draft: DashboardDraft;
@@ -51,6 +57,8 @@ export function DashboardHead({
   busy: boolean;
   save: Save;
   onEdit: (on: boolean) => void;
+  /** Drop the draft's changes: back to what is saved, or out of a dashboard never saved. */
+  onDiscard: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const dNameId = useId();
@@ -87,32 +95,54 @@ export function DashboardHead({
           </div>
         ) : null
       ) : (
-        <p className="note">
+        <p className="note print-omit">
           {draft.id === null ? t("dashboard.viewerNew") : t("dashboard.viewerNote")}
         </p>
       )}
 
-      {canAuthor ? (
-        <DashboardVerbs
-          tenantId={tenantId}
-          draft={draft}
-          edit={edit}
-          valid={valid}
-          busy={busy}
-          save={save}
-          onEdit={onEdit}
-        />
-      ) : null}
+      {/* One toolbar, as the design sets it: the author's verbs, then what every role may do
+          with the dashboard as it stands -- print it, or copy its address. */}
+      <div className="row print-omit">
+        {canAuthor ? (
+          <DashboardVerbs
+            tenantId={tenantId}
+            draft={draft}
+            edit={edit}
+            valid={valid}
+            busy={busy}
+            save={save}
+            onEdit={onEdit}
+            onDiscard={onDiscard}
+          />
+        ) : null}
+        {draft.id === null ? null : (
+          <>
+            <button
+              className="plate"
+              type="button"
+              onClick={(): void => {
+                globalThis.print();
+              }}
+            >
+              {t("dashboard.print")}
+            </button>
+            <CopyLink />
+          </>
+        )}
+        {canAuthor ? <DraftNote draft={draft} save={save} /> : null}
+      </div>
       {save.isError ? <Errata heading={t("bi.notSaved")} live={true} error={save.error} /> : null}
     </div>
   );
 }
 
 /**
- * Edit, Save, and what the draft's state says about each.
+ * Edit, Save and Discard, set into the head's toolbar.
  *
  * Save is disabled while a filter is unnamed or named twice, because the server would refuse
  * it -- a refusal after the press is a worse way to learn than a plate that will not go down.
+ * Discard is offered while editing and goes down only when there is something to drop; a
+ * dashboard never saved always has.
  */
 function DashboardVerbs({
   tenantId,
@@ -122,6 +152,7 @@ function DashboardVerbs({
   busy,
   save,
   onEdit,
+  onDiscard,
 }: {
   tenantId: string;
   draft: DashboardDraft;
@@ -130,12 +161,13 @@ function DashboardVerbs({
   busy: boolean;
   save: Save;
   onEdit: (on: boolean) => void;
+  onDiscard: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const dirty = isDashboardDirty(draft);
 
   return (
-    <div className="row">
+    <>
       <button
         className="plate"
         type="button"
@@ -161,15 +193,32 @@ function DashboardVerbs({
       >
         {save.isPending ? t("bi.saving") : t("bi.save")}
       </button>
-      {dirty ? (
-        <span className="datum datum--quiet">{t("bi.unsaved")}</span>
-      ) : save.isSuccess ? (
-        <span className="datum datum--quiet" role="status">
-          {t("bi.savedNote")}
-        </span>
+      {edit ? (
+        <button className="plate" disabled={busy || !dirty} type="button" onClick={onDiscard}>
+          {t("bi.discard")}
+        </button>
       ) : null}
-    </div>
+    </>
   );
+}
+
+/** What the draft's state says about Save, at the end of the toolbar. */
+function DraftNote({
+  draft,
+  save,
+}: {
+  draft: DashboardDraft;
+  save: Save;
+}): React.JSX.Element | null {
+  const { t } = useTranslation();
+  if (isDashboardDirty(draft)) {
+    return <span className="datum datum--quiet">{t("bi.unsaved")}</span>;
+  }
+  return save.isSuccess ? (
+    <span className="datum datum--quiet" role="status">
+      {t("bi.savedNote")}
+    </span>
+  ) : null;
 }
 
 /** The grid itself, and -- while editing -- the one question that can be added to it. */
@@ -263,9 +312,9 @@ export function DeleteBand({
 
   return (
     <>
-      <Separator className="band-rule" />
-      <div className="head">{t("dashboard.deleteHead")}</div>
-      <div className="body stack">
+      <Separator className="band-rule print-omit" />
+      <div className="head print-omit">{t("dashboard.deleteHead")}</div>
+      <div className="body stack print-omit">
         <p className="prose">{t("dashboard.deleteLead", { name: draft.name })}</p>
         <details className="tokenform">
           <summary className="plate">{t("dashboard.deleteHead")}</summary>

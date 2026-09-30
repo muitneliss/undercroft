@@ -210,6 +210,13 @@
                   "bun:test": {
                     "importNames": ["mock", "spyOn", "jest"],
                     "message": "Do not mock. Use the real in-memory implementation from @undercroft/testing. See .claude/rules/tests.md."
+                  },
+                  // Vitest is here for the visual tier alone (ADR 0099), and `vi` is its whole
+                  // mocking surface -- `vi.mock`, `vi.fn`, fake timers, `vi.stubGlobal`. The
+                  // no-mocks plugin catches three of those spellings; this closes the door.
+                  "vitest": {
+                    "importNames": ["vi", "vitest"],
+                    "message": "Do not mock. The visual tier renders the real app; stop the clock with the freezeClock command. See .claude/rules/tests.md and ADR 0099."
                   }
                 }
               }
@@ -452,7 +459,8 @@
     // `apps/desktop/src/view`, is a browser and keeps the rule, like `apps/ui/src`.
     //
     // `vite.config.ts` and `src/test/setup.ts` live inside `apps/ui` but run on Node and Bun
-    // respectively, never in the browser.
+    // respectively, never in the browser. `vitest.config.ts` runs on Node too: it is the Vitest
+    // server that drives Chromium, not a page (ADR 0099).
     {
       "includes": [
         "apps/cli/**",
@@ -468,6 +476,7 @@
         "scripts/**",
         ".claude/**",
         "apps/ui/vite.config.ts",
+        "apps/ui/vitest.config.ts",
         "apps/ui/src/test/setup.ts"
       ],
       "linter": { "rules": { "correctness": { "noNodejsModules": "off" } } }
@@ -530,7 +539,9 @@
         // AI SDK adds 182 kB to the entry chunk.
         "apps/ui/src/components/Book.tsx",
         "apps/ui/src/components/LakeConsole.tsx",
-        "apps/ui/src/components/QuestionBands.tsx",
+        // `QuestionBands.tsx` was here until the definition's leaf moved into
+        // `QuestionDefinition.tsx`, which took the lazy SQL editor with it.
+        "apps/ui/src/components/QuestionDefinition.tsx",
         // `QuestionResult.tsx` was here until the drawing moved into `ResultReading.tsx`,
         // which took `lazy` and `Suspense` with it; the rule is back on for the first.
         "apps/ui/src/components/ResultReading.tsx",
@@ -728,6 +739,14 @@
       "includes": ["apps/ui/src/styles/landing-cover.css"],
       "linter": { "rules": { "nursery": { "useBaseline": "off" } } }
     },
+    // The visual tier's motion stop (ADR 0099): four `!important` durations that must beat
+    // every duration the app's own rules set, whatever their specificity, so an animation that
+    // starts after the page settled is still at its end in the picture. A test-only sheet the
+    // app never loads; `noImportantStyles` stays on for every stylesheet that ships.
+    {
+      "includes": ["apps/ui/src/test/visual.css"],
+      "linter": { "rules": { "complexity": { "noImportantStyles": "off" } } }
+    },
     // Same parameter-property reasoning for the one error class here.
     {
       "includes": ["packages/contracts/src/loadSpec.ts"],
@@ -820,17 +839,19 @@
       "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "off" } } }
     },
 
-    // Seven entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
+    // Eight entry points whose SHAPE is dictated by the thing that loads them: Bun reads a
     // default export carrying `port` and `fetch` to start a server, and Vite reads a default
-    // export from its config, as Astro does from `astro.config.ts` and Electrobun's toolchain
-    // from `electrobun.config.ts` and `hutch.config.ts`. A named export is not an option a
-    // caller would accept. `embedded.d.ts` declares what Bun's text loader hands an
+    // export from its config, as Vitest does from `vitest.config.ts`, Astro from
+    // `astro.config.ts` and Electrobun's toolchain from `electrobun.config.ts` and
+    // `hutch.config.ts`. A named export is not an option a caller would accept.
+    // `embedded.d.ts` declares what Bun's text loader hands an
     // `import ... with { type: "text" }` -- a default export is the only shape it has.
     {
       "includes": [
         "apps/*/src/main.ts",
         "apps/worker/src/server.ts",
         "apps/ui/vite.config.ts",
+        "apps/ui/vitest.config.ts",
         "apps/blog/astro.config.ts",
         "apps/desktop/electrobun.config.ts",
         "apps/desktop/hutch.config.ts",
@@ -1068,6 +1089,16 @@
     {
       "includes": ["packages/db/src/repos/**"],
       "linter": { "rules": { "complexity": { "useMaxParams": "off" } } }
+    },
+
+    // The visual tier's harness (ADR 0099) is not a suite by name, but its whole job is the
+    // assertion every visual test shares: wait for the page to settle, refuse a procedure the
+    // fixtures left unanswered, match the screenshot with animations stopped. Three findings,
+    // each an `expect` in the helper that names that check once -- the reason the suite
+    // override below gives for switching this rule off in every test file.
+    {
+      "includes": ["apps/ui/src/test/visual.tsx"],
+      "linter": { "rules": { "suspicious": { "noMisplacedAssertion": "off" } } }
     },
 
     // Rules whose reason is "because it is a test" -- true of every test file, identically,

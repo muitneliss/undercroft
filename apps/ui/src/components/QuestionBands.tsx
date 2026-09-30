@@ -1,38 +1,39 @@
 /**
- * The bands one open question is set in: its name, its definition, its parameters, its
- * result, and the one that deletes it.
+ * The bands one open question is set in: its title and verbs, its parameters, and the one
+ * that deletes it. How it is defined is `QuestionDefinition.tsx`'s.
  *
  * Split out of `routes/Question.tsx`, which held the whole leaf in one function. The split
  * follows the rules on the page: each band is a separate decision with its own head, and the
  * route above composes them and owns the mutations they share -- `busy` means "one request is
  * in flight", and it has to mean that across every band or two of them race.
  *
+ * A question is READ first, as a dashboard is: its title, its parameters and its answer. An
+ * author turns to the workbench with Edit question (`?edit=1`, in the address so a reload
+ * mid-edit lands back in it), where the name, the definition, Discard and Delete are; a new
+ * question has nothing to read and opens there. Save sits with Edit in both, as it does on a
+ * dashboard, because a draft changed and left unsaved is still visible from the reading page.
+ *
  * Nothing here interpolates a parameter into SQL. `{{name}}` holes are collected from the
  * compiled text, filled from the URL, and bound by the server; a hole left empty refuses the
  * run before it is sent rather than running a query with a blank in it.
  */
 
-import { Suspense, lazy, useId } from "react";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
-import type { SchemaView } from "@/api/types.ts";
-import { Errata, type ServerError } from "@/components/Errata.tsx";
-import { QuestionBuilder } from "@/components/QuestionBuilder.tsx";
-import { Skeleton } from "@/components/Skeleton.tsx";
+import { CopyLink } from "@/components/CopyLink.tsx";
+import { Errata } from "@/components/Errata.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
-import type { QuestionDraft } from "@/lib/questionDraft.ts";
+import { withPoint } from "@/lib/chartData.ts";
 import { divisionPath } from "@/lib/divisions.ts";
 import { withParam } from "@/lib/params.ts";
+import { isQuestionDirty, type QuestionDraft } from "@/lib/questionDraft.ts";
 import { dashboardBack } from "@/lib/reportLinks.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
-const SqlEditor = lazy(() =>
-  import("@/components/SqlEditor.tsx").then((module) => ({ default: module.SqlEditor })),
-);
-
-/** What an unsaved question's editor is keyed by, so a new one does not inherit a draft. */
+/** The id a dashboard never saved stands under in the address; it has no name to read. */
 const NEW = "new";
 
 /** The parameters a run needs, as `paramsFromSearch` resolved them against the URL. */
@@ -42,6 +43,7 @@ export interface BoundParams {
 }
 
 type Remove = ReturnType<typeof trpc.bi.questions.delete.useMutation>;
+type Save = ReturnType<typeof trpc.bi.questions.save.useMutation>;
 
 /**
  * The way back to the dashboard this question was opened from, on the values it had.
@@ -69,19 +71,33 @@ function DashboardBackLink({ tenantId }: { tenantId: string }): React.JSX.Elemen
   );
 }
 
-/** The question's title and, for an author, the field that changes it. */
+/** What the title band's verbs do; the route owns the address and the draft they change. */
+export interface HeadActions {
+  readonly save: Save;
+  readonly busy: boolean;
+  readonly onEdit: (on: boolean) => void;
+  /** Drop the draft's changes: back to what is saved, or out of a question never saved. */
+  readonly onDiscard: () => void;
+}
+
+/**
+ * The question's title, the ways back, and the verbs: for an author, Edit or Done, Save and
+ * (while editing) Discard; for every role, Copy link on a saved question.
+ */
 export function QuestionHead({
   tenantId,
   draft,
   canAuthor,
+  edit,
+  actions,
 }: {
   tenantId: string;
   draft: QuestionDraft;
   canAuthor: boolean;
+  edit: boolean;
+  actions: HeadActions;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const qNameId = useId();
-  const setQuestionName = useUiStore((state) => state.setQuestionName);
 
   return (
     <div className="body stack">
@@ -94,155 +110,129 @@ export function QuestionHead({
       <h1>{draft.name === "" ? t("bi.untitled") : draft.name}</h1>
 
       {canAuthor ? (
-        <div className="field">
-          <label className="label" htmlFor={qNameId}>
-            {t("bi.nameLabel")}
-          </label>
-          <input
-            autoComplete="off"
-            className="input"
-            id={qNameId}
-            maxLength={120}
-            placeholder={t("bi.namePlaceholder")}
-            type="text"
-            value={draft.name}
-            onChange={(event): void => {
-              setQuestionName(event.currentTarget.value);
-            }}
-          />
-        </div>
+        edit ? (
+          <NameField name={draft.name} />
+        ) : null
       ) : (
         <p className="note">{draft.id === null ? t("bi.viewerNew") : t("bi.viewerNote")}</p>
       )}
+      {/* One toolbar, as on a dashboard: the author's verbs, then the link every role may copy
+          of a saved question, then what the draft's state says. */}
+      <div className="row">
+        {canAuthor ? (
+          <QuestionVerbs tenantId={tenantId} draft={draft} edit={edit} actions={actions} />
+        ) : null}
+        {draft.id === null ? null : <CopyLink />}
+        {canAuthor ? <DraftNote draft={draft} save={actions.save} /> : null}
+      </div>
+      {actions.save.isError ? (
+        <Errata heading={t("bi.notSaved")} live={true} error={actions.save.error} />
+      ) : null}
+    </div>
+  );
+}
+
+function NameField({ name }: { name: string }): React.JSX.Element {
+  const { t } = useTranslation();
+  const qNameId = useId();
+  const setQuestionName = useUiStore((state) => state.setQuestionName);
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor={qNameId}>
+        {t("bi.nameLabel")}
+      </label>
+      <input
+        autoComplete="off"
+        className="input"
+        id={qNameId}
+        maxLength={120}
+        placeholder={t("bi.namePlaceholder")}
+        type="text"
+        value={name}
+        onChange={(event): void => {
+          setQuestionName(event.currentTarget.value);
+        }}
+      />
     </div>
   );
 }
 
 /**
- * How the question is defined: built in the form, or written as SQL.
- *
- * A viewer sees the compiled text and no editor. Switching to SQL is one way on purpose --
- * it starts from the text the builder compiled, so what runs is what was on screen, and
- * there is no second compiler that could disagree with the server's.
+ * Edit or Done, Save and Discard, set into the head's toolbar. Done is not offered on a
+ * question never saved, which has no reading page to return to; Discard is, and leaves it.
+ * An untitled question is saved as "untitled".
  */
-export function DefinitionBand({
+function QuestionVerbs({
   tenantId,
   draft,
-  schema,
-  canAuthor,
-  sqlText,
-  compileError,
+  edit,
+  actions,
 }: {
   tenantId: string;
   draft: QuestionDraft;
-  schema: SchemaView;
-  canAuthor: boolean;
-  sqlText: string;
-  compileError: ServerError | null;
+  edit: boolean;
+  actions: HeadActions;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const setQuestionSql = useUiStore((state) => state.setQuestionSql);
-  const visual = draft.definition.kind === "visual" ? draft.definition : null;
-
-  if (!canAuthor) {
-    return (
-      <>
-        <Separator className="band-rule" />
-        <div className="head">{t("bi.compiledHead")}</div>
-        <div className="body stack">
-          <pre className="payload__text">{sqlText}</pre>
-        </div>
-      </>
-    );
-  }
+  const { save, busy, onEdit, onDiscard } = actions;
+  const dirty = isQuestionDirty(draft);
 
   return (
     <>
-      <Separator className="band-rule" />
-      <div className="head">{visual === null ? t("bi.kindSql") : t("bi.builderHead")}</div>
-      <div className="body stack">
-        {visual === null ? (
-          <Suspense fallback={<Skeleton rows={6} />}>
-            <SqlEditor
-              key={`${tenantId}/${draft.id ?? NEW}`}
-              value={draft.definition.kind === "sql" ? draft.definition.sql : ""}
-              onChange={setQuestionSql}
-              label={t("bi.sqlLabel")}
-            />
-          </Suspense>
-        ) : (
-          <VisualDefinitionBand
-            schema={schema}
-            visual={visual}
-            sqlText={sqlText}
-            compileError={compileError}
-          />
-        )}
-      </div>
+      {draft.id === null ? null : (
+        <button
+          className="plate"
+          type="button"
+          onClick={(): void => {
+            onEdit(!edit);
+          }}
+        >
+          {edit ? t("bi.done") : t("bi.editQuestion")}
+        </button>
+      )}
+      <button
+        className="plate plate--primary"
+        disabled={busy || !dirty}
+        type="button"
+        onClick={(): void => {
+          save.mutate({
+            tenantId,
+            ...(draft.id === null ? {} : { id: draft.id }),
+            name: draft.name === "" ? t("bi.untitled") : draft.name,
+            definition: draft.definition,
+            chart: draft.chart,
+          });
+        }}
+      >
+        {save.isPending ? t("bi.saving") : t("bi.save")}
+      </button>
+      {edit ? (
+        <button className="plate" disabled={busy || !dirty} type="button" onClick={onDiscard}>
+          {t("bi.discard")}
+        </button>
+      ) : null}
     </>
   );
 }
 
-/** The builder, the SQL it compiles to, and the one-way door out of it. */
-function VisualDefinitionBand({
-  schema,
-  visual,
-  sqlText,
-  compileError,
+/** What the draft's state says about Save, at the end of the toolbar. */
+function DraftNote({
+  draft,
+  save,
 }: {
-  schema: SchemaView;
-  visual: Extract<QuestionDraft["definition"], { kind: "visual" }>;
-  sqlText: string;
-  compileError: ServerError | null;
-}): React.JSX.Element {
+  draft: QuestionDraft;
+  save: Save;
+}): React.JSX.Element | null {
   const { t } = useTranslation();
-  const patchQuestionVisual = useUiStore((state) => state.patchQuestionVisual);
-  const switchQuestionToSql = useUiStore((state) => state.switchQuestionToSql);
-
-  if (schema.tables.length === 0) {
-    return (
-      <>
-        <p className="note">{t("bi.noTables")}</p>
-        <div className="row">
-          <button
-            className="plate"
-            type="button"
-            onClick={(): void => {
-              switchQuestionToSql(sqlText === "" ? "select 1 as n" : sqlText);
-            }}
-          >
-            {t("bi.switchToSql")}
-          </button>
-        </div>
-      </>
-    );
+  if (isQuestionDirty(draft)) {
+    return <span className="datum datum--quiet">{t("bi.unsaved")}</span>;
   }
-
-  return (
-    <>
-      <QuestionBuilder schema={schema} definition={visual} onPatch={patchQuestionVisual} />
-      <span className="label">{t("bi.compiledHead")}</span>
-      {compileError === null ? (
-        <pre className="payload__text">{sqlText}</pre>
-      ) : (
-        <Errata heading={t("common.notLoaded")} error={compileError} />
-      )}
-      <div className="row">
-        <button
-          className="plate"
-          disabled={sqlText === ""}
-          title={t("bi.switchHint")}
-          type="button"
-          onClick={(): void => {
-            switchQuestionToSql(sqlText);
-          }}
-        >
-          {t("bi.switchToSql")}
-        </button>
-        <span className="datum datum--quiet">{t("bi.switchHint")}</span>
-      </div>
-    </>
-  );
+  return save.isSuccess ? (
+    <span className="datum datum--quiet" role="status">
+      {t("bi.savedNote")}
+    </span>
+  ) : null;
 }
 
 /**
@@ -278,7 +268,8 @@ export function ParamsBand({
           onSubmit={(event): void => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
-            let next = search;
+            // A selected point names a row of the answer it was chosen on, not of the next one.
+            let next = withPoint(search, null);
             for (const name of names) {
               next = withParam(next, name, String(data.get(name) ?? "").trim());
             }

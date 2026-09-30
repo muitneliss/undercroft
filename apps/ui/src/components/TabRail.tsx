@@ -37,11 +37,15 @@
 // prefix, so `/tenants` stayed active inside `/tenants/CASE-.../lake` and two
 // tabs rendered as the current one -- two punched holes in a strip whose whole
 // job is saying which section you are in. The division is already known here.
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { letteringOn } from "@/lib/acetate.ts";
 import { DIVISIONS, type DivisionId, divisionPath } from "@/lib/divisions.ts";
+
+/** The phone layout's breakpoint, where the strip sits at the foot and scrolls sideways. */
+const FOOT_STRIP = "(max-width: 760px)";
 
 export function TabRail({
   tenantId,
@@ -51,9 +55,44 @@ export function TabRail({
   current: DivisionId;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const railRef = useRef<HTMLElement>(null);
+
+  /**
+   * On a phone the strip is wider than the screen, and a division past its edge would open
+   * with no tab in view saying which it is. So the current tab is brought into view whenever
+   * it changes -- and whenever the screen narrows past the breakpoint, since a window made
+   * narrow (or a tablet turned) moves the strip to the foot with its first tabs showing, and a
+   * page opened wide and then narrowed would otherwise never say where it is.
+   *
+   * Only below the breakpoint: on a wide screen every tab is already in view. At once rather
+   * than smoothly, because every other movement in the book is stepped (ADR 0014) and a smooth
+   * scroll is an easing curve by another name. A ref, not state: it is the DOM node.
+   *
+   * The STRIP scrolls, sideways, and nothing else. `scrollIntoView` also scrolls every
+   * ancestor, the window included, to fit the raised current tab of the sticky strip -- so
+   * opening a division nudged the whole page a few pixels up, and a capture of it moved with it.
+   */
+  useEffect(() => {
+    const strip = globalThis.matchMedia(FOOT_STRIP);
+    function reveal(): void {
+      const rail = railRef.current;
+      const tab = rail?.querySelector(`[data-division="${current}"]`);
+      if (!strip.matches || rail === null || tab === null || tab === undefined) {
+        return;
+      }
+      const offset = tab.getBoundingClientRect().left - rail.getBoundingClientRect().left;
+      const centred = offset - (rail.clientWidth - tab.getBoundingClientRect().width) / 2;
+      rail.scrollTo({ left: rail.scrollLeft + centred });
+    }
+    reveal();
+    strip.addEventListener("change", reveal);
+    return (): void => {
+      strip.removeEventListener("change", reveal);
+    };
+  }, [current]);
 
   return (
-    <nav className="rail" aria-label={t("nav.sections")}>
+    <nav className="rail" aria-label={t("nav.sections")} ref={railRef}>
       {DIVISIONS.map((div) => {
         const locked = div.scoped && !tenantId;
         // Lettering is chosen per hue rather than fixed: white reads at 2.09:1
@@ -85,6 +124,7 @@ export function TabRail({
             className="rail__tab"
             style={style}
             to={divisionPath(div.id, tenantId)}
+            data-division={div.id}
             {...(div.id === current ? { "aria-current": "page" as const } : {})}
           >
             {t(div.labelKey)}

@@ -11,288 +11,24 @@
  * rejected, because the role is already known here — but hiding them is courtesy, not the
  * control: the procedures refuse regardless of what the browser renders.
  *
- * No `useState`, per `state.md`, and nothing here needs it. The two inputs are uncontrolled
- * and read through refs on submit; everything else is server state in the query cache or
+ * No `useState`, per `state.md`, and nothing here needs it. The two invitation inputs are
+ * uncontrolled and read through refs on submit; the open view and the address search are the
+ * page's address (`?view=`, `?q=`); everything else is server state in the query cache or
  * mutation state on the mutation. The one thing that would otherwise want a local flag —
  * "did the invitation email go out?" — is read from the mutation's own result, which is the
  * only thing that actually knows.
  */
 
-import type { Locale } from "@undercroft/core/locale";
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { Errata } from "@/components/Errata.tsx";
+import { InvitePanel, OpenInvitations, RoleRights } from "@/components/Invitations.tsx";
 import { Roster } from "@/components/Roster.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
-import { isRole, ROLES, type Role } from "@/lib/roles.ts";
-import { formatDate } from "@/lib/when.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
-
-/**
- * Withdrawing one open invitation: two presses, the second naming the address.
- *
- * The fold `RemoveCell` uses in the roster, for the same reason: the first plate opens it and
- * sends nothing, the second says whose invitation goes. `<details>` holds whether it is open,
- * so there is no `useState`. Every plate waits while one withdrawal is in flight, but only the
- * row being withdrawn says so -- `variables` is which one was asked for.
- */
-function WithdrawCell({
-  invitation,
-  revoke,
-  tenantId,
-}: {
-  invitation: { id: string; email: string };
-  revoke: ReturnType<typeof trpc.people.revokeInvitation.useMutation>;
-  tenantId: string;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <td>
-      <details className="tokenform">
-        <summary className="plate plate--small">{t("people.withdraw")}</summary>
-        <div className="hinge">
-          <button
-            className="plate plate--small plate--primary"
-            type="button"
-            disabled={revoke.isPending}
-            onClick={(): void => {
-              revoke.mutate({ tenantId, id: invitation.id });
-            }}
-          >
-            {revoke.isPending && revoke.variables.id === invitation.id
-              ? t("people.withdrawing")
-              : t("people.withdrawConfirm", { email: invitation.email })}
-          </button>
-        </div>
-      </details>
-    </td>
-  );
-}
-
-/** Invitations still open, and the refusal shown when one cannot be withdrawn. */
-function OpenInvitations({
-  open,
-  isAdmin,
-  revoke,
-  tenantId,
-  locale,
-}: {
-  open: readonly { id: string; email: string; role: string; expiresAt: string }[];
-  isAdmin: boolean;
-  revoke: ReturnType<typeof trpc.people.revokeInvitation.useMutation>;
-  tenantId: string;
-  locale: Locale;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <>
-      {open.length === 0 ? (
-        <p className="note">{t("people.noneWaiting")}</p>
-      ) : (
-        <table className="table">
-          <caption>{t("people.waitingCaption", { count: open.length })}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("people.colAddress")}</th>
-              <th scope="col">{t("people.colInvitedAs")}</th>
-              <th scope="col">{t("people.colExpires")}</th>
-              {isAdmin ? <th scope="col">{t("people.colWithdraw")}</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {open.map((invitation) => (
-              <tr key={invitation.id}>
-                <td className="datum datum--quiet">{invitation.email}</td>
-                <td>{invitation.role}</td>
-                {/* Through `formatDate`, not `toISOString().slice(0, 10)`: that rendered
-                  the date in UTC while every other date on the schedule is in Singapore
-                  time, so an invitation expiring at 07:00 SGT showed the previous day. */}
-                <td className="datum datum--quiet">{formatDate(invitation.expiresAt, locale)}</td>
-                {isAdmin ? (
-                  <WithdrawCell invitation={invitation} revoke={revoke} tenantId={tenantId} />
-                ) : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {revoke.isError ? (
-        <Errata heading={t("people.notWithdrawn")} live={true} error={revoke.error} />
-      ) : null}
-    </>
-  );
-}
-
-/**
- * What happened to the invitation.
- *
- * Success is TWO states, not one: an invitation is valid whether or not the mail went out,
- * and an admin who is not told the send failed will wait for a reply that is not coming.
- */
-function InviteOutcome({
-  invite,
-}: {
-  invite: ReturnType<typeof trpc.people.invite.useMutation>;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <>
-      {/* The server's own words. It composes them in the language this browser
-      asked for -- `main.tsx` sends `accept-language` on every tRPC call --
-      so this renders a Vietnamese sentence for a Vietnamese reader without
-      the UI having to know what went wrong. */}
-      {invite.isError ? (
-        <Errata heading={t("people.notInvited")} live={true} error={invite.error} />
-      ) : null}
-
-      {/*
-       * Read from the mutation's result, not assumed. With no mail configured the
-       * invitation is still valid and still works — but somebody has to tell the
-       * person, and an admin who was not told that will wait for nothing.
-       */}
-      {invite.isSuccess ? (
-        invite.data.notified ? (
-          <p className="note" role="status">
-            {t("people.invitedAndEmailed", { email: invite.data.email })}
-          </p>
-        ) : (
-          <Errata heading={t("people.invitedNotEmailedHeading")}>
-            {t("people.invitedNotEmailed", { email: invite.data.email })}
-          </Errata>
-        )
-      ) : null}
-    </>
-  );
-}
-
-/** Each role's sentence, keyed by the role so a fourth role is a type error until worded. */
-const RIGHTS = {
-  viewer: "people.rightsViewer",
-  member: "people.rightsMember",
-  admin: "people.rightsAdmin",
-} as const satisfies Record<Role, string>;
-
-/**
- * What each role may do in this customer, beside the form that grants one.
- *
- * One catalogue entry per role, never assembled from role names (`i18n.md`), and each states
- * what the router's gates allow and refuse and nothing more: `requireRole("member")` on asking
- * and saving questions and dashboards, `requireRole("admin")` on every write to connections,
- * models, macros, document kinds, keys, people and the customer's name, on starting a run and on
- * reading the raw lake's contents. A gate that moves makes these sentences false, so a change
- * to one is a change to both catalogues in the same commit. No test pins the two together:
- * the sentences are prose, and a check that they match the router would have to parse them.
- *
- * Shown to every reader, not only an admin: a viewer who reads why a plate is absent has been
- * told something true before the server had to refuse them.
- */
-function RoleRights({ tenantId }: { tenantId: string }): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <dl className="access" aria-label={t("people.rightsLabel", { tenantId })}>
-      {/* A flat list of pairs rather than a keyed `Fragment`, which Biome cannot resolve
-        out of React's types: `.access` lays `dt` and `dd` out as direct grid children. */}
-      {ROLES.flatMap((role) => [
-        <dt key={`${role}-role`}>{role}</dt>,
-        <dd key={`${role}-rights`}>{t(RIGHTS[role])}</dd>,
-      ])}
-    </dl>
-  );
-}
-
-/** Inviting somebody, which only an admin of this tenant may do. */
-function InvitePanel({
-  isAdmin,
-  invite,
-  tenantId,
-  emailFieldRef,
-  roleFieldRef,
-  emailId,
-  roleId,
-}: {
-  isAdmin: boolean;
-  invite: ReturnType<typeof trpc.people.invite.useMutation>;
-  tenantId: string;
-  emailFieldRef: React.RefObject<HTMLInputElement | null>;
-  roleFieldRef: React.RefObject<HTMLSelectElement | null>;
-  emailId: string;
-  roleId: string;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <>
-      {isAdmin ? (
-        <form
-          className="stack stack--tight"
-          onSubmit={(event): void => {
-            event.preventDefault();
-            const email = emailFieldRef.current?.value.trim() ?? "";
-            const role = roleFieldRef.current?.value ?? "viewer";
-            if (email === "") {
-              return;
-            }
-            invite.mutate({ tenantId, email, role: isRole(role) ? role : "viewer" });
-          }}
-        >
-          <div className="field">
-            <label className="label" htmlFor={emailId}>
-              {t("people.inviteLabel")}
-            </label>
-            <input
-              className="input"
-              id={emailId}
-              name="email"
-              type="email"
-              autoComplete="off"
-              required={true}
-              placeholder={t("people.invitePlaceholder")}
-              ref={emailFieldRef}
-              disabled={invite.isPending}
-            />
-            <p className="field__hint">{t("people.inviteHint")}</p>
-          </div>
-
-          <div className="field">
-            <label className="label" htmlFor={roleId}>
-              {t("people.roleLabel")}
-            </label>
-            <select
-              className="input"
-              id={roleId}
-              name="role"
-              ref={roleFieldRef}
-              disabled={invite.isPending}
-              defaultValue="viewer"
-            >
-              {/* The values as they are, as in the roster's select: what each one grants is
-                the statement beside this form, and a second description here would be one
-                more place for the two to disagree. */}
-              {ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <InviteOutcome invite={invite} />
-
-          <div className="row">
-            <button className="plate plate--primary" type="submit" disabled={invite.isPending}>
-              {invite.isPending ? t("people.inviting") : t("people.sendInvitation")}
-            </button>
-          </div>
-        </form>
-      ) : (
-        <p className="note">{t("people.adminOnly", { tenantId })}</p>
-      )}
-      <RoleRights tenantId={tenantId} />
-    </>
-  );
-}
 
 /**
  * Everything this page reads and writes, wired once.
@@ -348,18 +84,246 @@ function usePeopleMutations(
   };
 }
 
-export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
+/** The three views of the division, in the order the plates print. */
+const VIEWS = ["members", "invites", "roles"] as const;
+type PeopleView = (typeof VIEWS)[number];
+
+/**
+ * Which view is open and what the reader searched for, both read from the address.
+ *
+ * The address and not the store, as the customer list's filters are: a view is a page a reader
+ * links, reloads and comes Back to. A view the address names that is not one of the three
+ * opens Members rather than guessing. The search is replaced rather than pushed, because a
+ * keystroke is not a page; a view is pushed, because it is one. Both keep the other, so a
+ * search carries from Members to the invitations it may also match.
+ */
+interface PeopleAddress {
+  readonly view: PeopleView;
+  readonly search: string;
+  readonly setSearch: (search: string) => void;
+  readonly viewSearch: (view: PeopleView) => string;
+}
+
+function usePeopleAddress(): PeopleAddress {
+  const [params, setParams] = useSearchParams();
+  const asked = params.get("view");
+  return {
+    view: VIEWS.find((view) => view === asked) ?? "members",
+    search: params.get("q") ?? "",
+    setSearch: (search): void => {
+      const next = new URLSearchParams(params);
+      if (search === "") {
+        next.delete("q");
+      } else {
+        next.set("q", search);
+      }
+      setParams(next, { replace: true });
+    },
+    viewSearch: (view): string => {
+      const next = new URLSearchParams(params);
+      if (view === "members") {
+        next.delete("view");
+      } else {
+        next.set("view", view);
+      }
+      const written = next.toString();
+      return written === "" ? "" : `?${written}`;
+    },
+  };
+}
+
+/**
+ * The three views as one control, the Models division's plate pair with a third plate, and
+ * under it what the open view needs first: the address search, or the role statements. Each
+ * count is the whole list's, not the search's: it says what a view holds before it is opened.
+ */
+function ViewHead({
+  address,
+  members,
+  invitations,
+  tenantId,
+}: {
+  address: PeopleAddress;
+  members: number;
+  invitations: number;
+  tenantId: string;
+}): React.JSX.Element {
   const { t } = useTranslation();
-  const emailId = useId();
-  const roleId = useId();
+  const labels: Record<PeopleView, string> = {
+    members: t("people.viewMembers", { count: members }),
+    invites: t("people.viewInvites", { count: invitations }),
+    roles: t("people.viewRoles"),
+  };
+  return (
+    <>
+      <nav aria-label={t("people.viewsLabel")} className="langset">
+        {VIEWS.map((each) => (
+          <Link
+            key={each}
+            className="plate plate--small"
+            to={{ search: address.viewSearch(each) }}
+            {...(each === address.view ? { "aria-current": "page" as const } : {})}
+          >
+            {labels[each]}
+          </Link>
+        ))}
+      </nav>
+      {address.view === "roles" ? (
+        <RoleRights tenantId={tenantId} />
+      ) : (
+        <AddressSearch search={address.search} setSearch={address.setSearch} />
+      )}
+    </>
+  );
+}
+
+/** The search over addresses, on the two views that list them, and one clear while it narrows. */
+function AddressSearch({
+  search,
+  setSearch,
+}: {
+  search: string;
+  setSearch: (search: string) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const searchId = useId();
+  return (
+    <div className="row row--field">
+      <div className="field">
+        <label className="label" htmlFor={searchId}>
+          {t("people.searchLabel")}
+        </label>
+        <input
+          className="input"
+          id={searchId}
+          type="search"
+          autoComplete="off"
+          value={search}
+          onChange={(event): void => {
+            setSearch(event.target.value);
+          }}
+        />
+      </div>
+      {search === "" ? null : (
+        <button
+          className="plate"
+          type="button"
+          onClick={(): void => {
+            setSearch("");
+          }}
+        >
+          {t("people.clearSearch")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The open view's list: who has access, or the invitations still waiting, narrowed by the
+ * address search. Compare roles lists nothing; its statements are printed by `ViewHead`.
+ */
+function ViewList({
+  address,
+  roster,
+  open,
+  isAdmin,
+  writes,
+  tenantId,
+  signedInAs,
+}: {
+  address: PeopleAddress;
+  roster: readonly { userId: string; email: string; role: string }[];
+  open: readonly { id: string; email: string; role: string; expiresAt: string }[];
+  isAdmin: boolean;
+  writes: PeopleMutations;
+  tenantId: string;
+  signedInAs: string;
+}): React.JSX.Element | null {
   const locale = useUiStore((state) => state.locale);
+  if (address.view === "members") {
+    return (
+      <Roster
+        roster={roster}
+        isAdmin={isAdmin}
+        setRole={writes.setRole}
+        remove={writes.remove}
+        tenantId={tenantId}
+        search={address.search}
+        signedInAs={signedInAs}
+      />
+    );
+  }
+  if (address.view === "invites") {
+    return (
+      <OpenInvitations
+        open={open}
+        search={address.search}
+        isAdmin={isAdmin}
+        revoke={writes.revoke}
+        tenantId={tenantId}
+        locale={locale}
+      />
+    );
+  }
+  return null;
+}
+
+/** The invitation form and the role statements beside it, on the Invitations view. */
+function InviteBand({
+  isAdmin,
+  invite,
+  tenantId,
+  displayName,
+  emailFieldRef,
+}: {
+  isAdmin: boolean;
+  invite: ReturnType<typeof trpc.people.invite.useMutation>;
+  tenantId: string;
+  displayName: string;
+  emailFieldRef: React.RefObject<HTMLInputElement | null>;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <>
+      <div className="band-rule" />
+      <div className="head">{t("people.invitationsHead")}</div>
+      <div className="body stack">
+        <InvitePanel
+          isAdmin={isAdmin}
+          invite={invite}
+          tenantId={tenantId}
+          displayName={displayName}
+          emailFieldRef={emailFieldRef}
+        />
+      </div>
+    </>
+  );
+}
+
+/**
+ * The people division, in three views bound to `?view=`: who has access (the default), the
+ * invitations still open with the form that sends one, and what each role may do.
+ *
+ * The form and the role statements stay together on Invitations, as the design contract asks:
+ * an admin choosing a role reads what it grants beside the choice. Compare roles repeats the
+ * statements alone, for a reader who came to ask only that.
+ */
+export function People({
+  tenantId,
+  signedInAs,
+}: {
+  tenantId: string;
+  signedInAs: string;
+}): React.JSX.Element {
+  const { t } = useTranslation();
   const emailFieldRef = useRef<HTMLInputElement>(null);
-  const roleFieldRef = useRef<HTMLSelectElement>(null);
+  const address = usePeopleAddress();
 
   const tenant = trpc.tenants.get.useQuery({ tenantId });
   const members = trpc.people.members.useQuery({ tenantId });
   const invitations = trpc.people.invitations.useQuery({ tenantId });
-  const { invite, revoke, setRole, remove } = usePeopleMutations(tenantId, emailFieldRef);
+  const writes = usePeopleMutations(tenantId, emailFieldRef);
 
   if (members.isPending || invitations.isPending) {
     return <Skeleton rows={4} />;
@@ -374,7 +338,6 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
   }
 
   const isAdmin = tenant.data?.role === "admin";
-  const roster = members.data;
   const open = invitations.data.filter((i) => i.status === "pending");
 
   return (
@@ -383,38 +346,32 @@ export function People({ tenantId }: { tenantId: string }): React.JSX.Element {
       <div className="body stack">
         <h1>{t("people.title")}</h1>
         <p className="prose prose--lead">{t("people.lead", { tenantId })}</p>
-
-        <Roster
-          roster={roster}
-          isAdmin={isAdmin}
-          setRole={setRole}
-          remove={remove}
+        <ViewHead
+          address={address}
+          members={members.data.length}
+          invitations={open.length}
           tenantId={tenantId}
         />
-      </div>
-
-      <div className="band-rule" />
-
-      <div className="head">{t("people.invitationsHead")}</div>
-      <div className="body stack">
-        <OpenInvitations
+        <ViewList
+          address={address}
+          roster={members.data}
           open={open}
           isAdmin={isAdmin}
-          revoke={revoke}
+          writes={writes}
           tenantId={tenantId}
-          locale={locale}
-        />
-
-        <InvitePanel
-          isAdmin={isAdmin}
-          invite={invite}
-          tenantId={tenantId}
-          emailFieldRef={emailFieldRef}
-          roleFieldRef={roleFieldRef}
-          emailId={emailId}
-          roleId={roleId}
+          signedInAs={signedInAs}
         />
       </div>
+
+      {address.view === "invites" ? (
+        <InviteBand
+          isAdmin={isAdmin}
+          invite={writes.invite}
+          tenantId={tenantId}
+          displayName={tenant.data?.displayName || tenantId}
+          emailFieldRef={emailFieldRef}
+        />
+      ) : null}
     </div>
   );
 }
