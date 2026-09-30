@@ -52,7 +52,8 @@
  * Google account, and three gates reading one list cannot disagree about who is on it.
  * ADR 0013.
  *
- * A third method exists on a local stack only: `POST /api/auth/sign-in/dev` signs the browser
+ * A third method exists on loopback only -- a developer's stack, or a desktop install signing its
+ * owner in (ADR 0094): `POST /api/auth/sign-in/dev` signs the browser
  * in as `UNDERCROFT_DEV_SIGN_IN_AS` without proving the address. It is a Better Auth method
  * like the other two rather than a bypass around the library, so what it yields is an
  * ordinary session -- the same cookie, the same row, the same `resolveCaller`, the same
@@ -165,6 +166,29 @@ export interface AuthConfig {
   readonly onEmailError?: (error: unknown) => void;
 }
 
+/**
+ * A way in this install offers, as the sign-in page and the boot log name it.
+ *
+ * `dev` is the one that proves nothing (`devSignIn.ts`). Offered ALONE it is a local install
+ * whose owner the page signs in without asking (ADR 0094); offered beside another it stays a
+ * button, because somebody configured a method that does prove something.
+ */
+export type SignInMethod = "google" | "email-otp" | "dev";
+
+/**
+ * The methods `config` builds, in the order the page presents them. Read off the same fields
+ * `authOptions` builds its providers and plugins from, so what is announced and what exists
+ * cannot differ.
+ */
+function signInMethods(config: AuthConfig): readonly SignInMethod[] {
+  const settings: readonly (readonly [SignInMethod, unknown])[] = [
+    ["google", config.google],
+    ["email-otp", config.email],
+    ["dev", config.devSignInAs],
+  ];
+  return settings.filter(([, setting]) => setting !== undefined).map(([method]) => method);
+}
+
 /** What a resolved session tells us. Everything else Better Auth returns is unused here. */
 export interface AuthSession {
   readonly session: { readonly id: string };
@@ -192,6 +216,11 @@ export interface Auth {
    * only. `handler` serves its endpoints and discovery documents either way.
    */
   mcp: McpAuth | null;
+  /**
+   * The ways in this instance was built with. Public -- the sign-in page must know them before
+   * anybody is signed in -- and it names methods, never an address.
+   */
+  methods: readonly SignInMethod[];
 }
 
 /**
@@ -429,5 +458,6 @@ export function createAuth(config: AuthConfig): Auth {
       signOut: (input) => instance.api.signOut(input),
     },
     mcp: issuer === null ? null : createMcpAuth(instance, issuer),
+    methods: signInMethods(config),
   };
 }

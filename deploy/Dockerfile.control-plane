@@ -8,7 +8,13 @@
 # `apps/ui` builds to `apps/ui/dist`, which the runtime stage copies in and the server
 # serves. A type error does not fail here -- `vite build` transpiles rather than typechecks;
 # the gate's `bun run typecheck` is what guards types.
-FROM oven/bun:1.4.2-slim AS ui
+#
+# On the BUILD platform, whichever platform the image is for: what this stage produces is
+# JavaScript and CSS, the same bytes on every architecture. `build-images.yml` builds amd64 and
+# arm64 (ADR 0094), and without the pin the arm64 image would run Vite a second time, under
+# emulation, to produce the files the native build already has. A plain `docker build` sets
+# `BUILDPLATFORM` to the machine's own, so a local build is unchanged.
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.2-slim AS ui
 
 WORKDIR /app
 

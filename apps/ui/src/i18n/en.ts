@@ -91,6 +91,8 @@ export const en = {
     dev: "Sign in locally (development)",
     devFailed:
       "Local sign-in is off. Set UNDERCROFT_DEV_SIGN_IN_AS in deploy/compose/.env and restart task dev:run.",
+    signingInOwner: "Signing you in to the copy installed on this computer…",
+    retry: "Try again",
   },
 
   landing: {

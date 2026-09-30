@@ -28,15 +28,21 @@
  *
  * So the query cache owns everything, which is what `state.md` asks for: one value, one
  * owner, and nothing to drift.
+ *
+ * ## Which ways in are shown is the server's answer
+ *
+ * The local method (`useLocalSignIn`) is shown because the server says it offers it, not because
+ * the bundle is a development build: a desktop install runs the production bundle (ADR 0094).
+ * Offered alone, there is nothing to ask, and the page signs the owner in by itself.
  */
 
 import { useMutation } from "@tanstack/react-query";
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   isAuthorizing,
   sendSignInCode,
-  signInForDevelopment,
+  signInLocally,
   signInWithCode,
   signInWithGoogle,
 } from "@/auth.ts";
@@ -44,6 +50,7 @@ import { Colophon } from "@/components/Colophon.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher.tsx";
 import { Mark } from "@/components/Mark.tsx";
+import { useLocalSignIn } from "@/components/useLocalSignIn.ts";
 import { DIVISIONS } from "@/lib/divisions.ts";
 
 /** The full wheel: seven hues, every one of them a division's, in the order they are bound. */
@@ -51,14 +58,7 @@ const WHEEL = DIVISIONS.map((d) => d.hue);
 
 export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX.Element {
   const { t } = useTranslation();
-
-  const sendCode = useMutation({
-    mutationFn: (variables: { email: string }) => sendSignInCode(variables.email),
-  });
-
-  // The step, derived. `variables` is what the send was called with, so the address shown
-  // and the address verified cannot disagree.
-  const sentTo = sendCode.isSuccess ? sendCode.variables.email : null;
+  const local = useLocalSignIn();
 
   return (
     <main className="titlepage">
@@ -106,41 +106,10 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
           </Errata>
         ) : null}
 
-        {/* `import.meta.env.DEV` is a constant Vite folds at build time, so a production
-            bundle does not contain this button at all -- not merely hide it. */}
-        {import.meta.env.DEV ? <DevSignIn /> : null}
-
-        <GoogleSignIn />
-
-        {/*
-         * The two steps are KEYED, and the key is the only reason the step change
-         * is visible.
-         *
-         * Both forms render at the same position, so React reconciles one into the
-         * other: same <form> element, new children, no remount -- and the slip-tip
-         * in `index.css` cannot run on an element that never arrived. A distinct
-         * key per step makes the swap a real mount, which is also the honest shape
-         * of it. This is a different form asking a different question, not the
-         * first one with its fields rewritten, and the uncontrolled inputs behind
-         * it are cleared by the remount rather than by hand.
-         */}
-        {sentTo === null ? (
-          <AddressForm
-            key="address"
-            pending={sendCode.isPending}
-            error={sendCode.isError ? sendCode.error : null}
-            onSend={(email): void => {
-              sendCode.mutate({ email });
-            }}
-          />
+        {local === "automatic" ? (
+          <OwnerSignIn />
         ) : (
-          <CodeForm
-            key="code"
-            sentTo={sentTo}
-            onUseAnotherAddress={(): void => {
-              sendCode.reset();
-            }}
-          />
+          <SignInChoices offersLocal={local === "button"} />
         )}
 
         {/* The imprint opens this page and the colophon closes it, on the same hairline
@@ -149,6 +118,120 @@ export function SignIn({ reason }: { reason?: "expired" | "denied" }): React.JSX
         <Colophon />
       </div>
     </main>
+  );
+}
+
+/**
+ * The ways in the person chooses between: the local method when the server offers it beside
+ * the others, Google, and a code by email.
+ */
+function SignInChoices({ offersLocal }: { offersLocal: boolean }): React.JSX.Element {
+  const sendCode = useMutation({
+    mutationFn: (variables: { email: string }) => sendSignInCode(variables.email),
+  });
+
+  // The step, derived. `variables` is what the send was called with, so the address shown
+  // and the address verified cannot disagree.
+  const sentTo = sendCode.isSuccess ? sendCode.variables.email : null;
+
+  return (
+    <>
+      {offersLocal ? <DevSignIn /> : null}
+
+      <GoogleSignIn />
+
+      {/*
+       * The two steps are KEYED, and the key is the only reason the step change
+       * is visible.
+       *
+       * Both forms render at the same position, so React reconciles one into the
+       * other: same <form> element, new children, no remount -- and the slip-tip
+       * in `index.css` cannot run on an element that never arrived. A distinct
+       * key per step makes the swap a real mount, which is also the honest shape
+       * of it. This is a different form asking a different question, not the
+       * first one with its fields rewritten, and the uncontrolled inputs behind
+       * it are cleared by the remount rather than by hand.
+       */}
+      {sentTo === null ? (
+        <AddressForm
+          key="address"
+          pending={sendCode.isPending}
+          error={sendCode.isError ? sendCode.error : null}
+          onSend={(email): void => {
+            sendCode.mutate({ email });
+          }}
+        />
+      ) : (
+        <CodeForm
+          key="code"
+          sentTo={sentTo}
+          onUseAnotherAddress={(): void => {
+            sendCode.reset();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * A desktop install's way in (ADR 0094). The local method is the only one the server offers, so
+ * there is no choice to put to the person: the page makes the call itself, once, on arrival, and
+ * the session it gets is the same ordinary one `DevSignIn` would have got with a click.
+ *
+ * ONCE is a latch, as in `LakeAnswers`: StrictMode mounts, tears down and mounts again, and the
+ * second pass of the effect still sees the render in which the mutation was idle -- so without
+ * the ref a development build would sign in twice, two sessions, where a production one signs in
+ * once.
+ *
+ * A refusal stays on screen with the server's reason and a retry rather than trying again by
+ * itself. The refusal worth expecting is a configuration only the person can fix -- the address
+ * is not a superadmin -- and asking again in a loop would only repeat it.
+ */
+function OwnerSignIn(): React.JSX.Element {
+  const { t } = useTranslation();
+  const signIn = useMutation({
+    mutationFn: signInLocally,
+    onSuccess: (destination) => {
+      // A full reload, as after a code: the identity just changed under every cached query.
+      globalThis.location.assign(destination);
+    },
+  });
+  const askedRef = useRef(false);
+  const { mutate } = signIn;
+
+  useEffect(() => {
+    if (!askedRef.current) {
+      askedRef.current = true;
+      mutate();
+    }
+  }, [mutate]);
+
+  if (signIn.isError) {
+    return (
+      <div className="stack stack--tight">
+        <Errata heading={t("signIn.notSignedIn")} live={true}>
+          {signIn.error.message}
+        </Errata>
+        <div className="row">
+          <button
+            className="plate plate--primary"
+            type="button"
+            onClick={(): void => {
+              signIn.mutate();
+            }}
+          >
+            {t("signIn.retry")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <p className="note" role="status">
+      {t("signIn.signingInOwner")}
+    </p>
   );
 }
 
@@ -186,15 +269,15 @@ function GoogleSignIn(): React.JSX.Element {
 }
 
 /**
- * The local stack's way in, `POST /api/auth/sign-in/dev`: one click, and the session is an
- * ordinary Better Auth session for the address the control plane was started with. The server
- * is what decides whether this works -- it has the method only on loopback with
- * `UNDERCROFT_DEV_SIGN_IN_AS` set -- and the error says how to turn it on when it does not.
+ * The local method as a button, `POST /api/auth/sign-in/dev`, shown when the server offers it
+ * beside a method that proves something: one click, and the session is an ordinary Better Auth
+ * session for the address the control plane was started with. The server has the method only
+ * on loopback with `UNDERCROFT_DEV_SIGN_IN_AS` set, and says so here only when it has it.
  */
 function DevSignIn(): React.JSX.Element {
   const { t } = useTranslation();
   const signIn = useMutation({
-    mutationFn: signInForDevelopment,
+    mutationFn: signInLocally,
     onSuccess: (destination) => {
       // A full reload, as after a code: the identity just changed under every cached query.
       globalThis.location.assign(destination);

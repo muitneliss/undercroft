@@ -15,6 +15,7 @@
 import { useLocation, useRoutes, useSearchParams } from "react-router-dom";
 
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { useLocalSignIn } from "@/components/useLocalSignIn.ts";
 import { appRoutes } from "@/routeTable.tsx";
 import { Landing } from "@/routes/Landing.tsx";
 import { SignIn } from "@/routes/SignIn.tsx";
@@ -34,12 +35,23 @@ export function App(): React.JSX.Element {
   // The one auth read. `session.me` is an authed procedure, so with no session cookie it
   // errors and the app sits on the title page.
   const session = trpc.session.me.useQuery(undefined, { retry: false });
+  // Asked here, beside `session.me` and in the same batch, rather than first by the sign-in
+  // page: the answer decides whether the root is the introduction at all.
+  const localSignIn = useLocalSignIn();
   const [params] = useSearchParams();
   const { pathname } = useLocation();
 
   // The public introduction needs no server data. Auth callbacks still reach sign-in,
-  // and a known session opens the customer index through the existing route table.
-  if (pathname === "/" && !params.has("reason") && !params.has("sig") && !session.isSuccess) {
+  // and a known session opens the customer index through the existing route table. A desktop
+  // install has no public to introduce: its root goes straight to the sign-in that needs no
+  // click (ADR 0094), so the one person it is for lands in the book.
+  if (
+    pathname === "/" &&
+    !params.has("reason") &&
+    !params.has("sig") &&
+    !session.isSuccess &&
+    localSignIn !== "automatic"
+  ) {
     return <Landing />;
   }
 

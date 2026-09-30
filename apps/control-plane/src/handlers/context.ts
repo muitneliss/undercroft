@@ -420,6 +420,7 @@ function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Call
     notifyInvitation: (to, tenantId): Promise<boolean> =>
       sendInvitation(deps, to, tenantId, locale),
     apps: auth?.mcp ?? null,
+    signInMethods: auth?.methods ?? [],
     worker: deps.worker ?? null,
     specReads: deps.specReads ?? NO_SPECS,
     // The id and key only. `clientSecret` is deliberately not spread in here; the

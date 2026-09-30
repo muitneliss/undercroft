@@ -51,6 +51,7 @@ function context(user: SessionUser | null, superadmin = false, exec: SqlExecutor
     worker: null,
     specReads: new Map(),
     googlePicker: null,
+    signInMethods: [],
   };
 }
 
