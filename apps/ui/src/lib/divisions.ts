@@ -77,3 +77,13 @@ export function divisionPath(id: DivisionId, tenantId: string | undefined): stri
   }
   return id === "sources" ? `/tenants/${tenantId}` : `/tenants/${tenantId}/${id}`;
 }
+
+/**
+ * One customer's own page, in the Customers division: its facts and a door to each division.
+ *
+ * Beside `/tenants/:tenantId` rather than at it, because that address has always opened the
+ * book at Sources and every link already printed to it must keep landing there.
+ */
+export function customerPagePath(tenantId: string): string {
+  return `/tenants/${encodeURIComponent(tenantId)}/about`;
+}

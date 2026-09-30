@@ -48,6 +48,12 @@ export const vi = {
     staleChunk: "Trang này thuộc một phiên bản mới hơn",
     staleChunkBody:
       "Undercroft đã được cập nhật sau khi bạn mở tab này. Hãy lưu những gì đang viết dở, rồi tải lại trang.",
+    /**
+     * The running head's customer ID, which is a link back to the customer list. The ID comes
+     * first because it is the text the reader sees, so a voice or a screen reader can name the
+     * link by what is printed.
+     */
+    switchCustomer: "{{tenantId}} · Đổi khách hàng",
   },
 
   lang: {
@@ -223,6 +229,8 @@ export const vi = {
     emptyBody:
       "Khách hàng là đơn vị mà mọi thứ khác gắn vào: các tài khoản đã kết nối, các bản ghi đã đồng bộ, và những ai được xem chúng.",
     caption_other: "{{count, number}} khách hàng",
+    /** While a search or a role narrows the list: the rows shown, then every customer the reader has. */
+    captionFiltered_other: "{{shown, number}} / {{count, number}} khách hàng",
     colCustomer: "Khách hàng",
     colReference: "Mã khách hàng",
     colRole: "Vai trò của bạn",
@@ -266,6 +274,22 @@ export const vi = {
     renaming: "Đang lưu…",
     renamed: "Đã đổi tên hiển thị.",
     notRenamed: "Chưa đổi được tên",
+
+    /** The customer's own page: its facts, and a door to each division of its book. */
+    aboutLead: "Mã khách hàng giữ nguyên; quản trị viên có thể sửa tên hiển thị.",
+    aboutNotLoaded:
+      "Không tải được hồ sơ {{tenantId}}, hoặc bạn không có quyền xem. Không có gì bị thay đổi.",
+    openSources: "Mở nguồn dữ liệu",
+    /** The rename form has one home, at the foot of Sources; this page links there. */
+    renameOnSources: "Sửa tên hiển thị ở trang Nguồn",
+    insideHead: "Trong hồ sơ này",
+    insideLabel: "Các phần trong hồ sơ {{tenantId}}",
+    insideSources: "Dữ liệu đến từ tài khoản nào?",
+    insideJournal: "Lần chạy nào đã thành công hoặc bị từ chối?",
+    insideLake: "Bản gốc nào đã được lưu?",
+    insideModels: "Dữ liệu được biến đổi thế nào?",
+    insideReports: "Những con số trả lời câu hỏi gì?",
+    insidePeople: "Ai có thể xem và ai có thể thay đổi?",
   },
 
   sources: {
@@ -718,6 +742,26 @@ export const vi = {
     inviting: "Đang mời…",
     sendInvitation: "Gửi lời mời",
     adminOnly: "Chỉ quản trị viên của {{tenantId}} mới có thể mời người khác.",
+
+    /** Three views of the division, each its own address (`?view=`). */
+    viewsLabel: "Cách xem người dùng",
+    viewMembers_other: "Thành viên · {{count, number}}",
+    viewInvites_other: "Lời mời đang chờ · {{count, number}}",
+    viewRoles: "So sánh vai trò",
+    searchLabel: "Tìm địa chỉ email",
+    clearSearch: "Xóa lọc",
+    noMatch: "Không có địa chỉ nào khớp. Thử một phần khác của địa chỉ, hoặc xóa lọc.",
+    /** While a search narrows a table: the rows shown, then every row there is. */
+    captionFiltered_other: "{{shown, number}} / {{count, number}} người có quyền truy cập",
+    waitingCaptionFiltered_other:
+      "{{shown, number}} / {{count, number}} lời mời đang chờ được chấp nhận",
+    /** Beside the signed-in reader's own row. */
+    you: "Bạn",
+    /** Inside Remove's second press: what it ends, and what it leaves alone. */
+    removeLead:
+      "Chỉ kết thúc tư cách thành viên tại khách hàng này. Tài khoản đăng nhập và dữ liệu khách hàng vẫn giữ nguyên.",
+    /** Under the invitation's role: which customer the role is granted in. */
+    grantedWithin: "Quyền truy cập được cấp trong: {{name}} · {{tenantId}}",
   },
 
   grant: {

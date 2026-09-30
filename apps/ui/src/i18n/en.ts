@@ -21,6 +21,7 @@ export const en = {
     staleChunk: "This page belongs to a newer release",
     staleChunkBody:
       "Undercroft was updated after this tab was opened. Save anything you are still writing, then reload the page.",
+    switchCustomer: "{{tenantId}} · Switch customer",
   },
 
   lang: {
@@ -177,6 +178,8 @@ export const en = {
       "A customer is the unit everything else hangs off: their connected accounts, their synced records, and who can see them.",
     caption_one: "{{count, number}} customer",
     caption_other: "{{count, number}} customers",
+    captionFiltered_one: "{{shown, number}} of {{count, number}} customer",
+    captionFiltered_other: "{{shown, number}} of {{count, number}} customers",
     colCustomer: "Customer",
     colReference: "Tenant ID",
     colRole: "Your role",
@@ -203,6 +206,20 @@ export const en = {
     renaming: "Saving…",
     renamed: "The display name has been changed.",
     notRenamed: "Not changed",
+
+    aboutLead: "The customer ID is permanent; an administrator can correct the display name.",
+    aboutNotLoaded:
+      "The book for {{tenantId}} could not be loaded, or you may not see it. Nothing has been changed.",
+    openSources: "Open data sources",
+    renameOnSources: "Correct the display name on Sources",
+    insideHead: "Inside this book",
+    insideLabel: "The divisions of {{tenantId}}",
+    insideSources: "Which account does the data come from?",
+    insideJournal: "Which runs succeeded or were refused?",
+    insideLake: "Which originals were preserved?",
+    insideModels: "How is the data transformed?",
+    insideReports: "Which questions do the figures answer?",
+    insidePeople: "Who can read and who can change things?",
   },
 
   sources: {
@@ -596,6 +613,24 @@ export const en = {
     inviting: "Inviting…",
     sendInvitation: "Send invitation",
     adminOnly: "Only an admin of {{tenantId}} can invite someone.",
+
+    viewsLabel: "Ways to view people",
+    viewMembers_one: "Members · {{count, number}}",
+    viewMembers_other: "Members · {{count, number}}",
+    viewInvites_one: "Open invitations · {{count, number}}",
+    viewInvites_other: "Open invitations · {{count, number}}",
+    viewRoles: "Compare roles",
+    searchLabel: "Find an email address",
+    clearSearch: "Clear",
+    noMatch: "No address matches. Try another part of the address, or clear the search.",
+    captionFiltered_one: "{{shown, number}} of {{count, number}} person with access",
+    captionFiltered_other: "{{shown, number}} of {{count, number}} people with access",
+    waitingCaptionFiltered_one: "{{shown, number}} of {{count, number}} waiting to be accepted",
+    waitingCaptionFiltered_other: "{{shown, number}} of {{count, number}} waiting to be accepted",
+    you: "You",
+    removeLead:
+      "Ends membership in this customer only. The person's sign-in and the customer's data stay.",
+    grantedWithin: "Access is granted within: {{name}} · {{tenantId}}",
   },
 
   grant: {
