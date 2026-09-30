@@ -968,6 +968,17 @@
     min-height: var(--control-h);
   }
 
+  /*
+   * A select written straight into the row -- the direction beside the column a question is
+   * ordered by -- is one of the row's controls, so it takes the row's line. `.input--select`
+   * carries an `align-self` of its own for the schedule's column, and below 1100px that sent
+   * this one to the TOP of the row, a caption's height above the select beside it.
+   */
+  .row--field > .input--select,
+  .row:has(> .field) > .input--select {
+    align-self: auto;
+  }
+
   .spread {
     display: flex;
     align-items: flex-start;
