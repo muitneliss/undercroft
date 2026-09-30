@@ -8,7 +8,7 @@ existing account. Two ways in, and they are not symmetric:
   settings absent the control plane comes up with no way in at all, Google included.
 - **Google** — needs an OAuth client, and is added on top of the code-by-email path.
 
-On a local stack there is a third, which needs neither: see
+On a local stack or a desktop install there is a third, which needs neither: see
 [Skip sign-in locally](#skip-sign-in-locally).
 
 The decisions behind all this are in [ADR 0010](../adr/0010-invite-only-sign-in-with-better-auth.md);
@@ -81,8 +81,8 @@ Testing** with your invitees added as test users.
 **Not optional, even if you only want Google.** `UNDERCROFT_EMAIL_API_KEY` and
 `UNDERCROFT_EMAIL_FROM` are both required before sign-in is wired up at all: with either one
 absent the control plane logs `sign_in_unconfigured` and offers no way in, the Google button
-included. They carry the invitation emails too. The one exception is a local stack signed in
-with `UNDERCROFT_DEV_SIGN_IN_AS`; see [Skip sign-in locally](#skip-sign-in-locally).
+included. They carry the invitation emails too. The one exception is a local stack or a desktop
+install signed in with `UNDERCROFT_DEV_SIGN_IN_AS`; see [Skip sign-in locally](#skip-sign-in-locally).
 
 With Resend: create an API key, and use `onboarding@resend.dev` as the from-address until you
 have verified a domain of your own.
@@ -326,8 +326,10 @@ UNDERCROFT_SUPERADMINS=you@example.test
 UNDERCROFT_DEV_SIGN_IN_AS=you@example.test
 ```
 
-Then run `task dev:run`, open `http://localhost:5173` and click **Sign in locally (development)**.
-The boot log names the method, at `warn` so it is never missed:
+Then run `task dev:run` and open `http://localhost:5173`. When this is the only method configured,
+as above, the page signs you in by itself; with a mail key or a Google client set as well, it is
+a button, **Sign in locally (development)**, beside the others. The boot log names the method, at
+`warn` so it is never missed:
 
 ```json
 { "event": "sign_in_configured", "methods": "dev" }
@@ -340,13 +342,18 @@ row, the same sign-out, and it lasts as long as any other session.
 - **It skips proving the address, not the invite-only gate.** The address must be named in
   `UNDERCROFT_SUPERADMINS` or invited (`task dev:invite`). A first sign-in goes through the
   same provisioning hook as a real one, so its invitations are redeemed, and it gets exactly
-  that address's access. Otherwise the button answers "That address has not been invited". To
+  that address's access. Otherwise the page answers "That address has not been invited". To
   see the app as a `viewer`, invite the address with `--role viewer` and leave it out of
   `UNDERCROFT_SUPERADMINS`.
 - **The server chooses the address, not the browser.** The endpoint takes no input.
-- **It cannot reach a server.** Only `task dev:api` passes the variable, and neither compose
-  file does. The control plane refuses to start with it unless `UNDERCROFT_PUBLIC_URL` is
-  `localhost`, `127.0.0.1` or `[::1]`. The button is compiled only into the Vite dev build.
+- **It cannot reach a server.** `task dev:api` passes the variable, and so does a desktop install,
+  which uses this same method to sign its owner in (ADR 0094); the server compose file never does.
+  The control plane refuses to start with it unless `UNDERCROFT_PUBLIC_URL` is `localhost`,
+  `127.0.0.1` or `[::1]`. The page offers it only when the server says it has it.
+- **Open the page on the public URL's own host.** The method refuses a request addressed to any
+  other host name, which is what stops a web page that has pointed its own name at `127.0.0.1`
+  from signing itself in. With `UNDERCROFT_PUBLIC_URL=http://localhost:…`, a page opened on
+  `127.0.0.1` is refused with "Local sign-in works only at http://localhost:…".
 
 ---
 

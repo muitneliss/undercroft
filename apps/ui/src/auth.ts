@@ -164,11 +164,12 @@ export async function signInWithCode(email: string, otp: string): Promise<string
 }
 
 /**
- * Sign in on a local stack as the address the control plane was started with
- * (`UNDERCROFT_DEV_SIGN_IN_AS`). The server chooses who, never this call. A server without the
- * method answers 404, which is the case `signIn.devFailed` explains.
+ * Sign in on loopback -- a developer's stack, or a desktop install (ADR 0094) -- as the address
+ * the control plane was started with (`UNDERCROFT_DEV_SIGN_IN_AS`). The server chooses who, never
+ * this call. A server without the method answers 404, which is the case `signIn.devFailed`
+ * explains.
  */
-export async function signInForDevelopment(): Promise<string> {
+export async function signInLocally(): Promise<string> {
   const { data, error } = await authClient.$fetch("/sign-in/dev", {
     method: "POST",
     headers: acceptLanguage(),

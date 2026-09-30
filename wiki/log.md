@@ -252,3 +252,7 @@
 ## [2026-09-30] ingest | ADR 0090 Reports Computes No Figure It Cannot Stand Behind
 ## [2026-09-30] ingest | File formats a Gmail or Drive connection can land
 ## [2026-09-30] ingest | ADR 0093: A document keeps its last accepted kind while a new catalogue is asked
+## [2026-09-30] ingest | ADR 0094: A local install signs its owner in on loopback
+## [2026-09-30] ingest | Runbook Sign-In Setup
+## [2026-09-30] ingest | Runbook Sign-In Setup
+## [2026-09-30] ingest | ADR 0094: A local install signs its owner in on loopback

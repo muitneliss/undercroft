@@ -37,6 +37,7 @@ import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import type { Grant } from "../services/accessTokens.ts";
 import type { OAuthApps } from "../services/connectedApps.ts";
+import type { SignInMethod } from "./auth.ts";
 import { authorityIn, outranks, type Role } from "../services/authz.ts";
 import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
@@ -154,6 +155,11 @@ export interface Context {
    * client SECRET is not in here and must never be: it stays in the process.
    */
   readonly googlePicker: { clientId: string; apiKey: string; appId: string } | null;
+  /**
+   * The ways in this server offers, for the sign-in page (`config.signIn`). Empty where no
+   * sign-in was built. Required like the rest, so a door building a context decides it.
+   */
+  readonly signInMethods: readonly SignInMethod[];
 }
 
 export type { Role } from "../services/authz.ts";

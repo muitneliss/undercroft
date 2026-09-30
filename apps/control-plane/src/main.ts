@@ -210,10 +210,12 @@ const email: EmailSender | undefined =
       });
 
 /**
- * Sign-in without proof, for a local stack. Set by `task dev:api` and by nothing a deployment
- * runs -- the compose files do not pass it -- and `createAuth` refuses it unless the public
- * URL is loopback. It stands in for mail as the one method sign-in cannot be built without,
- * because on a laptop with no mail key it is the only way in.
+ * Sign-in without proof, on loopback only. Set by `task dev:api` for a developer, and by the
+ * desktop installer for the one person whose machine the install is on (ADR 0094); never by the
+ * server compose file, and `createAuth` refuses it unless the public URL is loopback. It stands
+ * in for mail as the one method sign-in cannot be built without, because on a laptop with no
+ * mail key it is the only way in -- and when it IS the only way in, the sign-in page takes it
+ * without asking for a click.
  */
 const devSignInAs = optional("UNDERCROFT_DEV_SIGN_IN_AS");
 const google =
@@ -251,11 +253,8 @@ if (auth === undefined) {
     google: google !== undefined,
   });
 } else {
-  const methods = [
-    ...(google === undefined ? [] : ["google"]),
-    ...(email === undefined ? [] : ["email-otp"]),
-    ...(devSignInAs === undefined ? [] : ["dev"]),
-  ].join(",");
+  // The list the sign-in page is told (`config.signIn`), so the log and the page cannot differ.
+  const methods = auth.methods.join(",");
   if (devSignInAs === undefined) {
     log.info("sign_in_configured", { methods });
   } else {

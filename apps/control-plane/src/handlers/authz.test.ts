@@ -63,6 +63,7 @@ function caller(user: SessionUser | null, superadmin = false) {
     worker: null,
     specReads: new Map(),
     googlePicker: null,
+    signInMethods: [],
   };
   return appRouter.createCaller(ctx);
 }

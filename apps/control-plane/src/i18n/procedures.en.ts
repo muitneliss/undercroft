@@ -98,5 +98,6 @@ export const procedureSentences: SentenceTable = {
   "runs.events": "What the worker is saying about a run.",
   "runs.trigger": "Read a source now. Admins.",
   "config.google": "The public half of the Google client, for the Drive picker.",
+  "config.signIn": "The ways to sign in this server offers, for the sign-in page.",
   health: "Whether the server is answering.",
 };

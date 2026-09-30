@@ -56,6 +56,7 @@ function caller(userId: string, email: string, worker: WorkerClient | null = nul
     worker,
     specReads: new Map(),
     googlePicker: null,
+    signInMethods: [],
   };
   return appRouter.createCaller(ctx);
 }

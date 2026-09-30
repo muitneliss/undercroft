@@ -112,5 +112,6 @@ export const procedureSentences: SentenceTable = {
   "runs.events": "Những gì worker đang báo về một lần chạy.",
   "runs.trigger": "Chạy ngay việc đọc một nguồn. Quản trị.",
   "config.google": "Nửa công khai của ứng dụng Google, cho trình chọn Drive.",
+  "config.signIn": "Các cách đăng nhập máy chủ này cung cấp, cho trang đăng nhập.",
   health: "Máy chủ có đang trả lời không.",
 };

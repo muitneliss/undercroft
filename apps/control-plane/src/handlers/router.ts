@@ -269,18 +269,27 @@ export const appRouter = router({
       }),
   }),
 
-  /**
-   * The public halves of the Google client, for the browser's Picker.
-   *
-   * A client id and an API key are public by design -- they identify the app, they do not
-   * authorise anything, and Google's own documentation puts both in page source. The client
-   * SECRET is not here and never crosses this boundary.
-   *
-   * `authedProcedure` rather than public: there is no reason for an anonymous visitor to
-   * learn which Google project a deployment belongs to.
-   */
+  /** What the browser needs to know about how this install is configured. */
   config: router({
+    /**
+     * The public halves of the Google client, for the browser's Picker.
+     *
+     * A client id and an API key are public by design -- they identify the app, they do not
+     * authorise anything, and Google's own documentation puts both in page source. The client
+     * SECRET is not here and never crosses this boundary.
+     *
+     * `authedProcedure` rather than public: there is no reason for an anonymous visitor to
+     * learn which Google project a deployment belongs to.
+     */
     google: authedProcedure.query(({ ctx }) => ctx.googlePicker),
+
+    /**
+     * The ways in, for the sign-in page. Public, and it has to be: the page asks before anybody
+     * is signed in. It names methods and never who a method signs in as -- the local method's
+     * address stays in the server's environment. ADR 0094: `dev` alone is a desktop install,
+     * and the page signs its owner in without a click.
+     */
+    signIn: publicProcedure.query(({ ctx }) => ({ methods: ctx.signInMethods })),
   }),
 
   health: publicProcedure.query(() => ({ ok: true })),
