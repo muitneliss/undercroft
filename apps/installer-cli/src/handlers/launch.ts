@@ -6,7 +6,13 @@
 
 import { join } from "node:path";
 import { log, note } from "@clack/prompts";
-import { type Answers, ENV_FILE, installUrl, type StepResult } from "@undercroft/setup";
+import {
+  type Answers,
+  ENV_FILE,
+  installUrl,
+  redirectUris,
+  type StepResult,
+} from "@undercroft/setup";
 import type { CliProblem } from "../services/options.ts";
 import type { Context, Exit } from "./context.ts";
 import { progress } from "./progress.ts";
@@ -59,16 +65,15 @@ async function withProgress(
 }
 
 function redirects(ctx: Context, answers: Answers, url: string): string[] {
+  const uris = redirectUris(url);
   return [
     ...(answers.mode === "server" && answers.signIn.kind === "google"
-      ? [ctx.t("redirect.googleSignIn", { uri: `${url}/api/auth/callback/google` })]
+      ? [ctx.t("redirect.googleSignIn", { uri: uris.googleSignIn })]
       : []),
     ...(answers.connectors.googleIngest === null
       ? []
-      : [ctx.t("redirect.googleIngest", { uri: `${url}/oauth/google/callback` })]),
-    ...(answers.connectors.xero === null
-      ? []
-      : [ctx.t("redirect.xero", { uri: `${url}/oauth/xero/callback` })]),
+      : [ctx.t("redirect.googleIngest", { uri: uris.googleIngest })]),
+    ...(answers.connectors.xero === null ? [] : [ctx.t("redirect.xero", { uri: uris.xero })]),
   ];
 }
 

@@ -47,3 +47,6 @@ apps/ui/public/fonts/
 # Prettier would check every Markdown file in it again -- under whatever `.prettierignore`
 # that branch happens to carry rather than this one.
 .worktrees/
+# The desktop app's generated trees (see `.gitignore`), for the same reason as the lines above.
+apps/desktop/.hutch/
+apps/desktop/artifacts/

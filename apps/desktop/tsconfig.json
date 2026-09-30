@@ -1,0 +1,13 @@
+{
+  "//": "The desktop app (ADR 0097), as the offline gate typechecks it. Electrobun 2 ships its SDK through its own toolchain rather than npm, so the three modules that import it -- the composition root, the view's bridge and the view's entry -- are left to tsconfig.electrobun.json, which `task ci:desktop-check` runs after `electrobun prepare` has projected the SDK. Everything else here is written against rpc.ts and handlers/shell.ts and checked in every gate.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx"
+  },
+  "include": ["src/**/*", "scripts/**/*", "package.json"],
+  "exclude": ["src/main.ts", "src/view/bridge.ts", "src/view/main.tsx"],
+  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/setup" }]
+}

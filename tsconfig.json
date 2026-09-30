@@ -15,6 +15,7 @@
     { "path": "./apps/ui" },
     { "path": "./apps/cli" },
     { "path": "./apps/installer-cli" },
+    { "path": "./apps/desktop" },
     { "path": "./apps/mcp-widgets" },
     { "path": "./scripts" }
   ]

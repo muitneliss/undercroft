@@ -110,6 +110,61 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Build the desktop app (ADR 0097) on one runner per platform: Electrobun builds only for the
+  # system it runs on, and publishes no macOS x64 core, so macOS is Apple Silicon alone. Each
+  # runner hands its `artifacts/` to the job below as a workflow artifact rather than uploading
+  # to the release itself, so one job writes one checksum file for the whole app.
+  #
+  # Nothing is signed or notarized: ADR 0097 records why, and `docs/runbook/install.md` tells a
+  # person what their system says about an unsigned app and how to verify the download instead.
+  build-desktop:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      - run: bun install --frozen-lockfile
+      - run: task build:desktop
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.runner }}
+          path: apps/desktop/artifacts/
+          if-no-files-found: error
+
+  # Attach every platform's installer and update files, and `undercroft-desktop-SHA256SUMS`, to
+  # the release, under Electrobun's names: the app's updater reads
+  # `releases/latest/download/stable-<os>-<arch>-update.json`, so the names are the contract.
+  release-desktop:
+    needs: [release-please, build-desktop]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: go-task/setup-task@v2
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: desktop-artifacts
+      - run: task cd:desktop-release DIR=desktop-artifacts TAG=${{ needs.release-please.outputs.tag_name }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Publish the release's images. Gated on a release actually being cut, and granting
   # packages:write on THIS job -- a called workflow can only narrow the caller's token.
   release-images:

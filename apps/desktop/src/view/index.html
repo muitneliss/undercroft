@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      No Content-Security-Policy here, deliberately: under `default-src 'self' views:` Electrobun
+      2.0.2's preload bridge never answered the view's first request, and the window stayed blank.
+      The page loads only this app's own bundled files, from `views://`.
+    -->
+    <title>Undercroft</title>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="index.js"></script>
+  </body>
+</html>

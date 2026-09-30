@@ -1,0 +1,13 @@
+{
+  "//": "The whole desktop app against the real Electrobun SDK: tsconfig.json plus the three modules it leaves out, with the `electrobun/*` paths `electrobun prepare` projects into .hutch/devkit. Run by `task ci:desktop-check`, never by the offline gate, which has no devkit.",
+  "extends": ["./tsconfig.json", "./.hutch/devkit/tsconfig.json"],
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*", "scripts/**/*", "package.json", "electrobun.config.ts"],
+  "exclude": []
+}

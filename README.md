@@ -94,7 +94,9 @@ Connect your accounts, declare what to pull in YAML, and write your own SQL on t
 
 The setup wizard installs Undercroft with Docker on Windows, macOS or Linux, either for one
 person on their own machine or for a team on a server. It installs the same stack the hosted
-server runs, and [installing Undercroft](docs/runbook/install.md) is the guide.
+server runs, and [installing Undercroft](docs/runbook/install.md) is the guide. Choose the
+[desktop app](docs/runbook/install.md#the-desktop-app), a window and a tray icon, if you would
+rather not open a terminal; the terminal wizard does the same and also runs unattended.
 
 ## Ways in
 
@@ -149,7 +151,8 @@ its ADR, and what exactly it accepts lives in a reference page.
 - **Architecture:** [the map of the system](docs/architecture.md): its services, data layers,
   key flows and security model, with diagrams.
 - **Runbooks,** one per way in or per thing to set up ([`docs/runbook/`](docs/runbook/)):
-  - Installing it: [on your own machine or a server](docs/runbook/install.md)
+  - Installing it: [on your own machine or a server](docs/runbook/install.md), with
+    [the desktop app](docs/runbook/install.md#the-desktop-app) or the terminal wizard
   - Getting started: [onboarding a new person](docs/runbook/onboarding.md)
   - Using it: [the CLI](docs/runbook/cli.md), [connecting an agent over MCP](docs/runbook/mcp-setup.md),
     [agent skills](docs/runbook/agent-skills.md)

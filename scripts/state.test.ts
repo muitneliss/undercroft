@@ -7,8 +7,9 @@
  * a throwaway project, copy the REAL rule files and sgconfig into it, write fixtures, run the
  * real pinned `ast-grep` binary) so this cannot pass against a stale copy of the rule.
  *
- * Fixture paths below are rooted at the literal string `apps/ui/...`, not `apps/demo/...` as
- * `layering.test.ts` uses -- `no-usestate.yml`'s `files:` is anchored to `"apps/ui/**"` itself
+ * Fixture paths below are rooted at the literal strings `apps/ui/...` and `apps/desktop/...`,
+ * not `apps/demo/...` as `layering.test.ts` uses -- `no-usestate.yml`'s `files:` is anchored to
+ * those two React trees themselves
  * (`useState` is a React concern with no equivalent glob elsewhere), unlike the layer rules,
  * which match on directory name alone. An `apps/demo/...` fixture would stay quiet for the wrong
  * reason: it would never match `files:` at all, exemption or not.
@@ -35,6 +36,19 @@ const FIXTURES: Record<string, string> = {
   `,
   "apps/ui/src/components/Bar.tsx": `
     export function Bar(): React.JSX.Element {
+      return <span>quiet</span>;
+    }
+  `,
+  // The desktop app's wizard is React too, with its own store (ADR 0097).
+  "apps/desktop/src/view/steps/Qux.tsx": `
+    import { useState } from "react";
+    export function Qux(): React.JSX.Element {
+      const [step, setStep] = useState("language");
+      return <span>{step}{String(setStep)}</span>;
+    }
+  `,
+  "apps/desktop/src/view/steps/Quux.tsx": `
+    export function Quux(): React.JSX.Element {
       return <span>quiet</span>;
     }
   `,
@@ -100,6 +114,16 @@ describe("useState is refused in application UI code", () => {
 
   it("a component with no useState is not", () => {
     expect(rulesOn("apps/ui/src/components/Bar.tsx")).toEqual([]);
+  });
+});
+
+describe("useState is refused in the desktop app's wizard too", () => {
+  it("a wizard component calling useState is refused", () => {
+    expect(rulesOn("apps/desktop/src/view/steps/Qux.tsx")).toContain("no-usestate-tsx");
+  });
+
+  it("a wizard component with no useState is not", () => {
+    expect(rulesOn("apps/desktop/src/view/steps/Quux.tsx")).toEqual([]);
   });
 });
 

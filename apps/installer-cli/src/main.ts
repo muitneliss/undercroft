@@ -11,12 +11,17 @@
  */
 
 import { homedir } from "node:os";
-import { join } from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import { systemClock } from "@undercroft/core";
 import { DEFAULT_LOCALE, type Locale } from "@undercroft/core/locale";
-import { type Arch, installation, type Platform, processRunner } from "@undercroft/setup";
+import {
+  type Arch,
+  defaultInstallDir,
+  installation,
+  type Platform,
+  processRunner,
+} from "@undercroft/setup";
 import pkg from "../package.json" with { type: "json" };
 import type { Context, Exit } from "./handlers/context.ts";
 import { dispatch } from "./handlers/dispatch.ts";
@@ -36,15 +41,14 @@ const platform: Platform =
 const arch: Arch = process.arch === "arm64" ? "arm64" : "x64";
 
 /**
- * Where an install lives when `--dir` does not say: the user's own local application data on
- * Windows, a dot-folder in the home directory elsewhere. Per user, never system-wide, because
- * the `.env` in it holds every secret and is readable by its owner alone.
+ * Where an install lives when `--dir` does not say. The setup package decides, so the desktop
+ * app finds the same install this wizard wrote (ADR 0097).
  */
 function defaultDir(): string {
-  const localAppData = process.env.LOCALAPPDATA;
-  return platform === "win32" && localAppData !== undefined
-    ? join(localAppData, "Undercroft")
-    : join(homedir(), ".undercroft");
+  return defaultInstallDir(platform, {
+    home: homedir(),
+    localAppData: process.env.LOCALAPPDATA,
+  });
 }
 
 /** The context for this run, worded in `locale`; `relocale` builds the next one. */

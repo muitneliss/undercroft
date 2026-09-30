@@ -261,3 +261,6 @@
 ## [2026-09-30] ingest | ADR 0096: The CLI signs in to a local install the way the browser does
 ## [2026-09-30] ingest | Runbook: The undercroft CLI
 ## [2026-09-30] ingest | Runbook: Installing Undercroft
+## [2026-09-30] ingest | Runbook: Installing Undercroft
+## [2026-09-30] ingest | ADR 0097: The desktop installer is an Electrobun app over the setup service
+## [2026-09-30] ingest | Runbook: Installing Undercroft

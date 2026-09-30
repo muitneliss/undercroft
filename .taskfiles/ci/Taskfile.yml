@@ -116,6 +116,15 @@ tasks:
     cmds:
       - bun run installer:check
 
+  desktop-check:
+    desc: >-
+      Typecheck the desktop app against the Electrobun SDK, build it for this OS, check the
+      bundle, then launch it and let it walk itself to the Docker step. Needs the network the
+      first time and a display (xvfb-run on Linux); not part of ci:verify. Pass `-- --no-launch`
+      where no window can open.
+    cmds:
+      - bun run desktop:check {{.CLI_ARGS}}
+
   skill-check:
     desc: >-
       Assert `npx skills add . --list` finds every skill under skills/. Needs the network (it

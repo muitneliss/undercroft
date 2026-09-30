@@ -100,6 +100,7 @@
 - [ADR 0094: A local install signs its owner in on loopback](sources/adr-0094-a-local-install-signs-its-owner-in-on-loopback.md)
 - [ADR 0095: Undercroft installs through a setup wizard that drives Docker](sources/adr-0095-undercroft-installs-through-a-setup-wizard-that-drives-docker.md)
 - [ADR 0096: The CLI signs in to a local install the way the browser does](sources/adr-0096-the-cli-signs-in-to-a-local-install-the-way-the-browser-does.md)
+- [ADR 0097: The desktop installer is an Electrobun app over the setup service](sources/adr-0097-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

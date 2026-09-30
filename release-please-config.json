@@ -8,7 +8,8 @@
       "extra-files": [
         { "type": "generic", "path": "skills/undercroft/references/cli.md" },
         { "type": "json", "path": "apps/cli/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "apps/installer-cli/package.json", "jsonpath": "$.version" }
+        { "type": "json", "path": "apps/installer-cli/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/desktop/package.json", "jsonpath": "$.version" }
       ]
     }
   }
