@@ -1,6 +1,6 @@
 ---
 name: undercroft
-description: Work in an Undercroft data platform through its MCP tools or its `undercroft` CLI -- list and trigger ingest runs, read the raw lake, manage connections, ingest keys and people, write and build dbt models, save reports and dashboards. Use whenever a task involves an Undercroft deployment (tenants such as CASE-0042, runs, the raw lake, dbt models, BI questions or dashboards), or when a person asks you to do something they would otherwise do in Undercroft's web UI. Read it before any Undercroft workflow skill, such as undercroft-model-builder. Also use it to report a defect you hit in Undercroft as a GitHub issue.
+description: Work in an Undercroft data platform through its MCP tools or its `undercroft` CLI -- list and trigger ingest runs, read the raw lake, manage connections, ingest keys and people, write and build dbt models, save reports and dashboards, and find documents by what they are (an invoice, a contract, a KYC form) through the customer's catalogue of document kinds. Use whenever a task involves an Undercroft deployment (tenants such as CASE-0042, runs, the raw lake, dbt models, BI questions or dashboards), or when a person asks you to do something they would otherwise do in Undercroft's web UI. Read it before any Undercroft workflow skill, such as undercroft-model-builder. Also use it to report a defect you hit in Undercroft as a GitHub issue.
 ---
 
 # Undercroft
@@ -29,6 +29,11 @@ Every role check and every refusal the web UI has applies to you unchanged.
   so it is as fresh as the model's last build, never fresher. Keep it thin: pick, filter,
   group and sort one model. Logic a second question would repeat belongs in a model.
 - **Dashboard**: saved questions on a grid, under shared filters.
+- **Document kind**: what a document is -- `invoice`, `contract`, `kyc_form`, `other` -- from
+  the customer's own catalogue of kinds. A classifier assigns one to every readable file,
+  attachment and mail body in the background, so "find the KYC forms" is a filter, not a
+  keyword search. Read `references/document-kinds.md` before you answer with a kind or change
+  the catalogue: publishing a catalogue sends every document to the classifier again.
 
 When a person finds the word "question" odd, tell them what it is. Do not rename it in
 what you save.
