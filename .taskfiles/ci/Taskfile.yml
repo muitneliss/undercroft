@@ -5,6 +5,7 @@ version: "3"
 vars:
   COMPOSE_FILE: "{{.ROOT_DIR}}/deploy/compose/docker-compose.yml"
   COMPOSE_SERVER_FILE: "{{.ROOT_DIR}}/deploy/compose/docker-compose.server.yml"
+  COMPOSE_INSTALL_FILE: "{{.ROOT_DIR}}/deploy/compose/docker-compose.install.yml"
   COMPOSE_EXAMPLE_ENV: "{{.ROOT_DIR}}/deploy/compose/.env.example"
 
 tasks:
@@ -76,11 +77,11 @@ tasks:
       - UNDERCROFT_ITEST=1 bun test integration
 
   compose-check:
-    desc: Assert every compose service (dev + server variant) declares a memory limit.
+    desc: Assert every compose service (dev, server and install variants) declares a memory limit.
     cmds:
       - |
         fail=0
-        for file in {{.COMPOSE_FILE}} {{.COMPOSE_SERVER_FILE}}; do
+        for file in {{.COMPOSE_FILE}} {{.COMPOSE_SERVER_FILE}} {{.COMPOSE_INSTALL_FILE}}; do
           missing=$(docker compose -f "$file" --env-file {{.COMPOSE_EXAMPLE_ENV}} config --format json \
             | python3 -c 'import json,sys; c=json.load(sys.stdin); \
               print("\n".join(n for n,s in c["services"].items() \
@@ -107,6 +108,13 @@ tasks:
       and assert --help and `describe --agent` answer. Needs Node 22+ and npm on PATH.
     cmds:
       - bun run cli:pack-check
+
+  installer-check:
+    desc: >-
+      Compile this machine's setup wizard, then run it with no Docker: --help, --version, an
+      unattended --dry-run, and two refusals. Not part of ci:verify -- compiling takes a while.
+    cmds:
+      - bun run installer:check
 
   skill-check:
     desc: >-

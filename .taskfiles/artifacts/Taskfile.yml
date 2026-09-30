@@ -22,6 +22,14 @@ tasks:
     cmds:
       - bun run build:cli-pack
 
+  installer-cli:
+    desc: >-
+      Compile the setup wizard for linux-x64/arm64, darwin-arm64/x64 and windows-x64 into
+      apps/installer-cli/dist/, with undercroft-installer-SHA256SUMS. Needs the network (Bun
+      fetches each target's runtime). ADR 0095.
+    cmds:
+      - bun run build:installer-cli
+
   spec-schema:
     desc: Emit the connector spec's JSON Schema to specs/schema/connector.v1.json.
     cmds:

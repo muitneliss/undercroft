@@ -46,6 +46,8 @@
     "build:cli": "bun run apps/cli/scripts/build.ts",
     "build:cli-pack": "bun run apps/cli/scripts/pack.ts",
     "cli:pack-check": "bun run apps/cli/scripts/packCheck.ts",
+    "build:installer-cli": "bun run apps/installer-cli/scripts/build.ts",
+    "installer:check": "bun run apps/installer-cli/scripts/check.ts",
     "skill:check": "bun run scripts/skillCheck.ts",
     "test": "bun test --parallel --timeout 10000",
     "itest": "UNDERCROFT_ITEST=1 bun test integration",

@@ -1,0 +1,10 @@
+{
+  "//": "The terminal setup wizard (ADR 0095): Clack prompts over @undercroft/setup, compiled per platform by scripts/build.ts.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*", "scripts/**/*", "package.json"],
+  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/setup" }]
+}

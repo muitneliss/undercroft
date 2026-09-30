@@ -1,7 +1,8 @@
 # scripts/dokploy.ts, one task per subcommand -- CI runs these, and an operator runs the
 # same commands by hand for a manual deploy or a rollback. The Dokploy API is the only
 # channel for a change; see .claude/rules/deployment.md and docs/runbook/deployment.md.
-# `cli-upload` is the one delivery that is not a deploy: it attaches the CLI to a release.
+# `cli-upload` and `installer-upload` are the two deliveries that are not a deploy: each
+# attaches files to a release.
 #
 # Credentials (DOKPLOY_API_ENDPOINT/API_KEY/COMPOSE_ID) come from the ambient environment,
 # exactly as they do for `bun run scripts/dokploy.ts` today -- Task does not manage them.
@@ -63,6 +64,27 @@ tasks:
       # only for a name every release shares, which a versioned name never is (ADR 0046).
       - cp {{.VERSIONED}} {{.LATEST}}
       - gh release upload {{.TAG}} {{.VERSIONED}} {{.LATEST}} --clobber
+
+  installer-upload:
+    desc: >-
+      Attach the compiled setup wizard and its checksums to the GitHub release TAG (after task
+      build:installer-cli). Usage: task cd:installer-upload TAG=v1.2.3 -- needs GH_TOKEN.
+    requires:
+      vars: [TAG]
+    cmds:
+      # Every file is named without a version, so `releases/latest/download/<name>` finds the
+      # newest one and `releases/download/<tag>/<name>` pins one (ADR 0046, ADR 0095). They are
+      # listed rather than globbed, so a stray file in dist/ is never published. --clobber makes
+      # a re-run replace them.
+      - >-
+        gh release upload {{.TAG}} --clobber
+        apps/installer-cli/dist/undercroft-installer-linux-x64
+        apps/installer-cli/dist/undercroft-installer-linux-arm64
+        apps/installer-cli/dist/undercroft-installer-darwin-arm64
+        apps/installer-cli/dist/undercroft-installer-darwin-x64
+        apps/installer-cli/dist/undercroft-installer-windows-x64.exe
+        apps/installer-cli/dist/undercroft-installer-SHA256SUMS
+        deploy/install/install.sh
 
   release:
     desc: "The full manual deploy sequence from docs/runbook/deployment.md. Usage: task cd:release TAG=v1.2.3"

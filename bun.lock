@@ -39,7 +39,7 @@
     },
     "apps/cli": {
       "name": "@undercroft/cli",
-      "version": "1.53.0",
+      "version": "1.55.0",
       "dependencies": {
         "@clack/core": "1.5.1",
         "@clack/prompts": "1.8.1",
@@ -83,6 +83,16 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "15.11.7",
         "@modelcontextprotocol/client": "2.1.0",
+      },
+    },
+    "apps/installer-cli": {
+      "name": "@undercroft/installer-cli",
+      "version": "1.55.0",
+      "dependencies": {
+        "@clack/prompts": "1.8.1",
+        "@undercroft/core": "workspace:*",
+        "@undercroft/setup": "workspace:*",
+        "i18next": "26.4.2",
       },
     },
     "apps/mcp-widgets": {
@@ -227,6 +237,13 @@
       "version": "0.1.0",
       "dependencies": {
         "@aws-sdk/client-s3": "3.717.0",
+        "@undercroft/core": "workspace:*",
+      },
+    },
+    "packages/setup": {
+      "name": "@undercroft/setup",
+      "version": "0.1.0",
+      "dependencies": {
         "@undercroft/core": "workspace:*",
       },
     },
@@ -1166,9 +1183,13 @@
 
     "@undercroft/db": ["@undercroft/db@workspace:packages/db"],
 
+    "@undercroft/installer-cli": ["@undercroft/installer-cli@workspace:apps/installer-cli"],
+
     "@undercroft/lake": ["@undercroft/lake@workspace:packages/lake"],
 
     "@undercroft/mcp-widgets": ["@undercroft/mcp-widgets@workspace:apps/mcp-widgets"],
+
+    "@undercroft/setup": ["@undercroft/setup@workspace:packages/setup"],
 
     "@undercroft/telemetry": ["@undercroft/telemetry@workspace:packages/telemetry"],
 
