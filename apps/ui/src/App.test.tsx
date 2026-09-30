@@ -24,15 +24,11 @@ import { App } from "@/App.tsx";
 // For its side effect as much as for `translatorFor`: `useTranslation` resolves against the
 // module-level i18next singleton, and without it every key renders as itself. See `@/i18n`.
 import { translatorFor } from "@/i18n/index.ts";
-import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
 const SIGNED_IN_AS = "ops@example.test";
 
-afterEach(() => {
-  cleanup();
-  useUiStore.getState().setTenantSearch("");
-});
+afterEach(cleanup);
 
 /** The one procedure this suite models, in the envelope tRPC reads. */
 function answerSessionMe(): Response {
@@ -127,11 +123,45 @@ describe("the public and signed-in home", () => {
     );
     expect(screen.queryByRole("link", { name: "Hồ sơ Xanh" })).toBeNull();
     fireEvent.click(
-      screen.getByRole("button", { name: translatorFor("vi")("tenants.clearSearch") }),
+      screen.getByRole("button", { name: translatorFor("vi")("tenants.clearFilters") }),
     );
     expect(screen.getByRole("link", { name: "Hồ sơ Xanh" }).getAttribute("href")).toBe(
       "/tenants/CASE-0108",
     );
+  });
+
+  it("narrows the customers by the reader's role together with the search, counting only what it lists", async () => {
+    // Public promise (#348): the role filter and the search narrow together, the count is the
+    // rows listed, and one clear restores every customer.
+    renderAt("/tenants", {
+      "session.me": answerSessionMe(),
+      "tenants.list": Response.json({
+        result: {
+          data: [
+            { id: "CASE-0042", displayName: "Hồ sơ Đỏ", role: "admin" },
+            { id: "CASE-0043", displayName: "Hồ sơ Xanh", role: "viewer" },
+          ],
+        },
+      }),
+    });
+    const t = translatorFor("vi");
+    function listed(): string[] {
+      return screen.queryAllByRole("rowheader").map((cell) => cell.textContent ?? "");
+    }
+
+    fireEvent.change(await screen.findByLabelText(t("tenants.roleLabel")), {
+      target: { value: "viewer" },
+    });
+    expect(listed()).toEqual(["Hồ sơ XanhCASE-0043"]);
+    expect(screen.getByRole("status").textContent).toBe(t("tenants.caption", { count: 1 }));
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "0042" } });
+    expect(listed()).toEqual([]);
+    expect(screen.getByRole("status").textContent).toBe(t("tenants.caption", { count: 0 }));
+
+    fireEvent.click(screen.getByRole("button", { name: t("tenants.clearFilters") }));
+    expect(listed()).toEqual(["Hồ sơ ĐỏCASE-0042", "Hồ sơ XanhCASE-0043"]);
+    expect(screen.getByRole("status").textContent).toBe(t("tenants.caption", { count: 2 }));
   });
 
   it("takes a public visitor from the introduction to the sign-in form", async () => {
