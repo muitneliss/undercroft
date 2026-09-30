@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.55.0](https://github.com/muitneliss/undercroft/compare/v1.54.0...v1.55.0) (2026-09-30)
+
+
+### Features
+
+* follow one account from its source card to the runs, the scope each read with, and the records it wrote (ADR 0091) ([#356](https://github.com/muitneliss/undercroft/issues/356)) ([4db874e](https://github.com/muitneliss/undercroft/commit/4db874e4e4f92adb10be30a3fa837e534ab5f281))
+* **models:** build counts that narrow the list, and a declared-only lineage view (ADR 0092) ([#355](https://github.com/muitneliss/undercroft/issues/355)) ([b88d547](https://github.com/muitneliss/undercroft/commit/b88d5474e88f69bec59d082f5470eb80d41985a1))
+* print the contact address on the blog and the homepage ([#360](https://github.com/muitneliss/undercroft/issues/360)) ([87387ac](https://github.com/muitneliss/undercroft/commit/87387acdb4c0c0ff911f2d2d61d027bdb117eee1))
+* **semantic:** a document keeps its last accepted kind while a new catalogue is asked (ADR 0093) ([#357](https://github.com/muitneliss/undercroft/issues/357)) ([d2a8a85](https://github.com/muitneliss/undercroft/commit/d2a8a85068c6d2ab19835a8c16e395259ec17d36))
+* **ui:** keep a dashboard's filters and every figure with the reader in Reports (ADR 0090) ([#353](https://github.com/muitneliss/undercroft/issues/353)) ([2fdd2eb](https://github.com/muitneliss/undercroft/commit/2fdd2ebd5a51ce6d31a6dad186530d8b2b06e308)), closes [#347](https://github.com/muitneliss/undercroft/issues/347)
+* **ui:** show role limits in People and Customers before the server refuses ([#352](https://github.com/muitneliss/undercroft/issues/352)) ([3cda25d](https://github.com/muitneliss/undercroft/commit/3cda25d3cff1c90a03a192815afde7c3f1073f20)), closes [#348](https://github.com/muitneliss/undercroft/issues/348)
+
+
+### Bug Fixes
+
+* **ui:** drop the "not guessed" slogan from user-facing text ([#358](https://github.com/muitneliss/undercroft/issues/358)) ([0820881](https://github.com/muitneliss/undercroft/commit/0820881db309af1da2dfa4923cc40797e55c131f))
+
 ## [1.54.0](https://github.com/muitneliss/undercroft/compare/v1.53.0...v1.54.0) (2026-09-30)
 
 
