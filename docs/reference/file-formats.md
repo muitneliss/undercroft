@@ -119,8 +119,8 @@ The text is recorded as `doc`.
 Three kinds of file are refused by name:
 
 - `legacy-doc-unsupported`: the file was saved by Word 95 or earlier. Its text is in the
-  codepage of whichever machine saved it, so reading it would be a guess. To read it, open it
-  in Word and save it as `.docx`.
+  codepage of whichever machine saved it, so it cannot be read exactly. To read it, open it in
+  Word and save it as `.docx`.
 - `doc-password-protected`: the file was saved with a password. Its bytes are intact in the
   lake, and reading it needs an unlocked copy from the sender.
 - `doc-unreadable`: the file is not a Word document that can be read exactly, for example a

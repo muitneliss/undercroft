@@ -250,3 +250,4 @@
 ## [2026-09-30] ingest | What an ingest run counts
 ## [2026-09-30] ingest | Design: Operator and reader paths
 ## [2026-09-30] ingest | ADR 0090 Reports Computes No Figure It Cannot Stand Behind
+## [2026-09-30] ingest | File formats a Gmail or Drive connection can land

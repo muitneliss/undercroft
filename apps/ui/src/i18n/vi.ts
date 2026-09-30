@@ -587,7 +587,7 @@ export const vi = {
   kinds: {
     head: "Loại tài liệu",
     title: "Danh mục loại tài liệu",
-    lead: "Mỗi tài liệu đọc được của {{tenantId}} được phân loại vào đúng một loại trong danh mục này. Một câu trả lời dưới độ tin cậy 0,90 để trống, không đoán.",
+    lead: "Mỗi tài liệu đọc được của {{tenantId}} được phân loại vào đúng một loại trong danh mục này. Một câu trả lời dưới độ tin cậy 0,90 được để trống.",
     notLoaded: "Không tải được danh mục loại tài liệu của {{tenantId}}.",
     back: "Về Hồ dữ liệu",
     published: "Đang phân loại theo phiên bản {{version}}, publish lúc {{when}} bởi {{by}}.",
@@ -1156,7 +1156,7 @@ export const vi = {
       noBytesNote: "Nguồn trả về một tệp rỗng. Không cần làm gì.",
       legacyDoc: "Tệp .doc từ Word 95 trở về trước, không đọc",
       legacyDocNote:
-        "Chữ trong tệp này theo bảng mã của máy đã lưu nó, nên đọc thì chỉ là đoán. Muốn đọc, hãy mở bằng Word và lưu lại thành .docx.",
+        "Chữ trong tệp này theo bảng mã của máy đã lưu nó, nên không đọc chính xác được. Muốn đọc, hãy mở bằng Word và lưu lại thành .docx.",
       legacyXls: "Định dạng .xls cũ, không đọc",
       legacyXlsNote:
         "Chưa có trình đọc cho bảng tính nhị phân trước 2007 — một quyết định đã cân nhắc, không phải lỗi.",
@@ -1390,7 +1390,7 @@ export const vi = {
     notLoaded: "Không tải được dòng dữ liệu của {{tenantId}}.",
     empty:
       "Dòng dữ liệu được vẽ từ các mô hình. Khi đã có mô hình, mỗi quan hệ nó khai báo sẽ hiện ở đây.",
-    lead: "Chỉ vẽ quan hệ đọc từ khai báo của chính các mô hình: ref() giữa hai mô hình, và bảng hồ thô được khai báo làm nguồn dbt bằng source(), kể cả qua macro. Không suy từ tên giống nhau, bộ lọc hay dữ liệu, nên ở đây không có tài khoản nguồn hay báo cáo nào. Chọn một mô hình để tô cả chuỗi thượng nguồn của nó.",
+    lead: "Chỉ vẽ quan hệ đọc từ khai báo của chính các mô hình: ref() giữa hai mô hình, và bảng hồ thô được khai báo làm nguồn dbt bằng source(), kể cả qua macro, nên tài khoản nguồn và báo cáo không có ở đây. Chọn một mô hình để tô cả chuỗi thượng nguồn của nó.",
     pickLabel: "Mô hình",
     pickNone: "Không chọn",
     pick: "Tô thượng nguồn",
