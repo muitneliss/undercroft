@@ -89,13 +89,14 @@ function provider(
   };
 }
 
-async function pass(ask: SemanticAsk) {
+async function pass(ask: SemanticAsk, stop?: AbortSignal) {
   const current = await currentDefinition(db, TENANT);
   if (current === null) {
     throw new Error("nothing published");
   }
   await syncDefinition(db, TENANT, current);
-  return classifyPass({ exec: db, ask }, SCOPE, catalogueOf(current), "run-1");
+  const deps = { exec: db, ask, ...(stop === undefined ? {} : { stop }) };
+  return classifyPass(deps, SCOPE, catalogueOf(current), "run-1");
 }
 
 /** A run starting under the newest catalogue: the view learns which version is current. */
@@ -189,6 +190,65 @@ describe("classifyPass", () => {
 
     expect(again.classified).toBe(2);
     expect((await stored()).map((row) => row.version)).toEqual([2, 2]);
+  });
+});
+
+describe("several texts at once", () => {
+  it("stores each text's own answer when the replies arrive out of order", async () => {
+    await land("f1", "a".repeat(64), INVOICE);
+    await land("f2", "b".repeat(64), CONTRACT);
+    await publish(1, KINDS);
+    // The invoice is asked first and answered only once the contract has been asked: a pass that
+    // waited on each call in turn would never finish, and one that paired replies by arrival
+    // would store them crossed.
+    const contractAsked = Promise.withResolvers<void>();
+    const crossing: SemanticAsk = async (text) => {
+      if (text === CONTRACT) {
+        contractAsked.resolve();
+        return chose("contract");
+      }
+      await contractAsked.promise;
+      return chose("invoice");
+    };
+
+    await pass(crossing);
+
+    expect(await stored()).toEqual([
+      { status: "classified", kind: "invoice", version: 1 },
+      { status: "classified", kind: "contract", version: 1 },
+    ]);
+  });
+
+  it("a stop keeps the answers already in flight and leaves the rest due", async () => {
+    const texts = Array.from({ length: 8 }, (_, i) => `${INVOICE} Copy ${String(i)}.`);
+    for (const [i, text] of texts.entries()) {
+      await land(`f${String(i)}`, String(i).repeat(64), text);
+    }
+    await publish(1, KINDS);
+    // Three calls are in flight when the stop arrives, and all three are answered after it.
+    const stop = new AbortController();
+    const thirdAsked = Promise.withResolvers<void>();
+    let asked = 0;
+    const stopping: SemanticAsk = async () => {
+      asked += 1;
+      if (asked === 3) {
+        stop.abort();
+        thirdAsked.resolve();
+      }
+      await thirdAsked.promise;
+      return chose("invoice");
+    };
+
+    const first = await pass(stopping, stop.signal);
+    const afterStop = await stored();
+    // Refuses the three already answered, so asking one again fails the pass.
+    const rest = await pass(
+      provider(Object.fromEntries(texts.slice(3).map((text) => [text, chose("invoice")]))),
+    );
+
+    expect(first.stopped).toBe(true);
+    expect(afterStop).toHaveLength(3);
+    expect(rest.classified).toBe(5);
   });
 });
 

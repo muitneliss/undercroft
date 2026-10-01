@@ -280,3 +280,4 @@
 ## [2026-10-01] ingest | Runbook HubSpot Setup
 ## [2026-10-01] ingest | What an ingest run counts
 ## [2026-10-01] ingest | Runbook HubSpot Setup
+## [2026-10-01] ingest | ADR 0102 A Classifying Pass Asks Several Texts at Once
