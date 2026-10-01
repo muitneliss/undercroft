@@ -103,6 +103,7 @@
 - [ADR 0097 Lineage Is Drawn on a Board the Reader Arranges](sources/adr-0097-lineage-is-drawn-on-a-board-the-reader-arranges.md)
 - [ADR 0098: The desktop installer is an Electrobun app over the setup service](sources/adr-0098-the-desktop-installer-is-an-electrobun-app-over-the-setup-service.md)
 - [ADR 0099: Screens are compared as pictures by Vitest, and nothing else uses it](sources/adr-0099-screens-are-compared-as-pictures-by-vitest-and-nothing-else-uses-it.md)
+- [ADR 0100 The Lineage Board's Selected Chains Flow](sources/adr-0100-the-lineage-board-s-selected-chains-flow.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

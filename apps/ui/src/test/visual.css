@@ -10,8 +10,9 @@
  *
  * So no element animates at all. That draws the same page, because every keyframe in
  * `index.css` ends on the element's own resting style (`leaf-turn`, `punch-through`,
- * `hinge-down` at `transform: none`; `ink-set`, `slip-tip` at `opacity: 1`), and the two
- * infinite ones (a run link's flow, a skeleton's line being set) rest at their first frame. A
+ * `hinge-down` at `transform: none`; `ink-set`, `slip-tip` at `opacity: 1`), and the
+ * infinite ones (a run link's flow, a lineage wire's beads, a skeleton's line being set) rest at
+ * their first frame. A
  * zero duration instead of no animation drew the same end state but left each row that had
  * run one in its own compositing layer, whose glyphs anti-aliased differently run to run.
  * Transitions end at once.

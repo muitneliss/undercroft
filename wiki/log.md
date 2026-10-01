@@ -275,3 +275,4 @@
 ## [2026-09-30] ingest | ADR 0099: Screens are compared as pictures by Vitest, and nothing else uses it
 ## [2026-09-30] ingest | Runbook: Visual regression tests
 ## [2026-09-30] ingest | Runbook Google Ingestion Setup
+## [2026-10-01] ingest | ADR 0100 The Lineage Board's Selected Chains Flow
