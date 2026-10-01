@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.59.0](https://github.com/muitneliss/undercroft/compare/v1.58.0...v1.59.0) (2026-10-01)
+
+
+### Features
+
+* **ui:** give the models lineage board the leaf's full width, a readable zoom floor and full screen ([#373](https://github.com/muitneliss/undercroft/issues/373)) ([c225fdd](https://github.com/muitneliss/undercroft/commit/c225fdd613b9481e5bef7d60d46d48166d30f3ba))
+
 ## [1.58.0](https://github.com/muitneliss/undercroft/compare/v1.57.0...v1.58.0) (2026-09-30)
 
 
