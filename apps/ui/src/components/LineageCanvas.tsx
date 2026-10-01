@@ -37,7 +37,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import type { TFunction } from "i18next";
-import { useEffect, useMemo } from "react";
+import { type RefObject, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ModelItem, ModelLineage as Graph } from "@/api/types.ts";
@@ -50,6 +50,7 @@ import {
   type WireEdge,
 } from "@/components/LineageCards.tsx";
 import { type Focus, laneLabel, nodeState } from "@/lib/lineage.ts";
+import { useFullscreen } from "@/lib/fullscreen.ts";
 import { BoardContext } from "@/lib/lineageBoard.ts";
 import { layout } from "@/lib/lineageLayout.ts";
 
@@ -69,9 +70,10 @@ const HEAD_H = 32;
  * How a fitted view frames what it fits: never enlarged past life size, and never shrunk past
  * where a card's name can still be read. A project too big for the board at that floor is
  * fitted from its middle, and the reader pans to the rest -- the mini map says where they are.
- * Fitting all of a sixty-model project at once drew every name as a grey smear.
+ * Fitting all of a sixty-model project at once drew every name as a grey smear, and so did a
+ * floor of 0.6: a card's caption came out at six pixels.
  */
-const FIT = { padding: 0.12, minZoom: 0.6, maxZoom: 1 } as const;
+const FIT = { padding: 0.12, minZoom: 0.85, maxZoom: 1 } as const;
 
 /** Every card at the place `layout` gives it, and a heading over every column that has one. */
 function toNodes(t: TFunction, graph: Graph, drawn: Graph): Node[] {
@@ -139,10 +141,22 @@ function FollowSelection({ ids }: { ids: string }): null {
   return null;
 }
 
-/** The board's own furniture: the zoom plates, the mini map, and the way back to the layout. */
-function Furniture({ nodes, focus }: { nodes: Node[]; focus: Focus }): React.JSX.Element {
+/**
+ * The board's own furniture: the zoom plates, the mini map, the way back to the layout, and the
+ * way to full screen -- for the bench, not the board alone, so the details stay beside it.
+ */
+function Furniture({
+  nodes,
+  focus,
+  bench,
+}: {
+  nodes: Node[];
+  focus: Focus;
+  bench: RefObject<HTMLElement | null>;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const { setNodes, fitView } = useReactFlow();
+  const screen = useFullscreen(bench);
   return (
     <>
       <Background gap={18} size={1} variant={BackgroundVariant.Dots} />
@@ -156,7 +170,17 @@ function Furniture({ nodes, focus }: { nodes: Node[]; focus: Focus }): React.JSX
         pannable={true}
         zoomable={true}
       />
-      <Panel position="top-right">
+      <Panel className="row" position="top-right">
+        {screen.available ? (
+          <button
+            aria-pressed={screen.on}
+            className="plate plate--small"
+            onClick={screen.toggle}
+            type="button"
+          >
+            {screen.on ? t("lineage.exitFullscreen") : t("lineage.fullscreen")}
+          </button>
+        ) : null}
         <button
           className="plate plate--small"
           onClick={(): void => {
@@ -178,6 +202,7 @@ export function LineageCanvas({
   focus,
   builds,
   select,
+  bench,
 }: {
   graph: Graph;
   /** The part of `graph` on the board: all of it, or the selection's chains. */
@@ -185,6 +210,8 @@ export function LineageCanvas({
   focus: Focus;
   builds: ReadonlyMap<string, ModelItem>;
   select: (name: string | null) => void;
+  /** The board and its details together: what full screen fills. */
+  bench: RefObject<HTMLElement | null>;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const nodes = useMemo(() => toNodes(t, graph, drawn), [t, graph, drawn]);
@@ -217,7 +244,7 @@ export function LineageCanvas({
             elementsSelectable={false}
             fitView={true}
             fitViewOptions={FIT}
-            maxZoom={1.5}
+            maxZoom={2}
             minZoom={0.1}
             nodesConnectable={false}
             nodesFocusable={false}
@@ -229,7 +256,7 @@ export function LineageCanvas({
             // `@xyflow/react` is MIT, which asks for it, not requires it. The run map does the same.
             proOptions={{ hideAttribution: true }}
           >
-            <Furniture focus={focus} nodes={nodes} />
+            <Furniture bench={bench} focus={focus} nodes={nodes} />
             <FollowSelection ids={followed} />
           </ReactFlow>
         </ReactFlowProvider>

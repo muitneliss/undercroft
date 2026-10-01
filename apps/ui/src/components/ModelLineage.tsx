@@ -14,7 +14,7 @@
  * the address and nothing else, so Back retraces a trace one step at a time.
  */
 
-import { useCallback, useId, useMemo } from "react";
+import { useCallback, useId, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -72,6 +72,7 @@ function LineageView({ graph, tenantId }: { graph: Graph; tenantId: string }): R
     () => (list.data === undefined ? NO_BUILDS : new Map(list.data.map((m) => [m.name, m]))),
     [list.data],
   );
+  const benchRef = useRef<HTMLDivElement>(null);
   const asked = params.get(MODEL_PARAM);
   const selected = selectedNode(graph, params);
   const related = isRelatedScope(params) && selected !== null;
@@ -94,8 +95,15 @@ function LineageView({ graph, tenantId }: { graph: Graph; tenantId: string }): R
         <p className="note">{t("lineage.unknownModel", { name: asked })}</p>
       ) : null}
       <Legend focus={focus} graph={graph} />
-      <div className="lineage-bench">
-        <LineageCanvas builds={builds} drawn={drawn} focus={focus} graph={graph} select={select} />
+      <div className="lineage-bench" ref={benchRef}>
+        <LineageCanvas
+          bench={benchRef}
+          builds={builds}
+          drawn={drawn}
+          focus={focus}
+          graph={graph}
+          select={select}
+        />
         <LineageDetail
           builds={builds}
           focus={focus}

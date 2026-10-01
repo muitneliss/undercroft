@@ -1545,6 +1545,8 @@ export const vi = {
     declaredSource: "▭ Nguồn dbt đã khai báo",
     undeclaredMark: "? Thượng nguồn chưa khai báo",
     resetLayout: "Sắp lại như ban đầu",
+    fullscreen: "Toàn màn hình",
+    exitFullscreen: "Thoát toàn màn hình",
     controls: "Điều khiển sơ đồ",
     zoomIn: "Phóng to",
     zoomOut: "Thu nhỏ",
