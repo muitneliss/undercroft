@@ -46,16 +46,16 @@ The web UI has the same catalogue on the Lake division's **Document kinds** page
 An admin reads them with `lake.query`, from the view `document_kinds`, one row per live
 document that has been answered:
 
-| Column               | What it says                                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `source`             | The source the document came from, such as `drive` or `gmail.3fa9c1d2e0ab`.                                                                                  |
-| `document_id`        | The document, as `documents` names it. A mail's body is `<messageId>:body`.                                                                                  |
-| `kind`, `confidence` | The classifier's answer and how sure it was, 0 to 1, whatever the confidence.                                                                                |
-| `accepted_kind`      | The kind at 0.90 or above under the CURRENT catalogue, else NULL. Count with this when only confirmed answers may count.                                     |
-| `last_accepted_kind` | The kind at 0.90 or above under whichever catalogue gave the answer. Use this for a list or dashboard that must not go blank while a new catalogue is asked. |
-| `current`            | `true` when the answer was given under the current catalogue. `false` means it is an old answer, still waiting to be asked again.                            |
-| `version`            | The catalogue version that gave the answer.                                                                                                                  |
-| `status`, `reason`   | `classified`, `too-short` (under 60 characters, never sent), `invalid-response` or `provider-error`, with why.                                               |
+| Column               | What it says                                                                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`             | The source the document came from, such as `drive` or `gmail.3fa9c1d2e0ab`.                                                                                           |
+| `document_id`        | The document, as `documents` names it. A mail's body is `<messageId>:body`; a HubSpot note's, call's or task's text is `<entity>:<id>:body`, such as `notes:51:body`. |
+| `kind`, `confidence` | The classifier's answer and how sure it was, 0 to 1, whatever the confidence.                                                                                         |
+| `accepted_kind`      | The kind at 0.90 or above under the CURRENT catalogue, else NULL. Count with this when only confirmed answers may count.                                              |
+| `last_accepted_kind` | The kind at 0.90 or above under whichever catalogue gave the answer. Use this for a list or dashboard that must not go blank while a new catalogue is asked.          |
+| `current`            | `true` when the answer was given under the current catalogue. `false` means it is an old answer, still waiting to be asked again.                                     |
+| `version`            | The catalogue version that gave the answer.                                                                                                                           |
+| `status`, `reason`   | `classified`, `too-short` (under 60 characters, never sent), `invalid-response` or `provider-error`, with why.                                                        |
 
 What the answers do not say:
 

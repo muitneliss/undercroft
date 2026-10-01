@@ -22,12 +22,14 @@ import {
   readEntity,
   type RunContext,
 } from "@undercroft/connector-runtime";
-import { type ConnectorEntity, type ConnectorSpec, sourceKind } from "@undercroft/contracts";
+import { type ConnectorEntity, sourceKind } from "@undercroft/contracts";
 import { createByteFetcher } from "@undercroft/core";
+import type { RunEntity } from "@undercroft/db/repos";
 
+import { DOCUMENT_ENTITY, documentsEntity } from "./documentSink.ts";
 import { createGoogleApi, googleMinIntervalMs } from "./google/api.ts";
 import { type CollectResult, runGoogleCollect } from "./google/collect.ts";
-import type { LandSummary, RefusalWriter } from "./landing.ts";
+import type { RefusalWriter } from "./landing.ts";
 import { NotGranted } from "./notGranted.ts";
 import { createRecordSink } from "./recordSink.ts";
 import { parentOf, RelationIds } from "./relationIds.ts";
@@ -36,6 +38,7 @@ import type { Ledger, RunDeps } from "./runTypes.ts";
 import { resolveToken, RunStopped } from "./runTypes.ts";
 import type { RunJournal } from "./runJournal.ts";
 import { type Ended, keepingEnd } from "./keepingEnd.ts";
+import { readingDocuments, type SpecDocuments } from "./specDocuments.ts";
 import { openSpecRun, type SpecRun } from "./specRun.ts";
 import { openStreamCursor, type StreamCursor } from "./streamCursor.ts";
 
@@ -135,22 +138,8 @@ function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entit
       refused: refusedOf(recordsEntity),
       ...(result.reread === null ? {} : { reread: { ...result.reread } }),
     },
-    {
-      entity: "documents",
-      landed: result.documents.created + result.documents.unchanged,
-      created: result.documents.created,
-      changed: 0,
-      unchanged: result.documents.unchanged,
-      refused: refusedOf("documents"),
-    },
-    ...result.alongside.map((stream) => ({
-      entity: stream.entity,
-      landed: stream.landed,
-      created: stream.created,
-      changed: stream.changed,
-      unchanged: stream.unchanged,
-      refused: refusedOf(stream.entity),
-    })),
+    documentsEntity(result.documents, refusedOf(DOCUMENT_ENTITY)),
+    ...result.alongside.map((stream) => ({ ...stream, refused: refusedOf(stream.entity) })),
   ];
 }
 
@@ -158,18 +147,18 @@ function entitiesOf(result: CollectResult, recordsEntity: string): Ledger["entit
 interface EntityRun {
   readonly deps: RunDeps;
   readonly input: { source: string; tenantId: string; runId: string };
-  readonly spec: ConnectorSpec;
-  /** What decides how each list is read this run: the re-sync and the day's budget. */
-  readonly opened: Pick<SpecRun, "resync" | "day">;
+  /** The spec, and what decides how each list is read this run: the re-sync and the day's budget. */
+  readonly opened: SpecRun;
   readonly ledger: Ledger;
   readonly journal: RunJournal;
+  /** Where the text a person wrote on a record lands, or `null` for a spec that declares none. */
+  readonly documents: SpecDocuments | null;
 }
 
 /** Write one entity's outcome into the ledger, and narrate it. */
-function recordEntity(run: EntityRun, entity: string, landed: LandSummary): void {
-  const counts = { entity, ...landed };
+function recordEntity(run: Pick<EntityRun, "ledger" | "journal">, counts: RunEntity): void {
   run.ledger.entities.push(counts);
-  run.journal.info("entity_done", counts);
+  run.journal.info("entity_done", { ...counts });
 }
 
 /**
@@ -200,7 +189,7 @@ async function startEntity(
   const { deps, input, journal } = run;
   const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
   const cursor = await openStreamCursor(deps.exec, {
-    spec: run.spec,
+    spec: run.opened.spec,
     entity,
     stream,
     runId: input.runId,
@@ -251,6 +240,10 @@ async function startEntity(
  * {@link RunStopped} from above the cursor write. A stopped read is a partial read, and the
  * paragraph above is exactly why a partial read must not move the mark.
  *
+ * A record's DOCUMENTS -- the text a person wrote on it, which the runtime took out of its
+ * payload (ADR 0101) -- are settled before the mark too, and a document that could not be landed
+ * keeps it where it was by the same control flow: `settle` throws (`specDocuments.ts`).
+ *
  * ## And a removal is decided after that, by the same rule
  *
  * An entity whose spec says what an absence means (`removedWhen`) gets back, from a read that
@@ -277,7 +270,7 @@ async function ingestEntity(
     return null;
   }
   const { cursor, entityCtx } = started;
-  const { deps, input, spec, journal } = run;
+  const { deps, input, journal, opened } = run;
   const stream = { source: input.source, tenantId: input.tenantId, entity: entity.name };
   const sink = createRecordSink(
     { lake: deps.lake, exec: deps.exec, refuse: intoLedger(run.ledger) },
@@ -287,13 +280,14 @@ async function ingestEntity(
   let read = 0;
   let stopped = false;
   const end: Ended<ReadEnd> = {};
-  for await (const record of keepingEnd(readEntity(spec, entity, entityCtx), end)) {
+  for await (const record of keepingEnd(readEntity(opened.spec, entity, entityCtx), end)) {
     await sink.add({
       entity: record.entity,
       sourceRecordId: record.sourceRecordId,
       sourceUpdatedAt: record.sourceUpdatedAt,
       payloadText: record.payloadText,
     });
+    await run.documents?.add(record);
     read += 1;
     cursor.observe(record.incrementalAt);
     // Coalesced by the journal: a line per record would be the run written twice.
@@ -310,7 +304,7 @@ async function ingestEntity(
   // settle saying nothing about records that are in the lake and in `raw.records`. The same
   // ordering, and the same reason, as `landing.ts` writing a chunk's refusals before projecting
   // it. A cursor left behind costs one re-read; evidence never written cannot be recovered.
-  recordEntity(run, entity.name, landed);
+  recordEntity(run, { entity: entity.name, ...landed });
 
   if (stopped) {
     throw new RunStopped();
@@ -318,10 +312,13 @@ async function ingestEntity(
   if (end.value?.exhausted === true) {
     journal.warn("whole_read_paused", { entity: entity.name, requests: end.value.requests });
   }
+  // The documents before the mark, for the mark's own reason: a mark saved past a record whose
+  // text did not land would never offer that record, or its text, again (`specDocuments.ts`).
+  await run.documents?.settle(entity.name, read);
   if (end.value !== undefined) {
     await cursor.save(end.value);
   }
-  await settleRemovals(deps.exec, spec, stream, end.value);
+  await settleRemovals(deps.exec, opened.spec, stream, end.value);
   return end.value?.named ?? null;
 }
 
@@ -358,8 +355,24 @@ export async function runSpecIngest(
   journal: RunJournal,
 ): Promise<void> {
   const opened = await openSpecRun(deps, input);
-  const { spec, ctx, entities, ungranted } = opened;
-  const run: EntityRun = { deps, input, spec, opened, ledger, journal };
+  await readingDocuments(
+    {
+      spec: opened.spec,
+      sinks: { lake: deps.lake, exec: deps.exec, refuse: intoLedger(ledger) },
+      at: { ...input, observedAt: opened.resync.runStartedAt.toISOString() },
+      record: (row) => recordEntity({ ledger, journal }, row),
+    },
+    (documents) => readEntities({ deps, input, opened, ledger, journal, documents }),
+  );
+}
+
+/**
+ * Every entity in spec order: read, named as not granted, or named with the scope its parent
+ * lacks. Throws {@link RunStopped} at an entity's boundary once the process has asked it to stop.
+ */
+async function readEntities(run: EntityRun): Promise<void> {
+  const { deps, input, journal } = run;
+  const { ctx, entities, ungranted } = run.opened;
   const notGranted = new NotGranted(journal, ungranted);
   const relations = new RelationIds(entities);
   let read = 0;

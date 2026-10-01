@@ -31,6 +31,7 @@ import {
 } from "@undercroft/core";
 import { type Fetcher, type HttpRequest, raiseForStatus } from "./fetcher.ts";
 import { admitUnder, type RequestBudget } from "./budget.ts";
+import { type RecordDocument, splitDocuments } from "./documents.ts";
 import { alreadyRead, checkIncremental, incrementalAt, sinceCarriedIn } from "./incremental.ts";
 import { startNaming } from "./listing.ts";
 import { EntityNotGranted, refusedScopes } from "./refusal.ts";
@@ -53,6 +54,12 @@ export interface RawRecordOut {
    * other would be a guess about a fact already written down.
    */
   readonly incrementalAt: string | null;
+  /**
+   * The text a person wrote on this record, in the fields the entity declares as `documents`,
+   * which `payloadText` no longer holds (`documents.ts`). Empty for an entity that declares
+   * none, and for a record whose declared fields were empty.
+   */
+  readonly documents: readonly RecordDocument[];
 }
 
 export type { RequestBudget } from "./budget.ts";
@@ -310,18 +317,23 @@ export function keyOf(reader: Reader, record: unknown): string {
  * it becomes a `timestamptz` column, and Xero writes `/Date(1573755038314+0000)/`, which
  * Postgres refuses, taking the whole run with it (#265). Text that names no instant is `null`
  * and the record still lands. The payload keeps the value exactly as the source wrote it.
+ *
+ * The one place every read's records pass through on their way out, which is why the declared
+ * document fields are taken out here and nowhere else: no request shape can route around it.
  */
 export function outOf(reader: Reader, id: string, record: unknown): RawRecordOut {
   const { spec, entity } = reader;
   const updatedAt =
     entity.updatedAtPath === undefined ? null : getStringPath(record, entity.updatedAtPath);
+  const { payload, documents } = splitDocuments(spec.id, entity, reader.seen, record);
   return {
     source: spec.id,
     entity: entity.name,
     sourceRecordId: id,
     sourceUpdatedAt: updatedAt === null ? null : isoInstant(updatedAt),
-    payloadText: canonicalJson(record),
+    payloadText: canonicalJson(payload),
     incrementalAt: incrementalAt(entity, record),
+    documents,
   };
 }
 

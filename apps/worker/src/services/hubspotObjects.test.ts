@@ -1,6 +1,8 @@
 /**
  * The HubSpot objects of issue 279 -- quotes, line items, products, owners, deal pipelines and
- * seven more kinds of link -- read through `runIngest` over the SHIPPED spec. ADR 0075.
+ * seven more kinds of link -- and the notes, calls and tasks of issue 372 with the companies,
+ * contacts and deals they are logged on, read through `runIngest` over the SHIPPED spec. ADR 0075,
+ * and ADR 0101 for the text a person wrote on an activity, which lands as a document of it.
  *
  * HubSpot is played by {@link HubSpotPortal}, an in-memory portal that answers the requests the
  * spec sends the way HubSpot's API reference says it does: objects listed by `archived` and paged
@@ -17,7 +19,7 @@ import type { Fetcher, HttpRequest, HttpResponse } from "@undercroft/connector-r
 import { createStampSource, TestClock } from "@undercroft/core";
 import { seal } from "@undercroft/crypto";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
-import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
+import { InMemoryObjectStore, LakeStore, type ObjectStore } from "@undercroft/lake";
 
 import { runIngest } from "./ingest.ts";
 
@@ -27,6 +29,13 @@ const ENV = { UNDERCROFT_SECRET_KEY: KEY };
 const SPECS_DIR = join(import.meta.dirname, "..", "..", "..", "..", "specs", "connectors");
 const MODIFIED = "2026-03-01T00:00:00.000Z";
 const EARLIER = "2026-01-15T00:00:00.000Z";
+const LATER = "2026-04-01T00:00:00.000Z";
+const LATEST = "2026-05-01T00:00:00.000Z";
+
+/** A note at HubSpot's ceiling of 65,536 characters, with letters outside ASCII in every line. */
+const NOTE_BODY = `<p>${"Đã chốt giá gia hạn với bên mua; ".repeat(2100)}`.slice(0, 65_536);
+/** HubSpot's own GUID for its default "Connected" call outcome, from its public reference. */
+const CONNECTED = "f240bbac-87c9-4f6e-bf70-924b57d47db7";
 
 /** One CRM record as the portal holds it. */
 interface Row {
@@ -49,14 +58,22 @@ interface Portal {
   readonly objects: Readonly<Record<string, readonly Row[]>>;
   readonly owners: readonly Row[];
   readonly pipelines: readonly unknown[];
+  /** The call outcomes, as the engagements API answers them: a bare array. */
+  readonly dispositions: readonly unknown[];
   /** By `from/to` object type, then by the id of the record the links hang off. */
   readonly links: Readonly<Record<string, Readonly<Record<string, readonly Link[]>>>>;
 }
 
-/** The scope HubSpot names when a token lacks an object's. */
+const CONTACTS_SCOPE = "crm.objects.contacts.read";
+
+/** The scope HubSpot names when a token lacks an object's. Activities are read under contacts'. */
 const SCOPE_OF: Readonly<Record<string, string>> = {
   quotes: "crm.objects.quotes.read",
   line_items: "crm.objects.line_items.read",
+  contacts: CONTACTS_SCOPE,
+  notes: CONTACTS_SCOPE,
+  calls: CONTACTS_SCOPE,
+  tasks: CONTACTS_SCOPE,
 };
 
 const OBJECT_LIST = /^\/crm\/v3\/objects\/(?<type>[a-z_]+)$/u;
@@ -95,6 +112,10 @@ class HubSpotPortal implements Fetcher {
     }
     if (request.method === "GET" && url.pathname === "/crm/v3/pipelines/deals") {
       return Promise.resolve(json(200, { results: this.#portal.pipelines }));
+    }
+    if (request.method === "GET" && url.pathname === "/calling/v1/dispositions") {
+      // HubSpot's reference names no scope for this endpoint, so the portal refuses it nothing.
+      return Promise.resolve(json(200, this.#portal.dispositions));
     }
     if (request.method === "POST" && link?.from !== undefined && link.to !== undefined) {
       return Promise.resolve(
@@ -179,11 +200,53 @@ function linked(toObjectId: number, typeId: number): Link {
 /**
  * A small portal with every case the issue names: a contact at two companies, one of them its
  * primary and the other under the portal's own label; a quote with no deal; a line item with no
- * product and one sold as a product since archived; a deactivated owner; a custom pipeline.
+ * product and one sold as a product since archived; a deactivated owner; a custom pipeline. And
+ * issue 372's: a note at the length ceiling with two attachments, owned by the deactivated owner;
+ * a call with an outcome; an open task and a completed one with no body; each logged on the
+ * company, the contact and the deal.
  */
 function portal(): Portal {
   return {
     objects: {
+      notes: [
+        {
+          id: "801",
+          properties: {
+            hs_note_body: NOTE_BODY,
+            hs_attachment_ids: "9001;9002",
+            hubspot_owner_id: "702",
+            hs_timestamp: EARLIER,
+          },
+        },
+      ],
+      calls: [
+        {
+          id: "811",
+          properties: {
+            hs_call_title: "Renewal check-in",
+            hs_call_body: "<p>Asked for a revised quote by Friday.</p>",
+            hs_call_direction: "OUTBOUND",
+            hs_call_duration: "184000",
+            hs_call_disposition: CONNECTED,
+            hubspot_owner_id: "701",
+          },
+        },
+      ],
+      tasks: [
+        {
+          id: "821",
+          properties: {
+            hs_task_subject: "Send the revised quote",
+            hs_task_body: "<p>Include the support plan.</p>",
+            hs_task_status: "NOT_STARTED",
+            hs_timestamp: LATER,
+          },
+        },
+        {
+          id: "822",
+          properties: { hs_task_subject: "Book the call", hs_task_status: "COMPLETED" },
+        },
+      ],
       companies: [
         { id: "101", properties: { name: "Acme Trading" } },
         { id: "102", properties: { name: "Example Holdings" } },
@@ -267,15 +330,55 @@ function portal(): Portal {
       "quotes/line_items": { 401: [linked(501, 67), linked(502, 67)], 402: [linked(503, 67)] },
       "quotes/contacts": { 401: [linked(201, 69)] },
       "quotes/companies": { 401: [linked(101, 71)] },
+      ...activityLinks(),
     },
+    dispositions: [{ id: CONNECTED, label: "Connected", deleted: false }],
   };
 }
 
+/** What each activity is logged on: company 101, contact 201 and deal 301. Task 822 is on none. */
+const LOGGED_ON = { companies: 101, contacts: 201, deals: 301 } as const;
+const ACTIVITY = { notes: "801", calls: "811", tasks: "821" } as const;
+
+function activityLinks(): Portal["links"] {
+  return Object.fromEntries(
+    Object.entries(ACTIVITY).flatMap(([from, id]) =>
+      Object.entries(LOGGED_ON).map(([to, target]) => [
+        `${from}/${to}`,
+        { [id]: [linked(target, 1)] },
+      ]),
+    ),
+  );
+}
+
+/**
+ * The lake's object store, a real in-memory one that refuses every write of a document while
+ * `refusing` is set: the lake failing under a run, which no spec path document can otherwise do
+ * -- its bytes are already in hand.
+ */
+function documentRefusingStore(): ObjectStore & { refusing: boolean } {
+  const held = new InMemoryObjectStore();
+  const store = {
+    refusing: false,
+    get: (key: string): Promise<Uint8Array> => held.get(key),
+    put: (key: string, data: Uint8Array): Promise<void> =>
+      store.refusing && key.startsWith("documents/")
+        ? Promise.reject(new Error("the object store refused the write"))
+        : held.put(key, data),
+    exists: (key: string): Promise<boolean> => held.exists(key),
+    list: (prefix: string, startAfter?: string): Promise<string[]> => held.list(prefix, startAfter),
+    delete: (key: string): Promise<void> => held.delete(key),
+  };
+  return store;
+}
+
 let db: TestDatabase;
+let store: ReturnType<typeof documentRefusingStore>;
 let lake: LakeStore;
 
 beforeEach(async () => {
-  lake = new LakeStore(new InMemoryObjectStore(), { stamps: createStampSource(new TestClock()) });
+  store = documentRefusingStore();
+  lake = new LakeStore(store, { stamps: createStampSource(new TestClock()) });
   db = await createMigratedTestDatabase();
   await db.query("INSERT INTO ops.tenant (id) VALUES ($1)", [TENANT]);
   const sealed = seal(JSON.stringify({ accessToken: "pat", refreshToken: "", expiresAt: null }), {
@@ -325,11 +428,17 @@ async function payloadOf(entity: string, id: string): Promise<Record<string, unk
 }
 
 describe("a HubSpot connection with no scope chosen", () => {
-  it("lands quotes, line items, products, owners and pipelines, and every link kind", async () => {
+  it("lands quotes, line items, products, owners, pipelines, activities and every link kind", async () => {
     await ingest(new HubSpotPortal(portal()));
 
     expect(await landed()).toEqual({
       associations: ["301"],
+      // Each activity once, however many records it is logged on, with one link to each.
+      call_companies: ["811"],
+      call_contacts: ["811"],
+      call_deals: ["811"],
+      call_dispositions: [CONNECTED],
+      calls: ["811"],
       companies: ["101", "102"],
       contact_companies: ["201", "202"],
       contacts: ["201", "202"],
@@ -339,6 +448,10 @@ describe("a HubSpot connection with no scope chosen", () => {
       deal_quotes: ["301"],
       deals: ["301"],
       line_items: ["501", "502", "503"],
+      note_companies: ["801"],
+      note_contacts: ["801"],
+      note_deals: ["801"],
+      notes: ["801"],
       // Archived and live alike, so line item 502's product resolves.
       owners: ["701", "702"],
       products: ["601", "602"],
@@ -346,6 +459,11 @@ describe("a HubSpot connection with no scope chosen", () => {
       quote_contacts: ["401"],
       quote_line_items: ["401", "402"],
       quotes: ["401", "402"],
+      task_companies: ["821"],
+      task_contacts: ["821"],
+      task_deals: ["821"],
+      // Open and completed alike.
+      tasks: ["821", "822"],
     });
     expect((await payloadOf("products", "602")).archived).toBe(true);
     expect((await payloadOf("owners", "702")).archived).toBe(true);
@@ -379,7 +497,8 @@ describe("a HubSpot connection with no scope chosen", () => {
   it("asks every contact for its companies on every run, and a second run changes nothing", async () => {
     // The second run's watermark skips landing contact 202, which has not changed, but its links
     // are still asked for: a link read added after the watermark was set would otherwise never
-    // learn the links of any contact that has not changed since.
+    // learn the links of any contact that has not changed since. Nothing is New or Changed on any
+    // entity -- the activities, and the `documents` their text lands as, included.
     await ingest(new HubSpotPortal(portal()));
     const again = new HubSpotPortal(portal());
 
@@ -389,6 +508,96 @@ describe("a HubSpot connection with no scope chosen", () => {
     const asked = again.calls.find((call) => call.url.includes("/contacts/companies/"));
     expect(JSON.parse(asked?.body ?? "{}")).toEqual({ inputs: [{ id: "201" }, { id: "202" }] });
     expect(result.entities.filter((e) => e.created > 0 || e.changed > 0)).toEqual([]);
+    expect(result.entities.find((e) => e.entity === "documents")?.unchanged).toBe(3);
+  });
+});
+
+/** The catalogue rows of the documents a run landed, as dbt reads them. */
+async function documents(): Promise<{ id: string; type: string; meta: unknown }[]> {
+  const { rows } = await db.query<{ id: string; type: string; meta: unknown }>(
+    `SELECT document_id AS id, content_type AS type, metadata AS meta FROM raw.documents
+     WHERE source = 'hubspot' ORDER BY document_id`,
+  );
+  return rows;
+}
+
+/** A document's bytes as the lake holds them, read as UTF-8. */
+async function documentText(id: string): Promise<string> {
+  return new TextDecoder().decode(await lake.read(`documents/hubspot/${TENANT}/${id}`));
+}
+
+describe("a HubSpot portal's notes, calls and tasks", () => {
+  it("lands the text a person wrote as a document of its activity, whole, and never in a record", async () => {
+    await ingest(new HubSpotPortal(portal()));
+
+    // Task 822 has no body, so it has no document; nothing stands in for one.
+    expect(await documents()).toEqual([
+      {
+        id: "calls:811:body",
+        type: "text/html",
+        meta: { entity: "calls", sourceRecordId: "811", part: "body", sourceUpdatedAt: MODIFIED },
+      },
+      {
+        id: "notes:801:body",
+        type: "text/html",
+        meta: { entity: "notes", sourceRecordId: "801", part: "body", sourceUpdatedAt: MODIFIED },
+      },
+      {
+        id: "tasks:821:body",
+        type: "text/html",
+        meta: { entity: "tasks", sourceRecordId: "821", part: "body", sourceUpdatedAt: MODIFIED },
+      },
+    ]);
+    expect(NOTE_BODY).toHaveLength(65_536);
+    expect(await documentText("notes:801:body")).toBe(NOTE_BODY);
+    // The record keeps everything but the text: its attachments' ids, and an owner who has
+    // since been deactivated, which `owners` still holds.
+    const note = await payloadOf("notes", "801");
+    expect(note).not.toHaveProperty("properties.hs_note_body");
+    expect(note).toMatchObject({ properties: { hs_attachment_ids: "9001;9002" } });
+    expect(await landed()).toMatchObject({ owners: ["701", "702"] });
+    const { rows } = await db.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM raw.records WHERE payload::text LIKE '%chốt giá%' OR payload::text LIKE '%revised quote by%'",
+    );
+    expect(rows[0]?.n).toBe(0);
+  });
+
+  it("links each activity to the company, the contact and the deal it is logged on", async () => {
+    await ingest(new HubSpotPortal(portal()));
+
+    for (const [from, id] of Object.entries(ACTIVITY)) {
+      for (const [to, target] of Object.entries(LOGGED_ON)) {
+        const payload = await payloadOf(`${from.slice(0, -1)}_${to}`, id);
+        expect(payload).toEqual({ from: { id }, to: [linked(target, 1)] });
+      }
+    }
+  });
+
+  it("a document the lake refuses keeps the notes' watermark, so the next run lands its text", async () => {
+    // Note 801 is edited, and note 802 is written after it. Had the failed run saved its mark at
+    // 802's, the run after would skip 801 as unchanged since, and its new text would never land.
+    await ingest(new HubSpotPortal(portal()));
+    const edited: Portal = {
+      ...portal(),
+      objects: {
+        ...portal().objects,
+        notes: [
+          {
+            id: "801",
+            properties: { hs_note_body: "<p>Price agreed.</p>", hs_lastmodifieddate: LATER },
+          },
+          { id: "802", properties: { hs_note_body: "<p>Sent.</p>", hs_lastmodifieddate: LATEST } },
+        ],
+      },
+    };
+
+    store.refusing = true;
+    await expect(ingest(new HubSpotPortal(edited))).rejects.toThrow("could not be landed");
+    store.refusing = false;
+    await ingest(new HubSpotPortal(edited));
+
+    expect(await documentText("notes:801:body")).toBe("<p>Price agreed.</p>");
+    expect(await documentText("notes:802:body")).toBe("<p>Sent.</p>");
   });
 });
 
@@ -411,5 +620,39 @@ describe("a HubSpot private app without the quotes scope", () => {
     expect([read.get("companies"), read.get("contacts"), read.get("deals")]).toEqual([2, 2, 1]);
     expect(read.get("associations")).toBe(1);
     expect(read.has("quotes")).toBe(false);
+  });
+});
+
+describe("a HubSpot private app without the contacts scope", () => {
+  it("names notes, calls and tasks with the scope HubSpot reads them under, and lands the rest", async () => {
+    // HubSpot reads activities under the contacts scope, so a private app without it is refused
+    // contacts and all three activity lists, and every link that hangs off them or points at a
+    // contact is named with the same scope. A pasted token's run still closes succeeded.
+    const result = await ingest(
+      new HubSpotPortal(portal(), ["contacts", "notes", "calls", "tasks"]),
+    );
+
+    const { rows } = await db.query<{ entity: string; scope: string }>(
+      `SELECT entity, detail->>'scope' AS scope FROM ops.run_event
+       WHERE event = 'entity_not_granted' ORDER BY id`,
+    );
+    expect(rows).toEqual(
+      [
+        "contacts",
+        "contact_companies",
+        "deal_contacts",
+        "quote_contacts",
+        "notes",
+        "calls",
+        "tasks",
+        ...["note", "call", "task"].flatMap((from) =>
+          ["companies", "contacts", "deals"].map((to) => `${from}_${to}`),
+        ),
+      ].map((entity) => ({ entity, scope: CONTACTS_SCOPE })),
+    );
+    const read = new Map(result.entities.map((e) => [e.entity, e.landed]));
+    expect([read.get("companies"), read.get("deals"), read.get("quotes")]).toEqual([2, 1, 2]);
+    expect(read.get("call_dispositions")).toBe(1);
+    expect(read.get("documents")).toBe(0);
   });
 });

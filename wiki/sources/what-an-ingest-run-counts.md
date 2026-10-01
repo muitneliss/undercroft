@@ -1,12 +1,12 @@
 ---
 title: What an ingest run counts
 type: source
-date: 2026-09-30
+date: 2026-10-01
 tags: []
 source: docs/reference/run-counts.md
 source_path: docs/reference/run-counts.md
-source_hash: 0d2d139fa2b3db3334100273edfbd8982707ce60b86b8667a9404daaa4da885c
-ingested: 2026-09-30
+source_hash: ac2518048910f359845405141bc3d4c32b02586f24b9418a927329514b01dfcb
+ingested: 2026-10-01
 ---
 
 # What an ingest run counts
@@ -21,7 +21,7 @@ The reference page for the five per-entity numbers an ingest run reports, which 
 
 **Where they are decided.** Per record, at the lake write in `apps/worker/src/services/land.ts`. The projection into `raw.records` runs afterwards and decides none of them. Runs recorded before the fix for issue #284 took the split from the projection, which never saw an identical re-read, so on those runs Unchanged is short; their rows are not rewritten.
 
-**Coarser in two places.** Documents are their own entity and count a changed document as New (Changed is always 0). The lake REST API's published response keeps `created` meaning "stored as a new version", first or not.
+**Coarser in two places.** Documents -- Gmail attachments and bodies, Drive files, and the text of a HubSpot note, call or task ([[ADR 0101 A Spec Lands the Text a Person Wrote as a Document of Its Record]]) -- are their own entity and count a changed document as New (Changed is always 0). The lake REST API's published response keeps `created` meaning "stored as a new version", first or not.
 
 **Held records read again.** A Gmail run's `messages` entity carries `reread` with `records` (held messages read again because they carry an attachment the current choice allows and no earlier read landed) and `documents` (attachments that reading stored for the first time, also counted in `documents`). It is `null` on every other entity, on Drive and spec runs, and on runs before [[ADR 0076 A Harvest Records What It Left Behind]]; a Gmail run that re-read nothing says 0.
 

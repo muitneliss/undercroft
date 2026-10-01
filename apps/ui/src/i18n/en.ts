@@ -883,8 +883,11 @@ export const en = {
     hubspotQuotes: "Quotes",
     hubspotLineItems: "Line items",
     hubspotProducts: "Products",
+    hubspotNotes: "Notes",
+    hubspotCalls: "Calls",
+    hubspotTasks: "Tasks",
     hubspotStandard:
-      "The standard properties of companies, contacts, deals, quotes, line items and products",
+      "The standard properties of companies, contacts, deals, quotes, line items, products, notes, calls and tasks",
     hubspotChosen_one: "The standard properties, and {{count, number}} more chosen",
     hubspotChosen_other: "The standard properties, and {{count, number}} more chosen",
     gmailWholeMailbox: "Headers and matching attachments, whole mailbox",
@@ -1635,7 +1638,7 @@ export const en = {
   source: {
     readOnly: "Nothing. Read-only access, and you can disconnect at any time.",
     hubspotReads:
-      "Companies, contacts, deals, quotes, line items and products (archived products included) from your CRM, with their standard properties and any further ones you choose; the owners, deactivated ones included; the deal pipelines and their stages; and the links between them: each deal's companies, contacts, quotes and line items, each quote's line items, contacts and companies, and each contact's companies. HubSpot keeps no change time on a link, so its source-side change time is always empty.",
+      "Companies, contacts, deals, quotes, line items and products (archived products included) from your CRM, with their standard properties and any further ones you choose; the owners, deactivated ones included; the deal pipelines and their stages; and the links between them: each deal's companies, contacts, quotes and line items, each quote's line items, contacts and companies, and each contact's companies. The notes, calls and tasks (open and completed) logged on companies, contacts and deals, with a link to each of those records; HubSpot reads all three with the crm.objects.contacts.read permission. The text people wrote on a note, call or task is kept as a document of its own, which only your own models can read. Call recordings and transcripts are never read. HubSpot keeps no change time on a link, so its source-side change time is always empty.",
     xeroReads:
       "Contacts, invoices, credit notes, quotes, purchase orders, items and payments from one organisation you choose.",
     gmailReads:

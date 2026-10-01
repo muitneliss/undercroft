@@ -9,9 +9,9 @@
  * Nothing here mirrors the spec. Which objects exist and which of their properties are always
  * read both arrive with the listing (`connections.browseScope`), because the worker reads them
  * off `specs/connectors/hubspot.yaml`; a list written here would be a second copy to drift.
- * Only the WORDS for the six objects shipped today live here, and an object this build has no
- * word for keeps its id rather than being dropped. Owners, pipelines and the links are read too,
- * but carry no properties to choose, so the listing never names them.
+ * Only the WORDS for the nine objects shipped today live here, and an object this build has no
+ * word for keeps its id rather than being dropped. Owners, pipelines, call outcomes and the links
+ * are read too, but carry no properties to choose, so the listing never names them.
  */
 
 import type { TFunction } from "i18next";
@@ -25,6 +25,9 @@ const OBJECT_KEY = {
   quotes: "scope.hubspotQuotes",
   line_items: "scope.hubspotLineItems",
   products: "scope.hubspotProducts",
+  notes: "scope.hubspotNotes",
+  calls: "scope.hubspotCalls",
+  tasks: "scope.hubspotTasks",
 } as const;
 
 function isNamedObject(entity: string): entity is keyof typeof OBJECT_KEY {

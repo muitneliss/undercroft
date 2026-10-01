@@ -66,7 +66,17 @@ describe("browsing a HubSpot portal's properties", () => {
   const PROPERTIES = "https://api.hubapi.com/crm/v3/properties";
 
   /** The objects whose properties the spec lets a scope choose, in spec order. */
-  const OBJECTS = ["companies", "contacts", "deals", "quotes", "line_items", "products"];
+  const OBJECTS = [
+    "companies",
+    "contacts",
+    "deals",
+    "quotes",
+    "line_items",
+    "products",
+    "notes",
+    "calls",
+    "tasks",
+  ];
 
   /** HubSpot's answer to a token without the object's scope. */
   const MISSING_SCOPES = { status: 403, body: { category: "MISSING_SCOPES" } };
@@ -81,6 +91,18 @@ describe("browsing a HubSpot portal's properties", () => {
       ],
       contacts: [{ name: "lastmodifieddate", label: "Last Modified Date" }],
       quotes: [{ name: "hs_title", label: "Quote name", hubspotDefined: true }],
+      // What HubSpot lists on a call, and the picker must not offer all of it: the recording,
+      // the transcript and its summary are never read, and the call's notes and their preview
+      // land as a document of the call rather than as a property of it (ADR 0101).
+      calls: [
+        { name: "hs_call_title", label: "Call Title", hubspotDefined: true },
+        { name: "hs_call_body", label: "Call notes", hubspotDefined: true },
+        { name: "hs_body_preview", label: "Body preview", hubspotDefined: true },
+        { name: "hs_call_recording_url", label: "Recording URL", hubspotDefined: true },
+        { name: "hs_call_has_transcript", label: "Has transcript", hubspotDefined: true },
+        { name: "hs_call_summary", label: "Call summary", hubspotDefined: true },
+        { name: "hs_call_callee_object_type", label: "Callee object type", hubspotDefined: true },
+      ],
     };
     const fetcher = new InMemoryByteFetcher();
     for (const object of OBJECTS) {
@@ -100,9 +122,9 @@ describe("browsing a HubSpot portal's properties", () => {
     );
   }
 
-  it("lists every object's properties, the portal's own among them, and marks what is always read", async () => {
-    // Six objects, six requests: owners, pipelines and the links have no properties to list,
-    // and the recorded fetcher refuses a request nobody recorded.
+  it("lists every object's properties, the portal's own among them, marks what is always read, and offers nothing never read", async () => {
+    // Nine objects, nine requests: owners, pipelines, call outcomes and the links have no
+    // properties to list, and the recorded fetcher refuses a request nobody recorded.
     const outcome = await browse(portal());
 
     expect(outcome).toEqual({
@@ -119,6 +141,13 @@ describe("browsing a HubSpot portal's properties", () => {
           always: true,
         },
         { id: "hs_title", name: "Quote name", kind: "system", entity: "quotes", always: true },
+        { id: "hs_call_title", name: "Call Title", kind: "system", entity: "calls", always: true },
+        {
+          id: "hs_call_callee_object_type",
+          name: "Callee object type",
+          kind: "system",
+          entity: "calls",
+        },
       ],
       partial: [],
     });
@@ -131,7 +160,7 @@ describe("browsing a HubSpot portal's properties", () => {
 
     expect(outcome.ok).toBe(true);
     const entities = outcome.ok ? new Set(outcome.items.map((item) => item.entity)) : new Set();
-    expect([...entities]).toEqual(["companies", "contacts"]);
+    expect([...entities]).toEqual(["companies", "contacts", "calls"]);
   });
 
   it("a token whose private app may read no object is a reconnect, not an outage", async () => {

@@ -184,6 +184,33 @@ entities:
     expect(() => parseSpec(broken)).toThrow("or nothing decides a removal");
   });
 
+  it("refuses a document field that would take out what a record is keyed or watermarked by", () => {
+    // A document's field is removed from the record. Declared over the watermark's own field --
+    // or over the object holding it -- it would leave a cursor that never moves; the shipped
+    // HubSpot spec, which parses above, is the case where it stays quiet.
+    function declaring(path: string): string {
+      return `
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: broken
+displayName: Broken
+baseUrl: https://example.test
+auth: { kind: none }
+entities:
+  - name: notes
+    request: { kind: list, path: /notes }
+    idPath: id
+    incremental: { strategy: client-filter, sourcePath: properties.modified }
+    documents:
+      - { path: ${path}, part: body, contentType: text/html }
+`;
+    }
+
+    expect(() => parseSpec(declaring("properties.modified"))).toThrow("watermark");
+    expect(() => parseSpec(declaring("properties"))).toThrow("watermark");
+    expect(parseSpec(declaring("properties.body")).entities[0]?.documents).toHaveLength(1);
+  });
+
   it("rejects malformed YAML before it reaches schema validation", () => {
     expect(() => parseSpec("key: [unclosed")).toThrow(SpecError);
   });

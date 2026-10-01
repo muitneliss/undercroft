@@ -23,11 +23,12 @@
  * leave a cursor that never advances, on a read that reports success every day.
  */
 
-import type {
-  BrowseScopeResponse,
-  ConnectorEntity,
-  ConnectorSpec,
-  HubspotScope,
+import {
+  type BrowseScopeResponse,
+  type ConnectorEntity,
+  type ConnectorSpec,
+  type HubspotScope,
+  neverReads,
 } from "@undercroft/contracts";
 import { refusedScopes } from "@undercroft/connector-runtime";
 import type { ByteFetcher } from "@undercroft/core";
@@ -41,6 +42,9 @@ const OBJECT_LIST = /^\/crm\/v3\/objects\/(?<objectType>[^/]+)$/u;
 /** The query parameter a HubSpot object list names its properties in, and how it separates them. */
 const PROPERTIES = "properties";
 const SEPARATOR = ",";
+
+/** Where a HubSpot record carries the properties it was asked for. */
+const RECORD_PROPERTIES = "properties";
 
 /** Where HubSpot reads an object's records by id, below the path it lists them at. */
 const BATCH_READ = "/batch/read";
@@ -90,6 +94,12 @@ function floorOf(entity: ConnectorEntity): string[] {
  *
  * A chosen name HubSpot no longer has is sent like any other. HubSpot answers by leaving it out
  * of every record, and nothing downstream of that answer invents a value for it.
+ *
+ * A chosen name the entity's `neverRead` refuses is NOT sent, whoever chose it -- the picker does
+ * not offer one, but a scope is also written over the CLI and MCP, and a name chosen before the
+ * spec refused it stays in a saved scope. A call's recording URL is never asked of HubSpot
+ * (ADR 0101). It is dropped silently rather than refused, because the run's answer to "read this"
+ * was decided by the spec, and refusing the whole scope over one name would read nothing chosen.
  */
 export function withChosenProperties(
   entity: ConnectorEntity,
@@ -102,7 +112,7 @@ export function withChosenProperties(
   }
   const floor = floorOf(entity);
   const added = [...new Set(chosen)]
-    .filter((name) => !floor.includes(name))
+    .filter((name) => !(floor.includes(name) || neverReads(entity, name)))
     .toSorted((a, b) => a.localeCompare(b, "en"));
   if (added.length === 0) {
     return entity;
@@ -165,7 +175,11 @@ export async function listProperties(
         firstRefusal ??= answer;
       } else {
         listed += 1;
-        items.push(...answer.rows.flatMap((row) => itemOf(row, entity.name, always)));
+        items.push(
+          ...answer.rows
+            .flatMap((row) => itemOf(row, entity.name, always))
+            .filter((item) => offered(entity, item.id)),
+        );
       }
     }
   }
@@ -177,6 +191,19 @@ export async function listProperties(
     raiseForByteStatus(firstRefusal.request, firstRefusal.response);
   }
   return items;
+}
+
+/**
+ * Whether the picker lists this property as part of the record: not when the spec says it is
+ * never read, and not when it is text the run lands as a document of the record rather than in
+ * it (`documents` in the spec, ADR 0101) -- listed, it would describe a field no record holds.
+ * HubSpot answers a record's properties under `properties`, so that is where its paths point.
+ */
+function offered(entity: ConnectorEntity, property: string): boolean {
+  const asDocument = (entity.documents ?? []).some(
+    (document) => document.path === `${RECORD_PROPERTIES}.${property}`,
+  );
+  return !(asDocument || neverReads(entity, property));
 }
 
 /** A properties request HubSpot refused because the token lacks the object's scope. */

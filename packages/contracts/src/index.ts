@@ -4,6 +4,7 @@ export {
   type ConnectorPagination,
   ConnectorSpec,
 } from "./connectorSpec.ts";
+export { neverReads } from "./outOfPayload.ts";
 export {
   BrowseListing,
   BrowseScopeRequest,

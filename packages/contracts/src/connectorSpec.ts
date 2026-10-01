@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { DocumentField, documentsProblem, NeverReadPattern } from "./outOfPayload.ts";
 import { WholeReadBudget, wholeReadBudgetProblem } from "./wholeReadBudget.ts";
 
 /** A dotted path into a JSON body: `paging.next.link`, `Invoices`, `from.id`. */
@@ -297,6 +298,15 @@ const Entity = z.object({
    */
   readScope: z.string().min(1).optional(),
   removedWhen: RemovedWhen.optional(),
+  /** The fields that are text a person wrote, each landed as a document of its record. */
+  documents: z.array(DocumentField).min(1).optional(),
+  /**
+   * Field names no read of this entity may ask for, even when a person chose them. A scope that
+   * widens what an entity reads (ADR 0052) offers every field the source lists, and some are
+   * never to be read at all -- a call's recording or its transcript (ADR 0101). The listing a
+   * scope is chosen from leaves them out, and a run drops them from whatever was chosen.
+   */
+  neverRead: z.array(NeverReadPattern).min(1).optional(),
 });
 
 export const ConnectorSpec = z
@@ -352,6 +362,14 @@ export const ConnectorSpec = z
           code: z.ZodIssueCode.custom,
           path: ["entities", entity.name, "removedWhen"],
           message: refused,
+        });
+      }
+      const documentsIssue = documentsProblem(entity);
+      if (documentsIssue !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["entities", entity.name, "documents"],
+          message: documentsIssue,
         });
       }
     }

@@ -39,6 +39,13 @@ This is an open-source repository. Nothing about a real customer belongs in it.
   payload stays the six headers the consent names, because `raw.records` is read by dbt
   directly and by `undercroft_app`.
 
+  **So is the text a person wrote on a HubSpot note, call or task (ADR 0101)** --
+  `hs_note_body`, `hs_call_body`, `hs_task_body` -- and any field a spec declares under
+  `documents`. The runtime takes it out of the record's payload by its declared path, whatever
+  requested it, and it lands as `<entity>:<id>:<part>` (`notes:51:body`). **Never list such a
+  field without declaring it**, and never let a scope reach the copies of it a source offers
+  (`hs_body_preview*`), or a call's recording and transcript: those are the spec's `neverRead`.
+
   Since ADR 0026 an **excerpt** of that text also crosses to the browser, for an admin who
   searched the lake. It reaches them the way the Lake Console's rows already do — read by the
   tenant's own dbt login inside the worker, never by the control plane, which is still denied

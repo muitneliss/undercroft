@@ -276,3 +276,7 @@
 ## [2026-09-30] ingest | Runbook: Visual regression tests
 ## [2026-09-30] ingest | Runbook Google Ingestion Setup
 ## [2026-10-01] ingest | ADR 0100 The Lineage Board's Selected Chains Flow
+## [2026-10-01] ingest | ADR 0101 A Spec Lands the Text a Person Wrote as a Document of Its Record
+## [2026-10-01] ingest | Runbook HubSpot Setup
+## [2026-10-01] ingest | What an ingest run counts
+## [2026-10-01] ingest | Runbook HubSpot Setup

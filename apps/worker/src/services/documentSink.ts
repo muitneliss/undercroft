@@ -9,7 +9,7 @@
  */
 
 import { type RawDocumentRow, upsertDocuments } from "../repos/rawDocuments.ts";
-import type { RunRefusal } from "@undercroft/db/repos";
+import type { RunEntity, RunRefusal } from "@undercroft/db/repos";
 
 import { type DocumentToLand, type LandedDocument, landDocuments } from "./landDocument.ts";
 import {
@@ -23,7 +23,25 @@ import {
 } from "./landing.ts";
 
 /** The entity a refused document is filed under. Documents are their own entity in the ledger. */
-const DOCUMENT_ENTITY = "documents";
+export const DOCUMENT_ENTITY = "documents";
+
+/**
+ * What a document sink counted, as the run's `documents` row. Changed is always 0: a document
+ * whose bytes differ from the stored ones is counted as New (`docs/reference/run-counts.md`).
+ */
+export function documentsEntity(
+  summary: Pick<DocumentSummary, "created" | "unchanged">,
+  refused: number,
+): RunEntity {
+  return {
+    entity: DOCUMENT_ENTITY,
+    landed: summary.created + summary.unchanged,
+    created: summary.created,
+    changed: 0,
+    unchanged: summary.unchanged,
+    refused,
+  };
+}
 
 /** One landed chunk of documents, split three ways. */
 interface SortedChunk {

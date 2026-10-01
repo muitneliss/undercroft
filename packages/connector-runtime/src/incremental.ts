@@ -150,9 +150,19 @@ export function checkIncremental(spec: ConnectorSpec, entity: ConnectorEntity): 
  * already JavaScript numbers, which {@link canonicalJson} refuses on sight because a PAYLOAD's
  * float has lost digits. The round trip through text hands it the same digits the YAML held,
  * as lossless numbers; nothing here is a payload and nothing is landed.
+ *
+ * An entity's `documents` are in it too, only when it declares some -- so every key that existed
+ * before the field did is unchanged. They change what a record is landed AS: a field declared a
+ * document after the mark was set would otherwise reach the documents of changed records alone,
+ * and every record unchanged since would keep its text in the old payload and have none beside it.
  */
 export function requestKey(spec: ConnectorSpec, entity: ConnectorEntity): string {
-  const asked = { baseUrl: spec.baseUrl, request: entity.request, headers: spec.defaults.headers };
+  const asked = {
+    baseUrl: spec.baseUrl,
+    request: entity.request,
+    headers: spec.defaults.headers,
+    ...(entity.documents === undefined ? {} : { documents: entity.documents }),
+  };
   const canonical = canonicalJson(parseLossless(JSON.stringify(asked)));
   return createHash("sha256").update(canonical).digest("hex");
 }

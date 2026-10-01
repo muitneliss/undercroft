@@ -147,7 +147,7 @@ describe("scopeSummary for HubSpot", () => {
     const hubspot = connection("hubspot", { status: "connected", config: {} });
 
     expect(scopeSummary(t, hubspot.kind, hubspot.config)).toBe(
-      "Các trường chuẩn của công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm",
+      "Các trường chuẩn của công ty, liên hệ, giao dịch, báo giá, dòng báo giá, sản phẩm, ghi chú, cuộc gọi và công việc",
     );
   });
 

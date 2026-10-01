@@ -198,9 +198,11 @@ export interface DocumentSummary {
  * `raw.records` meant a finished harvest, and the assertion bound only the rows written after
  * it. ADR 0035, and `230_documents_landed.sql` for the column.
  *
- * ABSENT MEANS THE CALLER HAS NO DOCUMENTS TO SETTLE -- the spec path and the lake REST API,
- * neither of which has a document channel at all. Nothing is marked for them, so nothing
- * claims their rows are complete. It is optional rather than a required `0` so that the two
+ * ABSENT MEANS THE CALLER HAS NO DOCUMENTS TO SETTLE PER RECORD -- the lake REST API, which has
+ * no document channel at all, and the spec path, whose documents (ADR 0101) are settled by its
+ * watermark instead: an entity's mark does not move past a record whose text did not land
+ * (`specDocuments.ts`), so the next run offers that record again without being told. Nothing is
+ * marked for them, so nothing claims their rows are complete. It is optional rather than a required `0` so that the two
  * callers with nothing to say are not made to say it: a required field they would fill with a
  * constant is a field the next caller fills with a constant too, and this column exists
  * because a constant claim of completeness went unchecked once already.
@@ -250,7 +252,8 @@ export interface DocumentSink {
    * must not reach `raw.records` before its attachment reaches the lake, because that row is
    * what the next run reads as "fully harvested" and skips. A record that outran its
    * attachment is therefore an attachment lost for good -- CLAUDE.md rule 2 broken by the
-   * resume mechanism itself.
+   * resume mechanism itself. A spec run is the other: an entity's watermark must not move past a
+   * record whose text did not land, for the same reason (`specDocuments.ts`, ADR 0101).
    *
    * SINCE THE LAST FLUSH, not since this call, and the module docstring says why: a full
    * buffer lands on its own inside `add`, and an answer scoped to this call's chunk is silent
