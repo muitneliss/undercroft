@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.62.0](https://github.com/muitneliss/undercroft/compare/v1.61.0...v1.62.0) (2026-10-01)
+
+
+### Features
+
+* **worker:** a classifying pass asks six texts at once (ADR 0102) ([#379](https://github.com/muitneliss/undercroft/issues/379)) ([b5aa2b7](https://github.com/muitneliss/undercroft/commit/b5aa2b7ed9b7201d1fbca020a9743ec34f613a94))
+
 ## [1.61.0](https://github.com/muitneliss/undercroft/compare/v1.60.0...v1.61.0) (2026-10-01)
 
 
