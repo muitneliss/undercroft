@@ -1,11 +1,11 @@
 /**
- * Where each node of the lineage sits on the board, without a word or a pixel: its column, and
- * its place within the column. `LineageCanvas` turns these into pixels and the text list into
- * an order.
+ * Where each node of the lineage sits, without a word or a pixel: its column, and its place
+ * within the column. The board reads the columns and leaves the rest to ELK (`arrange`, ADR
+ * 0103); the text list reads both, as its order, without waiting for ELK.
  *
  * A column is the length of the longest declared chain below a node (ADR 0092), so a column says
  * how far a model stands from the raw lake; the order within a column is only a heuristic for
- * fewer crossings, and a reader who disagrees with it drags the card.
+ * fewer crossings.
  */
 
 import type { LineageNode, ModelLineage } from "@/api/types.ts";
@@ -15,16 +15,11 @@ export interface Placed {
   readonly node: LineageNode;
   /** 0 for a raw lake table or a missing dependency; a model one past its deepest parent. */
   readonly column: number;
-  /** The node's place in its column, counted from the top. */
-  readonly row: number;
-  /** The same place measured from the column's middle, so every column centres on one line. */
-  readonly offset: number;
 }
 
 export interface Layout {
   readonly placed: readonly Placed[];
   readonly columns: number;
-  readonly rows: number;
 }
 
 /** Each node's column: the longest declared chain below it, a cycle followed once. */
@@ -69,10 +64,9 @@ const SWEEPS = 4;
  *
  * The order within a column is the barycentre heuristic, swept both ways: going right, each
  * node moves to the mean place of what it reads; coming back, to the mean place of what reads
- * it. So a raw table sits beside the models that read it and a model beside its inputs, and
- * the drawn edges cross far less than a single pass left them. Places are measured from the
- * column's middle, because the drawing centres every column on one line: a short column sits
- * opposite the middle of a long one rather than hanging off its top.
+ * it. So a raw table sits beside the models that read it and a model beside its inputs. Places
+ * are measured from the column's middle, so a short column is weighed against the middle of a
+ * long one rather than its top.
  *
  * `drawn` is the part of `graph` on the page (`drawnGraph`). Its nodes are ordered among
  * themselves, but their columns are still read off the whole graph: a column says how far a
@@ -133,8 +127,6 @@ export function layout(graph: ModelLineage, drawn: ModelLineage = graph): Layout
     reorder(lane, reads);
   }
 
-  const placed = lanes.flatMap((lane, column) =>
-    lane.map((node, row) => ({ node, column, row, offset: at.get(node.id) ?? 0 })),
-  );
-  return { placed, columns: count, rows: Math.max(0, ...lanes.map((lane) => lane.length)) };
+  const placed = lanes.flatMap((lane, column) => lane.map((node) => ({ node, column })));
+  return { placed, columns: count };
 }

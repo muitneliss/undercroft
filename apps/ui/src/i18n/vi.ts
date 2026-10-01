@@ -1548,6 +1548,8 @@ export const vi = {
     declaredSource: "▭ Nguồn dbt đã khai báo",
     undeclaredMark: "? Thượng nguồn chưa khai báo",
     resetLayout: "Sắp lại như ban đầu",
+    /** When the layout engine could not place the board; the text beneath still holds. */
+    notArranged: "Không sắp được sơ đồ. Tên và đường dẫn bên dưới vẫn cho biết mỗi mô hình đọc gì.",
     fullscreen: "Toàn màn hình",
     exitFullscreen: "Thoát toàn màn hình",
     controls: "Điều khiển sơ đồ",

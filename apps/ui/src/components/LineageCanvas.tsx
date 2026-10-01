@@ -8,13 +8,17 @@
  * its edges as one thicket. A card here is as wide as a name needs, the columns stand as far
  * apart as the edges need, and the page's width decides neither. Each column carries a heading
  * saying how far it stands from the raw lake, because that is what a column is (`layout`).
+ * Where each card stands within its column, and the line each edge runs along, are ELK's
+ * (`arrange`, ADR 0103), so a wire that spans columns passes between their cards, not over them.
  *
  * WHERE A DRAGGED CARD'S PLACE LIVES. In `@xyflow/react`'s own store: the board is handed its
  * cards once, as `defaultNodes`, and owns their places from then on. A dragged place is the
  * drawing's working state, like a scroll offset -- no other component reads it and nothing keeps
  * it -- so it is neither server state nor the Zustand store's (`.claude/rules/state.md`).
  * "Reset layout" puts every card back. The board is remounted by key whenever what it draws
- * changes, so a card is never left at a place computed for a different graph.
+ * changes, so a card is never left at a place computed for a different graph. A wire keeps the
+ * line ELK routed only while both its cards stand where ELK put them; once either is dragged it
+ * is drawn as a plain curve between them, since the routed line no longer meets the card.
  *
  * THE KEYBOARD. Each card is a real <button> that selects it, and the library's own node focus
  * is off, so a card is one tab stop, not two. The picker above the board and the text beneath
@@ -49,21 +53,16 @@ import {
   Wire,
   type WireEdge,
 } from "@/components/LineageCards.tsx";
-import { type Focus, laneLabel, nodeState } from "@/lib/lineage.ts";
+import { Skeleton } from "@/components/Skeleton.tsx";
 import { useFullscreen } from "@/lib/fullscreen.ts";
+import { type Focus, laneLabel, nodeState } from "@/lib/lineage.ts";
+import { type Arrangement, CARD_H, CARD_W, edgeId, useArrangement } from "@/lib/lineageArrange.ts";
 import { BoardContext } from "@/lib/lineageBoard.ts";
-import { layout } from "@/lib/lineageLayout.ts";
 
 const NODE_TYPES: NodeTypes = { card: Card, head: Head };
 const EDGE_TYPES: EdgeTypes = { wire: Wire };
 
-/** A card's box. `.lineage-card` in `index.css` is the same size; the two are one number. */
-const CARD_W = 248;
-const CARD_H = 96;
-/** From one column's left edge to the next, and from one card's middle to the next. */
-const PITCH_X = CARD_W + 88;
-const PITCH_Y = CARD_H + 28;
-/** How far a column's heading stands above its tallest column. */
+/** How far a column's heading stands above the highest card. */
 const HEAD_GAP = 64;
 const HEAD_H = 32;
 /**
@@ -75,14 +74,12 @@ const HEAD_H = 32;
  */
 const FIT = { padding: 0.12, minZoom: 0.85, maxZoom: 1 } as const;
 
-/** Every card at the place `layout` gives it, and a heading over every column that has one. */
-function toNodes(t: TFunction, graph: Graph, drawn: Graph): Node[] {
-  const { placed, rows } = layout(graph, drawn);
-  const top = (-(rows - 1) / 2) * PITCH_Y - CARD_H / 2;
-  const cards: CardNode[] = placed.map(({ node, column, offset }) => ({
+/** Every card at the place `arrange` gives it, and a heading over every column that has one. */
+function toNodes(t: TFunction, drawn: Graph, arrangement: Arrangement): Node[] {
+  const cards: CardNode[] = drawn.nodes.map((node) => ({
     id: node.id,
     type: "card",
-    position: { x: column * PITCH_X, y: offset * PITCH_Y - CARD_H / 2 },
+    position: arrangement.cards.get(node.id) ?? { x: 0, y: 0 },
     data: { node },
     width: CARD_W,
     height: CARD_H,
@@ -90,11 +87,12 @@ function toNodes(t: TFunction, graph: Graph, drawn: Graph): Node[] {
     selectable: false,
     connectable: false,
   }));
-  const missing = placed.some((p) => p.column === 0 && p.node.kind === "missing");
-  const heads: HeadNode[] = [...new Set(placed.map((p) => p.column))].map((column) => ({
+  // A missing dependency stands in the first column, beside the raw lake tables.
+  const missing = drawn.nodes.some((node) => node.kind === "missing");
+  const heads: HeadNode[] = arrangement.columns.map(({ column, x }) => ({
     id: `head:${String(column)}`,
     type: "head",
-    position: { x: column * PITCH_X, y: top - HEAD_GAP },
+    position: { x, y: arrangement.top - HEAD_GAP },
     data: { label: laneLabel(t, column, missing) },
     width: CARD_W,
     height: HEAD_H,
@@ -106,22 +104,34 @@ function toNodes(t: TFunction, graph: Graph, drawn: Graph): Node[] {
   return [...heads, ...cards];
 }
 
-function toEdges(drawn: Graph): WireEdge[] {
+function toEdges(drawn: Graph, arrangement: Arrangement): WireEdge[] {
   const missing = new Set(drawn.nodes.filter((n) => n.kind === "missing").map((n) => n.id));
   return drawn.edges
     .filter((edge) => edge.from !== edge.to)
-    .map((edge) => ({
-      id: `${edge.from}|${edge.to}`,
-      source: edge.from,
-      target: edge.to,
-      type: "wire",
-      data: { missing: missing.has(edge.from) },
-      // Drawn into a shared <defs>, outside the edge's class, so its colour cannot come from
-      // the stylesheet: `--ink-2`'s own value, as the run map's arrow does.
-      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "#56513f" },
-      focusable: false,
-      selectable: false,
-    }));
+    .map((edge) => {
+      const id = edgeId(edge.from, edge.to);
+      const route = arrangement.routes.get(id);
+      const from = arrangement.cards.get(edge.from);
+      const to = arrangement.cards.get(edge.to);
+      return {
+        id,
+        source: edge.from,
+        target: edge.to,
+        type: "wire",
+        data: {
+          missing: missing.has(edge.from),
+          routed:
+            route === undefined || from === undefined || to === undefined
+              ? null
+              : { route, from, to },
+        },
+        // Drawn into a shared <defs>, outside the edge's class, so its colour cannot come from
+        // the stylesheet: `--ink-2`'s own value, as the run map's arrow does.
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "#56513f" },
+        focusable: false,
+        selectable: false,
+      };
+    });
 }
 
 /**
@@ -196,14 +206,7 @@ function Furniture({
   );
 }
 
-export function LineageCanvas({
-  graph,
-  drawn,
-  focus,
-  builds,
-  select,
-  bench,
-}: {
+interface BoardProps {
   graph: Graph;
   /** The part of `graph` on the board: all of it, or the selection's chains. */
   drawn: Graph;
@@ -212,10 +215,35 @@ export function LineageCanvas({
   select: (name: string | null) => void;
   /** The board and its details together: what full screen fills. */
   bench: RefObject<HTMLElement | null>;
-}): React.JSX.Element {
+}
+
+/** The board, once ELK has arranged it; its place is held while ELK works. */
+export function LineageCanvas(props: BoardProps): React.JSX.Element {
   const { t } = useTranslation();
-  const nodes = useMemo(() => toNodes(t, graph, drawn), [t, graph, drawn]);
-  const edges = useMemo(() => toEdges(drawn), [drawn]);
+  const arrangement = useArrangement(props.graph, props.drawn);
+  return (
+    <figure aria-label={t("lineage.drawingLabel")} className="lineage-board">
+      {arrangement === undefined ? <Skeleton rows={6} /> : null}
+      {arrangement === null ? <p className="note">{t("lineage.notArranged")}</p> : null}
+      {arrangement === undefined || arrangement === null ? null : (
+        <Arranged {...props} arrangement={arrangement} />
+      )}
+    </figure>
+  );
+}
+
+function Arranged({
+  graph,
+  drawn,
+  focus,
+  builds,
+  select,
+  bench,
+  arrangement,
+}: BoardProps & { arrangement: Arrangement }): React.JSX.Element {
+  const { t } = useTranslation();
+  const nodes = useMemo(() => toNodes(t, drawn, arrangement), [t, drawn, arrangement]);
+  const edges = useMemo(() => toEdges(drawn, arrangement), [drawn, arrangement]);
   const board = useMemo(() => ({ graph, focus, builds, select }), [graph, focus, builds, select]);
   // What the board draws, as one string: a change of it remounts the board with fresh places.
   const shape = [...drawn.nodes.map((n) => n.id), ...edges.map((e) => e.id)].join("\n");
@@ -232,35 +260,33 @@ export function LineageCanvas({
   };
 
   return (
-    <figure aria-label={t("lineage.drawingLabel")} className="lineage-board">
-      <BoardContext.Provider value={board}>
-        <ReactFlowProvider key={shape}>
-          <ReactFlow
-            ariaLabelConfig={labels}
-            defaultEdges={edges}
-            defaultNodes={nodes}
-            edgesFocusable={false}
-            edgeTypes={EDGE_TYPES}
-            elementsSelectable={false}
-            fitView={true}
-            fitViewOptions={FIT}
-            maxZoom={2}
-            minZoom={0.1}
-            nodesConnectable={false}
-            nodesFocusable={false}
-            nodeTypes={NODE_TYPES}
-            onPaneClick={(): void => {
-              select(null);
-            }}
-            // The credit pill floats over the drawing, which this system has no object for;
-            // `@xyflow/react` is MIT, which asks for it, not requires it. The run map does the same.
-            proOptions={{ hideAttribution: true }}
-          >
-            <Furniture bench={bench} focus={focus} nodes={nodes} />
-            <FollowSelection ids={followed} />
-          </ReactFlow>
-        </ReactFlowProvider>
-      </BoardContext.Provider>
-    </figure>
+    <BoardContext.Provider value={board}>
+      <ReactFlowProvider key={shape}>
+        <ReactFlow
+          ariaLabelConfig={labels}
+          defaultEdges={edges}
+          defaultNodes={nodes}
+          edgesFocusable={false}
+          edgeTypes={EDGE_TYPES}
+          elementsSelectable={false}
+          fitView={true}
+          fitViewOptions={FIT}
+          maxZoom={2}
+          minZoom={0.1}
+          nodesConnectable={false}
+          nodesFocusable={false}
+          nodeTypes={NODE_TYPES}
+          onPaneClick={(): void => {
+            select(null);
+          }}
+          // The credit pill floats over the drawing, which this system has no object for;
+          // `@xyflow/react` is MIT, which asks for it, not requires it. The run map does the same.
+          proOptions={{ hideAttribution: true }}
+        >
+          <Furniture bench={bench} focus={focus} nodes={nodes} />
+          <FollowSelection ids={followed} />
+        </ReactFlow>
+      </ReactFlowProvider>
+    </BoardContext.Provider>
   );
 }

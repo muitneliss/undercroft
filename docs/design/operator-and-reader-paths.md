@@ -124,7 +124,9 @@ The wheel is full at seven (ADR 0019), so lineage is a view of the Models divisi
 - A macro's own declarations count for the model that calls it. The shipped `gmail_letters()`
   reads `source('undercroft', 'records')`, so a model that calls it has the raw records as an
   upstream; a tenant's macro (ADR 0086) is read the same way from its saved definition.
-- It is drawn on a board the reader pans, zooms and rearranges (ADR 0097). Selecting any node
+- It is drawn on a board the reader pans, zooms and rearranges (ADR 0097), its cards placed and
+  its wires routed between them, never over a card, by a layout engine that keeps each column
+  (ADR 0103). Selecting any node
   highlights its whole upstream chain, marks its downstream chain in a second stroke and in
   words, and dims every node on neither; the selected node's last build, columns, SQL and
   neighbours stand beside the board, and every upstream path to it is written out beneath.
