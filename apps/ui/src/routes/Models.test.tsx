@@ -282,7 +282,9 @@ describe("the lineage view", () => {
     const all = await screen.findByRole("region", { name: "Mỗi mô hình và những gì nó đọc" });
     expect(within(all).getByText(/không phải chuỗi cố định/u)).toBeDefined();
     expect(within(all).getByText(/Đọc: raw\.records, stg_gone/u)).toBeDefined();
-    expect(cards()).toContain("stg_gone · Phụ thuộc bị thiếu");
+    await waitFor(() => {
+      expect(cards()).toContain("stg_gone · Phụ thuộc bị thiếu");
+    });
     expect(cards().some((card) => card.startsWith("stg_legacy · Thượng nguồn chưa khai báo"))).toBe(
       true,
     );
@@ -291,7 +293,7 @@ describe("the lineage view", () => {
   it("selects a raw lake table by its card, and names everything downstream of it", async () => {
     const router = mount(`/tenants/${TENANT}/models?view=lineage`);
     await screen.findByRole("region", { name: "Mỗi mô hình và những gì nó đọc" });
-    fireEvent.click(within(screen.getByRole("figure")).getByTitle("raw.records"));
+    fireEvent.click(await within(screen.getByRole("figure")).findByTitle("raw.records"));
     expect(router.state.location.search).toBe("?view=lineage&model=raw.records");
 
     const trace = await screen.findByRole("region", { name: /Thượng nguồn của raw\.records/u });
@@ -331,11 +333,13 @@ describe("the lineage view", () => {
   it("narrows the board to what is related to the selection, and back", async () => {
     mount(`/tenants/${TENANT}/models?view=lineage&model=stg_files&scope=related`);
     await screen.findByRole("region", { name: /Thượng nguồn của stg_files/u });
-    expect(
-      cards()
-        .map((card) => card.split(" · ")[0] ?? "")
-        .sort((a, b) => a.localeCompare(b)),
-    ).toEqual(["mart_pipeline", "raw.documents", "stg_files"]);
+    await waitFor(() => {
+      expect(
+        cards()
+          .map((card) => card.split(" · ")[0] ?? "")
+          .sort((a, b) => a.localeCompare(b)),
+      ).toEqual(["mart_pipeline", "raw.documents", "stg_files"]);
+    });
 
     fireEvent.click(screen.getByRole("link", { name: "Hiện mọi nút" }));
     await waitFor(() => {

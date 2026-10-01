@@ -1289,6 +1289,8 @@ export const en = {
     declaredSource: "▭ Declared dbt source",
     undeclaredMark: "? Upstream not declared",
     resetLayout: "Reset layout",
+    notArranged:
+      "The drawing could not be laid out. The names and paths below still say what each model reads.",
     fullscreen: "Full screen",
     exitFullscreen: "Exit full screen",
     controls: "Drawing controls",
