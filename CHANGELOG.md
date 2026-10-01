@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.0](https://github.com/muitneliss/undercroft/compare/v1.59.0...v1.60.0) (2026-10-01)
+
+
+### Features
+
+* **ui:** the lineage board's selected chains flow toward the data's destination (ADR 0100) ([#375](https://github.com/muitneliss/undercroft/issues/375)) ([c302d68](https://github.com/muitneliss/undercroft/commit/c302d68d38b0cadd9ad3bc08fa9f90334be06462))
+
 ## [1.59.0](https://github.com/muitneliss/undercroft/compare/v1.58.0...v1.59.0) (2026-10-01)
 
 
