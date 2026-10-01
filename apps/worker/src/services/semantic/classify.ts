@@ -11,10 +11,17 @@
  * is a guess with a number on it. Only the first `MAX_CHARS` of a text are sent -- measured on
  * `tai-001`, where 32,000 characters were answered in under half a second.
  *
+ * SEVERAL TEXTS AT ONCE, `IN_FLIGHT` of them (ADR 0102). The provider bills per call and allows
+ * far more than one in flight; asking one text at a time used about 5% of that and made a first
+ * classification take two days of ticks for no saving. Six, because the worker runs two semantic
+ * runs at once by default (`UNDERCROFT_MAX_CONCURRENT_SEMANTIC`), and twelve calls of ~0.5 s and
+ * ~3,000 tokens stay well under 40 requests and 100K tokens a second -- limits the provider says
+ * it moves. A 429 that outlives the SDK's own retries is a `provider-error` row, asked again.
+ *
  * WRITTEN AS IT GOES, in small batches. A deploy stops the worker, and on the day this was written
  * four deploys in an hour each stopped a long run; answers held in memory until the end would be
  * paid for and lost every time. A batch written is an answer kept, and the next run asks only what
- * is still due. The stop signal is honoured between two texts.
+ * is still due. A stop starts no new call; the calls already in flight finish and are written.
  *
  * A PROVIDER ERROR IS A ROW, NOT A FAILED RUN: it says why, and the due predicate asks it again.
  */
@@ -28,13 +35,16 @@ import {
 } from "../../repos/documentKindResults.ts";
 import type { SqlExecutor } from "@undercroft/db";
 import { judge, type SemanticAsk, SemanticProviderError } from "./definition.ts";
+import { inFlight } from "./inFlight.ts";
 
 /** Shorter than this is not a document worth a call. */
 export const MIN_CHARS = 60;
 /** How much of a text is sent. */
 export const MAX_CHARS = 32_000;
-/** Texts per run; the flow's next tick takes the rest. */
-export const DEFAULT_BATCH = 500;
+/** Texts per run; the flow's next tick takes the rest. About four minutes at `IN_FLIGHT`. */
+export const DEFAULT_BATCH = 3000;
+/** Calls waiting on the provider at once, per run. */
+export const IN_FLIGHT = 6;
 /** Answers per write: small enough that a stop loses little, large enough to be one statement. */
 const WRITE_EVERY = 25;
 
@@ -147,24 +157,24 @@ export async function classifyPass(
   };
   const pending: KindResult[] = [];
   const tally = { asked: 0, classified: 0, tooShort: 0, invalid: 0, providerErrors: 0 };
-  let stopped = false;
 
-  for (const text of texts) {
-    if (deps.stop?.aborted === true) {
-      stopped = true;
-      break;
-    }
-    const result = await answerOne(deps, catalogue, text);
-    count(tally, result.status);
-    pending.push(result);
-    if (pending.length >= WRITE_EVERY) {
-      await upsertKindResults(deps.exec, scope.tenantId, stamp, pending.splice(0));
-    }
-    deps.progress?.(
-      tally.classified + tally.tooShort + tally.invalid + tally.providerErrors,
-      texts.length,
-    );
-  }
+  const { stopped } = await inFlight(
+    texts,
+    IN_FLIGHT,
+    async (text) => {
+      const result = await answerOne(deps, catalogue, text);
+      count(tally, result.status);
+      pending.push(result);
+      if (pending.length >= WRITE_EVERY) {
+        await upsertKindResults(deps.exec, scope.tenantId, stamp, pending.splice(0));
+      }
+      deps.progress?.(
+        tally.classified + tally.tooShort + tally.invalid + tally.providerErrors,
+        texts.length,
+      );
+    },
+    deps.stop,
+  );
   await upsertKindResults(deps.exec, scope.tenantId, stamp, pending.splice(0));
   return { ...tally, stopped };
 }

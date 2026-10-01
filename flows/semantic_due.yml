@@ -12,11 +12,11 @@ description: |
   tick over a settled tenant starts nothing and sends nothing to the classifier. A worker with
   no provider key answers an empty list, so this flow ticks quietly rather than failing.
 
-  Every thirty minutes rather than hourly: a run classifies a capped batch (DEFAULT_BATCH, 500
-  texts) in about five minutes, one call at a time, so an hourly tick would leave the worker
-  idle most of the hour while a first classification of ~50,000 texts waited. Every thirty
-  minutes halves that without overlapping itself; a pair still running is a 409 this flow
-  ignores. At :22 and :52 so it lands on neither `ingest_due`'s five-minute ticks' busiest
+  Every thirty minutes rather than hourly: a run classifies a capped batch (DEFAULT_BATCH, 3,000
+  texts) in about four minutes, six calls at a time (ADR 0102), so an hourly tick would leave
+  the worker idle most of the hour while a first classification of ~50,000 texts waited. Every
+  thirty minutes halves that without overlapping itself; a pair still running is a 409 this
+  flow ignores. At :22 and :52 so it lands on neither `ingest_due`'s five-minute ticks' busiest
   minute nor `extract_due`'s :07.
 
   NOT CHAINED TO THE EXTRACT THAT READ THE TEXT, for the reason `extract_due` is not chained
@@ -49,8 +49,9 @@ tasks:
     # `Loop`, `item.value` and `fromJson` for the Kestra 2.x reasons `extract_due` records.
     type: io.kestra.plugin.core.flow.Loop
     values: "{{ fromJson(outputs.due.body).due }}"
-    # One at a time: each run makes one classifier call at a time, and the provider's pace
-    # is per key, so starting pairs in parallel would only queue them at the provider.
+    # One request at a time. Each answers at once and its run goes on in the background, six
+    # classifier calls at a time; how many runs classify together is the worker's
+    # UNDERCROFT_MAX_CONCURRENT_SEMANTIC, which keeps the key under the provider's limits.
     concurrencyLimit: 1
     tasks:
       - id: classify

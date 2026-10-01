@@ -19,13 +19,14 @@ import type { SqlExecutor } from "@undercroft/db";
 import { insertKinds, listKinds } from "@undercroft/db/repos";
 
 import { sampleTextByDigest, type TextPart } from "../../repos/documentText.ts";
-import { MAX_CHARS, MIN_CHARS } from "./classify.ts";
+import { IN_FLIGHT, MAX_CHARS, MIN_CHARS } from "./classify.ts";
 import {
   judge,
   type SemanticAsk,
   type SemanticDefinition,
   SemanticProviderError,
 } from "./definition.ts";
+import { inFlight } from "./inFlight.ts";
 
 /** A kind must be at least this share of a sample to be kept: one text in a hundred. */
 export const KEEP_SHARE = 0.01;
@@ -95,34 +96,39 @@ async function sampleOf(
   return texts.filter((text) => text.chars >= MIN_CHARS).map((text) => text.text);
 }
 
-/** Classify one part's sample into the whole catalogue, stopping at the first abort. */
+/**
+ * Classify one part's sample into the whole catalogue, `IN_FLIGHT` texts at once as a pass does
+ * (ADR 0102), starting nothing more once a stop arrives.
+ */
 async function tallyPart(
   deps: InitialiseDeps,
   texts: readonly string[],
   progress: Progress,
 ): Promise<PartTally> {
   const tally: PartTally = { labels: new Map(), answered: 0, providerErrors: 0, stopped: false };
-  for (const text of texts) {
-    if (deps.stop?.aborted === true) {
-      tally.stopped = true;
-      return tally;
-    }
-    try {
-      const reply = await deps.ask(text, { [QUESTION]: WHOLE_CATALOGUE });
-      const judged = judge(WHOLE_CATALOGUE, reply.answers[QUESTION]);
-      if (judged.status === "classified" && judged.answer.kind === "choice") {
-        tally.labels.set(judged.answer.label, (tally.labels.get(judged.answer.label) ?? 0) + 1);
-        tally.answered += 1;
+  const { stopped } = await inFlight(
+    texts,
+    IN_FLIGHT,
+    async (text) => {
+      try {
+        const reply = await deps.ask(text, { [QUESTION]: WHOLE_CATALOGUE });
+        const judged = judge(WHOLE_CATALOGUE, reply.answers[QUESTION]);
+        if (judged.status === "classified" && judged.answer.kind === "choice") {
+          tally.labels.set(judged.answer.label, (tally.labels.get(judged.answer.label) ?? 0) + 1);
+          tally.answered += 1;
+        }
+      } catch (error) {
+        if (!(error instanceof SemanticProviderError)) {
+          throw error;
+        }
+        tally.providerErrors += 1;
       }
-    } catch (error) {
-      if (!(error instanceof SemanticProviderError)) {
-        throw error;
-      }
-      tally.providerErrors += 1;
-    }
-    progress.done += 1;
-    deps.progress?.(progress.done, progress.total);
-  }
+      progress.done += 1;
+      deps.progress?.(progress.done, progress.total);
+    },
+    deps.stop,
+  );
+  tally.stopped = stopped;
   return tally;
 }
 

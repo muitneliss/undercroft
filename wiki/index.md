@@ -105,6 +105,7 @@
 - [ADR 0099: Screens are compared as pictures by Vitest, and nothing else uses it](sources/adr-0099-screens-are-compared-as-pictures-by-vitest-and-nothing-else-uses-it.md)
 - [ADR 0100 The Lineage Board's Selected Chains Flow](sources/adr-0100-the-lineage-board-s-selected-chains-flow.md)
 - [ADR 0101 A Spec Lands the Text a Person Wrote as a Document of Its Record](sources/adr-0101-a-spec-lands-the-text-a-person-wrote-as-a-document-of-its-record.md)
+- [ADR 0102 A Classifying Pass Asks Several Texts at Once](sources/adr-0102-a-classifying-pass-asks-several-texts-at-once.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)
