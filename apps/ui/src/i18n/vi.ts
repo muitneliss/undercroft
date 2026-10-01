@@ -1100,9 +1100,12 @@ export const vi = {
     hubspotQuotes: "Báo giá",
     hubspotLineItems: "Dòng báo giá",
     hubspotProducts: "Sản phẩm",
+    hubspotNotes: "Ghi chú",
+    hubspotCalls: "Cuộc gọi",
+    hubspotTasks: "Công việc",
     /** Nothing chosen: the spec's own properties, which is what HubSpot has always read. */
     hubspotStandard:
-      "Các trường chuẩn của công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm",
+      "Các trường chuẩn của công ty, liên hệ, giao dịch, báo giá, dòng báo giá, sản phẩm, ghi chú, cuộc gọi và công việc",
     hubspotChosen_other: "Các trường chuẩn, cùng {{count, number}} trường chọn thêm",
     anyFileType: "Mọi loại tệp",
     fileTypesChosen_other: "Đã chọn {{count, number}} loại tệp",
@@ -1884,7 +1887,7 @@ export const vi = {
   source: {
     readOnly: "Không gì cả. Quyền chỉ đọc, và bạn có thể ngắt kết nối bất cứ lúc nào.",
     hubspotReads:
-      "Công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm (kể cả sản phẩm đã lưu trữ) từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm; người phụ trách (owner), kể cả người đã ngừng hoạt động; các pipeline giao dịch cùng các giai đoạn của chúng; và liên kết giữa chúng: công ty, liên hệ, báo giá và dòng báo giá của mỗi giao dịch, dòng báo giá, liên hệ và công ty của mỗi báo giá, và công ty của mỗi liên hệ. HubSpot không lưu thời điểm sửa cho liên kết, nên thời điểm sửa phía nguồn của chúng luôn để trống.",
+      "Công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm (kể cả sản phẩm đã lưu trữ) từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm; người phụ trách (owner), kể cả người đã ngừng hoạt động; các pipeline giao dịch cùng các giai đoạn của chúng; và liên kết giữa chúng: công ty, liên hệ, báo giá và dòng báo giá của mỗi giao dịch, dòng báo giá, liên hệ và công ty của mỗi báo giá, và công ty của mỗi liên hệ. Ghi chú, cuộc gọi và công việc (cả việc đang mở lẫn đã xong) ghi trên công ty, liên hệ và giao dịch, cùng liên kết tới từng bản ghi đó; HubSpot cho đọc cả ba bằng quyền crm.objects.contacts.read. Nội dung người dùng viết trong ghi chú, cuộc gọi và công việc được lưu thành tài liệu riêng, chỉ mô hình của bạn đọc được. Bản ghi âm và bản chép lời cuộc gọi không bao giờ được đọc. HubSpot không lưu thời điểm sửa cho liên kết, nên thời điểm sửa phía nguồn của chúng luôn để trống.",
     xeroReads:
       "Liên hệ, hóa đơn, giấy báo có, báo giá, đơn đặt hàng, mặt hàng và các khoản thanh toán từ một tổ chức bạn chọn.",
     gmailReads:

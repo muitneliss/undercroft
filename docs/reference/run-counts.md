@@ -55,8 +55,8 @@ again when it changed, for instance when the file was moved. It then counts as C
 
 ## Two places the split is coarser
 
-- **Documents** (Gmail attachments, Drive files) are counted beside the records as their own
-  entity, `documents`. A document whose content differs from the stored one is counted as
+- **Documents** (Gmail attachments and bodies, Drive files, and the text of a HubSpot note, call
+  or task) are counted beside the records as their own entity, `documents`. A document whose content differs from the stored one is counted as
   New, not Changed. Landed = New + Unchanged there, because Changed is always 0.
 - **A lake API batch** (`POST /v1/lake/records`) answers in its own published shape, where
   `created` is every record stored as a new version, first or not. The totals of the run it

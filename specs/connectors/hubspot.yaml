@@ -370,3 +370,255 @@ entities:
       failOnEmpty: false
     readScope: crm.objects.companies.read
     removedWhen: parent-removed
+
+  # The activities logged on a record, issue 372: notes, calls and tasks, open and completed alike
+  # (HubSpot lists both). Each is listed whole every run like the objects above, and links to the
+  # companies, contacts and deals it is logged on below. HubSpot reads all three under the contacts
+  # scope: there is no scope of their own.
+  #
+  # The text a person wrote -- `hs_note_body`, `hs_call_body`, `hs_task_body` -- is a DOCUMENT of
+  # its record, never a field of it, exactly as a Gmail message's body is (ADR 0084, ADR 0101). The
+  # runtime takes it out of the payload whatever asked for it, and the worker lands it as
+  # `<entity>:<id>:body` (`notes:51:body`); a model reads it in `raw.document_text`. HubSpot caps it
+  # at 65,536 characters, so it is always far under the 25 MiB a document may weigh.
+  #
+  # `neverRead` keeps out what a scope could otherwise add (ADR 0052): the body's own preview
+  # copies, which are the same text, and on calls the recording, the transcript and the summary
+  # made from it. None of them is ever asked of HubSpot, and no transcript API is ever called.
+  #
+  # `hubspot_owner_id` is the item's owner, an owner's `id`; `hs_created_by` is the HubSpot user who
+  # logged it, an owner's `userId`. Owners above are read deactivated ones included, so both
+  # resolve. `hs_attachment_ids` is the semicolon-separated list of the files attached to a note;
+  # the files themselves are not read.
+  - name: notes
+    request:
+      kind: list
+      path: /crm/v3/objects/notes
+      query:
+        limit: "100"
+        archived: "false"
+        properties: hs_timestamp,hs_note_body,hubspot_owner_id,hs_created_by,hs_attachment_ids,hs_createdate,hs_lastmodifieddate
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: cursor, cursorPath: paging.next.after, param: after }
+    incremental:
+      strategy: client-filter
+      sourcePath: properties.hs_lastmodifieddate
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: absent
+    documents:
+      - { path: properties.hs_note_body, part: body, contentType: text/html }
+    neverRead: [hs_body_preview*]
+
+  # `hs_call_disposition` is the outcome as a GUID; `call_dispositions` below says what each means.
+  # `hs_call_duration` is in milliseconds. `hs_call_recording_url` is never read.
+  - name: calls
+    request:
+      kind: list
+      path: /crm/v3/objects/calls
+      query:
+        limit: "100"
+        archived: "false"
+        properties: hs_timestamp,hs_call_title,hs_call_body,hs_call_direction,hs_call_duration,hs_call_disposition,hs_call_status,hubspot_owner_id,hs_created_by,hs_createdate,hs_lastmodifieddate
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: cursor, cursorPath: paging.next.after, param: after }
+    incremental:
+      strategy: client-filter
+      sourcePath: properties.hs_lastmodifieddate
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: absent
+    documents:
+      - { path: properties.hs_call_body, part: body, contentType: text/html }
+    neverRead: [hs_body_preview*, "*recording*", "*transcri*", "*summary*"]
+
+  # `hs_timestamp` is a task's due date; `hs_task_completion_date` is set once it is completed.
+  - name: tasks
+    request:
+      kind: list
+      path: /crm/v3/objects/tasks
+      query:
+        limit: "100"
+        archived: "false"
+        properties: hs_task_subject,hs_task_body,hs_task_status,hs_timestamp,hs_task_priority,hs_task_type,hs_task_completion_date,hubspot_owner_id,hs_created_by,hs_createdate,hs_lastmodifieddate
+    envelopePath: results
+    idPath: id
+    updatedAtPath: updatedAt
+    pagination: { kind: cursor, cursorPath: paging.next.after, param: after }
+    incremental:
+      strategy: client-filter
+      sourcePath: properties.hs_lastmodifieddate
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: absent
+    documents:
+      - { path: properties.hs_task_body, part: body, contentType: text/html }
+    neverRead: [hs_body_preview*]
+
+  # What each `hs_call_disposition` GUID means, HubSpot's defaults and the portal's own outcomes,
+  # read from the portal rather than written into anybody's model. The engagements API's own
+  # answer: a top-level array of `{id, label, deleted}`, unpaged, so no `envelopePath`. HubSpot's
+  # reference names no scope for it; it is read under the scope calls are.
+  - name: call_dispositions
+    request:
+      kind: list
+      path: /calling/v1/dispositions
+    idPath: id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: absent
+
+  # Every company, contact and deal each activity is logged on, keyed by the activity and removed
+  # with it, like the links above. An activity on several records lands once, with a link to each.
+  - name: note_companies
+    request:
+      kind: batch-from
+      entity: notes
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/notes/companies/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.companies.read
+    removedWhen: parent-removed
+
+  - name: note_contacts
+    request:
+      kind: batch-from
+      entity: notes
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/notes/contacts/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: parent-removed
+
+  - name: note_deals
+    request:
+      kind: batch-from
+      entity: notes
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/notes/deals/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.deals.read
+    removedWhen: parent-removed
+
+  - name: call_companies
+    request:
+      kind: batch-from
+      entity: calls
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/calls/companies/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.companies.read
+    removedWhen: parent-removed
+
+  - name: call_contacts
+    request:
+      kind: batch-from
+      entity: calls
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/calls/contacts/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: parent-removed
+
+  - name: call_deals
+    request:
+      kind: batch-from
+      entity: calls
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/calls/deals/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.deals.read
+    removedWhen: parent-removed
+
+  - name: task_companies
+    request:
+      kind: batch-from
+      entity: tasks
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/tasks/companies/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.companies.read
+    removedWhen: parent-removed
+
+  - name: task_contacts
+    request:
+      kind: batch-from
+      entity: tasks
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/tasks/contacts/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.contacts.read
+    removedWhen: parent-removed
+
+  - name: task_deals
+    request:
+      kind: batch-from
+      entity: tasks
+      idPath: id
+      chunkSize: 100
+      path: /crm/v4/associations/tasks/deals/batch/read
+      bodyTemplate: hubspot-batch-inputs
+    envelopePath: results
+    idPath: from.id
+    pagination: { kind: none }
+    guards:
+      failOnEmpty: false
+    readScope: crm.objects.deals.read
+    removedWhen: parent-removed

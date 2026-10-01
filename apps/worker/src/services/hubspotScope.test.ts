@@ -36,6 +36,7 @@ const ENV = { UNDERCROFT_SECRET_KEY: KEY };
 const SPECS_DIR = join(import.meta.dirname, "..", "..", "..", "..", "specs", "connectors");
 const ASSOCIATIONS = "https://api.hubapi.com/crm/v4/associations/deals/companies/batch/read";
 const COMPANIES_BATCH = "https://api.hubapi.com/crm/v3/objects/companies/batch/read";
+const NOTES_BATCH = "https://api.hubapi.com/crm/v3/objects/notes/batch/read";
 
 /** The properties the shipped spec reads on one object, as it writes them. */
 function specProperties(object: string): string {
@@ -79,33 +80,48 @@ function links(from: string, to: string): string {
   return `https://api.hubapi.com/crm/v4/associations/${from}/${to}/batch/read`;
 }
 
+/** The activities a portal holds; none unless a test says so. */
+interface Activities {
+  readonly notes?: unknown[];
+  readonly calls?: unknown[];
+}
+
 /**
  * What the spec reads beside the three objects a scope widens, in the order it reads it: none of
  * it changes with a choice of properties, so it is recorded once, as quiet as a portal gets -- no
- * quotes, line items or products, one owner and one pipeline.
+ * quotes, line items or products, one owner and one pipeline, no tasks, no call outcomes, and the
+ * notes and calls a test hands it, whose links are its own to record.
  */
-const REST_OF_PORTAL: readonly (readonly ["GET" | "POST", string, unknown])[] = [
-  ["GET", specUrl("quotes"), { results: [] }],
-  ["GET", specUrl("line_items"), { results: [] }],
-  ["GET", specUrl("products", { archived: "false" }), { results: [] }],
-  ["GET", specUrl("products", { archived: "true" }), { results: [] }],
-  ["GET", specUrl("owners", { archived: "false" }), { results: [{ id: "o1", archived: false }] }],
-  ["GET", specUrl("owners", { archived: "true" }), { results: [] }],
-  ["GET", specUrl("deal_pipelines"), { results: [{ id: "default", stages: [] }] }],
-  ["POST", links("contacts", "companies"), { results: [] }],
-  ["POST", links("deals", "contacts"), { results: [] }],
-  ["POST", links("deals", "quotes"), { results: [] }],
-  ["POST", links("deals", "line_items"), { results: [] }],
-];
+function restOfPortal(
+  activities: Activities = {},
+): readonly (readonly ["GET" | "POST", string, unknown])[] {
+  return [
+    ["GET", specUrl("quotes"), { results: [] }],
+    ["GET", specUrl("line_items"), { results: [] }],
+    ["GET", specUrl("products", { archived: "false" }), { results: [] }],
+    ["GET", specUrl("products", { archived: "true" }), { results: [] }],
+    ["GET", specUrl("owners", { archived: "false" }), { results: [{ id: "o1", archived: false }] }],
+    ["GET", specUrl("owners", { archived: "true" }), { results: [] }],
+    ["GET", specUrl("deal_pipelines"), { results: [{ id: "default", stages: [] }] }],
+    ["POST", links("contacts", "companies"), { results: [] }],
+    ["POST", links("deals", "contacts"), { results: [] }],
+    ["POST", links("deals", "quotes"), { results: [] }],
+    ["POST", links("deals", "line_items"), { results: [] }],
+    ["GET", specUrl("notes"), { results: activities.notes ?? [] }],
+    ["GET", specUrl("calls"), { results: activities.calls ?? [] }],
+    ["GET", specUrl("tasks"), { results: [] }],
+    ["GET", specUrl("call_dispositions"), []],
+  ];
+}
 
 /**
  * HubSpot as recorded: `companies` listed as the spec declares it, the other two objects and the
  * relation at the URLs the spec has always used, and the rest of the portal. Any other request is
  * refused -- a widened read records its batch read on top with {@link batchAnswers}.
  */
-function hubspot(companies: unknown[]): InMemoryFetcher {
+function hubspot(companies: unknown[], activities: Activities = {}): InMemoryFetcher {
   const fetcher = new InMemoryFetcher();
-  for (const [method, url, body] of REST_OF_PORTAL) {
+  for (const [method, url, body] of restOfPortal(activities)) {
     fetcher.on(method, url, { body });
   }
   return fetcher
@@ -204,7 +220,7 @@ describe("a HubSpot connection nobody has scoped", () => {
     expect(await recordedScope(db, result.runId)).toEqual({ selectionJson: null });
 
     // The three quote relations read nothing, because the portal has no quotes -- and ask
-    // HubSpot nothing, which the recorded fetcher would have refused.
+    // HubSpot nothing, which the recorded fetcher would have refused. So do the activities' links.
     expect(result.entities.map((entity) => entity.entity)).toEqual([
       "companies",
       "contacts",
@@ -222,13 +238,21 @@ describe("a HubSpot connection nobody has scoped", () => {
       "quote_line_items",
       "quote_contacts",
       "quote_companies",
+      "notes",
+      "calls",
+      "tasks",
+      "call_dispositions",
+      ...["note", "call", "task"].flatMap((from) =>
+        ["companies", "contacts", "deals"].map((to) => `${from}_${to}`),
+      ),
+      "documents",
     ]);
     expect(fetcher.calls.map((call) => call.url)).toEqual([
       listUrl("companies", specProperties("companies")),
       listUrl("contacts", specProperties("contacts")),
       listUrl("deals", specProperties("deals")),
       ASSOCIATIONS,
-      ...REST_OF_PORTAL.map(([, url]) => url),
+      ...restOfPortal().map(([, url]) => url),
     ]);
   });
 });
@@ -338,5 +362,62 @@ describe("a HubSpot scope", () => {
     await choose({ companies: ["annualrevenue"] });
 
     await expect(ingest(hubspot([]))).rejects.toThrow("failOnEmpty");
+  });
+
+  it("never asks for what the spec refuses, and a note's body chosen again lands only as a document", async () => {
+    // Ticked over the CLI, or before the spec refused them: a call's recording, its transcript and
+    // its summary, and a note's preview copies of its own text. None is asked of HubSpot. Calls
+    // are left as the spec reads them -- a batch read of calls would be refused by the recorder --
+    // and the note body, chosen again, is still taken out of the record by its path.
+    await choose({
+      notes: ["hs_note_body", "hs_body_preview", "hs_body_preview_html", "x_meeting_room"],
+      calls: ["hs_call_recording_url", "hs_call_transcript", "hs_call_summary"],
+    });
+    const at = "2026-01-01T00:00:00.000Z";
+    const note = { id: "n1", updatedAt: at, properties: { hs_lastmodifieddate: at } };
+    const call = { id: "k1", updatedAt: at, properties: { hs_lastmodifieddate: at } };
+    const fetcher = hubspot([company("1", at)], { notes: [note], calls: [call] }).on(
+      "POST",
+      NOTES_BATCH,
+      {
+        body: {
+          status: "COMPLETE",
+          results: [
+            {
+              ...note,
+              properties: {
+                ...note.properties,
+                hs_note_body: "<p>Room 4</p>",
+                x_meeting_room: "4",
+              },
+            },
+          ],
+        },
+      },
+    );
+    for (const from of ["notes", "calls"]) {
+      for (const to of ["companies", "contacts", "deals"]) {
+        fetcher.on("POST", links(from, to), { body: { results: [] } });
+      }
+    }
+
+    await ingest(fetcher);
+
+    const asked = fetcher.calls.find((request) => request.url === NOTES_BATCH);
+    expect(JSON.parse(asked?.body ?? "{}").properties).toEqual([
+      ...specProperties("notes").split(","),
+      "x_meeting_room",
+    ]);
+    expect(fetcher.calls.some((request) => request.url.includes("/objects/calls/batch"))).toBe(
+      false,
+    );
+    const { rows } = await db.query<{ payload: { properties: Record<string, unknown> } }>(
+      "SELECT payload FROM raw.records WHERE entity = 'notes' AND source_record_id = 'n1'",
+    );
+    expect(rows[0]?.payload.properties).toEqual({ hs_lastmodifieddate: at, x_meeting_room: "4" });
+    const documents = await db.query<{ id: string }>(
+      "SELECT document_id AS id FROM raw.documents WHERE source = 'hubspot'",
+    );
+    expect(documents.rows).toEqual([{ id: "notes:n1:body" }]);
   });
 });

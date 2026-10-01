@@ -163,6 +163,36 @@ describe("guards", () => {
   });
 });
 
+describe("a field declared as a document", () => {
+  const withBody = parseSpec(`
+apiVersion: undercroft.dev/v1
+kind: Connector
+id: demo
+displayName: Demo
+baseUrl: ${BASE}
+auth: { kind: none }
+entities:
+  - name: notes
+    request: { kind: list, path: /notes }
+    envelopePath: results
+    idPath: id
+    documents:
+      - { path: properties.body, part: body, contentType: text/html }
+`);
+
+  it("refuses a value that is not text, rather than landing it either way", async () => {
+    // A spec that named the wrong field. Landing the object as a document, or leaving it in the
+    // payload, would each be a guess about what it is. The text case lands in the worker's suite.
+    const fetcher = new InMemoryFetcher().on("GET", `${BASE}/notes`, {
+      body: { results: [{ id: "1", properties: { body: { blocks: [] } } }] },
+    });
+
+    await expect(
+      collect(readEntity(withBody, withBody.entities[0]!, ctx(fetcher))),
+    ).rejects.toThrow("is not text");
+  });
+});
+
 describe("an unmodelled request is an error", () => {
   it("the fetcher refuses a request nobody recorded", async () => {
     const fetcher = new InMemoryFetcher(); // nothing recorded

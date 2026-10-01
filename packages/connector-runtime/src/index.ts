@@ -1,3 +1,4 @@
+export type { RecordDocument } from "./documents.ts";
 export {
   createFetcher,
   type Fetcher,
