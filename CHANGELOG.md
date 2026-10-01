@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.61.0](https://github.com/muitneliss/undercroft/compare/v1.60.0...v1.61.0) (2026-10-01)
+
+
+### Features
+
+* **hubspot:** read notes, calls and tasks, with the text a person wrote landed as documents (ADR 0101) ([#377](https://github.com/muitneliss/undercroft/issues/377)) ([75f6213](https://github.com/muitneliss/undercroft/commit/75f6213a4b6556149d4008f4c61524f30c6e9368))
+
 ## [1.60.0](https://github.com/muitneliss/undercroft/compare/v1.59.0...v1.60.0) (2026-10-01)
 
 
