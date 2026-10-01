@@ -3669,19 +3669,44 @@
     border-top: var(--hair) dashed var(--rule-strong);
   }
 
-  /* The board and the details, side by side on a desk; one above the other below 1100px. */
+  /* The board and the details, side by side on a desk; one above the other below 1100px.
+   *
+   * A board is a drawing to work in, not a column of prose, so it takes all the width the leaf
+   * has: the sheet drops its measure on this view, and the bench hangs out into the margin column
+   * the division's head stands in (it is printed above, not beside, the board). `--lineage-h` is
+   * the board's height and the details' limit, one number for both. The colophon's rule follows
+   * the sheet's measure, so it drops it too. */
+  .sheet:has(.lineage-bench),
+  .leaf:has(.lineage-bench) .colophon {
+    max-width: none;
+  }
+
   .lineage-bench {
+    --lineage-h: clamp(32rem, calc(100vh - 10rem), 64rem);
     display: grid;
     grid-template-columns: minmax(0, 1fr) 22rem;
     gap: var(--s-4);
     align-items: start;
+    margin-left: calc(-1 * (var(--head-col) + var(--s-5)));
+  }
+
+  /* Full screen fills the window with the board and its details, side by side at any width. */
+  .lineage-bench:fullscreen {
+    --lineage-h: calc(100vh - 2 * var(--s-4));
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    padding: var(--s-4);
+    background: var(--page);
+  }
+
+  .lineage-bench:fullscreen .lineage-detail {
+    max-height: var(--lineage-h);
   }
 
   /* The ground is the page stock inside one keyline, as the run map's is; here the dots are
    * `@xyflow/react`'s own <Background>, because on a board that pans the grid must pan too. */
   .lineage-board {
     position: relative;
-    height: clamp(30rem, 72vh, 56rem);
+    height: var(--lineage-h);
     min-width: 0;
     margin: 0;
     overflow: hidden;
@@ -3820,7 +3845,7 @@
   .lineage-card__note {
     overflow: hidden;
     font-family: var(--face-display);
-    font-size: 0.625rem;
+    font-size: var(--t-micro);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-overflow: ellipsis;
@@ -3848,7 +3873,7 @@
   }
 
   .lineage-card .mark {
-    font-size: 0.625rem;
+    font-size: var(--t-micro);
   }
 
   /* Present for @xyflow/react to anchor an edge to, and never seen: nothing connects here.
@@ -3905,7 +3930,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--s-4);
-    max-height: clamp(30rem, 72vh, 56rem);
+    max-height: var(--lineage-h);
     overflow-y: auto;
     padding: var(--s-4);
     background: var(--leaf);
@@ -5029,6 +5054,11 @@
      name every node of the selected chains and wrap, so they are the view on a phone. */
     .lineage-board {
       display: none;
+    }
+
+    /* No margin column to hang into: the head is printed above the page here. */
+    .lineage-bench {
+      margin-left: 0;
     }
 
     .lineage-levels {

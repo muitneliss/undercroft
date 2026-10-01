@@ -1286,6 +1286,8 @@ export const en = {
     declaredSource: "▭ Declared dbt source",
     undeclaredMark: "? Upstream not declared",
     resetLayout: "Reset layout",
+    fullscreen: "Full screen",
+    exitFullscreen: "Exit full screen",
     controls: "Drawing controls",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
