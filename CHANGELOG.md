@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.63.0](https://github.com/muitneliss/undercroft/compare/v1.62.0...v1.63.0) (2026-10-01)
+
+
+### Features
+
+* **ui:** the lineage board is laid out by ELK, its wires routed between the cards (ADR 0103) ([#381](https://github.com/muitneliss/undercroft/issues/381)) ([404e29e](https://github.com/muitneliss/undercroft/commit/404e29e17a49e01301f6f5b7e2cc203e3b1b1531))
+
 ## [1.62.0](https://github.com/muitneliss/undercroft/compare/v1.61.0...v1.62.0) (2026-10-01)
 
 
