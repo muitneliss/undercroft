@@ -2435,9 +2435,10 @@
    * THE CONNECTION IS ALIVE WHILE THE RUN IS. An edge out of a settled stage is a
    * still rule; an edge out of a stage still working flows. It is the one honest
    * live signal the drawing has, and the thing that tells an operator mid-call that
-   * something IS happening without them reading a figure. That flow is the single
-   * `linear` animation in this sheet -- everything else steps, and a dash crawling
-   * in six visible jumps reads as a rendering fault rather than as movement.
+   * something IS happening without them reading a figure. That flow and the lineage
+   * board's (ADR 0100) are the only `linear` animations in this sheet -- everything
+   * else steps, and a dash crawling in six visible jumps reads as a rendering fault
+   * rather than as movement.
    *
    * `--station-h` is the same number `runFlowLayout.ts` gives the nodes;
    * `runFlowLayout.test.ts` reads this block and fails if the two ever disagree.
@@ -3890,7 +3891,7 @@
   .lineage-wire--chain,
   .lineage-wire--downstream {
     stroke: var(--ink);
-    stroke-width: 2px;
+    stroke-width: 2.5px;
   }
 
   .lineage-wire--downstream {
@@ -3904,6 +3905,34 @@
 
   .lineage-wire--dim {
     opacity: 0.25;
+  }
+
+  /* The selection's chains flow toward the data's destination: round beads of ink, wider than
+   * the wire they ride, so the wire's own stroke shows between them (ADR 0100). `linear` for the
+   * reason the run map's live edge gives: a travelling bead stepped at a legible frame count
+   * reads as a rendering fault, not as movement. */
+  .lineage-wire__flow {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 8px;
+    stroke-dasharray: 0.01 34;
+    stroke-linecap: round;
+    pointer-events: none;
+    animation: lineage-flow 900ms linear infinite;
+  }
+
+  @keyframes lineage-flow {
+    to {
+      stroke-dashoffset: -34.01;
+    }
+  }
+
+  /* Stilled beads would only be noise on the line; the wire's stroke and the cards' words
+   * already say which chain is which. */
+  @media (prefers-reduced-motion: reduce) {
+    .lineage-wire__flow {
+      display: none;
+    }
   }
 
   .lineage-mini {

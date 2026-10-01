@@ -7,6 +7,11 @@
  * selection, its name, then the one fact a reader tracing a failure wants next -- the last
  * build, or why its upstream cannot be read, or that it is gone. Every one of those is also
  * worded in the card's accessible name, so the dimming and the strokes carry nothing alone.
+ *
+ * A WIRE ON THE SELECTION'S CHAINS FLOWS (ADR 0100): beads of ink travel along it from source to
+ * target, so the upstream chain runs into the selected card and the downstream chain runs out of
+ * it. The beads ride on a second path over the wire, which keeps its own stroke -- solid
+ * upstream, dotted downstream -- so the legend still reads with the motion stilled.
  */
 
 import type { Edge, EdgeProps, Node, NodeProps } from "@xyflow/react";
@@ -146,16 +151,22 @@ export function Wire({
     targetY,
     targetPosition,
   });
-  const classes = ["lineage-wire", `lineage-wire--${edgeState(focus, source, target)}`];
+  const state = edgeState(focus, source, target);
+  const classes = ["lineage-wire", `lineage-wire--${state}`];
   if (data?.missing === true) {
     classes.push("lineage-wire--missing");
   }
   return (
-    <BaseEdge
-      className={classes.join(" ")}
-      interactionWidth={0}
-      path={path}
-      {...(markerEnd === undefined ? {} : { markerEnd })}
-    />
+    <>
+      <BaseEdge
+        className={classes.join(" ")}
+        interactionWidth={0}
+        path={path}
+        {...(markerEnd === undefined ? {} : { markerEnd })}
+      />
+      {state === "chain" || state === "downstream" ? (
+        <path className="lineage-wire__flow" d={path} />
+      ) : null}
+    </>
   );
 }
