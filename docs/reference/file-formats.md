@@ -445,7 +445,13 @@ The limits are Excel's own:
 | Columns in a row          | 16,384    | The sheet stops: `cells-out-of-order`                      |
 | Characters in a cell      | 32,767    | The sheet stops: `cell-too-long`                           |
 | Sheets in a workbook      | 256       | Later sheets are listed with `reason: sheets-limit`        |
-| One sheet's XML, inflated | 32 MiB    | That sheet is listed with `reason: sheet-unreadable`       |
+| One sheet's XML, inflated | 2 GiB     | The sheet stops, `reason: sheet-too-large`                 |
+
+A sheet is read as it inflates, never held whole, so its size is bounded by the 2 GiB of work a
+single part may demand and not by memory ([ADR 0106](../adr/0106-a-sheet-is-read-as-it-inflates.md)).
+A sheet whose part is corrupt part-way is listed with `reason: sheet-unreadable`, its rows before
+that point kept. A workbook whose shared string table cannot be read to its end is refused whole
+as `xlsx-unreadable`.
 
 Rows and cells must run in order. A row whose cells do not run left to right stops its sheet
 with `cells-out-of-order`, and rows out of order stop it with `rows-out-of-order`; the rows

@@ -26,7 +26,7 @@
  * begin.
  */
 
-import { inflateRawSync } from "node:zlib";
+import { createInflateRaw, inflateRawSync } from "node:zlib";
 
 const EOCD_SIGNATURE = 0x06_05_4b_50;
 const CENTRAL_SIGNATURE = 0x02_01_4b_50;
@@ -131,14 +131,8 @@ export function readZipIndex(bytes: Uint8Array): ZipIndex {
   return members;
 }
 
-/**
- * One member's bytes, or `null` if they cannot be read exactly.
- *
- * The local header is consulted only for where the data begins: its size and method fields
- * are zero in an archive written with a data descriptor, which is why the central directory's
- * copies are the ones carried in `Member`.
- */
-export function readZipMember(bytes: Uint8Array, member: Member): Uint8Array | null {
+/** Where a member's stored bytes are, or `null` when the archive does not hold them exactly. */
+function memberData(bytes: Uint8Array, member: Member): Uint8Array | null {
   if (member.compressedBytes === ZIP64_SENTINEL) {
     return null;
   }
@@ -147,15 +141,24 @@ export function readZipMember(bytes: Uint8Array, member: Member): Uint8Array | n
   if (header + LOCAL_BYTES > view.byteLength || view.getUint32(header, true) !== LOCAL_SIGNATURE) {
     return null;
   }
-
   const start =
     header + LOCAL_BYTES + view.getUint16(header + 26, true) + view.getUint16(header + 28, true);
   const stop = start + member.compressedBytes;
-  if (stop > bytes.byteLength) {
+  return stop > bytes.byteLength ? null : bytes.subarray(start, stop);
+}
+
+/**
+ * One member's bytes, or `null` if they cannot be read exactly.
+ *
+ * The local header is consulted only for where the data begins: its size and method fields
+ * are zero in an archive written with a data descriptor, which is why the central directory's
+ * copies are the ones carried in `Member`.
+ */
+export function readZipMember(bytes: Uint8Array, member: Member): Uint8Array | null {
+  const raw = memberData(bytes, member);
+  if (raw === null) {
     return null;
   }
-
-  const raw = bytes.subarray(start, stop);
   if (member.method === STORED) {
     return raw.byteLength > MAX_MEMBER_BYTES ? null : raw;
   }
@@ -178,4 +181,83 @@ export function readZipText(bytes: Uint8Array, index: ZipIndex, name: string): s
   }
   const raw = readZipMember(bytes, member);
   return raw === null ? null : new TextDecoder("utf-8").decode(raw);
+}
+
+/**
+ * The ceiling on one member READ AS A STREAM: past this many inflated bytes the stream stops
+ * and says so. It is not a memory bound -- a streamed member is never held whole -- but a
+ * bound on the work a single part can demand, so a zip bomb costs seconds of inflating rather
+ * than a run that never ends. Two gibibytes is several times the XML of a sheet at Excel's
+ * own row limit. ADR 0106.
+ */
+export const MAX_STREAMED_BYTES = 2 * 1024 * 1024 * 1024;
+
+/** How a streamed member ended: whole, stopped at the ceiling, or unreadable part-way. */
+export type StreamEnd = "complete" | "too-large" | "unreadable";
+
+/** Stored bytes are handed over in pieces of this size, so a stored part is never one string. */
+const STORED_PIECE = 1024 * 1024;
+
+async function* inflatedPieces(raw: Uint8Array, method: number): AsyncGenerator<Uint8Array> {
+  if (method === STORED) {
+    for (let at = 0; at < raw.byteLength; at += STORED_PIECE) {
+      yield raw.subarray(at, at + STORED_PIECE);
+    }
+    return;
+  }
+  const inflater = createInflateRaw();
+  // A Node stream iterates its chunks untyped; an inflater's are always Buffers.
+  const pieces: AsyncIterable<Buffer> = inflater;
+  try {
+    inflater.end(raw);
+    for await (const piece of pieces) {
+      yield piece;
+    }
+  } finally {
+    inflater.destroy();
+  }
+}
+
+/**
+ * A member's UTF-8 text in pieces as it inflates, never whole, and how the stream ended.
+ *
+ * For the one part that can be larger than `MAX_MEMBER_BYTES` and must still be read: a
+ * worksheet (`sheetScan.ts`). A corrupt stream ends `unreadable` and a stream past `maxBytes`
+ * ends `too-large`; the text already handed over was exact up to there, and the caller says the
+ * part stopped short rather than presenting it as whole. Absent members are the caller's to
+ * check; this answers `unreadable` for them too.
+ */
+export async function* streamZipText(
+  bytes: Uint8Array,
+  index: ZipIndex,
+  name: string,
+  maxBytes: number = MAX_STREAMED_BYTES,
+): AsyncGenerator<string, StreamEnd> {
+  const member = index.get(name);
+  const raw = member === undefined ? null : memberData(bytes, member);
+  if (
+    member === undefined ||
+    raw === null ||
+    (member.method !== STORED && member.method !== DEFLATED)
+  ) {
+    return "unreadable";
+  }
+  const decoder = new TextDecoder("utf-8");
+  let total = 0;
+  try {
+    for await (const piece of inflatedPieces(raw, member.method)) {
+      total += piece.byteLength;
+      if (total > maxBytes) {
+        return "too-large";
+      }
+      yield decoder.decode(piece, { stream: true });
+    }
+  } catch {
+    return "unreadable";
+  }
+  const rest = decoder.decode();
+  if (rest !== "") {
+    yield rest;
+  }
+  return "complete";
 }

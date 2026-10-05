@@ -279,8 +279,8 @@ async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
  * that stopped short is read, and its text says it is short (`truncated`), because the sheets
  * it holds are no longer the whole workbook.
  */
-function readSpreadsheet(_deps: ExtractDeps, input: Document): Extracted {
-  const reading = readWorkbook(input.bytes, MAX_TEXT_CHARS);
+async function readSpreadsheet(_deps: ExtractDeps, input: Document): Promise<Extracted> {
+  const reading = await readWorkbook(input.bytes, MAX_TEXT_CHARS);
   return reading === null
     ? refused(XLSX_UNREADABLE)
     : { ...read("xlsx", reading.text, reading.short), workbook: reading.workbook };
@@ -465,6 +465,10 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * second is read with that one sheet marked incomplete. 51 documents on `tai-001` carry that
  * refusal, 35 of their 41 digests five megabytes or more.
  *
+ * GENERATION 7 IS THE STREAMED SHEET (ADR 0106). A sheet whose XML inflated past 32 MiB was
+ * refused with its whole workbook; it is now read as it inflates, so every `xlsx-unreadable`
+ * refusal is offered again -- most of `tai-001`'s were workbooks of five megabytes or more.
+ *
  * NOT BUMPED FOR ISSUE #218's UTF-16 DECODE AND NUL REPLACEMENT, and that is the rule working
  * rather than an oversight. A bump re-offers refusals, and neither change turns a refusal into a
  * reading: the documents they were written for never got a row at all -- their NUL failed the
@@ -482,7 +486,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 6;
+export const CURRENT_READER_VERSION = 7;
 
 /**
  * One document, read whichever way its type allows.

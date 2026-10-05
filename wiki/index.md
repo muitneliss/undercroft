@@ -109,6 +109,7 @@
 - [ADR 0103 The Lineage Board Is Laid Out by ELK](sources/adr-0103-the-lineage-board-is-laid-out-by-elk.md)
 - [ADR 0104 Every Workbook Is Landed as Rows](sources/adr-0104-every-workbook-is-landed-as-rows.md)
 - [ADR 0105 A Model Carries One Business Context, Reviewed Against Its Definition](sources/adr-0105-a-model-carries-one-business-context-reviewed-against-its-definition.md)
+- [ADR 0106 A Sheet Is Read as It Inflates](sources/adr-0106-a-sheet-is-read-as-it-inflates.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)
