@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.63.0](https://github.com/muitneliss/undercroft/compare/v1.62.0...v1.63.0) (2026-10-05)
+
+
+### Features
+
+* **db:** a model reads a workbook's rows through source(), and types its dates exactly (ADR 0104) ([#391](https://github.com/muitneliss/undercroft/issues/391)) ([76c94a5](https://github.com/muitneliss/undercroft/commit/76c94a58c986fcbab75834cfd4bf08bfd9fe3f4f))
+* **models:** a model carries one business context, visibly stale when its definition changes (ADR 0104) ([#389](https://github.com/muitneliss/undercroft/issues/389)) ([a90358c](https://github.com/muitneliss/undercroft/commit/a90358c98aa1c6a2fbf4b2dae454329c8e85a197)), closes [#384](https://github.com/muitneliss/undercroft/issues/384)
+* **ui:** the lineage board is laid out by ELK, its wires routed between the cards (ADR 0103) ([#381](https://github.com/muitneliss/undercroft/issues/381)) ([404e29e](https://github.com/muitneliss/undercroft/commit/404e29e17a49e01301f6f5b7e2cc203e3b1b1531))
+* **worker:** a sheet is read as it inflates, so a workbook of any size Excel saves is read (ADR 0106) ([#392](https://github.com/muitneliss/undercroft/issues/392)) ([6d4848d](https://github.com/muitneliss/undercroft/commit/6d4848d2c3a72055c688aee5fe68198511a2e3ea))
+* **worker:** a spreadsheet is opened by what its bytes are, whatever it was labelled (ADR 0104) ([#393](https://github.com/muitneliss/undercroft/issues/393)) ([8d43465](https://github.com/muitneliss/undercroft/commit/8d434658ac33c110b2c43f8e3571baab4c324b78))
+* **worker:** a workbook is read through its package into sheets of placed cells (ADR 0104) ([#387](https://github.com/muitneliss/undercroft/issues/387)) ([f3cb3b8](https://github.com/muitneliss/undercroft/commit/f3cb3b814cd1320507618eeb53261006a6e76b21))
+* **worker:** a workbook's sheets and rows land in raw.document_sheets and raw.document_rows (ADR 0104) ([#388](https://github.com/muitneliss/undercroft/issues/388)) ([bbd8c71](https://github.com/muitneliss/undercroft/commit/bbd8c7194bd6ec334d48286786ce5afe2215d97c))
+* **worker:** an Excel 97-2003 workbook is read into the same rows as an .xlsx (ADR 0104) ([#394](https://github.com/muitneliss/undercroft/issues/394)) ([574cf4d](https://github.com/muitneliss/undercroft/commit/574cf4d937369e2eb074e2646808df1e1533387e))
+* **worker:** workbooks read before their rows existed are read again for them (ADR 0104) ([#390](https://github.com/muitneliss/undercroft/issues/390)) ([9ce4079](https://github.com/muitneliss/undercroft/commit/9ce4079a5fdee6541b89f13bfda41048059d2e3a))
+
+
+### Bug Fixes
+
+* **worker:** a workbook's cell keeps its own column; ADR 0104 lands every workbook as rows ([#386](https://github.com/muitneliss/undercroft/issues/386)) ([0aa1fa4](https://github.com/muitneliss/undercroft/commit/0aa1fa48e41ff84edee009c6c633f5c8e51bede1))
+
 ## [1.62.0](https://github.com/muitneliss/undercroft/compare/v1.61.0...v1.62.0) (2026-10-01)
 
 
