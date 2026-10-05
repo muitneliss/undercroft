@@ -30,6 +30,19 @@ async function expectDenied(fn: () => Promise<unknown>): Promise<void> {
   }
 }
 
+/** One sheet with one row for each of two tenants, over the same bytes. */
+async function seedWorkbookRows(): Promise<void> {
+  await db.exec(
+    `INSERT INTO raw.document_sheets (tenant_id, sha256, sheet_index, sheet_name, sheet_state,
+       container, date1904, row_count, complete, rows_version, extracted_at, run_id)
+     VALUES ('CASE-0042', repeat('0', 64), 1, 'Ledger', 'visible', 'ooxml', false, 1, true, 1, now(), 'r'),
+            ('CASE-0043', repeat('0', 64), 1, 'Ledger', 'visible', 'ooxml', false, 1, true, 1, now(), 'r');
+     INSERT INTO raw.document_rows (tenant_id, sha256, sheet_index, row_number, cells)
+     VALUES ('CASE-0042', repeat('0', 64), 1, 1, '{"A": "1"}'),
+            ('CASE-0043', repeat('0', 64), 1, 1, '{"A": "2"}');`,
+  );
+}
+
 /** What a call was refused with, or `""` when it was not refused at all. */
 async function refusalOf(fn: () => Promise<unknown>): Promise<string> {
   try {
@@ -184,6 +197,41 @@ describe("each tenant's SQL runs as its own role and sees only its own rows", ()
 
     expect(own.rows).toEqual([{ tenant_id: "CASE-0042", accepted_kind: "invoice" }]);
     expect(legacy.rows[0]?.n).toBe("0");
+  });
+
+  it("a tenant's dbt role reads its own workbook sheets and rows, and no other tenant's", async () => {
+    // ADR 0104: the per-tenant grant is the one list in 010_provision_tenant.sql, and only the
+    // row policy keeps one customer's ledger out of another's models.
+    await seedWorkbookRows();
+
+    const seen = await db.asRole("undercroft_dbt_case_0042", (tx) =>
+      tx.query<{ tenant_id: string; sheet_name: string; cells: unknown }>(
+        `SELECT s.tenant_id, s.sheet_name, r.cells
+           FROM raw.document_sheets s JOIN raw.document_rows r USING (tenant_id, sha256, sheet_index)`,
+      ),
+    );
+
+    expect(seen.rows).toEqual([
+      { tenant_id: "CASE-0042", sheet_name: "Ledger", cells: { A: "1" } },
+    ]);
+  });
+
+  it("the control plane counts a workbook's sheets but reads no name and no cell; BI reads neither", async () => {
+    // A sheet's name and its cells are text a person wrote (`pii.md`).
+    await seedWorkbookRows();
+
+    const counted = await db.asRole("undercroft_app", (tx) =>
+      tx.query<{ n: string }>("SELECT count(*)::text AS n FROM raw.document_sheets WHERE complete"),
+    );
+    expect(counted.rows[0]?.n).toBe("2");
+    await db.asRole("undercroft_app", async (tx) => {
+      await expectDenied(() => tx.query("SELECT sheet_name FROM raw.document_sheets"));
+      await expectDenied(() => tx.query("SELECT cells FROM raw.document_rows"));
+    });
+    await db.asRole("undercroft_bi", async (tx) => {
+      await expectDenied(() => tx.query("SELECT count(*) FROM raw.document_sheets"));
+      await expectDenied(() => tx.query("SELECT count(*) FROM raw.document_rows"));
+    });
   });
 
   it("naming a partition directly is a permission error, not a way round the policy", async () => {
