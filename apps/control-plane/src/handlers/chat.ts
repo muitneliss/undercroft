@@ -140,23 +140,39 @@ function isChatBody(body: unknown): body is ChatBody {
   );
 }
 
+/** Where a reader stands with a customer: their role, a deactivated customer, or nowhere. */
+type Standing = { readonly role: string } | "deactivated" | null;
+
 /**
  * Establish that this reader may speak about this customer, and with what authority.
  *
- * Through `tenants.get`, which is `tenantProcedure` -- so a non-member gets NOT_FOUND and
- * learns nothing about whether the customer exists, exactly as everywhere else. Asking the
- * repo directly here would have been a second copy of that decision, and the one that forgot
- * that a superadmin holds admin without a `tenant_member` row.
+ * Through `tenants.get`, which resolves authority as every tenant procedure does -- so a
+ * non-member gets NOT_FOUND and learns nothing about whether the customer exists, exactly as
+ * everywhere else. Asking the repo directly here would have been a second copy of that
+ * decision, and the one that forgot that a superadmin holds admin without a `tenant_member` row.
  *
  * It also yields the role, which the prompt needs in order to tell the reader what they can do.
+ *
+ * `deactivated` because `tenants.get` is the one read that still answers on a deactivated
+ * customer (ADR 0110) -- that is what it is for -- so this door has to ask the question the
+ * middleware asks for every other procedure. A deactivated customer's members cannot reach its
+ * data through the tools anyway; this keeps them from holding a conversation about it, and
+ * from reading the one they had.
  */
-async function authority(ctx: Context, tenantId: string): Promise<{ role: string } | null> {
+async function authority(ctx: Context, tenantId: string): Promise<Standing> {
   try {
     const tenant = await appRouter.createCaller(ctx).tenants.get({ tenantId });
-    return { role: tenant.role };
+    return tenant.deactivatedAt === null ? { role: tenant.role } : "deactivated";
   } catch {
     return null;
   }
+}
+
+/** The answer for a reader who may not speak here: a 404 that says nothing, or a worded 409. */
+function refusedStanding(c: HonoContext, ctx: Context, held: "deactivated" | null): Response {
+  return held === null
+    ? c.body(null, 404)
+    : c.json({ error: catalogue(ctx.locale)("error.tenantDeactivated") }, 409);
 }
 
 /** Asia/Singapore, always. A locale never moves a timestamp -- `.claude/rules/i18n.md`. */
@@ -203,8 +219,8 @@ async function admit(c: HonoContext, deps: AssistantRouteDeps, ctx: Context): Pr
   }
 
   const held = await authority(ctx, body.tenantId);
-  if (held === null) {
-    return { ok: false, response: c.body(null, 404) };
+  if (held === null || held === "deactivated") {
+    return { ok: false, response: refusedStanding(c, ctx, held) };
   }
 
   return { ok: true, assistant, body, role: held.role };
@@ -255,8 +271,9 @@ export function registerAssistantRoutes(app: Hono, deps: AssistantRouteDeps): vo
       return c.body(null, 401);
     }
     const tenantId = c.req.query("tenantId") ?? "";
-    if (tenantId === "" || (await authority(ctx, tenantId)) === null) {
-      return c.body(null, 404);
+    const held = tenantId === "" ? null : await authority(ctx, tenantId);
+    if (held === null || held === "deactivated") {
+      return refusedStanding(c, ctx, held);
     }
 
     return c.json({ messages: await history(deps.exec, tenantId, ctx.user.userId) });

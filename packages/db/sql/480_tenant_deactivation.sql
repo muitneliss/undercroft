@@ -1,0 +1,22 @@
+-- A customer can be deactivated, and reactivated. ADR 0110.
+--
+-- ONE COLUMN, AND IT IS THE WHOLE STATE. `deactivated_at` is NULL for a customer in use and the
+-- moment an admin deactivated it otherwise. "Active" is not stored anywhere: it is
+-- `deactivated_at IS NULL`, read where it is needed, so there is no second column to fall out
+-- of step with this one. Who did it, and every reactivation since, is in `ops.audit_log` as
+-- `tenants.deactivate` / `tenants.reactivate` -- the audit trail is the history, this is now.
+--
+-- WHAT IT STOPS, AND WHERE. Every tenant-scoped procedure refuses on a deactivated customer
+-- (`tenantProcedure`, apps/control-plane/src/handlers/trpc.ts), and the run ledger refuses to
+-- open a run for one (`openRun` and `claimExternalRun`, packages/db/src/repos/runs.ts), which
+-- is how a scheduled sync, a pushed batch and a manual trigger that reaches the worker directly
+-- all stop at one statement. The worker's due lists name what they skipped and why.
+--
+-- WHAT IT DOES NOT TOUCH. Nothing is deleted and no grant moves: the raw lake is the durable
+-- layer (CLAUDE.md rule 1), memberships stay, and reactivating restores exactly what was there.
+--
+-- NO NEW GRANT. A column added to an existing table is covered by the table-level grants that
+-- table already has (040): the control plane writes it, the worker reads it to refuse a run, and
+-- `undercroft_bi` may read it beside the rest of `ops.tenant`, which holds no secret.
+
+ALTER TABLE ops.tenant ADD COLUMN IF NOT EXISTS deactivated_at timestamptz;

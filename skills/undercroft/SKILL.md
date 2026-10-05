@@ -120,7 +120,11 @@ Both doors refuse with the same codes. Branch on the code, and give the person t
   `HUMAN_REQUIRED` and `NOT_FOUND`. They do not change on a retry. `NOT_FOUND` may mean the
   thing is not yours to see, and the platform deliberately does not say which.
 - **Ask first:** `CONFLICT` means the platform's state refused it, and the message says which
-  state -- a name already taken, a build already running. Tell the person; do not loop.
+  state -- a name already taken, a build already running. Tell the person; do not loop. A
+  customer an admin has deactivated refuses every operation this way, with
+  `TENANT_DEACTIVATED` in the details, until an admin reactivates it (`tenants.reactivate`).
+  `tenants.get` still answers, and its `deactivatedAt` says since when. Reactivating is the
+  admin's decision: ask them, never reactivate a customer to finish a task.
 - **Retry once:** `NETWORK_ERROR` and `TIMEOUT`.
 - **Fix, then retry:** `VALIDATION_FAILED`, using the issues in its details.
 

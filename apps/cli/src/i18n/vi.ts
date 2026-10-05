@@ -92,6 +92,7 @@ export const vi = {
 
   prompt: {
     tenant: "Chọn khách hàng",
+    tenantDeactivated: "{{label}} (đã ngừng kích hoạt)",
     value: "Nhập {{name}}",
     email: "Địa chỉ email",
     code: "Mã sáu chữ số trong email",

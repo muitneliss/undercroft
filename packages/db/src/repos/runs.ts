@@ -152,14 +152,31 @@ export { SOURCE_OF_TRANSFORM };
 
 export type OpenOutcome =
   | { readonly ok: true }
-  | { readonly ok: false; readonly reason: "in-progress"; readonly runId: string };
+  | { readonly ok: false; readonly reason: "in-progress"; readonly runId: string }
+  /** The customer is deactivated (ADR 0110); nothing is opened until it is reactivated. */
+  | { readonly ok: false; readonly reason: "tenant-deactivated" };
 
 /**
- * Open a run, or learn which run is already in progress for the same pair.
+ * The condition every run row is inserted under: the customer it is for is not deactivated.
  *
- * The refusal comes from `run_one_running`, not from a read-then-insert: two callers that
- * both read "nothing running" and both insert would both succeed, and the index is what
- * makes the second one lose.
+ * In the INSERT itself rather than read first by each caller, for the reason `run_one_running`
+ * is an index: a check in application code binds only the caller that runs it, and every kind
+ * of run -- a scheduled sync, an extract, a build, a classification, a pushed batch -- enters
+ * the ledger through the two statements below. A tenant id with no `ops.tenant` row is NOT
+ * refused here; whether that is an unknown tenant is each verb's question, answered before.
+ */
+const TENANT_NOT_DEACTIVATED = `NOT EXISTS (
+  SELECT 1 FROM ops.tenant t WHERE t.id = $2 AND t.deactivated_at IS NOT NULL
+)`;
+
+/**
+ * Open a run, or learn why not: a run is already in progress for the same pair, or the
+ * customer is deactivated.
+ *
+ * The in-progress refusal comes from `run_one_running`, not from a read-then-insert: two
+ * callers that both read "nothing running" and both insert would both succeed, and the index
+ * is what makes the second one lose. The deactivated one is the statement's own condition, so
+ * no row is written for a run that was never going to start.
  */
 export async function openRun(
   exec: SqlExecutor,
@@ -176,10 +193,12 @@ export async function openRun(
   },
 ): Promise<OpenOutcome> {
   try {
-    await exec.query(
+    const { rows } = await exec.query<{ id: string }>(
       `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, triggered_by, parent_run_id,
                             release_tag)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8
+       WHERE ${TENANT_NOT_DEACTIVATED}
+       RETURNING id`,
       [
         input.id,
         input.tenantId,
@@ -191,7 +210,7 @@ export async function openRun(
         input.releaseTag ?? "",
       ],
     );
-    return { ok: true };
+    return rows.length > 0 ? { ok: true } : { ok: false, reason: "tenant-deactivated" };
   } catch (error) {
     if (!(error instanceof Error && error.message.includes("run_one_running"))) {
       throw error;
@@ -511,29 +530,44 @@ export async function eventsFor(
   }));
 }
 
+/** What claiming an external run id found: ours, another pair's, or a deactivated customer's. */
+export type ExternalClaim = "claimed" | "foreign" | "tenant-deactivated";
+
 /**
  * Claim a run id for an external caller of the lake API, or refuse it.
  *
  * A script posts batches under a run id of its own choosing, possibly several. The first
  * batch creates the row; later ones add to it. What must not happen is one caller's run id
- * landing on another tenant's row, so the claim answers `false` when the id exists for a
+ * landing on another tenant's row, so the claim answers `foreign` when the id exists for a
  * different (tenant, source) and the handler refuses before anything is landed.
+ *
+ * Nor may a deactivated customer's batch land, under a new id or one claimed before it was
+ * deactivated: `tenant-deactivated` for both, and no row is written for the first. The same
+ * condition `openRun` inserts under, for the same reason -- a pushed batch is a run too.
  */
 export async function claimExternalRun(
   exec: SqlExecutor,
   input: { id: string; tenantId: string; source: string },
-): Promise<boolean> {
-  await exec.query(
-    `INSERT INTO ops.run (id, tenant_id, source, verb, trigger, status)
-     VALUES ($1, $2, $3, 'ingest', 'lake-api', 'ok')
-     ON CONFLICT (id) DO NOTHING`,
+): Promise<ExternalClaim> {
+  const { rows: inserted } = await exec.query<{ deactivated: boolean }>(
+    `WITH ins AS (
+       INSERT INTO ops.run (id, tenant_id, source, verb, trigger, status)
+       SELECT $1, $2, $3, 'ingest', 'lake-api', 'ok'
+       WHERE ${TENANT_NOT_DEACTIVATED}
+       ON CONFLICT (id) DO NOTHING
+       RETURNING id
+     )
+     SELECT NOT ${TENANT_NOT_DEACTIVATED} AS deactivated`,
     [input.id, input.tenantId, input.source],
   );
+  if (inserted[0]?.deactivated === true) {
+    return "tenant-deactivated";
+  }
   const { rows } = await exec.query<{ ok: boolean }>(
     "SELECT tenant_id = $2 AND source = $3 AS ok FROM ops.run WHERE id = $1",
     [input.id, input.tenantId, input.source],
   );
-  return rows[0]?.ok === true;
+  return rows[0]?.ok === true ? "claimed" : "foreign";
 }
 
 /** Add one landed batch to an external run. The run's status follows its worst batch. */

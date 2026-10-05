@@ -25,7 +25,7 @@ import {
   type ProcedureSpec,
   SESSION_ONLY,
 } from "./surface.ts";
-import { sessionProcedure, tenantProcedure } from "./trpc.ts";
+import { sessionProcedure, tenantStatusProcedure } from "./trpc.ts";
 
 export type Caller = ReturnType<typeof appRouter.createCaller>;
 
@@ -202,7 +202,8 @@ function mergeObjects(path: string, schemas: readonly JsonSchema[]): JsonSchema 
  * is not zod, a chain that cannot be merged, a session-only procedure `SESSION_ONLY` misses.
  */
 export async function procedureManifest(): Promise<ProcedureSpec[]> {
-  const [tenantInput] = tenantProcedure._def.inputs;
+  // `tenantStatusProcedure`'s, which `tenantProcedure` and every chain on either inherit.
+  const [tenantInput] = tenantStatusProcedure._def.inputs;
   const specs: ProcedureSpec[] = [];
   for (const [path, procedure] of Object.entries(appRouter._def.procedures)) {
     if (!isProcedurePath(path)) {
@@ -220,8 +221,8 @@ export async function procedureManifest(): Promise<ProcedureSpec[]> {
       path,
       type,
       input: mergeObjects(path, schemas),
-      // Identity, not shape: the one parser object `tenantProcedure` puts first in every
-      // chain built on it. `tenants.create` also takes a `tenantId`, and is not scoped.
+      // Identity, not shape: the one parser object the tenant builders put first in every
+      // chain built on them. `tenants.create` also takes a `tenantId`, and is not scoped.
       tenantScoped: inputs[0] !== undefined && inputs[0] === tenantInput,
       effect,
       description: { vi: vi[path], en: en[path] },

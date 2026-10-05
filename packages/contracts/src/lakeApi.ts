@@ -66,6 +66,10 @@ export type LandRecordsResponse = z.infer<typeof LandRecordsResponse>;
  * `tenant_busy` (503) is a request that found no database connection in time for the tenant's
  * login -- the pooler's queue ran out, or a limit was reached (ADR 0088). Nothing was wrong
  * with it; asked again in a moment, it runs.
+ *
+ * `tenant_deactivated` (409) is a run or a batch for a customer an admin has deactivated (ADR
+ * 0110). Nothing was started and nothing landed; it starts again once the customer is
+ * reactivated, and not before.
  */
 export const ApiError = z.object({
   code: z.enum([
@@ -88,6 +92,7 @@ export const ApiError = z.object({
     "relation_depended_on",
     "not_found",
     "tenant_busy",
+    "tenant_deactivated",
     "internal_error",
   ]),
   message: z.string(),

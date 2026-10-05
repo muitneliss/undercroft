@@ -1,6 +1,6 @@
 /**
- * Which tenants a caller can see, what one of them is called, how a new one comes to be, and
- * how its name is corrected afterwards.
+ * Which tenants a caller can see, what one of them is called, how a new one comes to be, how
+ * its name is corrected afterwards, and how it is deactivated and reactivated (ADR 0110).
  *
  * `get` returns `null` for a tenant that does not exist and leaves the reporting to the
  * handler. It does not take the caller's role into account: membership has already been
@@ -21,8 +21,10 @@ import { record as recordAudit } from "../repos/auditLog.ts";
 import { listForUser, type MemberTenant } from "../repos/membership.ts";
 import {
   createTenant,
+  deactivateTenant,
   findTenant,
   listAllTenants,
+  reactivateTenant,
   renameTenant,
   type Tenant,
   undoCreateTenant,
@@ -47,7 +49,7 @@ export async function listForCaller(
   }
 
   const all = await listAllTenants(exec);
-  return all.map((tenant) => ({ id: tenant.id, displayName: tenant.displayName, role: "admin" }));
+  return all.map((tenant) => ({ ...tenant, role: "admin" }));
 }
 
 /** One tenant, or `null`. */
@@ -110,7 +112,10 @@ export async function create(
     detail: JSON.stringify({ displayName: input.displayName }),
   });
 
-  return { ok: true, tenant: { id: input.tenantId, displayName: input.displayName } };
+  return {
+    ok: true,
+    tenant: { id: input.tenantId, displayName: input.displayName, deactivatedAt: null },
+  };
 }
 
 /**
@@ -151,4 +156,79 @@ export async function rename(
   });
 
   return renamed;
+}
+
+export type TransitionResult =
+  | { readonly ok: true; readonly tenant: Tenant }
+  /**
+   * The tenant is already in the state asked for. Refused rather than reported as done: a
+   * second "deactivate" that answered success would overwrite nothing and record nothing, and
+   * the person pressing it would believe they had just cut the customer off -- when somebody
+   * else did, at a moment they are not being told.
+   */
+  | { readonly ok: false; readonly reason: "already-deactivated" | "already-active" }
+  /** No tenant with that id. In practice only a race with a deletion; the handler words it. */
+  | { readonly ok: false; readonly reason: "not-found" };
+
+/**
+ * Deactivate a customer: every member loses access and nothing more is started for it, until
+ * an admin reactivates it. ADR 0110.
+ *
+ * Nothing is deleted. The state is one column (`ops.tenant.deactivated_at`), the transition one
+ * conditional UPDATE, and the audit row the record of who did it -- written here rather than
+ * by the handler, because "the customer was deactivated, and by whom" is one fact. Authority is
+ * not re-checked: this is reachable through `requireRole("admin")` alone.
+ */
+export async function deactivate(
+  exec: SqlExecutor,
+  input: { tenantId: string; actor: string },
+): Promise<TransitionResult> {
+  const changed = await deactivateTenant(exec, input.tenantId);
+  if (changed === null) {
+    return await refusedTransition(exec, input.tenantId);
+  }
+  await recordAudit(exec, {
+    tenantId: input.tenantId,
+    actor: input.actor,
+    action: "tenants.deactivate",
+    detail: JSON.stringify({ deactivatedAt: changed.deactivatedAt }),
+  });
+  return { ok: true, tenant: changed };
+}
+
+/**
+ * Reactivate a deactivated customer: access and schedules return exactly as they were, since
+ * deactivating took nothing away but the permission to use them.
+ *
+ * The audit row carries when the customer had been deactivated, so the pair of rows reads as
+ * the whole interval without a reader having to find the first one.
+ */
+export async function reactivate(
+  exec: SqlExecutor,
+  input: { tenantId: string; actor: string },
+): Promise<TransitionResult> {
+  const before = await findTenant(exec, input.tenantId);
+  const changed = await reactivateTenant(exec, input.tenantId);
+  if (changed === null) {
+    return await refusedTransition(exec, input.tenantId);
+  }
+  await recordAudit(exec, {
+    tenantId: input.tenantId,
+    actor: input.actor,
+    action: "tenants.reactivate",
+    detail: JSON.stringify({ deactivatedSince: before?.deactivatedAt ?? null }),
+  });
+  return { ok: true, tenant: changed };
+}
+
+/** Why a transition changed nothing, read after the conditional UPDATE declined. */
+async function refusedTransition(exec: SqlExecutor, tenantId: string): Promise<TransitionResult> {
+  const now = await findTenant(exec, tenantId);
+  if (now === null) {
+    return { ok: false, reason: "not-found" };
+  }
+  return {
+    ok: false,
+    reason: now.deactivatedAt === null ? "already-active" : "already-deactivated",
+  };
 }

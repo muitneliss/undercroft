@@ -39,7 +39,7 @@ const XERO_RERUN = "run-0107";
 
 /** Demo Co., opened by a reader holding `role` in it. */
 export function tenant(role: Role): Out["tenants"]["get"] {
-  return { id: TENANT, displayName: "Demo Co.", role };
+  return { id: TENANT, displayName: "Demo Co.", role, deactivatedAt: null };
 }
 
 function lastRun(id: string, at: string, seen: number): NonNullable<Connection["lastRun"]> {

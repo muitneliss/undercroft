@@ -20,7 +20,6 @@ import { describeError, getPath, getStringPath, newRunId } from "@undercroft/cor
 import {
   closeRun,
   MAX_ERROR_CHARS,
-  openRun,
   recordEntities,
   recordPendingBefore,
   type RunTrigger,
@@ -34,9 +33,10 @@ import {
   semanticDueScopes,
   syncDefinition,
 } from "../../repos/documentKindResults.ts";
-import { RunInProgress } from "../ingest.ts";
+import { openRunOrRefuse } from "../ingest.ts";
 import { type JobDeps, track } from "../jobs.ts";
 import { createRunJournal } from "../runJournal.ts";
+import { type DueList, startable } from "../schedule.ts";
 import { turnsFor } from "../slots.ts";
 import { type Catalogue, type ClassifyDeps, type ClassifyTally, classifyPass } from "./classify.ts";
 import type { SemanticAsk } from "./definition.ts";
@@ -93,21 +93,21 @@ interface Opening {
   readonly triggeredBy: string;
 }
 
-/** Open the run and its journal; a second start for the same key is `RunInProgress`. */
+/**
+ * Open the run and its journal; a second start for the same key is `RunInProgress`, and a
+ * deactivated customer's is `TenantDeactivated`.
+ */
 async function openSemanticRun(
   deps: JobDeps,
   opening: Opening,
 ): Promise<{ runId: string; journal: Journal }> {
   const runId = newRunId();
-  const opened = await openRun(deps.exec, {
+  await openRunOrRefuse(deps.exec, {
     id: runId,
     ...opening,
     parentRunId: null,
     releaseTag: deps.releaseTag ?? "",
   });
-  if (!opened.ok) {
-    throw new RunInProgress(opening.verb, opening.tenantId, opened.runId);
-  }
   const log = deps.log?.child({ runId, tenantId: opening.tenantId, source: opening.source });
   const journal = createRunJournal({
     exec: deps.exec,
@@ -206,9 +206,12 @@ export async function startSemanticJob(
   return { runId };
 }
 
-/** The pairs the scheduler should start a semantic run for: work outstanding, not a cadence. */
-export function listSemanticDue(exec: JobDeps["exec"]): Promise<SemanticScope[]> {
-  return semanticDueScopes(exec);
+/**
+ * The pairs the scheduler should start a semantic run for: work outstanding, not a cadence. A
+ * deactivated customer's are set aside under `skipped`, as every due list does (ADR 0110).
+ */
+export async function listSemanticDue(exec: JobDeps["exec"]): Promise<DueList<SemanticScope>> {
+  return startable(exec, await semanticDueScopes(exec));
 }
 
 export type InitialiseStart = { ok: true; runId: string } | { ok: false; reason: "exists" };

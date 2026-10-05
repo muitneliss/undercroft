@@ -6,24 +6,60 @@
  */
 
 import { TRPCError } from "@trpc/server";
+import type { Locale } from "@undercroft/core";
 import { z } from "zod";
 import { TenantId } from "./inputs.ts";
 import { messages } from "../i18n/index.ts";
 import * as tenants from "../services/tenants.ts";
+import type { Tenant, TransitionResult } from "../services/tenants.ts";
 import {
   authedProcedure,
+  refusal,
   requireRole,
   router,
   superadminProcedure,
-  tenantProcedure,
+  tenantStatusProcedure,
 } from "./trpc.ts";
+
+/**
+ * What a deactivation or reactivation answers: the tenant as it now stands, or the refusal.
+ *
+ * One mapping for both directions, so "already in that state" is the same code either way --
+ * PRECONDITION_FAILED, as the middleware refuses a deactivated customer -- and the sentence and
+ * the facts name the state the customer is actually in, whichever way the caller pushed.
+ */
+function transitioned(
+  ctx: { readonly locale: Locale; readonly tenantId: string },
+  result: TransitionResult,
+): Tenant {
+  if (result.ok) {
+    return result.tenant;
+  }
+  if (result.reason === "not-found") {
+    throw new TRPCError({ code: "NOT_FOUND" });
+  }
+  const deactivated = result.reason === "already-deactivated";
+  throw refusal(
+    "PRECONDITION_FAILED",
+    messages(ctx.locale)(deactivated ? "error.tenantDeactivated" : "error.tenantNotDeactivated"),
+    { reason: deactivated ? "TENANT_DEACTIVATED" : "TENANT_ACTIVE", tenantId: ctx.tenantId },
+  );
+}
 
 export const tenantsRouter = router({
   list: authedProcedure.query(({ ctx }) =>
     tenants.listForCaller(ctx.exec, { userId: ctx.user.userId, superadmin: ctx.superadmin }),
   ),
 
-  get: tenantProcedure.query(async ({ ctx, input }) => {
+  /**
+   * One customer, and the caller's role in it -- answered while it is deactivated too.
+   *
+   * `tenantStatusProcedure`, deliberately: this is how a page, the CLI or an agent learns that
+   * a customer is deactivated (`deactivatedAt`), and a refusal in its place would leave them
+   * nothing to render but an error. It reveals no data the deactivation withholds: a name, an
+   * id and a role the caller already holds.
+   */
+  get: tenantStatusProcedure.query(async ({ ctx, input }) => {
     const tenant = await tenants.get(ctx.exec, input.tenantId);
     if (tenant === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
@@ -76,7 +112,7 @@ export const tenantsRouter = router({
    * `create` above and deliberately so: bringing a customer into existence is platform
    * authority, but retitling one that already exists is an act *inside* that customer, and
    * a tenant admin is exactly who that belongs to. A superadmin still reaches it, because
-   * `authorityIn` resolves them to `admin` in any tenant that exists.
+   * `accessIn` resolves them to `admin` in any tenant that exists.
    *
    * There is no `tenantId` in the body and there never will be. The id is an S3 key prefix
    * in the raw lake and the lake is create-only, so a "rename" of it would strand every
@@ -101,4 +137,38 @@ export const tenantsRouter = router({
 
       return renamed;
     }),
+
+  /**
+   * Deactivate a customer: every member loses access, and nothing more is started for it, until
+   * an admin reactivates it. Nothing is deleted. ADR 0110.
+   *
+   * Tenant admin, for the reason `rename` is: an act inside one customer, which a superadmin
+   * reaches as that customer's admin. On `tenantProcedure` like every other, so deactivating a
+   * customer that is already deactivated is refused by the middleware with the same
+   * PRECONDITION_FAILED every procedure gives there; the service's own `already-deactivated`
+   * is the same answer for the one caller who loses a race to a second admin.
+   */
+  deactivate: requireRole("admin").mutation(async ({ ctx }) => {
+    const result = await tenants.deactivate(ctx.exec, {
+      tenantId: ctx.tenantId,
+      actor: ctx.user.email,
+    });
+    return transitioned(ctx, result);
+  }),
+
+  /**
+   * Reactivate a deactivated customer: access and schedules return as they were. Tenant admin.
+   *
+   * The one admin procedure on `tenantStatusProcedure`, since it is the way out of the state
+   * every other procedure refuses in. PRECONDITION_FAILED, worded, for a customer that is not
+   * deactivated -- the same code as the refusal it undoes, so a transition to the state a
+   * customer is already in reads the same in both directions, and is never a quiet success.
+   */
+  reactivate: requireRole("admin", tenantStatusProcedure).mutation(async ({ ctx }) => {
+    const result = await tenants.reactivate(ctx.exec, {
+      tenantId: ctx.tenantId,
+      actor: ctx.user.email,
+    });
+    return transitioned(ctx, result);
+  }),
 });

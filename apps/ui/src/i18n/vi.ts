@@ -291,6 +291,33 @@ export const vi = {
     insideModels: "Dữ liệu được biến đổi thế nào?",
     insideReports: "Những con số trả lời câu hỏi gì?",
     insidePeople: "Ai có thể xem và ai có thể thay đổi?",
+
+    /**
+     * Deactivating a customer (ADR 0110). The lead and the confirmation say what happens AND
+     * what does not -- nothing is deleted -- because "deactivate" alone reads as "delete" to a
+     * person deciding under pressure.
+     */
+    deactivateHead: "Ngừng kích hoạt khách hàng",
+    deactivateLead:
+      "Ngừng kích hoạt thì mọi thành viên, kể cả bạn, mất quyền truy cập hồ sơ này, và mọi lần đồng bộ, đọc tài liệu và dựng mô hình dừng lại. Không có dữ liệu nào bị xoá; kích hoạt lại thì mọi thứ trở lại như trước.",
+    deactivateNote: "Chỉ quản trị viên của khách hàng này mới ngừng kích hoạt được.",
+    deactivate: "Ngừng kích hoạt…",
+    deactivateConfirm: "Ngừng kích hoạt {{name}}",
+    deactivating: "Đang ngừng kích hoạt…",
+    notDeactivated: "Chưa ngừng kích hoạt được",
+    /** The mark beside a deactivated customer in the list. */
+    deactivatedMark: "Đã ngừng kích hoạt",
+    /** The notice that stands in place of every division of a deactivated customer's book. */
+    deactivatedHead: "Khách hàng này đã ngừng kích hoạt",
+    deactivatedSince:
+      "Ngừng kích hoạt lúc {{when}}. Dữ liệu vẫn được giữ nguyên; không có gì được đồng bộ hay dựng lại cho đến khi kích hoạt lại.",
+    deactivatedAdmin:
+      "Bạn là quản trị viên của khách hàng này, nên có thể kích hoạt lại. Quyền truy cập và lịch đồng bộ sẽ trở lại như trước.",
+    deactivatedOthers:
+      "Hãy đề nghị một quản trị viên của khách hàng này kích hoạt lại nếu bạn cần dùng.",
+    reactivate: "Kích hoạt lại",
+    reactivating: "Đang kích hoạt lại…",
+    notReactivated: "Chưa kích hoạt lại được",
   },
 
   sources: {

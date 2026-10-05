@@ -195,6 +195,20 @@ describe("a failed run", () => {
 
     expect(email.last?.subject).toBe("The HubSpot sync for CASE-0042 failed");
   });
+
+  it("about a deactivated customer is withheld from every channel and counted, not lost quietly", async () => {
+    // ADR 0110. A run in flight when its customer was deactivated can still fail; its admins
+    // could open nothing the notice links to. The quiet side is the first test in this block.
+    const userId = await seedAdmin("ada@example.test");
+    await failedRun("r-1");
+    await caller(userId, "ada@example.test").tenants.deactivate({ tenantId: TENANT });
+
+    const summary = await runAlerts(deps({ lark: larkGroup }));
+
+    expect(summary).toMatchObject({ failures: 0, withheld: 1 });
+    expect(email.sent).toEqual([]);
+    expect(cards).toEqual([]);
+  });
 });
 
 describe("a sync's status in the operators' Lark group", () => {

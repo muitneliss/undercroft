@@ -14,6 +14,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { StatusMark } from "@/components/StatusMark.tsx";
 import { customerPagePath } from "@/lib/divisions.ts";
 import { foldForSearch } from "@/lib/labelIndex.ts";
 import { isRole, ROLES } from "@/lib/roles.ts";
@@ -22,6 +23,8 @@ interface Customer {
   readonly id: string;
   readonly displayName: string;
   readonly role: string;
+  /** Set for a deactivated customer, which stays in the list, marked (ADR 0110). */
+  readonly deactivatedAt: string | null;
 }
 
 /** The two filters, read from the address, and the one way to write them back. */
@@ -133,6 +136,11 @@ function CustomerTable({ visible }: { visible: readonly Customer[] }): React.JSX
                 <Link to={customerPagePath(customer.id)}>
                   {customer.displayName || customer.id}
                 </Link>
+                {/* Marked rather than left out: a customer that vanished from its members'
+                    list would read as deleted, and it is not. */}
+                {customer.deactivatedAt === null ? null : (
+                  <StatusMark mark="absent" label={t("tenants.deactivatedMark")} />
+                )}
                 <span className="customer-index__mobile-id datum datum--quiet">{customer.id}</span>
               </th>
               <td className="customer-index__reference datum datum--quiet">{customer.id}</td>

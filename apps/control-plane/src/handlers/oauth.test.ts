@@ -10,7 +10,7 @@ import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/te
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { Hono } from "hono";
 
-import { isAdminIn } from "../services/authz.ts";
+import { adminStandingIn } from "../services/authz.ts";
 import { startConsent } from "../services/oauth.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { InMemoryWorkerClient } from "../services/inMemoryWorkerClient.ts";
@@ -130,7 +130,7 @@ async function seedUser(email: string, role: string): Promise<string> {
 /**
  * Build the app with a given signed-in caller. `null` is nobody signed in.
  *
- * `hasAdminAuthority` is the REAL policy, not a lookup written here. The first version of
+ * `adminStanding` is the REAL policy, not a lookup written here. The first version of
  * this helper ran its own `SELECT role FROM app.tenant_member`, which happened to be what
  * the wiring in `server.ts` also did -- so the suite agreed with production about a rule
  * neither of them had right, and stayed green while a superadmin could not finish a consent.
@@ -146,7 +146,7 @@ function appFor(
     google,
     xero,
     worker,
-    hasAdminAuthority: (tenantId, who) => isAdminIn(db, superadmins, { tenantId, ...who }),
+    adminStanding: (tenantId, who) => adminStandingIn(db, superadmins, { tenantId, ...who }),
     resolveCaller: () => Promise.resolve(caller),
   });
   return app;
@@ -277,6 +277,19 @@ describe("completing a consent", () => {
 
     expect(replay.headers.get("location")).toContain("reason=bad-state");
     expect(worker.stored).toHaveLength(1);
+  });
+
+  it("a customer deactivated while the consent was out seals nothing, and says why", async () => {
+    // ADR 0110. The callback has no middleware to refuse a deactivated customer, so it asks
+    // itself -- and an admin is told the customer's state, not that they are not an admin.
+    // The quiet side is the first test in this block: the same admin, the customer in use.
+    const state = await beginConsent();
+    await db.query("UPDATE ops.tenant SET deactivated_at = now() WHERE id = $1", [TENANT]);
+
+    const response = await callback(appFor(ADMIN), { state, code: "auth-code" });
+
+    expect(response.headers.get("location")).toContain("reason=tenant-deactivated");
+    expect(worker.stored).toHaveLength(0);
   });
 
   it("a member of the tenant is refused: starting a flow is not a standing authorisation", async () => {

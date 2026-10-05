@@ -153,6 +153,13 @@ export const vi = {
       "Thao tác này chỉ làm được khi đăng nhập bằng trình duyệt (hoặc CLI), không làm được bằng token.",
     tenantExists: "Mã khách hàng {{tenantId}} đã được dùng cho một khách hàng khác.",
     /**
+     * Every tenant procedure on a deactivated customer (ADR 0110). Says who can undo it, since
+     * the reader of this sentence is usually not the one who can.
+     */
+    tenantDeactivated:
+      "Khách hàng này đã ngừng kích hoạt. Không thể truy cập hay đồng bộ cho đến khi một quản trị viên kích hoạt lại.",
+    tenantNotDeactivated: "Khách hàng này đang hoạt động, không cần kích hoạt lại.",
+    /**
      * Two references that differ only in case or punctuation fold to one database login.
      * The sentence names the fix -- a reference that differs in more than that -- rather
      * than the mechanism, which the operator cannot see.

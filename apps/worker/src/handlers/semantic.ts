@@ -17,7 +17,9 @@ import {
   startSemanticInitJob,
   startSemanticJob,
 } from "../services/semantic/job.ts";
+import type { DueList } from "../services/schedule.ts";
 import { jobDepsFor, serviceTokenOk, UNAUTHENTICATED } from "./bearer.ts";
+import { answerDue } from "./due.ts";
 import type { LakeApiDeps } from "./lake.ts";
 
 const NOT_CONFIGURED = {
@@ -26,16 +28,17 @@ const NOT_CONFIGURED = {
   details: [],
 } as const;
 
+/** What is due with no classifier: nothing, and nothing set aside. */
+const NOTHING_DUE: DueList = { due: [], skipped: [] };
+
 /** Registered before `/v1/runs/:id`, for the reason `extract-due` is. */
 export function registerSemanticRoutes(app: Hono, deps: LakeApiDeps): void {
   app.get("/v1/runs/semantic-due", async (c) => {
     if (!serviceTokenOk(deps, c)) {
       return c.json(UNAUTHENTICATED, 401);
     }
-    return c.json(
-      { due: deps.semanticAsk === undefined ? [] : await listSemanticDue(deps.exec) },
-      200,
-    );
+    const due = deps.semanticAsk === undefined ? NOTHING_DUE : await listSemanticDue(deps.exec);
+    return answerDue(c, deps, "semantic", due);
   });
 
   app.post("/v1/runs/semantic", async (c) => {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LandRecordsResponse } from "@undercroft/contracts";
 import { canonicalJson, createLogger, createStampSource, TestClock } from "@undercroft/core";
+import { hashToken } from "@undercroft/crypto";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 import { landRecords } from "../services/land.ts";
@@ -175,6 +176,37 @@ describe("the lake records API", () => {
     });
     expect(res.status).toBe(400);
     expect((await backing.list("_blobs/")).length).toBe(blobs);
+  });
+
+  it("a deactivated customer's own ingest key lands nothing, and says why", async () => {
+    // ADR 0110. The key is valid and scoped to the customer -- the quiet side is every test
+    // above, where the same batch lands -- so what refuses is the customer's state alone.
+    const key = "uk_push_test_secret";
+    await db.asSuperuser(async (tx) => {
+      await tx.query(
+        "INSERT INTO app.ingest_key (id, token_sha256, tenant_id) VALUES ('uk_push', $1, 'CASE-1')",
+        [hashToken(key)],
+      );
+      await tx.query("UPDATE ops.tenant SET deactivated_at = now() WHERE id = 'CASE-1'");
+    });
+
+    const res = await post(
+      {
+        source: "hubspot",
+        tenantId: "CASE-1",
+        runId: "pushed",
+        records: [
+          { entity: "deals", sourceRecordId: "1", sourceUpdatedAt: null, payloadText: "{}" },
+        ],
+      },
+      key,
+    );
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe("tenant_deactivated");
+    expect((await backing.list("_blobs/")).length).toBe(0);
+    const { rows } = await db.query("SELECT id FROM ops.run WHERE id = 'pushed'");
+    expect(rows).toEqual([]);
   });
 });
 

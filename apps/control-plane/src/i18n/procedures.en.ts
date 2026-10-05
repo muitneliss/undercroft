@@ -21,6 +21,10 @@ export const procedureSentences: SentenceTable = {
   "tenants.get": "One customer, and your role in it.",
   "tenants.create": "Create a customer. Platform superadmins only.",
   "tenants.rename": "Correct a customer's display name. Tenant admins.",
+  "tenants.deactivate":
+    "Deactivate a customer: every member loses access and every sync stops until it is reactivated. Nothing is deleted. Tenant admins.",
+  "tenants.reactivate":
+    "Reactivate a deactivated customer: access and sync schedules return as they were. Tenant admins.",
   "connections.list": "A customer's sources and how each is connected.",
   "connections.get": "One source and how it is connected.",
   "connections.startOAuth": "Begin an OAuth grant; returns the URL to open in a browser. Admins.",

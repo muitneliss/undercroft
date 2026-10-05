@@ -35,6 +35,7 @@ import { Mark } from "@/components/Mark.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StaleChunkBoundary } from "@/components/StaleChunkBoundary.tsx";
 import { TabRail } from "@/components/TabRail.tsx";
+import { DeactivatedNotice } from "@/components/TenantDeactivation.tsx";
 import { applyBoard } from "@/lib/acetate.ts";
 import { type DivisionId, division } from "@/lib/divisions.ts";
 import { useUiStore } from "@/store.ts";
@@ -77,6 +78,89 @@ function FistPlate(): React.JSX.Element {
       <span aria-hidden="true">{FIST}</span>
     </button>
   );
+}
+
+/**
+ * The right of the running head: who is reading, their language, the assistant where a book
+ * in use is open, and the way out. Its own component since ADR 0110 pushed `Book` past what one
+ * function may hold; it owns the one mutation the chrome makes.
+ */
+function ReaderPlates({
+  signedInAs,
+  assisted,
+}: {
+  signedInAs: string;
+  assisted: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const signOut = trpc.session.signOut.useMutation({
+    onSuccess: () => {
+      // The opaque session is revoked server-side; a full reload drops back to the title
+      // page rather than leaving a stale cache pointed at a dead session.
+      globalThis.location.assign("/");
+    },
+  });
+  // Pending until the reload lands, not until the server answers: in between, the session is
+  // already gone and a live plate would offer to end it a second time.
+  const signingOut = signOut.isPending || signOut.isSuccess;
+
+  return (
+    <div className="runhead__right">
+      {/* The address is the way to the account page: it already answers "who am I here",
+          and what belongs to that person -- their tokens -- is one step further. */}
+      <Link className="datum datum--quiet" to="/account" title={t("account.open")}>
+        {signedInAs}
+      </Link>
+      {/* Beside the sign-out plate, not buried in a settings page: changing language
+          is something a reader does in their first seconds, before they know where
+          anything else is. */}
+      <LanguageSwitcher />
+      {assisted ? <FistPlate /> : null}
+      <button
+        className="plate plate--small"
+        type="button"
+        onClick={(): void => signOut.mutate()}
+        disabled={signingOut}
+      >
+        {signingOut ? t("app.signingOut") : t("app.signOut")}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * What the leaf prints: the division, or what stands in for it.
+ *
+ * A book's division waits for `tenants.get` before it renders, because until that answers
+ * nobody knows whether the customer is deactivated (ADR 0110) -- and a division rendered in
+ * the meantime would ask the server for everything it shows, be refused each time, and flash
+ * those refusals before the notice replaced them. A refused `tenants.get` lets the division
+ * render and say for itself what it could not load. The Customers division is in no book and
+ * waits for nothing.
+ */
+function leafPage(page: {
+  tenantId: string | undefined;
+  pending: boolean;
+  role: string;
+  deactivatedAt: string | null;
+  children: ReactNode;
+}): ReactNode {
+  if (page.tenantId === undefined) {
+    return page.children;
+  }
+  if (page.pending) {
+    return <Skeleton rows={4} />;
+  }
+  if (page.deactivatedAt !== null) {
+    return (
+      <DeactivatedNotice
+        tenantId={page.tenantId}
+        role={page.role}
+        deactivatedAt={page.deactivatedAt}
+      />
+    );
+  }
+  return page.children;
 }
 
 export function Book({
@@ -126,27 +210,25 @@ export function Book({
     { enabled: Boolean(tenantId), retry: false },
   );
 
-  const signOut = trpc.session.signOut.useMutation({
-    onSuccess: () => {
-      // The opaque session is revoked server-side; a full reload drops back to the title
-      // page rather than leaving a stale cache pointed at a dead session.
-      globalThis.location.assign("/");
-    },
-  });
-  // Pending until the reload lands, not until the server answers: in between, the session is
-  // already gone and a live plate would offer to end it a second time.
-  const signingOut = signOut.isPending || signOut.isSuccess;
+  /**
+   * When the open customer was deactivated (ADR 0110), or `null` while it is in use or not yet
+   * known. Read off `tenants.get`, the one procedure that still answers for a deactivated
+   * customer, so the book can say why every other one would refuse.
+   */
+  const deactivatedAt = tenant.data?.deactivatedAt ?? null;
 
   const assistantOpen = useUiStore((state) => state.assistantOpen);
   /**
-   * The interleaf needs a customer, so the fist only appears once a book is open.
+   * The interleaf needs a customer, so the fist only appears once a book is open -- and one that
+   * is in use: the assistant refuses to speak about a deactivated customer, as its tools would.
    *
    * Not disabled-but-present: a control that is there and refuses is a question the reader has
    * to answer ("why can I not?"), where its absence on the one division outside any book --
    * Customers -- is simply the truth. `TabRail` draws a division that cannot open face-down for
    * the same reason.
    */
-  const interleaved = assistantOpen && tenantId !== undefined;
+  const assisted = tenantId !== undefined && deactivatedAt === null;
+  const interleaved = assistantOpen && assisted;
 
   return (
     <div
@@ -201,31 +283,22 @@ export function Book({
             </span>
           ) : null}
 
-          <div className="runhead__right">
-            {/* The address is the way to the account page: it already answers "who am I here",
-                and what belongs to that person -- their tokens -- is one step further. */}
-            <Link className="datum datum--quiet" to="/account" title={t("account.open")}>
-              {signedInAs}
-            </Link>
-            {/* Beside the sign-out plate, not buried in a settings page: changing language
-                is something a reader does in their first seconds, before they know where
-                anything else is. */}
-            <LanguageSwitcher />
-            {tenantId === undefined ? null : <FistPlate />}
-            <button
-              className="plate plate--small"
-              type="button"
-              onClick={(): void => signOut.mutate()}
-              disabled={signingOut}
-            >
-              {signingOut ? t("app.signingOut") : t("app.signOut")}
-            </button>
-          </div>
+          <ReaderPlates signedInAs={signedInAs} assisted={assisted} />
         </header>
 
         {/* Inside the keyed leaf, so a page a deploy took away is answered here with the chrome
-            still around it, and the answer is dropped when the reader turns to another page. */}
-        <StaleChunkBoundary>{children}</StaleChunkBoundary>
+            still around it, and the answer is dropped when the reader turns to another page.
+            A deactivated customer's notice stands in for the division here, chrome and all:
+            every procedure the division would ask refuses until it is reactivated (ADR 0110). */}
+        <StaleChunkBoundary>
+          {leafPage({
+            tenantId,
+            pending: tenant.isPending,
+            role: tenant.data?.role ?? "",
+            deactivatedAt,
+            children,
+          })}
+        </StaleChunkBoundary>
 
         {/* Last on the leaf, and last in the DOM: the page is what the reader came for,
             and the printing it came from is the footnote to it. */}

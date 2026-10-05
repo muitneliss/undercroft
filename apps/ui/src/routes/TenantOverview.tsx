@@ -37,6 +37,7 @@ import type { Connection } from "@/api/types.ts";
 import { AccountSwitcher } from "@/components/AccountSwitcher.tsx";
 import { ConnectionCard } from "@/components/ConnectionCard.tsx";
 import { DisplayNameForm } from "@/components/DisplayNameForm.tsx";
+import { DeactivateTenant } from "@/components/TenantDeactivation.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { IngestKeys } from "@/components/IngestKeys.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
@@ -118,6 +119,20 @@ export function TenantOverview({ tenantId }: { tenantId: string }): React.JSX.El
       <div className="head">{t("tenants.renameHead")}</div>
       <div className="body stack">
         <DisplayNameForm
+          canEdit={isAdmin}
+          displayName={tenant.data.displayName}
+          tenantId={tenantId}
+        />
+      </div>
+
+      {/* Beside the name, because both act on the customer itself rather than on a source.
+          Reactivating is not here: a deactivated customer's book shows `DeactivatedNotice`
+          instead of this page, and that is where the way back is (ADR 0110). */}
+      <div className="band-rule" />
+
+      <div className="head">{t("tenants.deactivateHead")}</div>
+      <div className="body stack">
+        <DeactivateTenant
           canEdit={isAdmin}
           displayName={tenant.data.displayName}
           tenantId={tenantId}

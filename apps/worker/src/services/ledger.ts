@@ -19,6 +19,7 @@ import {
   type RunRefusal,
 } from "@undercroft/db/repos";
 
+import { TenantDeactivated } from "./ingest.ts";
 import type { LandResult } from "./land.ts";
 
 /** One run by id, for an operator watching a verb they started. `null` when there is none. */
@@ -31,16 +32,24 @@ export function findRun(exec: SqlExecutor, runId: string): Promise<Run | null> {
  *
  * `false` means the id already names another tenant's or source's run, and the caller must
  * be refused before a byte is landed under it.
+ *
+ * A deactivated customer is `TenantDeactivated`, raised rather than answered, so the lake API's
+ * error boundary gives a pushed batch the code a run gets for the same reason -- one word,
+ * `tenant_deactivated`, for a script to match whatever it was doing (ADR 0110).
  */
-export function claimExternal(
+export async function claimExternal(
   exec: SqlExecutor,
   input: { runId: string; tenantId: string; source: string },
 ): Promise<boolean> {
-  return claimExternalRun(exec, {
+  const claim = await claimExternalRun(exec, {
     id: input.runId,
     tenantId: input.tenantId,
     source: input.source,
   });
+  if (claim === "tenant-deactivated") {
+    throw new TenantDeactivated(input.tenantId);
+  }
+  return claim === "claimed";
 }
 
 /** Account for one landed batch: its counts on the run, its refusals beneath it. */

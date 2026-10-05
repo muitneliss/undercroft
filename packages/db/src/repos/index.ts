@@ -77,6 +77,7 @@ export {
   closeRun,
   entitiesForRuns,
   eventsFor,
+  type ExternalClaim,
   type FailedRunNotice,
   findChildRun,
   findRunById,
@@ -121,7 +122,7 @@ export {
   type TenantRoles,
   tenantRolesFor,
 } from "./tenantRoles.ts";
-export { tenantExists } from "./tenants.ts";
+export { deactivatedTenants, tenantExists } from "./tenants.ts";
 export {
   type CatalogueKind,
   countReadableDocuments,

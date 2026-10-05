@@ -220,6 +220,25 @@ export const en = {
     insideModels: "How is the data transformed?",
     insideReports: "Which questions do the figures answer?",
     insidePeople: "Who can read and who can change things?",
+
+    deactivateHead: "Deactivate this customer",
+    deactivateLead:
+      "Deactivating takes access to this book from every member, you included, and stops every sync, document read and build for it. Nothing is deleted; reactivating restores everything as it was.",
+    deactivateNote: "Only an admin of this customer can deactivate it.",
+    deactivate: "Deactivate…",
+    deactivateConfirm: "Deactivate {{name}}",
+    deactivating: "Deactivating…",
+    notDeactivated: "Not deactivated",
+    deactivatedMark: "Deactivated",
+    deactivatedHead: "This customer is deactivated",
+    deactivatedSince:
+      "Deactivated at {{when}}. Its data is kept as it was; nothing is synced or built until it is reactivated.",
+    deactivatedAdmin:
+      "You are an admin of this customer, so you can reactivate it. Access and sync schedules return as they were.",
+    deactivatedOthers: "Ask an admin of this customer to reactivate it if you need it.",
+    reactivate: "Reactivate",
+    reactivating: "Reactivating…",
+    notReactivated: "Not reactivated",
   },
 
   sources: {

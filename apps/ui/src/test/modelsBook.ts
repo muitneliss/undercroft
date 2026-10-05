@@ -215,7 +215,7 @@ export const LINEAGE: ModelLineage = {
 
 /** The reader, by role, on Demo Co.'s book. */
 export function reader(role: Role): Outputs["tenants"]["get"] {
-  return { id: TENANT, displayName: DISPLAY_NAME, role };
+  return { id: TENANT, displayName: DISPLAY_NAME, role, deactivatedAt: null };
 }
 
 function nameOf(input: unknown): string | undefined {

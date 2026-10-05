@@ -17,12 +17,23 @@
 import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 
+import { deactivatedAtOf, type Tenant, type TenantRow, toTenant } from "./tenant.ts";
+
 export type Role = "viewer" | "member" | "admin";
 
-export interface MemberTenant {
-  readonly id: string;
-  readonly displayName: string;
+/**
+ * A tenant as one member sees it in their list: the tenant, deactivated or not, and their role.
+ * A deactivated customer stays in its members' lists, marked, rather than vanishing -- a book
+ * that disappears reads as one that was deleted (ADR 0110).
+ */
+export interface MemberTenant extends Tenant {
   readonly role: string;
+}
+
+/** A member's standing in one tenant: their role, and whether the tenant is deactivated. */
+export interface MemberAccess {
+  readonly role: Role;
+  readonly deactivatedAt: string | null;
 }
 
 export interface Member {
@@ -45,19 +56,44 @@ export async function roleFor(
 }
 
 /**
+ * The caller's role in one tenant and that tenant's state, or `null` when they are not a member.
+ *
+ * One statement rather than `roleFor` and then a tenant read, because it runs on every
+ * tenant-scoped request and the membership is the filter either way: a non-member learns
+ * nothing about the tenant's state, because there is no row to carry it.
+ */
+export async function accessFor(
+  exec: SqlExecutor,
+  tenantId: string,
+  userId: string,
+): Promise<MemberAccess | null> {
+  const { rows } = await exec.query<{ role: Role } & Pick<TenantRow, "deactivated_at">>(
+    `SELECT m.role, t.deactivated_at
+     FROM app.tenant_member m JOIN ops.tenant t ON t.id = m.tenant_id
+     WHERE m.tenant_id = $1 AND m.user_id = $2`,
+    [tenantId, userId],
+  );
+  const [row] = rows;
+  if (row === undefined) {
+    return null;
+  }
+  return { role: row.role, deactivatedAt: deactivatedAtOf(row) };
+}
+
+/**
  * The tenants one user is a member of.
  *
  * This query IS the visibility boundary for the list view: a tenant absent from the result
  * is a tenant the caller is never told about.
  */
 export async function listForUser(exec: SqlExecutor, userId: string): Promise<MemberTenant[]> {
-  const { rows } = await exec.query<{ id: string; display_name: string; role: string }>(
-    `SELECT t.id, t.display_name, m.role
+  const { rows } = await exec.query<TenantRow & { role: string }>(
+    `SELECT t.id, t.display_name, t.deactivated_at, m.role
      FROM app.tenant_member m JOIN ops.tenant t ON t.id = m.tenant_id
      WHERE m.user_id = $1 ORDER BY t.id`,
     [userId],
   );
-  return rows.map((r) => ({ id: r.id, displayName: r.display_name, role: r.role }));
+  return rows.map((r) => ({ ...toTenant(r), role: r.role }));
 }
 
 /** Someone an alert about a tenant goes to, in the language they read. */

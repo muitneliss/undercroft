@@ -96,6 +96,7 @@ function missingArguments(
 type TenantRow = OutputOf<"tenants.list">[number];
 const TENANT_ID = "id" satisfies keyof TenantRow;
 const TENANT_NAME = "displayName" satisfies keyof TenantRow;
+const TENANT_DEACTIVATED_AT = "deactivatedAt" satisfies keyof TenantRow;
 
 /** The tenants the caller can see, as choices, or the refusal that stopped the listing. */
 async function askTenant(
@@ -121,7 +122,11 @@ async function askTenant(
       return [];
     }
     const name: unknown = Reflect.get(row, TENANT_NAME);
-    const label = typeof name === "string" ? `${id} -- ${name}` : id;
+    const named = typeof name === "string" ? `${id} -- ${name}` : id;
+    // Still offered, marked: the person may be about to reactivate it, and a customer that
+    // vanished from the list would read as deleted (ADR 0110).
+    const deactivated = typeof Reflect.get(row, TENANT_DEACTIVATED_AT) === "string";
+    const label = deactivated ? ctx.t("prompt.tenantDeactivated", { label: named }) : named;
     return [{ value: id, label }];
   });
   return { ok: true, value: await askChoice(ctx, ctx.t("prompt.tenant"), options) };

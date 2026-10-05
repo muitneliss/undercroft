@@ -110,8 +110,8 @@ describe("the public and signed-in home", () => {
       "tenants.list": Response.json({
         result: {
           data: [
-            { id: "CASE-0042", displayName: "Hồ sơ Đỏ", role: "admin" },
-            { id: "CASE-0108", displayName: "Hồ sơ Xanh", role: "viewer" },
+            { id: "CASE-0042", displayName: "Hồ sơ Đỏ", role: "admin", deactivatedAt: null },
+            { id: "CASE-0108", displayName: "Hồ sơ Xanh", role: "viewer", deactivatedAt: null },
           ],
         },
       }),
@@ -131,6 +131,33 @@ describe("the public and signed-in home", () => {
     );
   });
 
+  it("keeps a deactivated customer in the list, marked, beside one in use that is not", async () => {
+    // ADR 0110: a customer that vanished from its members' list would read as deleted.
+    renderAt("/tenants", {
+      "session.me": answerSessionMe(),
+      "tenants.list": Response.json({
+        result: {
+          data: [
+            { id: "CASE-0042", displayName: "Hồ sơ Đỏ", role: "admin", deactivatedAt: null },
+            {
+              id: "CASE-0043",
+              displayName: "Hồ sơ Xanh",
+              role: "viewer",
+              deactivatedAt: "2026-10-01T02:00:00.000Z",
+            },
+          ],
+        },
+      }),
+    });
+    const marked = translatorFor("vi")("tenants.deactivatedMark");
+
+    const deactivated = await screen.findByRole("row", { name: /Hồ sơ Xanh/u });
+    const inUse = screen.getByRole("row", { name: /Hồ sơ Đỏ/u });
+
+    expect(deactivated.textContent).toContain(marked);
+    expect(inUse.textContent).not.toContain(marked);
+  });
+
   it("narrows the customers by the reader's role together with the search, counting only what it lists", async () => {
     // Public promise (#348): the role filter and the search narrow together, the count is the
     // rows listed -- against every customer while a filter narrows them -- and one clear
@@ -140,8 +167,8 @@ describe("the public and signed-in home", () => {
       "tenants.list": Response.json({
         result: {
           data: [
-            { id: "CASE-0042", displayName: "Hồ sơ Đỏ", role: "admin" },
-            { id: "CASE-0043", displayName: "Hồ sơ Xanh", role: "viewer" },
+            { id: "CASE-0042", displayName: "Hồ sơ Đỏ", role: "admin", deactivatedAt: null },
+            { id: "CASE-0043", displayName: "Hồ sơ Xanh", role: "viewer", deactivatedAt: null },
           ],
         },
       }),

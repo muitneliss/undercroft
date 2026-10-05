@@ -31,6 +31,7 @@ import { createPkce, hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 
 import { consentTarget } from "./accountResolution.ts";
+import type { AdminStanding } from "./authz.ts";
 import { sealResolved } from "./consentSeal.ts";
 import {
   consumeHandshake,
@@ -238,6 +239,8 @@ export type CompleteOutcome =
         | "not-configured"
         | "bad-state"
         | "not-admin"
+        /** The customer was deactivated while the consent was out (ADR 0110). Nothing is sealed. */
+        | "tenant-deactivated"
         | "exchange-failed"
         | "scope-declined"
         | "worker-refused"
@@ -251,7 +254,7 @@ export type CompleteOutcome =
 
 export interface CompleteDeps extends OAuthDeps {
   /**
-   * Answers whether the caller may act as an admin of the tenant. Injected, so this stays
+   * Answers where the caller stands as an admin of the tenant. Injected, so this stays
    * pure-ish.
    *
    * It takes the whole caller rather than a uuid because "admin" here means **authority**,
@@ -259,13 +262,17 @@ export interface CompleteDeps extends OAuthDeps {
    * Handed only a `userId`, the one honest implementation left is a `tenant_member` lookup --
    * which is exactly the bug this signature exists to make unwritable: a superadmin holds
    * admin in every tenant and has a row in none of them, so the consent they started was
-   * refused here as `not-admin` after Google had already granted it. `authz.isAdminIn` is
-   * the implementation; the type is what stops a caller inventing a narrower one.
+   * refused here as `not-admin` after Google had already granted it. `authz.adminStandingIn`
+   * is the implementation; the type is what stops a caller inventing a narrower one.
+   *
+   * A standing rather than a boolean since ADR 0110: a consent started before its customer
+   * was deactivated must not seal a credential after, and the refusal has to say that rather
+   * than call an admin a non-admin.
    */
-  hasAdminAuthority: (
+  adminStanding: (
     tenantId: string,
     caller: { userId: string; email: string },
-  ) => Promise<boolean>;
+  ) => Promise<AdminStanding>;
 }
 
 /**
@@ -300,10 +307,12 @@ export async function completeConsent(
   }
 
   const { caller } = input;
-  if (caller === null || !(await deps.hasAdminAuthority(handshake.tenantId, caller))) {
+  const standing =
+    caller === null ? "not-admin" : await deps.adminStanding(handshake.tenantId, caller);
+  if (caller === null || standing !== "admin") {
     return {
       ok: false,
-      reason: "not-admin",
+      reason: standing === "deactivated" ? "tenant-deactivated" : "not-admin",
       tenantId: handshake.tenantId,
       source: handshake.source,
     };

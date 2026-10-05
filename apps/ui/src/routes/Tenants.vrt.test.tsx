@@ -16,9 +16,9 @@ import { describe, test as it } from "vitest";
 import { open } from "@/test/visual.tsx";
 
 const CUSTOMERS: inferRouterOutputs<AppRouter>["tenants"]["list"] = [
-  { id: "CASE-0042", displayName: "Demo Co.", role: "admin" },
-  { id: "CASE-0067", displayName: "Atlas Example", role: "member" },
-  { id: "CASE-0081", displayName: "Paper & Pine Demo", role: "viewer" },
+  { id: "CASE-0042", displayName: "Demo Co.", role: "admin", deactivatedAt: null },
+  { id: "CASE-0067", displayName: "Atlas Example", role: "member", deactivatedAt: null },
+  { id: "CASE-0081", displayName: "Paper & Pine Demo", role: "viewer", deactivatedAt: null },
 ];
 
 describe("the customer index, in English", () => {
