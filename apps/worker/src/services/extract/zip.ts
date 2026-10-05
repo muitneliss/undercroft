@@ -259,20 +259,21 @@ async function* inflatedPieces(raw: Uint8Array, method: number): AsyncGenerator<
 }
 
 /**
- * A member's UTF-8 text in pieces as it inflates, never whole, and how the stream ended.
+ * A member's bytes in pieces as they inflate, never whole, and how the stream ended.
  *
- * For the one part that can be larger than `MAX_MEMBER_BYTES` and must still be read: a
- * worksheet (`sheetScan.ts`). A corrupt stream ends `unreadable` and a stream past `maxBytes`
- * ends `too-large`; the text already handed over was exact up to there, and the caller says the
- * part stopped short rather than presenting it as whole. Absent members are the caller's to
- * check; this answers `unreadable` for them too.
+ * For a part that can be larger than `MAX_MEMBER_BYTES` and must still be read: a worksheet,
+ * as XML (`sheetScan.ts`, through {@link streamZipText}) or as binary records (`xlsbRecords.ts`).
+ * A corrupt stream ends `unreadable` and a stream past `maxBytes` ends `too-large`; the bytes
+ * already handed over were exact up to there, and the caller says the part stopped short rather
+ * than presenting it as whole. Absent members are the caller's to check; this answers
+ * `unreadable` for them too.
  */
-export async function* streamZipText(
+export async function* streamZipBytes(
   bytes: Uint8Array,
   index: ZipIndex,
   name: string,
   maxBytes: number = MAX_STREAMED_BYTES,
-): AsyncGenerator<string, StreamEnd> {
+): AsyncGenerator<Uint8Array, StreamEnd> {
   const member = index.get(name);
   const raw = member === undefined || member.encrypted ? null : memberData(bytes, member);
   if (
@@ -282,7 +283,6 @@ export async function* streamZipText(
   ) {
     return "unreadable";
   }
-  const decoder = new TextDecoder("utf-8");
   let total = 0;
   try {
     for await (const piece of inflatedPieces(raw, member.method)) {
@@ -290,14 +290,36 @@ export async function* streamZipText(
       if (total > maxBytes) {
         return "too-large";
       }
-      yield decoder.decode(piece, { stream: true });
+      yield piece;
     }
   } catch {
     return "unreadable";
   }
-  const rest = decoder.decode();
-  if (rest !== "") {
-    yield rest;
-  }
   return "complete";
+}
+
+/** A member's UTF-8 text in pieces as it inflates: {@link streamZipBytes}, decoded. */
+export async function* streamZipText(
+  bytes: Uint8Array,
+  index: ZipIndex,
+  name: string,
+  maxBytes: number = MAX_STREAMED_BYTES,
+): AsyncGenerator<string, StreamEnd> {
+  const decoder = new TextDecoder("utf-8");
+  const pieces = streamZipBytes(bytes, index, name, maxBytes);
+  try {
+    let step = await pieces.next();
+    while (step.done !== true) {
+      yield decoder.decode(step.value, { stream: true });
+      step = await pieces.next();
+    }
+    const rest = decoder.decode();
+    if (rest !== "" && step.value === "complete") {
+      yield rest;
+    }
+    return step.value;
+  } finally {
+    // A reader that stops early returns this generator; the inflater beneath closes with it.
+    await pieces.return("complete");
+  }
 }

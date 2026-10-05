@@ -413,6 +413,12 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * `octet-stream` was a type nobody reads; it is now read for the documents it holds, and the
  * bump re-offers the archives already refused so their members land.
  *
+ * GENERATION 11 IS THE BINARY WORKBOOK READER (ADR 0109). Every `.xlsb` was recorded
+ * `xlsb-unsupported`, a refusal whose whole point is that it stops being true; the bump
+ * re-offers them, and one whose workbook part cannot be read comes back `xlsb-unreadable`. An
+ * `.xlsb` a provider called `octet-stream` or a zip was `unsupported-content-type`, and is
+ * re-offered by the same bump.
+ *
  * NOT BUMPED FOR ISSUE #218's UTF-16 DECODE AND NUL REPLACEMENT, and that is the rule working
  * rather than an oversight. A bump re-offers refusals, and neither change turns a refusal into a
  * reading: the documents they were written for never got a row at all -- their NUL failed the
@@ -430,7 +436,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 10;
+export const CURRENT_READER_VERSION = 11;
 
 /**
  * One document, read whichever way its type allows.

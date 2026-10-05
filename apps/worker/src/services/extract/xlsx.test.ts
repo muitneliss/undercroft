@@ -19,10 +19,10 @@ import { extractDocument } from "./extractText.ts";
 import {
   WORKBOOK_NOT_A_WORKBOOK,
   WORKBOOK_PASSWORD_PROTECTED,
-  XLSB_UNSUPPORTED,
   XLSX_UNREADABLE,
 } from "./spreadsheet.ts";
 import { zipOf } from "./testing.ts";
+import { xlsbOf } from "./xlsbTesting.ts";
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -415,16 +415,14 @@ describe("a file labelled as a spreadsheet", () => {
     expect((await extract(docx)).reason).toBe(WORKBOOK_NOT_A_WORKBOOK);
   });
 
-  it("is refused as binary when it is an .xlsb", async () => {
-    const xlsb = zipOf([
-      {
-        name: "[Content_Types].xml",
-        body: typesOf("application/vnd.ms-excel.sheet.binary.macroEnabled.main"),
-      },
-      { name: "xl/workbook.bin", body: "binary records" },
-    ]);
+  it("is read by the binary workbook reader when it is an .xlsb under the .xlsx label", async () => {
+    const xlsb = xlsbOf({
+      sheets: [{ name: "Ledger", rows: [{ row: 0, cells: [{ col: 0, text: "Acme" }] }] }],
+    });
 
-    expect((await extract(xlsb)).reason).toBe(XLSB_UNSUPPORTED);
+    const result = await extract(xlsb);
+
+    expect([result.method, result.workbook?.container]).toEqual(["xlsb", "xlsb"]);
   });
 
   it("is refused as locked when a password was set on it", async () => {

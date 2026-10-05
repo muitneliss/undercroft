@@ -183,7 +183,7 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     ],
     extensions: ["xlsb"],
     spec: "https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xlsb/",
-    reads: "metadata",
+    reads: "table",
     landsAs: "application/vnd.ms-excel.sheet.binary.macroenabled.12",
   },
   {

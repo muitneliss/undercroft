@@ -2,8 +2,9 @@
  * A file labelled as a spreadsheet, opened by what its bytes are. ADR 0104 decision 5.
  *
  * `workbookKind.ts` says what the bytes are; this decides what each kind is read as, and reads
- * the workbooks (`xlsx.ts`). Read in process, spawning nothing: a workbook is a zip of XML, and
- * `xlsx.ts` argues why that is cheaper here than either a converter binary or a dependency.
+ * the workbooks (`xlsx.ts`, `biff8.ts`, `xlsb.ts`). Read in process, spawning nothing: a workbook
+ * is a zip of XML or of binary records, or a compound file of them, and `zip.ts` argues why that
+ * is cheaper here than either a converter binary or a dependency.
  */
 
 import { readArchive } from "./archive.ts";
@@ -11,17 +12,21 @@ import { type Extracted, MAX_TEXT_CHARS, read, refused, UNSUPPORTED_TYPE } from 
 import { decodeHtmlBytes, htmlToText } from "./html.ts";
 import { readBiff8 } from "./biff8.ts";
 import { type WorkbookKind, workbookKindOf } from "./workbookKind.ts";
+import { readXlsb } from "./xlsb.ts";
 import { readWorkbook } from "./xlsx.ts";
 
 /** An Excel 97–2003 workbook whose records break off, never read as a shorter one. */
 export const XLS_UNREADABLE = "xls-unreadable";
 /** A package the workbook reader could not open exactly -- never an empty workbook. */
 export const XLSX_UNREADABLE = "xlsx-unreadable";
+/** A binary workbook whose workbook part, shared strings or styles cannot be read exactly. */
+export const XLSB_UNREADABLE = "xlsb-unreadable";
 /**
  * A file labelled as a spreadsheet whose bytes say otherwise. Each names what the bytes are, so
- * an operator reading the ledger knows which sender to ask for what.
+ * an operator reading the ledger knows which sender to ask for what. (`xlsb-unsupported` was
+ * one until the binary workbook was read, ADR 0109; a row refused under it keeps it until the
+ * next extract pass reads it again.)
  */
-export const XLSB_UNSUPPORTED = "xlsb-unsupported";
 export const XLS_BIFF5 = "xls-biff5-unsupported";
 export const WORKBOOK_PASSWORD_PROTECTED = "workbook-password-protected";
 export const WORKBOOK_NOT_A_WORKBOOK = "workbook-not-a-workbook";
@@ -50,6 +55,14 @@ async function readLegacyWorkbook(bytes: Uint8Array): Promise<Extracted> {
   return { ...read("xls", reading.text, reading.short), workbook: reading.workbook };
 }
 
+/** An Excel binary workbook (`xlsb.ts`, ADR 0109): the same sheets of rows an `.xlsx` gives. */
+async function readBinaryWorkbook(bytes: Uint8Array): Promise<Extracted> {
+  const reading = await readXlsb(bytes, MAX_TEXT_CHARS);
+  return reading === null
+    ? refused(XLSB_UNREADABLE)
+    : { ...read("xlsb", reading.text, reading.short), workbook: reading.workbook };
+}
+
 /** An HTML table, or SpreadsheetML markup, saved under an Excel name: the text a reader sees. */
 function readMarkup(bytes: Uint8Array): Extracted {
   return read("html", htmlToText(decodeHtmlBytes(bytes)));
@@ -65,7 +78,7 @@ const READING: Readonly<
   ooxml: readSpreadsheet,
   "unlabelled-package": readSpreadsheet,
   markup: readMarkup,
-  xlsb: () => refused(XLSB_UNSUPPORTED),
+  xlsb: readBinaryWorkbook,
   biff8: readLegacyWorkbook,
   biff5: () => refused(XLS_BIFF5),
   encrypted: () => refused(WORKBOOK_PASSWORD_PROTECTED),
@@ -79,12 +92,18 @@ export async function readLabelledSpreadsheet(bytes: Uint8Array): Promise<Extrac
   return await Promise.resolve(READING[workbookKindOf(bytes)](bytes));
 }
 
+/** A package whose own content-types part names a workbook, XML or binary, whatever its label. */
+function namesAWorkbook(kind: WorkbookKind): kind is "ooxml" | "xlsb" {
+  return kind === "ooxml" || kind === "xlsb";
+}
+
 /**
  * A file labelled a zip: a workbook when its content-types part names one, and otherwise an
  * archive -- refused `archive-unreadable` when its bytes are no zip at all (ADR 0108).
  */
 export async function readLabelledArchive(bytes: Uint8Array): Promise<Extracted> {
-  return workbookKindOf(bytes) === "ooxml" ? await readSpreadsheet(bytes) : readArchive(bytes);
+  const kind = workbookKindOf(bytes);
+  return namesAWorkbook(kind) ? await READING[kind](bytes) : readArchive(bytes);
 }
 
 /**
@@ -95,8 +114,8 @@ export async function readLabelledArchive(bytes: Uint8Array): Promise<Extracted>
  */
 export async function readUnlabelled(bytes: Uint8Array): Promise<Extracted> {
   const kind = workbookKindOf(bytes);
-  if (kind === "ooxml") {
-    return await readSpreadsheet(bytes);
+  if (namesAWorkbook(kind)) {
+    return await READING[kind](bytes);
   }
   return kind === "unlabelled-package" ? readArchive(bytes) : refused(UNSUPPORTED_TYPE);
 }

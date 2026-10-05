@@ -21,7 +21,8 @@ import {
   rowEntries,
   type ScannedRow,
 } from "./sheetCells.ts";
-import type { PartStream, WorkbookPackage } from "./workbookPackage.ts";
+import type { PartStream } from "./opcPackage.ts";
+import type { WorkbookPackage } from "./workbookPackage.ts";
 import { attributesOf, PREFIX } from "./xml.ts";
 import type { StreamEnd } from "./zip.ts";
 

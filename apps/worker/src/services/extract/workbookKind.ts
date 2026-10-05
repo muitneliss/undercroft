@@ -42,7 +42,11 @@ const MARKUP_PROBE = 1024;
 
 const SPREADSHEET_MAIN =
   /spreadsheetml\.(?:sheet|template)\.main\+xml|ms-excel\.(?:sheet|template)\.macroenabled\.main\+xml/iu;
-const BINARY_MAIN = /ms-excel\.sheet\.binary\.macroenabled\.main/iu;
+/**
+ * The binary workbook's main part. Excel writes the first spelling; [MS-XLSB] §2.1.7.61 gives
+ * the second, so a writer that follows the spec is recognised too.
+ */
+const BINARY_MAIN = /ms-excel\.sheet\.binary\.macroenabled\.main|ms-excel\.main(?![\w.+])/iu;
 const OTHER_MAIN =
   /(?:wordprocessingml|presentationml)\.[a-z.]+\.main\+xml|ms-(?:word|powerpoint)\.[a-z.]+\.main\+xml/iu;
 const MARKUP_START = /^(?:﻿)?\s*<(?:!doctype\s+html|html|table|\?xml|meta|head|body)\b/iu;

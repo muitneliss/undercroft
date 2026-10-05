@@ -49,7 +49,7 @@ that the file is treated as a spreadsheet. Its bytes decide how it is opened.
 | What the bytes are                                                | What happens                             |
 | ----------------------------------------------------------------- | ---------------------------------------- |
 | A zip whose own content-types part names a workbook or a template | Read as a workbook                       |
-| A zip whose content-types part names an `.xlsb`                   | Refused as `xlsb-unsupported`            |
+| A zip whose content-types part names an `.xlsb`                   | Read as a binary workbook                |
 | A zip whose content-types part names a document or a presentation | Refused as `workbook-not-a-workbook`     |
 | A compound file holding an Excel 97–2003 workbook                 | Read as a workbook                       |
 | A compound file holding an Excel 5/95 workbook                    | Refused as `xls-biff5-unsupported`       |
@@ -235,10 +235,24 @@ It is read as an `.xltx` is, and its macros are never run.
 - Choice: `application/vnd.ms-excel.sheet.binary.macroenabled.12`
 - Extensions: `.xlsb`
 - Specification: <https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xlsb/>
-- Reads: `metadata`
+- Reads: `table`
 
-Its package is a zip like an `.xlsx`, but each sheet is stored in a binary record format, and
-no reader for that has been written. It is refused as `xlsb-unsupported`.
+Its package is a zip like an `.xlsx`, found through the same relationships, but each part is
+stored as binary records (BIFF12) instead of XML. The worker reads it in process into the same
+rows an `.xlsx` gives, with sheet names, tab order, hidden sheets and rows, merged ranges, the
+declared range, number formats and the 1904 date epoch. A number is stored in the file as a
+binary double, and is written as the shortest decimal that is exactly that double, as for an
+`.xls`. A formula's cell holds the result Excel saved with it. The macros are never run.
+
+- A sheet whose records break off is listed with `reason: sheet-unreadable`, its rows before that
+  point kept.
+- A workbook whose workbook part, shared string table or styles cannot be read to its end is
+  refused as `xlsb-unreadable`.
+- A workbook saved with a password is refused as `workbook-password-protected`.
+
+Documents refused as `xlsb-unsupported` before this reader existed are read again by the next
+extract run. [ADR 0109](../adr/0109-a-binary-workbook-is-read-into-the-same-rows.md) records
+why.
 
 ### Google Sheets
 
@@ -534,7 +548,7 @@ with WebP support. If that support is ever missing, each WebP file is refused as
 
 ## A workbook's rows
 
-An `.xlsx`, an `.xlsm`, an `.xls`, a Google Sheet and a CSV, alone or inside a zip, are read into two tables a tenant's dbt models select
+An `.xlsx`, an `.xlsm`, an `.xls`, an `.xlsb`, a Google Sheet and a CSV, alone or inside a zip, are read into two tables a tenant's dbt models select
 through `source('undercroft', ...)`. Both are keyed by the digest of the file's bytes, so one file
 attached to ten messages is one set of rows; join `raw.documents.sha256` to reach it.
 [ADR 0104](../adr/0104-every-workbook-is-landed-as-rows.md) records why.
@@ -564,19 +578,19 @@ and `sheet_name_reason` is `workbook-relationships-missing`.
 
 The limits are Excel's own:
 
-| Limit                     | Value     | When it is passed                                          |
-| ------------------------- | --------- | ---------------------------------------------------------- |
-| Rows in a sheet           | 1,048,576 | The sheet stops, `complete` is false, `reason: rows-limit` |
-| Columns in a row          | 16,384    | The sheet stops: `cells-out-of-order`                      |
-| Characters in a cell      | 32,767    | The sheet stops: `cell-too-long`                           |
-| Sheets in a workbook      | 256       | Later sheets are listed with `reason: sheets-limit`        |
-| One sheet's XML, inflated | 2 GiB     | The sheet stops, `reason: sheet-too-large`                 |
+| Limit                      | Value     | When it is passed                                          |
+| -------------------------- | --------- | ---------------------------------------------------------- |
+| Rows in a sheet            | 1,048,576 | The sheet stops, `complete` is false, `reason: rows-limit` |
+| Columns in a row           | 16,384    | The sheet stops: `cells-out-of-order`                      |
+| Characters in a cell       | 32,767    | The sheet stops: `cell-too-long`                           |
+| Sheets in a workbook       | 256       | Later sheets are listed with `reason: sheets-limit`        |
+| One sheet's part, inflated | 2 GiB     | The sheet stops, `reason: sheet-too-large`                 |
 
 A sheet is read as it inflates, never held whole, so its size is bounded by the 2 GiB of work a
 single part may demand and not by memory ([ADR 0106](../adr/0106-a-sheet-is-read-as-it-inflates.md)).
 A sheet whose part is corrupt part-way is listed with `reason: sheet-unreadable`, its rows before
 that point kept. A workbook whose shared string table cannot be read to its end is refused whole
-as `xlsx-unreadable`.
+as `xlsx-unreadable`, or `xlsb-unreadable` for an `.xlsb`.
 
 Rows and cells must run in order. A row whose cells do not run left to right stops its sheet
 with `cells-out-of-order`, and rows out of order stop it with `rows-out-of-order`; the rows

@@ -23,8 +23,8 @@ import {
   CELLS_OUT_OF_ORDER,
   type Entry,
   FORMULA_UNCACHED,
-  lettersOf,
   MAX_CELL_CHARS,
+  rangeOf,
   ROWS_OUT_OF_ORDER,
   type ScannedRow,
 } from "./sheetCells.ts";
@@ -32,16 +32,6 @@ import { SHEET_UNREADABLE, type SheetEnd } from "./sheetScan.ts";
 import { assembleWorkbook, type SheetSource, type WorkbookReading } from "./xlsx.ts";
 
 const ROW_HIDDEN = 0x20;
-
-/** A range from zero-based bounds, as Excel writes it: `A1:F1`. */
-function rangeOf(
-  firstRow: number,
-  lastRow: number,
-  firstColumn: number,
-  lastColumn: number,
-): string {
-  return `${lettersOf(firstColumn + 1)}${String(firstRow + 1)}:${lettersOf(lastColumn + 1)}${String(lastRow + 1)}`;
-}
 
 /** Where a sheet scan is: the row being gathered, and the facts outside the cells. */
 interface SheetScan {

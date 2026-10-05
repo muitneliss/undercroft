@@ -30,7 +30,7 @@ import type { Workbook } from "./xlsx.ts";
 export const CURRENT_ROWS_VERSION = 1;
 
 /** The text methods a workbook is read by: the ones whose read also yields rows. */
-export const WORKBOOK_METHODS: readonly string[] = ["xlsx", "xls"];
+export const WORKBOOK_METHODS: readonly string[] = ["xlsx", "xls", "xlsb"];
 
 /** The delimited types read as text with rows beside it (ADR 0107), whatever their method. */
 export const TABULAR_TYPES: readonly string[] = ["text/csv", "text/tab-separated-values"];

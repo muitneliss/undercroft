@@ -45,6 +45,8 @@ const DOCUMENT_REASONS = [
   "workbook-password-protected",
   // Labelled a spreadsheet and opened by its bytes (ADR 0104): what they turned out to be.
   "xls-biff5-unsupported",
+  // No longer written: an `.xlsb` is read since ADR 0109. A row refused before keeps it until
+  // the next extract pass reads it again.
   "xlsb-unsupported",
   "workbook-not-a-workbook",
   // A file inside a zip that is not landed (ADR 0108): what the archive holds, not a fault here.
@@ -61,6 +63,7 @@ const DEPLOYMENT_REASONS = [
   "ocr-out-of-time",
   "xlsx-unreadable",
   "xls-unreadable",
+  "xlsb-unreadable",
   "docx-unreadable",
   "doc-unreadable",
   "archive-unreadable",
@@ -246,6 +249,44 @@ function aboutTheDocument(t: TFunction, code: DocumentReason): Words {
   }
 }
 
+/** An Office file whose own reader could not read it exactly: one per format, by its name. */
+function aboutAnOfficeFile(
+  t: TFunction,
+  code: Extract<DeploymentReason, `${"xls" | "xlsx" | "xlsb" | "doc" | "docx"}-unreadable`>,
+): Words {
+  switch (code) {
+    case "xlsx-unreadable":
+      return {
+        title: t("journal.reason.xlsxUnreadable"),
+        note: t("journal.reason.xlsxUnreadableNote"),
+      };
+    case "xls-unreadable":
+      return {
+        title: t("journal.reason.xlsUnreadable"),
+        note: t("journal.reason.xlsUnreadableNote"),
+      };
+    case "xlsb-unreadable":
+      return {
+        title: t("journal.reason.xlsbUnreadable"),
+        note: t("journal.reason.xlsbUnreadableNote"),
+      };
+    case "docx-unreadable":
+      return {
+        title: t("journal.reason.docxUnreadable"),
+        note: t("journal.reason.docxUnreadableNote"),
+      };
+    case "doc-unreadable":
+      return {
+        title: t("journal.reason.docUnreadable"),
+        note: t("journal.reason.docUnreadableNote"),
+      };
+    default: {
+      const exhaustive: never = code;
+      throw new Error(`unhandled office file reason ${String(exhaustive)}`);
+    }
+  }
+}
+
 function aboutTheDeployment(t: TFunction, code: DeploymentReason): Words {
   switch (code) {
     case "pdftotext-failed":
@@ -270,25 +311,11 @@ function aboutTheDeployment(t: TFunction, code: DeploymentReason): Words {
         note: t("journal.reason.ocrOutOfTimeNote"),
       };
     case "xlsx-unreadable":
-      return {
-        title: t("journal.reason.xlsxUnreadable"),
-        note: t("journal.reason.xlsxUnreadableNote"),
-      };
     case "xls-unreadable":
-      return {
-        title: t("journal.reason.xlsUnreadable"),
-        note: t("journal.reason.xlsUnreadableNote"),
-      };
+    case "xlsb-unreadable":
     case "docx-unreadable":
-      return {
-        title: t("journal.reason.docxUnreadable"),
-        note: t("journal.reason.docxUnreadableNote"),
-      };
     case "doc-unreadable":
-      return {
-        title: t("journal.reason.docUnreadable"),
-        note: t("journal.reason.docUnreadableNote"),
-      };
+      return aboutAnOfficeFile(t, code);
     case "archive-unreadable":
       return {
         title: t("journal.reason.archiveUnreadable"),
