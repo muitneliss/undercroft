@@ -17,27 +17,25 @@
  *
  * Both the Transitional and the Strict (ISO/IEC 29500 Strict) vocabularies are accepted: they
  * differ in namespace URIs, and a relationship type is matched on its last segment, which the
- * two share.
+ * two share. How a relationship is followed is `opcPackage.ts`'s, shared with the binary
+ * workbook (`xlsb.ts`); what a SpreadsheetML workbook part says is this module's.
  */
 
 import { integerOf, numberFormatsOf } from "./numberFormats.ts";
+import { OpcPackage, type PartStream, partOfType } from "./opcPackage.ts";
 import { readSharedStrings } from "./sharedStrings.ts";
 import { attributesOf, PREFIX } from "./xml.ts";
-import { readZipIndex, readZipText, type StreamEnd, streamZipText, type ZipIndex } from "./zip.ts";
 
 /**
- * Which container a workbook came from: an OOXML package, Strict or not, a BIFF8 stream, or a
- * delimited text file (ADR 0107).
+ * Which container a workbook came from: an OOXML package, Strict or not, a BIFF8 stream, a
+ * binary (BIFF12) package (ADR 0109), or a delimited text file (ADR 0107).
  */
-export type Container = "ooxml" | "ooxml-strict" | "biff8" | "csv" | "tsv";
+export type Container = "ooxml" | "ooxml-strict" | "biff8" | "xlsb" | "csv" | "tsv";
 export type SheetKind = "worksheet" | "chartsheet" | "dialogsheet" | "macrosheet";
 export type SheetState = "visible" | "hidden" | "veryHidden";
 
 /** Why a sheet's name is `null`. The only one: the package has no relationships to follow. */
 export const NAMES_UNRESOLVED = "workbook-relationships-missing";
-
-/** A part's text, opened afresh on each call and read as it inflates (`zip.ts`). */
-export type PartStream = () => AsyncGenerator<string, StreamEnd>;
 
 /** One sheet the workbook lists, in tab order, with a way to stream its part. */
 export interface SheetPart {
@@ -62,18 +60,15 @@ export interface WorkbookPackage {
   readonly numberFormat: (styleIndex: number) => string | null;
 }
 
-const ROOT_RELATIONSHIPS = "_rels/.rels";
 const CONVENTIONAL_WORKBOOK = "xl/workbook.xml";
 const CONVENTIONAL_SHARED_STRINGS = "xl/sharedStrings.xml";
 const CONVENTIONAL_STYLES = "xl/styles.xml";
 const CONVENTIONAL_SHEET = /^xl\/worksheets\/sheet(?<index>\d+)\.xml$/iu;
 
-const RELATIONSHIP = /<Relationship\b(?<attributes>[^>]*?)\/?>/gu;
 const STRICT_NAMESPACE = /purl\.oclc\.org\/ooxml\/spreadsheetml\/main/u;
 const SHEET = new RegExp(`<${PREFIX}sheet\\b(?<attributes>[^>]*?)\\/?>`, "gu");
 const WORKBOOK_PROPERTIES = new RegExp(`<${PREFIX}workbookPr\\b(?<attributes>[^>]*?)\\/?>`, "u");
 const RELATIONSHIP_ID = /^[A-Za-z_][\w.-]*:id$/u;
-const LEADING_SLASHES = /^\/+/u;
 
 /** A relationship type's last segment, which Transitional and Strict share. */
 const KIND_BY_TYPE: ReadonlyMap<string, SheetKind> = new Map([
@@ -84,108 +79,19 @@ const KIND_BY_TYPE: ReadonlyMap<string, SheetKind> = new Map([
   ["xlintlmacrosheet", "macrosheet"],
 ]);
 
+/**
+ * What kind of sheet a relationship type names, or `null` for one no sheet is. An `.xlsb`
+ * relates its sheets by the same types (`xlsb.ts`), so the one table answers both.
+ */
+export function sheetKindOf(relationshipType: string | undefined): SheetKind | null {
+  return relationshipType === undefined ? null : (KIND_BY_TYPE.get(relationshipType) ?? null);
+}
+
 const STATES: ReadonlyMap<string, SheetState> = new Map([
   ["visible", "visible"],
   ["hidden", "hidden"],
   ["veryHidden", "veryHidden"],
 ]);
-
-interface Relationship {
-  readonly type: string;
-  readonly target: string;
-}
-
-/** The parts of one package, looked up the case-insensitive way OPC names them (Part 2 §9.1.1.1). */
-class Parts {
-  readonly #bytes: Uint8Array;
-  readonly #index: ZipIndex;
-  readonly #names: ReadonlyMap<string, string>;
-
-  constructor(bytes: Uint8Array, index: ZipIndex) {
-    this.#bytes = bytes;
-    this.#index = index;
-    this.#names = new Map([...index.keys()].map((name) => [name.toLowerCase(), name]));
-  }
-
-  has(name: string): boolean {
-    return this.#names.has(name.toLowerCase());
-  }
-
-  text(name: string): string | null {
-    const actual = this.#names.get(name.toLowerCase());
-    return actual === undefined ? null : readZipText(this.#bytes, this.#index, actual);
-  }
-
-  /** A part that may be larger than `readZipText`'s ceiling, as a stream; `null` when absent. */
-  stream(name: string): PartStream | null {
-    const actual = this.#names.get(name.toLowerCase());
-    return actual === undefined
-      ? null
-      : (): AsyncGenerator<string, StreamEnd> => streamZipText(this.#bytes, this.#index, actual);
-  }
-
-  /** Every part name, as stored. */
-  names(): string[] {
-    return [...this.#names.values()];
-  }
-}
-
-function relationshipsOf(xml: string | null): ReadonlyMap<string, Relationship> {
-  const relationships = new Map<string, Relationship>();
-  for (const match of xml?.matchAll(RELATIONSHIP) ?? []) {
-    const attributes = attributesOf(match.groups?.attributes ?? "");
-    const id = attributes.get("Id");
-    const type = attributes.get("Type");
-    const target = attributes.get("Target");
-    // An external target is a URL outside the package, never one of its parts.
-    const internal = attributes.get("TargetMode") !== "External";
-    if (id !== undefined && type !== undefined && target !== undefined && internal) {
-      relationships.set(id, { type: lastSegment(type), target });
-    }
-  }
-  return relationships;
-}
-
-function lastSegment(type: string): string {
-  return (type.split("/").at(-1) ?? "").toLowerCase();
-}
-
-/** `xl/workbook.xml` → `xl/_rels/workbook.xml.rels`, where OPC keeps a part's relationships. */
-function relationshipsPartOf(part: string): string {
-  const slash = part.lastIndexOf("/");
-  return `${part.slice(0, slash + 1)}_rels/${part.slice(slash + 1)}.rels`;
-}
-
-function decodedTarget(target: string): string {
-  try {
-    return decodeURIComponent(target);
-  } catch {
-    // A malformed escape is a name containing a `%`, which is legal; keep it as written.
-    return target;
-  }
-}
-
-/** A relationship target resolved against the part that holds it, `..` and `/` included. */
-function resolve(fromPart: string, target: string): string {
-  const decoded = decodedTarget(target);
-  const base = decoded.startsWith("/") ? [] : fromPart.split("/").slice(0, -1);
-  const segments: string[] = [...base];
-  for (const segment of decoded.replace(LEADING_SLASHES, "").split("/")) {
-    if (segment === "..") {
-      segments.pop();
-    } else if (segment !== "." && segment !== "") {
-      segments.push(segment);
-    }
-  }
-  return segments.join("/");
-}
-
-function targetOf(
-  relationships: ReadonlyMap<string, Relationship>,
-  type: string,
-): string | undefined {
-  return [...relationships.values()].find((relationship) => relationship.type === type)?.target;
-}
 
 function date1904Of(workbookXml: string | null): boolean | null {
   if (workbookXml === null) {
@@ -215,14 +121,14 @@ function relationshipIdOf(attributes: ReadonlyMap<string, string>): string | und
 }
 
 /** The sheets a workbook part lists, each resolved through the workbook's relationships. */
-function listedSheets(parts: Parts, workbookPart: string, workbookXml: string): SheetPart[] {
-  const relationships = relationshipsOf(parts.text(relationshipsPartOf(workbookPart)));
+function listedSheets(parts: OpcPackage, workbookPart: string, workbookXml: string): SheetPart[] {
+  const relationships = parts.relationships(workbookPart);
   return [...workbookXml.matchAll(SHEET)].map((match, at) => {
     const attributes = attributesOf(match.groups?.attributes ?? "");
     const id = relationshipIdOf(attributes);
     const relationship = id === undefined ? undefined : relationships.get(id);
-    const kind = relationship === undefined ? null : (KIND_BY_TYPE.get(relationship.type) ?? null);
-    const part = relationship === undefined ? null : resolve(workbookPart, relationship.target);
+    const kind = sheetKindOf(relationship?.type);
+    const part = relationship?.part ?? null;
     return {
       index: at + 1,
       name: attributes.get("name") ?? null,
@@ -235,7 +141,7 @@ function listedSheets(parts: Parts, workbookPart: string, workbookXml: string): 
 }
 
 /** Excel's own part names, for a package that carries no relationships to follow. */
-function conventionalSheets(parts: Parts): SheetPart[] {
+function conventionalSheets(parts: OpcPackage): SheetPart[] {
   const found = parts
     .names()
     .map((name) => ({ name, at: integerOf(CONVENTIONAL_SHEET.exec(name)?.groups?.index) }))
@@ -259,23 +165,23 @@ interface Located {
   readonly styles: string | null;
 }
 
-function viaRelationships(parts: Parts, workbookPart: string): Located | null {
+function viaRelationships(parts: OpcPackage, workbookPart: string): Located | null {
   const workbookXml = parts.text(workbookPart);
   if (workbookXml === null) {
     return null;
   }
-  const relationships = relationshipsOf(parts.text(relationshipsPartOf(workbookPart)));
-  const shared = targetOf(relationships, "sharedstrings");
-  const styles = targetOf(relationships, "styles");
+  const relationships = parts.relationships(workbookPart);
+  const shared = partOfType(relationships, "sharedstrings");
+  const styles = partOfType(relationships, "styles");
   return {
     workbookXml,
     sheets: listedSheets(parts, workbookPart, workbookXml),
-    sharedStrings: shared === undefined ? null : parts.stream(resolve(workbookPart, shared)),
-    styles: styles === undefined ? null : parts.text(resolve(workbookPart, styles)),
+    sharedStrings: shared === undefined ? null : parts.stream(shared),
+    styles: styles === undefined ? null : parts.text(styles),
   };
 }
 
-function viaConventionalNames(parts: Parts): Located {
+function viaConventionalNames(parts: OpcPackage): Located {
   return {
     workbookXml: parts.text(CONVENTIONAL_WORKBOOK),
     sheets: conventionalSheets(parts),
@@ -290,14 +196,10 @@ function viaConventionalNames(parts: Parts): Located {
  * an empty spreadsheet, and the caller records each as a reason (`CLAUDE.md` rule 2).
  */
 export async function openWorkbookPackage(bytes: Uint8Array): Promise<WorkbookPackage | null> {
-  const parts = new Parts(bytes, readZipIndex(bytes));
-  const office = parts.has(ROOT_RELATIONSHIPS)
-    ? targetOf(relationshipsOf(parts.text(ROOT_RELATIONSHIPS)), "officedocument")
-    : undefined;
+  const parts = new OpcPackage(bytes);
+  const office = parts.mainPart();
   const located =
-    office === undefined
-      ? viaConventionalNames(parts)
-      : viaRelationships(parts, resolve("", office));
+    office === undefined ? viaConventionalNames(parts) : viaRelationships(parts, office);
   if (located === null || located.sheets.length === 0) {
     return null;
   }

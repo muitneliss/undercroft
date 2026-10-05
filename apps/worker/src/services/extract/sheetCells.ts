@@ -16,7 +16,7 @@ import { attributesOf, decodeXmlText, PREFIX } from "./xml.ts";
 
 /** Excel's last row and last column (XFD), and its longest cell. ECMA-376 Part 1 §18.3.1. */
 export const MAX_ROW = 1_048_576;
-const MAX_COLUMN = 16_384;
+export const MAX_COLUMN = 16_384;
 export const MAX_CELL_CHARS = 32_767;
 
 /** Why a sheet's scan ended early. Each is a fact about the file, named for the operator. */
@@ -95,6 +95,19 @@ export function lettersOf(column: number): string {
     letters = String.fromCodePoint(A_CODE + ((rest - 1) % LETTERS)) + letters;
   }
   return letters;
+}
+
+/**
+ * A range from zero-based, inclusive bounds, as Excel writes it: `A1:F1`. The binary workbooks
+ * (`biff8.ts`, `xlsbSheet.ts`) state their used range and merged ranges as numbers.
+ */
+export function rangeOf(
+  firstRow: number,
+  lastRow: number,
+  firstColumn: number,
+  lastColumn: number,
+): string {
+  return `${lettersOf(firstColumn + 1)}${String(firstRow + 1)}:${lettersOf(lastColumn + 1)}${String(lastRow + 1)}`;
 }
 
 /**

@@ -134,7 +134,7 @@ view, not ephemeral.
 
 ## A workbook's rows
 
-Every `.xlsx`, `.xlsm`, `.xls`, Google Sheet and CSV that lands is read into rows (a CSV as one
+Every `.xlsx`, `.xlsm`, `.xls`, `.xlsb`, Google Sheet and CSV that lands is read into rows (a CSV as one
 sheet with no name, by RFC 4180: a semicolon-separated file arrives as one column to split). A
 workbook inside a zip is a document of its own: `metadata->>'archiveDocumentId'` names the
 archive it came from. Nothing is decided for you: no header is chosen, no column named, no type inferred. Every cell is the string the file
