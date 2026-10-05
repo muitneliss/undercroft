@@ -8,9 +8,9 @@
  * authors no Python (`CLAUDE.md`, "Language and runtime"). A npm zip library is a supply-chain
  * surface for the ~120 lines below, in the one process that holds `UNDERCROFT_SECRET_KEY`.
  *
- * SO THIS IS DELIBERATELY NOT A ZIP LIBRARY. It reads members by exact name out of a
- * single-disk archive and does nothing else: no writing, no directory traversal, no streaming,
- * no encryption, no zip64. Each of those is a shape an OOXML part never has, and the way an
+ * SO THIS IS DELIBERATELY NOT A ZIP LIBRARY. It reads members out of a single-disk archive --
+ * by exact name for OOXML, or as the directory lists them for an archive read for what it holds
+ * (ADR 0108) -- and does nothing else: no writing, no path resolution, no decryption, no zip64. Each of those is a shape an OOXML part never has, and the way an
  * unused branch earns a CVE is by existing.
  *
  * IT REFUSES RATHER THAN GUESSES (`CLAUDE.md` rule 2). Every read that cannot be trusted --
@@ -55,14 +55,24 @@ const ZIP64_SENTINEL = 0xff_ff_ff_ff;
  */
 export const MAX_MEMBER_BYTES = 32 * 1024 * 1024;
 
-interface Member {
+export interface Member {
   readonly method: number;
   readonly compressedBytes: number;
+  /** What the central directory says the member inflates to. A claim, checked by inflating. */
+  readonly uncompressedBytes: number;
   readonly localOffset: number;
+  /** Its stored bytes are ciphertext, which a stored member would otherwise pass off as itself. */
+  readonly encrypted: boolean;
 }
 
 /** Members by name, in central-directory order. Empty when this is not a readable archive. */
 export type ZipIndex = ReadonlyMap<string, Member>;
+
+/** One member as the central directory lists it. */
+export interface ListedMember {
+  readonly name: string;
+  readonly member: Member;
+}
 
 function viewOf(bytes: Uint8Array): DataView {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -84,51 +94,81 @@ function findEndRecord(view: DataView): number | null {
   return null;
 }
 
-/**
- * Index the archive's members, or hand back an empty map.
- *
- * Empty rather than a throw because "these bytes are not a zip" is an ordinary answer about a
- * document -- a `.xlsx` that is really an HTML error page saved under the wrong name is a
- * thing a sync collects -- and the caller already has a column to record it in.
- */
-export function readZipIndex(bytes: Uint8Array): ZipIndex {
-  const members = new Map<string, Member>();
+/** The central directory walked: every entry that parsed, and whether that was all of them. */
+interface Directory {
+  readonly listed: ListedMember[];
+  readonly exact: boolean;
+}
+
+function walkDirectory(bytes: Uint8Array): Directory {
+  const listed: ListedMember[] = [];
   if (bytes.byteLength < EOCD_BYTES) {
-    return members;
+    return { listed, exact: false };
   }
 
   const view = viewOf(bytes);
   const end = findEndRecord(view);
   if (end === null) {
-    return members;
+    return { listed, exact: false };
   }
 
   const count = view.getUint16(end + 10, true);
   let at = view.getUint32(end + 16, true);
   if (at === ZIP64_SENTINEL) {
-    return members; // Zip64. Not a shape an OOXML part has; refused rather than guessed at.
+    return { listed, exact: false }; // Zip64: refused rather than guessed at.
   }
 
   const names = new TextDecoder("utf-8");
   for (let seen = 0; seen < count; seen += 1) {
     if (at + CENTRAL_BYTES > view.byteLength || view.getUint32(at, true) !== CENTRAL_SIGNATURE) {
-      return members; // Truncated or not where the end record said. Keep what already parsed.
+      return { listed, exact: false }; // Truncated or not where the end record said.
     }
     const nameBytes = view.getUint16(at + 28, true);
     const extraBytes = view.getUint16(at + 30, true);
     const commentBytes = view.getUint16(at + 32, true);
     const name = names.decode(bytes.subarray(at + CENTRAL_BYTES, at + CENTRAL_BYTES + nameBytes));
 
-    members.set(name, {
-      method: view.getUint16(at + 10, true),
-      compressedBytes: view.getUint32(at + 20, true),
-      localOffset: view.getUint32(at + 42, true),
+    listed.push({
+      name,
+      member: {
+        method: view.getUint16(at + 10, true),
+        compressedBytes: view.getUint32(at + 20, true),
+        uncompressedBytes: view.getUint32(at + 24, true),
+        localOffset: view.getUint32(at + 42, true),
+        // General-purpose flag bit 0, the low bit: an odd flags word is an encrypted member.
+        encrypted: view.getUint16(at + 8, true) % 2 === 1,
+      },
     });
 
     at += CENTRAL_BYTES + nameBytes + extraBytes + commentBytes;
   }
 
-  return members;
+  return { listed, exact: true };
+}
+
+/**
+ * Index the archive's members, or hand back an empty map.
+ *
+ * Empty rather than a throw because "these bytes are not a zip" is an ordinary answer about a
+ * document -- a `.xlsx` that is really an HTML error page saved under the wrong name is a
+ * thing a sync collects -- and the caller already has a column to record it in. A directory
+ * that breaks off part-way keeps what already parsed: an OOXML reader asks for named parts and
+ * says which one is missing.
+ */
+export function readZipIndex(bytes: Uint8Array): ZipIndex {
+  return new Map(walkDirectory(bytes).listed.map(({ name, member }) => [name, member]));
+}
+
+/**
+ * Every member in central-directory order, or `null` unless the WHOLE directory was read.
+ *
+ * Stricter than {@link readZipIndex} on purpose: an archive is read for what it holds, and a
+ * directory that broke off part-way would present the members before the break as all of
+ * them (ADR 0108 decision 5).
+ */
+export function readZipListing(bytes: Uint8Array): readonly ListedMember[] | null {
+  const directory = walkDirectory(bytes);
+  return directory.exact ? directory.listed : null;
 }
 
 /** Where a member's stored bytes are, or `null` when the archive does not hold them exactly. */
@@ -155,7 +195,7 @@ function memberData(bytes: Uint8Array, member: Member): Uint8Array | null {
  * copies are the ones carried in `Member`.
  */
 export function readZipMember(bytes: Uint8Array, member: Member): Uint8Array | null {
-  const raw = memberData(bytes, member);
+  const raw = member.encrypted ? null : memberData(bytes, member);
   if (raw === null) {
     return null;
   }
@@ -234,7 +274,7 @@ export async function* streamZipText(
   maxBytes: number = MAX_STREAMED_BYTES,
 ): AsyncGenerator<string, StreamEnd> {
   const member = index.get(name);
-  const raw = member === undefined ? null : memberData(bytes, member);
+  const raw = member === undefined || member.encrypted ? null : memberData(bytes, member);
   if (
     member === undefined ||
     raw === null ||

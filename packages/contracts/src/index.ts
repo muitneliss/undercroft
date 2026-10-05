@@ -85,6 +85,8 @@ export {
   GENERIC_MIME_TYPES,
   isPlausibleFileChoice,
   landedType,
+  type MemberType,
+  memberTypeOf,
   mimeTypesOf,
   normalizeFileChoice,
 } from "./fileMatching.ts";

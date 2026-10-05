@@ -165,6 +165,30 @@ export function landedType(file: DescribedFile): string {
   return format?.landsAs ?? file.mimeType;
 }
 
+/** What a file inside an archive is catalogued as, and whether it is itself an archive. */
+export interface MemberType {
+  readonly type: string;
+  readonly archive: boolean;
+}
+
+/**
+ * The type a file inside an archive is catalogued under, or `null` when it is left there.
+ *
+ * A member has no declared type -- no provider handed it over -- so its name is the only label
+ * it has, and the MIME-first rule above has nothing to ask first: its extension must name a
+ * format here. `archive` says the member is one too, which the worker refuses rather than
+ * expands (ADR 0108 decisions 3 and 5).
+ */
+export function memberTypeOf(name: string): MemberType | null {
+  const extension = extensionOf(name);
+  const format =
+    extension === null ? undefined : FILE_FORMATS.find((f) => f.extensions.includes(extension));
+  const type = format?.landsAs ?? format?.mimeTypes[0];
+  return format === undefined || type === undefined
+    ? null
+    : { type, archive: format.reads === "members" };
+}
+
 /** The type a Google-native file is exported as, or `null` for a file that downloads as itself. */
 export function exportTypeOf(mimeType: string): string | null {
   const type = bareType(mimeType);

@@ -25,7 +25,7 @@ describe("describeFileType", () => {
   });
 
   it("a type outside the curated list keeps its raw MIME type", () => {
-    expect(describeFileType(en, "application/zip")).toBe("application/zip");
+    expect(describeFileType(en, "application/vnd.rar")).toBe("application/vnd.rar");
   });
 });
 

@@ -1130,6 +1130,7 @@ export const vi = {
     fileTypeXml: "XML, gồm báo cáo XBRL (.xml)",
     fileTypeJson: "JSON",
     fileTypeOpenAttestation: "Hồ sơ OpenAttestation có chữ ký số (.oa)",
+    fileTypeZip: "Tệp nén Zip (.zip), đọc từng tệp bên trong",
     fileTypeJpeg: "Ảnh JPEG",
     fileTypePng: "Ảnh PNG",
     fileTypeWebp: "Ảnh WebP",
@@ -1312,6 +1313,20 @@ export const vi = {
       workbookNotAWorkbook: "Mang nhãn bảng tính nhưng không phải bảng tính",
       workbookNotAWorkbookNote:
         "Tệp đến với loại Excel, nhưng nội dung là thứ khác — một tài liệu, một hình ảnh hoặc một bản tải về bị hỏng. Tệp vẫn được lưu nguyên vẹn.",
+      archiveUnreadable: "Không đọc được danh sách tệp trong tệp nén",
+      archiveUnreadableNote:
+        "Tệp nén có thể hỏng, hoặc là tệp zip64 mà chưa có trình đọc nào ở đây mở được. Tệp gốc vẫn được lưu nguyên vẹn.",
+      archiveMemberEncrypted: "Một tệp trong tệp nén có mật khẩu",
+      archiveMemberEncryptedNote:
+        "Tệp nén vẫn được lưu nguyên vẹn. Muốn đọc tệp này, hãy xin người gửi bản không đặt mật khẩu.",
+      archiveMemberUnreadable: "Không giải nén được một tệp trong tệp nén",
+      archiveMemberUnreadableNote:
+        "Tệp được nén bằng phương thức chưa có trình đọc nào ở đây hỗ trợ, hoặc dữ liệu bị hỏng.",
+      archiveNested: "Tệp nén nằm trong tệp nén, không giải nén",
+      archiveNestedNote: "Chỉ giải nén một cấp. Muốn đọc, hãy gửi riêng tệp nén bên trong.",
+      archiveMembersLimit: "Vượt quá 1.000 tệp đọc từ một tệp nén",
+      archiveMembersLimitNote:
+        "Tệp nén vẫn được lưu nguyên vẹn; các tệp sau 1.000 tệp đầu không được đọc.",
       docxUnreadable: "Không mở được tài liệu Word",
       docxUnreadableNote: "Tệp .docx có thể hỏng.",
       docUnreadable: "Không mở được tài liệu Word",

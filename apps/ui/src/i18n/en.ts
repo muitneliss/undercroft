@@ -916,6 +916,7 @@ export const en = {
     fileTypeXml: "XML, including XBRL filings (.xml)",
     fileTypeJson: "JSON",
     fileTypeOpenAttestation: "Signed OpenAttestation record (.oa)",
+    fileTypeZip: "Zip archive (.zip), its files read one by one",
     fileTypeJpeg: "JPEG image",
     fileTypePng: "PNG image",
     fileTypeWebp: "WebP image",
@@ -1074,6 +1075,21 @@ export const en = {
       workbookNotAWorkbook: "Labelled a spreadsheet, but is not one",
       workbookNotAWorkbookNote:
         "The file arrived with an Excel type, but its bytes are something else — a document, a picture or a broken download. It is kept intact.",
+      archiveUnreadable: "Could not read the zip archive's list of files",
+      archiveUnreadableNote:
+        "The archive may be corrupt, or it is a zip64 archive, which no reader here opens. The original is kept intact.",
+      archiveMemberEncrypted: "A file in the archive is password-protected",
+      archiveMemberEncryptedNote:
+        "The archive is kept intact. To read this file, ask the sender for an unlocked copy.",
+      archiveMemberUnreadable: "Could not unpack a file from the archive",
+      archiveMemberUnreadableNote:
+        "It is compressed by a method no reader here implements, or its data is corrupt.",
+      archiveNested: "An archive inside an archive, not unpacked",
+      archiveNestedNote:
+        "Only one level is unpacked. To read it, send the inner archive on its own.",
+      archiveMembersLimit: "Past the 1,000 files read from one archive",
+      archiveMembersLimitNote:
+        "The archive is kept intact; the files after the first 1,000 are not read.",
       docxUnreadable: "Could not open the Word document",
       docxUnreadableNote: "The .docx file may be corrupt.",
       docUnreadable: "Could not open the Word document",

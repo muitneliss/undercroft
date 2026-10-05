@@ -15,6 +15,7 @@ The reading level describes what becomes searchable text, and, for `table`, what
 | `text`        | The words are extracted in reading order.                                                     |
 | `table`       | Each sheet's rows are read into `raw.document_rows`, every cell under its column letter.      |
 | `ocr`         | The file is a picture; `tesseract` reads it in Vietnamese and English.                        |
+| `members`     | The file is an archive; each file inside it lands as a document of its own and is read.       |
 | `metadata`    | The file lands and is catalogued, but nothing reads its content. A named refusal is recorded. |
 
 ## How a file is matched to a chosen type
@@ -57,8 +58,10 @@ that the file is treated as a spreadsheet. Its bytes decide how it is opened.
 | Anything else                                                     | Refused as `workbook-not-a-workbook`     |
 
 A file labelled `application/octet-stream` or as a zip is read as a workbook only when its
-content-types part names one; otherwise it stays `unsupported-content-type`. The name of a file
-is never consulted when it is read.
+content-types part names one. Otherwise a file labelled as a zip is read as an archive (see
+"Zip archive" below), and so is an `application/octet-stream` file that is a zip with no
+content-types part; anything else stays `unsupported-content-type`. The name of a file is
+never consulted when it is read.
 
 When an admin chooses a spreadsheet extension, such as `.xlsx`, an `application/octet-stream`
 file with that name is filed under that format's type, so it is read as the workbook it is.
@@ -100,7 +103,7 @@ never listed, so a widened choice finds it as a new file.
 
 ## What is not offered
 
-ZIP and RAR archives, HEIC and TIFF images are not offered. The worker has no reader for them,
+RAR and 7z archives, HEIC and TIFF images are not offered. The worker has no reader for them,
 and offering a type that lands but cannot be read would promise something it does not do. A
 file of any type still lands when the admin chooses "every file type". If the worker has no
 reader for it, it is recorded with the refusal `unsupported-content-type`, and the document's
@@ -453,6 +456,44 @@ ADR 0081.
 A verification whose DNS lookup failed is not retried until the worker's reader version is next
 raised.
 
+### Zip archive (.zip)
+
+- Choice: `application/zip`
+- Extensions: `.zip`
+- Specification: <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT>
+- Reads: `members`
+
+A zip is read for the files it holds. Gmail also sends one as `application/x-zip-compressed`,
+which is read the same way. To admit a zip that Gmail calls `application/octet-stream`, also
+choose the extension `.zip`; it then lands as `application/zip`.
+
+The archive's own text is empty: it has no words, and its files' names stay in the lake manifest.
+Each file inside it whose extension names a format on this page lands as a document of its own:
+
+- Its id is the archive's id, a slash, and its position in the archive (`19a2f:004/2`).
+- It is filed under that format's type and read on the next extract pass. A workbook in an
+  archive reaches `raw.document_rows` like any other.
+- Its `metadata` holds `archiveDocumentId` and `archiveMember`, which is how a model joins it
+  back to the archive.
+- Its files are read whatever file types the scope chose, because choosing archives is choosing
+  what is inside them.
+
+A file whose extension names no format here is left in the archive. So are folders and the
+`__MACOSX/` resource forks macOS writes. The pass's ledger refuses, against the file's own id:
+
+- `archive-member-encrypted`: the file is password-protected.
+- `archive-member-unreadable`: it is compressed by a method other than deflate, or its data is
+  corrupt.
+- `archive-nested`: it is an archive itself. Only one level is unpacked.
+- `archive-members-limit`: it comes after the first 1,000 files.
+
+A file larger than 25 MiB is refused unfetched, as any document is. An archive whose list of
+files cannot be read whole, such as a zip64 archive, a truncated one or a file that is no zip at
+all, is refused as `archive-unreadable` rather than read as holding fewer files. A zip holding a
+`[Content_Types].xml` part is a package in a format of its own, such as a `.docx` or an `.xlsb`,
+and is never unpacked: it is read as the workbook it is, or stays `unsupported-content-type`.
+[ADR 0108](../adr/0108-an-archive-is-read-into-the-documents-it-holds.md) records why.
+
 ### JPEG image
 
 - Choice: `image/jpeg`
@@ -493,7 +534,7 @@ with WebP support. If that support is ever missing, each WebP file is refused as
 
 ## A workbook's rows
 
-An `.xlsx`, an `.xlsm`, an `.xls`, a Google Sheet and a CSV are read into two tables a tenant's dbt models select
+An `.xlsx`, an `.xlsm`, an `.xls`, a Google Sheet and a CSV, alone or inside a zip, are read into two tables a tenant's dbt models select
 through `source('undercroft', ...)`. Both are keyed by the digest of the file's bytes, so one file
 attached to ten messages is one set of rows; join `raw.documents.sha256` to reach it.
 [ADR 0104](../adr/0104-every-workbook-is-landed-as-rows.md) records why.

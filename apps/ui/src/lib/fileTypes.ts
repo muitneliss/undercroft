@@ -47,6 +47,7 @@ const FILE_TYPE_KEY: Record<
   | "scope.fileTypeXml"
   | "scope.fileTypeJson"
   | "scope.fileTypeOpenAttestation"
+  | "scope.fileTypeZip"
   | "scope.fileTypeJpeg"
   | "scope.fileTypePng"
   | "scope.fileTypeWebp"
@@ -72,6 +73,7 @@ const FILE_TYPE_KEY: Record<
   xml: "scope.fileTypeXml",
   json: "scope.fileTypeJson",
   openAttestation: "scope.fileTypeOpenAttestation",
+  zip: "scope.fileTypeZip",
   jpeg: "scope.fileTypeJpeg",
   png: "scope.fileTypePng",
   webp: "scope.fileTypeWebp",
