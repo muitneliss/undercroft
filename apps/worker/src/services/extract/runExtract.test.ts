@@ -251,6 +251,46 @@ async function seedStaleRows(sha256: string): Promise<void> {
   );
 }
 
+describe("a workbook whose text passes the ceiling", () => {
+  it("is read to its last row by the tenant's own model, while its text says it was cut (#385)", async () => {
+    // Two thousand rows of 600 characters is 1.2M: past `MAX_TEXT_CHARS`. The text a search
+    // index holds is capped and says so; the rows a model selects are whole, and the sheet
+    // says that too. The query is the one a model compiles: the source tables, as the tenant.
+    const filler = "x".repeat(600);
+    const sheet = Array.from(
+      { length: 2000 },
+      (_, at) =>
+        `<row r="${String(at + 1)}"><c r="A${String(at + 1)}" t="inlineStr"><is><t>${filler}</t></is></c>` +
+        `<c r="B${String(at + 1)}"><v>${String(at + 1)}.10</v></c></row>`,
+    ).join("");
+    const bytes = zipOf([
+      {
+        name: "xl/worksheets/sheet1.xml",
+        body: `<worksheet><sheetData>${sheet}</sheetData></worksheet>`,
+      },
+    ]);
+    await landDocument({ documentId: "big", bytes, contentType: XLSX_TYPE });
+    await extract(spawnAnswering(""));
+    await db.asSuperuser((tx) => tx.query("SELECT ops.provision_tenant($1)", [TENANT]));
+
+    const seen = await db.asRole("undercroft_dbt_case_0042", (tx) =>
+      tx.query<{ row_number: number; amount: string; complete: boolean; truncated: boolean }>(
+        `SELECT r.row_number, r.cells ->> 'B' AS amount, s.complete, t.truncated
+           FROM raw.documents d
+           JOIN raw.document_text t USING (source, tenant_id, document_id)
+           JOIN raw.document_sheets s ON s.tenant_id = d.tenant_id AND s.sha256 = d.sha256
+           JOIN raw.document_rows r
+             ON r.tenant_id = s.tenant_id AND r.sha256 = s.sha256 AND r.sheet_index = s.sheet_index
+          ORDER BY r.row_number DESC LIMIT 1`,
+      ),
+    );
+
+    expect(seen.rows).toEqual([
+      { row_number: 2000, amount: "2000.10", complete: true, truncated: true },
+    ]);
+  });
+});
+
 describe("a workbook read before its rows existed", () => {
   it("makes its scope due when it is the only work there is", async () => {
     const sha = await landDocument({

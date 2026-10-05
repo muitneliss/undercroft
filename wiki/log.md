@@ -292,3 +292,5 @@
 ## [2026-10-05] ingest | ADR 0105 A Model Carries One Business Context, Reviewed Against Its Definition
 ## [2026-10-05] ingest | Architecture
 ## [2026-10-05] ingest | Runbook: Agent skills
+## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
+## [2026-10-05] ingest | Runbook Deployment

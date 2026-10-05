@@ -416,8 +416,8 @@ release's flow. There is nothing to upload by hand; a flow that is only on the s
 drift the next deploy reverts. There are three flows. `ingest_due` asks the worker every five
 minutes which (customer, source) pairs are due — by a preset cadence or a custom cron
 expression read in Singapore time (ADR 0059) — and starts each. `extract_due` asks hourly, at
-:07, which pairs hold landed documents not yet read into `raw.document_text`, and starts an
-extract run for each. `semantic_due` asks every thirty minutes, at :22 and :52, which pairs hold
+:07, which pairs hold landed documents not yet read into `raw.document_text`, or workbooks
+read before their rows existed (ADR 0104), and starts an extract run for each. `semantic_due` asks every thirty minutes, at :22 and :52, which pairs hold
 texts with no answer to the customer's published catalogue of document kinds, and starts a
 semantic run for each (ADR 0085); with no `UNDERCROFT_TYPESAFE_API_KEY` on the worker it is
 answered an empty list and starts nothing. A pair already running is a 409 every flow ignores.

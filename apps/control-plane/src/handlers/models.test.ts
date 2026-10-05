@@ -183,6 +183,8 @@ describe("models.build", () => {
       "parse_amount",
       "generate_schema_name",
       "gmail_letters",
+      "excel_serial_date",
+      "excel_serial_timestamp",
     ]);
   });
 });
