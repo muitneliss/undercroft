@@ -33,6 +33,9 @@ const FILE_TYPE_KEY: Record<
   | "scope.fileTypeXlsx"
   | "scope.fileTypeXlsm"
   | "scope.fileTypeXls"
+  | "scope.fileTypeXltx"
+  | "scope.fileTypeXltm"
+  | "scope.fileTypeXlsb"
   | "scope.fileTypeGoogleSheet"
   | "scope.fileTypeGoogleSlides"
   | "scope.fileTypeCsv"
@@ -55,6 +58,9 @@ const FILE_TYPE_KEY: Record<
   xlsx: "scope.fileTypeXlsx",
   xlsm: "scope.fileTypeXlsm",
   xls: "scope.fileTypeXls",
+  xltx: "scope.fileTypeXltx",
+  xltm: "scope.fileTypeXltm",
+  xlsb: "scope.fileTypeXlsb",
   googleSheet: "scope.fileTypeGoogleSheet",
   googleSlides: "scope.fileTypeGoogleSlides",
   csv: "scope.fileTypeCsv",

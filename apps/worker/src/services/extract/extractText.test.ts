@@ -12,15 +12,13 @@ import { describe, expect, test as it } from "bun:test";
 import { FILE_FORMATS } from "@undercroft/contracts";
 
 import type { Spawn } from "../transform.ts";
+import { type Extracted, MAX_TEXT_CHARS, UNSUPPORTED_TYPE } from "./extracted.ts";
 import {
   EMPTY_SOURCE,
   extractDocument,
-  type Extracted,
-  MAX_TEXT_CHARS,
   normalizeText,
   PDF_PASSWORD_PROTECTED,
   TEXT_LAYER_ROUTING_CHARS,
-  UNSUPPORTED_TYPE,
 } from "./extractText.ts";
 // Running a child program, and what an absent one is called, moved to their own module when
 // the OCR reader came to need them too -- the assertions below are unchanged.

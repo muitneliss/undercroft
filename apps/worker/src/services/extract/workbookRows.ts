@@ -18,7 +18,7 @@ import {
   rewriteWorkbookText,
 } from "../../repos/workbookBacklog.ts";
 import type { Transactor } from "../runTypes.ts";
-import type { Extracted } from "./extractText.ts";
+import type { Extracted } from "./extracted.ts";
 import type { Workbook } from "./xlsx.ts";
 
 /**

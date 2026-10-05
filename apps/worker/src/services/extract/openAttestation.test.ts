@@ -22,7 +22,8 @@ import {
   wrapDocument,
 } from "@tradetrust-tt/tradetrust";
 
-import { extractDocument, type Extracted } from "./extractText.ts";
+import type { Extracted } from "./extracted.ts";
+import { extractDocument } from "./extractText.ts";
 import { OA_UNSUPPORTED_ISSUER, OA_UNSUPPORTED_VERSION } from "./openAttestation.ts";
 import {
   OA_IDENTITY_INVALID,

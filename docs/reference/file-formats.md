@@ -37,6 +37,33 @@ octet-stream file whose name does not match is not landed.
 
 The picker's free-text field accepts either a MIME type (`image/png`) or an extension (`.oa`).
 
+## A spreadsheet is opened by what it is
+
+A provider's label is often wrong for a spreadsheet. Outlook sends an `.xlsx` as
+`application/vnd.ms-excel`, a web export saves an HTML table as `.xls`, and Gmail calls a file it
+does not recognise `application/octet-stream`. So for every Excel type, the label decides only
+that the file is treated as a spreadsheet. Its bytes decide how it is opened.
+[ADR 0104](../adr/0104-every-workbook-is-landed-as-rows.md) records why.
+
+| What the bytes are                                                | What happens                             |
+| ----------------------------------------------------------------- | ---------------------------------------- |
+| A zip whose own content-types part names a workbook or a template | Read as a workbook                       |
+| A zip whose content-types part names an `.xlsb`                   | Refused as `xlsb-unsupported`            |
+| A zip whose content-types part names a document or a presentation | Refused as `workbook-not-a-workbook`     |
+| A compound file holding an Excel 97–2003 workbook                 | Refused as `legacy-xls-unsupported`      |
+| A compound file holding an Excel 5/95 workbook                    | Refused as `xls-biff5-unsupported`       |
+| A compound file holding an encrypted package (a password was set) | Refused as `workbook-password-protected` |
+| HTML or SpreadsheetML markup                                      | Read as a web page's text                |
+| Anything else                                                     | Refused as `workbook-not-a-workbook`     |
+
+A file labelled `application/octet-stream` or as a zip is read as a workbook only when its
+content-types part names one; otherwise it stays `unsupported-content-type`. The name of a file
+is never consulted when it is read.
+
+When an admin chooses a spreadsheet extension, such as `.xlsx`, an `application/octet-stream`
+file with that name is filed under that format's type, so it is read as the workbook it is.
+Choosing the MIME type alone still does not admit such a file by its name.
+
 ## When the choice changes
 
 A Gmail run does not fetch a message it already holds, with one exception. When a message is
@@ -170,6 +197,39 @@ spellings match.
 This is the binary workbook format from before 2007. It is refused as `legacy-xls-unsupported`:
 it shares its container with `.doc`, but its cells are stored in a second format, BIFF, and no
 reader for that has been written.
+
+A file labelled `.xls` is often something else, and it is read as what its bytes say it is
+(see "A spreadsheet is opened by what it is" below). An `.xlsx` sent under this label is read as
+a workbook. An HTML table saved under an Excel name is read as a web page's text.
+
+### Excel template (.xltx)
+
+- Choice: `application/vnd.openxmlformats-officedocument.spreadsheetml.template`
+- Extensions: `.xltx`
+- Specification: <https://ecma-international.org/publications-and-standards/standards/ecma-376/>
+- Reads: `table`
+
+It is the same package as an `.xlsx` with a template's main part, and its sheets are read the
+same way.
+
+### Macro-enabled Excel template (.xltm)
+
+- Choice: `application/vnd.ms-excel.template.macroenabled.12`
+- Extensions: `.xltm`
+- Specification: <https://ecma-international.org/publications-and-standards/standards/ecma-376/>
+- Reads: `table`
+
+It is read as an `.xltx` is, and its macros are never run.
+
+### Excel binary workbook (.xlsb)
+
+- Choice: `application/vnd.ms-excel.sheet.binary.macroenabled.12`
+- Extensions: `.xlsb`
+- Specification: <https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xlsb/>
+- Reads: `metadata`
+
+Its package is a zip like an `.xlsx`, but each sheet is stored in a binary record format, and
+no reader for that has been written. It is refused as `xlsb-unsupported`.
 
 ### Google Sheets
 

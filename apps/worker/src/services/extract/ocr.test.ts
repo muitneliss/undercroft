@@ -20,7 +20,8 @@ import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 
 import type { Spawn } from "../transform.ts";
-import { type Extracted, extractDocument } from "./extractText.ts";
+import type { Extracted } from "./extracted.ts";
+import { extractDocument } from "./extractText.ts";
 import {
   IMAGE_TOO_SMALL,
   OCR_FOUND_NOTHING,
