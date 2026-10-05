@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.64.0](https://github.com/muitneliss/undercroft/compare/v1.63.0...v1.64.0) (2026-10-05)
+
+
+### Features
+
+* **worker:** a CSV is read into rows by the grammar its type names (ADR 0107) ([#395](https://github.com/muitneliss/undercroft/issues/395)) ([b8ce349](https://github.com/muitneliss/undercroft/commit/b8ce3498ffe4d587a43dca83ce2cfb5ca3a24a1d))
+* **worker:** a zip is read into the documents it holds (ADR 0108) ([#397](https://github.com/muitneliss/undercroft/issues/397)) ([c4325aa](https://github.com/muitneliss/undercroft/commit/c4325aa7e2fc33ae680aace1fe110e07217a429c))
+* **worker:** an Excel binary workbook is read into the same rows (ADR 0109) ([#398](https://github.com/muitneliss/undercroft/issues/398)) ([bd72943](https://github.com/muitneliss/undercroft/commit/bd729437b8eeeed86ec5397932708203d48ae439))
+
 ## [1.63.0](https://github.com/muitneliss/undercroft/compare/v1.62.0...v1.63.0) (2026-10-05)
 
 
