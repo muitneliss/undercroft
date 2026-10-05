@@ -144,6 +144,9 @@ export const EFFECTS: EffectTable = {
   "models.save": "write",
   "models.build": "write",
   "models.delete": "destructive",
+  // Approving a context is a person's decision about what a model means. It changes no SQL,
+  // but an agent with only a read grant must not be able to make it.
+  "models.setContext": "write",
 
   // As `models.check`: a POST for the text, reading only the tenant's names. Deleting a macro
   // deletes text the customer wrote, like deleting a model (ADR 0086).

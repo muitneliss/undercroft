@@ -74,8 +74,12 @@ export const procedureSentences: SentenceTable = {
     "Khởi tạo các loại đầu tiên của catalogue từ một mẫu tài liệu của khách hàng, như một lần chạy; không publish gì. Quản trị.",
   "documentKinds.publish":
     "Publish bản nháp catalogue, để mọi tài liệu được phân loại lại theo nó. Quản trị.",
-  "models.list": "Các mô hình dbt của khách hàng.",
-  "models.get": "Một mô hình dbt và SQL của nó.",
+  "models.list":
+    "Các mô hình dbt của khách hàng, mỗi mô hình kèm trạng thái ngữ cảnh nghiệp vụ (incomplete, needs_review, current) và lý do.",
+  "models.get":
+    "Một mô hình dbt: SQL, kiểm thử, lần dựng gần nhất, và ngữ cảnh nghiệp vụ đã duyệt kèm trạng thái, những gì đã đổi từ khi duyệt và basis để duyệt lại.",
+  "models.setContext":
+    "Duyệt và lưu ngữ cảnh nghiệp vụ của một mô hình, kèm basis lấy từ models.get; từ chối nếu định nghĩa đã đổi từ lúc đọc. Không chạy gì. Quản trị.",
   "models.save": "Lưu một mô hình dbt; không chạy gì. Quản trị.",
   "models.delete":
     "Xoá một mô hình dbt cùng bảng nó đã dựng và các dòng kiểm thử nó đã lưu; không xoá gì nếu chưa gỡ được bảng. Quản trị.",

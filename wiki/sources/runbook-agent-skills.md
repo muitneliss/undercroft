@@ -1,21 +1,19 @@
 ---
 title: 'Runbook: Agent skills'
 type: source
-date: 2026-09-26
+date: 2026-10-05
 tags: []
 source: docs/runbook/agent-skills.md
 source_path: docs/runbook/agent-skills.md
-source_hash: 3122e6512e3a062ead555d3ca8b670ec9ac8eaa707092f0a125c0dfc95e929f6
-ingested: 2026-09-26
+source_hash: 8d41c6598bcf122c6254c6ad1ff57f0a645968521f1fdaefc8c76b5440b9e05d
+ingested: 2026-10-05
 ---
-
-# Runbook: Agent skills
 
 # Runbook: Agent skills
 
 How to install, use and add Undercroft's published Agent Skills; the decisions are [[ADR 0067: The published skills are one family, installed by npx skills and served by /mcp]]. The skills teach workflows; the agent carries them out through either door, the MCP tools at `/mcp` ([[Runbook: Connecting an agent over MCP]]) or the `undercroft` CLI ([[Runbook: The undercroft CLI]]).
 
-**The skills.** `undercroft` is the entry: which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, how to report a defect; read before any other. `undercroft-model-builder` saves a query as a dbt model or builds a new one: interviews the person, reads the lake, runs `models.check`, asks before saving and again before building. Both live in `skills/` at the repository root, the only copy.
+**The skills.** `undercroft` is the entry: which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, how to report a defect; read before any other. `undercroft-model-builder` saves a query as a dbt model or builds a new one: interviews the person, reads the lake, runs `models.check`, asks before saving and again before building. It also drafts a model's business context for a person to approve with `models.setContext`, and audits which contexts are `incomplete` or `needs_review` ([[ADR 0105 A Model Carries One Business Context, Reviewed Against Its Definition]]). Both live in `skills/` at the repository root, the only copy.
 
 **Installing.** `npx skills add muitneliss/undercroft` installs every skill; `--skill <name> --agent claude-code|codex -y` installs one without prompts, `-g` for every project. With MCP tools present the skills use them; otherwise the `undercroft` skill installs its pinned CLI release on first use. Moving from releases before 1.41: `npx skills remove undercroft-cli`, then `npx skills add muitneliss/undercroft`; the CLI's commands, error codes and the MCP tools are unchanged.
 

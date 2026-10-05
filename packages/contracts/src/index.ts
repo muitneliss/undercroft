@@ -109,9 +109,23 @@ export {
 } from "./lakeApi.ts";
 export { parseSpec, SpecError } from "./loadSpec.ts";
 export {
+  CONTEXT_CHANGE_KINDS,
+  CONTEXT_SECTIONS,
+  CONTEXT_STATES,
+  ContextColumn,
+  type ContextChangeKind,
+  ContextKey,
+  ContextRules,
+  type ContextSection,
+  type ContextState,
+  MAX_CONTEXT_COLUMNS,
+  MAX_CONTEXT_RULES,
+  MAX_CONTEXT_TEXT_CHARS,
   MAX_IDENTIFIER_CHARS,
   MAX_MODEL_SQL_BYTES,
+  missingSections,
   MODEL_NAME,
+  ModelContext,
   ModelName,
   ModelTests,
   TEST_KINDS,
