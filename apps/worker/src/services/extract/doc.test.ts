@@ -13,10 +13,10 @@ import { describe, expect, test as it } from "bun:test";
 
 import type { Spawn } from "../transform.ts";
 import { type DocParagraph, docOf } from "./docTesting.ts";
+import type { Extracted } from "./extracted.ts";
 import {
   DOC_PASSWORD_PROTECTED,
   DOC_UNREADABLE,
-  type Extracted,
   extractDocument,
   LEGACY_DOC,
 } from "./extractText.ts";

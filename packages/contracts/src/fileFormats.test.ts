@@ -35,6 +35,16 @@ describe("allowsFile", () => {
     expect(landedType(file)).toBe("application/json");
   });
 
+  it("an .xlsx sent as octet-stream is matched by the .xlsx choice and filed as a workbook", () => {
+    // ADR 0104 decision 6: Gmail calls an attachment it cannot place octet-stream, and filed
+    // as that it reached no reader even though the admin had asked for `.xlsx` by name.
+    const file = { mimeType: OCTET, name: "Ledger 2026.xlsx" };
+    expect(allowsFile([".xlsx"], file)).toBe(true);
+    expect(landedType(file)).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+  });
+
   it("an extension never overrides a MIME type that says what the file is", () => {
     const file = { mimeType: "application/pdf", name: "renamed.oa" };
     expect(allowsFile([".oa"], file)).toBe(false);

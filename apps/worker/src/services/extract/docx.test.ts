@@ -17,7 +17,8 @@
 import { describe, expect, test as it } from "bun:test";
 import type { Spawn } from "../transform.ts";
 import { readDocx } from "./docx.ts";
-import { DOCX_UNREADABLE, type Extracted, extractDocument } from "./extractText.ts";
+import type { Extracted } from "./extracted.ts";
+import { DOCX_UNREADABLE, extractDocument } from "./extractText.ts";
 import { type ZipMember, zipOf } from "./testing.ts";
 
 const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

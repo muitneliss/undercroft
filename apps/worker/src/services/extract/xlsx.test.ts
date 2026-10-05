@@ -12,19 +12,28 @@
 
 import { describe, expect, test as it } from "bun:test";
 import type { Spawn } from "../transform.ts";
+import { cfbOf } from "./cfbTesting.ts";
+import { type Extracted, MAX_TEXT_CHARS, UNSUPPORTED_TYPE } from "./extracted.ts";
+import { extractDocument } from "./extractText.ts";
 import {
-  type Extracted,
-  extractDocument,
   LEGACY_XLS,
-  MAX_TEXT_CHARS,
+  WORKBOOK_NOT_A_WORKBOOK,
+  WORKBOOK_PASSWORD_PROTECTED,
+  XLSB_UNSUPPORTED,
   XLSX_UNREADABLE,
-} from "./extractText.ts";
+} from "./spreadsheet.ts";
 import { zipOf } from "./testing.ts";
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const utf8 = new TextEncoder();
+const WORKBOOK_MAIN = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+
+/** A package's own content-types part, naming its main part's type as Excel and Word write it. */
+function typesOf(main: string): string {
+  return `<Types><Override PartName="/xl/workbook.xml" ContentType="${main}"/></Types>`;
+}
 
 /** Invented throughout, per `pii.md`: Acme, and an amount with a decimal that floats round. */
 const SHARED = ["Invoice", "Acme Holdings", "Tiền thanh toán"];
@@ -58,7 +67,7 @@ function packageOf(
       `<Relationship Id="rId${String(at + 1)}" Type="${rel}/worksheet" Target="${partOf(s, at)}"/>`,
   );
   return zipOf([
-    { name: "[Content_Types].xml", body: "<Types/>", stored: true },
+    { name: "[Content_Types].xml", body: typesOf(WORKBOOK_MAIN), stored: true },
     {
       name: "_rels/.rels",
       body: `<Relationships><Relationship Id="rId1" Type="${rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
@@ -360,9 +369,9 @@ describe("bytes that are not a workbook we can open", () => {
   it("are refused by name, never stored as a spreadsheet that says nothing", async () => {
     // The whole of CLAUDE.md rule 2: an empty string here is indistinguishable downstream from
     // a genuinely blank workbook.
-    const result = await extract(utf8.encode("<html>Sign in to continue</html>"));
+    const result = await extract(utf8.encode("PK not quite a zip, and not a workbook"));
 
-    expect([result.method, result.reason]).toEqual([null, XLSX_UNREADABLE]);
+    expect([result.method, result.reason]).toEqual([null, WORKBOOK_NOT_A_WORKBOOK]);
   });
 
   it("include a zip holding no sheet at all, such as a document renamed", async () => {
@@ -370,15 +379,89 @@ describe("bytes that are not a workbook we can open", () => {
 
     expect(result.reason).toBe(XLSX_UNREADABLE);
   });
+});
 
-  it("include the pre-2007 binary workbook, by a reason of its own", async () => {
-    // Not `legacy-doc-unsupported`: an operator reading the ledger should not have to know
-    // that the Word reason was meant to cover spreadsheets too.
+describe("a file labelled as a spreadsheet", () => {
+  // ADR 0104 decision 5: the label says it is a spreadsheet; its bytes say which reader.
+  it("is read as the workbook it is when an .xlsx comes under the legacy label", async () => {
     const result = await extract(
       packageOf([{ name: "Ledger", xml: LEDGER }]),
       "application/vnd.ms-excel",
     );
 
-    expect(result.reason).toBe(LEGACY_XLS);
+    expect([result.method, result.workbook?.sheets[0]?.name]).toEqual(["xlsx", "Ledger"]);
+  });
+
+  it("is read as a web page's text when it is an HTML table saved as .xls", async () => {
+    const html = utf8.encode("<table><tr><td>Acme Holdings</td><td>1234.10</td></tr></table>");
+
+    const result = await extract(html, "application/vnd.ms-excel");
+
+    expect([result.method, result.text.includes("Acme Holdings")]).toEqual(["html", true]);
+  });
+
+  it("is refused by a name of its own when it is a Word document", async () => {
+    const docx = zipOf([
+      {
+        name: "[Content_Types].xml",
+        body: typesOf(
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+        ),
+      },
+      { name: "word/document.xml", body: "<w:document/>" },
+    ]);
+
+    expect((await extract(docx)).reason).toBe(WORKBOOK_NOT_A_WORKBOOK);
+  });
+
+  it("is refused as binary when it is an .xlsb", async () => {
+    const xlsb = zipOf([
+      {
+        name: "[Content_Types].xml",
+        body: typesOf("application/vnd.ms-excel.sheet.binary.macroEnabled.main"),
+      },
+      { name: "xl/workbook.bin", body: "binary records" },
+    ]);
+
+    expect((await extract(xlsb)).reason).toBe(XLSB_UNSUPPORTED);
+  });
+
+  it("is refused as locked when a password was set on it", async () => {
+    // Excel saves a password-protected .xlsx as a compound file around an encrypted package.
+    const locked = cfbOf([
+      { name: "Root Entry", type: 5, child: 1 },
+      { name: "EncryptionInfo", type: 2, bytes: utf8.encode("info"), right: 2 },
+      { name: "EncryptedPackage", type: 2, bytes: utf8.encode("ciphertext") },
+    ]);
+
+    expect((await extract(locked)).reason).toBe(WORKBOOK_PASSWORD_PROTECTED);
+  });
+
+  it("is refused by a reason of its own when it is an Excel 97-2003 workbook", async () => {
+    // Not `legacy-doc-unsupported`: an operator reading the ledger should not have to know
+    // that the Word reason was meant to cover spreadsheets too.
+    const xls = cfbOf([
+      { name: "Root Entry", type: 5, child: 1 },
+      { name: "Workbook", type: 2, bytes: utf8.encode("BIFF8 records") },
+    ]);
+
+    expect((await extract(xls, "application/vnd.ms-excel")).reason).toBe(LEGACY_XLS);
+  });
+});
+
+describe("a file its provider could only call octet-stream", () => {
+  it("is read as a workbook when its own content-types part says it is one", async () => {
+    const result = await extract(
+      packageOf([{ name: "Ledger", xml: LEDGER }]),
+      "application/octet-stream",
+    );
+
+    expect(result.method).toBe("xlsx");
+  });
+
+  it("stays a type nobody reads when its bytes are not a workbook", async () => {
+    const result = await extract(utf8.encode("%PDF-1.7"), "application/octet-stream");
+
+    expect(result.reason).toBe(UNSUPPORTED_TYPE);
   });
 });

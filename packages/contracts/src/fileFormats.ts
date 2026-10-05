@@ -28,6 +28,9 @@ export type FileFormatId =
   | "xlsx"
   | "xlsm"
   | "xls"
+  | "xltx"
+  | "xltm"
+  | "xlsb"
   | "googleSheet"
   | "googleSlides"
   | "csv"
@@ -112,6 +115,10 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     reads: "text",
     exportAs: DOCX,
   },
+  // Every Excel format carries `landsAs`: when an admin chose its EXTENSION, a file a provider
+  // could only call `application/octet-stream` is filed as the workbook it is named, so it
+  // reaches the workbook reader (ADR 0104 decision 6). A MIME choice still never admits such a
+  // file by its name (`allowsFacts`, ADR 0048); this decides only what an admitted one is filed as.
   {
     id: "xlsx",
     choice: XLSX,
@@ -119,6 +126,7 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     extensions: ["xlsx"],
     spec: OOXML_SPEC,
     reads: "table",
+    landsAs: XLSX,
   },
   {
     id: "xlsm",
@@ -133,6 +141,7 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     extensions: ["xlsm"],
     spec: OOXML_SPEC,
     reads: "table",
+    landsAs: "application/vnd.ms-excel.sheet.macroenabled.12",
   },
   {
     id: "xls",
@@ -141,6 +150,40 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     extensions: ["xls"],
     spec: "https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xls/",
     reads: "metadata",
+    landsAs: "application/vnd.ms-excel",
+  },
+  {
+    id: "xltx",
+    choice: "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+    mimeTypes: ["application/vnd.openxmlformats-officedocument.spreadsheetml.template"],
+    extensions: ["xltx"],
+    spec: OOXML_SPEC,
+    reads: "table",
+    landsAs: "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+  },
+  {
+    id: "xltm",
+    choice: "application/vnd.ms-excel.template.macroenabled.12",
+    mimeTypes: [
+      "application/vnd.ms-excel.template.macroenabled.12",
+      "application/vnd.ms-excel.template.macroEnabled.12",
+    ],
+    extensions: ["xltm"],
+    spec: OOXML_SPEC,
+    reads: "table",
+    landsAs: "application/vnd.ms-excel.template.macroenabled.12",
+  },
+  {
+    id: "xlsb",
+    choice: "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+    mimeTypes: [
+      "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+      "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+    ],
+    extensions: ["xlsb"],
+    spec: "https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xlsb/",
+    reads: "metadata",
+    landsAs: "application/vnd.ms-excel.sheet.binary.macroenabled.12",
   },
   {
     id: "googleSheet",

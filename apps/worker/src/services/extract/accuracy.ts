@@ -47,7 +47,7 @@
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { Extracted } from "./extractText.ts";
+import type { Extracted } from "./extracted.ts";
 import { normalizeText } from "./extractText.ts";
 import { EXTRACTOR_MISSING, type ExtractDeps } from "./program.ts";
 

@@ -10,7 +10,8 @@ import { join } from "node:path";
 import type { LakeStore } from "@undercroft/lake";
 
 import type { Spawn } from "../transform.ts";
-import { type Extracted, extractDocument } from "./extractText.ts";
+import type { Extracted } from "./extracted.ts";
+import { extractDocument } from "./extractText.ts";
 
 /** What opening a document needs: the lake, and how a reader binary is run. */
 export interface OpenDeps {

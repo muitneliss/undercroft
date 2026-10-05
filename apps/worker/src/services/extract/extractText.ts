@@ -21,20 +21,8 @@ import { ocrImage, ocrScan } from "./ocr.ts";
 import { ACRA_LAYOUT_VERSION } from "./acraTemplates.ts";
 import { claimsOpenAttestation, readOpenAttestation, relaid } from "./openAttestation.ts";
 import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
-import { readWorkbook, type Workbook } from "./xlsx.ts";
-
-/** How the text was read. A new extractor is a new value; the column is deliberately not an enum. */
-export type ExtractMethod =
-  | "pdf_text"
-  | "pdf_ocr"
-  | "docx"
-  | "doc"
-  | "xlsx"
-  | "image_ocr"
-  | "txt"
-  | "html"
-  | "mime"
-  | "openattestation";
+import { type Extracted, read, refused, storableText, UNSUPPORTED_TYPE } from "./extracted.ts";
+import { readLabelledSpreadsheet, readUnlabelled } from "./spreadsheet.ts";
 
 /**
  * Why nothing could be read. Each names something an operator can act on.
@@ -43,8 +31,6 @@ export type ExtractMethod =
  */
 // Since ADR 0053, only a Word file from before Word 97, whose 8-bit text states no codepage.
 export const LEGACY_DOC = "legacy-doc-unsupported";
-export const LEGACY_XLS = "legacy-xls-unsupported";
-export const XLSX_UNREADABLE = "xlsx-unreadable";
 export const DOCX_UNREADABLE = "docx-unreadable";
 export const DOC_UNREADABLE = "doc-unreadable";
 /**
@@ -53,7 +39,6 @@ export const DOC_UNREADABLE = "doc-unreadable";
  * a look.
  */
 export const DOC_PASSWORD_PROTECTED = "doc-password-protected";
-export const UNSUPPORTED_TYPE = "unsupported-content-type";
 export const EMPTY_SOURCE = "document-has-no-bytes";
 export const PDF_TEXT_FAILED = "pdftotext-failed";
 /**
@@ -71,16 +56,6 @@ export const PDF_PASSWORD_PROTECTED = "pdf-password-protected";
  * never wrong.
  */
 const POPPLER_PASSWORD_DIAGNOSTIC = "Incorrect password";
-
-/**
- * The ceiling on stored text.
- *
- * A cut document that does not SAY it is cut reads as a complete one that simply lacks the
- * clause you were looking for, so passing this sets `truncated` rather than trimming quietly.
- * 1 MB of text is a long contract several times over; the bytes remain whole in the lake
- * either way, and raising this is a decision about Postgres, not about the archive.
- */
-export const MAX_TEXT_CHARS = 1_000_000;
 
 /**
  * WHICH READER A PDF GOES TO, and nothing else. It is not a quality bar.
@@ -112,15 +87,6 @@ export const MAX_TEXT_CHARS = 1_000_000;
  */
 export const TEXT_LAYER_ROUTING_CHARS = 80;
 
-export interface Extracted {
-  readonly method: ExtractMethod | null;
-  readonly reason: string | null;
-  readonly text: string;
-  readonly truncated: boolean;
-  /** A spreadsheet's sheets and rows, from the same parse as `text` (ADR 0104). */
-  readonly workbook?: Workbook;
-}
-
 /**
  * Whitespace collapsed, so a count means characters a reader would see.
  *
@@ -129,59 +95,6 @@ export interface Extracted {
  */
 export function normalizeText(value: string): string {
   return value.replaceAll(/\s+/gu, " ").trim();
-}
-
-function capped(text: string): { text: string; truncated: boolean } {
-  return text.length > MAX_TEXT_CHARS
-    ? { text: text.slice(0, MAX_TEXT_CHARS), truncated: true }
-    : { text, truncated: false };
-}
-
-/**
- * U+0000, the one character a Postgres `text` column cannot hold.
- *
- * Everything a reader produces reaches the table through `read` below, so this is decided
- * there once rather than in each reader: a NUL is valid UTF-8 and survives the text decode,
- * and the HTML, MIME, Word and OCR paths can each hand one over too.
- */
-const NUL = "\u0000";
-
-/**
- * Where a NUL stood, visibly: the character a non-fatal decode already writes for a byte that
- * is not text (`readPlainText`).
- */
-const NOT_TEXT = "�";
-
-/**
- * The text as a reader found it, cut to the ceiling and made storable.
- *
- * A NUL IS REPLACED, NOT DROPPED, AND DOES NOT REFUSE THE DOCUMENT. Issue #218: one arrived in
- * a batch that is written as a single statement, failed it, and the same batch came back every
- * run -- a backlog that only grew. Postgres cannot store the character, so something has to
- * give, and the three options are not equal:
- *
- * - Refusing the document costs every readable word in it for one byte, which is exactly what
- *   the non-fatal decode was chosen to avoid.
- * - Dropping it is the plausible-looking answer, and that is its defect. A NUL in a text
- *   document is never a word; it is the trace of a file that is not what it was labelled -- a
- *   UTF-16 export with no byte-order mark decodes to every other byte a NUL, and dropping them
- *   would print its ASCII cleanly beside mangled accents, a reading that looks right and is
- *   not (`CLAUDE.md` rule 2).
- * - Replacing it with U+FFFD keeps the text, keeps its length and positions, and leaves the
- *   row saying where something here was not text. That is the choice.
- *
- * `cutShort` is a reader saying the text it hands over is not the whole document -- a scan
- * stopped at the page cap, say. It joins the ceiling below into one flag because downstream
- * the question is the same one: is this all of it? WHY it is short is the reader's business;
- * THAT it is short is the document's.
- */
-function read(method: ExtractMethod, raw: string, cutShort = false): Extracted {
-  const { text, truncated } = capped(raw.replaceAll(NUL, NOT_TEXT));
-  return { method, reason: null, text, truncated: truncated || cutShort };
-}
-
-function refused(reason: string): Extracted {
-  return { method: null, reason, text: "", truncated: false };
 }
 
 /** Poppler's text layer, straight to stdout. `-layout` keeps columns in reading order. */
@@ -268,22 +181,6 @@ async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
   // layer decides is only that a scan is what we are looking at.
   const scan = await ocrScan(deps, input.path);
   return scan.ok ? read("pdf_ocr", scan.text, scan.truncated) : refused(scan.reason);
-}
-
-/**
- * Read in process, spawning nothing: a workbook is a zip of XML, and `xlsx.ts` argues there
- * why that is cheaper here than either a converter binary or a dependency.
- *
- * `null` is a workbook we could not open exactly -- never an empty one. The two are different
- * facts and an empty string would make them one (`CLAUDE.md` rule 2). A workbook with a sheet
- * that stopped short is read, and its text says it is short (`truncated`), because the sheets
- * it holds are no longer the whole workbook.
- */
-async function readSpreadsheet(_deps: ExtractDeps, input: Document): Promise<Extracted> {
-  const reading = await readWorkbook(input.bytes, MAX_TEXT_CHARS);
-  return reading === null
-    ? refused(XLSX_UNREADABLE)
-    : { ...read("xlsx", reading.text, reading.short), workbook: reading.workbook };
 }
 
 /**
@@ -377,6 +274,16 @@ async function readImage(deps: ExtractDeps, input: Document): Promise<Extracted>
  * lookup of `constructor` or `__proto__` in a plain object answers with something that is not
  * a reader.
  */
+/** A spreadsheet label, opened by its bytes (ADR 0104 decision 5). */
+function spreadsheetByBytes(_deps: ExtractDeps, input: Document): Promise<Extracted> {
+  return readLabelledSpreadsheet(input.bytes);
+}
+
+/** A file its provider could not name, read as a workbook only when its bytes say it is one. */
+function unlabelledByBytes(_deps: ExtractDeps, input: Document): Promise<Extracted> {
+  return readUnlabelled(input.bytes);
+}
+
 const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   ["text/plain", readPlainText],
   // A delimited file IS text, and the reader above already decodes it non-fatally. Parsing it
@@ -396,10 +303,19 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   ["message/rfc822", readMime],
   ["multipart/related", readMime],
   ["application/pdf", readPdf],
-  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", readSpreadsheet],
+  // Every Excel type is opened by what its bytes are, not by its label (`spreadsheet.ts`).
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", spreadsheetByBytes],
   // A macro-enabled workbook is the same OOXML package with one more part, which is never
   // run: the reader opens the sheets' XML and nothing else. Lowercase, as the lookup is.
-  ["application/vnd.ms-excel.sheet.macroenabled.12", readSpreadsheet],
+  ["application/vnd.ms-excel.sheet.macroenabled.12", spreadsheetByBytes],
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.template", spreadsheetByBytes],
+  ["application/vnd.ms-excel.template.macroenabled.12", spreadsheetByBytes],
+  ["application/vnd.ms-excel.sheet.binary.macroenabled.12", spreadsheetByBytes],
+  // What a provider calls a file it cannot name. Read as a workbook only when its bytes say
+  // they are one; anything else is what it always was, a type nobody reads.
+  ["application/octet-stream", unlabelledByBytes],
+  ["application/zip", unlabelledByBytes],
+  ["application/x-zip-compressed", unlabelledByBytes],
   ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", readWordDocument],
   // The two image types the connection picker offers and the only two the lake holds: 1,274
   // PNGs and 283 JPEGs, none of them readable until now. `ocr.ts` decides which of them are
@@ -416,12 +332,9 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   // installs with tesseract -- is built with WebP. Where it is not, tesseract exits non-zero
   // and the refusal is `tesseract-failed`, by name.
   ["image/webp", readImage],
-  // The pre-2007 binary workbook, refused by name so it is visible in the ledger rather than
-  // absent from it. Its container is the one `cfb.ts` now opens for Word, but BIFF's cell
-  // records are a second format entirely, and no reader for them has been written. Its own
-  // reason rather than `LEGACY_DOC`, because an operator reading the ledger should not have
-  // to know that the Word reason was meant to cover spreadsheets too.
-  ["application/vnd.ms-excel", (): Extracted => refused(LEGACY_XLS)],
+  // The pre-2007 binary workbook -- or, as often, an `.xlsx` or an HTML table under its label,
+  // which its bytes reveal and which are read as what they are.
+  ["application/vnd.ms-excel", spreadsheetByBytes],
   // The pre-2007 binary Word format. Only a file older than Word 97 is still refused, as
   // `LEGACY_DOC`; ADR 0053.
   ["application/msword", readLegacyWord],
@@ -469,6 +382,11 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * refused with its whole workbook; it is now read as it inflates, so every `xlsx-unreadable`
  * refusal is offered again -- most of `tai-001`'s were workbooks of five megabytes or more.
  *
+ * GENERATION 8 IS A SPREADSHEET OPENED BY WHAT ITS BYTES ARE (ADR 0104 decision 5). An `.xlsx`
+ * labelled `vnd.ms-excel` was refused as legacy, an HTML table saved as `.xls` likewise, and a
+ * workbook a provider called `octet-stream` was a type nobody reads; each is now read as what
+ * it is, and the rest are refused under names that say what they are.
+ *
  * NOT BUMPED FOR ISSUE #218's UTF-16 DECODE AND NUL REPLACEMENT, and that is the rule working
  * rather than an oversight. A bump re-offers refusals, and neither change turns a refusal into a
  * reading: the documents they were written for never got a row at all -- their NUL failed the
@@ -486,7 +404,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 7;
+export const CURRENT_READER_VERSION = 8;
 
 /**
  * One document, read whichever way its type allows.
@@ -533,5 +451,5 @@ export function relayText(
   stored: string,
 ): { readonly text: string; readonly truncated: boolean } | null {
   const relayed = RELAYERS.get(method)?.(stored) ?? null;
-  return relayed === null ? null : capped(relayed.replaceAll(NUL, NOT_TEXT));
+  return relayed === null ? null : storableText(relayed);
 }

@@ -14,6 +14,7 @@ import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { listExtractDue } from "../schedule.ts";
 import type { Spawn } from "../transform.ts";
+import { cfbOf } from "./cfbTesting.ts";
 import { runExtract } from "./runExtract.ts";
 import { zipOf } from "./testing.ts";
 
@@ -139,7 +140,7 @@ describe("a pass over landed documents", () => {
     // forever, at full cost. The reason is what stops that.
     await landDocument({
       documentId: "f2",
-      bytes: new TextEncoder().encode("\xd0\xcf\x11\xe0legacy"),
+      bytes: legacyWorkbook("f2"),
       contentType: "application/vnd.ms-excel",
     });
 
@@ -225,6 +226,14 @@ describe("a workbook's rows", () => {
     expect([rows, (await workbookRows()).length]).toEqual([[{ run_id: "run-gmail" }], 1]);
   });
 });
+
+/** An Excel 97-2003 container whose BIFF records no reader yet opens; `marker` varies its bytes. */
+function legacyWorkbook(marker: string): Uint8Array {
+  return cfbOf([
+    { name: "Root Entry", type: 5, child: 1 },
+    { name: "Workbook", type: 2, bytes: new TextEncoder().encode(`BIFF8 records ${marker}`) },
+  ]);
+}
 
 /** A workbook's text as a reader before rows existed left it: read, from these bytes. */
 async function seedReadText(documentId: string, sha256: string, text: string): Promise<void> {
@@ -338,7 +347,7 @@ describe("a workbook read before its rows existed", () => {
     expect([text?.text, (await workbookRows()).length, refused]).toEqual([
       "held text",
       1,
-      [{ reason: "xlsx-unreadable" }],
+      [{ reason: "workbook-not-a-workbook" }],
     ]);
   });
 });
@@ -446,7 +455,8 @@ describe("a pass after the readers changed", () => {
 
     expect(second).toMatchObject({ read: 0, refused: 1 });
     expect(third).toMatchObject({ read: 0, refused: 0, unreadable: 0 });
-    expect((await textRows())[0]?.reason).toBe("legacy-xls-unsupported");
+    // PDF bytes under an Excel label: the label says spreadsheet, the bytes say otherwise.
+    expect((await textRows())[0]?.reason).toBe("workbook-not-a-workbook");
   });
 });
 
@@ -683,7 +693,7 @@ describe("what a pass hands the ledger", () => {
     for (const id of ["a1", "a2"]) {
       await landDocument({
         documentId: id,
-        bytes: new TextEncoder().encode(`\xd0\xcf\x11\xe0legacy ${id}`),
+        bytes: legacyWorkbook(id),
         contentType: "application/vnd.ms-excel",
       });
     }
@@ -731,7 +741,7 @@ describe("what a pass hands the ledger", () => {
     for (const id of ["dup1", "dup2", "dup3"]) {
       await landDocument({
         documentId: id,
-        bytes: new TextEncoder().encode("\xd0\xcf\x11\xe0the same legacy bytes"),
+        bytes: legacyWorkbook("the same legacy bytes"),
         contentType: "application/vnd.ms-excel",
       });
     }

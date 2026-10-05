@@ -66,6 +66,8 @@ interface Sectors {
 export interface Cfb {
   /** The named root stream's bytes, or `null` when there is none or it cannot be read exactly. */
   readonly stream: (name: string) => Uint8Array | null;
+  /** Whether the root holds a stream of this name, without reading it. */
+  readonly has: (name: string) => boolean;
 }
 
 function viewOf(bytes: Uint8Array): DataView {
@@ -263,6 +265,7 @@ export function openCfb(bytes: Uint8Array): Cfb | null {
   const miniFatStart = header.getUint32(0x3c, true);
 
   return {
+    has: (name: string): boolean => children.get(name.toLowerCase())?.type === STREAM,
     stream: (name: string): Uint8Array | null => {
       const entry = children.get(name.toLowerCase());
       if (entry?.type !== STREAM) {

@@ -43,7 +43,7 @@
  */
 
 import { extractDocument } from "./extractText.ts";
-import type { Extracted } from "./extractText.ts";
+import type { Extracted } from "./extracted.ts";
 import { ocrScan } from "./ocr.ts";
 import { pdfOf, zipOf } from "./testing.ts";
 import type { GoldCase, GoldDocument } from "./accuracy.ts";
