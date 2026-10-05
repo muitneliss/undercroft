@@ -49,8 +49,9 @@ const PHONETIC = /<rPh\b[\s\S]*?<\/rPh>/gu;
  * The element grammar, each written to match a self-closing tag as well as a filled one.
  *
  * `<c r="A1"/>` is a legal empty cell and `<row r="7"/>` a legal empty row, so a pattern that
- * only matched `<x>...</x>` would silently drop the gaps between values and slide a row's
- * columns left. The alternation is what keeps a blank cell blank.
+ * only matched `<x>...</x>` would miss them. Matching them is not what keeps a row's columns in
+ * place, though: Excel usually omits an empty cell outright, and `rowCells` places every cell
+ * by its own reference for that reason.
  */
 const TEXT_RUN = /<t\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/t>)/gu;
 const SHARED_ITEM = /<si\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/si>)/gu;
@@ -59,6 +60,12 @@ const ROW = /<row\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/row>)/gu;
 const CELL = /<c\b(?<attributes>[^>]*?)(?:\/>|>(?<body>[\s\S]*?)<\/c>)/gu;
 const VALUE = /<v\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/v>)/u;
 const CELL_TYPE = /\bt="(?<type>[^"]*)"/u;
+const CELL_REFERENCE = /\br="(?<reference>[^"]*)"/u;
+const COLUMN_LETTERS = /^\$?(?<letters>[A-Za-z]{1,3})\$?\d+$/u;
+const A_CODE = 65;
+
+/** XFD, the last column Excel has had since 2007 (ECMA-376 Part 1 §18.3.1.4). */
+const MAX_COLUMN = 16_384;
 
 const NAMED_ENTITY: Readonly<Record<string, string>> = {
   amp: "&",
@@ -139,15 +146,68 @@ function cellText(attributes: string, body: string, shared: readonly string[]): 
   return shared[index] ?? "";
 }
 
-/** One worksheet's rows. An entirely empty row is dropped; a partly empty one keeps its gaps. */
-function sheetText(xml: string, shared: readonly string[]): string {
+/**
+ * The 1-based column a cell reference names (`C7` → 3), or `null` for one that names none.
+ *
+ * Bounded by Excel's own last column, XFD. A reference past it is not a workbook Excel could
+ * have written, and placing its cell would pad a row with thousands of empty columns.
+ */
+function columnOf(reference: string): number | null {
+  const letters = COLUMN_LETTERS.exec(reference)?.groups?.letters;
+  if (letters === undefined) {
+    return null;
+  }
+  let column = 0;
+  for (const letter of letters.toUpperCase()) {
+    column = column * 26 + (letter.codePointAt(0) ?? 0) - A_CODE + 1;
+  }
+  return column <= MAX_COLUMN ? column : null;
+}
+
+/**
+ * One row's cells, each in the column its reference names, or `null` for a row that cannot be
+ * laid out exactly.
+ *
+ * PLACED BY `r`, NOT BY POSITION IN THE XML. Excel omits an empty cell entirely rather than
+ * writing `<c r="B5"/>`, so a row holding A and C is two `<c>` elements; joined in document
+ * order, C would slide left into B and an amount would read under the wrong heading. A cell
+ * with no `r` -- legal, and what some writers emit for every cell -- takes the column after
+ * the one before it, which is exactly what ECMA-376 Part 1 §18.3.1.4 says it means.
+ *
+ * Cells must arrive left to right (the same section). One that names a column at or before
+ * the previous one would overwrite a value or reorder the row, so the row is refused rather
+ * than laid out by a guess.
+ */
+function rowCells(body: string, shared: readonly string[]): string[] | null {
+  const cells: string[] = [];
+  for (const cell of body.matchAll(CELL)) {
+    const attributes = cell.groups?.attributes ?? "";
+    const reference = CELL_REFERENCE.exec(attributes)?.groups?.reference;
+    const column = reference === undefined ? cells.length + 1 : columnOf(reference);
+    if (column === null || column <= cells.length) {
+      return null;
+    }
+    while (cells.length < column - 1) {
+      cells.push("");
+    }
+    cells.push(cellText(attributes, cell.groups?.body ?? "", shared));
+  }
+  return cells;
+}
+
+/**
+ * One worksheet's rows, or `null` when a row cannot be laid out exactly (`rowCells`). An
+ * entirely empty row is dropped; a partly empty one keeps its gaps.
+ */
+function sheetText(xml: string, shared: readonly string[]): string | null {
   const data = SHEET_DATA.exec(xml)?.groups?.body ?? "";
   const lines: string[] = [];
 
   for (const row of data.matchAll(ROW)) {
-    const cells = [...(row.groups?.body ?? "").matchAll(CELL)].map((cell) =>
-      cellText(cell.groups?.attributes ?? "", cell.groups?.body ?? "", shared),
-    );
+    const cells = rowCells(row.groups?.body ?? "", shared);
+    if (cells === null) {
+      return null;
+    }
     if (cells.some((cell) => cell !== "")) {
       lines.push(cells.join(CELL_SEPARATOR));
     }
@@ -192,10 +252,13 @@ export function readXlsx(bytes: Uint8Array): string | null {
   const texts: string[] = [];
   for (const sheet of sheets) {
     const xml = readZipText(bytes, index, sheet);
-    if (xml === null) {
-      return null; // A worksheet we could not inflate. A short workbook reads as a complete one.
+    // A worksheet we could not inflate, or one whose cells cannot be placed exactly. Either
+    // way a short or shifted workbook would read as a complete one.
+    const text = xml === null ? null : sheetText(xml, shared);
+    if (text === null) {
+      return null;
     }
-    texts.push(sheetText(xml, shared));
+    texts.push(text);
   }
 
   return texts.join(SHEET_SEPARATOR);
