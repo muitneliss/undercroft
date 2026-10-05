@@ -9,6 +9,8 @@
 import { describe, expect, test as it } from "bun:test";
 
 import {
+  excelSerialDateSql,
+  excelSerialTimestampSql,
   gmailLettersSql,
   MACROS,
   parseRunResults,
@@ -83,6 +85,23 @@ describe("renderProject", () => {
     expect(file.endsWith(wrapped)).toBe(true);
     expect(file.slice(0, file.length - wrapped.length)).toMatch(ONLY_A_COMMENT);
     expect(gmailLettersSql("raw.records")).not.toMatch(JINJA);
+  });
+});
+
+describe("the workbook date macros", () => {
+  it("ship exactly the SQL the offline suite runs, with the macro's arguments in place", () => {
+    // excelSerial.test.ts runs these functions' SQL on PGlite; a macro adding Jinja of its own
+    // would be text that suite never executed.
+    for (const [name, sql] of [
+      ["excel_serial_date", excelSerialDateSql],
+      ["excel_serial_timestamp", excelSerialTimestampSql],
+    ] as const) {
+      const wrapped = `{% macro ${name}(value, date1904) %}\n${sql("{{ value }}", "{{ date1904 }}")}\n{% endmacro %}\n`;
+      const file = PROJECT[`macros/${name}.sql`] ?? "";
+      expect(file.endsWith(wrapped)).toBe(true);
+      expect(file.slice(0, file.length - wrapped.length)).toMatch(ONLY_A_COMMENT);
+      expect(sql("value", "date1904")).not.toMatch(JINJA);
+    }
   });
 });
 

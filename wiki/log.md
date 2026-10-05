@@ -287,3 +287,5 @@
 ## [2026-10-01] ingest | ADR 0103 The Lineage Board Is Laid Out by ELK
 ## [2026-10-05] ingest | ADR 0104 Every Workbook Is Landed as Rows
 ## [2026-10-05] ingest | ADR 0104 Every Workbook Is Landed as Rows
+## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
+## [2026-10-05] ingest | Runbook Deployment

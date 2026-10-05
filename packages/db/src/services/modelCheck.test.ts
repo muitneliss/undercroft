@@ -61,7 +61,14 @@ describe("a model a person would write", () => {
 
 describe("the sources it knows", () => {
   it("are the ones the project's sources.yml declares", () => {
-    expect(declaredSources()).toEqual(new Map([["undercroft", ["records", "documents"]]]));
+    expect(declaredSources()).toEqual(
+      new Map([
+        [
+          "undercroft",
+          ["records", "documents", "document_sheets", "document_rows", "document_rows_refusal"],
+        ],
+      ]),
+    );
   });
 });
 

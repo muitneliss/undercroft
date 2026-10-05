@@ -13,6 +13,10 @@ server you are on; when it disagrees with this page, it is right.
     `deleted_at` (set when the source deleted it).
   - `{{ source('undercroft', 'documents') }}` -- the catalogue of files and attachments, one
     row each. The bytes are not in Postgres.
+  - `{{ source('undercroft', 'document_sheets') }}` and `{{ source('undercroft', 'document_rows') }}`
+    -- every sheet of every landed workbook, and its rows, keyed by the digest of the file's
+    bytes (`documents.sha256`). `{{ source('undercroft', 'document_rows_refusal') }}` says why a
+    workbook has no rows. See "A workbook's rows" below.
 - **Each document's kind**, as `raw.document_kinds`, by its name: it is not one of the declared
   sources, so a model names it directly, the one raw relation it does. One row per live
   document that has been classified, keyed by `source` and `document_id` like `documents`.
@@ -127,6 +131,85 @@ Which folder means what -- a client, a status -- is the person's to say, as a li
 the model that reads this one. A folder dragged elsewhere changes one `folders` record, and the
 next build places every file beneath it under its new parent. Keep this model a table or a
 view, not ephemeral.
+
+## A workbook's rows
+
+Every `.xlsx`, `.xlsm` and Google Sheet that lands is read into rows. Nothing is decided for
+you: no header is chosen, no column named, no type inferred. Every cell is the string the file
+stored, so the model decides what each column is.
+
+- `document_sheets`: one row per sheet. It holds `sheet_index` (tab order), `sheet_name`,
+  `sheet_state` (`visible`, `hidden`, `veryHidden`), `date1904`, `merges` (ranges such as
+  `A1:F1`, never filled), `row_count`, and `complete`. When `complete` is false, `reason` says
+  why, and the rows before that point are still there.
+- `document_rows`: one row per non-empty row. It holds `row_number` (Excel's own, so the gaps
+  are real), `hidden`, and three JSON maps keyed by column letter:
+  - `cells` holds the stored strings;
+  - `formats` holds the number format Excel shows a cell in, such as `dd/mm/yyyy`, or
+    `builtin:14` for the locale's short date;
+  - `faults` holds what is not a value: `#REF!`, `#DIV/0!`, or `formula-uncached`.
+
+  `cells ->> 'D'` is NULL where `faults` holds D, so an error never reads as a word.
+
+Join the two on `(tenant_id, sha256, sheet_index)`, and reach the file through `documents.sha256`. Read
+the column letters, the header row and the first data row from a sample before you write
+anything: `lake.query` over `raw.document_rows` with a `limit`. Every client's workbook is laid
+out differently.
+
+**A clean export, header in row 1.** Name the columns after the header the sample showed,
+read from row 2 down:
+
+```sql
+select
+    r.row_number,
+    r.cells ->> 'A'                                        as account,
+    r.cells ->> 'C'                                        as description,
+    {{ parse_amount('r.cells', 'F') }}                     as amount,
+    {{ excel_serial_date("r.cells ->> 'B'", 's.date1904') }} as booked_on
+from {{ source('undercroft', 'document_rows') }} as r
+join {{ source('undercroft', 'document_sheets') }} as s
+    using (tenant_id, sha256, sheet_index)
+where s.sheet_name = 'Account Transactions'
+  and r.row_number > 1
+```
+
+**Title rows above the header.** An export often opens with a title, a company line and a
+period before the header. Find the header row by a label it always carries rather than by a
+fixed number, then read the rows below it:
+
+```sql
+with header as (
+    select r.tenant_id, r.sha256, r.sheet_index, min(r.row_number) as row_number
+    from {{ source('undercroft', 'document_rows') }} as r
+    where r.cells ->> 'A' = 'Date'
+    group by r.tenant_id, r.sha256, r.sheet_index
+)
+
+select r.*
+from {{ source('undercroft', 'document_rows') }} as r
+join header as h using (tenant_id, sha256, sheet_index)
+where r.row_number > h.row_number
+```
+
+**Totals, merged titles and hidden helpers.** A totals row is data the workbook computed.
+Leave it out by its label, such as `where r.cells ->> 'A' <> 'Total'`, and check it against
+your own `sum` in a test rather than trusting it. A merged title lives in the first cell of
+its range only. Filter `s.sheet_state = 'visible'` and `not r.hidden` only when the person
+says hidden sheets and rows are working space, never by default.
+
+**Dates typed by hand and dates Excel stored.** A date Excel stored is a serial, such as
+`46286` for 2026-09-21, and `formats` shows it as a date. A date typed as text, such as
+`21/09/2026`, has no date format. Tell them apart by `r.formats ->> 'B'`:
+
+- convert a serial with `excel_serial_date` (or `excel_serial_timestamp` for a time of day),
+  passing `s.date1904`;
+- parse a typed date only in the form the person confirms;
+- leave anything else NULL.
+
+**A sheet that stopped short.** When `s.complete` is false, the rows after `reason` were not
+read. Carry `complete` into the model, or leave the sheet out, and tell the person. Never
+present a partial ledger's totals as the whole. A workbook in
+`document_rows_refusal` has text but no rows; say so too.
 
 ## Building on other models
 

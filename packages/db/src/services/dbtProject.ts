@@ -73,6 +73,22 @@ sources:
         description: >
           The catalogue of byte documents -- mail attachments, files -- one row each.
           The bytes themselves stay in the lake.
+      - name: document_sheets
+        description: >
+          Every sheet of every landed workbook, one row each, keyed by the digest of the
+          bytes it was read from -- join documents.sha256. Its name and tab order, kind,
+          visibility, the workbook's 1904 date epoch, merged ranges, and whether the read is
+          complete; when it is not, reason says why. ADR 0104.
+      - name: document_rows
+        description: >
+          A sheet's non-empty rows: Excel's own row number, and cells, formats and faults as
+          sparse JSON keyed by column letter. Every cell is the string the file stored; no
+          header is chosen and no type inferred. Type a column in your model with
+          parse_amount or excel_serial_date.
+      - name: document_rows_refusal
+        description: >
+          Why a workbook whose text was read has no rows: the reader refused it when it was
+          read again for them.
 `;
 
 const PARSE_AMOUNT = `{#
@@ -215,11 +231,82 @@ ${gmailLettersSql("{{ source('undercroft', 'records') }}")}
 {% endmacro %}
 `;
 
+/** An Excel serial: whole days, at most seven digits (9999-12-31 is 2,958,465). */
+const SERIAL_DAYS = "^[0-9]{1,7}$";
+const SERIAL_DAYS_AND_TIME = "^[0-9]{1,7}([.][0-9]+)?$";
+
+/**
+ * The date an Excel serial stands for, or NULL: `value` and `date1904` are SQL expressions
+ * spliced in as written -- the text of a cell, and the workbook's epoch flag.
+ *
+ * Exact, and NULL rather than a guess wherever the answer is not one (`CLAUDE.md` rule 2):
+ * - an epoch the workbook did not state (NULL) dates nothing;
+ * - in the 1900 system serial 60 is 1900-02-29, a day that never existed -- Excel kept Lotus
+ *   1-2-3's leap-year bug -- so it is NULL, and serials before it count from 1899-12-31 while
+ *   those after count from 1899-12-30; serial 0 is "1900-01-00" and NULL too;
+ * - the 1904 system counts from 1904-01-01, serial 0 included;
+ * - anything but whole days is NULL: a fraction is a time, `excel_serial_timestamp`'s.
+ *
+ * Plain SQL with no Jinja of its own, so `excelSerial.test.ts` runs this very text.
+ */
+export function excelSerialDateSql(value: string, date1904: string): string {
+  return `(CASE
+        WHEN (${date1904}) IS NULL OR (${value}) IS NULL OR (${value}) !~ '${SERIAL_DAYS}' THEN NULL
+        WHEN (${date1904}) THEN DATE '1904-01-01' + (${value})::integer
+        WHEN (${value})::integer >= 61 THEN DATE '1899-12-30' + (${value})::integer
+        WHEN (${value})::integer BETWEEN 1 AND 59 THEN DATE '1899-12-31' + (${value})::integer
+        ELSE NULL
+    END)`;
+}
+
+/**
+ * The timestamp an Excel serial stands for, to the millisecond, with no time zone attached --
+ * Excel stores none, and choosing one is not this platform's call (`i18n.md`). The whole days
+ * are `excelSerialDateSql`'s, NULLs included; the fraction is the time of day, in numeric
+ * arithmetic, never through a float.
+ */
+export function excelSerialTimestampSql(value: string, date1904: string): string {
+  const days = `trunc((${value})::numeric)::text`;
+  return `(CASE
+        WHEN (${value}) IS NULL OR (${value}) !~ '${SERIAL_DAYS_AND_TIME}' THEN NULL
+        ELSE ${excelSerialDateSql(days, date1904)}::timestamp
+            + round(((${value})::numeric - trunc((${value})::numeric)) * 86400000)
+              * interval '1 millisecond'
+    END)`;
+}
+
+const EXCEL_SERIAL_DATE = `{#
+    The date an Excel serial stands for -- a workbook cell stores a date as a count of days:
+    select {{ excel_serial_date("r.cells ->> 'A'", 's.date1904') }} as booked_on
+      from {{ source('undercroft', 'document_rows') }} r
+      join {{ source('undercroft', 'document_sheets') }} s using (tenant_id, sha256, sheet_index)
+
+    Pass the sheet's date1904 so a Mac workbook's dates are not four years out. NULL for
+    anything that is not whole days, for 1900-02-29 (a day Excel invented), and when the
+    epoch is unknown. Whether a column IS a date is your call: formats says how Excel showed it.
+#}
+{% macro excel_serial_date(value, date1904) %}
+${excelSerialDateSql("{{ value }}", "{{ date1904 }}")}
+{% endmacro %}
+`;
+
+const EXCEL_SERIAL_TIMESTAMP = `{#
+    The timestamp an Excel serial stands for, whole days and the fraction that is the time of
+    day, to the millisecond and with no time zone -- Excel stores none:
+    select {{ excel_serial_timestamp("r.cells ->> 'B'", 's.date1904') }} as posted_at
+#}
+{% macro excel_serial_timestamp(value, date1904) %}
+${excelSerialTimestampSql("{{ value }}", "{{ date1904 }}")}
+{% endmacro %}
+`;
+
 /** The macros every tenant's project carries. Read-only from the editor's side. */
 export const MACROS: readonly { name: string; sql: string }[] = [
   { name: "parse_amount", sql: PARSE_AMOUNT },
   { name: "generate_schema_name", sql: GENERATE_SCHEMA_NAME },
   { name: "gmail_letters", sql: GMAIL_LETTERS },
+  { name: "excel_serial_date", sql: EXCEL_SERIAL_DATE },
+  { name: "excel_serial_timestamp", sql: EXCEL_SERIAL_TIMESTAMP },
 ];
 
 export interface ProjectModel {

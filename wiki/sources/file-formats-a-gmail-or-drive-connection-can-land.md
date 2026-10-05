@@ -1,19 +1,19 @@
 ---
 title: File formats a Gmail or Drive connection can land
 type: source
-date: 2026-09-30
+date: 2026-10-05
 tags: []
 source: docs/reference/file-formats.md
 source_path: docs/reference/file-formats.md
-source_hash: 417960aa2dc916769d7684f9321bcdd9ccbefa7e1c034e25cf99239f13745aa4
-ingested: 2026-09-30
+source_hash: 668218616a68b7827ad68cd3a601abeb05c83d4d6f271f3c094f88c5fe31af4f
+ingested: 2026-10-05
 ---
 
 # File formats a Gmail or Drive connection can land
 
 The reference page for every file type the connection picker offers, kept in step with `packages/contracts/src/fileFormats.ts` by `fileFormatsDoc.test.ts`. The decision behind it is [[ADR 0048: A file is recognised by its type first, and a signed record is verified before it is read]].
 
-**Reading levels.** `text` (words in reading order), `table` (each sheet's rows, cells separated), `ocr` (tesseract, Vietnamese and English), `metadata` (lands and is catalogued, refused by name, not read). Bytes always stay whole in the raw lake.
+**Reading levels.** `text` (words in reading order), `table` (each sheet's rows into `raw.document_rows`, every cell under its column letter, and as tab-separated text), `ocr` (tesseract, Vietnamese and English), `metadata` (lands and is catalogued, refused by name, not read). Bytes always stay whole in the raw lake.
 
 **Matching.** MIME type first. The name counts only for `application/octet-stream`, and then only for an extension chosen as such, like `.oa`. Choosing `application/octet-stream` itself, which the Drive browse offers when such files are present, takes every file of that type. An extension is one to eight letters or digits after the last dot, at least one of them a letter, so `for Mr. Smith`, `Rev.1` and `Pte. Ltd.` have none. A Drive listing asks by MIME type; choosing an extension adds octet-stream and lets the name decide. The free-text field takes a MIME type or `.ext`.
 
@@ -33,3 +33,5 @@ The reference page for every file type the connection picker offers, kept in ste
 **When the choice changes.** A Gmail mark lists each attachment part it left behind (document id, bare MIME type, extension, declared size; never a filename). A held message is read again only when the current choice allows one of those parts and it is under the ceiling, and then only those parts land. Adding a type, or an upgrade that admits a new spelling such as `image/jpg`, lands those attachments on held mail by the end of the first run that finishes; removing a type deletes and reads nothing; an over-ceiling attachment never causes a re-read; a message marked before the list existed is read once more; each mailbox is its own source. The Journal and `runs get` (`reread` on the `messages` entity) say how many were read again. See [[ADR 0076 A Harvest Records What It Left Behind]].
 
 **A message's body.** Since [[ADR 0084 A Gmail Harvest Lands Each Messages Body]] every Gmail message's body lands whatever the file-type choice, as its own document `<message id>:body`: the `text/plain` part, else the `text/html` one, stored as UTF-8. Its text reaches `raw.document_text` like any document's. On a mailbox that ran before that release, the first run after it reads every held message again once, for its body alone; attachments already landed are not fetched again.
+
+**A workbook's rows.** Per [[ADR 0104 Every Workbook Is Landed as Rows]], an `.xlsx`, `.xlsm` or Google Sheet lands in `document_sheets` (one row per sheet: name, kind, hidden state, 1904 epoch, declared range, merges, `complete`/`reason`) and `document_rows` (Excel's row number, hidden flag, and sparse `cells`, `formats` and `faults` maps keyed by column letter), keyed by the file's digest and selected through `source('undercroft', ...)`. Nothing is interpreted: no header, no types, dates stay serials (the `excel_serial_date` / `excel_serial_timestamp` macros convert on request), merges unfilled, hidden rows kept. A package without relationships is read by Excel's part names with `sheet_name_reason: workbook-relationships-missing`. Limits are Excel's own -- 1,048,576 rows, 16,384 columns, 32,767 characters a cell, 256 sheets -- and one sheet's inflated XML is capped at 32 MiB; a sheet passing one stops with a named reason (`rows-limit`, `cells-out-of-order`, `cell-too-long`, `sheets-limit`, `sheet-unreadable`, `rows-out-of-order`) while the rest of the workbook is read and its text marked truncated. The 1,000,000-character text cap is for search only; a sheet's completeness is `document_sheets.complete`. Workbooks read before rows existed are read again by the next extract run, and a refusal then keeps the held text and is recorded in `document_rows_refusal`.

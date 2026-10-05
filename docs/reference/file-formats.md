@@ -2,17 +2,18 @@
 
 This page lists every file type the connection picker offers. For each one it gives the
 public specification, how the file is recognised, and how much of it the worker reads into
-`raw.document_text`. `packages/contracts/src/fileFormatsDoc.test.ts` fails the gate when the picker offers a
+`raw.document_text` -- and, for a workbook, into `raw.document_rows` (see "A workbook's rows"
+below). `packages/contracts/src/fileFormatsDoc.test.ts` fails the gate when the picker offers a
 format that has no section here, or when a section's specification link or reading level
 disagrees with the catalogue in `packages/contracts/src/fileFormats.ts`.
 
 Every file that lands keeps its bytes whole in the raw lake, whatever the reading level says.
-The reading level describes only what becomes searchable text.
+The reading level describes what becomes searchable text, and, for `table`, what becomes rows.
 
 | Reading level | Meaning                                                                                       |
 | ------------- | --------------------------------------------------------------------------------------------- |
 | `text`        | The words are extracted in reading order.                                                     |
-| `table`       | Each sheet's rows are extracted, cells separated, so a model can split them again.            |
+| `table`       | Each sheet's rows are read into `raw.document_rows`, every cell under its column letter.      |
 | `ocr`         | The file is a picture; `tesseract` reads it in Vietnamese and English.                        |
 | `metadata`    | The file lands and is catalogued, but nothing reads its content. A named refusal is recorded. |
 
@@ -144,8 +145,9 @@ Google caps an export at 10 MB.
 - Specification: <https://ecma-international.org/publications-and-standards/standards/ecma-376/>
 - Reads: `table`
 
-Every sheet is read row by row, with shared strings resolved. A workbook the reader cannot open
-is refused as `xlsx-unreadable`.
+Every sheet is read row by row into `raw.document_rows`, and as tab-separated text into
+`raw.document_text`. "A workbook's rows" below says what is kept and where the limits are. A
+workbook the reader cannot open at all is refused as `xlsx-unreadable`.
 
 ### Macro-enabled Excel workbook (.xlsm)
 
@@ -404,3 +406,57 @@ It is read and refused exactly as a JPEG is.
 It is read as a JPEG is. Tesseract opens WebP through leptonica, which the worker image installs
 with WebP support. If that support is ever missing, each WebP file is refused as
 `tesseract-failed`.
+
+## A workbook's rows
+
+An `.xlsx`, an `.xlsm` and a Google Sheet are read into two tables a tenant's dbt models select
+through `source('undercroft', ...)`. Both are keyed by the digest of the file's bytes, so one file
+attached to ten messages is one set of rows; join `raw.documents.sha256` to reach it.
+[ADR 0104](../adr/0104-every-workbook-is-landed-as-rows.md) records why.
+
+- `document_sheets` has one row per sheet, in tab order. It records the sheet's name, its kind,
+  whether it is hidden, the workbook's 1904 date epoch, its declared range and its merged
+  ranges. `complete` is false when the read stopped short, and `reason` says why.
+- `document_rows` has one row per non-empty row. It records Excel's own row number, whether the
+  row is hidden, and three maps keyed by column letter:
+  - `cells`: the string each cell stores, exactly as written. An amount is never turned into a
+    number.
+  - `formats`: each cell's number format when it is not General. It is the workbook's own code,
+    such as `dd/mm/yyyy`, or `builtin:<id>` for a built-in format whose look depends on the
+    reader's locale.
+  - `faults`: what stands where a value would. That is an Excel error such as `#REF!`,
+    `formula-uncached` for a formula saved without its result, or `shared-string-missing`. Such a
+    cell has no entry in `cells`.
+
+Nothing is interpreted. No header row is chosen, no column is named or typed, a date stays the
+serial Excel stores, a merged range is not filled, and a hidden row is not dropped. The
+`excel_serial_date` and `excel_serial_timestamp` macros turn a serial into a date when a model
+asks.
+
+A sheet's name is read from the workbook through the package's relationships. A package
+without relationships is still read by Excel's own part names; its sheets then have no name,
+and `sheet_name_reason` is `workbook-relationships-missing`.
+
+The limits are Excel's own:
+
+| Limit                     | Value     | When it is passed                                          |
+| ------------------------- | --------- | ---------------------------------------------------------- |
+| Rows in a sheet           | 1,048,576 | The sheet stops, `complete` is false, `reason: rows-limit` |
+| Columns in a row          | 16,384    | The sheet stops: `cells-out-of-order`                      |
+| Characters in a cell      | 32,767    | The sheet stops: `cell-too-long`                           |
+| Sheets in a workbook      | 256       | Later sheets are listed with `reason: sheets-limit`        |
+| One sheet's XML, inflated | 32 MiB    | That sheet is listed with `reason: sheet-unreadable`       |
+
+Rows and cells must run in order. A row whose cells do not run left to right stops its sheet
+with `cells-out-of-order`, and rows out of order stop it with `rows-out-of-order`; the rows
+before that point are kept. A sheet that stops short, or cannot be read, leaves the rest of the
+workbook readable, and the workbook's text is then marked `truncated`.
+
+**The text is capped; the rows are not.** `raw.document_text` holds at most 1,000,000 characters
+of a workbook and marks the text `truncated` past that. That cap is for search. A workbook's
+completeness is `document_sheets.complete`, and a model reads every row of a sheet whose text
+was cut.
+
+A workbook read before rows existed is read again for them by the next extract run, without
+anyone triggering it. If that read is refused, the text already held is kept, and
+`document_rows_refusal` says why.
