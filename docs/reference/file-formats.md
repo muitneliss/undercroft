@@ -261,10 +261,28 @@ Drive exports a Google Slides deck as plain text, and that text is stored.
 - Choice: `text/csv`
 - Extensions: `.csv`
 - Specification: <https://www.rfc-editor.org/rfc/rfc4180>
-- Reads: `text`
+- Reads: `table`
 
-The file is stored as the text it is. It is not split into rows, because doing that would mean
-guessing a delimiter, a quoting style and an encoding that the file does not state.
+The file is stored as the text it is, and its records are also read into rows (see "A workbook's
+rows" below) by the grammar `text/csv` names: RFC 4180.
+
+- A comma separates fields and a line break separates records.
+- A field may be wrapped in double quotes, which can hold a comma, a line break, or a quote
+  written twice.
+- A record may end in CRLF, LF or a lone CR. A quote inside an unquoted field is that character.
+- The delimiter is never guessed from the content. A file separated by semicolons and sent as
+  `text/csv` therefore lands as one column, which a model can split.
+- A record the grammar has no reading for, such as a closing quote followed by more text or a
+  quote that is never closed, stops the rows there with `reason: csv-malformed`. The rows before
+  it are kept.
+- A blank line keeps its row number, so the row after it is numbered as the file's record is.
+- The rows have no sheet name (`sheet_name_reason: delimited-text-has-no-sheets`), and
+  `container` is `csv`.
+- A file served as `text/tab-separated-values` is read the same way with a tab between fields
+  and no quoting, and its `container` is `tsv`.
+
+[ADR 0107](../adr/0107-a-delimited-file-is-read-into-rows-by-the-grammar-its-type-names.md)
+records why.
 
 ### Plain text
 
@@ -475,7 +493,7 @@ with WebP support. If that support is ever missing, each WebP file is refused as
 
 ## A workbook's rows
 
-An `.xlsx`, an `.xlsm` and a Google Sheet are read into two tables a tenant's dbt models select
+An `.xlsx`, an `.xlsm`, an `.xls`, a Google Sheet and a CSV are read into two tables a tenant's dbt models select
 through `source('undercroft', ...)`. Both are keyed by the digest of the file's bytes, so one file
 attached to ten messages is one set of rows; join `raw.documents.sha256` to reach it.
 [ADR 0104](../adr/0104-every-workbook-is-landed-as-rows.md) records why.

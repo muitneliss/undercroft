@@ -32,6 +32,9 @@ export const CURRENT_ROWS_VERSION = 1;
 /** The text methods a workbook is read by: the ones whose read also yields rows. */
 export const WORKBOOK_METHODS: readonly string[] = ["xlsx", "xls"];
 
+/** The delimited types read as text with rows beside it (ADR 0107), whatever their method. */
+export const TABULAR_TYPES: readonly string[] = ["text/csv", "text/tab-separated-values"];
+
 /** Digests whose orphaned rows one pass removes, at most. */
 const ORPHANS_PER_PASS = 500;
 
@@ -100,7 +103,12 @@ export async function backfillWorkbooks(
   const owed = await owedWorkbooks(
     deps.exec,
     { tenantId: pass.tenantId, source: pass.source },
-    { methods: WORKBOOK_METHODS, rowsVersion: CURRENT_ROWS_VERSION, limit: pass.limit },
+    {
+      methods: WORKBOOK_METHODS,
+      tabularTypes: TABULAR_TYPES,
+      rowsVersion: CURRENT_ROWS_VERSION,
+      limit: pass.limit,
+    },
   );
   let written = 0;
   let refused = 0;

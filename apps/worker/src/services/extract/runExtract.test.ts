@@ -236,12 +236,17 @@ function legacyWorkbook(marker: string): Uint8Array {
 }
 
 /** A workbook's text as a reader before rows existed left it: read, from these bytes. */
-async function seedReadText(documentId: string, sha256: string, text: string): Promise<void> {
+async function seedReadText(
+  documentId: string,
+  sha256: string,
+  text: string,
+  method = "xlsx",
+): Promise<void> {
   await db.query(
     `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method, text,
        chars, extracted_at, run_id, reader_version)
-     VALUES ($1, $2, $3, $4, 'xlsx', $5, char_length($5), now(), 'run-old', 6)`,
-    [SOURCE, TENANT, documentId, sha256, text],
+     VALUES ($1, $2, $3, $4, $6, $5, char_length($5), now(), 'run-old', 6)`,
+    [SOURCE, TENANT, documentId, sha256, text, method],
   );
 }
 
@@ -348,6 +353,33 @@ describe("a workbook read before its rows existed", () => {
       "held text",
       1,
       [{ reason: "workbook-not-a-workbook" }],
+    ]);
+  });
+});
+
+describe("a CSV read as text before its rows existed", () => {
+  it("is read again for its rows, its text left as the file it is", async () => {
+    // ADR 0107: a delimited file's method is `txt`, so it is owed rows by its type.
+    const file = "Customer,Amount\nAcme Holdings,1234.10\n";
+    const sha = await landDocument({
+      documentId: "c1",
+      bytes: new TextEncoder().encode(file),
+      contentType: "text/csv",
+    });
+    await seedReadText("c1", sha, file, "txt");
+
+    await extract(spawnAnswering(""));
+
+    const { rows } = await db.query<{ cells: unknown }>(
+      "SELECT cells FROM raw.document_rows ORDER BY row_number",
+    );
+    const [text] = await textRows();
+    expect([rows.map((row) => row.cells), text?.text]).toEqual([
+      [
+        { A: "Customer", B: "Amount" },
+        { A: "Acme Holdings", B: "1234.10" },
+      ],
+      file,
     ]);
   });
 });

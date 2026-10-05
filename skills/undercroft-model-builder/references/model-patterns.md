@@ -134,7 +134,8 @@ view, not ephemeral.
 
 ## A workbook's rows
 
-Every `.xlsx`, `.xlsm` and Google Sheet that lands is read into rows. Nothing is decided for
+Every `.xlsx`, `.xlsm`, `.xls`, Google Sheet and CSV that lands is read into rows (a CSV as one
+sheet with no name, by RFC 4180: a semicolon-separated file arrives as one column to split). Nothing is decided for
 you: no header is chosen, no column named, no type inferred. Every cell is the string the file
 stored, so the model decides what each column is.
 

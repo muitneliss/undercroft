@@ -209,7 +209,7 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     mimeTypes: ["text/csv"],
     extensions: ["csv"],
     spec: "https://www.rfc-editor.org/rfc/rfc4180",
-    reads: "text",
+    reads: "table",
   },
   {
     id: "txt",
