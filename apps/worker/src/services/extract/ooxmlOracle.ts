@@ -31,14 +31,14 @@
  *
  * WHAT IT SHARES WITH THE READER, and therefore cannot check: the zip container and the XML
  * entity decoder. A member `zip.ts` cannot inflate is invisible to both, so this cannot report
- * a part the container dropped -- `docx.ts` and `xlsx.ts` fail the WHOLE read in that case,
- * which is the property that makes the gap survivable, and `zip.ts`'s own suite is what pins
- * it. Writing a second zip parser here would put a likelier bug in the oracle than the one it
+ * a part the container dropped -- `docx.ts` fails the WHOLE read in that case, and `xlsx.ts`
+ * marks that sheet incomplete and its text `truncated`, which are the properties that make the
+ * gap survivable, and `zip.ts`'s own suite is what pins it. Writing a second zip parser here would put a likelier bug in the oracle than the one it
  * was watching for. `UNMEASURED` says so out loud.
  */
 
 import { comparable } from "./accuracy.ts";
-import { decodeXmlText } from "./xlsx.ts";
+import { decodeXmlText } from "./xml.ts";
 import { readZipIndex, readZipText } from "./zip.ts";
 
 /** Which container this is. The two are reported separately and never averaged; see above. */

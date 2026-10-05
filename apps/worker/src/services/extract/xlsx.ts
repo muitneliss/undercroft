@@ -1,265 +1,224 @@
 /**
- * What a spreadsheet says, as text.
+ * What a spreadsheet says: its sheets as rows of cells, and the same rows as text.
  *
- * The OOXML half of the `.xlsx` reader; `zip.ts` is the container half and argues there why
- * neither a converter binary nor an npm dependency is the right shape here.
+ * `workbookPackage.ts` finds the parts and `zip.ts` opens the container; this reads the sheets.
+ * ONE PARSE, TWO OUTPUTS: the rows a dbt model selects (`raw.document_rows`, ADR 0104) and the
+ * tab-separated text search indexes (`raw.document_text`) come from the same scan, so the two
+ * can never disagree about what a workbook holds.
  *
  * CELL VALUES STAY STRINGS, EXACTLY AS THE FILE WROTE THEM. This is `money.md`, and a
  * spreadsheet is the single likeliest document in the platform to be full of amounts: the
  * moment a cell becomes a JavaScript `number` it is a float, and `1234.10` arrives downstream
- * as `1234.0999999999999`. Nothing here parses a value -- the stored XML digits are copied
- * through verbatim, which is also the only honest thing to do for a column whose type this
- * reader cannot know.
+ * as `1234.0999999999999`. Nothing here parses a value.
  *
- * FOR THE SAME REASON A DATE IS LEFT AS ITS SERIAL. Excel stores `2026-09-21` as `46286` plus
- * a number format nobody here resolves, and rendering it needs the workbook's format table,
- * the 1900/1904 epoch flag and a timezone this file has no business choosing (`i18n.md` --
- * "never let a locale change a timezone"). A visible `46286` is a value a reader can look up;
- * a guessed date is one they cannot tell from a real one.
- *
- * SHEET NAMES ARE NOT INCLUDED, which is a refusal rather than an omission. A worksheet's
- * name lives in `xl/workbook.xml` and is bound to its part through `xl/_rels/workbook.xml.rels`;
- * without walking both, the mapping from `sheet1.xml` to the first tab is a convention that
- * usually holds, and "usually holds" is the definition of a guess. Sheets are emitted in
- * filename order and the text says which boundary is which.
+ * FACTS ARE RECORDED AND NOTHING IS INTERPRETED (ADR 0104 decision 2). A date stays its serial
+ * beside the workbook's `date1904` flag and the cell's number-format code; a merged range is
+ * listed, never filled; a hidden row is flagged, never dropped; no header is chosen. An Excel
+ * error (`#REF!`) and a formula written without its result are FAULTS, kept apart from values,
+ * so a model casting a column reads NULL rather than mistaking `#REF!` for a word.
  *
  * WHAT IT DOES NOT READ: charts, pivot caches, comments, and the formula behind a cell. A
  * formula's *result* is what the cell says; its source is a different document.
  */
 
-import { readZipIndex, readZipText } from "./zip.ts";
+import {
+  type Container,
+  openWorkbookPackage,
+  type SheetKind,
+  type SheetPart,
+  type SheetState,
+  type WorkbookPackage,
+} from "./workbookPackage.ts";
+import { lettersOf, type ScannedRow, scanSheet, stopped } from "./sheetScan.ts";
+import { attributesOf, PREFIX } from "./xml.ts";
 
-const SHARED_STRINGS = "xl/sharedStrings.xml";
-const WORKSHEET = /^xl\/worksheets\/sheet(?<index>\d+)\.xml$/u;
+export type { Container, SheetKind, SheetState } from "./workbookPackage.ts";
 
-/** Cells across, rows down. Tab-separated because a cell's own text may contain a comma. */
+/** One non-empty row, its cells keyed by column letter. Every map is sparse. */
+export interface SheetRow {
+  /** Excel's own row number; the gaps between two rows are real. */
+  readonly rowNumber: number;
+  readonly hidden: boolean;
+  /** Column letter → the string the file stores. */
+  readonly cells: Readonly<Record<string, string>>;
+  /** Column letter → number-format code, for a cell whose format is not General. */
+  readonly formats: Readonly<Record<string, string>> | null;
+  /** Column letter → what stands where a value would: `#REF!`, `formula-uncached`. */
+  readonly faults: Readonly<Record<string, string>> | null;
+}
+
+export interface Sheet {
+  readonly index: number;
+  readonly name: string | null;
+  readonly nameReason: string | null;
+  readonly kind: SheetKind | null;
+  readonly state: SheetState;
+  /** The used range the sheet declares, such as `A1:K5012`, or `null` when it declares none. */
+  readonly dimension: string | null;
+  /** Merged ranges as declared, such as `A1:F1`. Never filled. */
+  readonly merges: readonly string[];
+  /** `false` when the read stopped short; `reason` says why, and `rows` holds what came before. */
+  readonly complete: boolean;
+  readonly reason: string | null;
+  /** The sheet's rows, scanned afresh on each call so no sheet is ever held as an array. */
+  readonly rows: () => Iterable<SheetRow>;
+}
+
+export interface Workbook {
+  readonly container: Container;
+  readonly date1904: boolean | null;
+  readonly sheets: readonly Sheet[];
+}
+
+export interface WorkbookReading {
+  readonly workbook: Workbook;
+  /** The sheets as text: cells across by tab, rows down by line, sheets by a blank line. */
+  readonly text: string;
+  /** `true` when a sheet is incomplete, so the text is shorter than the workbook. */
+  readonly short: boolean;
+}
+
+/** A sheet listed past this is recorded and not read (ADR 0104 decision 11). */
+export const MAX_SHEETS = 256;
+
+/** Why a whole sheet is incomplete. A scan that stops part-way names its own (`sheetScan.ts`). */
+export const SHEET_UNREADABLE = "sheet-unreadable";
+export const SHEETS_LIMIT = "sheets-limit";
+
 const CELL_SEPARATOR = "\t";
 const ROW_SEPARATOR = "\n";
 const SHEET_SEPARATOR = "\n\n";
+const DIMENSION = new RegExp(`<${PREFIX}dimension\\b(?<attributes>[^>]*?)\\/?>`, "u");
+const MERGE = new RegExp(`<${PREFIX}mergeCell\\b(?<attributes>[^>]*?)\\/?>`, "gu");
 
-/**
- * Phonetic guide text, which duplicates the reading it annotates.
- *
- * Excel writes `<rPh>` inside a shared string to carry furigana over the same characters the
- * `<t>` runs already hold. Collected naively, every such string arrives doubled.
- */
-const PHONETIC = /<rPh\b[\s\S]*?<\/rPh>/gu;
-
-/**
- * The element grammar, each written to match a self-closing tag as well as a filled one.
- *
- * `<c r="A1"/>` is a legal empty cell and `<row r="7"/>` a legal empty row, so a pattern that
- * only matched `<x>...</x>` would miss them. Matching them is not what keeps a row's columns in
- * place, though: Excel usually omits an empty cell outright, and `rowCells` places every cell
- * by its own reference for that reason.
- */
-const TEXT_RUN = /<t\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/t>)/gu;
-const SHARED_ITEM = /<si\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/si>)/gu;
-const SHEET_DATA = /<sheetData\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/sheetData>)/u;
-const ROW = /<row\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/row>)/gu;
-const CELL = /<c\b(?<attributes>[^>]*?)(?:\/>|>(?<body>[\s\S]*?)<\/c>)/gu;
-const VALUE = /<v\b[^>]*?(?:\/>|>(?<body>[\s\S]*?)<\/v>)/u;
-const CELL_TYPE = /\bt="(?<type>[^"]*)"/u;
-const CELL_REFERENCE = /\br="(?<reference>[^"]*)"/u;
-const COLUMN_LETTERS = /^\$?(?<letters>[A-Za-z]{1,3})\$?\d+$/u;
-const A_CODE = 65;
-
-/** XFD, the last column Excel has had since 2007 (ECMA-376 Part 1 §18.3.1.4). */
-const MAX_COLUMN = 16_384;
-
-const NAMED_ENTITY: Readonly<Record<string, string>> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-};
-
-const ENTITY = /&(?<body>#x?[0-9a-f]+|[a-z]+);/giu;
-
-/**
- * XML entities resolved, including the numeric forms Excel uses for control characters.
- *
- * An entity this function does not recognise is left standing rather than dropped: `&foo;` on
- * the page is visibly odd, where silently deleting it edits the document.
- */
-export function decodeXmlText(value: string): string {
-  return value.replaceAll(ENTITY, (whole, body: string) => {
-    const named = NAMED_ENTITY[body.toLowerCase()];
-    if (named !== undefined) {
-      return named;
+function sheetRowOf(row: ScannedRow): SheetRow {
+  const cells: Record<string, string> = {};
+  const formats: Record<string, string> = {};
+  const faults: Record<string, string> = {};
+  for (const entry of row.entries) {
+    const letters = lettersOf(entry.column);
+    if (entry.value !== null) {
+      cells[letters] = entry.value;
     }
-    if (!body.startsWith("#")) {
-      return whole;
+    if (entry.format !== null) {
+      formats[letters] = entry.format;
     }
-    const hex = body.startsWith("#x") || body.startsWith("#X");
-    // `Number.parseInt`, not `Number()`: a code point is an integer index, not an amount.
-    // money.grit's docstring names this exact distinction.
-    const code = Number.parseInt(hex ? body.slice(2) : body.slice(1), hex ? 16 : 10);
-    return Number.isInteger(code) && code > 0 && code <= 0x10_ff_ff
-      ? String.fromCodePoint(code)
-      : whole;
-  });
-}
-
-/** Every `<t>` run inside one element, joined. A shared string is its runs in order. */
-function runsOf(xml: string): string {
-  let text = "";
-  for (const run of xml.replaceAll(PHONETIC, "").matchAll(TEXT_RUN)) {
-    text += decodeXmlText(run.groups?.body ?? "");
+    if (entry.fault !== null) {
+      faults[letters] = entry.fault;
+    }
   }
-  return text;
+  return {
+    rowNumber: row.rowNumber,
+    hidden: row.hidden,
+    cells,
+    formats: Object.keys(formats).length > 0 ? formats : null,
+    faults: Object.keys(faults).length > 0 ? faults : null,
+  };
 }
 
 /**
- * The shared string table, by index.
- *
- * Absent from a workbook whose every string is inline, which is not an error -- an empty
- * table simply resolves no `t="s"` cell, and there are none to resolve.
+ * A row as a line of text, every gap kept so a column stays a column. An Excel error is text a
+ * reader would see on the sheet; an uncached formula or a missing shared string shows nothing.
  */
-export function sharedStrings(xml: string | null): string[] {
-  if (xml === null) {
-    return [];
-  }
-  return [...xml.matchAll(SHARED_ITEM)].map((item) => runsOf(item.groups?.body ?? ""));
-}
-
-/**
- * One cell's text.
- *
- * `t="s"` indexes the shared table; `t="inlineStr"` carries its own runs; everything else --
- * a number, a boolean's `0`/`1`, a formula's cached string, an error's `#REF!` -- is the
- * literal contents of `<v>`, copied and not interpreted. See the module docstring.
- */
-function cellText(attributes: string, body: string, shared: readonly string[]): string {
-  const type = CELL_TYPE.exec(attributes)?.groups?.type ?? "";
-  if (type === "inlineStr") {
-    return runsOf(body);
-  }
-  const raw = decodeXmlText(VALUE.exec(body)?.groups?.body ?? "");
-  if (type !== "s") {
-    return raw;
-  }
-  const index = Number.parseInt(raw, 10);
-  // An index the table cannot answer is left blank rather than filled with the raw number,
-  // which would put a row number where a word belongs.
-  return shared[index] ?? "";
-}
-
-/**
- * The 1-based column a cell reference names (`C7` → 3), or `null` for one that names none.
- *
- * Bounded by Excel's own last column, XFD. A reference past it is not a workbook Excel could
- * have written, and placing its cell would pad a row with thousands of empty columns.
- */
-function columnOf(reference: string): number | null {
-  const letters = COLUMN_LETTERS.exec(reference)?.groups?.letters;
-  if (letters === undefined) {
-    return null;
-  }
-  let column = 0;
-  for (const letter of letters.toUpperCase()) {
-    column = column * 26 + (letter.codePointAt(0) ?? 0) - A_CODE + 1;
-  }
-  return column <= MAX_COLUMN ? column : null;
-}
-
-/**
- * One row's cells, each in the column its reference names, or `null` for a row that cannot be
- * laid out exactly.
- *
- * PLACED BY `r`, NOT BY POSITION IN THE XML. Excel omits an empty cell entirely rather than
- * writing `<c r="B5"/>`, so a row holding A and C is two `<c>` elements; joined in document
- * order, C would slide left into B and an amount would read under the wrong heading. A cell
- * with no `r` -- legal, and what some writers emit for every cell -- takes the column after
- * the one before it, which is exactly what ECMA-376 Part 1 §18.3.1.4 says it means.
- *
- * Cells must arrive left to right (the same section). One that names a column at or before
- * the previous one would overwrite a value or reorder the row, so the row is refused rather
- * than laid out by a guess.
- */
-function rowCells(body: string, shared: readonly string[]): string[] | null {
+function lineOf(row: ScannedRow): string {
   const cells: string[] = [];
-  for (const cell of body.matchAll(CELL)) {
-    const attributes = cell.groups?.attributes ?? "";
-    const reference = CELL_REFERENCE.exec(attributes)?.groups?.reference;
-    const column = reference === undefined ? cells.length + 1 : columnOf(reference);
-    if (column === null || column <= cells.length) {
-      return null;
-    }
-    while (cells.length < column - 1) {
+  for (const entry of row.entries) {
+    while (cells.length < entry.column - 1) {
       cells.push("");
     }
-    cells.push(cellText(attributes, cell.groups?.body ?? "", shared));
+    cells.push(entry.value ?? (entry.fault?.startsWith("#") === true ? entry.fault : ""));
   }
-  return cells;
+  return cells.join(CELL_SEPARATOR);
+}
+
+function* sheetRows(xml: string, workbook: WorkbookPackage): Generator<SheetRow> {
+  for (const row of scanSheet(xml, workbook)) {
+    yield sheetRowOf(row);
+  }
+}
+
+/** Text collected up to a ceiling: past it, the scan goes on for its outcome but writes nothing. */
+class BoundedText {
+  readonly #limit: number;
+  readonly #parts: string[] = [];
+  #length = 0;
+
+  constructor(limit: number) {
+    this.#limit = limit;
+  }
+
+  add(part: string): void {
+    if (this.#length <= this.#limit) {
+      this.#parts.push(part);
+      this.#length += part.length;
+    }
+  }
+
+  toString(): string {
+    return this.#parts.join("");
+  }
+}
+
+/** Scans a sheet once for its text and its outcome; `rows` scans it again on demand. */
+function readSheet(part: SheetPart, workbook: WorkbookPackage, text: BoundedText): Sheet {
+  const facts = {
+    index: part.index,
+    name: part.name,
+    nameReason: part.nameReason,
+    kind: part.kind,
+    state: part.state,
+  };
+  const { xml } = part;
+  if (xml === null || part.index > MAX_SHEETS) {
+    const reason = xml === null ? SHEET_UNREADABLE : SHEETS_LIMIT;
+    return { ...facts, dimension: null, merges: [], ...stopped(reason), rows: () => [] };
+  }
+  const lines = scanSheet(xml, workbook);
+  let first = true;
+  let step = lines.next();
+  while (step.done !== true) {
+    text.add(`${first ? "" : ROW_SEPARATOR}${lineOf(step.value)}`);
+    first = false;
+    step = lines.next();
+  }
+  return {
+    ...facts,
+    dimension: attributesOf(DIMENSION.exec(xml)?.groups?.attributes ?? "").get("ref") ?? null,
+    merges: [...xml.matchAll(MERGE)].flatMap(
+      (merge) => attributesOf(merge.groups?.attributes ?? "").get("ref") ?? [],
+    ),
+    ...step.value,
+    rows: () => sheetRows(xml, workbook),
+  };
 }
 
 /**
- * One worksheet's rows, or `null` when a row cannot be laid out exactly (`rowCells`). An
- * entirely empty row is dropped; a partly empty one keeps its gaps.
- */
-function sheetText(xml: string, shared: readonly string[]): string | null {
-  const data = SHEET_DATA.exec(xml)?.groups?.body ?? "";
-  const lines: string[] = [];
-
-  for (const row of data.matchAll(ROW)) {
-    const cells = rowCells(row.groups?.body ?? "", shared);
-    if (cells === null) {
-      return null;
-    }
-    if (cells.some((cell) => cell !== "")) {
-      lines.push(cells.join(CELL_SEPARATOR));
-    }
-  }
-
-  return lines.join(ROW_SEPARATOR);
-}
-
-/**
- * A workbook's worksheets, in filename order.
+ * Read a workbook into sheets of rows and their text, or `null` for bytes that are not a
+ * workbook this reader can open.
  *
- * Numeric order rather than lexicographic, so `sheet10.xml` follows `sheet9.xml` instead of
- * `sheet1.xml`. Ordering is cosmetic for a search index and free to get right here.
- */
-function worksheetNames(index: ReadonlyMap<string, unknown>): string[] {
-  const sheets: { name: string; at: number }[] = [];
-  for (const name of index.keys()) {
-    const matched = WORKSHEET.exec(name);
-    if (matched !== null) {
-      sheets.push({ name, at: Number.parseInt(matched[1] ?? "0", 10) });
-    }
-  }
-  return sheets.sort((a, b) => a.at - b.at).map((sheet) => sheet.name);
-}
-
-/**
- * Read a `.xlsx` into text, or `null` if these bytes are not a workbook we can open.
+ * `null` covers a corrupt archive, one that is not a zip at all, a zip holding no sheet -- a
+ * `.docx` renamed, say -- and a workbook none of whose sheets could be read. Each is "we could
+ * not read this", which the caller records as a reason; none of them is an empty spreadsheet,
+ * and this must not return one for them (`CLAUDE.md` rule 2). A workbook with SOME sheets
+ * readable is read, and the others say why they are not (`Sheet.reason`).
  *
- * `null` covers a corrupt archive, one that is not a zip at all, and a zip holding no
- * worksheet -- a `.docx` renamed, say. Each is "we could not read this", which the caller
- * records as a reason; none of them is an empty spreadsheet, and this must not return `""`
- * for them (`CLAUDE.md` rule 2).
+ * `textLimit` bounds the text held while scanning; the caller caps and flags it exactly.
  */
-export function readXlsx(bytes: Uint8Array): string | null {
-  const index = readZipIndex(bytes);
-  const sheets = worksheetNames(index);
-  if (sheets.length === 0) {
+export function readWorkbook(bytes: Uint8Array, textLimit: number): WorkbookReading | null {
+  const opened = openWorkbookPackage(bytes);
+  if (opened === null || opened.sheets.every((sheet) => sheet.xml === null)) {
     return null;
   }
-
-  const shared = sharedStrings(readZipText(bytes, index, SHARED_STRINGS));
-  const texts: string[] = [];
-  for (const sheet of sheets) {
-    const xml = readZipText(bytes, index, sheet);
-    // A worksheet we could not inflate, or one whose cells cannot be placed exactly. Either
-    // way a short or shifted workbook would read as a complete one.
-    const text = xml === null ? null : sheetText(xml, shared);
-    if (text === null) {
-      return null;
+  const text = new BoundedText(textLimit);
+  const sheets = opened.sheets.map((part) => {
+    if (part.index > 1) {
+      text.add(SHEET_SEPARATOR);
     }
-    texts.push(text);
-  }
-
-  return texts.join(SHEET_SEPARATOR);
+    return readSheet(part, opened, text);
+  });
+  return {
+    workbook: { container: opened.container, date1904: opened.date1904, sheets },
+    text: text.toString(),
+    short: sheets.some((sheet) => !sheet.complete),
+  };
 }
