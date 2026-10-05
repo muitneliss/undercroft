@@ -42,6 +42,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { type DashboardDraft, isDashboardDirty } from "@/lib/dashboardDraft.ts";
+import {
+  type ContextDraft,
+  type ContextFields,
+  contextFields,
+  isContextDirty,
+} from "@/lib/modelContextDraft.ts";
 import { isDirty, type ModelDraft } from "@/lib/modelDraft.ts";
 import {
   isQuestionDirty,
@@ -298,6 +304,17 @@ interface UiState {
   removeModelTestColumn: (column: string) => void;
   /** The server now holds what the draft holds: nothing is unsaved. */
   markModelSaved: () => void;
+  /**
+   * The business context being written for one model, or null. Same rules as `modelDraft`,
+   * and kept apart from it: approving a context and saving SQL are two verbs, and an edit to
+   * one must not make the other look unsaved. ADR 0104.
+   */
+  modelContextDraft: ContextDraft | null;
+  setModelContextDraft: (draft: ContextDraft | null) => void;
+  /** Change some of the draft's fields; the rest are kept. */
+  editModelContext: (patch: Partial<ContextFields>) => void;
+  /** The server now holds what the draft holds: nothing is unsaved. */
+  markModelContextSaved: () => void;
   /** The question being edited, or null. Same rules as `modelDraft`. */
   questionDraft: QuestionDraft | null;
   setQuestionDraft: (draft: QuestionDraft | null) => void;
@@ -442,6 +459,7 @@ export function holdsUnsavedWork(
   state: Pick<
     UiState,
     | "modelDraft"
+    | "modelContextDraft"
     | "questionDraft"
     | "dashboardDraft"
     | "assistantDraft"
@@ -452,6 +470,7 @@ export function holdsUnsavedWork(
 ): boolean {
   return (
     (state.modelDraft !== null && isDirty(state.modelDraft)) ||
+    (state.modelContextDraft !== null && isContextDirty(state.modelContextDraft)) ||
     (state.questionDraft !== null && isQuestionDirty(state.questionDraft)) ||
     (state.dashboardDraft !== null && isDashboardDirty(state.dashboardDraft)) ||
     state.assistantDraft.trim() !== "" ||
@@ -803,6 +822,33 @@ function modelSlice(
   };
 }
 
+/** A model's business context being written. See `modelContextDraft`. */
+function modelContextSlice(
+  set: Setter,
+): Pick<
+  UiState,
+  "modelContextDraft" | "setModelContextDraft" | "editModelContext" | "markModelContextSaved"
+> {
+  return {
+    modelContextDraft: null,
+    setModelContextDraft: (modelContextDraft): unknown => set({ modelContextDraft }),
+    editModelContext: (patch): unknown =>
+      set((state) =>
+        state.modelContextDraft === null
+          ? {}
+          : { modelContextDraft: { ...state.modelContextDraft, ...patch } },
+      ),
+    markModelContextSaved: (): unknown =>
+      set((state) => {
+        const draft = state.modelContextDraft;
+        if (draft === null) {
+          return {};
+        }
+        return { modelContextDraft: { ...draft, saved: contextFields(draft) } };
+      }),
+  };
+}
+
 /** A question being built: its name, its visual, and the SQL behind it. */
 function questionSlice(
   set: Setter,
@@ -986,6 +1032,7 @@ export const useUiStore = create<UiState>()(
       ...scopeSlice(set),
       ...lakeSlice(set),
       ...modelSlice(set),
+      ...modelContextSlice(set),
       ...questionSlice(set),
       ...dashboardSlice(set),
       ...assistantSlice(set),

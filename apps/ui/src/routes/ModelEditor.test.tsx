@@ -3,7 +3,9 @@
  * discarded back to what the server holds -- in the store AND in the editor on screen, which is
  * uncontrolled and would otherwise keep showing the discarded text -- and the dependencies band
  * lists only what the saved SQL declares, marking a deleted ref as missing and an unreadable
- * upstream as undeclared rather than as "reads nothing".
+ * upstream as undeclared rather than as "reads nothing"; and a business context out of date says
+ * which model changed and how, keeps the approved text beneath, and never calls a declared key
+ * anything a test would (ADR 0104).
  *
  * No mocks: the real route, store, router, tRPC client, react-query and CodeMirror, over a fetch
  * that answers the leaf's queries and REFUSES every other path.
@@ -26,6 +28,37 @@ import { trpc } from "@/trpc.ts";
 const TENANT = "CASE-0042";
 const WHEN = "2026-09-30T03:12:53.210Z";
 
+/** Synthetic: approved before stg_notes, which this model reads, changed its SQL. */
+const REVIEWED: ModelDetail["context"] = {
+  state: "needs_review",
+  missing: [],
+  changes: [{ model: "stg_notes", kind: "sql" }],
+  body: {
+    purpose: "Notes per deal, for the pipeline review.",
+    grain: "One note.",
+    key: { kind: "declared", columns: ["deal_id", "note_id"] },
+    columns: [{ name: "deal_id", definition: "The deal the note is on." }],
+    rules: { kind: "none" },
+  },
+  reviewedBy: "u1",
+  reviewedAt: WHEN,
+  basis: "b1",
+  absentColumns: [],
+  upstreamUndeclared: false,
+};
+
+const UNWRITTEN: ModelDetail["context"] = {
+  state: "incomplete",
+  missing: ["purpose", "grain", "key", "columns", "rules"],
+  changes: [],
+  body: null,
+  reviewedBy: null,
+  reviewedAt: null,
+  basis: "b0",
+  absentColumns: [],
+  upstreamUndeclared: false,
+};
+
 function detail(name: string): ModelDetail {
   return {
     name,
@@ -34,6 +67,7 @@ function detail(name: string): ModelDetail {
     lastBuild: { runId: "run-7", status: "success", endedAt: WHEN, columns: ["deal_id"] },
     sql: `select 1 as deal_id -- ${name}`,
     tests: { columns: {} },
+    context: name === "mart_notes" ? REVIEWED : UNWRITTEN,
   };
 }
 
@@ -61,7 +95,7 @@ const LINEAGE = {
 
 afterEach(() => {
   cleanup();
-  useUiStore.setState({ modelDraft: null });
+  useUiStore.setState({ modelDraft: null, modelContextDraft: null });
 });
 
 function answer(data: unknown): Response {
@@ -171,5 +205,24 @@ describe("the dependencies band", () => {
     mount("stg_blank");
     expect(await screen.findByText("Không khai báo đọc gì.")).toBeDefined();
     expect(screen.queryByText("Thượng nguồn chưa khai báo")).toBeNull();
+  });
+});
+
+describe("the business context band", () => {
+  it("names what changed and where, keeps the approved text, and claims no test", async () => {
+    mount("mart_notes");
+    const band = await screen.findByRole("region", { name: "Ngữ cảnh nghiệp vụ" });
+
+    expect(within(band).getByText("Cần duyệt lại")).toBeDefined();
+    expect(
+      within(band).getByText("SQL của stg_notes, mô hình mà mô hình này đọc, đã đổi."),
+    ).toBeDefined();
+    expect(within(band).getByText("Notes per deal, for the pipeline review.")).toBeDefined();
+    expect(within(band).getByText("deal_id, note_id")).toBeDefined();
+    expect(
+      within(band).getByText("Đây là trạng thái tài liệu, không phải kiểm thử dữ liệu."),
+    ).toBeDefined();
+    // A declared key is documentation: nothing on the band may read as a test that ran.
+    expect(band.textContent).not.toMatch(/unique|verified|passed|duy nhất|xác minh|đạt/iu);
   });
 });

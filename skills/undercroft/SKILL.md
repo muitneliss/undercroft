@@ -18,6 +18,11 @@ Every role check and every refusal the web UI has applies to you unchanged.
   schema. The logic lives here: joins, deduplication, time zones, what a metric means. A
   model changes only when it is built -- after each successful ingest, or by
   `models.build`.
+- **Business context**: what a model means, written by a person -- its purpose, what one
+  row is, its key, what each column means and the rules it applies -- and approved by an
+  admin with `models.setContext`. `models.list` and `models.get` return its state:
+  `incomplete` (a part is missing), `needs_review` (the model, or a model it reads, changed
+  since approval) or `current`. It is documentation, never a test of the data.
 - **Macro**: a named piece of dbt Jinja a model calls, such as `{{ parse_amount(...) }}`.
   The platform ships a few into every project; a customer's admin can save the customer's
   own with `macros.save`, and every model of that customer can then call it. Reuse one
@@ -89,7 +94,9 @@ door with this rule.
 Each workflow is its own skill. Follow it when the person's request matches.
 
 - `undercroft-model-builder`: turn a query into a dbt model, or design and build a new model,
-  by interviewing the person first and checking the model before it is saved.
+  by interviewing the person first and checking the model before it is saved. It also
+  drafts a model's business context for a person to approve, and audits which contexts are
+  incomplete or need review.
 
 ## Things only the person can do
 

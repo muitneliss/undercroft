@@ -107,6 +107,7 @@
 - [ADR 0101 A Spec Lands the Text a Person Wrote as a Document of Its Record](sources/adr-0101-a-spec-lands-the-text-a-person-wrote-as-a-document-of-its-record.md)
 - [ADR 0102 A Classifying Pass Asks Several Texts at Once](sources/adr-0102-a-classifying-pass-asks-several-texts-at-once.md)
 - [ADR 0103 The Lineage Board Is Laid Out by ELK](sources/adr-0103-the-lineage-board-is-laid-out-by-elk.md)
+- [ADR 0104 A Model Carries One Business Context, Reviewed Against Its Definition](sources/adr-0104-a-model-carries-one-business-context-reviewed-against-its-definition.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

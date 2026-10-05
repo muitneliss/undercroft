@@ -9,13 +9,10 @@ import { describe, expect, test as it } from "bun:test";
 import type { ModelDetail } from "@/api/types.ts";
 import { draftFrom, isDirty, testsFor } from "./modelDraft.ts";
 
-const MODEL: ModelDetail = {
+const MODEL: Pick<ModelDetail, "name" | "sql" | "tests"> = {
   name: "stg_deals",
   sql: "select 1 as deal_id",
   tests: { columns: { deal_id: ["not_null", "unique"] } },
-  updatedAt: "2026-09-17T10:00:00.000Z",
-  updatedBy: "u-1",
-  lastBuild: null,
 };
 
 describe("modelDraft", () => {

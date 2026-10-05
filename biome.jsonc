@@ -975,6 +975,18 @@
       "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
     },
 
+    // A model's business rules (ADR 0104): sentences with no id of their own, which may repeat
+    // while a draft is half-written, so the position is the only identity a rule has. The
+    // rule guards a reordered list reusing a node with the wrong state; the form's inputs are
+    // controlled by the store, so a reused node is handed the right text on the same render.
+    {
+      "includes": [
+        "apps/ui/src/components/ModelContext.tsx",
+        "apps/ui/src/components/ModelContextForm.tsx"
+      ],
+      "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
+    },
+
     // A fixed-length skeleton. The rule guards against reconciliation bugs when a keyed list
     // is REORDERED, inserted into or filtered; this list is a placeholder of constant length
     // whose items carry no identity and never move, so the index is the only id there is.

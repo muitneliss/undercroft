@@ -285,3 +285,6 @@
 ## [2026-10-01] ingest | Design: Operator and reader paths
 ## [2026-10-01] ingest | ADR 0103 The Lineage Board Is Laid Out by ELK
 ## [2026-10-01] ingest | ADR 0103 The Lineage Board Is Laid Out by ELK
+## [2026-10-05] ingest | ADR 0104 A Model Carries One Business Context, Reviewed Against Its Definition
+## [2026-10-05] ingest | Architecture
+## [2026-10-05] ingest | Runbook: Agent skills
