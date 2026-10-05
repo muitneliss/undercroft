@@ -15,6 +15,9 @@
  * (`ModelLineage`, ADR 0092), in the same address with `?view=lineage`: a view of Models and
  * not an eighth division, because the wheel is full (ADR 0019).
  *
+ * Beside each build, the state of the model's business context (ADR 0105) -- whether what is
+ * written about the model still describes it -- as the server worked it out on this read.
+ *
  * Creating is admin-only, like saving: a model is what a dashboard will show. The name is
  * checked by the browser's own constraint validation before it is sent, so a bad name is a
  * message at the field and not a refusal from the server; the server refuses regardless.
@@ -28,6 +31,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState.tsx";
 import { Errata } from "@/components/Errata.tsx";
 import { ModelLineage } from "@/components/ModelLineage.tsx";
+import { ModelRow } from "@/components/ModelRow.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { StatusMark } from "@/components/StatusMark.tsx";
 import { divisionPath } from "@/lib/divisions.ts";
@@ -35,10 +39,7 @@ import { LINEAGE_VIEW, lineagePath, VIEW_PARAM } from "@/lib/lineage.ts";
 import {
   BUILD_STATES,
   type BuildState,
-  buildMark,
-  buildMarkLabel,
   buildTally,
-  builtColumnCount,
   stateLabel,
   stateMark,
 } from "@/lib/modelBuild.ts";
@@ -53,9 +54,7 @@ import {
 } from "@/lib/modelList.ts";
 import { isModelName } from "@/lib/modelName.ts";
 import { modelTemplate } from "@/lib/modelTemplate.ts";
-import { formatCount, MISSING } from "@/lib/money.ts";
-import { journalPath } from "@/lib/runs.ts";
-import { relativeTime } from "@/lib/when.ts";
+import { formatCount } from "@/lib/money.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -276,7 +275,6 @@ function ModelList({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [params] = useSearchParams();
-  const locale = useUiStore((state) => state.locale);
   const draft = useUiStore((state) => state.modelDraft);
   const models = trpc.models.list.useQuery({ tenantId });
 
@@ -299,7 +297,6 @@ function ModelList({
     );
   }
 
-  const base = divisionPath("models", tenantId);
   const filters = modelListFilters(params);
   const { matched, shown } = narrowModels(models.data, filters);
   const statuses = matched.map((model) => model.lastBuild?.status ?? null);
@@ -324,50 +321,19 @@ function ModelList({
               <th className="num" scope="col">
                 {t("models.colColumns")}
               </th>
+              <th scope="col">{t("models.colContext")}</th>
               <th scope="col">{t("models.colUpdated")}</th>
             </tr>
           </thead>
           <tbody>
-            {shown.map((model) => {
-              const columns = builtColumnCount(model.lastBuild);
-              return (
-                <tr key={model.name}>
-                  <td>
-                    <Link className="journal__what" to={`${base}/${model.name}`}>
-                      {model.name}
-                    </Link>
-                    {unsaved === model.name ? (
-                      <span className="datum datum--quiet journal__trigger">
-                        {t("models.unsaved")}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td>
-                    <StatusMark
-                      mark={buildMark(model.lastBuild?.status ?? null)}
-                      label={buildMarkLabel(t, model.lastBuild?.status ?? null)}
-                    />
-                  </td>
-                  <td className="datum">
-                    {model.lastBuild === null ? (
-                      <span className="missing">{MISSING}</span>
-                    ) : (
-                      <Link to={journalPath(tenantId, { runId: model.lastBuild.runId })}>
-                        {model.lastBuild.runId}
-                      </Link>
-                    )}
-                  </td>
-                  <td className="datum num">
-                    {columns === null ? (
-                      <span className="missing">{MISSING}</span>
-                    ) : (
-                      formatCount(columns, locale)
-                    )}
-                  </td>
-                  <td className="datum datum--quiet">{relativeTime(model.updatedAt, locale)}</td>
-                </tr>
-              );
-            })}
+            {shown.map((model) => (
+              <ModelRow
+                key={model.name}
+                model={model}
+                tenantId={tenantId}
+                unsaved={unsaved === model.name}
+              />
+            ))}
           </tbody>
         </table>
       </div>

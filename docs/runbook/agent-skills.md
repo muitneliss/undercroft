@@ -7,10 +7,10 @@ agent carries them out through one of the two doors, the MCP tools at `/mcp` or 
 
 ## The skills
 
-| Skill                      | What it is for                                                                                                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `undercroft`               | The entry. It says which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, and how to report a defect. Read before any other. |
-| `undercroft-model-builder` | Saving a query as a dbt model, or building a new one. Interviews the person first, reads the lake, runs `models.check`, and asks before it saves and again before it builds.     |
+| Skill                      | What it is for                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `undercroft`               | The entry. It says which door to use, how an operation is spelled on each, what a refusal means, what only the person can do, and how to report a defect. Read before any other.                                                                                                                                                               |
+| `undercroft-model-builder` | Saving a query as a dbt model, or building a new one. Interviews the person first, reads the lake, runs `models.check`, and asks before it saves and again before it builds. Also drafts a model's business context for a person to approve with `models.setContext`, and audits which contexts are `incomplete` or `needs_review` (ADR 0105). |
 
 They live in `skills/` at the repository root, and that is the only copy.
 
