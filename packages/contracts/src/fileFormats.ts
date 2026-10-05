@@ -149,7 +149,7 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     mimeTypes: ["application/vnd.ms-excel"],
     extensions: ["xls"],
     spec: "https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xls/",
-    reads: "metadata",
+    reads: "table",
     landsAs: "application/vnd.ms-excel",
   },
   {

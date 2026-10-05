@@ -778,6 +778,22 @@
       "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
     },
 
+    // The Excel 97-2003 reader, for [MS-DOC]'s reason in [MS-XLS]: an RK value keeps its
+    // `fX100` and `fInt` flags in its two low bits and a 30-bit value above them, a string's
+    // `fHighByte` is bit 0 of its flags byte, a sheet's visibility is the low two bits of a byte
+    // and a row's `fDyZero` is 0x20 of its flags. The spec defines each as a mask, and
+    // `(rk | 0) >> 2` is the sign-extended field; arithmetic in its place would be a second
+    // definition of the format. 18 findings across the four files. ADR 0104 decision 7.
+    {
+      "includes": [
+        "apps/worker/src/services/extract/biff8.ts",
+        "apps/worker/src/services/extract/biff8Globals.ts",
+        "apps/worker/src/services/extract/biff8Values.ts",
+        "apps/worker/src/services/extract/biffRecords.ts"
+      ],
+      "linter": { "rules": { "suspicious": { "noBitwiseOperators": "off" } } }
+    },
+
     // `noUnsafeTypeAssertion` is one of the two rules the `types` domain was kept for, and it
     // stays on everywhere. Ten of its findings were real and are fixed -- `isRecord` guards in
     // `getPath`, `canonicalJson`, `connectionScope` and the S3 error shape, `instanceof Error`

@@ -1298,6 +1298,20 @@ export const vi = {
         "Tài liệu quá nặng, hoặc worker đang quá tải. Tài liệu sẽ được đọc lại ở lần chạy sau.",
       xlsxUnreadable: "Không mở được bảng tính",
       xlsxUnreadableNote: "Tệp .xlsx có thể hỏng.",
+      xlsUnreadable: "Không đọc được bảng tính Excel 97–2003",
+      xlsUnreadableNote: "Các bản ghi trong tệp bị đứt giữa chừng; tệp .xls có thể hỏng.",
+      workbookPasswordProtected: "Bảng tính có mật khẩu mở, không đọc được",
+      workbookPasswordProtectedNote:
+        "Tệp gốc vẫn được lưu nguyên vẹn. Muốn đọc nội dung, hãy xin người gửi bản không đặt mật khẩu.",
+      xlsBiff5: "Bảng tính Excel 5/95, không đọc",
+      xlsBiff5Note:
+        "Chữ trong tệp này theo bảng mã của máy đã lưu nó, nên không đọc chính xác được. Muốn đọc, hãy mở bằng Excel và lưu lại thành .xlsx.",
+      xlsb: "Bảng tính Excel nhị phân (.xlsb), không đọc",
+      xlsbNote:
+        "Các trang tính được lưu dạng bản ghi nhị phân mà chưa có trình đọc nào ở đây mở được. Muốn đọc, hãy mở bằng Excel và lưu lại thành .xlsx.",
+      workbookNotAWorkbook: "Mang nhãn bảng tính nhưng không phải bảng tính",
+      workbookNotAWorkbookNote:
+        "Tệp đến với loại Excel, nhưng nội dung là thứ khác — một tài liệu, một hình ảnh hoặc một bản tải về bị hỏng. Tệp vẫn được lưu nguyên vẹn.",
       docxUnreadable: "Không mở được tài liệu Word",
       docxUnreadableNote: "Tệp .docx có thể hỏng.",
       docUnreadable: "Không mở được tài liệu Word",

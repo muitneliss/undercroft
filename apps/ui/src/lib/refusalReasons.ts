@@ -42,6 +42,11 @@ const DOCUMENT_REASONS = [
   // The sender locked it. The bytes are whole in the lake; nothing here can fix the lock.
   "pdf-password-protected",
   "doc-password-protected",
+  "workbook-password-protected",
+  // Labelled a spreadsheet and opened by its bytes (ADR 0104): what they turned out to be.
+  "xls-biff5-unsupported",
+  "xlsb-unsupported",
+  "workbook-not-a-workbook",
 ] as const;
 
 /** Facts about this deployment. Each one has somebody who can act. */
@@ -51,6 +56,7 @@ const DEPLOYMENT_REASONS = [
   "tesseract-failed",
   "ocr-out-of-time",
   "xlsx-unreadable",
+  "xls-unreadable",
   "docx-unreadable",
   "doc-unreadable",
   "lake-object-unreadable",
@@ -181,6 +187,20 @@ function aboutTheDocument(t: TFunction, code: DocumentReason): Words {
         title: t("journal.reason.docPasswordProtected"),
         note: t("journal.reason.docPasswordProtectedNote"),
       };
+    case "workbook-password-protected":
+      return {
+        title: t("journal.reason.workbookPasswordProtected"),
+        note: t("journal.reason.workbookPasswordProtectedNote"),
+      };
+    case "xls-biff5-unsupported":
+      return { title: t("journal.reason.xlsBiff5"), note: t("journal.reason.xlsBiff5Note") };
+    case "xlsb-unsupported":
+      return { title: t("journal.reason.xlsb"), note: t("journal.reason.xlsbNote") };
+    case "workbook-not-a-workbook":
+      return {
+        title: t("journal.reason.workbookNotAWorkbook"),
+        note: t("journal.reason.workbookNotAWorkbookNote"),
+      };
     default: {
       const exhaustive: never = code;
       throw new Error(`unhandled document reason ${String(exhaustive)}`);
@@ -215,6 +235,11 @@ function aboutTheDeployment(t: TFunction, code: DeploymentReason): Words {
       return {
         title: t("journal.reason.xlsxUnreadable"),
         note: t("journal.reason.xlsxUnreadableNote"),
+      };
+    case "xls-unreadable":
+      return {
+        title: t("journal.reason.xlsUnreadable"),
+        note: t("journal.reason.xlsUnreadableNote"),
       };
     case "docx-unreadable":
       return {

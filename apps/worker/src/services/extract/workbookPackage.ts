@@ -25,7 +25,8 @@ import { readSharedStrings } from "./sharedStrings.ts";
 import { attributesOf, PREFIX } from "./xml.ts";
 import { readZipIndex, readZipText, type StreamEnd, streamZipText, type ZipIndex } from "./zip.ts";
 
-export type Container = "ooxml" | "ooxml-strict";
+/** Which container a workbook came from: an OOXML package, Strict or not, or a BIFF8 stream. */
+export type Container = "ooxml" | "ooxml-strict" | "biff8";
 export type SheetKind = "worksheet" | "chartsheet" | "dialogsheet" | "macrosheet";
 export type SheetState = "visible" | "hidden" | "veryHidden";
 

@@ -14,6 +14,7 @@ export type ExtractMethod =
   | "docx"
   | "doc"
   | "xlsx"
+  | "xls"
   | "image_ocr"
   | "txt"
   | "html"
