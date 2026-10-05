@@ -112,7 +112,7 @@ BEGIN
     EXECUTE format(
         'GRANT SELECT ON raw.records, raw.documents, raw.document_text, raw.document_kind,
              raw.document_kind_definition, raw.document_kinds, raw.document_sheets,
-             raw.document_rows TO %I',
+             raw.document_rows, raw.document_rows_refusal TO %I',
         v_dbt);
     EXECUTE format('GRANT EXECUTE ON FUNCTION raw.tenant_of(name) TO %I', v_dbt);
     EXECUTE format(

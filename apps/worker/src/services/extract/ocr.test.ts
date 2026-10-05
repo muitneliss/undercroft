@@ -133,7 +133,7 @@ describe("an image big enough to be a document", () => {
   });
 
   it("takes the file by the path it was written under, which has no extension", async () => {
-    // `runExtract` writes `doc-<sanitised id>` and nothing may start keying off a suffix;
+    // `readDocument.ts` writes `doc-<sanitised id>` and nothing may start keying off a suffix;
     // tesseract sniffs the content through leptonica and does not care.
     const { spawn, calls } = spawnAnswering(A_PAGE);
 

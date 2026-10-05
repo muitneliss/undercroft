@@ -71,6 +71,9 @@ const LOCK_DIGEST = "SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || 
 
 const DELETE_SHEETS = "DELETE FROM raw.document_sheets WHERE tenant_id = $1 AND sha256 = $2";
 
+/** A refusal is answered by the rows that replace it. `470_document_rows_refusal.sql`. */
+const DELETE_REFUSAL = "DELETE FROM raw.document_rows_refusal WHERE tenant_id = $1 AND sha256 = $2";
+
 const INSERT_SHEET = `INSERT INTO raw.document_sheets
     (tenant_id, sha256, sheet_index, sheet_name, sheet_name_reason, sheet_kind, sheet_state,
      container, date1904, dimension, merges, row_count, complete, reason, rows_version,
@@ -153,6 +156,7 @@ export async function replaceWorkbookRows(
 ): Promise<number> {
   await tx.query(LOCK_DIGEST, [key.tenantId, key.sha256]);
   await tx.query(DELETE_SHEETS, [key.tenantId, key.sha256]);
+  await tx.query(DELETE_REFUSAL, [key.tenantId, key.sha256]);
   let written = 0;
   for (const sheet of workbook.sheets) {
     await insertSheet(tx, { key, workbook, stamp }, sheet);

@@ -183,7 +183,7 @@ export interface GoldScore {
  *
  * The bytes go to disk under `deps.workDir` because two of the readers are native programs
  * that open a path. The names are the case ids, which this repository authors and which are
- * therefore known-safe -- `runExtract` sanitises a provider's document id for the same step
+ * therefore known-safe -- `readDocument.ts` sanitises a provider's document id for the same step
  * and must, because a Gmail id carries a colon; nothing here takes a name from outside.
  */
 export async function scoreGold(deps: ExtractDeps, cases: readonly GoldCase[]): Promise<GoldScore> {

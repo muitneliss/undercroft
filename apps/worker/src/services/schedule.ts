@@ -28,11 +28,13 @@ import { type DueCandidate, listDueCandidates } from "@undercroft/db/repos";
 
 import { staleLayoutScopes } from "../repos/documentLayout.ts";
 import { pendingScopes } from "../repos/documentText.ts";
+import { owedWorkbookScopes } from "../repos/workbookBacklog.ts";
 import {
   CURRENT_LAYOUT_VERSION,
   CURRENT_READER_VERSION,
   RELAYABLE_METHODS,
 } from "./extract/extractText.ts";
+import { CURRENT_ROWS_VERSION, WORKBOOK_METHODS } from "./extract/workbookRows.ts";
 
 export interface DuePair {
   readonly tenantId: string;
@@ -64,7 +66,7 @@ export async function listDue(exec: SqlExecutor, now: Date = new Date()): Promis
  * nothing, which is the one thing this function exists not to do.
  */
 export async function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
-  const [unread, unlaid] = await Promise.all([
+  const [unread, unlaid, owed] = await Promise.all([
     pendingScopes(exec, { readerVersion: CURRENT_READER_VERSION }),
     // A text written under an older layout is outstanding work too, and a scope may hold
     // nothing else: the tenant whose only change is that its templates became known.
@@ -72,9 +74,12 @@ export async function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
       methods: RELAYABLE_METHODS,
       layoutVersion: CURRENT_LAYOUT_VERSION,
     }),
+    // So is a workbook read before its rows existed (ADR 0104): a settled tenant's whole
+    // spreadsheet history is owed rows the day this ships, and nothing else would start a run.
+    owedWorkbookScopes(exec, { methods: WORKBOOK_METHODS, rowsVersion: CURRENT_ROWS_VERSION }),
   ]);
   const due = new Map(
-    [...unread, ...unlaid].map((pair) => [`${pair.tenantId}\u0000${pair.source}`, pair]),
+    [...unread, ...unlaid, ...owed].map((pair) => [`${pair.tenantId}\u0000${pair.source}`, pair]),
   );
   return [...due.values()].sort(
     (a, b) => a.tenantId.localeCompare(b.tenantId) || a.source.localeCompare(b.source),
