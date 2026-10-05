@@ -20,7 +20,7 @@
 
 import { TextDecoder as LabelledDecoder } from "node:util";
 
-import { decodeXmlText } from "./xlsx.ts";
+import { decodeXmlText } from "./xml.ts";
 
 /** Elements whose content is never text on the page. */
 const INVISIBLE = /<(?<tag>script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\k<tag>\s*>/giu;

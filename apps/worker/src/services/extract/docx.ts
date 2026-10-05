@@ -44,7 +44,7 @@
  * to stored text; nothing here flattens either.
  */
 
-import { decodeXmlText } from "./xlsx.ts";
+import { decodeXmlText } from "./xml.ts";
 import { readZipIndex, readZipText } from "./zip.ts";
 
 const BODY = "word/document.xml";
