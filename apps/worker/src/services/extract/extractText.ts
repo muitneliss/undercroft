@@ -22,6 +22,7 @@ import { ACRA_LAYOUT_VERSION } from "./acraTemplates.ts";
 import { claimsOpenAttestation, readOpenAttestation, relaid } from "./openAttestation.ts";
 import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
 import { type Extracted, read, refused, storableText, UNSUPPORTED_TYPE } from "./extracted.ts";
+import { CSV, delimitedWorkbook, type Grammar, TSV } from "./delimited.ts";
 import { readLabelledSpreadsheet, readUnlabelled } from "./spreadsheet.ts";
 
 /**
@@ -162,6 +163,17 @@ function readPlainText(_deps: ExtractDeps, input: Document): Extracted {
   return read("txt", decodeUnlabelled(input.bytes));
 }
 
+/**
+ * A delimited file: its text as the text it is, as before, and its records as rows by the
+ * grammar its type names (`delimited.ts`, ADR 0107). The text is the file, not a rendering of
+ * the rows, so search finds what the sender wrote.
+ */
+async function readDelimited(input: Document, grammar: Grammar): Promise<Extracted> {
+  const text = decodeUnlabelled(input.bytes);
+  const workbook = await delimitedWorkbook(text, grammar);
+  return workbook === null ? read("txt", text) : { ...read("txt", text), workbook };
+}
+
 async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
   const layer = await pdfTextLayer(deps, input.path);
   if (!layer.ok) {
@@ -286,11 +298,11 @@ function unlabelledByBytes(_deps: ExtractDeps, input: Document): Promise<Extract
 
 const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   ["text/plain", readPlainText],
-  // A delimited file IS text, and the reader above already decodes it non-fatally. Parsing it
-  // into rows instead would mean choosing a delimiter, a quoting style and an encoding that
-  // the file does not state -- three guesses for an index that wants the words either way.
-  ["text/csv", readPlainText],
-  ["text/tab-separated-values", readPlainText],
+  // A delimited file is text, decoded as the reader above decodes it, AND rows, by the grammar
+  // its type states: RFC 4180 for CSV, IANA's for TSV. Not a sniffed delimiter -- the type
+  // names it (ADR 0107, which reverses the no-rows reading recorded here before).
+  ["text/csv", (_deps, input): Promise<Extracted> => readDelimited(input, CSV)],
+  ["text/tab-separated-values", (_deps, input): Promise<Extracted> => readDelimited(input, TSV)],
   // Markdown and XML are read as the text they are. For XML that is the point rather than a
   // shortcut: an XBRL filing's element names -- `ifrs-full:Revenue` -- ARE its meaning, and
   // stripping the tags to leave the numbers would keep the figures and lose what they are.

@@ -24,9 +24,15 @@ interface Scope {
   readonly source: string;
 }
 
-/** Which texts count as workbooks, and the rows generation being written. */
+/**
+ * Which texts count as workbooks, and the rows generation being written. A workbook is a text
+ * read by one of `methods`; a delimited file is any text read from a document of one of
+ * `tabularTypes` -- it is read as text and its rows come beside it (ADR 0107), so its method
+ * says nothing a workbook's does.
+ */
 interface Owed {
   readonly methods: readonly string[];
+  readonly tabularTypes: readonly string[];
   readonly rowsVersion: number;
 }
 
@@ -39,7 +45,8 @@ export interface OwedWorkbook {
 }
 
 /**
- * `$1` IS THE METHODS AND `$2` THE ROWS GENERATION IN BOTH STATEMENTS, so one string names them.
+ * `$1` IS THE METHODS, `$2` THE ROWS GENERATION AND `$3` THE TABULAR TYPES IN BOTH STATEMENTS,
+ * so one string names them.
  * Scoped to a source because the extract run is (`ops.run` is one per tenant, source and verb);
  * the rows it writes are the digest's, so another source holding the same bytes finds them done.
  */
@@ -50,7 +57,9 @@ const OWED_JOIN = `FROM raw.documents d
         AND t.document_id = d.document_id
       WHERE d.deleted_at IS NULL
         AND t.source_sha256 = d.sha256
-        AND t.method = ANY($1::text[])
+        AND (t.method = ANY($1::text[])
+             OR (t.method IS NOT NULL
+                 AND lower(split_part(d.content_type, ';', 1)) = ANY($3::text[])))
         AND NOT EXISTS (SELECT 1 FROM raw.document_sheets s
                          WHERE s.tenant_id = d.tenant_id AND s.sha256 = d.sha256
                            AND s.rows_version >= $2)
@@ -72,11 +81,11 @@ export async function owedWorkbooks(
   }>(
     `SELECT DISTINCT ON (d.sha256) d.document_id, d.sha256, d.lake_key, d.content_type
        ${OWED_JOIN}
-        AND d.tenant_id = $3
-        AND d.source = $4
+        AND d.tenant_id = $4
+        AND d.source = $5
       ORDER BY d.sha256, d.document_id
-      LIMIT $5`,
-    [owed.methods, owed.rowsVersion, scope.tenantId, scope.source, owed.limit],
+      LIMIT $6`,
+    [owed.methods, owed.rowsVersion, owed.tabularTypes, scope.tenantId, scope.source, owed.limit],
   );
   return rows.map((row) => ({
     documentId: row.document_id,
@@ -92,7 +101,7 @@ export async function owedWorkbookScopes(exec: SqlExecutor, owed: Owed): Promise
     `SELECT DISTINCT d.tenant_id AS "tenantId", d.source
        ${OWED_JOIN}
       ORDER BY 1, 2`,
-    [owed.methods, owed.rowsVersion],
+    [owed.methods, owed.rowsVersion, owed.tabularTypes],
   );
   return rows.map((row) => ({ tenantId: row.tenantId, source: row.source }));
 }

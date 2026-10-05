@@ -34,7 +34,7 @@ import {
   CURRENT_READER_VERSION,
   RELAYABLE_METHODS,
 } from "./extract/extractText.ts";
-import { CURRENT_ROWS_VERSION, WORKBOOK_METHODS } from "./extract/workbookRows.ts";
+import { CURRENT_ROWS_VERSION, TABULAR_TYPES, WORKBOOK_METHODS } from "./extract/workbookRows.ts";
 
 export interface DuePair {
   readonly tenantId: string;
@@ -76,7 +76,11 @@ export async function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
     }),
     // So is a workbook read before its rows existed (ADR 0104): a settled tenant's whole
     // spreadsheet history is owed rows the day this ships, and nothing else would start a run.
-    owedWorkbookScopes(exec, { methods: WORKBOOK_METHODS, rowsVersion: CURRENT_ROWS_VERSION }),
+    owedWorkbookScopes(exec, {
+      methods: WORKBOOK_METHODS,
+      tabularTypes: TABULAR_TYPES,
+      rowsVersion: CURRENT_ROWS_VERSION,
+    }),
   ]);
   const due = new Map(
     [...unread, ...unlaid, ...owed].map((pair) => [`${pair.tenantId}\u0000${pair.source}`, pair]),

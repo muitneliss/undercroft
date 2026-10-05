@@ -298,3 +298,5 @@
 ## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
 ## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
 ## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
+## [2026-10-05] ingest | ADR 0107 A Delimited File Is Read into Rows by the Grammar Its Type Names
+## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
