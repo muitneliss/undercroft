@@ -1,4 +1,4 @@
-# 104. A model carries one business context, reviewed against its definition
+# 105. A model carries one business context, reviewed against its definition
 
 - Status: Accepted
 - Date: 2026-10-05

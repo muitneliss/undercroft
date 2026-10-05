@@ -307,7 +307,7 @@ interface UiState {
   /**
    * The business context being written for one model, or null. Same rules as `modelDraft`,
    * and kept apart from it: approving a context and saving SQL are two verbs, and an edit to
-   * one must not make the other look unsaved. ADR 0104.
+   * one must not make the other look unsaved. ADR 0105.
    */
   modelContextDraft: ContextDraft | null;
   setModelContextDraft: (draft: ContextDraft | null) => void;

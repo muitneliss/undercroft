@@ -1,17 +1,17 @@
 ---
-title: ADR 0104 A Model Carries One Business Context, Reviewed Against Its Definition
+title: ADR 0105 A Model Carries One Business Context, Reviewed Against Its Definition
 type: source
 date: 2026-10-05
 tags: []
 source: >-
-  docs/adr/0104-a-model-carries-one-business-context-reviewed-against-its-definition.md
+  docs/adr/0105-a-model-carries-one-business-context-reviewed-against-its-definition.md
 source_path: >-
-  docs/adr/0104-a-model-carries-one-business-context-reviewed-against-its-definition.md
-source_hash: 1e9a5304d95dd2f1587c5ede40598c6a12448ecc9aef98cfbdcb45a79b7d9914
+  docs/adr/0105-a-model-carries-one-business-context-reviewed-against-its-definition.md
+source_hash: 5d2f8bd7df5f710d65482fec61083799b6912c556440cda432148cdd6e44e8cf
 ingested: 2026-10-05
 ---
 
-# ADR 0104 A Model Carries One Business Context, Reviewed Against Its Definition
+# ADR 0105 A Model Carries One Business Context, Reviewed Against Its Definition
 
 A model used to store only its technical definition -- SQL, tests, the columns its last build found -- so a person or agent had to guess what one row is, its key, what each column means and which rules it applies; a note kept elsewhere goes quietly stale when the SQL or a build changes. Each model now carries **one business context** in `app.model_context` (migration `460_model_context.sql`): purpose, grain, key, each column's definition with an optional unit or currency, and the rules it applies. The contract's `ModelContext` is strict: a key that is both declared and declared absent is refused, as is a column defined twice. Builds on [[ADR 0092 Lineage Draws Only Declared Relations]], [[ADR 0086 A Tenant Writes Its Own Macros]] and [[ADR 0077 Deleting a Model Drops What It Built]].
 

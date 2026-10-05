@@ -15,7 +15,7 @@
  * changed what", and the SQL is in the table beside it.
  *
  * Every model is listed and read WITH its business context's state (`modelContext.ts`, ADR
- * 0104), so the UI, the CLI and an MCP client all read the same one. Save, build and delete
+ * 0105), so the UI, the CLI and an MCP client all read the same one. Save, build and delete
  * neither read nor change it: a context out of date is a warning to a reader, never a refusal.
  */
 

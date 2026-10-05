@@ -1,5 +1,5 @@
 /**
- * `app.model_context`: each model's approved business context, one row per model. ADR 0104.
+ * `app.model_context`: each model's approved business context, one row per model. ADR 0105.
  *
  * `body` and `reviewed` travel as JSON in and as untyped values out: their shapes are the
  * contract's `ModelContext` and the service's fingerprint, validated one layer up as a row is

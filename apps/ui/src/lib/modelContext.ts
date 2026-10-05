@@ -1,6 +1,6 @@
 /**
  * How a model's business context reads: its state as a mark and a word, each change since
- * approval as a sentence, and each unanswered section by name. ADR 0104.
+ * approval as a sentence, and each unanswered section by name. ADR 0105.
  *
  * The state is the server's, computed when the model was read; nothing here decides it. The
  * three states take three of the four marks the build column uses, so the two columns of the

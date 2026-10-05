@@ -61,7 +61,7 @@ export const modelsRouter = router({
     }),
 
   /**
-   * Approve a model's business context (ADR 0104). Saving is the approval, so it is an admin's,
+   * Approve a model's business context (ADR 0105). Saving is the approval, so it is an admin's,
    * and it carries the `basis` that `get` answered with: a definition that changed since the
    * reader looked is a CONFLICT and nothing is written, so nobody approves a definition they
    * did not see. An agent drafts; a person with the grant says yes. Changes no SQL and gates

@@ -6,7 +6,7 @@
  * Mirrors the design's fixtures rather than inventing new ones, so a capture can be read beside
  * the design's picture of the same screen: its fourteen models with their last builds, and what
  * each declares it reads (one ref to a model since deleted, one ref no reader can follow). Three
- * models carry an approved business context (ADR 0104): two still current, and churn_watch's
+ * models carry an approved business context (ADR 0105): two still current, and churn_watch's
  * out of date since a model it reads changed -- the state the editor's picture shows.
  * Nothing here is anonymised from real data; every name is invented (`.claude/rules/pii.md`).
  *

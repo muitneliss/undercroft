@@ -37,7 +37,7 @@ export const MAX_MODEL_SQL_BYTES = 64 * 1024;
 
 /**
  * A model's BUSINESS CONTEXT: what one row is, what identifies it, what each column means and
- * which rules the model applies. ADR 0104.
+ * which rules the model applies. ADR 0105.
  *
  * One per model, written by a person -- an agent may only draft it -- and stored beside the
  * model (`app.model_context`). Whether it still describes the model is NOT part of it: that is

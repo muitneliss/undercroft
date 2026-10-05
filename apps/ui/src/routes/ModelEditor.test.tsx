@@ -5,7 +5,7 @@
  * lists only what the saved SQL declares, marking a deleted ref as missing and an unreadable
  * upstream as undeclared rather than as "reads nothing"; and a business context out of date says
  * which model changed and how, keeps the approved text beneath, and never calls a declared key
- * anything a test would (ADR 0104).
+ * anything a test would (ADR 0105).
  *
  * No mocks: the real route, store, router, tRPC client, react-query and CodeMirror, over a fetch
  * that answers the leaf's queries and REFUSES every other path.

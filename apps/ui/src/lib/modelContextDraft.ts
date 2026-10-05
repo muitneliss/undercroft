@@ -1,7 +1,7 @@
 /**
  * The business context an admin is writing for one model, as the store holds it, and the two
  * questions asked of it: has it changed since it was approved, and what does the server get
- * when it is. ADR 0104.
+ * when it is. ADR 0105.
  *
  * The form edits FIELDS, not the contract's shape: a key that is declared keeps the reason a
  * reader typed before switching it to declared, so switching back does not lose the sentence.

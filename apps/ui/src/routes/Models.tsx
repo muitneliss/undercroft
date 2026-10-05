@@ -15,7 +15,7 @@
  * (`ModelLineage`, ADR 0092), in the same address with `?view=lineage`: a view of Models and
  * not an eighth division, because the wheel is full (ADR 0019).
  *
- * Beside each build, the state of the model's business context (ADR 0104) -- whether what is
+ * Beside each build, the state of the model's business context (ADR 0105) -- whether what is
  * written about the model still describes it -- as the server worked it out on this read.
  *
  * Creating is admin-only, like saving: a model is what a dashboard will show. The name is

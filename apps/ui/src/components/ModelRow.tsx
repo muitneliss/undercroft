@@ -1,7 +1,7 @@
 /**
  * One row of the Models list: the model's name -- and that its draft is unsaved, when it is --
  * its last build, the run that made it and the columns that run found, and the state of its
- * business context (ADR 0104). Split out of `routes/Models.tsx`; the list decides which rows
+ * business context (ADR 0105). Split out of `routes/Models.tsx`; the list decides which rows
  * show and in what order, and this decides nothing but how one reads.
  *
  * A model never built has no run and no known columns, and both print MISSING, never a zero

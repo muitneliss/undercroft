@@ -1,5 +1,5 @@
 -- A model's business context: what a row is, its key, what each column means, the rules it
--- applies. One per model, approved by a person. ADR 0104.
+-- applies. One per model, approved by a person. ADR 0105.
 --
 -- WHY `app`. The context is text the customer wrote about their own business -- a definition
 -- may name a customer, a rule may quote a threshold -- exactly like a model's SQL (140) or a

@@ -1,6 +1,6 @@
 /**
  * One model's business context, on its own editor: its state and why, the context that was
- * approved, and -- for an admin -- the form that approves a new one. ADR 0104.
+ * approved, and -- for an admin -- the form that approves a new one. ADR 0105.
  *
  * The state is the server's, read with the model (`models.get`), so this page, the CLI and an
  * MCP client all show the same one. A context that needs review keeps its approved text on

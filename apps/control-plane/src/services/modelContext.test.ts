@@ -1,5 +1,5 @@
 /**
- * What a model's business context promises (ADR 0104): it is read with its state, never
+ * What a model's business context promises (ADR 0105): it is read with its state, never
  * stored with one; the state follows the definition the context was approved against -- the
  * model's own SQL, tests and built columns, and those of each model it reads directly -- and
  * nothing that leaves the definition as it was (an order, an empty test, a first build) moves

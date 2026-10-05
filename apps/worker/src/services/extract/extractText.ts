@@ -21,7 +21,7 @@ import { ocrImage, ocrScan } from "./ocr.ts";
 import { ACRA_LAYOUT_VERSION } from "./acraTemplates.ts";
 import { claimsOpenAttestation, readOpenAttestation, relaid } from "./openAttestation.ts";
 import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
-import { readXlsx } from "./xlsx.ts";
+import { readWorkbook, type Workbook } from "./xlsx.ts";
 
 /** How the text was read. A new extractor is a new value; the column is deliberately not an enum. */
 export type ExtractMethod =
@@ -117,6 +117,8 @@ export interface Extracted {
   readonly reason: string | null;
   readonly text: string;
   readonly truncated: boolean;
+  /** A spreadsheet's sheets and rows, from the same parse as `text` (ADR 0104). */
+  readonly workbook?: Workbook;
 }
 
 /**
@@ -273,11 +275,15 @@ async function readPdf(deps: ExtractDeps, input: Document): Promise<Extracted> {
  * why that is cheaper here than either a converter binary or a dependency.
  *
  * `null` is a workbook we could not open exactly -- never an empty one. The two are different
- * facts and an empty string would make them one (`CLAUDE.md` rule 2).
+ * facts and an empty string would make them one (`CLAUDE.md` rule 2). A workbook with a sheet
+ * that stopped short is read, and its text says it is short (`truncated`), because the sheets
+ * it holds are no longer the whole workbook.
  */
-function readWorkbook(_deps: ExtractDeps, input: Document): Extracted {
-  const text = readXlsx(input.bytes);
-  return text === null ? refused(XLSX_UNREADABLE) : read("xlsx", text);
+function readSpreadsheet(_deps: ExtractDeps, input: Document): Extracted {
+  const reading = readWorkbook(input.bytes, MAX_TEXT_CHARS);
+  return reading === null
+    ? refused(XLSX_UNREADABLE)
+    : { ...read("xlsx", reading.text, reading.short), workbook: reading.workbook };
 }
 
 /**
@@ -390,10 +396,10 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   ["message/rfc822", readMime],
   ["multipart/related", readMime],
   ["application/pdf", readPdf],
-  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", readWorkbook],
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", readSpreadsheet],
   // A macro-enabled workbook is the same OOXML package with one more part, which is never
   // run: the reader opens the sheets' XML and nothing else. Lowercase, as the lookup is.
-  ["application/vnd.ms-excel.sheet.macroenabled.12", readWorkbook],
+  ["application/vnd.ms-excel.sheet.macroenabled.12", readSpreadsheet],
   ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", readWordDocument],
   // The two image types the connection picker offers and the only two the lake holds: 1,274
   // PNGs and 283 JPEGs, none of them readable until now. `ocr.ts` decides which of them are
@@ -453,6 +459,12 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * a refusal whose whole point is that it stops being true; the bump re-offers them, and only a
  * file older than Word 97 comes back with the same reason.
  *
+ * GENERATION 6 IS THE WORKBOOK READ THROUGH ITS PACKAGE (ADR 0104). A workbook whose parts are
+ * not named the way Excel names them, and one with a single sheet too large to inflate, were
+ * both refused `xlsx-unreadable` whole; the first now opens through its relationships and the
+ * second is read with that one sheet marked incomplete. 51 documents on `tai-001` carry that
+ * refusal, 35 of their 41 digests five megabytes or more.
+ *
  * NOT BUMPED FOR ISSUE #218's UTF-16 DECODE AND NUL REPLACEMENT, and that is the rule working
  * rather than an oversight. A bump re-offers refusals, and neither change turns a refusal into a
  * reading: the documents they were written for never got a row at all -- their NUL failed the
@@ -470,7 +482,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 5;
+export const CURRENT_READER_VERSION = 6;
 
 /**
  * One document, read whichever way its type allows.

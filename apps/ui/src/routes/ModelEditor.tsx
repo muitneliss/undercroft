@@ -1,6 +1,6 @@
 /**
  * One model, open: what its last build left, its SQL in the editor, its business context and
- * whether it still describes the model (ADR 0104), its tests as a form, what it declares it
+ * whether it still describes the model (ADR 0105), its tests as a form, what it declares it
  * reads and what reads it, and the verbs.
  *
  * Save stores what is on screen and executes nothing. Build runs dbt for this model alone,
