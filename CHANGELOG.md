@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.0](https://github.com/muitneliss/undercroft/compare/v1.64.0...v1.65.0) (2026-10-05)
+
+
+### Features
+
+* a tenant can be deactivated and reactivated (ADR 0110) ([#399](https://github.com/muitneliss/undercroft/issues/399)) ([34d7b13](https://github.com/muitneliss/undercroft/commit/34d7b13689daf618ed11661211bee8acfb94e9c7))
+
 ## [1.64.0](https://github.com/muitneliss/undercroft/compare/v1.63.0...v1.64.0) (2026-10-05)
 
 
