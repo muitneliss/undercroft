@@ -8,12 +8,14 @@
 
 import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { createStampSource, TestClock } from "@undercroft/core";
+import type { SqlExecutor } from "@undercroft/db";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 import { InMemoryObjectStore, LakeStore } from "@undercroft/lake";
 
 import { listExtractDue } from "../schedule.ts";
 import type { Spawn } from "../transform.ts";
 import { runExtract } from "./runExtract.ts";
+import { zipOf } from "./testing.ts";
 
 const TENANT = "CASE-0042";
 const ACRA_LOCATION = "acratrustbar.gov.sg";
@@ -47,13 +49,31 @@ function spawnAnswering(stdout: string): Spawn {
   };
 }
 
+/**
+ * PGlite is a single connection, so a transaction is BEGIN/COMMIT on it -- real enough for what
+ * the pass needs one for: a workbook's rows replaced as one unit.
+ */
+async function transactor<T>(fn: (tx: SqlExecutor) => Promise<T>): Promise<T> {
+  await db.exec("BEGIN");
+  try {
+    const result = await fn(db);
+    await db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    await db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 /** Land bytes in the lake and catalogue them, the way an ingest run leaves them. */
 async function landDocument(input: {
   documentId: string;
   bytes: Uint8Array;
   contentType: string;
+  source?: string;
 }): Promise<string> {
-  const lakeKey = `documents/${SOURCE}/${TENANT}/${input.documentId}`;
+  const source = input.source ?? SOURCE;
+  const lakeKey = `documents/${source}/${TENANT}/${input.documentId}`;
   const put = await lake.put(lakeKey, input.bytes, { runId: "run-seed" });
   await db.query(
     `INSERT INTO raw.documents
@@ -61,7 +81,7 @@ async function landDocument(input: {
         observed_at, run_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, now(), 'run-seed')`,
     [
-      SOURCE,
+      source,
       TENANT,
       input.documentId,
       lakeKey,
@@ -73,8 +93,8 @@ async function landDocument(input: {
   return put.sha256;
 }
 
-function extract(spawn: Spawn, runId = "run-extract-1") {
-  return runExtract({ exec: db, lake, spawn }, { tenantId: TENANT, source: SOURCE, runId });
+function extract(spawn: Spawn, runId = "run-extract-1", source = SOURCE) {
+  return runExtract({ exec: db, lake, spawn, transactor }, { tenantId: TENANT, source, runId });
 }
 
 async function textRows(): Promise<
@@ -134,6 +154,75 @@ describe("a pass over landed documents", () => {
     expect(result.refusals).toEqual([
       { entity: "documents", sourceRecordId: "f2", reason: "legacy-xls-unsupported" },
     ]);
+  });
+});
+
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+/** An invented one-sheet ledger, as a whole OPC package (`pii.md`: Acme, not a client). */
+const LEDGER_BYTES = zipOf([
+  {
+    name: "_rels/.rels",
+    body: `<Relationships><Relationship Id="r1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+  },
+  {
+    name: "xl/workbook.xml",
+    body: `<workbook xmlns:r="${REL}"><sheets><sheet name="Ledger" sheetId="1" r:id="s1"/></sheets></workbook>`,
+  },
+  {
+    name: "xl/_rels/workbook.xml.rels",
+    body: `<Relationships><Relationship Id="s1" Type="${REL}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+  },
+  {
+    name: "xl/worksheets/sheet1.xml",
+    body:
+      '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Acme Holdings</t></is></c>' +
+      '<c r="C1"><v>1234.10</v></c></row></sheetData></worksheet>',
+  },
+]);
+
+async function workbookRows(): Promise<unknown[]> {
+  const { rows } = await db.query(
+    `SELECT s.sheet_name, s.complete, r.row_number, r.cells
+       FROM raw.document_sheets s JOIN raw.document_rows r USING (tenant_id, sha256, sheet_index)
+      ORDER BY r.row_number`,
+  );
+  return rows;
+}
+
+describe("a workbook's rows", () => {
+  it("are written against the bytes they were read from, cells under their letters", async () => {
+    await landDocument({ documentId: "w1", bytes: LEDGER_BYTES, contentType: XLSX_TYPE });
+
+    await extract(spawnAnswering(""));
+
+    expect(await workbookRows()).toEqual([
+      {
+        sheet_name: "Ledger",
+        complete: true,
+        row_number: 1,
+        cells: { A: "Acme Holdings", C: "1234.10" },
+      },
+    ]);
+  });
+
+  it("are one set when the same workbook lands under two sources, each pass replacing it", async () => {
+    // An attachment also filed in Drive is one digest. Each source's pass reads it and replaces
+    // that digest's rows; neither doubles them, and the second does not fail on the first's key.
+    await landDocument({ documentId: "w1", bytes: LEDGER_BYTES, contentType: XLSX_TYPE });
+    await landDocument({
+      documentId: "m1:2",
+      bytes: LEDGER_BYTES,
+      contentType: XLSX_TYPE,
+      source: "gmail",
+    });
+
+    await extract(spawnAnswering(""), "run-drive", SOURCE);
+    await extract(spawnAnswering(""), "run-gmail", "gmail");
+
+    const { rows } = await db.query<{ run_id: string }>("SELECT run_id FROM raw.document_sheets");
+    expect([rows, (await workbookRows()).length]).toEqual([[{ run_id: "run-gmail" }], 1]);
   });
 });
 
@@ -485,7 +574,7 @@ describe("what a pass hands the ledger", () => {
     }
 
     const result = await runExtract(
-      { exec: db, lake, spawn: spawnAnswering(A_PAGE), batch: 1 },
+      { exec: db, lake, spawn: spawnAnswering(A_PAGE), transactor, batch: 1 },
       { tenantId: TENANT, source: SOURCE, runId: "run-extract-batch" },
     );
 

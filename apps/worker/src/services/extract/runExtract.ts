@@ -50,6 +50,7 @@ import {
 } from "../../repos/documentText.ts";
 import { relayTexts, staleLayouts } from "../../repos/documentLayout.ts";
 import { type RunJournal, SILENT_JOURNAL } from "../runJournal.ts";
+import type { Transactor } from "../runTypes.ts";
 import type { Spawn } from "../transform.ts";
 import {
   CURRENT_LAYOUT_VERSION,
@@ -58,6 +59,7 @@ import {
   RELAYABLE_METHODS,
   relayText,
 } from "./extractText.ts";
+import { type WorkbookWriter, workbookWriter } from "./workbookRows.ts";
 
 /** Documents read in one pass. A cap, so one run cannot hold the verb open for hours. */
 export const DEFAULT_BATCH = 500;
@@ -65,6 +67,12 @@ export const DEFAULT_BATCH = 500;
 export interface ExtractRunDeps {
   readonly exec: SqlExecutor;
   readonly lake: LakeStore;
+  /**
+   * The transaction a workbook's rows are replaced in (ADR 0104 decision 8). Required, not
+   * defaulted to autocommit: a delete and its inserts committed one statement at a time would
+   * leave a reader seeing a digest with no rows, or half of them, while a pass is writing.
+   */
+  readonly transactor: Transactor;
   /** Injected; the process passes one that runs the real binaries. */
   readonly spawn: Spawn;
   readonly journal?: RunJournal;
@@ -202,12 +210,26 @@ async function withBytesOnDisk<T>(
  */
 const LAKE_UNREADABLE = "lake-object-unreadable";
 
-/** One document: fetched from the lake, written down, read, and answered for either way. */
+/** Where one pass's reads put what they need to: bytes on disk, a workbook's rows. */
+interface Pass {
+  readonly scratch: string;
+  readonly workbooks: WorkbookWriter;
+}
+
+/**
+ * One document: fetched from the lake, written down, read, and answered for either way.
+ *
+ * A WORKBOOK'S ROWS ARE WRITTEN HERE, per digest, the moment it is read, rather than with the
+ * batch's texts at the end: a batch is 500 reads, and holding 500 workbooks' sheets until then
+ * is what the `--smol` heap cannot do. A read that was refused writes no rows, so a failed
+ * re-read leaves the rows already held where they are (ADR 0104 decision 8).
+ */
 async function readOne(
   deps: ExtractRunDeps,
-  scratch: string,
+  pass: Pass,
   document: PendingDocument,
 ): Promise<DocumentTextRow> {
+  const { scratch } = pass;
   const base = { documentId: document.documentId, sourceSha256: document.sha256 };
 
   let bytes: Uint8Array;
@@ -223,6 +245,10 @@ async function readOne(
       { contentType: document.contentType, bytes, path },
     ),
   );
+
+  if (extracted.workbook !== undefined) {
+    await pass.workbooks.write(document.sha256, extracted.workbook);
+  }
 
   return {
     ...base,
@@ -270,7 +296,7 @@ function tally(
  */
 async function readEach(
   deps: ExtractRunDeps,
-  scratch: string,
+  pass: Pass,
   pending: readonly PendingDocument[],
   journal: RunJournal,
 ): Promise<DocumentTextRow[]> {
@@ -283,7 +309,7 @@ async function readEach(
       total: pending.length,
     });
 
-    rows.push(await readOne(deps, scratch, document));
+    rows.push(await readOne(deps, pass, document));
   }
 
   return rows;
@@ -348,7 +374,8 @@ export async function runExtract(
   // It is the work, not the outcome: the documents answered is the larger number below.
   journal.info("work_listed", { entity: DOCUMENTS, total: pending.length });
 
-  const rows = await readEach(deps, scratch, pending, journal);
+  const workbooks = workbookWriter(deps.transactor, { ...scope, extractedAt, runId: input.runId });
+  const rows = await readEach(deps, { scratch, workbooks }, pending, journal);
 
   const stamp = { extractedAt, runId: input.runId, layoutVersion: CURRENT_LAYOUT_VERSION };
   const answered = await upsertDocumentText(deps.exec, scope, rows, {
@@ -361,6 +388,7 @@ export async function runExtract(
   const relaid = await relayStale(deps, scope, stamp);
 
   journal.info("documents_extracted", { entity: DOCUMENTS, read, refused, unreadable, relaid });
+  journal.info("workbook_rows_written", { entity: DOCUMENTS, ...workbooks.counts() });
 
   return {
     runId: input.runId,

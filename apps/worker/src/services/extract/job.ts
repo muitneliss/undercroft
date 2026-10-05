@@ -33,7 +33,9 @@ import {
 import { RunInProgress } from "../ingest.ts";
 import { type JobDeps, track } from "../jobs.ts";
 import { createRunJournal } from "../runJournal.ts";
+import type { Transactor } from "../runTypes.ts";
 import { turnsFor } from "../slots.ts";
+import type { Spawn } from "../transform.ts";
 import { type ExtractResult, runExtract } from "./runExtract.ts";
 
 /** `NodeJS.ProcessEnv` holds `string | undefined`; a child's environment holds strings. */
@@ -102,14 +104,23 @@ async function settle(
   }
 }
 
+/**
+ * What the verb needs that a deployment may not have: a reader, and a transaction to replace a
+ * workbook's rows in (ADR 0104). Without either, extract is not configured.
+ */
+function configured(deps: JobDeps): { extractSpawn: Spawn; transactor: Transactor } {
+  const { extractSpawn, transactor } = deps;
+  if (extractSpawn === undefined || transactor === undefined) {
+    throw new Error("extract is not configured");
+  }
+  return { extractSpawn, transactor };
+}
+
 export async function startExtractJob(
   deps: JobDeps,
   input: { source: string; tenantId: string; trigger: RunTrigger; triggeredBy: string },
 ): Promise<{ runId: string }> {
-  const { extractSpawn } = deps;
-  if (extractSpawn === undefined) {
-    throw new Error("extract is not configured");
-  }
+  const { extractSpawn, transactor } = configured(deps);
   const runId = newRunId();
   const opened = await openRun(deps.exec, {
     id: runId,
@@ -141,6 +152,7 @@ export async function startExtractJob(
         {
           exec: deps.exec,
           lake: deps.lake,
+          transactor,
           spawn: extractSpawn,
           journal,
           ...(deps.env === undefined ? {} : { env: definedOnly(deps.env) }),

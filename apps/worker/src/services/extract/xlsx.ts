@@ -57,6 +57,8 @@ export interface Sheet {
   readonly dimension: string | null;
   /** Merged ranges as declared, such as `A1:F1`. Never filled. */
   readonly merges: readonly string[];
+  /** Non-empty rows `rows` yields. */
+  readonly rowCount: number;
   /** `false` when the read stopped short; `reason` says why, and `rows` holds what came before. */
   readonly complete: boolean;
   readonly reason: string | null;
@@ -91,6 +93,20 @@ const SHEET_SEPARATOR = "\n\n";
 const DIMENSION = new RegExp(`<${PREFIX}dimension\\b(?<attributes>[^>]*?)\\/?>`, "u");
 const MERGE = new RegExp(`<${PREFIX}mergeCell\\b(?<attributes>[^>]*?)\\/?>`, "gu");
 
+/**
+ * U+0000 made storable: neither a Postgres `text` column nor a `jsonb` string can hold it. It is
+ * replaced by the character a non-fatal decode writes for a byte that is not text, exactly as
+ * `read` in `extractText.ts` does for a document's text (issue #218), and for the same reason:
+ * one unstorable value would fail the statement that carries a whole batch.
+ */
+function storable(value: string): string {
+  return value.replaceAll("\u0000", "\uFFFD");
+}
+
+function storableOrNull(value: string | null): string | null {
+  return value === null ? null : storable(value);
+}
+
 function sheetRowOf(row: ScannedRow): SheetRow {
   const cells: Record<string, string> = {};
   const formats: Record<string, string> = {};
@@ -98,13 +114,13 @@ function sheetRowOf(row: ScannedRow): SheetRow {
   for (const entry of row.entries) {
     const letters = lettersOf(entry.column);
     if (entry.value !== null) {
-      cells[letters] = entry.value;
+      cells[letters] = storable(entry.value);
     }
     if (entry.format !== null) {
-      formats[letters] = entry.format;
+      formats[letters] = storable(entry.format);
     }
     if (entry.fault !== null) {
-      faults[letters] = entry.fault;
+      faults[letters] = storable(entry.fault);
     }
   }
   return {
@@ -163,7 +179,7 @@ class BoundedText {
 function readSheet(part: SheetPart, workbook: WorkbookPackage, text: BoundedText): Sheet {
   const facts = {
     index: part.index,
-    name: part.name,
+    name: storableOrNull(part.name),
     nameReason: part.nameReason,
     kind: part.kind,
     state: part.state,
@@ -171,22 +187,33 @@ function readSheet(part: SheetPart, workbook: WorkbookPackage, text: BoundedText
   const { xml } = part;
   if (xml === null || part.index > MAX_SHEETS) {
     const reason = xml === null ? SHEET_UNREADABLE : SHEETS_LIMIT;
-    return { ...facts, dimension: null, merges: [], ...stopped(reason), rows: () => [] };
+    return {
+      ...facts,
+      dimension: null,
+      merges: [],
+      rowCount: 0,
+      ...stopped(reason),
+      rows: () => [],
+    };
   }
   const lines = scanSheet(xml, workbook);
-  let first = true;
+  let rowCount = 0;
   let step = lines.next();
   while (step.done !== true) {
-    text.add(`${first ? "" : ROW_SEPARATOR}${lineOf(step.value)}`);
-    first = false;
+    text.add(`${rowCount === 0 ? "" : ROW_SEPARATOR}${lineOf(step.value)}`);
+    rowCount += 1;
     step = lines.next();
   }
   return {
     ...facts,
-    dimension: attributesOf(DIMENSION.exec(xml)?.groups?.attributes ?? "").get("ref") ?? null,
-    merges: [...xml.matchAll(MERGE)].flatMap(
-      (merge) => attributesOf(merge.groups?.attributes ?? "").get("ref") ?? [],
+    dimension: storableOrNull(
+      attributesOf(DIMENSION.exec(xml)?.groups?.attributes ?? "").get("ref") ?? null,
     ),
+    merges: [...xml.matchAll(MERGE)].flatMap((merge) => {
+      const ref = attributesOf(merge.groups?.attributes ?? "").get("ref");
+      return ref === undefined ? [] : [storable(ref)];
+    }),
+    rowCount,
     ...step.value,
     rows: () => sheetRows(xml, workbook),
   };
