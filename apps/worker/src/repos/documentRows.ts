@@ -49,7 +49,7 @@ export interface SheetToStore {
   readonly complete: boolean;
   readonly reason: string | null;
   /** The sheet's rows, read once and in order; never held whole here. */
-  readonly rows: () => Iterable<RowToStore>;
+  readonly rows: () => AsyncIterable<RowToStore>;
 }
 
 export interface WorkbookToStore {
@@ -161,7 +161,7 @@ export async function replaceWorkbookRows(
   for (const sheet of workbook.sheets) {
     await insertSheet(tx, { key, workbook, stamp }, sheet);
     let batch: RowToStore[] = [];
-    for (const row of sheet.rows()) {
+    for await (const row of sheet.rows()) {
       batch.push(row);
       if (batch.length === ROW_BATCH) {
         await insertRows(tx, key, sheet.index, batch);

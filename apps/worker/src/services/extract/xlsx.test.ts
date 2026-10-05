@@ -101,7 +101,7 @@ describe("a workbook's rows", () => {
   it("carry each value under its column letter and Excel's own row number", async () => {
     const result = await extract(packageOf([{ name: "Ledger", xml: LEDGER }]));
 
-    const rows = [...(result.workbook?.sheets[0]?.rows() ?? [])];
+    const rows = await Array.fromAsync(result.workbook?.sheets[0]?.rows() ?? []);
 
     expect(rows.map((row) => [row.rowNumber, row.cells])).toEqual([
       [1, { A: "Invoice", B: "Tiền thanh toán" }],
@@ -141,7 +141,9 @@ describe("a workbook's rows", () => {
 
     const result = await extract(packageOf([{ name: "Ledger", xml: prefixed }]));
 
-    expect([...(result.workbook?.sheets[0]?.rows() ?? [])][0]?.cells).toEqual({ B: "Acme" });
+    expect((await Array.fromAsync(result.workbook?.sheets[0]?.rows() ?? []))[0]?.cells).toEqual({
+      B: "Acme",
+    });
   });
 });
 
@@ -157,11 +159,13 @@ describe("a workbook's sheets", () => {
       ]),
     );
 
-    const firstCells = result.workbook?.sheets.map((s) => [
-      s.index,
-      s.name,
-      [...s.rows()][0]?.cells.A,
-    ]);
+    const firstCells = await Promise.all(
+      (result.workbook?.sheets ?? []).map(async (s) => [
+        s.index,
+        s.name,
+        (await Array.fromAsync(s.rows()))[0]?.cells.A,
+      ]),
+    );
     expect(firstCells).toEqual([
       [1, "Summary", "Totals"],
       [2, "Ledger", "Invoice"],
@@ -216,7 +220,9 @@ describe("a workbook's sheets", () => {
       "A1:F2",
       ["A1:F1"],
     ]);
-    expect([...(helper?.rows() ?? [])].map((row) => [row.rowNumber, row.hidden])).toEqual([
+    expect(
+      (await Array.fromAsync(helper?.rows() ?? [])).map((row) => [row.rowNumber, row.hidden]),
+    ).toEqual([
       [1, false],
       [2, true],
     ]);
@@ -240,7 +246,7 @@ describe("what Excel stores about a cell", () => {
     );
 
     const result = await extract(packageOf([{ name: "Ledger", xml }]));
-    const [row] = [...(result.workbook?.sheets[0]?.rows() ?? [])];
+    const [row] = await Array.fromAsync(result.workbook?.sheets[0]?.rows() ?? []);
 
     expect([row?.cells, row?.faults]).toEqual([{}, { A: "#REF!", B: "formula-uncached" }]);
   });
@@ -257,7 +263,7 @@ describe("what Excel stores about a cell", () => {
 
     const result = await extract(packageOf([{ name: "Ledger", xml }], { styles }));
 
-    expect([...(result.workbook?.sheets[0]?.rows() ?? [])][0]?.formats).toEqual({
+    expect((await Array.fromAsync(result.workbook?.sheets[0]?.rows() ?? []))[0]?.formats).toEqual({
       A: "dd/mm/yyyy",
       B: "builtin:14",
     });
@@ -291,7 +297,7 @@ describe("a workbook that cannot be read whole", () => {
     const [ledger] = result.workbook?.sheets ?? [];
 
     expect([ledger?.complete, ledger?.reason]).toEqual([false, "cells-out-of-order"]);
-    expect([...(ledger?.rows() ?? [])].map((row) => row.rowNumber)).toEqual([1]);
+    expect((await Array.fromAsync(ledger?.rows() ?? [])).map((row) => row.rowNumber)).toEqual([1]);
   });
 
   it("is never cut as rows when only its text passes the ceiling", async () => {
@@ -308,7 +314,45 @@ describe("a workbook that cannot be read whole", () => {
     const [ledger] = result.workbook?.sheets ?? [];
 
     expect([result.truncated, result.text.length]).toEqual([true, MAX_TEXT_CHARS]);
-    expect([ledger?.complete, [...(ledger?.rows() ?? [])].at(-1)?.rowNumber]).toEqual([true, 2000]);
+    expect([
+      ledger?.complete,
+      (await Array.fromAsync(ledger?.rows() ?? [])).at(-1)?.rowNumber,
+    ]).toEqual([true, 2000]);
+  });
+});
+
+describe("a sheet larger than a part could once be", () => {
+  it("is read to its last row though its XML inflates past 32 MiB", async () => {
+    // ADR 0106: the sheet is streamed, never held whole, so the old ceiling on one inflated
+    // part -- which refused such a workbook outright -- no longer stands in front of a sheet.
+    const filler = "x".repeat(1000);
+    const rows = Array.from(
+      { length: 40_000 },
+      (_, at) =>
+        `<row r="${String(at + 1)}"><c r="A${String(at + 1)}" t="inlineStr"><is><t>${filler}</t></is></c></row>`,
+    );
+    const result = await extract(packageOf([{ name: "Ledger", xml: sheet(rows.join("")) }]));
+    const [ledger] = result.workbook?.sheets ?? [];
+
+    let last = 0;
+    for await (const row of ledger?.rows() ?? []) {
+      last = row.rowNumber;
+    }
+    expect([ledger?.complete, ledger?.rowCount, last]).toEqual([true, 40_000, 40_000]);
+  });
+
+  it("whose part is corrupt is listed as unreadable while the rest of the workbook is read", async () => {
+    const corrupt = zipOf([
+      { name: "xl/worksheets/sheet1.xml", body: LEDGER },
+      { name: "xl/worksheets/sheet2.xml", body: LEDGER, corrupt: true },
+    ]);
+
+    const result = await extract(corrupt);
+
+    expect(result.workbook?.sheets.map((s) => [s.complete, s.reason])).toEqual([
+      [true, null],
+      [false, "sheet-unreadable"],
+    ]);
   });
 });
 

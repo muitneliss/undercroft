@@ -29,8 +29,8 @@ import {
   type SheetState,
   type WorkbookPackage,
 } from "./workbookPackage.ts";
-import { lettersOf, type ScannedRow, scanSheet, stopped } from "./sheetScan.ts";
-import { attributesOf, PREFIX } from "./xml.ts";
+import { lettersOf, type ScannedRow } from "./sheetCells.ts";
+import { SHEET_UNREADABLE, type SheetEnd, scanSheet } from "./sheetScan.ts";
 
 export type { Container, SheetKind, SheetState } from "./workbookPackage.ts";
 
@@ -62,8 +62,8 @@ export interface Sheet {
   /** `false` when the read stopped short; `reason` says why, and `rows` holds what came before. */
   readonly complete: boolean;
   readonly reason: string | null;
-  /** The sheet's rows, scanned afresh on each call so no sheet is ever held as an array. */
-  readonly rows: () => Iterable<SheetRow>;
+  /** The sheet's rows, streamed afresh on each call so no sheet is ever held whole. */
+  readonly rows: () => AsyncIterable<SheetRow>;
 }
 
 export interface Workbook {
@@ -83,15 +83,12 @@ export interface WorkbookReading {
 /** A sheet listed past this is recorded and not read (ADR 0104 decision 11). */
 export const MAX_SHEETS = 256;
 
-/** Why a whole sheet is incomplete. A scan that stops part-way names its own (`sheetScan.ts`). */
-export const SHEET_UNREADABLE = "sheet-unreadable";
+/** Why a sheet listed past `MAX_SHEETS` is not read. A scan names its own (`sheetScan.ts`). */
 export const SHEETS_LIMIT = "sheets-limit";
 
 const CELL_SEPARATOR = "\t";
 const ROW_SEPARATOR = "\n";
 const SHEET_SEPARATOR = "\n\n";
-const DIMENSION = new RegExp(`<${PREFIX}dimension\\b(?<attributes>[^>]*?)\\/?>`, "u");
-const MERGE = new RegExp(`<${PREFIX}mergeCell\\b(?<attributes>[^>]*?)\\/?>`, "gu");
 
 /**
  * U+0000 made storable: neither a Postgres `text` column nor a `jsonb` string can hold it. It is
@@ -147,10 +144,27 @@ function lineOf(row: ScannedRow): string {
   return cells.join(CELL_SEPARATOR);
 }
 
-function* sheetRows(xml: string, workbook: WorkbookPackage): Generator<SheetRow> {
-  for (const row of scanSheet(xml, workbook)) {
+async function* sheetRows(
+  stream: NonNullable<SheetPart["stream"]>,
+  workbook: WorkbookPackage,
+): AsyncGenerator<SheetRow> {
+  for await (const row of scanSheet(stream, workbook)) {
     yield sheetRowOf(row);
   }
+}
+
+/** A sheet that is listed and not read: no rows, and why. */
+function unread(reason: string): Omit<Sheet, keyof SheetPart | "name" | "nameReason"> {
+  return {
+    dimension: null,
+    merges: [],
+    rowCount: 0,
+    complete: false,
+    reason,
+    async *rows(): AsyncGenerator<SheetRow> {
+      // Nothing was read, so there is nothing to yield.
+    },
+  };
 }
 
 /** Text collected up to a ceiling: past it, the scan goes on for its outcome but writes nothing. */
@@ -175,8 +189,12 @@ class BoundedText {
   }
 }
 
-/** Scans a sheet once for its text and its outcome; `rows` scans it again on demand. */
-function readSheet(part: SheetPart, workbook: WorkbookPackage, text: BoundedText): Sheet {
+/** Streams a sheet once for its text and its end; `rows` streams it again on demand. */
+async function readSheet(
+  part: SheetPart,
+  workbook: WorkbookPackage,
+  text: BoundedText,
+): Promise<Sheet> {
   const facts = {
     index: part.index,
     name: storableOrNull(part.name),
@@ -184,38 +202,26 @@ function readSheet(part: SheetPart, workbook: WorkbookPackage, text: BoundedText
     kind: part.kind,
     state: part.state,
   };
-  const { xml } = part;
-  if (xml === null || part.index > MAX_SHEETS) {
-    const reason = xml === null ? SHEET_UNREADABLE : SHEETS_LIMIT;
-    return {
-      ...facts,
-      dimension: null,
-      merges: [],
-      rowCount: 0,
-      ...stopped(reason),
-      rows: () => [],
-    };
+  const { stream } = part;
+  if (stream === null || part.index > MAX_SHEETS) {
+    return { ...facts, ...unread(stream === null ? SHEET_UNREADABLE : SHEETS_LIMIT) };
   }
-  const lines = scanSheet(xml, workbook);
+  const lines = scanSheet(stream, workbook);
   let rowCount = 0;
-  let step = lines.next();
+  let step = await lines.next();
   while (step.done !== true) {
     text.add(`${rowCount === 0 ? "" : ROW_SEPARATOR}${lineOf(step.value)}`);
     rowCount += 1;
-    step = lines.next();
+    step = await lines.next();
   }
+  const end: SheetEnd = step.value;
   return {
     ...facts,
-    dimension: storableOrNull(
-      attributesOf(DIMENSION.exec(xml)?.groups?.attributes ?? "").get("ref") ?? null,
-    ),
-    merges: [...xml.matchAll(MERGE)].flatMap((merge) => {
-      const ref = attributesOf(merge.groups?.attributes ?? "").get("ref");
-      return ref === undefined ? [] : [storable(ref)];
-    }),
+    ...end,
+    dimension: storableOrNull(end.dimension),
+    merges: end.merges.map(storable),
     rowCount,
-    ...step.value,
-    rows: () => sheetRows(xml, workbook),
+    rows: () => sheetRows(stream, workbook),
   };
 }
 
@@ -231,18 +237,27 @@ function readSheet(part: SheetPart, workbook: WorkbookPackage, text: BoundedText
  *
  * `textLimit` bounds the text held while scanning; the caller caps and flags it exactly.
  */
-export function readWorkbook(bytes: Uint8Array, textLimit: number): WorkbookReading | null {
-  const opened = openWorkbookPackage(bytes);
-  if (opened === null || opened.sheets.every((sheet) => sheet.xml === null)) {
+export async function readWorkbook(
+  bytes: Uint8Array,
+  textLimit: number,
+): Promise<WorkbookReading | null> {
+  const opened = await openWorkbookPackage(bytes);
+  if (opened === null || opened.sheets.every((sheet) => sheet.stream === null)) {
     return null;
   }
   const text = new BoundedText(textLimit);
-  const sheets = opened.sheets.map((part) => {
+  const sheets: Sheet[] = [];
+  // In order, one at a time: the text is the sheets in tab order, and one sheet streaming at a
+  // time is what keeps a workbook's memory to one piece and one row.
+  for (const part of opened.sheets) {
     if (part.index > 1) {
       text.add(SHEET_SEPARATOR);
     }
-    return readSheet(part, opened, text);
-  });
+    sheets.push(await readSheet(part, opened, text));
+  }
+  if (sheets.every((sheet) => sheet.reason === SHEET_UNREADABLE)) {
+    return null;
+  }
   return {
     workbook: { container: opened.container, date1904: opened.date1904, sheets },
     text: text.toString(),

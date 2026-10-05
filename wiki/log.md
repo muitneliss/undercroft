@@ -294,3 +294,5 @@
 ## [2026-10-05] ingest | Runbook: Agent skills
 ## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
 ## [2026-10-05] ingest | Runbook Deployment
+## [2026-10-05] ingest | ADR 0106 A Sheet Is Read as It Inflates
+## [2026-10-05] ingest | File formats a Gmail or Drive connection can land

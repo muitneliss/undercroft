@@ -21,8 +21,9 @@
  */
 
 import { integerOf, numberFormatsOf } from "./numberFormats.ts";
-import { attributesOf, decodeXmlText, PREFIX } from "./xml.ts";
-import { readZipIndex, readZipText, type ZipIndex } from "./zip.ts";
+import { readSharedStrings } from "./sharedStrings.ts";
+import { attributesOf, PREFIX } from "./xml.ts";
+import { readZipIndex, readZipText, type StreamEnd, streamZipText, type ZipIndex } from "./zip.ts";
 
 export type Container = "ooxml" | "ooxml-strict";
 export type SheetKind = "worksheet" | "chartsheet" | "dialogsheet" | "macrosheet";
@@ -31,7 +32,10 @@ export type SheetState = "visible" | "hidden" | "veryHidden";
 /** Why a sheet's name is `null`. The only one: the package has no relationships to follow. */
 export const NAMES_UNRESOLVED = "workbook-relationships-missing";
 
-/** One sheet the workbook lists, in tab order, with its part's XML if it could be read. */
+/** A part's text, opened afresh on each call and read as it inflates (`zip.ts`). */
+export type PartStream = () => AsyncGenerator<string, StreamEnd>;
+
+/** One sheet the workbook lists, in tab order, with a way to stream its part. */
 export interface SheetPart {
   /** 1-based, in the order the workbook lists its sheets (its tab order). */
   readonly index: number;
@@ -40,8 +44,8 @@ export interface SheetPart {
   /** `null` when the sheet's relationship names no part type this reader knows. */
   readonly kind: SheetKind | null;
   readonly state: SheetState;
-  /** `null` when the part is absent, corrupt, or past `zip.ts`'s inflate ceiling. */
-  readonly xml: string | null;
+  /** `null` when the package holds no part for it; a part that breaks part-way says so as it ends. */
+  readonly stream: PartStream | null;
 }
 
 export interface WorkbookPackage {
@@ -64,15 +68,6 @@ const RELATIONSHIP = /<Relationship\b(?<attributes>[^>]*?)\/?>/gu;
 const STRICT_NAMESPACE = /purl\.oclc\.org\/ooxml\/spreadsheetml\/main/u;
 const SHEET = new RegExp(`<${PREFIX}sheet\\b(?<attributes>[^>]*?)\\/?>`, "gu");
 const WORKBOOK_PROPERTIES = new RegExp(`<${PREFIX}workbookPr\\b(?<attributes>[^>]*?)\\/?>`, "u");
-const PHONETIC = new RegExp(`<${PREFIX}rPh\\b[\\s\\S]*?<\\/${PREFIX}rPh>`, "gu");
-const TEXT_RUN = new RegExp(
-  `<${PREFIX}t\\b[^>]*?(?:\\/>|>(?<body>[\\s\\S]*?)<\\/${PREFIX}t>)`,
-  "gu",
-);
-const SHARED_ITEM = new RegExp(
-  `<${PREFIX}si\\b[^>]*?(?:\\/>|>(?<body>[\\s\\S]*?)<\\/${PREFIX}si>)`,
-  "gu",
-);
 const RELATIONSHIP_ID = /^[A-Za-z_][\w.-]*:id$/u;
 const LEADING_SLASHES = /^\/+/u;
 
@@ -117,28 +112,18 @@ class Parts {
     return actual === undefined ? null : readZipText(this.#bytes, this.#index, actual);
   }
 
+  /** A part that may be larger than `readZipText`'s ceiling, as a stream; `null` when absent. */
+  stream(name: string): PartStream | null {
+    const actual = this.#names.get(name.toLowerCase());
+    return actual === undefined
+      ? null
+      : (): AsyncGenerator<string, StreamEnd> => streamZipText(this.#bytes, this.#index, actual);
+  }
+
   /** Every part name, as stored. */
   names(): string[] {
     return [...this.#names.values()];
   }
-}
-
-/** Every `<t>` run inside one element, joined, phonetic guides excluded. */
-export function stringRuns(xml: string): string {
-  let text = "";
-  // `<rPh>` carries furigana over characters the `<t>` runs already hold; read naively, every
-  // such string would arrive doubled.
-  for (const run of xml.replaceAll(PHONETIC, "").matchAll(TEXT_RUN)) {
-    text += decodeXmlText(run.groups?.body ?? "");
-  }
-  return text;
-}
-
-function sharedStringsOf(xml: string | null): string[] {
-  if (xml === null) {
-    return [];
-  }
-  return [...xml.matchAll(SHARED_ITEM)].map((item) => stringRuns(item.groups?.body ?? ""));
 }
 
 function relationshipsOf(xml: string | null): ReadonlyMap<string, Relationship> {
@@ -240,7 +225,7 @@ function listedSheets(parts: Parts, workbookPart: string, workbookXml: string): 
       nameReason: null,
       kind,
       state: stateOf(attributes.get("state")),
-      xml: kind === null || part === null ? null : parts.text(part),
+      stream: kind === null || part === null ? null : parts.stream(part),
     };
   });
 }
@@ -258,11 +243,19 @@ function conventionalSheets(parts: Parts): SheetPart[] {
     nameReason: NAMES_UNRESOLVED,
     kind: "worksheet",
     state: "visible",
-    xml: parts.text(sheet.name),
+    stream: parts.stream(sheet.name),
   }));
 }
 
-function viaRelationships(parts: Parts, workbookPart: string): WorkbookPackage | null {
+/** Where a package's parts are, before the shared strings are read. */
+interface Located {
+  readonly workbookXml: string | null;
+  readonly sheets: readonly SheetPart[];
+  readonly sharedStrings: PartStream | null;
+  readonly styles: string | null;
+}
+
+function viaRelationships(parts: Parts, workbookPart: string): Located | null {
   const workbookXml = parts.text(workbookPart);
   if (workbookXml === null) {
     return null;
@@ -271,42 +264,50 @@ function viaRelationships(parts: Parts, workbookPart: string): WorkbookPackage |
   const shared = targetOf(relationships, "sharedstrings");
   const styles = targetOf(relationships, "styles");
   return {
-    container: containerOf(workbookXml),
-    date1904: date1904Of(workbookXml),
+    workbookXml,
     sheets: listedSheets(parts, workbookPart, workbookXml),
-    sharedStrings: sharedStringsOf(
-      shared === undefined ? null : parts.text(resolve(workbookPart, shared)),
-    ),
-    numberFormat: numberFormatsOf(
-      styles === undefined ? null : parts.text(resolve(workbookPart, styles)),
-    ),
+    sharedStrings: shared === undefined ? null : parts.stream(resolve(workbookPart, shared)),
+    styles: styles === undefined ? null : parts.text(resolve(workbookPart, styles)),
   };
 }
 
-function viaConventionalNames(parts: Parts): WorkbookPackage {
-  const workbookXml = parts.text(CONVENTIONAL_WORKBOOK);
+function viaConventionalNames(parts: Parts): Located {
   return {
-    container: containerOf(workbookXml),
-    date1904: date1904Of(workbookXml),
+    workbookXml: parts.text(CONVENTIONAL_WORKBOOK),
     sheets: conventionalSheets(parts),
-    sharedStrings: sharedStringsOf(parts.text(CONVENTIONAL_SHARED_STRINGS)),
-    numberFormat: numberFormatsOf(parts.text(CONVENTIONAL_STYLES)),
+    sharedStrings: parts.stream(CONVENTIONAL_SHARED_STRINGS),
+    styles: parts.text(CONVENTIONAL_STYLES),
   };
 }
 
 /**
- * A workbook package opened, or `null` for bytes that hold no workbook: not a zip, or a zip
- * with no sheet in it -- a `.docx` renamed, say. Neither is an empty spreadsheet, and the caller
- * records each as a reason (`CLAUDE.md` rule 2).
+ * A workbook package opened, or `null` for bytes that hold no workbook: not a zip, a zip with no
+ * sheet in it -- a `.docx` renamed, say -- or a shared string table that stops part-way. None is
+ * an empty spreadsheet, and the caller records each as a reason (`CLAUDE.md` rule 2).
  */
-export function openWorkbookPackage(bytes: Uint8Array): WorkbookPackage | null {
+export async function openWorkbookPackage(bytes: Uint8Array): Promise<WorkbookPackage | null> {
   const parts = new Parts(bytes, readZipIndex(bytes));
   const office = parts.has(ROOT_RELATIONSHIPS)
     ? targetOf(relationshipsOf(parts.text(ROOT_RELATIONSHIPS)), "officedocument")
     : undefined;
-  const opened =
+  const located =
     office === undefined
       ? viaConventionalNames(parts)
       : viaRelationships(parts, resolve("", office));
-  return opened === null || opened.sheets.length === 0 ? null : opened;
+  if (located === null || located.sheets.length === 0) {
+    return null;
+  }
+  // A workbook with no shared strings part keeps every text inline, which is not an error.
+  const sharedStrings =
+    located.sharedStrings === null ? [] : await readSharedStrings(located.sharedStrings());
+  if (sharedStrings === null) {
+    return null;
+  }
+  return {
+    container: containerOf(located.workbookXml),
+    date1904: date1904Of(located.workbookXml),
+    sheets: located.sheets,
+    sharedStrings,
+    numberFormat: numberFormatsOf(located.styles),
+  };
 }
