@@ -226,6 +226,108 @@ describe("a workbook's rows", () => {
   });
 });
 
+/** A workbook's text as a reader before rows existed left it: read, from these bytes. */
+async function seedReadText(documentId: string, sha256: string, text: string): Promise<void> {
+  await db.query(
+    `INSERT INTO raw.document_text (source, tenant_id, document_id, source_sha256, method, text,
+       chars, extracted_at, run_id, reader_version)
+     VALUES ($1, $2, $3, $4, 'xlsx', $5, char_length($5), now(), 'run-old', 6)`,
+    [SOURCE, TENANT, documentId, sha256, text],
+  );
+}
+
+/** Rows written under a rows generation older than any the pass writes. */
+async function seedStaleRows(sha256: string): Promise<void> {
+  await db.query(
+    `INSERT INTO raw.document_sheets (tenant_id, sha256, sheet_index, sheet_name, sheet_state,
+       container, date1904, row_count, complete, rows_version, extracted_at, run_id)
+     VALUES ($1, $2, 1, 'Ledger', 'visible', 'ooxml', false, 1, true, 0, now(), 'run-old')`,
+    [TENANT, sha256],
+  );
+  await db.query(
+    `INSERT INTO raw.document_rows (tenant_id, sha256, sheet_index, row_number, cells)
+     VALUES ($1, $2, 1, 1, '{"A": "held"}')`,
+    [TENANT, sha256],
+  );
+}
+
+describe("a workbook read before its rows existed", () => {
+  it("makes its scope due when it is the only work there is", async () => {
+    const sha = await landDocument({
+      documentId: "w1",
+      bytes: LEDGER_BYTES,
+      contentType: XLSX_TYPE,
+    });
+    await seedReadText("w1", sha, "Acme Holdings\t1234.10");
+
+    expect(await listExtractDue(db)).toEqual([{ tenantId: TENANT, source: SOURCE }]);
+  });
+
+  it("is read again for its rows, and its text brought to the same reading", async () => {
+    // The text an older reader left slid C's amount into B; the rows and the text are now one
+    // reading of the same bytes.
+    const sha = await landDocument({
+      documentId: "w1",
+      bytes: LEDGER_BYTES,
+      contentType: XLSX_TYPE,
+    });
+    await seedReadText("w1", sha, "Acme Holdings\t1234.10");
+
+    await extract(spawnAnswering(""));
+
+    const [text] = await textRows();
+    expect([(await workbookRows()).length, text?.text]).toEqual([1, "Acme Holdings\t\t1234.10"]);
+  });
+
+  it("keeps the rows and the text it holds when the reader now refuses it, and says why", async () => {
+    // The 2,602-document rule: a re-read that cannot read never replaces a reading with nothing.
+    const sha = await landDocument({
+      documentId: "w1",
+      bytes: new TextEncoder().encode("not a workbook any more"),
+      contentType: XLSX_TYPE,
+    });
+    await seedReadText("w1", sha, "held text");
+    await seedStaleRows(sha);
+
+    await extract(spawnAnswering(""));
+
+    const { rows: refused } = await db.query<{ reason: string }>(
+      "SELECT reason FROM raw.document_rows_refusal",
+    );
+    const [text] = await textRows();
+    expect([text?.text, (await workbookRows()).length, refused]).toEqual([
+      "held text",
+      1,
+      [{ reason: "xlsx-unreadable" }],
+    ]);
+  });
+});
+
+describe("a workbook the reader refused under this rows generation", () => {
+  it("is not owed again, so it cannot head every batch for ever", async () => {
+    const sha = await landDocument({
+      documentId: "w1",
+      bytes: new TextEncoder().encode("not a workbook any more"),
+      contentType: XLSX_TYPE,
+    });
+    await seedReadText("w1", sha, "held text");
+
+    await extract(spawnAnswering(""));
+
+    expect(await listExtractDue(db)).toEqual([]);
+  });
+});
+
+describe("rows no live document holds", () => {
+  it("are removed by the next pass over the tenant", async () => {
+    await seedStaleRows("f".repeat(64));
+
+    await extract(spawnAnswering(""));
+
+    expect(await workbookRows()).toEqual([]);
+  });
+});
+
 describe("a second pass", () => {
   it("does nothing when the bytes have not moved", async () => {
     // The mechanism that makes this verb schedulable. Without it every run re-reads the whole

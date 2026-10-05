@@ -32,9 +32,7 @@
  * ids, which is what the rest of the ledger carries too.
  */
 
-import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { SqlExecutor } from "@undercroft/db";
 import type { RunReasonCount, RunRefusal } from "@undercroft/db/repos";
@@ -55,11 +53,11 @@ import type { Spawn } from "../transform.ts";
 import {
   CURRENT_LAYOUT_VERSION,
   CURRENT_READER_VERSION,
-  extractDocument,
   RELAYABLE_METHODS,
   relayText,
 } from "./extractText.ts";
-import { type WorkbookWriter, workbookWriter } from "./workbookRows.ts";
+import { readBytes } from "./readDocument.ts";
+import { backfillWorkbooks, type WorkbookWriter, workbookWriter } from "./workbookRows.ts";
 
 /** Documents read in one pass. A cap, so one run cannot hold the verb open for hours. */
 export const DEFAULT_BATCH = 500;
@@ -178,30 +176,6 @@ function tallyReasons(
 }
 
 /**
- * Read one document's bytes onto disk so a program can open it by name.
- *
- * On disk rather than through stdin because the binaries differ on what they accept, and a
- * path works for all of them. The file is removed whether the read succeeded or not; a run
- * over a large tenant would otherwise leave hundreds of megabytes behind in the temp dir.
- */
-async function withBytesOnDisk<T>(
-  dir: string,
-  documentId: string,
-  bytes: Uint8Array,
-  use: (path: string) => Promise<T>,
-): Promise<T> {
-  // The provider's own id is opaque, but it is not a filename: a Drive id is safe, a Gmail
-  // document id carries a colon. Hashing is overkill; replacing what a path cannot hold is not.
-  const path = join(dir, `doc-${documentId.replaceAll(/[^\w.-]/gu, "_")}`);
-  await writeFile(path, bytes);
-  try {
-    return await use(path);
-  } finally {
-    await rm(path, { force: true });
-  }
-}
-
-/**
  * The catalogue says the bytes are there and the lake disagrees.
  *
  * Recorded against the document rather than raised, so one unreadable object does not end a
@@ -229,22 +203,11 @@ async function readOne(
   pass: Pass,
   document: PendingDocument,
 ): Promise<DocumentTextRow> {
-  const { scratch } = pass;
   const base = { documentId: document.documentId, sourceSha256: document.sha256 };
-
-  let bytes: Uint8Array;
-  try {
-    bytes = await deps.lake.read(document.lakeKey);
-  } catch {
+  const extracted = await readBytes(deps, pass.scratch, document);
+  if (extracted === null) {
     return { ...base, method: null, reason: LAKE_UNREADABLE, text: "", truncated: false };
   }
-
-  const extracted = await withBytesOnDisk(scratch, document.documentId, bytes, (path) =>
-    extractDocument(
-      { spawn: deps.spawn, workDir: scratch, ...(deps.env === undefined ? {} : { env: deps.env }) },
-      { contentType: document.contentType, bytes, path },
-    ),
-  );
 
   if (extracted.workbook !== undefined) {
     await pass.workbooks.write(document.sha256, extracted.workbook);
@@ -343,6 +306,26 @@ async function relayStale(
   return await relayTexts(deps.exec, scope, relaid, stamp);
 }
 
+/**
+ * Report the workbook rows this pass wrote, then write the rows owed to workbooks read before
+ * them -- after the reads, so a workbook this run just read is not owed its rows. Counts only:
+ * the journal names nothing.
+ */
+async function finishWorkbooks(
+  deps: ExtractRunDeps,
+  pass: { tenantId: string; source: string; extractedAt: string; runId: string; scratch: string },
+  workbooks: WorkbookWriter,
+): Promise<void> {
+  const journal = deps.journal ?? SILENT_JOURNAL;
+  journal.info("workbook_rows_written", { entity: DOCUMENTS, ...workbooks.counts() });
+  const backfilled = await backfillWorkbooks(
+    deps,
+    { ...pass, limit: deps.batch ?? DEFAULT_BATCH },
+    (owed) => readBytes(deps, pass.scratch, owed),
+  );
+  journal.info("workbook_rows_backfilled", { entity: DOCUMENTS, ...backfilled });
+}
+
 export async function runExtract(
   deps: ExtractRunDeps,
   input: { tenantId: string; source: string; runId: string },
@@ -388,7 +371,7 @@ export async function runExtract(
   const relaid = await relayStale(deps, scope, stamp);
 
   journal.info("documents_extracted", { entity: DOCUMENTS, read, refused, unreadable, relaid });
-  journal.info("workbook_rows_written", { entity: DOCUMENTS, ...workbooks.counts() });
+  await finishWorkbooks(deps, { ...scope, extractedAt, runId: input.runId, scratch }, workbooks);
 
   return {
     runId: input.runId,

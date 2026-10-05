@@ -128,7 +128,7 @@ interface Image {
 /**
  * Read an image, or say why not.
  *
- * THE FILE ON DISK HAS NO EXTENSION -- `runExtract` writes `doc-<sanitised id>` -- and nothing
+ * THE FILE ON DISK HAS NO EXTENSION -- `readDocument.ts` writes `doc-<sanitised id>` -- and nothing
  * here may start depending on one. Tesseract sniffs the content through leptonica, so a PNG
  * named `doc-17a3` reads exactly as `doc-17a3.png` would.
  *
