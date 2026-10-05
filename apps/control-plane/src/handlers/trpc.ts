@@ -11,6 +11,9 @@
  * - **403 once membership is established.** Then the caller already knows the tenant
  *   exists; what they lack is authority, and saying so lets the UI disable a button rather
  *   than hide a page.
+ * - **PRECONDITION_FAILED for a deactivated customer** (ADR 0110), after both of the above:
+ *   a member is told the customer is deactivated, a non-member is still told nothing.
+ *   `tenantProcedure` is where; `tenantStatusProcedure` is the one way around it.
  * - **Sessions are server-side and opaque.** A stateless token cannot be withdrawn before
  *   it expires, and the buttons behind this cookie mint OAuth tokens into a customer's
  *   accounting system. So the session row is read from the database on every request, and a
@@ -24,9 +27,10 @@
  * `app.tenant_member` keys -- is what a role is resolved against. `Context.user.userId` is
  * always the `app_user` uuid, never Better Auth's id. `services/invite.ts` holds that seam.
  *
- * What is NOT here is the query. A role is resolved through `services/authz.ts`, which
- * answers with a role or `null`; turning that `null` into NOT_FOUND is the decision argued
- * above, and holding it in one place is why every tenant-scoped procedure gets it right.
+ * What is NOT here is the query. A role, and the tenant's state, are resolved through
+ * `services/authz.ts`, which answers with an `Access` or `null`; turning that `null` into
+ * NOT_FOUND, and a deactivated tenant into PRECONDITION_FAILED, are the decisions argued above,
+ * and holding them in one place is why every tenant-scoped procedure gets them right.
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
@@ -38,7 +42,7 @@ import { messages } from "../i18n/index.ts";
 import type { Grant } from "../services/accessTokens.ts";
 import type { OAuthApps } from "../services/connectedApps.ts";
 import type { SignInMethod } from "./auth.ts";
-import { authorityIn, outranks, type Role } from "../services/authz.ts";
+import { accessIn, outranks, type Role } from "../services/authz.ts";
 import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
@@ -283,28 +287,71 @@ export const sessionProcedure = authedProcedure.use(({ ctx, next }) => {
 });
 
 /**
- * A procedure scoped to a tenant the caller holds authority in. Resolves that authority and
- * puts it on the context; a caller with none gets NOT_FOUND, never FORBIDDEN.
+ * A procedure scoped to a tenant the caller holds authority in, WHATEVER ITS STATE. Resolves
+ * that authority and the tenant's state and puts both on the context; a caller with no
+ * authority gets NOT_FOUND, never FORBIDDEN.
  *
  * "Authority", not "membership", since ADR 0013: a superadmin resolves to `admin` in any
- * tenant that exists, and to `null` in one that does not. `authorityIn` makes both paths
+ * tenant that exists, and to `null` in one that does not. `accessIn` makes both paths
  * answer in the same shape, so the 404-not-403 reasoning above still happens exactly here
  * and exactly once -- which is the property that mattered before a second kind of caller
  * existed, and matters more now there is.
+ *
+ * Almost nothing should be built on this directly: `tenantProcedure` below is this plus the
+ * refusal of a deactivated tenant, and is what every tenant procedure uses. This one is for
+ * the procedures that are ABOUT the tenant's state and so must still answer while it is
+ * deactivated -- `tenants.get`, so a page can say the customer is deactivated, and
+ * `tenants.reactivate`, so an admin can undo it. Opting out is a choice of builder, visible at
+ * the procedure, rather than a list of paths here that a renamed procedure would fall out of.
  */
-export const tenantProcedure = authedProcedure
+export const tenantStatusProcedure = authedProcedure
   .input(z.object({ tenantId: z.string().min(1) }))
   .use(async ({ ctx, input, next }) => {
-    const role = await authorityIn(ctx.exec, {
+    const access = await accessIn(ctx.exec, {
       tenantId: input.tenantId,
       userId: ctx.user.userId,
       superadmin: ctx.superadmin,
     });
-    if (role === null) {
+    if (access === null) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
-    return next({ ctx: { ...ctx, role, tenantId: input.tenantId } });
+    return next({
+      ctx: {
+        ...ctx,
+        role: access.role,
+        deactivatedAt: access.deactivatedAt,
+        tenantId: input.tenantId,
+      },
+    });
   });
+
+/**
+ * A procedure scoped to a tenant the caller holds authority in, and which is not deactivated.
+ *
+ * The deactivation (ADR 0110) is enforced HERE and nowhere else in the router, which is what
+ * makes it hold for every door at once: the browser, the CLI, `/mcp` and the assistant all call
+ * the router, and a procedure added tomorrow is refused on a deactivated customer by being a
+ * tenant procedure at all.
+ *
+ * PRECONDITION_FAILED, worded, with the facts an agent matches on. Not NOT_FOUND: membership is
+ * established by now, the caller knows the customer exists, and hiding it would make a
+ * deactivated customer indistinguishable from a deleted one. Not FORBIDDEN either: nothing about
+ * the caller is lacking -- an admin is refused the same way -- and FORBIDDEN tells a caller to go
+ * and find more authority. What refused is the platform's state, which is what
+ * PRECONDITION_FAILED means here (`BY_TRPC_CODE` reads it as CONFLICT: ask, do not retry).
+ *
+ * After authority, so a non-member still learns nothing: the 404 above fires first.
+ */
+export const tenantProcedure = tenantStatusProcedure.use(({ ctx, next }) => {
+  if (ctx.deactivatedAt !== null) {
+    throw refusal("PRECONDITION_FAILED", messages(ctx.locale)("error.tenantDeactivated"), {
+      reason: "TENANT_DEACTIVATED",
+      tenantId: ctx.tenantId,
+      deactivatedAt: ctx.deactivatedAt,
+    });
+  }
+  return next();
+});
 
 /**
  * A procedure only a platform superadmin may call.
@@ -329,9 +376,18 @@ export const superadminProcedure = authedProcedure.use(({ ctx, next }) => {
   return next();
 });
 
-/** Require at least `min` authority. FORBIDDEN here is correct: membership is established. */
-export function requireRole(min: Role): ReturnType<typeof tenantProcedure.use> {
-  return tenantProcedure.use(({ ctx, next }) => {
+/**
+ * Require at least `min` authority. FORBIDDEN here is correct: membership is established.
+ *
+ * On `tenantProcedure` unless told otherwise, so an admin procedure is refused on a deactivated
+ * customer like every other. `tenantStatusProcedure` is passed by the one admin procedure that
+ * must work there: reactivating it.
+ */
+export function requireRole(
+  min: Role,
+  on: typeof tenantStatusProcedure = tenantProcedure,
+): ReturnType<typeof tenantProcedure.use> {
+  return on.use(({ ctx, next }) => {
     if (!outranks(ctx.role, min)) {
       // Worded, because the UI shows this message to the caller verbatim. The two refusals
       // above it -- UNAUTHORIZED, and NOT_FOUND for a non-member -- deliberately carry no

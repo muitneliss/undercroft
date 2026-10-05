@@ -363,6 +363,7 @@ describe("GET /v1/runs/due", () => {
         { tenantId: "CASE-1", source: "demo" },
         { tenantId: "CASE-1", source: "gmail" },
       ],
+      skipped: [],
     });
   });
 
@@ -378,13 +379,13 @@ describe("GET /v1/runs/due", () => {
     const live = await api().request("/v1/runs/due", {
       headers: { authorization: "Bearer svc-token" },
     });
-    expect(await live.json()).toEqual({ due: [] });
+    expect(await live.json()).toEqual({ due: [], skipped: [] });
 
     await seed("UPDATE ops.run SET status = 'ok', ended_at = now() WHERE id = 'r-live'");
     const fresh = await api().request("/v1/runs/due", {
       headers: { authorization: "Bearer svc-token" },
     });
-    expect(await fresh.json()).toEqual({ due: [] });
+    expect(await fresh.json()).toEqual({ due: [], skipped: [] });
   });
 });
 
@@ -412,14 +413,14 @@ describe("GET /v1/runs/due for a custom cadence", () => {
       `INSERT INTO ops.run (id, tenant_id, source, verb, status, started_at, ended_at)
        VALUES ('r-old', 'CASE-1', 'demo', 'ingest', 'ok', now() - interval '2 days', now() - interval '2 days')`,
     );
-    expect(await due()).toEqual({ due: [{ tenantId: "CASE-1", source: "demo" }] });
+    expect(await due()).toEqual({ due: [{ tenantId: "CASE-1", source: "demo" }], skipped: [] });
 
     // A run that started just now satisfies every fire before it; the next is in the future.
     await seed(
       `INSERT INTO ops.run (id, tenant_id, source, verb, status, started_at, ended_at)
        VALUES ('r-new', 'CASE-1', 'demo', 'ingest', 'ok', now(), now())`,
     );
-    expect(await due()).toEqual({ due: [] });
+    expect(await due()).toEqual({ due: [], skipped: [] });
   });
 });
 
@@ -461,7 +462,10 @@ describe("GET /v1/runs/extract-due", () => {
     const res = await extractDue();
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ due: [{ tenantId: "CASE-1", source: "drive" }] });
+    expect(await res.json()).toEqual({
+      due: [{ tenantId: "CASE-1", source: "drive" }],
+      skipped: [],
+    });
   });
 
   it("stops listing a pair once its documents are read, so the tick does not run forever", async () => {
@@ -470,11 +474,53 @@ describe("GET /v1/runs/extract-due", () => {
     await landed("doc-1", SHA_A);
     await readFrom("doc-1", SHA_A);
 
-    expect(await (await extractDue()).json()).toEqual({ due: [] });
+    expect(await (await extractDue()).json()).toEqual({ due: [], skipped: [] });
   });
 
   // Which documents count as pending -- changed bytes, a tombstone -- is the repo predicate's,
   // proven in `repos/documentText.test.ts`. These two are that the route answers with it.
+});
+
+/**
+ * A deactivated customer (ADR 0110): the scheduler skips it and says so, and a start that
+ * reaches the worker anyway -- a race with the tick, or a caller holding the trigger token -- is
+ * refused by name with no run left behind. The quiet sides are the suites above, where CASE-1
+ * is in use and the same pair is listed and started.
+ */
+describe("a deactivated customer", () => {
+  withDatabase();
+
+  async function deactivate(): Promise<void> {
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE ops.tenant SET deactivated_at = now() WHERE id = 'CASE-1'"),
+    );
+  }
+
+  it("is skipped by the due list, named with its reason, and not silently left out", async () => {
+    await deactivate();
+
+    const res = await api().request("/v1/runs/due", {
+      headers: { authorization: "Bearer svc-token" },
+    });
+
+    expect(await res.json()).toEqual({
+      due: [],
+      skipped: [{ tenantId: "CASE-1", source: "demo", reason: "tenant_deactivated" }],
+    });
+  });
+
+  it("is refused a run by name, and no run is opened", async () => {
+    await deactivate();
+
+    const res = await post(api(), "/v1/runs/ingest", { source: "demo", tenantId: "CASE-1" });
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe("tenant_deactivated");
+    const { rows } = await db.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM ops.run WHERE tenant_id = 'CASE-1'",
+    );
+    expect(rows[0]?.n).toBe(0);
+  });
 });
 
 describe("GET /v1/runs/:id", () => {

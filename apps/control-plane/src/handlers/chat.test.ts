@@ -238,6 +238,20 @@ describe("who may speak, and about what", () => {
     // A thread keyed to any tenantId a caller can type would be a write past the boundary.
     expect(await findThread(db, "CASE-0043", operator.userId)).toBeNull();
   });
+
+  it("a deactivated customer is refused by name to its own member, and nothing is written", async () => {
+    // ADR 0110. `tenants.get` still answers for a deactivated customer -- it is how a page says
+    // so -- and this door rides on it, so it has to refuse itself. The quiet side is every
+    // answered question above, on the same customer in use.
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE ops.tenant SET deactivated_at = now() WHERE id = 'CASE-0042'"),
+    );
+
+    const response = await ask(appWith([]), "Hoá đơn?");
+
+    expect(response.status).toBe(409);
+    expect(await findThread(db, "CASE-0042", operator.userId)).toBeNull();
+  });
 });
 
 describe("an unconfigured assistant says so, in the reader's language", () => {

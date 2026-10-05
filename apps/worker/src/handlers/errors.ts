@@ -23,6 +23,7 @@ import { GrantTooNarrow } from "../services/grant.ts";
 import {
   ConnectionUnusable,
   RunInProgress,
+  TenantDeactivated,
   UnknownSource,
   UnknownTenant,
 } from "../services/ingest.ts";
@@ -71,6 +72,11 @@ export function failureOf(error: unknown): Failure {
       message: error.message,
       details: [error.runId],
     };
+  }
+  // A deactivated customer (ADR 0110): the platform's state refused the run, as for one in
+  // progress, and the Kestra flows treat a 409 as not their failure. The reason is the code.
+  if (error instanceof TenantDeactivated) {
+    return { status: 409, code: "tenant_deactivated", message: error.message, details: [] };
   }
   // A grant too narrow to read its source has the remedy an unconnected one has: a reconnect.
   // Its message names the scope it lacks.

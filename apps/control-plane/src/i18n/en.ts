@@ -85,6 +85,9 @@ export const en = {
     requiresSession:
       "This can only be done from a signed-in browser (or the CLI), never with a token.",
     tenantExists: "The tenant ID {{tenantId}} is already in use by another customer.",
+    tenantDeactivated:
+      "This customer is deactivated. Nothing in it can be used or synced until an admin reactivates it.",
+    tenantNotDeactivated: "This customer is active; there is nothing to reactivate.",
     tenantRoleCollision:
       "The tenant ID {{tenantId}} is too close to another customer's (it differs only in case or punctuation). Choose one that differs in more than that.",
     documentKindExists:

@@ -211,7 +211,7 @@ function registerLakeRecordsRoute(app: Hono, deps: LakeApiDeps): void {
 
     // The caller's run id is claimed BEFORE anything is landed. A script posts batches under
     // an id of its own choosing, and an id that already names another tenant's run must be
-    // refused rather than merged into it.
+    // refused rather than merged into it. A deactivated customer's claim raises (ADR 0110).
     const claimed = await claimExternal(deps.exec, {
       runId: body.runId,
       tenantId: body.tenantId,

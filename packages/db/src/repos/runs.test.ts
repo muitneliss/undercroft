@@ -358,11 +358,11 @@ describe("the ledger survives the process", () => {
 describe("an external caller's run id", () => {
   it("is claimed once, accumulates its batches, and follows its worst batch", async () => {
     expect(await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0042", source: "csv" })).toBe(
-      true,
+      "claimed",
     );
     await recordExternalBatch(db, "ext-1", { created: 2, changed: 0, unchanged: 0, refused: 0 });
     expect(await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0042", source: "csv" })).toBe(
-      true,
+      "claimed",
     );
     await recordExternalBatch(db, "ext-1", { created: 1, changed: 0, unchanged: 1, refused: 1 });
 
@@ -377,9 +377,55 @@ describe("an external caller's run id", () => {
   it("is refused for another tenant, so a shared id cannot merge two customers' runs", async () => {
     await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0042", source: "csv" });
     expect(await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0043", source: "csv" })).toBe(
-      false,
+      "foreign",
     );
     expect(await getRun(db, "CASE-0043", "ext-1")).toBeNull();
+  });
+});
+
+/**
+ * ADR 0110: the ledger is where every kind of run is refused for a deactivated customer, so it
+ * is pinned here, at the statement, from both sides -- the paired quiet cases are the tests
+ * above, where CASE-0042 is in use and every open and claim goes through.
+ */
+describe("a deactivated customer opens no run", () => {
+  async function deactivate(tenantId: string): Promise<void> {
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE ops.tenant SET deactivated_at = now() WHERE id = $1", [tenantId]),
+    );
+  }
+
+  it("is refused by name, writes no row, and leaves another customer alone", async () => {
+    await deactivate("CASE-0043");
+
+    expect(await openRun(db, { id: "r1", ...PAIR, tenantId: "CASE-0043" })).toEqual({
+      ok: false,
+      reason: "tenant-deactivated",
+    });
+    expect(await getRun(db, "CASE-0043", "r1")).toBeNull();
+    expect(await openRun(db, { id: "r2", ...PAIR })).toEqual({ ok: true });
+  });
+
+  it("refuses a pushed batch under a new id and under one claimed before", async () => {
+    await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0043", source: "csv" });
+    await deactivate("CASE-0043");
+
+    expect(await claimExternalRun(db, { id: "ext-1", tenantId: "CASE-0043", source: "csv" })).toBe(
+      "tenant-deactivated",
+    );
+    expect(await claimExternalRun(db, { id: "ext-2", tenantId: "CASE-0043", source: "csv" })).toBe(
+      "tenant-deactivated",
+    );
+    expect(await getRun(db, "CASE-0043", "ext-2")).toBeNull();
+  });
+
+  it("opens again once the customer is reactivated", async () => {
+    await deactivate("CASE-0043");
+    await db.asSuperuser((tx) =>
+      tx.query("UPDATE ops.tenant SET deactivated_at = NULL WHERE id = 'CASE-0043'"),
+    );
+
+    expect(await openRun(db, { id: "r1", ...PAIR, tenantId: "CASE-0043" })).toEqual({ ok: true });
   });
 });
 

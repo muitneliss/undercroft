@@ -22,6 +22,7 @@ import { readRawSchema, readSchema, runQuery, runRawQuery } from "../services/qu
 import { searchRaw } from "../services/rawSearch.ts";
 import { listDue, listExtractDue } from "../services/schedule.ts";
 import { UNAUTHENTICATED, jobDepsFor, serviceTokenOk } from "./bearer.ts";
+import { answerDue } from "./due.ts";
 import type { LakeApiDeps } from "./lake.ts";
 import { registerSemanticRoutes } from "./semantic.ts";
 
@@ -294,7 +295,7 @@ function registerRunsDueGetRoute(app: Hono, deps: LakeApiDeps): void {
     if (!serviceTokenOk(deps, c)) {
       return c.json(UNAUTHENTICATED, 401);
     }
-    return c.json({ due: await listDue(deps.exec) }, 200);
+    return answerDue(c, deps, "ingest", await listDue(deps.exec));
   });
 }
 
@@ -311,7 +312,7 @@ function registerRunsExtractDueGetRoute(app: Hono, deps: LakeApiDeps): void {
     if (!serviceTokenOk(deps, c)) {
       return c.json(UNAUTHENTICATED, 401);
     }
-    return c.json({ due: await listExtractDue(deps.exec) }, 200);
+    return answerDue(c, deps, "extract", await listExtractDue(deps.exec));
   });
 }
 

@@ -25,6 +25,12 @@
  * until a later run succeeded, and that later run is visible on the screen they were linked
  * to. Either channel may be absent. What only email carries -- grants and keys -- is not
  * claimed without email, since a claim with nobody told is a notice lost.
+ *
+ * A notice about a DEACTIVATED customer (ADR 0110) is claimed and withheld, on every channel,
+ * and the log says so per notice with its reason. Its admins cannot act on it -- every page it
+ * links to refuses them -- and a "reconnect this source" for a customer nobody may open is
+ * noise. Claimed rather than left for later, so a reactivation a month on does not deliver a
+ * month of stale warnings at once; what a grant's expiry still means is on its card.
  */
 
 import {
@@ -42,6 +48,7 @@ import {
   claimExpiringKeys,
   claimFailedRuns,
   claimRecoveredRuns,
+  deactivatedTenants,
   readConnectionDetail,
 } from "@undercroft/db/repos";
 
@@ -52,6 +59,11 @@ import { failedRunCard, recoveredRunCard } from "./syncCards.ts";
 
 /** How far ahead a grant or a key is warned about. A week is a working week to act in. */
 export const WARN_DAYS = 7;
+
+/** One tick's deps: the caller's, and the customers deactivated when the tick began. */
+interface TickDeps extends AlertDeps {
+  readonly deactivated: ReadonlySet<string>;
+}
 
 export interface AlertDeps {
   readonly exec: SqlExecutor;
@@ -77,6 +89,21 @@ export interface AlertSummary {
   readonly keys: number;
   /** Messages or cards the channel refused or could not deliver. Logged; never retried. */
   readonly undeliverable: number;
+  /** Notices claimed about a deactivated customer and sent to nobody, each logged. ADR 0110. */
+  readonly withheld: number;
+}
+
+/**
+ * Whether a claimed notice is about a deactivated customer, and so goes to nobody. Said in the
+ * log with the reason as it is decided -- a notice withheld silently could not be told from
+ * one lost.
+ */
+function withheld(deps: TickDeps, tenantId: string, about: Record<string, string>): boolean {
+  if (!deps.deactivated.has(tenantId)) {
+    return false;
+  }
+  deps.log?.info("alert_withheld", { ...about, reason: "tenant_deactivated" });
+  return true;
 }
 
 /**
@@ -145,24 +172,31 @@ async function deliver(
 interface Counts {
   readonly told: number;
   readonly undeliverable: number;
+  readonly withheld: number;
 }
 
 /** Claim the failures and tell each channel there is; a suppressed one is told to neither. */
-async function tellFailures(deps: AlertDeps): Promise<{
+async function tellFailures(deps: TickDeps): Promise<{
   readonly failures: number;
   readonly suppressed: number;
   readonly undeliverable: number;
+  readonly withheld: number;
 }> {
   let failures = 0;
   let suppressed = 0;
   let undeliverable = 0;
+  let held = 0;
   for (const run of await claimFailedRuns(deps.exec)) {
     if (run.notice === "suppressed") {
       suppressed += 1;
       continue;
     }
-    failures += 1;
     const about = { kind: "run_failed", runId: run.id, tenantId: run.tenantId };
+    if (withheld(deps, run.tenantId, about)) {
+      held += 1;
+      continue;
+    }
+    failures += 1;
     const input = {
       ...run,
       runId: run.id,
@@ -181,70 +215,88 @@ async function tellFailures(deps: AlertDeps): Promise<{
       undeliverable += await post(deps, deps.lark, failedRunCard(input), about);
     }
   }
-  return { failures, suppressed, undeliverable };
+  return { failures, suppressed, undeliverable, withheld: held };
 }
 
 async function tellRecoveries(
-  deps: AlertDeps,
+  deps: TickDeps,
   lark: (notice: LarkNotice) => Promise<void>,
 ): Promise<Counts> {
-  const recovered = await claimRecoveredRuns(deps.exec);
+  let told = 0;
   let undeliverable = 0;
-  for (const run of recovered) {
+  let held = 0;
+  for (const run of await claimRecoveredRuns(deps.exec)) {
+    const about = { kind: "run_recovered", runId: run.id, tenantId: run.tenantId };
+    if (withheld(deps, run.tenantId, about)) {
+      held += 1;
+      continue;
+    }
+    told += 1;
     const card = recoveredRunCard({
       ...run,
       runId: run.id,
       publicUrl: deps.publicUrl,
       account: await accountLabelOf(deps.exec, run),
     });
-    undeliverable += await post(deps, lark, card, {
-      kind: "run_recovered",
-      runId: run.id,
-      tenantId: run.tenantId,
-    });
+    undeliverable += await post(deps, lark, card, about);
   }
-  return { told: recovered.length, undeliverable };
+  return { told, undeliverable, withheld: held };
 }
 
-async function tellExpiringGrants(deps: AlertDeps, email: EmailSender): Promise<Counts> {
-  const grants = await claimExpiringGrants(deps.exec, WARN_DAYS);
+async function tellExpiringGrants(deps: TickDeps, email: EmailSender): Promise<Counts> {
+  let told = 0;
   let undeliverable = 0;
-  for (const grant of grants) {
+  let held = 0;
+  for (const grant of await claimExpiringGrants(deps.exec, WARN_DAYS)) {
+    const about = { kind: "grant_expiring", tenantId: grant.tenantId, source: grant.source };
+    if (withheld(deps, grant.tenantId, about)) {
+      held += 1;
+      continue;
+    }
+    told += 1;
     undeliverable += await deliver(
       { ...deps, email },
       await recipientsFor(deps, grant.tenantId),
       (to) => grantExpiringMessage(to, { ...grant, publicUrl: deps.publicUrl }),
-      { kind: "grant_expiring", tenantId: grant.tenantId, source: grant.source },
+      about,
     );
   }
-  return { told: grants.length, undeliverable };
+  return { told, undeliverable, withheld: held };
 }
 
-async function tellExpiringKeys(deps: AlertDeps, email: EmailSender): Promise<Counts> {
-  const keys = await claimExpiringKeys(deps.exec, WARN_DAYS);
+async function tellExpiringKeys(deps: TickDeps, email: EmailSender): Promise<Counts> {
+  let told = 0;
   let undeliverable = 0;
-  for (const key of keys) {
+  let held = 0;
+  for (const key of await claimExpiringKeys(deps.exec, WARN_DAYS)) {
+    const about = { kind: "key_expiring", tenantId: key.tenantId, keyId: key.id };
+    if (withheld(deps, key.tenantId, about)) {
+      held += 1;
+      continue;
+    }
+    told += 1;
     undeliverable += await deliver(
       { ...deps, email },
       await recipientsFor(deps, key.tenantId),
       (to) => keyExpiringMessage(to, { ...key, publicUrl: deps.publicUrl }),
-      { kind: "key_expiring", tenantId: key.tenantId, keyId: key.id },
+      about,
     );
   }
-  return { told: keys.length, undeliverable };
+  return { told, undeliverable, withheld: held };
 }
 
-const NONE: Counts = { told: 0, undeliverable: 0 };
+const NONE: Counts = { told: 0, undeliverable: 0, withheld: 0 };
 
 /**
  * One tick: claim what is due, tell whoever should be told. Safe to run as often as wanted.
  */
 export async function runAlerts(deps: AlertDeps): Promise<AlertSummary> {
-  const failed = await tellFailures(deps);
+  const tick: TickDeps = { ...deps, deactivated: await deactivatedTenants(deps.exec) };
+  const failed = await tellFailures(tick);
   // After the failures, so a failure and the success that ended it in one interval are both told.
-  const recoveries = deps.lark === undefined ? NONE : await tellRecoveries(deps, deps.lark);
-  const grants = deps.email === undefined ? NONE : await tellExpiringGrants(deps, deps.email);
-  const keys = deps.email === undefined ? NONE : await tellExpiringKeys(deps, deps.email);
+  const recoveries = deps.lark === undefined ? NONE : await tellRecoveries(tick, deps.lark);
+  const grants = deps.email === undefined ? NONE : await tellExpiringGrants(tick, deps.email);
+  const keys = deps.email === undefined ? NONE : await tellExpiringKeys(tick, deps.email);
 
   const summary = {
     failures: failed.failures,
@@ -254,9 +306,15 @@ export async function runAlerts(deps: AlertDeps): Promise<AlertSummary> {
     keys: keys.told,
     undeliverable:
       failed.undeliverable + recoveries.undeliverable + grants.undeliverable + keys.undeliverable,
+    withheld: failed.withheld + recoveries.withheld + grants.withheld + keys.withheld,
   };
   if (
-    summary.failures + summary.suppressed + summary.recoveries + summary.grants + summary.keys >
+    summary.failures +
+      summary.suppressed +
+      summary.recoveries +
+      summary.grants +
+      summary.keys +
+      summary.withheld >
     0
   ) {
     deps.log?.info("alerts_tick", summary);

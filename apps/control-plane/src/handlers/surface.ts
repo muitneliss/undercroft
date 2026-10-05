@@ -114,6 +114,12 @@ export const EFFECTS: EffectTable = {
 
   "tenants.create": "write",
   "tenants.rename": "write",
+  // A write, not destructive, by the rule this table already keeps: it is undone by
+  // `reactivate`, and it deletes nothing. `destructive` is what the CLI confirms as "deletes
+  // data and cannot be undone", which would be false here. It still needs a write grant, and
+  // the browser asks before it (ADR 0110).
+  "tenants.deactivate": "write",
+  "tenants.reactivate": "write",
 
   // `startOAuth` records a handshake and returns a consent URL; the person opens it.
   "connections.startOAuth": "write",

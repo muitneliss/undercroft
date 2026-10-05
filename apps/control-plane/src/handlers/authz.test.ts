@@ -10,8 +10,9 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_LOCALE } from "@undercroft/core";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
+import { procedureManifest, resolveProcedure } from "./procedures.ts";
 import { appRouter } from "./router.ts";
-import type { Context, Role, SessionUser } from "./trpc.ts";
+import { type Context, type Role, refusalFacts, type SessionUser } from "./trpc.ts";
 
 let db: TestDatabase;
 
@@ -408,5 +409,164 @@ describe("a customer can be retitled, but never re-identified", () => {
     const cleared = await admin.tenants.rename({ tenantId: "CASE-0001", displayName: "" });
 
     expect(cleared.displayName).toBe("CASE-0001");
+  });
+});
+
+/**
+ * A deactivated customer (ADR 0110): every member loses access until an admin reactivates it.
+ *
+ * Each refusal is paired with its quiet side -- the same call on a customer in use, or the same
+ * caller after reactivation -- so code that refused everything could not pass.
+ */
+describe("a deactivated customer", () => {
+  async function seeded(role: Role, address = `${role}@example.test`) {
+    const userId = await seedUser(address);
+    await seedMembership("CASE-0001", userId, role);
+    return caller({ userId, email: address });
+  }
+
+  /** The refusal's code and the reason an agent matches on, or `NO_ERROR`. */
+  async function refusedWith(fn: () => Promise<unknown>): Promise<string> {
+    try {
+      await fn();
+      return "NO_ERROR";
+    } catch (error) {
+      if (!(error instanceof TRPCError)) {
+        return "UNKNOWN";
+      }
+      return `${error.code}:${refusalFacts(error)?.reason ?? ""}`;
+    }
+  }
+
+  it("refuses a member's tenant procedure by name, and answered it before", async () => {
+    const member = await seeded("member");
+    const admin = await seeded("admin");
+    expect(await errorCode(() => member.people.members({ tenantId: "CASE-0001" }))).toBe(
+      "NO_ERROR",
+    );
+
+    await admin.tenants.deactivate({ tenantId: "CASE-0001" });
+
+    expect(await refusedWith(() => member.people.members({ tenantId: "CASE-0001" }))).toBe(
+      "PRECONDITION_FAILED:TENANT_DEACTIVATED",
+    );
+  });
+
+  it("refuses every tenant procedure but the two about its state, for an admin too", async () => {
+    // The enforcement is one middleware; this is what proves every tenant procedure is behind
+    // it, including the next one somebody adds. Only `tenantId` is sent: the refusal comes
+    // before a procedure's own input is read, so no procedure needs a valid body to answer it.
+    const admin = await seeded("admin");
+    await admin.tenants.deactivate({ tenantId: "CASE-0001" });
+
+    const answered: string[] = [];
+    for (const spec of await procedureManifest()) {
+      // Reactivating last, below: it would end the state this loop is about.
+      const procedure =
+        spec.tenantScoped && spec.path !== "tenants.reactivate"
+          ? resolveProcedure(admin, spec.path)
+          : null;
+      if (
+        procedure !== null &&
+        (await refusedWith(() => procedure({ tenantId: "CASE-0001" }))) !==
+          "PRECONDITION_FAILED:TENANT_DEACTIVATED"
+      ) {
+        answered.push(spec.path);
+      }
+    }
+
+    expect(answered).toEqual(["tenants.get"]);
+    expect(await refusedWith(() => admin.tenants.reactivate({ tenantId: "CASE-0001" }))).toBe(
+      "NO_ERROR",
+    );
+  });
+
+  it("still tells a non-member the customer is not there", async () => {
+    // The 404 boundary comes first: a deactivated customer must not become an oracle for one
+    // that exists.
+    const admin = await seeded("admin");
+    await admin.tenants.deactivate({ tenantId: "CASE-0001" });
+    const outsider = await seedUser("outsider@example.test");
+
+    expect(
+      await errorCode(() =>
+        caller({ userId: outsider, email: "outsider@example.test" }).tenants.get({
+          tenantId: "CASE-0001",
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+
+  it("stays in its members' list and on its page, marked with when", async () => {
+    const member = await seeded("member");
+    const admin = await seeded("admin");
+    await admin.tenants.deactivate({ tenantId: "CASE-0001" });
+
+    const [listed] = await member.tenants.list();
+    const opened = await member.tenants.get({ tenantId: "CASE-0001" });
+
+    expect(listed?.deactivatedAt).toBeString();
+    expect(opened.deactivatedAt).toBe(listed?.deactivatedAt ?? "");
+    expect(opened.role).toBe("member");
+  });
+
+  it("is reactivated by an admin, and access returns as it was", async () => {
+    const member = await seeded("member");
+    const admin = await seeded("admin");
+    await admin.tenants.deactivate({ tenantId: "CASE-0001" });
+
+    const reactivated = await admin.tenants.reactivate({ tenantId: "CASE-0001" });
+
+    expect(reactivated.deactivatedAt).toBeNull();
+    expect(await errorCode(() => member.people.members({ tenantId: "CASE-0001" }))).toBe(
+      "NO_ERROR",
+    );
+    const { rows } = await db.query<{ action: string; actor: string }>(
+      "SELECT action, actor FROM ops.audit_log WHERE tenant_id = 'CASE-0001' ORDER BY id",
+    );
+    expect(rows).toEqual([
+      { action: "tenants.deactivate", actor: "admin@example.test" },
+      { action: "tenants.reactivate", actor: "admin@example.test" },
+    ]);
+  });
+
+  it("cannot be deactivated or reactivated by a member", async () => {
+    const member = await seeded("member");
+    const admin = await seeded("admin");
+
+    expect(await errorCode(() => member.tenants.deactivate({ tenantId: "CASE-0001" }))).toBe(
+      "FORBIDDEN",
+    );
+    expect((await member.tenants.get({ tenantId: "CASE-0001" })).deactivatedAt).toBeNull();
+
+    await admin.tenants.deactivate({ tenantId: "CASE-0001" });
+    expect(await errorCode(() => member.tenants.reactivate({ tenantId: "CASE-0001" }))).toBe(
+      "FORBIDDEN",
+    );
+  });
+
+  it("is deactivated and reactivated by a superadmin with no membership, as its admin", async () => {
+    await db.query("INSERT INTO ops.tenant (id) VALUES ('CASE-0001')");
+    const user = await seedUser("root@example.test");
+    const root = caller({ userId: user, email: "root@example.test" }, true);
+
+    await root.tenants.deactivate({ tenantId: "CASE-0001" });
+    const back = await root.tenants.reactivate({ tenantId: "CASE-0001" });
+
+    expect(back.deactivatedAt).toBeNull();
+  });
+
+  it("refuses a transition to the state it is already in, in both directions", async () => {
+    // Never a quiet success: a second "deactivate" that answered ok would let a person believe
+    // they cut the customer off, when somebody else did, at a moment they are not told.
+    const admin = await seeded("admin");
+
+    expect(await refusedWith(() => admin.tenants.reactivate({ tenantId: "CASE-0001" }))).toBe(
+      "PRECONDITION_FAILED:TENANT_ACTIVE",
+    );
+    await admin.tenants.deactivate({ tenantId: "CASE-0001" });
+    expect(await refusedWith(() => admin.tenants.deactivate({ tenantId: "CASE-0001" }))).toBe(
+      "PRECONDITION_FAILED:TENANT_DEACTIVATED",
+    );
   });
 });

@@ -12,13 +12,12 @@ import { describeError, newRunId } from "@undercroft/core";
 import {
   closeRun,
   MAX_ERROR_CHARS,
-  openRun,
   recordSteps,
   type RunTrigger,
   SOURCE_OF_TRANSFORM,
 } from "@undercroft/db/repos";
 
-import { RunInProgress } from "./ingest.ts";
+import { openRunOrRefuse } from "./ingest.ts";
 import type { JobDeps } from "./jobs.ts";
 import { createRunJournal, type RunJournal } from "./runJournal.ts";
 import { turnsFor } from "./slots.ts";
@@ -51,8 +50,8 @@ const MIN_BUILD_MS = 30_000;
  * a failed run carrying the last lines of its output -- never the whole log, which can
  * echo row values from a failing test.
  *
- * What refuses, refuses before a row exists: no dbt in this deployment, or a build for
- * this tenant already running.
+ * What refuses, refuses before a row exists: no dbt in this deployment, a build for this
+ * tenant already running, or a deactivated tenant (ADR 0110).
  */
 export async function startTransform(
   deps: JobDeps,
@@ -63,7 +62,7 @@ export async function startTransform(
     throw new Error("transform is not configured");
   }
   const runId = newRunId();
-  const opened = await openRun(deps.exec, {
+  await openRunOrRefuse(deps.exec, {
     id: runId,
     tenantId: input.tenantId,
     source: SOURCE_OF_TRANSFORM,
@@ -73,9 +72,6 @@ export async function startTransform(
     parentRunId: input.parentRunId ?? null,
     releaseTag: deps.releaseTag ?? "",
   });
-  if (!opened.ok) {
-    throw new RunInProgress("transform", input.tenantId, opened.runId);
-  }
   const log = deps.log?.child({ runId, tenantId: input.tenantId, source: SOURCE_OF_TRANSFORM });
   const journal = createRunJournal({
     exec: deps.exec,

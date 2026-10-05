@@ -21,7 +21,6 @@ import { describeError, newRunId } from "@undercroft/core";
 import {
   closeRun,
   MAX_ERROR_CHARS,
-  openRun,
   pruneRefusals,
   recordEntities,
   recordPendingBefore,
@@ -30,7 +29,7 @@ import {
   type RunTrigger,
 } from "@undercroft/db/repos";
 
-import { RunInProgress } from "../ingest.ts";
+import { openRunOrRefuse } from "../ingest.ts";
 import { type JobDeps, track } from "../jobs.ts";
 import { createRunJournal } from "../runJournal.ts";
 import type { Transactor } from "../runTypes.ts";
@@ -122,7 +121,7 @@ export async function startExtractJob(
 ): Promise<{ runId: string }> {
   const { extractSpawn, transactor } = configured(deps);
   const runId = newRunId();
-  const opened = await openRun(deps.exec, {
+  await openRunOrRefuse(deps.exec, {
     id: runId,
     tenantId: input.tenantId,
     source: input.source,
@@ -132,9 +131,6 @@ export async function startExtractJob(
     parentRunId: null,
     releaseTag: deps.releaseTag ?? "",
   });
-  if (!opened.ok) {
-    throw new RunInProgress("extract", input.tenantId, opened.runId);
-  }
 
   const log = deps.log?.child({ runId, tenantId: input.tenantId, source: input.source });
   const journal = createRunJournal({

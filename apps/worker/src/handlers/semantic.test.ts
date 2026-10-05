@@ -99,7 +99,7 @@ describe("without a classifier key", () => {
     });
 
     expect(started.status).toBe(400);
-    expect(await due.json()).toEqual({ due: [] });
+    expect(await due.json()).toEqual({ due: [], skipped: [] });
   });
 });
 

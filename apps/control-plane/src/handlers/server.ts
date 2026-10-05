@@ -18,7 +18,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { describeError } from "@undercroft/core";
 import { traceRequests } from "@undercroft/telemetry";
 import { Hono } from "hono";
-import { isAdminIn } from "../services/authz.ts";
+import { adminStandingIn } from "../services/authz.ts";
 import { NO_SUPERADMINS } from "../services/superadmin.ts";
 import { unavailableJudge } from "../services/assistant/judge.ts";
 import { registerAssistantRoutes } from "./chat.ts";
@@ -140,13 +140,14 @@ function registerConsentRoute(app: Hono, deps: ServerDeps): void {
     ...(deps.googleIngest === undefined ? {} : { google: deps.googleIngest }),
     ...(deps.xero === undefined ? {} : { xero: deps.xero }),
     ...(deps.worker === undefined ? {} : { worker: deps.worker }),
-    // Through `authz.isAdminIn`, which is the same policy `tenantProcedure` resolves. Asking
-    // `roleFor` here instead -- as this line first did -- reads a `tenant_member` row that a
-    // superadmin deliberately does not have, so the platform administrator who is the only
-    // person able to set a fresh deployment up was the one person who could never finish a
-    // consent.
-    hasAdminAuthority: (tenantId, caller) =>
-      isAdminIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
+    // Through `authz.adminStandingIn`, which is the same policy `tenantProcedure` resolves.
+    // Asking `roleFor` here instead -- as this line first did -- reads a `tenant_member` row
+    // that a superadmin deliberately does not have, so the platform administrator who is the
+    // only person able to set a fresh deployment up was the one person who could never finish
+    // a consent. It also answers for a deactivated customer, which this door has no middleware
+    // to refuse (ADR 0110).
+    adminStanding: (tenantId, caller) =>
+      adminStandingIn(deps.exec, deps.superadmins ?? NO_SUPERADMINS, { tenantId, ...caller }),
     resolveCaller: async (headers) => (await resolveCaller(deps, headers, "cookie")).user,
   });
 }

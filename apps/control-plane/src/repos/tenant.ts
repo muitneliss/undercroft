@@ -13,6 +13,10 @@
  * "A tenant is not created by a request" held until ADR 0013 and no longer does. What
  * replaces it is narrower and enforced one layer up: only a platform superadmin may create
  * one, and no tenant-scoped role can, however senior.
+ *
+ * Whether a customer is deactivated (ADR 0110) is one nullable column, `deactivated_at`, and
+ * this repo is its only writer: `deactivateTenant` and `reactivateTenant`, each a conditional
+ * UPDATE that changes the row only when it is in the other state.
  */
 
 import type { SqlExecutor } from "@undercroft/db";
@@ -20,16 +24,37 @@ import type { SqlExecutor } from "@undercroft/db";
 export interface Tenant {
   readonly id: string;
   readonly displayName: string;
+  /** When an admin deactivated it, as an ISO instant; `null` while it is in use. ADR 0110. */
+  readonly deactivatedAt: string | null;
+}
+
+/** The row as Postgres returns it: `pg` answers a timestamptz as a Date, PGlite as either. */
+export interface TenantRow {
+  readonly id: string;
+  readonly display_name: string;
+  readonly deactivated_at: Date | string | null;
+}
+
+/** The columns every read below selects, in the shape `toTenant` reads. */
+const TENANT_COLUMNS = "id, display_name, deactivated_at";
+
+/** The column as the ISO instant every caller reads, or `null` for a tenant in use. */
+export function deactivatedAtOf(row: Pick<TenantRow, "deactivated_at">): string | null {
+  return row.deactivated_at === null ? null : new Date(row.deactivated_at).toISOString();
+}
+
+export function toTenant(row: TenantRow): Tenant {
+  return { id: row.id, displayName: row.display_name, deactivatedAt: deactivatedAtOf(row) };
 }
 
 /** One tenant, or `null`. Whether "absent" is a 404 is the caller's decision. */
 export async function findTenant(exec: SqlExecutor, tenantId: string): Promise<Tenant | null> {
-  const { rows } = await exec.query<{ id: string; display_name: string }>(
-    "SELECT id, display_name FROM ops.tenant WHERE id = $1",
+  const { rows } = await exec.query<TenantRow>(
+    `SELECT ${TENANT_COLUMNS} FROM ops.tenant WHERE id = $1`,
     [tenantId],
   );
   const [row] = rows;
-  return row === undefined ? null : { id: row.id, displayName: row.display_name };
+  return row === undefined ? null : toTenant(row);
 }
 
 /**
@@ -99,13 +124,50 @@ export async function renameTenant(
   tenantId: string,
   displayName: string,
 ): Promise<Tenant | null> {
-  const { rows } = await exec.query<{ id: string; display_name: string }>(
+  const { rows } = await exec.query<TenantRow>(
     `UPDATE ops.tenant SET display_name = $2 WHERE id = $1
-     RETURNING id, display_name`,
+     RETURNING ${TENANT_COLUMNS}`,
     [tenantId, displayName],
   );
   const [row] = rows;
-  return row === undefined ? null : { id: row.id, displayName: row.display_name };
+  return row === undefined ? null : toTenant(row);
+}
+
+/**
+ * Deactivate a tenant, if it is in use. Returns the row as it now stands, or `null` when no
+ * tenant with that id is in use -- absent, or deactivated already.
+ *
+ * The state is the statement's condition, not a read before it, so two admins pressing
+ * Deactivate at once produce one transition and one `null`: the first moment is the one kept,
+ * and the second caller is told rather than allowed to overwrite when it happened.
+ */
+export async function deactivateTenant(
+  exec: SqlExecutor,
+  tenantId: string,
+): Promise<Tenant | null> {
+  const { rows } = await exec.query<TenantRow>(
+    `UPDATE ops.tenant SET deactivated_at = now()
+     WHERE id = $1 AND deactivated_at IS NULL
+     RETURNING ${TENANT_COLUMNS}`,
+    [tenantId],
+  );
+  const [row] = rows;
+  return row === undefined ? null : toTenant(row);
+}
+
+/** Reactivate a tenant, if it is deactivated. `null` when no deactivated tenant has that id. */
+export async function reactivateTenant(
+  exec: SqlExecutor,
+  tenantId: string,
+): Promise<Tenant | null> {
+  const { rows } = await exec.query<TenantRow>(
+    `UPDATE ops.tenant SET deactivated_at = NULL
+     WHERE id = $1 AND deactivated_at IS NOT NULL
+     RETURNING ${TENANT_COLUMNS}`,
+    [tenantId],
+  );
+  const [row] = rows;
+  return row === undefined ? null : toTenant(row);
 }
 
 /**
@@ -117,8 +179,8 @@ export async function renameTenant(
  * the query which IS the visibility boundary stays a query with no way to widen it.
  */
 export async function listAllTenants(exec: SqlExecutor): Promise<Tenant[]> {
-  const { rows } = await exec.query<{ id: string; display_name: string }>(
-    "SELECT id, display_name FROM ops.tenant ORDER BY id",
+  const { rows } = await exec.query<TenantRow>(
+    `SELECT ${TENANT_COLUMNS} FROM ops.tenant ORDER BY id`,
   );
-  return rows.map((row) => ({ id: row.id, displayName: row.display_name }));
+  return rows.map(toTenant);
 }

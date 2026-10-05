@@ -20,11 +20,17 @@
  * there documents nobody has read". Giving extract a cadence of its own would mean a tick that
  * starts a run over a tenant with nothing to do, every time, forever. ADR 0024 keeps it a
  * separate run from the ingest that landed the documents; this keeps it a separate question.
+ *
+ * A DEACTIVATED CUSTOMER IS SKIPPED BY EVERY LIST, AND THE LIST SAYS SO (ADR 0110). What is
+ * outstanding is still worked out for it, then set aside under `skipped` with its reason rather
+ * than left out: a tick that starts nothing for a customer reads, in the flow's own record,
+ * differently from one that found nothing to do. The ledger refuses such a run anyway (`openRun`);
+ * skipping here is what keeps the scheduler from asking every five minutes to be refused.
  */
 
 import { isDue } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
-import { type DueCandidate, listDueCandidates } from "@undercroft/db/repos";
+import { deactivatedTenants, type DueCandidate, listDueCandidates } from "@undercroft/db/repos";
 
 import { staleLayoutScopes } from "../repos/documentLayout.ts";
 import { pendingScopes } from "../repos/documentText.ts";
@@ -41,6 +47,42 @@ export interface DuePair {
   readonly source: string;
 }
 
+/** A pair that had work outstanding and was not started, and why. */
+export interface SkippedPair extends DuePair {
+  /** The worker's refusal code for the same run, so a reader matches one word for both. */
+  readonly reason: "tenant_deactivated";
+}
+
+/** What a due list answers: the pairs to start, and the ones set aside with their reason. */
+export interface DueList<P extends DuePair = DuePair> {
+  readonly due: P[];
+  readonly skipped: SkippedPair[];
+}
+
+/**
+ * Set aside the pairs whose customer is deactivated, naming each. One read of the deactivated
+ * set per tick, and none at all for a tick with nothing outstanding.
+ */
+export async function startable<P extends DuePair>(
+  exec: SqlExecutor,
+  pairs: readonly P[],
+): Promise<DueList<P>> {
+  if (pairs.length === 0) {
+    return { due: [], skipped: [] };
+  }
+  const deactivated = await deactivatedTenants(exec);
+  return {
+    due: pairs.filter((pair) => !deactivated.has(pair.tenantId)),
+    skipped: pairs
+      .filter((pair) => deactivated.has(pair.tenantId))
+      .map((pair) => ({
+        tenantId: pair.tenantId,
+        source: pair.source,
+        reason: "tenant_deactivated",
+      })),
+  };
+}
+
 /** The pure half: which of these candidates the scheduler should start at `now`. */
 export function dueNow(candidates: readonly DueCandidate[], now: Date): DuePair[] {
   return candidates
@@ -48,8 +90,8 @@ export function dueNow(candidates: readonly DueCandidate[], now: Date): DuePair[
     .map((candidate) => ({ tenantId: candidate.tenantId, source: candidate.source }));
 }
 
-export async function listDue(exec: SqlExecutor, now: Date = new Date()): Promise<DuePair[]> {
-  return dueNow(await listDueCandidates(exec), now);
+export async function listDue(exec: SqlExecutor, now: Date = new Date()): Promise<DueList> {
+  return startable(exec, dueNow(await listDueCandidates(exec), now));
 }
 
 /**
@@ -65,7 +107,7 @@ export async function listDue(exec: SqlExecutor, now: Date = new Date()): Promis
  * a scheduler asking an older question than `runExtract` answers would start runs that find
  * nothing, which is the one thing this function exists not to do.
  */
-export async function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
+export async function listExtractDue(exec: SqlExecutor): Promise<DueList> {
   const [unread, unlaid, owed] = await Promise.all([
     pendingScopes(exec, { readerVersion: CURRENT_READER_VERSION }),
     // A text written under an older layout is outstanding work too, and a scope may hold
@@ -85,7 +127,10 @@ export async function listExtractDue(exec: SqlExecutor): Promise<DuePair[]> {
   const due = new Map(
     [...unread, ...unlaid, ...owed].map((pair) => [`${pair.tenantId}\u0000${pair.source}`, pair]),
   );
-  return [...due.values()].sort(
-    (a, b) => a.tenantId.localeCompare(b.tenantId) || a.source.localeCompare(b.source),
+  return startable(
+    exec,
+    [...due.values()].sort(
+      (a, b) => a.tenantId.localeCompare(b.tenantId) || a.source.localeCompare(b.source),
+    ),
   );
 }

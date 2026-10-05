@@ -67,6 +67,43 @@ export class RunInProgress extends UndercroftError {
   }
 }
 
+/**
+ * The customer is deactivated (ADR 0110), so no run of any kind is opened for it until an admin
+ * reactivates it. A refusal with a name rather than an empty success: the scheduler, a script
+ * pushing batches and a person pressing Run all learn why nothing started.
+ */
+export class TenantDeactivated extends UndercroftError {
+  constructor(readonly tenantId: string) {
+    super(
+      `tenant ${JSON.stringify(tenantId)} is deactivated; nothing is started for it until it is reactivated`,
+    );
+  }
+}
+
+/**
+ * Open a run in the ledger, or throw why it cannot be opened.
+ *
+ * Every kind of run opens through here, so `openRun`'s two refusals are translated into the
+ * worker's exceptions once rather than at each verb -- and a verb added later cannot forget the
+ * deactivated customer, which a hand-written `if (!opened.ok)` at its call site would.
+ */
+export async function openRunOrRefuse(
+  exec: SqlExecutor,
+  opening: Parameters<typeof openRun>[1],
+): Promise<void> {
+  const opened = await openRun(exec, opening);
+  if (opened.ok) {
+    return;
+  }
+  if (opened.reason === "tenant-deactivated") {
+    throw new TenantDeactivated(opening.tenantId);
+  }
+  // An ingest is named by its source, every other run by its verb -- the message each verb
+  // has always given.
+  const what = opening.verb === "ingest" ? opening.source : opening.verb;
+  throw new RunInProgress(what, opening.tenantId, opened.runId);
+}
+
 /** No such tenant. Named so the handler can answer 404 rather than a constraint violation. */
 export class UnknownTenant extends UndercroftError {
   constructor(readonly tenantId: string) {
@@ -120,7 +157,8 @@ export async function runIngest(
  * rethrown, so a caller that awaits it learns both.
  *
  * Everything that can refuse does so BEFORE a row is opened: an unknown tenant, a source
- * with no usable grant, a run already in progress. A refused start leaves no run behind.
+ * with no usable grant, a run already in progress, a deactivated tenant. A refused start
+ * leaves no run behind.
  */
 export async function startIngest(
   deps: RunDeps,
@@ -136,7 +174,7 @@ export async function startIngest(
 
   const runId = newRunId();
   const trigger = input.trigger ?? "schedule";
-  const opened = await openRun(deps.exec, {
+  await openRunOrRefuse(deps.exec, {
     id: runId,
     tenantId: input.tenantId,
     source: input.source,
@@ -145,9 +183,6 @@ export async function startIngest(
     triggeredBy: input.triggeredBy ?? "",
     releaseTag: deps.releaseTag ?? "",
   });
-  if (!opened.ok) {
-    throw new RunInProgress(input.source, input.tenantId, opened.runId);
-  }
   const log = deps.log?.child({ runId, tenantId: input.tenantId, source: input.source });
   // One narrator for both channels. Every line below goes to stdout as it always did AND
   // into `ops.run_event`, where the person who pressed Run now can read it.

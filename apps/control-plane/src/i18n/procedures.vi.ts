@@ -32,6 +32,10 @@ export const procedureSentences: SentenceTable = {
   "tenants.get": "Một khách hàng và vai trò của bạn trong đó.",
   "tenants.create": "Tạo khách hàng mới. Chỉ quản trị nền tảng.",
   "tenants.rename": "Sửa tên hiển thị của khách hàng. Quản trị khách hàng.",
+  "tenants.deactivate":
+    "Ngừng kích hoạt khách hàng: mọi thành viên mất quyền truy cập và mọi lần đồng bộ dừng lại cho đến khi được kích hoạt lại. Không xoá dữ liệu nào. Quản trị khách hàng.",
+  "tenants.reactivate":
+    "Kích hoạt lại một khách hàng đã ngừng kích hoạt: quyền truy cập và lịch đồng bộ trở lại như trước. Quản trị khách hàng.",
   "connections.list": "Các nguồn của khách hàng và trạng thái kết nối.",
   "connections.get": "Một nguồn và trạng thái kết nối của nó.",
   "connections.startOAuth":

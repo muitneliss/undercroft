@@ -314,7 +314,7 @@ describe("a workbook read before its rows existed", () => {
     });
     await seedReadText("w1", sha, "Acme Holdings\t1234.10");
 
-    expect(await listExtractDue(db)).toEqual([{ tenantId: TENANT, source: SOURCE }]);
+    expect((await listExtractDue(db)).due).toEqual([{ tenantId: TENANT, source: SOURCE }]);
   });
 
   it("is read again for its rows, and its text brought to the same reading", async () => {
@@ -395,7 +395,7 @@ describe("a workbook the reader refused under this rows generation", () => {
 
     await extract(spawnAnswering(""));
 
-    expect(await listExtractDue(db)).toEqual([]);
+    expect((await listExtractDue(db)).due).toEqual([]);
   });
 });
 
@@ -570,13 +570,13 @@ describe("a pass after the layouts changed", () => {
     const elsewhere = readingBeforeItsTemplate("registry.example.test");
     await heldAsRead("other-issuer", "openattestation", elsewhere);
     const scope = [{ tenantId: TENANT, source: SOURCE }];
-    expect(await listExtractDue(db)).toEqual(scope);
+    expect((await listExtractDue(db)).due).toEqual(scope);
 
     const result = await extract(spawnAnswering(A_PAGE));
 
     expect(result.relaid).toBe(0);
     expect(await held("other-issuer")).toEqual({ text: elsewhere, run_id: "run-before" });
-    expect(await listExtractDue(db)).toEqual([]);
+    expect((await listExtractDue(db)).due).toEqual([]);
   });
 });
 

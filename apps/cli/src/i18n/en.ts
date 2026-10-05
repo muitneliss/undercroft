@@ -72,6 +72,7 @@ export const en = {
 
   prompt: {
     tenant: "Choose a customer",
+    tenantDeactivated: "{{label}} (deactivated)",
     value: "Enter {{name}}",
     email: "Email address",
     code: "The six-digit code from the email",

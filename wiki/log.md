@@ -305,3 +305,6 @@
 ## [2026-10-05] ingest | ADR 0108 An Archive Is Read into the Documents It Holds
 ## [2026-10-05] ingest | ADR 0109 A Binary Workbook Is Read into the Same Rows
 ## [2026-10-05] ingest | File formats a Gmail or Drive connection can land
+## [2026-10-05] ingest | ADR 0110 A Tenant Can Be Deactivated
+## [2026-10-05] ingest | Runbook: The undercroft CLI
+## [2026-10-05] ingest | Runbook: Connecting an agent over MCP
