@@ -111,6 +111,7 @@
 - [ADR 0105 A Model Carries One Business Context, Reviewed Against Its Definition](sources/adr-0105-a-model-carries-one-business-context-reviewed-against-its-definition.md)
 - [ADR 0106 A Sheet Is Read as It Inflates](sources/adr-0106-a-sheet-is-read-as-it-inflates.md)
 - [ADR 0107 A Delimited File Is Read into Rows by the Grammar Its Type Names](sources/adr-0107-a-delimited-file-is-read-into-rows-by-the-grammar-its-type-names.md)
+- [ADR 0108 An Archive Is Read into the Documents It Holds](sources/adr-0108-an-archive-is-read-into-the-documents-it-holds.md)
 - [An ingest streams, and does not re-read what it already holds](sources/an-ingest-streams-and-does-not-re-read-what-it-already-holds.md)
 - [Architecture](sources/architecture.md)
 - [Design: Operator and reader paths](sources/design-operator-and-reader-paths.md)

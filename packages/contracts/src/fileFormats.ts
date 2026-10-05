@@ -17,7 +17,7 @@
  */
 
 /** How much of a format's content the worker's readers turn into text. The docs page's column. */
-export type ReadLevel = "text" | "table" | "ocr" | "metadata";
+export type ReadLevel = "text" | "table" | "ocr" | "members" | "metadata";
 
 /** A union rather than `string`, so the UI's table of names cannot miss one. */
 export type FileFormatId =
@@ -42,6 +42,7 @@ export type FileFormatId =
   | "xml"
   | "json"
   | "openAttestation"
+  | "zip"
   | "jpeg"
   | "png"
   | "webp";
@@ -77,9 +78,9 @@ const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 /**
  * In the order the picker offers them: documents, then spreadsheets, then text and web, then
- * signed records, then images. Nothing here is a zip, a rar, a HEIC or a TIFF: none of them
- * has a reader, and offering a format the worker lands but cannot read is a promise with
- * nothing behind it.
+ * signed records, then archives, then images. Nothing here is a rar, a 7z, a HEIC or a TIFF:
+ * none of them has a reader, and offering a format the worker lands but cannot read is a
+ * promise with nothing behind it. A zip is here because its members are read (ADR 0108).
  */
 export const FILE_FORMATS: readonly FileFormat[] = [
   {
@@ -278,6 +279,18 @@ export const FILE_FORMATS: readonly FileFormat[] = [
     // it. Catalogued as JSON, the JSON reader recognises it by its content -- never by this
     // name -- which is the only recognition a signed record can rest on.
     landsAs: "application/json",
+  },
+  // Read for what it holds: each member whose extension names a format here lands as a
+  // document of its own (ADR 0108). `landsAs` for the same reason as a workbook's: `.zip`
+  // chosen as an extension admits the archives Gmail can only call `application/octet-stream`.
+  {
+    id: "zip",
+    choice: "application/zip",
+    mimeTypes: ["application/zip", "application/x-zip-compressed"],
+    extensions: ["zip"],
+    spec: "https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT",
+    reads: "members",
+    landsAs: "application/zip",
   },
   {
     id: "jpeg",

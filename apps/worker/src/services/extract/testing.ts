@@ -43,7 +43,8 @@ const utf8 = new TextEncoder();
 
 export interface ZipMember {
   readonly name: string;
-  readonly body: string;
+  /** Text, or the bytes of a whole file -- an archive holding a workbook (ADR 0108). */
+  readonly body: string | Uint8Array;
   /** Written uncompressed. Deflated when absent, which is what Word and Excel themselves emit. */
   readonly stored?: boolean;
   /**
@@ -52,31 +53,36 @@ export interface ZipMember {
    * is about exactly this member, and a rule with no way to fire is not a rule.
    */
   readonly corrupt?: boolean;
+  /** Flagged encrypted (general-purpose bit 0). The bytes are left plain, as a liar's would be. */
+  readonly encrypted?: boolean;
 }
 
 /** One member as it goes on the wire: the two headers must agree about all four of these. */
 interface Written {
   readonly name: Uint8Array;
   readonly method: number;
+  readonly flags: number;
   readonly plain: Uint8Array;
   readonly data: Uint8Array;
 }
 
 function written(member: ZipMember): Written {
   const name = utf8.encode(member.name);
-  const plain = utf8.encode(member.body);
+  const plain = typeof member.body === "string" ? utf8.encode(member.body) : member.body;
+  const flags = member.encrypted === true ? 1 : 0;
   if (member.corrupt === true) {
-    return { name, method: DEFLATED, plain, data: utf8.encode("not a deflate stream") };
+    return { name, method: DEFLATED, flags, plain, data: utf8.encode("not a deflate stream") };
   }
   const method = member.stored === true ? STORED : DEFLATED;
-  return { name, method, plain, data: method === STORED ? plain : deflateRawSync(plain) };
+  return { name, method, flags, plain, data: method === STORED ? plain : deflateRawSync(plain) };
 }
 
-function localHeader({ name, method, plain, data }: Written): Uint8Array {
+function localHeader({ name, method, flags, plain, data }: Written): Uint8Array {
   const local = new Uint8Array(LOCAL_BYTES + name.length + data.length);
   const view = new DataView(local.buffer);
   view.setUint32(0, LOCAL_SIGNATURE, true);
   view.setUint16(4, 20, true);
+  view.setUint16(6, flags, true);
   view.setUint16(8, method, true);
   view.setUint32(14, crc32(plain), true);
   view.setUint32(18, data.length, true);
@@ -87,10 +93,11 @@ function localHeader({ name, method, plain, data }: Written): Uint8Array {
   return local;
 }
 
-function centralEntry({ name, method, plain, data }: Written, offset: number): Uint8Array {
+function centralEntry({ name, method, flags, plain, data }: Written, offset: number): Uint8Array {
   const entry = new Uint8Array(CENTRAL_BYTES + name.length);
   const view = new DataView(entry.buffer);
   view.setUint32(0, CENTRAL_SIGNATURE, true);
+  view.setUint16(8, flags, true);
   view.setUint16(10, method, true);
   view.setUint32(16, crc32(plain), true);
   view.setUint32(20, data.length, true);

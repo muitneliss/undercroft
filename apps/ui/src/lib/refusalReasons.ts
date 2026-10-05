@@ -47,6 +47,10 @@ const DOCUMENT_REASONS = [
   "xls-biff5-unsupported",
   "xlsb-unsupported",
   "workbook-not-a-workbook",
+  // A file inside a zip that is not landed (ADR 0108): what the archive holds, not a fault here.
+  "archive-member-encrypted",
+  "archive-nested",
+  "archive-members-limit",
 ] as const;
 
 /** Facts about this deployment. Each one has somebody who can act. */
@@ -59,6 +63,8 @@ const DEPLOYMENT_REASONS = [
   "xls-unreadable",
   "docx-unreadable",
   "doc-unreadable",
+  "archive-unreadable",
+  "archive-member-unreadable",
   "lake-object-unreadable",
 ] as const;
 
@@ -147,6 +153,34 @@ interface Words {
   note: string;
 }
 
+/** A file inside a zip that did not land (ADR 0108): what the archive holds. */
+function aboutAnArchiveMember(
+  t: TFunction,
+  code: Extract<DocumentReason, `archive-${string}`>,
+): Words {
+  switch (code) {
+    case "archive-member-encrypted":
+      return {
+        title: t("journal.reason.archiveMemberEncrypted"),
+        note: t("journal.reason.archiveMemberEncryptedNote"),
+      };
+    case "archive-nested":
+      return {
+        title: t("journal.reason.archiveNested"),
+        note: t("journal.reason.archiveNestedNote"),
+      };
+    case "archive-members-limit":
+      return {
+        title: t("journal.reason.archiveMembersLimit"),
+        note: t("journal.reason.archiveMembersLimitNote"),
+      };
+    default: {
+      const exhaustive: never = code;
+      throw new Error(`unhandled archive reason ${String(exhaustive)}`);
+    }
+  }
+}
+
 /**
  * Spelled out as a switch rather than as a table of key fragments.
  *
@@ -201,6 +235,10 @@ function aboutTheDocument(t: TFunction, code: DocumentReason): Words {
         title: t("journal.reason.workbookNotAWorkbook"),
         note: t("journal.reason.workbookNotAWorkbookNote"),
       };
+    case "archive-member-encrypted":
+    case "archive-nested":
+    case "archive-members-limit":
+      return aboutAnArchiveMember(t, code);
     default: {
       const exhaustive: never = code;
       throw new Error(`unhandled document reason ${String(exhaustive)}`);
@@ -250,6 +288,16 @@ function aboutTheDeployment(t: TFunction, code: DeploymentReason): Words {
       return {
         title: t("journal.reason.docUnreadable"),
         note: t("journal.reason.docUnreadableNote"),
+      };
+    case "archive-unreadable":
+      return {
+        title: t("journal.reason.archiveUnreadable"),
+        note: t("journal.reason.archiveUnreadableNote"),
+      };
+    case "archive-member-unreadable":
+      return {
+        title: t("journal.reason.archiveMemberUnreadable"),
+        note: t("journal.reason.archiveMemberUnreadableNote"),
       };
     case "lake-object-unreadable":
       return {

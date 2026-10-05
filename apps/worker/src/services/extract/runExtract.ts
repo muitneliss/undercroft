@@ -39,7 +39,6 @@ import type { RunReasonCount, RunRefusal } from "@undercroft/db/repos";
 import type { LakeStore } from "@undercroft/lake";
 
 import {
-  type AnsweredDocuments,
   countPendingDocuments,
   type DocumentTextRow,
   type PendingDocument,
@@ -56,6 +55,8 @@ import {
   RELAYABLE_METHODS,
   relayText,
 } from "./extractText.ts";
+import { type ArchiveLander, archiveLander, type MembersLanded } from "./archiveMembers.ts";
+import { DOCUMENTS, LAKE_UNREADABLE, passCounts } from "./passCounts.ts";
 import { readBytes } from "./readDocument.ts";
 import { backfillWorkbooks, type WorkbookWriter, workbookWriter } from "./workbookRows.ts";
 
@@ -92,7 +93,10 @@ export interface ExtractResult {
   readonly source: string;
   /** Documents that left with a `method`. */
   readonly read: number;
-  /** Documents that left with a `reason`. Not failures of the run -- answers about a document. */
+  /**
+   * Documents that left with a `reason`, and archive members that did not land (ADR 0108). Not
+   * failures of the run -- answers about a document.
+   */
   readonly refused: number;
   /** Documents whose bytes could not be fetched from the lake at all. */
   readonly unreadable: number;
@@ -124,70 +128,11 @@ export interface ExtractResult {
   readonly pendingBefore: number;
 }
 
-/** The entity every extract refusal is recorded against; this verb reads exactly one kind. */
-const DOCUMENTS = "documents";
-
-/**
- * Every read that produced no text, as a ledger row -- one per DISTINCT DIGEST.
- *
- * The fan-out is deliberately not expanded here. `upsertDocumentText` answers every document
- * holding those bytes and reports how many, but it does not hand back their ids, and inventing
- * a row per document would mean writing 245 ledger entries that say one thing about one file.
- * So the list is the distinct files and the COUNT beside it is the documents; the interface
- * captions it as files for that reason.
- */
-function refusalsOf(rows: readonly DocumentTextRow[]): RunRefusal[] {
-  return rows
-    .filter((row) => row.method === null && row.reason !== null)
-    .map((row) => ({
-      entity: DOCUMENTS,
-      sourceRecordId: row.documentId,
-      // Narrowed by the filter; `reason` is non-null exactly when `method` is null, which the
-      // `document_text_said_why` CHECK guarantees on the way into Postgres too.
-      reason: row.reason ?? "",
-    }));
-}
-
-/**
- * Count the reasons, biggest first -- the order a reader wants them in.
- *
- * WEIGHTED BY THE FAN-OUT, like `tally` and for the same reason: these counts are what a reader
- * presses into after reading "245 refused", so they have to add up to 245 rather than to the
- * number of distinct files behind it.
- *
- * A `Map` rather than an object literal for the reason the `READERS` table is one: the key is
- * a reason string, and a lookup of `constructor` in a plain object answers with something that
- * is not a count.
- */
-function tallyReasons(
-  rows: readonly DocumentTextRow[],
-  answered: AnsweredDocuments,
-): RunReasonCount[] {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    if (row.method === null && row.reason !== null) {
-      const documents = answered.get(row.documentId) ?? 0;
-      counts.set(row.reason, (counts.get(row.reason) ?? 0) + documents);
-    }
-  }
-  return [...counts]
-    .map(([reason, count]) => ({ entity: DOCUMENTS, reason, count }))
-    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
-}
-
-/**
- * The catalogue says the bytes are there and the lake disagrees.
- *
- * Recorded against the document rather than raised, so one unreadable object does not end a
- * pass over the other 499 -- and counted apart from a refusal, because "we could not fetch
- * it" is a fact about the store while "we could not read it" is a fact about the document.
- */
-const LAKE_UNREADABLE = "lake-object-unreadable";
-
-/** Where one pass's reads put what they need to: bytes on disk, a workbook's rows. */
+/** Where one pass's reads put what they need to: bytes on disk, a workbook's rows, members. */
 interface Pass {
   readonly scratch: string;
   readonly workbooks: WorkbookWriter;
+  readonly archives: ArchiveLander;
 }
 
 /**
@@ -212,6 +157,9 @@ async function readOne(
   if (extracted.workbook !== undefined) {
     await pass.workbooks.write(document.sha256, extracted.workbook);
   }
+  if (extracted.archive !== undefined) {
+    await pass.archives.land(document, extracted.archive);
+  }
 
   return {
     ...base,
@@ -220,34 +168,6 @@ async function readOne(
     text: extracted.text,
     truncated: extracted.truncated,
   };
-}
-
-/**
- * What the pass did, in documents rather than in reads.
- *
- * Each read is weighted by how many catalogue rows it answered, so `read` keeps meaning
- * "documents that left with a method" -- the thing `job.ts` records as the run's `created` and a
- * customer sees on the run. Counting reads instead would quietly halve that number the day the
- * fan-out landed, for a pass that did strictly more.
- */
-function tally(
-  rows: readonly DocumentTextRow[],
-  answered: AnsweredDocuments,
-): { read: number; refused: number; unreadable: number } {
-  let read = 0;
-  let refused = 0;
-  let unreadable = 0;
-  for (const row of rows) {
-    const documents = answered.get(row.documentId) ?? 0;
-    if (row.reason === LAKE_UNREADABLE) {
-      unreadable += documents;
-    } else if (row.method === null) {
-      refused += documents;
-    } else {
-      read += documents;
-    }
-  }
-  return { read, refused, unreadable };
 }
 
 /**
@@ -326,6 +246,20 @@ async function finishWorkbooks(
   journal.info("workbook_rows_backfilled", { entity: DOCUMENTS, ...backfilled });
 }
 
+/** The batch read, and what its reads put in place: a workbook's rows, an archive's members. */
+async function readBatch(
+  deps: ExtractRunDeps,
+  pass: { tenantId: string; source: string; extractedAt: string; runId: string; scratch: string },
+  pending: readonly PendingDocument[],
+  journal: RunJournal,
+): Promise<{ rows: DocumentTextRow[]; workbooks: WorkbookWriter; members: MembersLanded }> {
+  const { scratch, ...at } = pass;
+  const workbooks = workbookWriter(deps.transactor, at);
+  const archives = archiveLander({ ...deps, journal }, { ...at, observedAt: at.extractedAt });
+  const rows = await readEach(deps, { scratch, workbooks, archives }, pending, journal);
+  return { rows, workbooks, members: await archives.finish() };
+}
+
 export async function runExtract(
   deps: ExtractRunDeps,
   input: { tenantId: string; source: string; runId: string },
@@ -357,31 +291,29 @@ export async function runExtract(
   // It is the work, not the outcome: the documents answered is the larger number below.
   journal.info("work_listed", { entity: DOCUMENTS, total: pending.length });
 
-  const workbooks = workbookWriter(deps.transactor, { ...scope, extractedAt, runId: input.runId });
-  const rows = await readEach(deps, { scratch, workbooks }, pending, journal);
+  const pass = { ...scope, extractedAt, runId: input.runId, scratch };
+  const { rows, workbooks, members } = await readBatch(deps, pass, pending, journal);
 
   const stamp = { extractedAt, runId: input.runId, layoutVersion: CURRENT_LAYOUT_VERSION };
   const answered = await upsertDocumentText(deps.exec, scope, rows, {
     ...stamp,
     readerVersion: CURRENT_READER_VERSION,
   });
-  const { read, refused, unreadable } = tally(rows, answered);
+  const counts = passCounts(rows, answered, members);
   // After the reads, so a text this run just wrote is already in the current layout and is
   // not looked at twice.
   const relaid = await relayStale(deps, scope, stamp);
 
+  const { read, refused, unreadable } = counts;
   journal.info("documents_extracted", { entity: DOCUMENTS, read, refused, unreadable, relaid });
-  await finishWorkbooks(deps, { ...scope, extractedAt, runId: input.runId, scratch }, workbooks);
+
+  await finishWorkbooks(deps, pass, workbooks);
 
   return {
     runId: input.runId,
     source: input.source,
-    read,
-    refused,
-    unreadable,
+    ...counts,
     relaid,
-    refusals: refusalsOf(rows),
-    reasonCounts: tallyReasons(rows, answered),
     pendingBefore,
   };
 }

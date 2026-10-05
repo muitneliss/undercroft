@@ -5,6 +5,7 @@
  * cannot store are decided once, for all of them.
  */
 
+import type { Archive } from "./archive.ts";
 import type { Workbook } from "./xlsx.ts";
 
 /** How the text was read. A new extractor is a new value; the column is deliberately not an enum. */
@@ -19,7 +20,8 @@ export type ExtractMethod =
   | "txt"
   | "html"
   | "mime"
-  | "openattestation";
+  | "openattestation"
+  | "zip";
 
 /** A type no reader opens: the refusal for a file nobody has written a reader for. */
 export const UNSUPPORTED_TYPE = "unsupported-content-type";
@@ -43,6 +45,8 @@ export interface Extracted {
   readonly truncated: boolean;
   /** A spreadsheet's sheets and rows, from the same parse as `text` (ADR 0104). */
   readonly workbook?: Workbook;
+  /** An archive's members, each to land as a document of its own (ADR 0108). */
+  readonly archive?: Archive;
 }
 
 /**

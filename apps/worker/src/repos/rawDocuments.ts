@@ -123,6 +123,9 @@ export async function upsertDocuments(
  *
  * The bytes stay in the lake regardless. `deleted_at` is a statement about the source, not
  * a licence to drop what we captured.
+ *
+ * A file read out of an archive is kept while its ARCHIVE is: its id is never in a listing, so
+ * judged by its own id every member would be tombstoned by every ingest (ADR 0108 decision 6).
  */
 export async function tombstoneMissing(
   exec: SqlExecutor,
@@ -133,9 +136,48 @@ export async function tombstoneMissing(
     `UPDATE raw.documents SET deleted_at = $3
      WHERE source = $1 AND tenant_id = $2
        AND deleted_at IS NULL
-       AND NOT (document_id = ANY($4::text[]))
+       AND NOT (coalesce(metadata->>'archiveDocumentId', document_id) = ANY($4::text[]))
      RETURNING document_id AS id`,
     [identity.source, identity.tenantId, input.observedAt, input.keptIds],
+  );
+  return rows.length;
+}
+
+/**
+ * The live documents holding these bytes. An archive is read once per digest, and its members
+ * land under every document holding it, so each message keeps its own (ADR 0108 decision 6).
+ */
+export async function documentsHolding(
+  exec: SqlExecutor,
+  identity: DocumentIdentity,
+  sha256: string,
+): Promise<string[]> {
+  const { rows } = await exec.query<{ id: string }>(
+    `SELECT document_id AS id FROM raw.documents
+      WHERE source = $1 AND tenant_id = $2 AND sha256 = $3 AND deleted_at IS NULL
+      ORDER BY document_id`,
+    [identity.source, identity.tenantId, sha256],
+  );
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Tombstone the members these archives no longer hold: an archive read again under new bytes
+ * holds what it holds now, and a member at a position it has given up is gone from the source.
+ */
+export async function tombstoneStaleMembers(
+  exec: SqlExecutor,
+  identity: DocumentIdentity,
+  input: { archiveIds: readonly string[]; keptIds: readonly string[]; observedAt: string },
+): Promise<number> {
+  const { rows } = await exec.query<{ id: string }>(
+    `UPDATE raw.documents SET deleted_at = $3
+     WHERE source = $1 AND tenant_id = $2
+       AND deleted_at IS NULL
+       AND metadata->>'archiveDocumentId' = ANY($4::text[])
+       AND NOT (document_id = ANY($5::text[]))
+     RETURNING document_id AS id`,
+    [identity.source, identity.tenantId, input.observedAt, input.archiveIds, input.keptIds],
   );
   return rows.length;
 }

@@ -798,3 +798,99 @@ describe("what a pass hands the ledger", () => {
     expect(result.reasonCounts).toEqual([]);
   });
 });
+
+/** An invented archive: a workbook, a note, and what is not landed beside them (`pii.md`). */
+const ARCHIVE_BYTES = zipOf([
+  { name: "ledger.xlsx", body: LEDGER_BYTES },
+  { name: "notes/readme.txt", body: "Acme Holdings, statement for September" },
+  { name: "logo.gif", body: "GIF89a" },
+  { name: "__MACOSX/._ledger.xlsx", body: "resource fork" },
+  { name: "inner.zip", body: zipOf([{ name: "a.txt", body: "nested" }]) },
+  { name: "locked.pdf", body: "%PDF-1.7", encrypted: true },
+  { name: "folder/", body: "" },
+]);
+
+async function members(): Promise<unknown[]> {
+  const { rows } = await db.query(
+    `SELECT document_id, content_type, metadata->>'archiveDocumentId' AS archive,
+            metadata->>'archiveMember' AS position
+       FROM raw.documents WHERE metadata ? 'archiveDocumentId' ORDER BY document_id`,
+  );
+  return rows.map((row) => Object.values(row));
+}
+
+describe("an archive", () => {
+  it("lands each file it holds in a catalogued format as a document, read by the next pass", async () => {
+    await landDocument({ documentId: "z1", bytes: ARCHIVE_BYTES, contentType: "application/zip" });
+
+    const first = await extract(spawnAnswering(""));
+
+    // The GIF names no catalogued format, the fork and the folder are not documents: none of
+    // them lands, and none is a refusal. The nested archive and the encrypted file are.
+    expect(await members()).toEqual([
+      ["z1/1", XLSX_TYPE, "z1", "1"],
+      ["z1/2", "text/plain", "z1", "2"],
+    ]);
+    expect(first.refusals).toEqual([
+      { entity: "documents", sourceRecordId: "z1/5", reason: "archive-nested" },
+      { entity: "documents", sourceRecordId: "z1/6", reason: "archive-member-encrypted" },
+    ]);
+    expect((await textRows()).map((row) => [row.document_id, row.method, row.text])).toEqual([
+      ["z1", "zip", ""],
+    ]);
+
+    await extract(spawnAnswering(""), "run-extract-2");
+
+    expect(await workbookRows()).toEqual([
+      {
+        sheet_name: "Ledger",
+        complete: true,
+        row_number: 1,
+        cells: { A: "Acme Holdings", C: "1234.10" },
+      },
+    ]);
+    expect((await textRows()).find((row) => row.document_id === "z1/2")?.text).toBe(
+      "Acme Holdings, statement for September",
+    );
+  });
+
+  it("lands its files under every document holding it, so each message keeps its own", async () => {
+    const note = zipOf([{ name: "note.txt", body: "Acme Holdings" }]);
+    await landDocument({ documentId: "m1:001", bytes: note, contentType: "application/zip" });
+    await landDocument({ documentId: "m2:001", bytes: note, contentType: "application/zip" });
+
+    await extract(spawnAnswering(""));
+
+    expect(await members()).toEqual([
+      ["m1:001/1", "text/plain", "m1:001", "1"],
+      ["m2:001/1", "text/plain", "m2:001", "1"],
+    ]);
+  });
+
+  it("is never unpacked when it is a package in a format of its own, such as a Word document", async () => {
+    // Its parts are XML, a format the catalogue lands: unpacked, they would be documents.
+    const docx = zipOf([
+      { name: "[Content_Types].xml", body: "<Types/>" },
+      { name: "word/document.xml", body: "<w:document/>" },
+    ]);
+    await landDocument({ documentId: "z3", bytes: docx, contentType: "application/zip" });
+
+    await extract(spawnAnswering(""));
+
+    expect([(await textRows())[0]?.reason, await members()]).toEqual([
+      "unsupported-content-type",
+      [],
+    ]);
+  });
+
+  it("is refused whole when its list of files breaks off, never read as holding fewer", async () => {
+    const bytes = zipOf([{ name: "note.txt", body: "Acme Holdings" }]);
+    // The end record claims two files where the directory holds one.
+    new DataView(bytes.buffer).setUint16(bytes.byteLength - 12, 2, true);
+    await landDocument({ documentId: "z2", bytes, contentType: "application/x-zip-compressed" });
+
+    await extract(spawnAnswering(""));
+
+    expect([(await textRows())[0]?.reason, await members()]).toEqual(["archive-unreadable", []]);
+  });
+});

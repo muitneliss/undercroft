@@ -23,7 +23,7 @@ import { claimsOpenAttestation, readOpenAttestation, relaid } from "./openAttest
 import { type ExtractDeps, extractorMissing, runProgram } from "./program.ts";
 import { type Extracted, read, refused, storableText, UNSUPPORTED_TYPE } from "./extracted.ts";
 import { CSV, delimitedWorkbook, type Grammar, TSV } from "./delimited.ts";
-import { readLabelledSpreadsheet, readUnlabelled } from "./spreadsheet.ts";
+import { readLabelledArchive, readLabelledSpreadsheet, readUnlabelled } from "./spreadsheet.ts";
 
 /**
  * Why nothing could be read. Each names something an operator can act on.
@@ -291,6 +291,11 @@ function spreadsheetByBytes(_deps: ExtractDeps, input: Document): Promise<Extrac
   return readLabelledSpreadsheet(input.bytes);
 }
 
+/** A file labelled a zip: a workbook if its bytes say so, else an archive (ADR 0108). */
+function archiveByBytes(_deps: ExtractDeps, input: Document): Promise<Extracted> {
+  return readLabelledArchive(input.bytes);
+}
+
 /** A file its provider could not name, read as a workbook only when its bytes say it is one. */
 function unlabelledByBytes(_deps: ExtractDeps, input: Document): Promise<Extracted> {
   return readUnlabelled(input.bytes);
@@ -326,8 +331,8 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
   // What a provider calls a file it cannot name. Read as a workbook only when its bytes say
   // they are one; anything else is what it always was, a type nobody reads.
   ["application/octet-stream", unlabelledByBytes],
-  ["application/zip", unlabelledByBytes],
-  ["application/x-zip-compressed", unlabelledByBytes],
+  ["application/zip", archiveByBytes],
+  ["application/x-zip-compressed", archiveByBytes],
   ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", readWordDocument],
   // The two image types the connection picker offers and the only two the lake holds: 1,274
   // PNGs and 283 JPEGs, none of them readable until now. `ocr.ts` decides which of them are
@@ -404,6 +409,10 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * stops being true; the bump re-offers them, and only a workbook older than Excel 97 keeps a
  * refusal (`xls-biff5-unsupported`).
  *
+ * GENERATION 10 IS THE ARCHIVE (ADR 0108). A zip a provider called `application/zip` or
+ * `octet-stream` was a type nobody reads; it is now read for the documents it holds, and the
+ * bump re-offers the archives already refused so their members land.
+ *
  * NOT BUMPED FOR ISSUE #218's UTF-16 DECODE AND NUL REPLACEMENT, and that is the rule working
  * rather than an oversight. A bump re-offers refusals, and neither change turns a refusal into a
  * reading: the documents they were written for never got a row at all -- their NUL failed the
@@ -421,7 +430,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 9;
+export const CURRENT_READER_VERSION = 10;
 
 /**
  * One document, read whichever way its type allows.

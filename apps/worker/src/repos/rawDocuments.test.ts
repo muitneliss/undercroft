@@ -128,6 +128,21 @@ describe("tombstoneMissing", () => {
     expect(count).toBe(0);
   });
 
+  it("a file read out of an archive is kept while its archive is, and goes with it", async () => {
+    // Regression for ADR 0108: a member's id is never in a Drive listing, so judged by its own
+    // id every ingest would tombstone every member.
+    const member = doc({ documentId: "zip1/1", metadataJson: '{"archiveDocumentId":"zip1"}' });
+    await upsertDocuments(db, IDENTITY, [doc({ documentId: "zip1" }), member]);
+
+    const whileKept = await tombstoneMissing(db, IDENTITY, {
+      keptIds: ["zip1"],
+      observedAt: LATER,
+    });
+    const once = await tombstoneMissing(db, IDENTITY, { keptIds: [], observedAt: LATER });
+
+    expect([whileKept, once]).toEqual([0, 2]);
+  });
+
   it("another tenant's documents are never tombstoned", async () => {
     // The identity is part of the WHERE clause, not a convention. A collector running for
     // one tenant must not reach into another's catalogue.

@@ -6,6 +6,7 @@
  * `xlsx.ts` argues why that is cheaper here than either a converter binary or a dependency.
  */
 
+import { readArchive } from "./archive.ts";
 import { type Extracted, MAX_TEXT_CHARS, read, refused, UNSUPPORTED_TYPE } from "./extracted.ts";
 import { decodeHtmlBytes, htmlToText } from "./html.ts";
 import { readBiff8 } from "./biff8.ts";
@@ -79,12 +80,23 @@ export async function readLabelledSpreadsheet(bytes: Uint8Array): Promise<Extrac
 }
 
 /**
+ * A file labelled a zip: a workbook when its content-types part names one, and otherwise an
+ * archive -- refused `archive-unreadable` when its bytes are no zip at all (ADR 0108).
+ */
+export async function readLabelledArchive(bytes: Uint8Array): Promise<Extracted> {
+  return workbookKindOf(bytes) === "ooxml" ? await readSpreadsheet(bytes) : readArchive(bytes);
+}
+
+/**
  * A file its provider could not name -- `application/octet-stream`, a bare zip -- read as a
- * workbook only when its own content-types part says it is one. Anything else stays what it
- * always was: a type nobody reads.
+ * workbook only when its own content-types part says it is one, and as an archive when it is a
+ * zip that names no package at all (ADR 0108). Anything else stays what it always was: a type
+ * nobody reads.
  */
 export async function readUnlabelled(bytes: Uint8Array): Promise<Extracted> {
-  return workbookKindOf(bytes) === "ooxml"
-    ? await readSpreadsheet(bytes)
-    : refused(UNSUPPORTED_TYPE);
+  const kind = workbookKindOf(bytes);
+  if (kind === "ooxml") {
+    return await readSpreadsheet(bytes);
+  }
+  return kind === "unlabelled-package" ? readArchive(bytes) : refused(UNSUPPORTED_TYPE);
 }
