@@ -1060,6 +1060,20 @@ export const en = {
         "The document is very heavy, or the worker is loaded. It is read again on a later run.",
       xlsxUnreadable: "Could not open the workbook",
       xlsxUnreadableNote: "The .xlsx file may be corrupt.",
+      xlsUnreadable: "Could not read the Excel 97–2003 workbook",
+      xlsUnreadableNote: "Its records break off part-way; the .xls file may be corrupt.",
+      workbookPasswordProtected: "The workbook is password-protected and cannot be read",
+      workbookPasswordProtectedNote:
+        "The original file is kept intact. To read its content, ask the sender for an unlocked copy.",
+      xlsBiff5: "An Excel 5/95 workbook, not read",
+      xlsBiff5Note:
+        "Its text is in the codepage of whichever machine saved it, so it cannot be read exactly. To read it, open it in Excel and save it as .xlsx.",
+      xlsb: "An Excel binary workbook (.xlsb), not read",
+      xlsbNote:
+        "Its sheets are stored as binary records that no reader here opens. To read it, open it in Excel and save it as .xlsx.",
+      workbookNotAWorkbook: "Labelled a spreadsheet, but is not one",
+      workbookNotAWorkbookNote:
+        "The file arrived with an Excel type, but its bytes are something else — a document, a picture or a broken download. It is kept intact.",
       docxUnreadable: "Could not open the Word document",
       docxUnreadableNote: "The .docx file may be corrupt.",
       docUnreadable: "Could not open the Word document",

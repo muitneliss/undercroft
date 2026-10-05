@@ -50,7 +50,7 @@ that the file is treated as a spreadsheet. Its bytes decide how it is opened.
 | A zip whose own content-types part names a workbook or a template | Read as a workbook                       |
 | A zip whose content-types part names an `.xlsb`                   | Refused as `xlsb-unsupported`            |
 | A zip whose content-types part names a document or a presentation | Refused as `workbook-not-a-workbook`     |
-| A compound file holding an Excel 97–2003 workbook                 | Refused as `legacy-xls-unsupported`      |
+| A compound file holding an Excel 97–2003 workbook                 | Read as a workbook                       |
 | A compound file holding an Excel 5/95 workbook                    | Refused as `xls-biff5-unsupported`       |
 | A compound file holding an encrypted package (a password was set) | Refused as `workbook-password-protected` |
 | HTML or SpreadsheetML markup                                      | Read as a web page's text                |
@@ -192,11 +192,17 @@ spellings match.
 - Choice: `application/vnd.ms-excel`
 - Extensions: `.xls`
 - Specification: <https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-xls/>
-- Reads: `metadata`
+- Reads: `table`
 
-This is the binary workbook format from before 2007. It is refused as `legacy-xls-unsupported`:
-it shares its container with `.doc`, but its cells are stored in a second format, BIFF, and no
-reader for that has been written.
+This is the binary workbook format of Excel 97–2003 (BIFF8). Its sheets are read in process into
+the same rows an `.xlsx` gives, with sheet names, merged ranges, hidden rows and number formats.
+A number is stored in the file as a binary double. It is written as the shortest decimal that is
+exactly that double, which is the digits an `.xlsx` would store, and nothing computes with it.
+
+- A workbook saved with a password is refused as `workbook-password-protected`.
+- One whose records break off is refused as `xls-unreadable`.
+- A workbook older than Excel 97 (Excel 5/95, BIFF5) is refused as `xls-biff5-unsupported`,
+  because its text is in a code page the file does not state.
 
 A file labelled `.xls` is often something else, and it is read as what its bytes say it is
 (see "A spreadsheet is opened by what it is" below). An `.xlsx` sent under this label is read as

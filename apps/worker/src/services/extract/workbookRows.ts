@@ -30,7 +30,7 @@ import type { Workbook } from "./xlsx.ts";
 export const CURRENT_ROWS_VERSION = 1;
 
 /** The text methods a workbook is read by: the ones whose read also yields rows. */
-export const WORKBOOK_METHODS: readonly string[] = ["xlsx"];
+export const WORKBOOK_METHODS: readonly string[] = ["xlsx", "xls"];
 
 /** Digests whose orphaned rows one pass removes, at most. */
 const ORPHANS_PER_PASS = 500;

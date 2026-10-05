@@ -12,11 +12,11 @@
 
 import { describe, expect, test as it } from "bun:test";
 import type { Spawn } from "../transform.ts";
+import { xlsOf } from "./biffTesting.ts";
 import { cfbOf } from "./cfbTesting.ts";
 import { type Extracted, MAX_TEXT_CHARS, UNSUPPORTED_TYPE } from "./extracted.ts";
 import { extractDocument } from "./extractText.ts";
 import {
-  LEGACY_XLS,
   WORKBOOK_NOT_A_WORKBOOK,
   WORKBOOK_PASSWORD_PROTECTED,
   XLSB_UNSUPPORTED,
@@ -263,11 +263,12 @@ describe("what Excel stores about a cell", () => {
   it("records a cell's number format by its code, and a locale's built-in by its id", async () => {
     // 164 is the workbook's own code; 14 is Excel's short date, which every reader's locale
     // renders its own way, so its code is not invented; 0 is General and not recorded.
+    // 165 spells General out, as LibreOffice writes it: still no format.
     const styles =
-      '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></numFmts>' +
-      '<cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="14"/></cellXfs></styleSheet>';
+      '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="General"/></numFmts>' +
+      '<cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="14"/><xf numFmtId="165"/></cellXfs></styleSheet>';
     const xml = sheet(
-      '<row r="1"><c r="A1" s="1"><v>46286</v></c><c r="B1" s="2"><v>46287</v></c><c r="C1" s="0"><v>7</v></c></row>',
+      '<row r="1"><c r="A1" s="1"><v>46286</v></c><c r="B1" s="2"><v>46287</v></c><c r="C1" s="0"><v>7</v></c><c r="D1" s="3"><v>8</v></c></row>',
     );
 
     const result = await extract(packageOf([{ name: "Ledger", xml }], { styles }));
@@ -437,15 +438,12 @@ describe("a file labelled as a spreadsheet", () => {
     expect((await extract(locked)).reason).toBe(WORKBOOK_PASSWORD_PROTECTED);
   });
 
-  it("is refused by a reason of its own when it is an Excel 97-2003 workbook", async () => {
-    // Not `legacy-doc-unsupported`: an operator reading the ledger should not have to know
-    // that the Word reason was meant to cover spreadsheets too.
-    const xls = cfbOf([
-      { name: "Root Entry", type: 5, child: 1 },
-      { name: "Workbook", type: 2, bytes: utf8.encode("BIFF8 records") },
-    ]);
+  it("is read by the Excel 97-2003 reader when it is an .xls under the .xlsx label", async () => {
+    const xls = xlsOf({ sheets: [{ name: "Ledger", cells: [{ row: 0, col: 0, label: "Acme" }] }] });
 
-    expect((await extract(xls, "application/vnd.ms-excel")).reason).toBe(LEGACY_XLS);
+    const result = await extract(xls);
+
+    expect([result.method, result.workbook?.container]).toEqual(["xls", "biff8"]);
   });
 });
 

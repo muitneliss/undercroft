@@ -8,16 +8,12 @@
 
 import { type Extracted, MAX_TEXT_CHARS, read, refused, UNSUPPORTED_TYPE } from "./extracted.ts";
 import { decodeHtmlBytes, htmlToText } from "./html.ts";
+import { readBiff8 } from "./biff8.ts";
 import { type WorkbookKind, workbookKindOf } from "./workbookKind.ts";
 import { readWorkbook } from "./xlsx.ts";
 
-/**
- * The pre-2007 binary workbook, refused by name until its reader exists: its container is the
- * one `cfb.ts` opens for Word, but BIFF's cell records are a second format entirely. Its own
- * reason rather than `legacy-doc-unsupported`, so an operator reading the ledger need not know
- * the Word reason was meant to cover spreadsheets too.
- */
-export const LEGACY_XLS = "legacy-xls-unsupported";
+/** An Excel 97–2003 workbook whose records break off, never read as a shorter one. */
+export const XLS_UNREADABLE = "xls-unreadable";
 /** A package the workbook reader could not open exactly -- never an empty workbook. */
 export const XLSX_UNREADABLE = "xlsx-unreadable";
 /**
@@ -41,6 +37,18 @@ async function readSpreadsheet(bytes: Uint8Array): Promise<Extracted> {
     : { ...read("xlsx", reading.text, reading.short), workbook: reading.workbook };
 }
 
+/** An Excel 97–2003 workbook (`biff8.ts`): the same sheets of rows an `.xlsx` gives. */
+async function readLegacyWorkbook(bytes: Uint8Array): Promise<Extracted> {
+  const reading = await readBiff8(bytes, MAX_TEXT_CHARS);
+  if (reading === "encrypted") {
+    return refused(WORKBOOK_PASSWORD_PROTECTED);
+  }
+  if (reading === null || reading === "unreadable") {
+    return refused(XLS_UNREADABLE);
+  }
+  return { ...read("xls", reading.text, reading.short), workbook: reading.workbook };
+}
+
 /** An HTML table, or SpreadsheetML markup, saved under an Excel name: the text a reader sees. */
 function readMarkup(bytes: Uint8Array): Extracted {
   return read("html", htmlToText(decodeHtmlBytes(bytes)));
@@ -57,7 +65,7 @@ const READING: Readonly<
   "unlabelled-package": readSpreadsheet,
   markup: readMarkup,
   xlsb: () => refused(XLSB_UNSUPPORTED),
-  biff8: () => refused(LEGACY_XLS),
+  biff8: readLegacyWorkbook,
   biff5: () => refused(XLS_BIFF5),
   encrypted: () => refused(WORKBOOK_PASSWORD_PROTECTED),
   "other-package": () => refused(WORKBOOK_NOT_A_WORKBOOK),

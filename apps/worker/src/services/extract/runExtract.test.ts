@@ -149,11 +149,11 @@ describe("a pass over landed documents", () => {
     expect(result).toMatchObject({ read: 0, refused: 1 });
     const rows = await textRows();
     expect(rows[0]?.method).toBeNull();
-    expect(rows[0]?.reason).toBe("legacy-xls-unsupported");
+    expect(rows[0]?.reason).toBe("xls-biff5-unsupported");
     // And the run hands the same refusal, with its reason, to the ledger -- not only a count.
     // Before that, `ops.run.refused` carried a number with nothing behind it. ADR 0039.
     expect(result.refusals).toEqual([
-      { entity: "documents", sourceRecordId: "f2", reason: "legacy-xls-unsupported" },
+      { entity: "documents", sourceRecordId: "f2", reason: "xls-biff5-unsupported" },
     ]);
   });
 });
@@ -227,11 +227,11 @@ describe("a workbook's rows", () => {
   });
 });
 
-/** An Excel 97-2003 container whose BIFF records no reader yet opens; `marker` varies its bytes. */
+/** An Excel 5/95 workbook (BIFF5), which no reader opens; `marker` varies its bytes. */
 function legacyWorkbook(marker: string): Uint8Array {
   return cfbOf([
     { name: "Root Entry", type: 5, child: 1 },
-    { name: "Workbook", type: 2, bytes: new TextEncoder().encode(`BIFF8 records ${marker}`) },
+    { name: "Book", type: 2, bytes: new TextEncoder().encode(`BIFF5 records ${marker}`) },
   ]);
 }
 
@@ -706,7 +706,7 @@ describe("what a pass hands the ledger", () => {
     const result = await extract(spawnAnswering(A_PAGE));
 
     expect(result.reasonCounts).toEqual([
-      { entity: "documents", reason: "legacy-xls-unsupported", count: 2 },
+      { entity: "documents", reason: "xls-biff5-unsupported", count: 2 },
       { entity: "documents", reason: "unsupported-content-type", count: 1 },
     ]);
   });
@@ -750,7 +750,7 @@ describe("what a pass hands the ledger", () => {
 
     expect(result.refused).toBe(3);
     expect(result.reasonCounts).toEqual([
-      { entity: "documents", reason: "legacy-xls-unsupported", count: 3 },
+      { entity: "documents", reason: "xls-biff5-unsupported", count: 3 },
     ]);
     // And the ledger's own list is the distinct FILES, which is why the interface captions it
     // that way rather than claiming a row per document.

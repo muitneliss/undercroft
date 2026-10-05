@@ -387,6 +387,11 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * workbook a provider called `octet-stream` was a type nobody reads; each is now read as what
  * it is, and the rest are refused under names that say what they are.
  *
+ * GENERATION 9 IS THE EXCEL 97–2003 READER (ADR 0104 decision 7). Every `.xls` was recorded
+ * `legacy-xls-unsupported` -- 364 documents on `tai-001` -- a refusal whose whole point is that it
+ * stops being true; the bump re-offers them, and only a workbook older than Excel 97 keeps a
+ * refusal (`xls-biff5-unsupported`).
+ *
  * NOT BUMPED FOR ISSUE #218's UTF-16 DECODE AND NUL REPLACEMENT, and that is the rule working
  * rather than an oversight. A bump re-offers refusals, and neither change turns a refusal into a
  * reading: the documents they were written for never got a row at all -- their NUL failed the
@@ -404,7 +409,7 @@ const READERS: ReadonlyMap<string, Reader> = new Map<string, Reader>([
  * re-offered, whatever its generation. The predicate in `repos/documentText.ts` carries that
  * argument and the 2,602-document incident behind it.
  */
-export const CURRENT_READER_VERSION = 8;
+export const CURRENT_READER_VERSION = 9;
 
 /**
  * One document, read whichever way its type allows.

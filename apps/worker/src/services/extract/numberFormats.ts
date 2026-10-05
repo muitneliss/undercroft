@@ -19,6 +19,7 @@ const CELL_FORMATS = new RegExp(
 );
 const CELL_FORMAT = new RegExp(`<${PREFIX}xf\\b(?<attributes>[^>]*?)\\/?>`, "gu");
 const DIGITS = /^\d+$/u;
+const GENERAL = /^general$/iu;
 
 /**
  * The built-in number formats whose code ECMA-376 Part 1 §18.8.30 fixes.
@@ -79,11 +80,20 @@ export function numberFormatsOf(xml: string | null): (styleIndex: number) => str
   const formatIds = [...body.matchAll(CELL_FORMAT)].map((match) =>
     integerOf(attributesOf(match.groups?.attributes ?? "").get("numFmtId")),
   );
-  return (styleIndex) => {
-    const id = formatIds[styleIndex] ?? null;
-    if (id === null || id === 0) {
-      return null;
-    }
-    return custom.get(id) ?? BUILTIN_FORMATS.get(id) ?? `builtin:${String(id)}`;
-  };
+  return (styleIndex) => formatCode(formatIds[styleIndex] ?? null, custom);
+}
+
+/**
+ * A format id's code: the workbook's own, a built-in the spec fixes, or `builtin:<id>` for one
+ * the reader's locale decides. `null` for General -- id 0, or a workbook's own format that spells
+ * it out, as LibreOffice writes -- and for no id at all: General is the absence of a format, and
+ * recording it would put a word in every cell's `formats`. One table for every container: an
+ * OOXML style and a BIFF8 `XF` record name the same ids.
+ */
+export function formatCode(id: number | null, custom: ReadonlyMap<number, string>): string | null {
+  if (id === null || id === 0) {
+    return null;
+  }
+  const code = custom.get(id) ?? BUILTIN_FORMATS.get(id) ?? `builtin:${String(id)}`;
+  return GENERAL.test(code) ? null : code;
 }

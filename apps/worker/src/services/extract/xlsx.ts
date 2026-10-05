@@ -25,9 +25,7 @@ import {
   type Container,
   openWorkbookPackage,
   type SheetKind,
-  type SheetPart,
   type SheetState,
-  type WorkbookPackage,
 } from "./workbookPackage.ts";
 import { lettersOf, type ScannedRow } from "./sheetCells.ts";
 import { SHEET_UNREADABLE, type SheetEnd, scanSheet } from "./sheetScan.ts";
@@ -144,17 +142,35 @@ function lineOf(row: ScannedRow): string {
   return cells.join(CELL_SEPARATOR);
 }
 
-async function* sheetRows(
-  stream: NonNullable<SheetPart["stream"]>,
-  workbook: WorkbookPackage,
-): AsyncGenerator<SheetRow> {
-  for await (const row of scanSheet(stream, workbook)) {
+/**
+ * A sheet as a container presents it: its facts, and a way to scan its rows afresh. The
+ * OOXML package is one container (`readWorkbook` below), a BIFF8 stream another (`biff8.ts`);
+ * everything a workbook becomes from there -- its rows, its text, its outcome -- is one code
+ * path for both, so the two cannot disagree about what a sheet is.
+ */
+export interface SheetSource {
+  readonly index: number;
+  readonly name: string | null;
+  readonly nameReason: string | null;
+  readonly kind: SheetKind | null;
+  readonly state: SheetState;
+  /**
+   * `null` when the container holds no part for this sheet. A stream is read as it inflates
+   * (async); a BIFF8 sheet is already in memory (sync). Both are read the same way below.
+   */
+  readonly scan:
+    | (() => AsyncGenerator<ScannedRow, SheetEnd> | Generator<ScannedRow, SheetEnd>)
+    | null;
+}
+
+async function* sheetRows(scan: NonNullable<SheetSource["scan"]>): AsyncGenerator<SheetRow> {
+  for await (const row of scan()) {
     yield sheetRowOf(row);
   }
 }
 
 /** A sheet that is listed and not read: no rows, and why. */
-function unread(reason: string): Omit<Sheet, keyof SheetPart | "name" | "nameReason"> {
+function unread(reason: string): Omit<Sheet, keyof SheetSource> {
   return {
     dimension: null,
     merges: [],
@@ -189,24 +205,20 @@ class BoundedText {
   }
 }
 
-/** Streams a sheet once for its text and its end; `rows` streams it again on demand. */
-async function readSheet(
-  part: SheetPart,
-  workbook: WorkbookPackage,
-  text: BoundedText,
-): Promise<Sheet> {
+/** Scans a sheet once for its text and its end; `rows` scans it again on demand. */
+async function readSheet(source: SheetSource, text: BoundedText): Promise<Sheet> {
   const facts = {
-    index: part.index,
-    name: storableOrNull(part.name),
-    nameReason: part.nameReason,
-    kind: part.kind,
-    state: part.state,
+    index: source.index,
+    name: storableOrNull(source.name),
+    nameReason: source.nameReason,
+    kind: source.kind,
+    state: source.state,
   };
-  const { stream } = part;
-  if (stream === null || part.index > MAX_SHEETS) {
-    return { ...facts, ...unread(stream === null ? SHEET_UNREADABLE : SHEETS_LIMIT) };
+  const { scan } = source;
+  if (scan === null || source.index > MAX_SHEETS) {
+    return { ...facts, ...unread(scan === null ? SHEET_UNREADABLE : SHEETS_LIMIT) };
   }
-  const lines = scanSheet(stream, workbook);
+  const lines = scan();
   let rowCount = 0;
   let step = await lines.next();
   while (step.done !== true) {
@@ -221,7 +233,7 @@ async function readSheet(
     dimension: storableOrNull(end.dimension),
     merges: end.merges.map(storable),
     rowCount,
-    rows: () => sheetRows(stream, workbook),
+    rows: () => sheetRows(scan),
   };
 }
 
@@ -242,24 +254,42 @@ export async function readWorkbook(
   textLimit: number,
 ): Promise<WorkbookReading | null> {
   const opened = await openWorkbookPackage(bytes);
-  if (opened === null || opened.sheets.every((sheet) => sheet.stream === null)) {
+  if (opened === null) {
+    return null;
+  }
+  const sources = opened.sheets.map((part): SheetSource => {
+    const { stream } = part;
+    return { ...part, scan: stream === null ? null : () => scanSheet(stream, opened) };
+  });
+  return await assembleWorkbook(opened, sources, textLimit);
+}
+
+/**
+ * A workbook from its sheets: each scanned once for the text and its outcome, in tab order and
+ * one at a time, so the text is the sheets in order and a workbook's memory is one sheet's scan.
+ * `null` when no sheet could be read at all -- a workbook with none readable is not an empty one.
+ */
+export async function assembleWorkbook(
+  head: Pick<Workbook, "container" | "date1904">,
+  sources: readonly SheetSource[],
+  textLimit: number,
+): Promise<WorkbookReading | null> {
+  if (sources.every((source) => source.scan === null)) {
     return null;
   }
   const text = new BoundedText(textLimit);
   const sheets: Sheet[] = [];
-  // In order, one at a time: the text is the sheets in tab order, and one sheet streaming at a
-  // time is what keeps a workbook's memory to one piece and one row.
-  for (const part of opened.sheets) {
-    if (part.index > 1) {
+  for (const source of sources) {
+    if (source.index > 1) {
       text.add(SHEET_SEPARATOR);
     }
-    sheets.push(await readSheet(part, opened, text));
+    sheets.push(await readSheet(source, text));
   }
   if (sheets.every((sheet) => sheet.reason === SHEET_UNREADABLE)) {
     return null;
   }
   return {
-    workbook: { container: opened.container, date1904: opened.date1904, sheets },
+    workbook: { container: head.container, date1904: head.date1904, sheets },
     text: text.toString(),
     short: sheets.some((sheet) => !sheet.complete),
   };
