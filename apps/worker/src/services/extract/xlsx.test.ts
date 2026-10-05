@@ -85,6 +85,26 @@ describe("a workbook's words", () => {
   });
 });
 
+describe("a row with an empty cell", () => {
+  it("keeps every later cell in its own column when Excel omits the empty one", async () => {
+    // The regression: cells were joined in document order, and Excel writes no element at all
+    // for an empty cell, so the amount in C slid left into B's column.
+    const bytes = workbook([
+      {
+        name: "xl/worksheets/sheet1.xml",
+        body: sheet(
+          '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>1234.10</v></c></row>' +
+            '<row r="2"><c r="B2" t="s"><v>1</v></c></row>',
+        ),
+      },
+    ]);
+
+    const result = await extract(bytes);
+
+    expect(result.text).toBe("Invoice\t\t1234.10\n\tAcme Holdings");
+  });
+});
+
 describe("a workbook of several sheets", () => {
   it("reads them in numeric order, so the tenth follows the ninth", () => {
     const bytes = workbook([
