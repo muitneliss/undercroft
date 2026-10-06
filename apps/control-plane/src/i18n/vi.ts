@@ -182,9 +182,6 @@ export const vi = {
     documentKindsEmpty:
       "Catalogue chưa có loại nào ngoài other, nên publish sẽ xếp mọi tài liệu vào không loại nào. Hãy thêm một loại hoặc khởi tạo catalogue trước.",
     modelNameTaken: "Đã có một mô hình tên {{name}}. Hãy mở mô hình đó để sửa, hoặc chọn tên khác.",
-    /** The definition moved under the reader; nothing was written, so reading again is safe. */
-    modelContextChanged:
-      "Chưa lưu ngữ cảnh của {{name}}: định nghĩa của mô hình đã đổi từ lúc bạn đọc. Hãy đọc lại mô hình, xem những gì đã đổi, rồi duyệt lại.",
     buildInProgress:
       "Đang có một lần dựng mô hình cho khách hàng này. Hãy đợi lần đó xong rồi thử lại.",
     buildNotStarted:

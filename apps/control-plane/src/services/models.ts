@@ -13,10 +13,6 @@
  *
  * The audit row names the model and who saved it, never the SQL: the trail is for "who
  * changed what", and the SQL is in the table beside it.
- *
- * Every model is listed and read WITH its business context's state (`modelContext.ts`, ADR
- * 0105), so the UI, the CLI and an MCP client all read the same one. Save, build and delete
- * neither read nor change it: a context out of date is a warning to a reader, never a refusal.
  */
 
 import {
@@ -47,29 +43,20 @@ import {
 } from "@undercroft/db/services";
 
 import { record as recordAudit } from "../repos/auditLog.ts";
-import { type ContextView, readContexts } from "./modelContext.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
 export type { LastBuild, Model } from "@undercroft/db/repos";
-
-export type { ContextChange, ContextView } from "./modelContext.ts";
 
 export interface ModelItem {
   readonly name: string;
   readonly updatedAt: string;
   readonly updatedBy: string;
   readonly lastBuild: (LastBuild & { columns: string[] }) | null;
-  /** The context's state and why; `get` carries the context itself. */
-  readonly context: Pick<ContextView, "state" | "missing" | "changes">;
 }
 
-export type ModelDetail = Omit<ModelItem, "context"> & {
-  readonly sql: string;
-  readonly tests: ModelTests;
-  readonly context: ContextView;
-};
+export type ModelDetail = ModelItem & { readonly sql: string; readonly tests: ModelTests };
 
-function item(model: Model, built: LastBuild | undefined): Omit<ModelItem, "context"> {
+function item(model: Model, built: LastBuild | undefined): ModelItem {
   return {
     name: model.name,
     updatedAt: model.updatedAt,
@@ -83,11 +70,7 @@ export async function list(exec: SqlExecutor, tenantId: string): Promise<ModelIt
     listModels(exec, tenantId),
     lastBuildPerModel(exec, tenantId),
   ]);
-  const contextOf = await readContexts(exec, tenantId, models);
-  return models.map((m) => {
-    const { state, missing, changes } = contextOf(m);
-    return { ...item(m, builds.get(m.name)), context: { state, missing, changes } };
-  });
+  return models.map((m) => item(m, builds.get(m.name)));
 }
 
 export async function get(
@@ -95,19 +78,13 @@ export async function get(
   tenantId: string,
   name: string,
 ): Promise<ModelDetail | null> {
-  // Every model, not only this one: its context is read against the models it reads.
-  const models = await listModels(exec, tenantId);
-  const model = models.find((m) => m.name === name);
-  if (model === undefined) {
+  const model = await getModel(exec, tenantId, name);
+  if (model === null) {
     return null;
   }
-  const [builds, contextOf] = await Promise.all([
-    lastBuildPerModel(exec, tenantId),
-    readContexts(exec, tenantId, models),
-  ]);
+  const builds = await lastBuildPerModel(exec, tenantId);
   return {
     ...item(model, builds.get(name)),
-    context: contextOf(model),
     sql: model.sql,
     // Re-validated on the way out rather than asserted: the row's shape is the contract's
     // by construction, and a parse says so where an assertion would only claim it.

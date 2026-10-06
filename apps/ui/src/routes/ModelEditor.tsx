@@ -1,7 +1,6 @@
 /**
- * One model, open: what its last build left, its SQL in the editor, its business context and
- * whether it still describes the model (ADR 0105), its tests as a form, what it declares it
- * reads and what reads it, and the verbs.
+ * One model, open: what its last build left, its SQL in the editor, its tests as a form, what
+ * it declares it reads and what reads it, and the verbs.
  *
  * Save stores what is on screen and executes nothing. Build runs dbt for this model alone,
  * from the SAVED version, and answers with the run's steps and the table's first rows read
@@ -26,8 +25,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { ModelDetail } from "@/api/types.ts";
 import { Errata } from "@/components/Errata.tsx";
-import { ContextBand } from "@/components/ModelContext.tsx";
-import type { ContextSave } from "@/components/ModelContextForm.tsx";
 import { ModelDependencies } from "@/components/ModelDependencies.tsx";
 import { ModelFacts } from "@/components/ModelFacts.tsx";
 import { BuildPanel, Reference, TestsForm } from "@/components/ModelPanels.tsx";
@@ -88,11 +85,9 @@ function useModelDraft(
 function useModelActions(
   tenantId: string,
   name: string,
-): ModelActions & { readonly remove: Remove; readonly approve: ContextSave } {
+): ModelActions & { readonly remove: Remove } {
   const setModelDraft = useUiStore((state) => state.setModelDraft);
   const markModelSaved = useUiStore((state) => state.markModelSaved);
-  const markContextSaved = useUiStore((state) => state.markModelContextSaved);
-  const setContextDraft = useUiStore((state) => state.setModelContextDraft);
   const navigate = useNavigate();
   const utils = trpc.useUtils();
 
@@ -112,18 +107,9 @@ function useModelActions(
       await utils.models.list.invalidate({ tenantId });
     },
   });
-  const approve = trpc.models.setContext.useMutation({
-    onSuccess: async () => {
-      markContextSaved();
-      // The state is the server's, worked out on read: both the model and the list read it.
-      await utils.models.get.invalidate({ tenantId, name });
-      await utils.models.list.invalidate({ tenantId });
-    },
-  });
   const remove = trpc.models.delete.useMutation({
     onSuccess: async () => {
       setModelDraft(null);
-      setContextDraft(null);
       await utils.models.list.invalidate({ tenantId });
       await utils.models.lineage.invalidate({ tenantId });
       void navigate(divisionPath("models", tenantId));
@@ -134,8 +120,7 @@ function useModelActions(
     save,
     build,
     remove,
-    approve,
-    busy: save.isPending || build.isPending || remove.isPending || approve.isPending,
+    busy: save.isPending || build.isPending || remove.isPending,
   };
 }
 
@@ -148,7 +133,7 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
   const model = trpc.models.get.useQuery({ tenantId, name }, { enabled: name !== "" });
   const tenant = trpc.tenants.get.useQuery({ tenantId });
   const held = useModelDraft(tenantId, name, model.data);
-  const { save, build, remove, approve, busy } = useModelActions(tenantId, name);
+  const { save, build, remove, busy } = useModelActions(tenantId, name);
 
   if (model.isPending || tenant.isPending || (model.isSuccess && held === null)) {
     return <Skeleton rows={6} />;
@@ -180,17 +165,6 @@ export function ModelEditor({ tenantId }: { tenantId: string }): React.JSX.Eleme
         queryable={queryable}
         locale={locale}
         actions={{ save, build, busy }}
-      />
-
-      <div className="band-rule" />
-      <div className="head">{t("models.contextHead")}</div>
-      <ContextBand
-        approve={approve}
-        busy={busy}
-        isAdmin={isAdmin}
-        sqlDirty={isDirty(held)}
-        stored={model.data}
-        tenantId={tenantId}
       />
 
       <div className="band-rule" />
