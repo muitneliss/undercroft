@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.68.0](https://github.com/muitneliss/undercroft/compare/v1.67.0...v1.68.0) (2026-10-06)
+
+
+### Features
+
+* every action is in the audit log, and people can read it (ADR 0113) ([#404](https://github.com/muitneliss/undercroft/issues/404)) ([76681a1](https://github.com/muitneliss/undercroft/commit/76681a1b6456add463f849fb776227e66464887e))
+* **ui:** a healthy source reads as one line of facts; vi/en catalogue pass ([#407](https://github.com/muitneliss/undercroft/issues/407)) ([1d2f276](https://github.com/muitneliss/undercroft/commit/1d2f276c3280b67f5b91c8b5127817d954817564))
+
 ## [1.67.0](https://github.com/muitneliss/undercroft/compare/v1.66.0...v1.67.0) (2026-10-06)
 
 
