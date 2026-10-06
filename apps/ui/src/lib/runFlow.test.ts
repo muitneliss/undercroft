@@ -334,7 +334,7 @@ describe("a run's place in its chain", () => {
       kind: "link-parent",
       mark: "lapsed",
       href: "/journal/run-parent",
-      label: "Chained from the HubSpot ingest",
+      label: "Chained from the HubSpot sync",
     });
   });
 

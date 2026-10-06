@@ -59,7 +59,7 @@ describe("a run chained on both sides", () => {
     );
 
     expect(
-      screen.getByRole("link", { name: "Chained from the HubSpot ingest" }).getAttribute("href"),
+      screen.getByRole("link", { name: "Chained from the HubSpot sync" }).getAttribute("href"),
     ).toBe("/tenants/CASE-0042/journal/run-parent");
     expect(
       screen.getByRole("link", { name: "Chained into a model build" }).getAttribute("href"),
@@ -85,7 +85,7 @@ describe("a run chained on both sides", () => {
     // Counted in the text, which includes the `aria-hidden` canvas: a second printing
     // anywhere on the leaf is a second occurrence, whatever class it is drawn with.
     const text = container.textContent ?? "";
-    expect(text.split("Chained from the HubSpot ingest")).toHaveLength(2);
+    expect(text.split("Chained from the HubSpot sync")).toHaveLength(2);
     expect(text.split("Chained into a model build")).toHaveLength(2);
   });
 });

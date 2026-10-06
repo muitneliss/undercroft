@@ -26,7 +26,7 @@
 export const vi = {
   app: {
     name: "Undercroft",
-    caption: "Undercroft · bảng điều khiển",
+    caption: "Undercroft · trang quản trị",
     signOut: "Đăng xuất",
     signingOut: "Đang đăng xuất…",
     /**
@@ -112,7 +112,7 @@ export const vi = {
   },
 
   signIn: {
-    title: "Bảng điều khiển",
+    title: "Trang quản trị",
     lead: "Kết nối các tài khoản của bạn và xem những gì đã được đồng bộ.",
     expired: "Phiên làm việc đã kết thúc. Hãy đăng nhập lại để tiếp tục.",
     deniedHeading: "Không có quyền truy cập",
@@ -176,7 +176,7 @@ export const vi = {
     stepRunTitle: "Chạy",
     stepRunBody: "Mỗi lần chạy ghi lại dữ liệu đã nhận, bị từ chối và lý do.",
     stepModelTitle: "Viết mô hình",
-    stepModelBody: "SQL của bạn, chạy bằng vai trò riêng của bạn.",
+    stepModelBody: "SQL của bạn, chạy bằng tài khoản cơ sở dữ liệu riêng của khách hàng.",
     stepAskTitle: "Đặt câu hỏi",
     stepAskBody: "Câu hỏi, biểu đồ và bảng điều khiển.",
     vaultRefused: "Bị từ chối · đã ghi lý do",
@@ -194,7 +194,7 @@ export const vi = {
     workflowConnectBody:
       "Thêm Undercroft bằng OAuth và chọn quyền chỉ đọc. Tác tử chỉ thấy các hồ sơ mà bạn được phép mở.",
     workflowAskTitle: "Đặt câu hỏi thật",
-    workflowAskBody: "Hỏi: “Hóa đơn Xero mới nhất đã có trong báo cáo chưa?”",
+    workflowAskBody: "Hỏi: “Hoá đơn Xero mới nhất đã có trong báo cáo chưa?”",
     workflowCheckTitle: "Kiểm tra bằng chứng",
     workflowCheckBody:
       "Tác tử đọc nhật ký chạy, kho dữ liệu gốc và báo cáo bằng chính các công cụ bạn có thể dùng trong không gian làm việc.",
@@ -215,12 +215,12 @@ export const vi = {
     /** Short enough to stay whole in the field at 390 px. */
     searchPlaceholder: "Tên hoặc CASE-…",
     /** The filter by the reader's own role; the options are the role values, untranslated. */
-    roleLabel: "Quyền của bạn",
+    roleLabel: "Vai trò của bạn",
     roleAny: "Mọi vai trò",
-    clearFilters: "Xóa bộ lọc",
+    clearFilters: "Xoá bộ lọc",
     noMatches:
-      "Không có khách hàng phù hợp. Thử tên, mã hoặc vai trò khác, hoặc xóa bộ lọc để xem tất cả.",
-    colAction: "Hành động",
+      "Không có khách hàng phù hợp. Thử tên, mã hoặc vai trò khác, hoặc xoá bộ lọc để xem tất cả.",
+    colAction: "Thao tác",
     open: "Mở hồ sơ →",
     openNamed: "Mở hồ sơ {{name}}",
     guideHead: "Trong mỗi hồ sơ",
@@ -234,7 +234,7 @@ export const vi = {
     captionFiltered_other: "{{shown, number}} / {{count, number}} khách hàng",
     colCustomer: "Khách hàng",
     colReference: "Mã khách hàng",
-    colRole: "Quyền của bạn",
+    colRole: "Vai trò của bạn",
     addHead: "Thêm khách hàng",
     /**
      * Shown in place of the form to everyone who is not a platform administrator. It names
@@ -242,7 +242,7 @@ export const vi = {
      * obvious instead of being a dead end.
      */
     addNote:
-      "Chỉ quản trị viên toàn hệ thống mới thêm được khách hàng. Hãy đề nghị người quản lý bảng điều khiển tạo mã khách hàng mới.",
+      "Chỉ quản trị viên toàn hệ thống mới thêm được khách hàng. Hãy đề nghị quản trị viên hệ thống tạo mã khách hàng mới.",
     /**
      * Two sentences because there are two different promises, and running them together is
      * what produced the question this wording answers: an operator read one warning over a
@@ -282,7 +282,7 @@ export const vi = {
       "Không tải được hồ sơ {{tenantId}}, hoặc bạn không có quyền xem. Không có gì bị thay đổi.",
     openSources: "Mở nguồn dữ liệu",
     /** The rename form has one home, at the foot of Sources; this page links there. */
-    renameOnSources: "Sửa tên hiển thị ở trang Nguồn",
+    renameOnSources: "Sửa tên hiển thị ở trang Nguồn dữ liệu",
     insideHead: "Trong hồ sơ này",
     insideLabel: "Các phần trong hồ sơ {{tenantId}}",
     insideSources: "Dữ liệu đến từ tài khoản nào?",
@@ -324,7 +324,6 @@ export const vi = {
     title: "Nguồn dữ liệu",
     lead: "Biết dữ liệu đến từ đâu, kết nối nào cần xử lý và lần đọc tiếp theo được cấu hình ra sao.",
     none: "Khách hàng này chưa kết nối nguồn nào.",
-    count_other: "Có {{count, number}} nguồn được ghi nhận.",
     /**
      * Các con số trên danh sách, mỗi con số mở đúng những tài khoản nó đếm (ADR 0039). "Cần xử lý"
      * là kết nối chờ chọn phạm vi hoặc cần kết nối lại, không phải nguồn chưa ai kết nối.
@@ -337,20 +336,20 @@ export const vi = {
     searchLabel: "Tìm nguồn hoặc tài khoản",
     searchPlaceholder: "Tên nguồn, email…",
     noMatch: "Không có nguồn nào khớp với bộ lọc.",
-    grantsHead: "Quyền đã cấp",
+    grantsHead: "Kết nối",
     notLoaded:
       "Không tải được các quyền của khách hàng này, hoặc bạn không có quyền xem chúng. Không có gì bị thay đổi.",
   },
 
   /** Ingest keys: the credential a script presents to land data. Shown once, at minting. */
   keys: {
-    head: "Khoá ghi dữ liệu",
+    head: "Khoá nạp dữ liệu",
     lead: "Khoá để một kịch bản hay bộ điều phối ghi dữ liệu vào hồ thay mặt {{tenantId}}. Mỗi khoá chỉ hiển thị một lần, lúc tạo.",
     notLoaded: "Không tải được danh sách khoá.",
     caption_other: "{{count, number}} khoá",
     colLabel: "Nhãn",
     colSources: "Nguồn",
-    colCreated: "Tạo",
+    colCreated: "Ngày tạo",
     colLastUsed: "Dùng gần nhất",
     colExpires: "Hết hạn",
     colRevoke: "Thu hồi",
@@ -408,7 +407,7 @@ export const vi = {
     caption_other: "{{count, number}} token",
     colLabel: "Nhãn",
     colGrant: "Quyền",
-    colCreated: "Tạo",
+    colCreated: "Ngày tạo",
     colLastUsed: "Dùng gần nhất",
     colExpires: "Hết hạn",
     colRevoke: "Thu hồi",
@@ -449,7 +448,7 @@ export const vi = {
     none: "Chưa có ứng dụng nào được kết nối.",
     caption_other: "{{count, number}} ứng dụng",
     colName: "Ứng dụng",
-    colHost: "Trả về tới",
+    colHost: "Chuyển hướng về",
     colGranted: "Đồng ý lúc",
     unnamed: "Không tên",
     grantNone: "Không có quyền nào",
@@ -458,9 +457,9 @@ export const vi = {
   /** The consent page a model-context client's authorization lands on (ADR 0061). */
   consent: {
     title: "Cho phép truy cập",
-    lead: "{{name}} (trả về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",
+    lead: "{{name}} (chuyển hướng về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",
     leadUnnamed:
-      "Một ứng dụng (trả về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",
+      "Một ứng dụng (chuyển hướng về {{host}}) xin làm việc với Undercroft thay mặt bạn, với đúng quyền bạn đang có ở mọi khách hàng.",
     signedInAs: "Đang đăng nhập bằng {{email}}.",
     grantLabel: "Quyền cho ứng dụng này",
     readHint:
@@ -478,9 +477,9 @@ export const vi = {
   lake: {
     head: "Hồ dữ liệu",
     title: "Hồ dữ liệu thô",
-    lead: "Tách bạch tài khoản, danh mục và payload. Đây là bằng chứng gốc, không phải bảng số liệu đã diễn giải.",
+    lead: "Dữ liệu được tách theo tài khoản, loại dữ liệu và nội dung gốc. Đây là bằng chứng gốc, chưa qua diễn giải thành số liệu kinh doanh.",
     notLoaded: "Không tải được hồ dữ liệu của {{tenantId}}.",
-    emptyTitle: "Chưa có gì về",
+    emptyTitle: "Chưa có dữ liệu nào về",
     emptyBody:
       "Lần chạy đầu tiên sẽ vào lúc {{when}}. Những gì nó đọc được sẽ được đếm ở đây, theo từng nguồn và loại dữ liệu.",
     emptyBodyDueNow:
@@ -509,7 +508,7 @@ export const vi = {
     refusalsOpen: "Xem lý do từ chối",
     consoleHead: "Truy vấn SQL",
     consoleLead:
-      "Viết một câu SELECT trên hồ dữ liệu thô. Chạy bằng quyền đọc của tenant: mọi thao tác ghi đều bị từ chối, và bạn chỉ thấy dữ liệu của chính mình.",
+      "Viết một câu SELECT trên hồ dữ liệu thô. Chạy bằng quyền chỉ đọc của khách hàng này: mọi thao tác ghi đều bị từ chối, và bạn chỉ thấy dữ liệu của chính mình.",
     consoleSqlLabel: "Câu truy vấn",
     consoleTables: "Bảng có thể truy vấn",
     consoleRun: "Chạy truy vấn",
@@ -557,7 +556,7 @@ export const vi = {
     consoleOpen: "Mở bảng truy vấn",
     kindsHead: "Loại tài liệu",
     kindsLead:
-      "Mỗi tài liệu đọc được được phân loại theo danh mục loại tài liệu của {{tenantId}}: hoá đơn, hợp đồng, sao kê… Xem và sửa danh mục ở đây.",
+      "Mỗi tài liệu đã đọc được nội dung sẽ được phân loại theo danh mục loại tài liệu của {{tenantId}}: hoá đơn, hợp đồng, sao kê… Xem và sửa danh mục ở đây.",
     kindsOpen: "Mở danh mục loại tài liệu",
     /**
      * Said to a reader who followed a pasted address they may not open. It names who can do
@@ -603,7 +602,7 @@ export const vi = {
     searchTruncated: "Tài liệu bị cắt bớt khi đọc, nên phần sau chưa được tìm.",
     searchOpenStream: "Mở luồng",
     colSource: "Nguồn",
-    colEntity: "Loại",
+    colEntity: "Loại dữ liệu",
     colRecords: "Bản ghi",
     colTombstoned: "Đã xoá ở nguồn",
     colLatest: "Mới nhất",
@@ -622,13 +621,13 @@ export const vi = {
     rowsCaption_other: "{{count, number}} bản ghi, mới nhất ở trên",
     docsCaption_other: "{{count, number}} tài liệu, mới nhất ở trên",
     colRecordId: "Mã bản ghi",
-    colObserved: "Quan sát",
-    colLoaded: "Nạp",
+    colObserved: "Ghi nhận lúc",
+    colLoaded: "Nạp lúc",
     colRun: "Lần chạy",
     colAtSource: "Ở nguồn",
     colDocumentId: "Mã tài liệu",
-    colContentType: "Kiểu",
-    live: "Còn",
+    colContentType: "Loại nội dung",
+    live: "Còn ở nguồn",
     deletedOn: "Đã xoá {{when}}",
     showPayload: "Xem nội dung",
     /**
@@ -638,7 +637,7 @@ export const vi = {
     copyPayload: "Sao chép chuỗi gốc",
     payloadCopied: "Đã sao chép nguyên chuỗi.",
     copyBlocked:
-      "Trình duyệt chặn clipboard. Hãy chọn nội dung ở trên và sao chép thủ công; không dữ liệu nào bị sửa.",
+      "Trình duyệt chặn bộ nhớ tạm. Hãy chọn nội dung ở trên và sao chép thủ công; không dữ liệu nào bị sửa.",
     /**
      * Nói với viewer và member vì sao họ chỉ thấy bảng tổng quan: không có câu này, các mục của
      * quản trị viên chỉ đơn giản là vắng mặt, và đọc như hồ dữ liệu không còn gì thêm.
@@ -670,13 +669,13 @@ export const vi = {
   kinds: {
     head: "Loại tài liệu",
     title: "Danh mục loại tài liệu",
-    lead: "Mỗi tài liệu đọc được của {{tenantId}} được phân loại vào đúng một loại trong danh mục này. Một câu trả lời dưới độ tin cậy 0,90 được để trống.",
+    lead: "Mỗi tài liệu đã đọc được nội dung của {{tenantId}} sẽ được xếp vào đúng một loại trong danh mục này. Kết quả có độ tin cậy dưới 0,90 sẽ để trống.",
     notLoaded: "Không tải được danh mục loại tài liệu của {{tenantId}}.",
-    back: "Về Hồ dữ liệu",
-    published: "Đang phân loại theo phiên bản {{version}}, publish lúc {{when}} bởi {{by}}.",
-    neverPublished: "Chưa publish phiên bản nào, nên chưa tài liệu nào được phân loại.",
+    back: "Về Hồ dữ liệu thô",
+    published: "Đang phân loại theo phiên bản {{version}}, áp dụng lúc {{when}} bởi {{by}}.",
+    neverPublished: "Chưa áp dụng phiên bản nào, nên chưa tài liệu nào được phân loại.",
     unpublished:
-      "Bản nháp khác phiên bản đang dùng. Chỉ khi publish, các thay đổi mới có hiệu lực.",
+      "Bản nháp khác phiên bản đang dùng. Chỉ khi áp dụng, các thay đổi mới có hiệu lực.",
     readable_other: "{{count, number}} tài liệu đọc được",
     caption_other: "{{count, number}} loại",
     colKind: "Loại",
@@ -686,7 +685,7 @@ export const vi = {
     colActions: "Thao tác",
     originInitialised: "Từ mẫu",
     originGeneric: "Danh mục chung",
-    originAdmin: "Admin tự thêm",
+    originAdmin: "Quản trị viên tự thêm",
     shareNone: "—",
     edit: "Sửa",
     save: "Lưu",
@@ -694,14 +693,14 @@ export const vi = {
     cancel: "Huỷ",
     remove: "Xoá",
     removing: "Đang xoá…",
-    otherRequired: "Luôn có",
+    otherRequired: "Bắt buộc",
     descriptionFor: "Mô tả của {{kind}}",
     notSaved: "Chưa lưu được",
     notRemoved: "Chưa xoá được",
     emptyTitle: "Chưa có danh mục",
     emptyBody:
-      "Khởi tạo sẽ lấy mẫu khoảng 450 tài liệu, phân loại chúng vào danh mục chung và giữ lại mọi loại chiếm từ 1% mẫu trở lên, cùng với other. Chưa publish gì: bạn xem lại, sửa rồi mới publish.",
-    emptyMember: "Chỉ admin của {{tenantId}} mới khởi tạo được danh mục.",
+      "Khởi tạo sẽ lấy mẫu khoảng 450 tài liệu, phân loại chúng vào danh mục chung và giữ lại mọi loại chiếm từ 1% mẫu trở lên, cùng với other. Chưa áp dụng gì: bạn xem lại, sửa rồi mới áp dụng.",
+    emptyMember: "Chỉ quản trị viên của {{tenantId}} mới khởi tạo được danh mục.",
     initialise: "Khởi tạo từ mẫu",
     initialising: "Đang khởi tạo…",
     initialiseStarted:
@@ -721,18 +720,18 @@ export const vi = {
     addCustom: "Thêm loại riêng",
     adding: "Đang thêm…",
     notAdded: "Chưa thêm được",
-    publishHead: "Publish",
+    publishHead: "Áp dụng",
     publishLead:
-      "Publish sẽ gửi lại mọi tài liệu đọc được cho bộ phân loại, theo danh mục mới, và tính phí trên key của nền tảng. Sửa bao nhiêu lần cũng được; chỉ publish mới tốn.",
-    publishNothing: "Không có gì để publish: bản nháp giống phiên bản đang dùng.",
-    publish: "Publish danh mục",
+      "Áp dụng sẽ gửi lại mọi tài liệu đọc được cho bộ phân loại, theo danh mục mới, và tính phí vào khoá API của nền tảng. Sửa bao nhiêu lần cũng được; chỉ áp dụng mới tốn.",
+    publishNothing: "Không có gì để áp dụng: bản nháp giống phiên bản đang dùng.",
+    publish: "Áp dụng danh mục",
     publishConfirm_other: "Xác nhận: phân loại lại {{count, number}} tài liệu",
-    publishing: "Đang publish…",
-    publishCancel: "Thôi",
+    publishing: "Đang áp dụng…",
+    publishCancel: "Để sau",
     publishedNow:
-      "Đã publish phiên bản {{version}}. Việc phân loại chạy nền, mỗi nửa giờ một lượt.",
-    notPublished: "Chưa publish được",
-    adminOnly: "Chỉ admin của {{tenantId}} mới sửa và publish được danh mục.",
+      "Đã áp dụng phiên bản {{version}}. Việc phân loại chạy nền, mỗi nửa giờ một lượt.",
+    notPublished: "Chưa áp dụng được",
+    adminOnly: "Chỉ quản trị viên của {{tenantId}} mới sửa và áp dụng được danh mục.",
   },
 
   people: {
@@ -740,14 +739,14 @@ export const vi = {
     lead: "Ai được xem {{tenantId}}, và họ đã được mời như thế nào.",
     emptyTitle: "Chưa ai có quyền truy cập",
     emptyBody:
-      "Hãy mời một địa chỉ email bên dưới. Người kiểm soát địa chỉ đó có thể đăng nhập bằng Google hoặc mã dùng một lần — lời mời chính là thứ cho phép họ vào.",
+      "Hãy mời một địa chỉ email bên dưới. Chủ của địa chỉ đó có thể đăng nhập bằng Google hoặc mã dùng một lần — lời mời chính là thứ cho phép họ vào.",
     caption_other: "{{count, number}} người có quyền truy cập",
     colAddress: "Địa chỉ",
     colRole: "Vai trò",
     notLoaded: "Không tải được danh sách người dùng của {{tenantId}}. Không có gì bị thay đổi.",
     roleFor: "Vai trò của {{email}}",
     roleSaving: "Đang lưu vai trò…",
-    roleChanged: "{{email}} giờ có vai trò {{role}}.",
+    roleChanged: "Đã đổi vai trò của {{email}} thành {{role}}.",
     roleNotChanged: "Chưa đổi được vai trò",
     colRemove: "Quyền truy cập",
     remove: "Gỡ…",
@@ -756,7 +755,8 @@ export const vi = {
      * The customer's only admin, whom the server refuses to demote or remove. Worded for every
      * reader, so it says what cannot happen and what would change that, not who should act.
      */
-    lastAdmin: "Admin cuối cùng — không hạ vai trò hay gỡ được cho đến khi có thêm một admin.",
+    lastAdmin:
+      "Quản trị viên (admin) cuối cùng — không hạ vai trò hay gỡ được cho đến khi có thêm một quản trị viên.",
     removing: "Đang gỡ…",
     removed: "{{email}} không còn quyền truy cập.",
     notRemoved: "Chưa gỡ được",
@@ -775,7 +775,7 @@ export const vi = {
     inviteLabel: "Mời một địa chỉ",
     invitePlaceholder: "dongnghiep@example.com",
     inviteHint:
-      "Họ phải đăng nhập bằng đúng địa chỉ này. Lời mời không phải là mật khẩu — nó không cấp gì cho đến khi họ chứng minh mình kiểm soát hòm thư.",
+      "Họ phải đăng nhập bằng đúng địa chỉ này. Lời mời không phải là mật khẩu — nó không cấp gì cho đến khi họ xác minh được hòm thư là của họ.",
     roleLabel: "Vai trò trong khách hàng này",
     /**
      * What each role may do in this customer, one entry per role. Each says what the router's
@@ -786,9 +786,9 @@ export const vi = {
     rightsViewer:
       "Xem các nguồn đã kết nối, nhật ký chạy, tổng quan hồ dữ liệu thô, các mô hình và macro, danh mục loại tài liệu, ai có quyền truy cập và ai đang được mời; mở và chạy các câu hỏi và bảng điều khiển đã lưu. Không soạn hay lưu được câu hỏi, và không thay đổi được gì khác.",
     rightsMember:
-      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xóa câu hỏi và bảng điều khiển. Không kết nối tài khoản, không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không mời hay gỡ người khác.",
+      "Mọi điều viewer làm được, và thêm: soạn và chạy câu hỏi mới, lưu và xoá câu hỏi và bảng điều khiển. Không kết nối tài khoản, không đọc nội dung hồ dữ liệu thô, không lưu hay dựng mô hình, không mời hay gỡ người khác.",
     rightsAdmin:
-      "Mọi điều member làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại; lưu, xóa và dựng mô hình, lưu và xóa macro; sửa và publish danh mục loại tài liệu; tạo và thu hồi khóa nạp dữ liệu; mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đổi tên khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
+      "Mọi điều member làm được, và thêm: kết nối và ngắt tài khoản, chọn phạm vi và tần suất đọc, chạy đồng bộ ngay; đọc, tìm và truy vấn bản ghi và tài liệu trong hồ dữ liệu thô, và các dòng mà kiểm thử chất lượng dữ liệu lưu lại khi thất bại; lưu, xoá và dựng mô hình, lưu và xoá macro; sửa và publish danh mục loại tài liệu; tạo và thu hồi khoá nạp dữ liệu; mời, đổi vai trò, gỡ người dùng và thu hồi lời mời; đổi tên khách hàng. Thêm khách hàng mới thì chỉ quản trị viên toàn hệ thống làm được.",
     notInvited: "Chưa mời được",
     invitedAndEmailed: "Đã mời {{email}}. Email đã được gửi cho họ.",
     invitedNotEmailedHeading: "Đã mời, nhưng chưa gửi được email",
@@ -804,8 +804,8 @@ export const vi = {
     viewInvites_other: "Lời mời đang chờ · {{count, number}}",
     viewRoles: "So sánh vai trò",
     searchLabel: "Tìm địa chỉ email",
-    clearSearch: "Xóa lọc",
-    noMatch: "Không có địa chỉ nào khớp. Thử một phần khác của địa chỉ, hoặc xóa lọc.",
+    clearSearch: "Xoá tìm kiếm",
+    noMatch: "Không có địa chỉ nào khớp. Thử một phần khác của địa chỉ, hoặc xoá lọc.",
     /** While a search narrows a table: the rows shown, then every row there is. */
     captionFiltered_other: "{{shown, number}} / {{count, number}} người có quyền truy cập",
     waitingCaptionFiltered_other:
@@ -826,21 +826,22 @@ export const vi = {
     markGranted: "Đã kết nối",
     markPending: "Chờ chọn phạm vi",
     markLapsed: "Cần cấp lại quyền",
-    markAbsent: "Chưa cấp",
+    markAbsent: "Chưa kết nối",
     account: "Tài khoản",
-    reads: "Đọc",
+    reads: "Phạm vi đọc",
     schedule: "Lịch",
     lastRun: "Lần chạy gần nhất",
     nextRun: "Lần chạy kế tiếp",
+    access: "Quyền truy cập",
     cadenceLabel: "Tần suất đồng bộ",
     runNow: "Chạy ngay",
     starting: "Đang bắt đầu…",
     cadenceSaving: "Đang lưu tần suất…",
     running: "Đang chạy…",
     runFailedHead: "Lần chạy gần nhất thất bại",
-    openInJournal: "Xem trong nhật ký",
+    openInJournal: "Xem trong Nhật ký",
     /** Mở Nhật ký, lọc theo đúng tài khoản trên thẻ này. */
-    openRuns: "Các lần chạy",
+    openRuns: "Xem các lần chạy",
     runNotStarted: "Chưa chạy được",
     cadenceNotSaved: "Chưa lưu được tần suất",
     /**
@@ -885,7 +886,7 @@ export const vi = {
     changeScope: "Đổi dữ liệu đồng bộ",
     /** The first press only opens the fold; the second, naming the account, disconnects. */
     disconnect: "Ngắt kết nối…",
-    disconnectLead: "Các bản ghi đã vào kho thô vẫn được giữ nguyên.",
+    disconnectLead: "Các bản ghi đã vào hồ dữ liệu thô vẫn được giữ nguyên.",
     disconnectConfirm: "Ngắt kết nối {{account}}",
     disconnecting: "Đang ngắt kết nối…",
     /** Only where the page cannot tell which source it was; see `connectFailedFor`. */
@@ -965,7 +966,7 @@ export const vi = {
   scopePicker: {
     title: "Chỉnh phạm vi",
     /** Above both steps: the account the edit is for, then its source ID. */
-    accountFor: "Tài khoản cố định cho lần chỉnh này",
+    accountFor: "Tài khoản đang chỉnh",
     leadGmail:
       "Chọn các nhãn cần đọc. Chỉ tiêu đề thư và tệp đính kèm phù hợp trong những nhãn đó được đọc; không nhãn nào khác được đọc.",
     leadDrive:
@@ -973,7 +974,7 @@ export const vi = {
     leadXero:
       "Chọn tổ chức Xero cần đọc, và những loại dữ liệu nào. Một lần cấp quyền có thể thấy nhiều tổ chức; chỉ tổ chức bạn chọn ở đây được đọc.",
     leadHubspot:
-      "Chọn thêm những trường HubSpot cần đọc cho từng đối tượng, kể cả trường do chính portal của bạn tạo. Lựa chọn ở đây chỉ thêm vào các trường chuẩn, không bớt đi trường nào.",
+      "Chọn thêm những trường HubSpot cần đọc cho từng đối tượng, kể cả trường do chính tài khoản HubSpot của bạn tạo. Lựa chọn ở đây chỉ thêm vào các trường chuẩn, không bớt đi trường nào.",
     /**
      * HubSpot's empty choice is the NARROW reading, the opposite of every other list here, so
      * it is said in as many words as theirs are.
@@ -983,7 +984,7 @@ export const vi = {
     /** Above each object's list: the spec's own properties, read whatever is ticked. */
     propertiesAlways: "Luôn đọc: {{properties}}",
     /** The runs of a property list. HubSpot reports whose a property is; nothing here infers it. */
-    propertiesMine: "Trường do portal của bạn tạo",
+    propertiesMine: "Trường tự tạo trong HubSpot của bạn",
     propertiesHubspot: "Trường sẵn có của HubSpot",
     /** A property the saved choice holds that HubSpot no longer lists. Shown so it can be unticked. */
     propertiesGone: "Không còn trong HubSpot",
@@ -1055,13 +1056,13 @@ export const vi = {
     next: "Tiếp: kiểm tra thay đổi",
     back: "Quay lại chỉnh",
     /** On both steps: the draft goes back to what is stored, and the schedule opens. */
-    discard: "Huỷ thay đổi",
+    discard: "Bỏ thay đổi",
     reviewHead: "Kiểm tra thay đổi",
-    colPart: "Phần của lựa chọn",
+    colPart: "Hạng mục",
     colSaved: "Đã lưu",
     colWillApply: "Sẽ áp dụng",
     rowReads: "Phạm vi đọc",
-    heldHead: "Bản ghi kho đã có sẽ ra sao",
+    heldHead: "Những bản ghi đã có trong hồ dữ liệu sẽ ra sao",
     /** Names in the saved choice that the draft drops. Only names; nothing inferred. */
     leaving: "Rời khỏi phạm vi: {{names}}",
     subfoldersDropped:
@@ -1083,7 +1084,7 @@ export const vi = {
     anyFileTypeHint:
       "Không chọn loại tệp nào nghĩa là đọc mọi loại tệp. Đây là một lựa chọn có chủ đích, không phải bỏ trống.",
     fileTypesCustomLabel: "Thêm loại tệp khác",
-    fileTypesCustomPlaceholder: "vd: image/png hoặc .oa",
+    fileTypesCustomPlaceholder: "Ví dụ: image/png hoặc .oa",
     fileTypesCustomAdd: "Thêm",
     fileTypesCustomInvalid:
       "Nhập loại tệp theo dạng loại/loại-con, ví dụ image/png, hoặc một đuôi tệp bắt đầu bằng dấu chấm, ví dụ .oa.",
@@ -1099,12 +1100,12 @@ export const vi = {
     gmailLabels: "Tiêu đề thư và tệp đính kèm phù hợp trong {{labels}}",
     /** Xero's entities, by the spec's ids. The ids are recorded; these are the words. */
     xeroContacts: "Liên hệ",
-    xeroInvoices: "Hóa đơn",
+    xeroInvoices: "Hoá đơn",
     xeroPayments: "Thanh toán",
     xeroCreditNotes: "Giấy báo có",
     xeroQuotes: "Báo giá",
     xeroPurchaseOrders: "Đơn đặt hàng",
-    xeroRepeatingInvoices: "Hóa đơn định kỳ",
+    xeroRepeatingInvoices: "Hoá đơn định kỳ",
     xeroLinkedTransactions: "Giao dịch liên kết",
     xeroItems: "Mặt hàng",
     xeroOverpayments: "Khoản trả thừa",
@@ -1197,25 +1198,25 @@ export const vi = {
     lead: "Mỗi lần đọc dữ liệu của {{tenantId}} và mỗi lần dựng mô hình, mới nhất ở trên.",
     notLoaded: "Không tải được nhật ký của {{tenantId}}.",
     caption_other: "{{count, number}} lần chạy",
-    colWhen: "Khi nào",
-    colWhat: "Việc gì",
+    colWhen: "Thời điểm",
+    colWhat: "Công việc",
     colOutcome: "Kết quả",
     colLanded: "Đã về",
     colCreated: "Mới",
-    colChanged: "Đổi",
-    colRefused: "Từ chối",
-    colDuration: "Mất",
+    colChanged: "Thay đổi",
+    colRefused: "Bị từ chối",
+    colDuration: "Thời lượng",
     kindModels: "Dựng mô hình",
-    kindBuild: "Dựng thử một mô hình",
-    kindLakeApi: "Ghi từ ngoài vào {{source}}",
-    kindExtract: "Đọc chữ tài liệu của {{source}}",
+    kindBuild: "Dựng một mô hình",
+    kindLakeApi: "Nạp dữ liệu từ bên ngoài vào {{source}}",
+    kindExtract: "Trích xuất nội dung tài liệu của {{source}}",
     kindSemantic: "Phân loại tài liệu của {{source}}",
-    kindSemanticInit: "Khởi tạo catalogue loại tài liệu từ một mẫu",
+    kindSemanticInit: "Khởi tạo danh mục loại tài liệu từ một mẫu",
     triggerSchedule: "theo lịch",
-    triggerManual: "chạy tay",
+    triggerManual: "chạy thủ công",
     triggerBuild: "từ trình soạn",
     triggerLakeApi: "qua API hồ dữ liệu",
-    testsFailed_other: "{{countText}} kiểm tra không đạt",
+    testsFailed_other: "{{countText}} kiểm thử không đạt",
     older: "Cũ hơn",
     loadingOlder: "Đang tải…",
     emptyTitle: "Chưa có lần chạy nào",
@@ -1228,11 +1229,11 @@ export const vi = {
     detailNotLoaded: "Không tải được chi tiết lần chạy này.",
     started: "Bắt đầu",
     ended: "Kết thúc",
-    trigger: "Khởi chạy",
+    trigger: "Kích hoạt bởi",
     runId: "Mã lần chạy",
     errorHead: "Lỗi",
     entitiesHead: "Theo từng loại dữ liệu",
-    colEntity: "Loại",
+    colEntity: "Loại dữ liệu",
     colUnchanged: "Không đổi",
     refusalsHead: "Bản ghi bị từ chối",
     colRecordId: "Mã bản ghi",
@@ -1260,7 +1261,7 @@ export const vi = {
     backlogNote_other:
       "Còn {{count, number}} tài liệu chờ đọc khi lần chạy này bắt đầu. Mỗi lần chạy đọc tối đa 500 tài liệu.",
     backlogEmpty: "Không còn tài liệu nào chờ đọc khi lần chạy này bắt đầu.",
-    release: "Bản dựng",
+    release: "Phiên bản",
 
     /**
      * Nhật ký lọc theo một tài khoản — thứ thẻ nguồn mở ra. Bộ lọc nằm trên địa chỉ, nên
@@ -1366,7 +1367,7 @@ export const vi = {
         "Danh mục nói tệp có, hồ dữ liệu nói không. Đây là sai lệch cần kiểm tra ngay.",
       extractorMissing: "Thiếu chương trình {{program}} trong worker",
       extractorMissingNote:
-        "Mọi tệp cần {{program}} sẽ còn bị từ chối cho tới khi image có lại chương trình này.",
+        "Mọi tệp cần {{program}} sẽ còn bị từ chối cho tới khi bản cài đặt của máy xử lý có lại chương trình này.",
       unknown: "Mã lý do chưa có diễn giải",
       unknownNote: "Giao diện chưa đặt lời cho mã này. Mã gốc ở ngay bên cạnh.",
     },
@@ -1375,7 +1376,7 @@ export const vi = {
     colStep: "Bước",
     colStatus: "Trạng thái",
     colFailures: "Dòng lỗi",
-    colTook: "Mất",
+    colTook: "Thời lượng",
     nothingRecorded: "Lần chạy này chưa ghi nhận gì thêm.",
 
     /**
@@ -1392,8 +1393,7 @@ export const vi = {
     },
 
     feedHead: "Diễn biến",
-    feedCount_one: "{{count}} mốc",
-    feedCount_other: "{{count}} mốc",
+    feedCount_other: "{{count, number}} mốc",
     feedEmpty: "Lần chạy này chưa ghi mốc nào.",
     colWhen2: "Lúc",
     colWhat2: "Việc",
@@ -1444,10 +1444,10 @@ export const vi = {
         "Đang chờ tới lượt: worker đang chạy đủ số việc cùng loại, việc này xếp hàng thứ {{waiting}}.",
       noModels: "Khách hàng này chưa có mô hình nào, nên không có gì để dựng.",
       dbtFinished:
-        "dbt dựng {{models}} mô hình, chạy {{tests}} kiểm tra, {{testsFailed}} không đạt.",
+        "dbt dựng {{models}} mô hình, chạy {{tests}} kiểm thử, {{testsFailed}} không đạt.",
       runClosedOk: "Kết thúc, thành công.",
       runClosedFailed: "Kết thúc, thất bại.",
-      runFailed: "Lần chạy hỏng ({{errorType}}). Lý do đầy đủ ở phần Lỗi phía trên.",
+      runFailed: "Lần chạy thất bại ({{errorType}}). Lý do đầy đủ ở phần Lỗi phía trên.",
       runStopped:
         "Dừng giữa chừng vì worker tắt, thường do triển khai bản mới. Những gì đã về được giữ lại: {{created}} mới, {{changed}} đổi, {{refused}} bị từ chối. Lần chạy sau tiếp tục từ đây.",
       truncated: "Đã ghi {{at}} dòng; từ đây chỉ ghi cảnh báo và lỗi.",
@@ -1459,8 +1459,8 @@ export const vi = {
       head: "Sơ đồ",
       models: "Mô hình",
       modelsNone: "Chưa có mô hình",
-      modelsSummary: "{{models}} mô hình · {{tests}} kiểm tra",
-      modelsSummaryFailed: "{{models}} mô hình · {{tests}} kiểm tra · {{testsFailed}} không đạt",
+      modelsSummary: "{{models}} mô hình · {{tests}} kiểm thử",
+      modelsSummaryFailed: "{{models}} mô hình · {{tests}} kiểm thử · {{testsFailed}} không đạt",
       outcome: "Kết quả",
       entityDone: "Xong",
       entityActive: "Đang xử lý",
@@ -1482,7 +1482,7 @@ export const vi = {
   models: {
     head: "Mô hình",
     title: "Mô hình dữ liệu",
-    lead: "Các mô hình dbt của {{tenantId}}, soạn ngay trong trình duyệt. Lưu chỉ cất giữ; Dựng mới chạy SQL.",
+    lead: "Các mô hình dbt của {{tenantId}}, soạn ngay trong trình duyệt. Lưu chỉ ghi lại SQL; bấm Dựng thì SQL mới được chạy.",
     notLoaded: "Không tải được các mô hình của {{tenantId}}.",
     emptyTitle: "Chưa có mô hình nào",
     emptyBody:
@@ -1492,12 +1492,12 @@ export const vi = {
     /** Always the rows shown against every model, searched or not, as the design counts them. */
     caption_other: "{{shown, number}} / {{count, number}} mô hình",
     colName: "Tên",
-    colUpdated: "Cập nhật SQL",
+    colUpdated: "SQL sửa lúc",
     colBuild: "Lần dựng gần nhất",
     colRun: "Lần dựng",
     colColumns: "Số cột",
     buildOk: "Dựng thành công",
-    buildFailed: "Dựng lỗi",
+    buildFailed: "Dựng thất bại",
     neverBuilt: "Chưa dựng",
     buildOther: "{{status}}",
     buildOtherState: "Kết quả khác",
@@ -1511,7 +1511,7 @@ export const vi = {
     sortLabel: "Sắp xếp",
     sortAttention: "Cần chú ý trước",
     sortName: "Tên A → Z",
-    clearFilters: "Xoá lọc",
+    clearFilters: "Xoá bộ lọc",
     captionFiltered_other: "{{shown, number}} / {{count, number}} mô hình · {{state}}",
     newHead: "Tạo mô hình mới",
     newLead:
@@ -1543,15 +1543,15 @@ export const vi = {
     notBuilt: "Chưa dựng được",
     buildOkHead: "Dựng thành công",
     buildFailedHead: "Dựng thất bại",
-    testsFailed_other: "{{count, number}} kiểm tra không đạt. Xem từng bước trong Nhật ký.",
+    testsFailed_other: "{{count, number}} kiểm thử không đạt. Xem từng bước trong Nhật ký.",
     openInJournal: "Xem trong Nhật ký",
     queryInReports: "Truy vấn trong Báo cáo",
     queryInReportsHint: "Mở một câu hỏi SQL mới trên bảng đã dựng gần nhất.",
     previewHead: "Những dòng đầu",
     previewEmpty: "Bảng đã dựng nhưng chưa có dòng nào.",
-    testsHead: "Kiểm tra",
+    testsHead: "Kiểm thử",
     testsLead:
-      "Với mỗi cột, chọn kiểm tra dbt sẽ chạy sau khi dựng. Dòng không đạt được giữ ở lược đồ dq, ngoài tầm với của báo cáo.",
+      "Với mỗi cột, chọn kiểm thử dbt sẽ chạy sau khi dựng. Dòng không đạt được giữ ở lược đồ dq, ngoài tầm với của báo cáo.",
     colColumn: "Cột",
     colNotNull: "Không rỗng",
     colUnique: "Duy nhất",
@@ -1559,7 +1559,7 @@ export const vi = {
     addColumnLabel: "Thêm cột",
     addColumnHint: "Tên cột như trong câu SELECT. Gợi ý lấy từ lần dựng gần nhất.",
     addColumn: "Thêm",
-    noTests: "Chưa có kiểm tra nào.",
+    noTests: "Chưa có kiểm thử nào.",
     dependenciesHead: "Phụ thuộc",
     dependenciesLead:
       "Những gì bản SQL đã lưu khai báo: ref() tới mô hình khác và source() trên hồ thô, kể cả qua macro. Không suy từ tên giống nhau hay từ dữ liệu.",
@@ -1640,7 +1640,7 @@ export const vi = {
     factUpdated: "Sửa lần cuối",
     openEditor: "Mở trình soạn",
     openRun: "Mở lần chạy",
-    openLake: "Mở trong Hồ thô",
+    openLake: "Mở trong Hồ dữ liệu thô",
     readsHead: "Đọc",
     readByHead: "Được đọc bởi",
     readByNothing: "Không mô hình nào khai báo đọc nó.",
@@ -1734,7 +1734,7 @@ export const vi = {
     incompleteNote:
       "“chưa đủ”: tổng này bỏ qua ít nhất một giá trị bị thiếu, nên không phải tổng thật.",
     boundMissing:
-      "Câu hỏi này chưa đặt giá trị tối đa, nên không vẽ tỉ lệ. Người soạn câu hỏi đặt nó ở mục Vẽ kết quả.",
+      "Câu hỏi này chưa đặt giá trị tối đa, nên không vẽ tỷ lệ. Người soạn câu hỏi đặt nó ở mục Vẽ kết quả.",
     otherTypes: "Các kiểu khác",
   },
 
@@ -1747,7 +1747,7 @@ export const vi = {
     emptyBody:
       "Một câu hỏi là một truy vấn trên các mô hình đã dựng — dựng bằng biểu mẫu hoặc viết SQL — và cách vẽ nó. Bảng điều khiển ghép nhiều câu hỏi với bộ lọc chung. Hãy đặt câu hỏi đầu tiên.",
     emptyBodyViewer:
-      "Một câu hỏi là một truy vấn trên các mô hình đã dựng và cách vẽ nó. Thành viên có vai trò member trở lên có thể đặt câu hỏi đầu tiên.",
+      "Một câu hỏi là một truy vấn trên các mô hình đã dựng và cách vẽ nó. Người có vai trò member hoặc admin có thể đặt câu hỏi đầu tiên.",
     searchLabel: "Tìm theo tên",
     searchPlaceholder: "Tên bảng điều khiển hoặc câu hỏi",
     clearSearch: "Xoá tìm kiếm",
@@ -1771,8 +1771,8 @@ export const vi = {
     newDashboard: "Bảng điều khiển mới",
     colName: "Tên",
     colKind: "Kiểu",
-    colChart: "Vẽ",
-    colTiles: "Ô",
+    colChart: "Biểu đồ",
+    colTiles: "Số ô",
     colSaved: "Định nghĩa lưu lúc",
     kindVisual: "Biểu mẫu",
     kindSql: "SQL",
@@ -1859,7 +1859,7 @@ export const vi = {
     copyBlocked:
       "Trình duyệt không cho chép. Hãy chép địa chỉ trên thanh địa chỉ; bộ lọc đã nằm trong đó.",
     editQuestion: "Sửa câu hỏi",
-    done: "Xong sửa",
+    done: "Sửa xong",
     discard: "Bỏ thay đổi",
     workbenchHead: "Soạn câu hỏi",
     panesLabel: "Xem câu hỏi",
@@ -1880,12 +1880,12 @@ export const vi = {
     viewerNote: "Bạn có thể xem bảng điều khiển này. Sửa cần vai trò member.",
     viewerNew: "Tạo bảng điều khiển mới cần vai trò member.",
     edit: "Sửa bố cục",
-    done: "Xong sửa",
+    done: "Sửa xong",
     emptyTitle: "Bảng điều khiển trống",
     emptyBody:
       "Thêm một câu hỏi đã lưu; mỗi câu hỏi là một ô trên lưới 12 cột. Bộ lọc ở đầu trang gắn vào tham số của từng câu hỏi.",
     emptyBodyViewer:
-      "Chưa có ô nào trên bảng này. Thành viên có vai trò member trở lên có thể thêm câu hỏi.",
+      "Chưa có ô nào trên bảng này. Người có vai trò member hoặc admin có thể thêm câu hỏi.",
     filtersHead: "Bộ lọc",
     apply: "Áp dụng",
     clear: "Xoá bộ lọc",
@@ -1926,7 +1926,7 @@ export const vi = {
     deleteHead: "Xoá bảng điều khiển",
     deleteLead: "Xoá {{name}}. Các câu hỏi trên đó vẫn còn trong báo cáo.",
     deleteConfirm: "Xoá bảng điều khiển",
-    print: "Bản in / PDF",
+    print: "In / Xuất PDF",
     viewData: "Xem số liệu →",
     orderHead: "Thứ tự đọc",
     orderLead:
@@ -1953,7 +1953,7 @@ export const vi = {
     hubspotReads:
       "Công ty, liên hệ, giao dịch, báo giá, dòng báo giá và sản phẩm (kể cả sản phẩm đã lưu trữ) từ CRM của bạn, với các trường chuẩn cùng những trường bạn chọn thêm; người phụ trách (owner), kể cả người đã ngừng hoạt động; các pipeline giao dịch cùng các giai đoạn của chúng; và liên kết giữa chúng: công ty, liên hệ, báo giá và dòng báo giá của mỗi giao dịch, dòng báo giá, liên hệ và công ty của mỗi báo giá, và công ty của mỗi liên hệ. Ghi chú, cuộc gọi và công việc (cả việc đang mở lẫn đã xong) ghi trên công ty, liên hệ và giao dịch, cùng liên kết tới từng bản ghi đó; HubSpot cho đọc cả ba bằng quyền crm.objects.contacts.read. Nội dung người dùng viết trong ghi chú, cuộc gọi và công việc được lưu thành tài liệu riêng, chỉ mô hình của bạn đọc được. Bản ghi âm và bản chép lời cuộc gọi không bao giờ được đọc. HubSpot không lưu thời điểm sửa cho liên kết, nên thời điểm sửa phía nguồn của chúng luôn để trống.",
     xeroReads:
-      "Liên hệ, hóa đơn, giấy báo có, báo giá, đơn đặt hàng, mặt hàng và các khoản thanh toán từ một tổ chức bạn chọn.",
+      "Liên hệ, hoá đơn, giấy báo có, báo giá, đơn đặt hàng, mặt hàng và các khoản thanh toán từ một tổ chức bạn chọn.",
     gmailReads:
       "Tiêu đề thư, nội dung thư và các loại tệp đính kèm bạn cho phép, từ hòm thư bạn kết nối.",
     driveReads:

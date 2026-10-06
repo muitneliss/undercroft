@@ -120,7 +120,7 @@ describe("scopeSummary for Xero", () => {
       config: { entities: ["invoices", "credit_notes"] },
     });
 
-    expect(scopeSummary(t, xero.kind, xero.config)).toBe("Hóa đơn, Giấy báo có");
+    expect(scopeSummary(t, xero.kind, xero.config)).toBe("Hoá đơn, Giấy báo có");
     expect(scopeSummary(translatorFor("en"), xero.kind, xero.config)).toBe(
       "Invoices, Credit notes",
     );
@@ -132,8 +132,8 @@ describe("scopeSummary for Xero", () => {
     // Every entity the picker offers, named -- not a sentence that listed four and went on
     // saying four after the spec declared thirteen.
     expect(scopeSummary(t, xero.kind, xero.config)).toBe(
-      "Mọi loại dữ liệu: Liên hệ, Hóa đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, " +
-        "Hóa đơn định kỳ, Giao dịch liên kết, Mặt hàng, Khoản trả thừa, Khoản trả trước, " +
+      "Mọi loại dữ liệu: Liên hệ, Hoá đơn, Thanh toán, Giấy báo có, Báo giá, Đơn đặt hàng, " +
+        "Hoá đơn định kỳ, Giao dịch liên kết, Mặt hàng, Khoản trả thừa, Khoản trả trước, " +
         "Thanh toán theo lô, Nhóm liên hệ, Hệ thống tài khoản, Danh mục theo dõi, Thuế suất, " +
         "Tiền tệ, Giao dịch ngân hàng, Chuyển tiền giữa tài khoản, Bút toán thủ công",
     );

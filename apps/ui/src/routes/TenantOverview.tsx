@@ -199,10 +199,13 @@ function SourcesBand({
       <div className="body stack">
         <h1>{t("sources.title")}</h1>
         <p className="prose prose--lead">{t("sources.lead")}</p>
-        <p className="prose">
-          {list.length === 0 ? t("sources.none") : t("sources.count", { count: list.length })}
-        </p>
-        {list.length === 0 ? null : <SourceTally tenantId={tenantId} list={list} filter={filter} />}
+        {/* The tally's first figure is the count, so a sentence saying it again above it is
+            printed only when there is no tally: an empty book. */}
+        {list.length === 0 ? (
+          <p className="prose">{t("sources.none")}</p>
+        ) : (
+          <SourceTally tenantId={tenantId} list={list} filter={filter} />
+        )}
         <Refusals actions={actions} failedReturn={failedReturn} />
       </div>
 

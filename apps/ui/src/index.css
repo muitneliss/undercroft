@@ -1728,11 +1728,24 @@
     padding: var(--s-4) 0;
   }
 
+  /* Who and what on the first line, with the row's plates at its end; when, on a line of its own
+     across the whole row beneath. The timing used to be a third column squeezed between the account and four
+     plates, which set "Next run" one word to a line and made a healthy grant nine lines tall --
+     the footprint of a lapsed one, the very thing a schedule exists to prevent. As a line of
+     facts it reads like a connection list in any data platform: one row, one glance. */
   .grant__head {
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(0, 0.95fr) auto;
-    gap: var(--s-4);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr) auto;
+    grid-template-areas:
+      "identity account actions"
+      "when when when";
+    column-gap: var(--s-5);
+    row-gap: var(--s-3);
     align-items: baseline;
+  }
+
+  .grant__identity {
+    grid-area: identity;
   }
 
   .grant__name {
@@ -1745,31 +1758,68 @@
   }
 
   .grant__account {
+    grid-area: account;
     min-width: 0;
   }
 
+  /* The facts wrap rather than squeeze: a narrow leaf takes them two to a line, never one word
+     to a line. */
   .grant__when {
-    text-align: right;
+    grid-area: when;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--s-3) var(--s-6);
+  }
+
+  /* Nothing to say about timing (a grant not yet made, or awaiting its scope) is no line at
+     all, not an empty one holding its gap open. */
+  .grant__when:empty {
+    display: none;
+  }
+
+  /* One fact: its caption over its value. */
+  .grant__fact {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+    min-width: 0;
+  }
+
+  /* A sentence about the facts, and a custom cron's field, take the strip's whole width. */
+  .grant__fact--wide,
+  .grant__fact:has(.grant__cron) {
+    flex-basis: 100%;
+  }
+
+  .grant__fact--wide:empty {
+    display: none;
+  }
+
+  /* A select under its caption, not at the far side of the fact. */
+  .grant__fact > .input--select {
+    align-self: flex-start;
   }
 
   /* A run's line: the mark, then how long ago, then how much. Inline, so the three
-     read as one fact set against the column's edge rather than three stacked lines. */
+     read as one fact rather than three stacked lines. */
   .grant__run {
     display: inline-flex;
     align-items: baseline;
-    justify-content: flex-end;
     gap: var(--s-2);
     flex-wrap: wrap;
   }
 
-  /* A custom cadence's expression and its Save, set against the column's edge like the
-     select above them. Horizontal only: which line the two share is `.row--field`'s. */
-  .grant__cron {
-    justify-content: flex-end;
+  /* "20 minutes ago · 1 record": on one line the two need the journal's interpunct between
+     them, or they read as one phrase. Punctuation, not words, so it is the sheet's to draw. */
+  .grant__run > span:not(.mark) + span::before {
+    content: "·";
+    margin-inline-end: var(--s-2);
+    color: var(--ink-3);
   }
 
-  /* A cron's next fires: dates set against the column's edge like every other datum in
-     it, not a bulleted list -- their order is the only structure they have. */
+  /* A cron's next fires: dates in a column, not a bulleted list -- their order is the only
+     structure they have. */
   .grant__fires {
     list-style: none;
     margin: 0;
@@ -1792,6 +1842,7 @@
   }
 
   .grant__actions {
+    grid-area: actions;
     display: flex;
     gap: var(--s-2);
     justify-content: flex-end;
@@ -5035,20 +5086,17 @@
     }
     .grant__head {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      row-gap: var(--s-2);
-    }
-    .grant__when {
-      text-align: left;
-    }
-    .grant__run {
-      justify-content: flex-start;
+      grid-template-areas:
+        "identity account"
+        "when when"
+        "actions actions";
+      row-gap: var(--s-3);
     }
     .input--select {
       align-self: flex-start;
     }
     .grant__actions {
       justify-content: flex-start;
-      grid-column: 1 / -1;
     }
     /* The details go under the board, which keeps the leaf's whole width to be drawn on. */
     .lineage-bench {
@@ -5269,6 +5317,7 @@
 
     .grant__head {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "identity" "account" "when" "actions";
     }
   }
 

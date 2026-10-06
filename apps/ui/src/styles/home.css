@@ -119,7 +119,7 @@
     padding-block: var(--s-4);
     border-bottom: var(--hair) solid var(--rule);
     /* A row head, not a column head: a long name wraps, as the table's caps heads never do,
-       so on a phone the name gives way rather than pushing "Open book" out of the box. */
+       so on a phone the name gives way rather than pushing "Open" out of the box. */
     white-space: normal;
     overflow-wrap: anywhere;
     max-width: 28rem;
@@ -133,7 +133,7 @@
     text-decoration: underline;
   }
 
-  /* "Open book →" is one plate: its arrow never wraps onto a line of its own. */
+  /* "Open →" is one plate: its arrow never wraps onto a line of its own. */
   .customer-index__table .plate {
     white-space: nowrap;
   }

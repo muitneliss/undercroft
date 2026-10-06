@@ -314,3 +314,4 @@
 ## [2026-10-06] ingest | Architecture
 ## [2026-10-06] ingest | Runbook: Agent skills
 ## [2026-10-06] ingest | ADR 0112 A Model Carries No Business Context
+## [2026-10-06] ingest | What an ingest run counts

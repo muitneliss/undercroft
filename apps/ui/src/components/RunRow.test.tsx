@@ -59,7 +59,7 @@ describe("the figures", () => {
 describe("failed tests", () => {
   it("English pluralises, Vietnamese does not", () => {
     render(row({ kind: "transform", source: null, entities: [], testsFailed: 2 }));
-    expect(screen.getByText("2 kiểm tra không đạt")).toBeDefined();
+    expect(screen.getByText("2 kiểm thử không đạt")).toBeDefined();
     cleanup();
 
     useUiStore.setState({ locale: "en" });
