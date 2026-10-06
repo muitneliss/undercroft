@@ -121,11 +121,31 @@ describe("an export", () => {
     expect(plane.worker.exports.map((e) => e.sql)).toEqual([`SELECT * FROM "${MODEL}"`]);
   });
 
+  it("is in the customer's log as asked for and as taken, by the door that took it", async () => {
+    const token = await operatorToken("read");
+    await download(await exportModel(token), { authorization: `Bearer ${token}` });
+
+    const input = encodeURIComponent(JSON.stringify({ tenantId: OWN }));
+    const response = await Bun.fetch(`${plane.origin}/trpc/audit.tenant?input=${input}`, {
+      headers: { cookie },
+    });
+    const body = (await response.json()) as {
+      result: { data: { entries: { action: string; channel: string | null }[] } };
+    };
+    const exports = body.result.data.entries.filter((entry) =>
+      entry.action.startsWith("bi.exports."),
+    );
+    expect(exports.map((entry) => [entry.action, entry.channel])).toEqual([
+      ["bi.exports.download", "mcp"],
+      ["bi.exports.create", "mcp"],
+    ]);
+  });
+
   it("answers no one but the person who asked for it", async () => {
     const path = await exportModel(await operatorToken("read"));
     const colleague = await mint(plane.db, {
       userId: colleagueId,
-      actor: COLLEAGUE,
+      actor: { userId: null, email: COLLEAGUE, channel: "web", credential: null },
       label: "agent",
       grant: "read",
       expiresInDays: 30,

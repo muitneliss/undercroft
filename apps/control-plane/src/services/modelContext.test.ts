@@ -23,7 +23,10 @@ import { build, get, list, remove, save } from "./models.ts";
 
 const TENANT = "CASE-0042";
 const OTHER = "CASE-0043";
-const ACTOR = { actor: "ada@example.test", actorId: "u-ada" };
+const ACTOR = {
+  actor: { userId: null, email: "ada@example.test", channel: "web", credential: null },
+  actorId: "u-ada",
+} as const;
 const RECORDS = "select source_record_id as id from {{ source('undercroft', 'records') }}";
 const PURPOSE = "One row per open deal, for the pipeline report.";
 

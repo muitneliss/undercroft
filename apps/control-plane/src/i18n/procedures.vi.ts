@@ -60,6 +60,10 @@ export const procedureSentences: SentenceTable = {
   "people.setRole": "Đổi vai trò của một thành viên; không áp dụng cho admin cuối cùng. Quản trị.",
   "people.removeMember":
     "Gỡ quyền truy cập của một thành viên; không áp dụng cho admin cuối cùng. Quản trị.",
+  "audit.mine":
+    "Các thao tác của chính bạn, mới nhất trước: đã làm gì, qua đâu, và kết quả ra sao.",
+  "audit.tenant": "Mọi thao tác trong khách hàng, của bất kỳ ai, mới nhất trước. Quản trị.",
+  "audit.all": "Mọi thao tác trên nền tảng, mới nhất trước. Chỉ quản trị nền tảng.",
   "lake.summary": "Những gì đã nạp, theo từng luồng: số lượng và độ mới.",
   "lake.records":
     "Các bản ghi thô của một thực thể, hoặc những bản ghi một lần chạy đã ghi. Quản trị.",

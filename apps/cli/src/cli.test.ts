@@ -310,6 +310,23 @@ describe("a write needs a person's permission, per environment", () => {
     ]);
   });
 
+  it("what a person does through the CLI is in their own log as the CLI's (ADR 0112)", async () => {
+    writeProfile("local", plane.origin, true);
+    await signIn();
+    await undercroft(["runs", "trigger", "--tenant-id", OWN, "--source", "hubspot", "--agent"]);
+
+    const read = await undercroft(["audit", "mine", "--agent"]);
+
+    const { entries } = envelope(read).data as {
+      entries: { action: string; channel: string | null }[];
+    };
+    expect(entries.map((entry) => [entry.action, entry.channel])).toEqual([
+      ["runs.trigger", "cli"],
+      ["auth.signIn", "cli"],
+      ["auth.invitationRedeemed", null],
+    ]);
+  });
+
   it("agent mode cannot grant itself writes, and the config is left as it was", async () => {
     writeProfile("local", plane.origin, false);
     const before = readFileSync(join(home, "config.json"), "utf8");

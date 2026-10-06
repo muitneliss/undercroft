@@ -46,7 +46,7 @@ import {
   SOURCES_YML,
 } from "@undercroft/db/services";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { type ContextView, readContexts } from "./modelContext.ts";
 import type { WorkerClient, WorkerOutcome } from "./workerClient.ts";
 
@@ -128,7 +128,7 @@ export async function save(
     sql: string;
     tests: ModelTests;
     create: boolean;
-    actor: string;
+    actor: Actor;
     actorId: string;
   },
 ): Promise<SaveOutcome> {
@@ -157,7 +157,7 @@ export async function save(
 export async function build(
   exec: SqlExecutor,
   worker: WorkerClient,
-  input: { tenantId: string; name: string; actor: string; actorId: string },
+  input: { tenantId: string; name: string; actor: Actor; actorId: string },
 ): Promise<WorkerOutcome<BuildModelResponse>> {
   const outcome = await worker.buildModel({
     tenantId: input.tenantId,
@@ -267,7 +267,7 @@ export type RemoveOutcome =
 export async function remove(
   exec: SqlExecutor,
   worker: WorkerClient,
-  input: { tenantId: string; name: string; actor: string },
+  input: { tenantId: string; name: string; actor: Actor },
 ): Promise<RemoveOutcome> {
   if ((await getModel(exec, input.tenantId, input.name)) === null) {
     return { ok: false, reason: "not-found" };

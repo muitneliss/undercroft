@@ -38,12 +38,13 @@ import { currentTraceId } from "@undercroft/telemetry";
 import type { Hono } from "hono";
 import { ZodError } from "zod";
 import { messages } from "../i18n/index.ts";
+import { recordAction } from "../services/audit.ts";
 import { EXPORT_MINUTES, type ExportRow } from "../services/biExports.ts";
 import type { BearerRefusal } from "./context.ts";
 import { EXPORT_ROUTE } from "./exportLink.ts";
 import { appRouter } from "./router.ts";
 import { BY_TRPC_CODE, type SurfaceErrorCode } from "./surface.ts";
-import type { Context } from "./trpc.ts";
+import { actorOf, type Context } from "./trpc.ts";
 
 export interface ExportRouteDeps {
   /** This request's caller, through the door its headers choose (see the module docstring). */
@@ -196,6 +197,16 @@ export function registerExportRoute(app: Hono, deps: ExportRouteDeps): void {
       via: ctx.via,
       credential: ctx.credentialId,
     });
+    // And in the audit log, where a person reads it (ADR 0112). The router has admitted the
+    // caller by now, so `user` is set; the guard is for the type, not a case that happens.
+    if (ctx.user !== null) {
+      await recordAction(ctx.exec, {
+        tenantId: asked.tenantId,
+        actor: actorOf({ ...ctx, user: ctx.user }),
+        action: "bi.exports.download",
+        detail: { id: row.id },
+      });
+    }
     return file(body, row.fileName);
   });
 }

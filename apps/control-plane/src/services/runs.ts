@@ -32,7 +32,7 @@ import {
   SOURCE_OF_TRANSFORM,
   stepsFor,
 } from "@undercroft/db/repos";
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { type ConnectionCardView, configOf } from "./connections.ts";
 import type { TriggerOutcome, WorkerClient } from "./workerClient.ts";
 
@@ -230,7 +230,7 @@ export async function list(
 export async function trigger(
   exec: SqlExecutor,
   worker: WorkerClient,
-  input: { tenantId: string; source: string; actor: string; actorId: string },
+  input: { tenantId: string; source: string; actor: Actor; actorId: string },
 ): Promise<TriggerOutcome> {
   const outcome = await worker.triggerIngest({
     source: input.source,

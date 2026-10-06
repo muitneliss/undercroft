@@ -35,7 +35,7 @@ import {
   readMacroDefinition,
 } from "@undercroft/db/services";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 
 export interface MacroItem {
   readonly name: string;
@@ -117,7 +117,7 @@ export async function save(
     description: string;
     sql: string;
     create: boolean;
-    actor: string;
+    actor: Actor;
     actorId: string;
   },
 ): Promise<SaveOutcome> {
@@ -160,7 +160,7 @@ export type RemoveOutcome =
 /** Delete the macro, unless a model or another macro of the tenant still calls it. */
 export async function remove(
   exec: SqlExecutor,
-  input: { tenantId: string; name: string; actor: string },
+  input: { tenantId: string; name: string; actor: Actor },
 ): Promise<RemoveOutcome> {
   const [models, macros] = await Promise.all([
     listModels(exec, input.tenantId),

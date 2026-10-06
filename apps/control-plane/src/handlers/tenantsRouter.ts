@@ -13,6 +13,7 @@ import { messages } from "../i18n/index.ts";
 import * as tenants from "../services/tenants.ts";
 import type { Tenant, TransitionResult } from "../services/tenants.ts";
 import {
+  actorOf,
   authedProcedure,
   refusal,
   requireRole,
@@ -89,7 +90,7 @@ export const tenantsRouter = router({
         // `bun run invite --create-tenant` already does. An empty display name would
         // render as a blank row in the list.
         displayName: input.displayName || input.tenantId,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
 
       if (!result.ok) {
@@ -128,7 +129,7 @@ export const tenantsRouter = router({
       const renamed = await tenants.rename(ctx.exec, {
         tenantId: ctx.tenantId,
         displayName: input.displayName || ctx.tenantId,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
 
       if (renamed === null) {
@@ -151,7 +152,7 @@ export const tenantsRouter = router({
   deactivate: requireRole("admin").mutation(async ({ ctx }) => {
     const result = await tenants.deactivate(ctx.exec, {
       tenantId: ctx.tenantId,
-      actor: ctx.user.email,
+      actor: actorOf(ctx),
     });
     return transitioned(ctx, result);
   }),
@@ -167,7 +168,7 @@ export const tenantsRouter = router({
   reactivate: requireRole("admin", tenantStatusProcedure).mutation(async ({ ctx }) => {
     const result = await tenants.reactivate(ctx.exec, {
       tenantId: ctx.tenantId,
-      actor: ctx.user.email,
+      actor: actorOf(ctx),
     });
     return transitioned(ctx, result);
   }),

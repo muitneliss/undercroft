@@ -29,7 +29,7 @@ import {
   revokeToken,
   touchTokenUse,
 } from "../repos/accessToken.ts";
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 
 export type { Grant, PersonalToken } from "../repos/accessToken.ts";
 
@@ -64,7 +64,7 @@ export async function mint(
   input: {
     userId: string;
     /** The owner's address, for the audit row. */
-    actor: string;
+    actor: Actor;
     label: string;
     grant: Grant;
     expiresInDays: number;
@@ -100,7 +100,7 @@ export async function mint(
 /** Revoke one of this person's live tokens. `false` when there was none to revoke. */
 export async function revoke(
   exec: SqlExecutor,
-  input: { userId: string; id: string; actor: string },
+  input: { userId: string; id: string; actor: Actor },
 ): Promise<boolean> {
   const revoked = await revokeToken(exec, input.userId, input.id);
   if (!revoked) {

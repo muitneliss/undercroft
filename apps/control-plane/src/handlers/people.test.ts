@@ -72,6 +72,7 @@ function caller(user: SessionUser, locale: Locale = DEFAULT_LOCALE) {
     specReads: new Map(),
     googlePicker: null,
     signInMethods: [],
+    channel: "web",
     publicUrl: null,
   };
   return appRouter.createCaller(ctx);
@@ -340,7 +341,7 @@ describe("an admin can change or end an existing member's access", () => {
       },
       {
         actor: "boss@example.test",
-        action: "people.remove",
+        action: "people.removeMember",
         detail: { email: "gone@example.test", previousRole: "viewer" },
       },
     ]);

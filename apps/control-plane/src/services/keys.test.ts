@@ -10,6 +10,12 @@ import { findByDigest } from "@undercroft/db/repos";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
 import { list, mint, revoke } from "./keys.ts";
+import type { Actor } from "../repos/auditLog.ts";
+
+/** An address acting through the browser, as a router would name it from a session. */
+function asActor(email: string): Actor {
+  return { userId: null, email, channel: "web", credential: null };
+}
 
 const TENANT = "CASE-0042";
 const NOW = new Date("2026-09-19T10:00:00.000Z");
@@ -35,7 +41,7 @@ describe("minting", () => {
       label: "Kestra feed",
       allowedSources: ["hubspot"],
       expiresInDays: 30,
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       now: NOW,
     });
 
@@ -61,7 +67,7 @@ describe("minting", () => {
       tenantId: TENANT,
       label: "Kestra feed",
       allowedSources: [],
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     const keys = await list(db, TENANT);
@@ -91,12 +97,12 @@ describe("revoking", () => {
       tenantId: TENANT,
       label: "Old feed",
       allowedSources: [],
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
-    expect(await revoke(db, { tenantId: TENANT, id: minted.id, actor: "ada@example.test" })).toBe(
-      true,
-    );
+    expect(
+      await revoke(db, { tenantId: TENANT, id: minted.id, actor: asActor("ada@example.test") }),
+    ).toBe(true);
     expect((await list(db, TENANT))[0]?.revokedAt).not.toBeNull();
     // The worker's rule (`apps/worker/src/services/auth.ts`) looks the key up by the token's
     // digest and refuses a row whose `revoked_at` is set. So the row it finds is the revoked
@@ -105,9 +111,9 @@ describe("revoking", () => {
     expect(seen?.id).toBe(minted.id);
     expect(seen?.revoked_at).not.toBeNull();
     // Revoking twice, or from another tenant, revokes nothing and says so.
-    expect(await revoke(db, { tenantId: TENANT, id: minted.id, actor: "ada@example.test" })).toBe(
-      false,
-    );
+    expect(
+      await revoke(db, { tenantId: TENANT, id: minted.id, actor: asActor("ada@example.test") }),
+    ).toBe(false);
   });
 
   it("another tenant cannot revoke it", async () => {
@@ -115,11 +121,15 @@ describe("revoking", () => {
       tenantId: TENANT,
       label: "Feed",
       allowedSources: [],
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(
-      await revoke(db, { tenantId: "CASE-0043", id: minted.id, actor: "eve@example.test" }),
+      await revoke(db, {
+        tenantId: "CASE-0043",
+        id: minted.id,
+        actor: asActor("eve@example.test"),
+      }),
     ).toBe(false);
     expect((await list(db, TENANT))[0]?.revokedAt).toBeNull();
   });

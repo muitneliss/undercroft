@@ -71,6 +71,7 @@ import { isAdmissible, recordRefusal, resolveInvitedUser } from "../services/inv
 import { setLocale } from "../services/preferences.ts";
 import { NO_SUPERADMINS, type Superadmins } from "../services/superadmin.ts";
 import { localeOf } from "./authLocale.ts";
+import { signInHooks } from "./authSignIn.ts";
 import { coreModels, USER_TABLE } from "./authSchema.ts";
 import { devSignIn } from "./devSignIn.ts";
 import { createMcpAuth, type McpAuth, mcpPlugins, oauthIssuer } from "./mcpAuth.ts";
@@ -336,7 +337,10 @@ function otpSignIn(
   });
 }
 
-/** The hooks that admit a platform superadmin on a fresh install. ADR 0013. */
+/**
+ * The hooks that admit a platform superadmin on a fresh install (ADR 0013), and record every
+ * sign-in (ADR 0112).
+ */
 function bootstrapHooks(
   config: AuthConfig,
   superadmins: Superadmins,
@@ -375,6 +379,7 @@ function bootstrapHooks(
         },
       },
     },
+    session: signInHooks(config.exec),
   };
 }
 

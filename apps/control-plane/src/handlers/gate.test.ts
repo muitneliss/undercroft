@@ -330,6 +330,26 @@ describe("signing in with a code lands on the platform's own user identity", () 
     );
     expect(rows).toEqual([{ tenant_id: "CASE-0042", role: "admin" }]);
   });
+
+  it("the sign-in and the invitation it redeemed are in the person's own log", async () => {
+    await seedInvitation("CASE-0042", "operator@example.test", "admin");
+    await requestCode("operator@example.test");
+    const cookie = await signInWithCode("operator@example.test");
+
+    const response = await Bun.fetch(
+      `${origin}/trpc/audit.mine?input=${encodeURIComponent("{}")}`,
+      {
+        headers: { cookie },
+      },
+    );
+    const body = (await response.json()) as {
+      result: { data: { entries: { action: string; tenantId: string | null }[] } };
+    };
+    expect(body.result.data.entries.map((entry) => [entry.action, entry.tenantId])).toEqual([
+      ["auth.signIn", null],
+      ["auth.invitationRedeemed", "CASE-0042"],
+    ]);
+  });
 });
 
 describe("a session can be withdrawn before it expires", () => {

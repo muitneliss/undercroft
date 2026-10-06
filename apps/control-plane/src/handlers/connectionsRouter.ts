@@ -13,7 +13,7 @@ import { messages } from "../i18n/index.ts";
 import * as connections from "../services/connections.ts";
 import { providerName } from "../services/oauthProviders.ts";
 import type { WorkerFailure } from "../services/workerRefusals.ts";
-import { refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, refusal, requireRole, router, tenantProcedure } from "./trpc.ts";
 import { tokenRefusalKey } from "./answers.ts";
 import { scheduleRefusal } from "./scheduleRefusal.ts";
 
@@ -180,7 +180,7 @@ export const connectionsRouter = router({
         tenantId: ctx.tenantId,
         source: input.source,
         selectionJson: JSON.stringify(input.selection ?? {}),
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         actorId: ctx.user.userId,
       });
       if (!result.ok) {
@@ -207,7 +207,7 @@ export const connectionsRouter = router({
         tenantId: ctx.tenantId,
         source: input.source,
         token: input.token,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
       if (result.ok) {
         return { ok: true };
@@ -247,7 +247,7 @@ export const connectionsRouter = router({
         source: input.source,
         cadence: input.cadence,
         cron: input.cron,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
       if (!result.ok) {
         throw scheduleRefusal(ctx.locale, { source: input.source, cron: input.cron ?? "" }, result);
@@ -274,7 +274,7 @@ export const connectionsRouter = router({
         source: input.source,
         cadence: input.cadence,
         cron: input.cron,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
       if (!result.ok) {
         throw scheduleRefusal(ctx.locale, { source: input.source, cron: input.cron ?? "" }, result);
@@ -295,7 +295,7 @@ export const connectionsRouter = router({
       connections.disconnect(ctx.exec, ctx.worker, {
         tenantId: ctx.tenantId,
         source: input.source,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       }),
     ),
 });

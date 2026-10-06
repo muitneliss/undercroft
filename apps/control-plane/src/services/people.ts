@@ -21,7 +21,7 @@ import { type EmailMessage, type Locale, postEmailLeaf } from "@undercroft/core"
 import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { messages } from "../i18n/index.ts";
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import * as invitations from "../repos/invitation.ts";
 import {
   changeRole,
@@ -127,7 +127,7 @@ export async function invite(
     tenantId: string;
     email: string;
     role: string;
-    actor: string;
+    actor: Actor;
     notify: (email: string, tenantId: string) => Promise<boolean>;
   },
 ): Promise<InviteResult> {
@@ -178,7 +178,7 @@ export type MembershipResult =
 async function settle(
   exec: SqlExecutor,
   change: MembershipChange,
-  entry: { tenantId: string; actor: string; action: string; detail: Record<string, string> },
+  entry: { tenantId: string; actor: Actor; action: string; detail: Record<string, string> },
 ): Promise<MembershipResult> {
   if (change.held === null) {
     return { ok: false, reason: "not-member" };
@@ -205,7 +205,7 @@ async function settle(
  */
 export async function setRole(
   exec: SqlExecutor,
-  input: { tenantId: string; email: string; role: Role; actor: string },
+  input: { tenantId: string; email: string; role: Role; actor: Actor },
 ): Promise<MembershipResult> {
   const change = await changeRole(exec, input.tenantId, input.email, input.role);
   return await settle(exec, change, {
@@ -228,13 +228,13 @@ export async function setRole(
  */
 export async function removeMember(
   exec: SqlExecutor,
-  input: { tenantId: string; email: string; actor: string },
+  input: { tenantId: string; email: string; actor: Actor },
 ): Promise<MembershipResult> {
   const change = await deleteMembership(exec, input.tenantId, input.email);
   return await settle(exec, change, {
     tenantId: input.tenantId,
     actor: input.actor,
-    action: "people.remove",
+    action: "people.removeMember",
     detail: { email: input.email },
   });
 }

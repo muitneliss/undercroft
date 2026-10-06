@@ -23,7 +23,7 @@ import type { SurfaceErrorCode } from "../manifest.ts";
 import { failure, type Refusal, success } from "../services/output.ts";
 import { type Context, connect, type ParsedFlags, stringFlag } from "./context.ts";
 import { type Noted, noted } from "./noted.ts";
-import { unreachable } from "./remote.ts";
+import { CLIENT_HEADERS, unreachable } from "./remote.ts";
 
 /**
  * How long a download may take, end to end. Longer than the worker's own ten-minute deadline,
@@ -112,6 +112,7 @@ export async function downloadExport(
   try {
     response = await connection.fetch(url, {
       headers: {
+        ...CLIENT_HEADERS,
         accept: "application/json",
         "accept-language": connection.locale,
         ...(connection.cookie === null ? {} : { cookie: connection.cookie }),

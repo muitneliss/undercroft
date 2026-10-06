@@ -73,7 +73,9 @@ export interface BindOptions {
  * context would be a set of verbs bound to whoever asked first.
  */
 export function bindTools(ctx: Context, options: BindOptions): ToolSet {
-  const caller = appRouter.createCaller(ctx);
+  // The browser's own context, named for what is acting: the audit log says an action the
+  // assistant took was the assistant's, on this person's authority (ADR 0112).
+  const caller = appRouter.createCaller({ ...ctx, channel: "assistant" });
   const tools: ToolSet = {};
 
   for (const [name, spec] of Object.entries(TOOLS)) {

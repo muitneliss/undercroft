@@ -27,6 +27,8 @@ export const en = {
     macros: "The customer's own dbt macros, which every model can call.",
     documentKinds: "The customer's catalogue of document kinds.",
     people: "Who has access, and invitations.",
+    audit:
+      "Who did what: your own actions, a customer's for its admins, everything for a superadmin.",
     runs: "Runs.",
     session: "The current session.",
     tenants: "Customers.",

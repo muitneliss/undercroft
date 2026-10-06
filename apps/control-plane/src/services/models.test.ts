@@ -17,7 +17,10 @@ import { get, list, remove, save } from "./models.ts";
 
 const TENANT = "CASE-0042";
 const OTHER = "CASE-0043";
-const ACTOR = { actor: "ada@example.test", actorId: "u-ada" };
+const ACTOR = {
+  actor: { userId: null, email: "ada@example.test", channel: "web", credential: null },
+  actorId: "u-ada",
+} as const;
 const SQL = "select source_record_id as deal_id from {{ source('undercroft', 'records') }}";
 
 let db: TestDatabase;

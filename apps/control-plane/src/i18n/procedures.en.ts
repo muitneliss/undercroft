@@ -47,6 +47,10 @@ export const procedureSentences: SentenceTable = {
   "people.revokeInvitation": "Withdraw an open invitation. Admins.",
   "people.setRole": "Change the role a member holds; never the last admin's. Admins.",
   "people.removeMember": "End a member's access; never the last admin's. Admins.",
+  "audit.mine":
+    "Your own actions, newest first: what you did, through which door, and how it ended.",
+  "audit.tenant": "Every action taken in the customer, by anyone, newest first. Admins.",
+  "audit.all": "Every action on the platform, newest first. Platform superadmins only.",
   "lake.summary": "What has landed, per stream: counts and freshness.",
   "lake.records": "An entity's raw records, or the ones a run wrote. Admins.",
   "lake.documents": "A source's raw documents, or the ones a run wrote. Admins.",

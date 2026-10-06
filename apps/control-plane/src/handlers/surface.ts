@@ -13,6 +13,8 @@
  *   which procedures only a signed-in browser session may call (`SESSION_ONLY`);
  * - which of the model-context door's two widgets draws its answer (`MCP_WIDGETS`), and the
  *   shape that answer arrives in there (`ToolContentOf`), which the widgets are typed against;
+ * - who writes its AUDIT row when it takes effect, if anyone (`AUDITED`, in `audited.ts`, which
+ *   is its own module only for length -- ADR 0112);
  * - what a credential's GRANT lets through, given the effect (`grantAdmits`);
  * - what a refusal means to a caller that is not tRPC's own client (`BY_TRPC_CODE`).
  *
@@ -42,6 +44,10 @@ import type { Grant } from "../services/accessTokens.ts";
 import type { AppRouter } from "./router.ts";
 
 export type { Grant } from "../services/accessTokens.ts";
+export type { Channel, Outcome } from "../services/audit.ts";
+/** What the browser labels an audit row by, and the header the CLI names itself with (ADR 0112). */
+export type { AuditAction } from "./audited.ts";
+export type { CLI_HEADER } from "./channel.ts";
 /**
  * The two OAuth scopes a model-context client asks for (ADR 0061), as TYPES: the consent page
  * in the browser spells them as `typeof READ_SCOPE`, so the two cannot drift.

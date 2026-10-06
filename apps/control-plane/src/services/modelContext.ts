@@ -55,7 +55,7 @@ import { listMacros, listModels, type Model } from "@undercroft/db/repos";
 import { type Lineage, modelLineage } from "@undercroft/db/services";
 import { z } from "zod";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { listModelContexts, upsertModelContext } from "../repos/modelContext.ts";
 
 /** One thing that changed since approval: in this model, or in a model it reads. */
@@ -304,7 +304,7 @@ export async function setContext(
     name: string;
     basis: string;
     context: ModelContext;
-    actor: string;
+    actor: Actor;
     actorId: string;
   },
 ): Promise<SetContextOutcome> {

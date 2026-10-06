@@ -65,6 +65,7 @@ function caller(user: SessionUser | null, superadmin = false) {
     specReads: new Map(),
     googlePicker: null,
     signInMethods: [],
+    channel: "web",
     publicUrl: null,
   };
   return appRouter.createCaller(ctx);
@@ -453,7 +454,7 @@ describe("a deactivated customer", () => {
     );
   });
 
-  it("refuses every tenant procedure but the two about its state, for an admin too", async () => {
+  it("refuses every tenant procedure but those about its state and its history, for an admin too", async () => {
     // The enforcement is one middleware; this is what proves every tenant procedure is behind
     // it, including the next one somebody adds. Only `tenantId` is sent: the refusal comes
     // before a procedure's own input is read, so no procedure needs a valid body to answer it.
@@ -476,7 +477,8 @@ describe("a deactivated customer", () => {
       }
     }
 
-    expect(answered).toEqual(["tenants.get"]);
+    // `audit.tenant` answers so the admin can read who deactivated it (ADR 0112).
+    expect(answered).toEqual(["audit.tenant", "tenants.get"]);
     expect(await refusedWith(() => admin.tenants.reactivate({ tenantId: "CASE-0001" }))).toBe(
       "NO_ERROR",
     );

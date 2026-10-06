@@ -17,7 +17,7 @@ import { hashToken, randomToken } from "@undercroft/crypto";
 import type { SqlExecutor } from "@undercroft/db";
 import { type IngestKey, insertKey, listKeys, revokeKey } from "@undercroft/db/repos";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 
 export type { IngestKey } from "@undercroft/db/repos";
 
@@ -43,7 +43,7 @@ export async function mint(
     label: string;
     allowedSources: string[];
     expiresInDays?: number;
-    actor: string;
+    actor: Actor;
     now?: Date;
   },
 ): Promise<{ id: string; token: string; expiresAt: string | null }> {
@@ -87,7 +87,7 @@ export async function mint(
 /** Revoke a live key. `false` when there was none to revoke. */
 export async function revoke(
   exec: SqlExecutor,
-  input: { tenantId: string; id: string; actor: string },
+  input: { tenantId: string; id: string; actor: Actor },
 ): Promise<boolean> {
   const revoked = await revokeKey(exec, input.tenantId, input.id);
   if (!revoked) {
