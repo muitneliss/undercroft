@@ -32,7 +32,7 @@ import {
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import {
   deleteDashboard,
   getDashboard,
@@ -180,7 +180,7 @@ export async function saveQuestion(
     name: string;
     definition: QuestionDefinition;
     chart: ChartConfig;
-    actor: string;
+    actor: Actor;
     actorId: string;
   },
 ): Promise<SaveOutcome> {
@@ -199,7 +199,7 @@ export async function saveQuestion(
   await recordAudit(exec, {
     tenantId: input.tenantId,
     actor: input.actor,
-    action: "bi.question.save",
+    action: "bi.questions.save",
     detail: JSON.stringify({ id, name: input.name, kind: input.definition.kind }),
   });
   return { ok: true, id };
@@ -207,14 +207,14 @@ export async function saveQuestion(
 
 export async function removeQuestion(
   exec: SqlExecutor,
-  input: { tenantId: string; id: string; actor: string },
+  input: { tenantId: string; id: string; actor: Actor },
 ): Promise<boolean> {
   const removed = await deleteQuestion(exec, input.tenantId, input.id);
   if (removed) {
     await recordAudit(exec, {
       tenantId: input.tenantId,
       actor: input.actor,
-      action: "bi.question.delete",
+      action: "bi.questions.delete",
       detail: JSON.stringify({ id: input.id }),
     });
   }
@@ -265,7 +265,7 @@ export async function saveDashboard(
     name: string;
     layout: DashboardLayout;
     filters: DashboardFilter[];
-    actor: string;
+    actor: Actor;
     actorId: string;
   },
 ): Promise<SaveOutcome> {
@@ -284,7 +284,7 @@ export async function saveDashboard(
   await recordAudit(exec, {
     tenantId: input.tenantId,
     actor: input.actor,
-    action: "bi.dashboard.save",
+    action: "bi.dashboards.save",
     detail: JSON.stringify({ id, name: input.name, tiles: input.layout.tiles.length }),
   });
   return { ok: true, id };
@@ -292,14 +292,14 @@ export async function saveDashboard(
 
 export async function removeDashboard(
   exec: SqlExecutor,
-  input: { tenantId: string; id: string; actor: string },
+  input: { tenantId: string; id: string; actor: Actor },
 ): Promise<boolean> {
   const removed = await deleteDashboard(exec, input.tenantId, input.id);
   if (removed) {
     await recordAudit(exec, {
       tenantId: input.tenantId,
       actor: input.actor,
-      action: "bi.dashboard.delete",
+      action: "bi.dashboards.delete",
       detail: JSON.stringify({ id: input.id }),
     });
   }

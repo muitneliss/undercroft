@@ -232,7 +232,7 @@ describe("completing a consent", () => {
     const { rows: audit } = await db.query<{ action: string; actor: string; detail: unknown }>(
       "SELECT action, actor, detail FROM ops.audit_log",
     );
-    expect(audit[0]?.action).toBe("connection.connected");
+    expect(audit[0]?.action).toBe("connections.connected");
     expect(audit[0]?.actor).toBe("ada@example.test");
     expect(JSON.stringify(audit[0]?.detail)).not.toContain("ops@acme.test");
   });

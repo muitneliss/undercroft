@@ -68,6 +68,7 @@ function caller(specReads: SpecReads = new Map()) {
     specReads,
     googlePicker: null,
     signInMethods: [],
+    channel: "web",
     publicUrl: null,
   };
   return appRouter.createCaller(ctx);

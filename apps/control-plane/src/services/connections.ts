@@ -49,7 +49,7 @@ import {
   writeConnectionDetail,
 } from "@undercroft/db/repos";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { missingScopes, requestedScopeFor } from "./oauth.ts";
 import type { WorkerClient } from "./workerClient.ts";
 
@@ -500,7 +500,7 @@ export async function setCadence(
     source: string;
     cadence: Cadence;
     cron?: string | undefined;
-    actor: string;
+    actor: Actor;
   },
 ): Promise<SetCadenceOutcome> {
   const decided = cadenceSetting(input);
@@ -516,7 +516,7 @@ export async function setCadence(
     await recordAudit(exec, {
       tenantId: input.tenantId,
       actor: input.actor,
-      action: "connection.cadence_set",
+      action: "connections.setCadence",
       // The expression is a schedule, not customer data, so the trail carries it whole: "who
       // made this run at 03:00" is the question an audit of a cadence is asked.
       detail: JSON.stringify({
@@ -550,7 +550,7 @@ export async function setResync(
     source: string;
     cadence: Cadence;
     cron?: string | undefined;
-    actor: string;
+    actor: Actor;
   },
 ): Promise<SetResyncOutcome> {
   const lists = specs.get(sourceKind(input.source))?.entities ?? [];
@@ -573,7 +573,7 @@ export async function setResync(
     await recordAudit(exec, {
       tenantId: input.tenantId,
       actor: input.actor,
-      action: "connection.resync_set",
+      action: "connections.setResync",
       detail: JSON.stringify({
         source: input.source,
         cadence: setting.cadence,
@@ -618,7 +618,7 @@ export async function setScope(
     tenantId: string;
     source: string;
     selectionJson: string;
-    actor: string;
+    actor: Actor;
     actorId: string;
   },
 ): Promise<SetScopeOutcome> {
@@ -644,7 +644,7 @@ export async function setScope(
     await recordAudit(exec, {
       tenantId: input.tenantId,
       actor: input.actor,
-      action: "connection.scope_set",
+      action: "connections.setScope",
       detail: JSON.stringify({ source: input.source, count: chosenCount(scope) }),
     });
   } catch {
@@ -676,7 +676,7 @@ export type SetTokenOutcome =
 export async function setToken(
   exec: SqlExecutor,
   worker: WorkerClient,
-  input: { tenantId: string; source: string; token: string; actor: string },
+  input: { tenantId: string; source: string; token: string; actor: Actor },
 ): Promise<SetTokenOutcome> {
   if (!PASTED_TOKEN_SOURCES.has(input.source)) {
     return { ok: false, reason: "unsupported-source" };
@@ -701,7 +701,7 @@ export async function setToken(
     await recordAudit(exec, {
       tenantId: input.tenantId,
       actor: input.actor,
-      action: "connection.connected",
+      action: "connections.setToken",
       // Which source, and that it was a pasted token. Never the token.
       detail: JSON.stringify({ source: input.source, method: "token" }),
     });
@@ -728,7 +728,7 @@ export interface DisconnectResult {
 export async function disconnect(
   exec: SqlExecutor,
   worker: WorkerClient | null,
-  input: { tenantId: string; source: string; actor: string },
+  input: { tenantId: string; source: string; actor: Actor },
 ): Promise<DisconnectResult> {
   let revokedUpstream = false;
   if (worker !== null) {
@@ -752,7 +752,7 @@ export async function disconnect(
     await recordAudit(exec, {
       tenantId: input.tenantId,
       actor: input.actor,
-      action: "connection.disconnected",
+      action: "connections.disconnect",
       detail: JSON.stringify({ source: input.source, revokedUpstream }),
     });
   } catch {

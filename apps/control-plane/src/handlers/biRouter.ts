@@ -22,7 +22,7 @@ import { outranks } from "../services/authz.ts";
 import * as bi from "../services/bi.ts";
 import * as biExports from "../services/biExports.ts";
 import { exportPath, exportUrl } from "./exportLink.ts";
-import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 /** What an export is of: a saved question, a definition as `bi.answer` takes one, or a model. */
 const ExportSource = z.discriminatedUnion("kind", [
@@ -127,7 +127,7 @@ export const biRouter = router({
           name: input.name,
           definition: input.definition,
           chart: input.chart,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
           actorId: ctx.user.userId,
         });
         if (!outcome.ok) {
@@ -142,7 +142,7 @@ export const biRouter = router({
         const removed = await bi.removeQuestion(ctx.exec, {
           tenantId: ctx.tenantId,
           id: input.id,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
         });
         if (!removed) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -182,7 +182,7 @@ export const biRouter = router({
           name: input.name,
           layout: input.layout,
           filters: input.filters,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
           actorId: ctx.user.userId,
         });
         if (!outcome.ok) {
@@ -197,7 +197,7 @@ export const biRouter = router({
         const removed = await bi.removeDashboard(ctx.exec, {
           tenantId: ctx.tenantId,
           id: input.id,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
         });
         if (!removed) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -228,7 +228,7 @@ export const biRouter = router({
         const outcome = await biExports.createExport(ctx.exec, {
           tenantId: ctx.tenantId,
           userId: ctx.user.userId,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
           source: input.source,
           params: input.params,
           unnamed: t("export.unnamed"),

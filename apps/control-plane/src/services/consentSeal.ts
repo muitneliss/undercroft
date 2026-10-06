@@ -75,8 +75,9 @@ async function sealAndRecord(
   try {
     await recordAudit(deps.exec, {
       tenantId: handshake.tenantId,
-      actor: caller.email,
-      action: "connection.connected",
+      // The browser the provider sent back, whichever door started the consent.
+      actor: { userId: caller.userId, email: caller.email, channel: "web", credential: null },
+      action: "connections.connected",
       // Which source and who. Not the address: that is in `connection_detail`, and
       // `ops.audit_log` has a different readership.
       detail: JSON.stringify({ source: handshake.source }),

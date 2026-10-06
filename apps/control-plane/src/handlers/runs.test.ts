@@ -60,6 +60,7 @@ function caller(userId: string, email: string, worker: WorkerClient | null = nul
     specReads: new Map(),
     googlePicker: null,
     signInMethods: [],
+    channel: "web",
     publicUrl: null,
   };
   return appRouter.createCaller(ctx);
@@ -273,7 +274,7 @@ describe("runs.trigger", () => {
     ).toBe("FORBIDDEN");
   });
 
-  it("a run already in progress is CONFLICT, worded, and nothing is audited", async () => {
+  it("a run already in progress is CONFLICT, worded, and audited as refused rather than run", async () => {
     const admin = await seedMember("a@example.test", "admin", "CASE-0042");
     const worker = new InMemoryWorkerClient().runningAs("run-held");
     const refused = await refusal(() =>
@@ -286,10 +287,10 @@ describe("runs.trigger", () => {
     expect(refused.message).toBe(
       messages(DEFAULT_LOCALE)("error.runInProgress", { source: "hubspot" }),
     );
-    const { rows } = await db.query<{ n: string }>(
-      "SELECT count(*)::text AS n FROM ops.audit_log WHERE action = 'runs.trigger'",
+    const { rows } = await db.query<{ outcome: string; reason: string | null }>(
+      "SELECT outcome, reason FROM ops.audit_log WHERE action = 'runs.trigger'",
     );
-    expect(rows[0]?.n).toBe("0");
+    expect(rows).toEqual([{ outcome: "refused", reason: "CONFLICT" }]);
   });
 
   it("a worker that did not answer is PRECONDITION_FAILED; one that refused is BAD_REQUEST", async () => {

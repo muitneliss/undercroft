@@ -12,7 +12,7 @@ import { messages } from "../i18n/index.ts";
 import * as models from "../services/models.ts";
 import { notRun } from "./answers.ts";
 import { wordCheck } from "./checkWords.ts";
-import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 export const modelsRouter = router({
   /** The tenant's models with their last build. Any member may read what is built for them. */
@@ -47,7 +47,7 @@ export const modelsRouter = router({
         sql: input.sql,
         tests: input.tests,
         create: input.create,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         actorId: ctx.user.userId,
       });
       if (!outcome.ok) {
@@ -78,7 +78,7 @@ export const modelsRouter = router({
       const outcome = await models.remove(ctx.exec, ctx.worker, {
         tenantId: ctx.tenantId,
         name: input.name,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
       if (outcome.ok) {
         return { ok: true };
@@ -121,7 +121,7 @@ export const modelsRouter = router({
       const outcome = await models.build(ctx.exec, ctx.worker, {
         tenantId: ctx.tenantId,
         name: input.name,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         actorId: ctx.user.userId,
       });
       if (!outcome.ok) {

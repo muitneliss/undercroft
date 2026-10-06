@@ -29,6 +29,12 @@ import {
 } from "./connections.ts";
 import { loadSpecReads } from "../specs.ts";
 import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
+import type { Actor } from "../repos/auditLog.ts";
+
+/** An address acting through the browser, as a router would name it from a session. */
+function asActor(email: string): Actor {
+  return { userId: null, email, channel: "web", credential: null };
+}
 
 const TENANT = "CASE-0042";
 const ENV = { UNDERCROFT_SECRET_KEY: Buffer.alloc(32, 5).toString("base64") };
@@ -382,7 +388,7 @@ describe("the schedule", () => {
       tenantId: TENANT,
       source: "hubspot",
       cadence: "hourly",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
     await openRun(db, {
       id: "r-1",
@@ -409,7 +415,7 @@ describe("the schedule", () => {
       tenantId: TENANT,
       source: "hubspot",
       cadence: "paused",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
     await upsertConnection(db, { tenantId: TENANT, source: "gmail", status: "connected" });
 
@@ -488,7 +494,7 @@ describe("re-syncing a connection's lists whole", () => {
       source: "xero",
       cadence: "custom",
       cron: "0 2 * * 0",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(result).toEqual({ ok: true });
@@ -498,7 +504,7 @@ describe("re-syncing a connection's lists whole", () => {
       cron: "0 2 * * 0",
     });
     const { rows } = await db.query<{ action: string }>("SELECT action FROM ops.audit_log");
-    expect(rows.map((row) => row.action)).toEqual(["connection.resync_set"]);
+    expect(rows.map((row) => row.action)).toEqual(["connections.setResync"]);
   });
 
   it("refuses a source whose lists no change filter reads, before writing anything", async () => {
@@ -507,7 +513,7 @@ describe("re-syncing a connection's lists whole", () => {
       tenantId: TENANT,
       source: "hubspot",
       cadence: "daily",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(result).toEqual({ ok: false, reason: "not-resyncable" });
@@ -544,13 +550,13 @@ describe("choosing a cadence", () => {
       tenantId: TENANT,
       source: "hubspot",
       cadence: "every_6h",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
     expect(result).toEqual({ ok: true });
     const { rows } = await db.query<{ action: string; detail: unknown }>(
       "SELECT action, detail FROM ops.audit_log",
     );
-    expect(rows[0]?.action).toBe("connection.cadence_set");
+    expect(rows[0]?.action).toBe("connections.setCadence");
     expect(JSON.stringify(rows[0]?.detail)).toContain('"cadence":"every_6h"');
   });
 
@@ -559,7 +565,7 @@ describe("choosing a cadence", () => {
       tenantId: TENANT,
       source: "hubspot",
       cadence: "hourly",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
     expect(result).toEqual({ ok: false, reason: "no-connection" });
   });
@@ -578,7 +584,7 @@ describe("choosing a cadence", () => {
       source: "hubspot",
       cadence: "custom",
       cron: "30 7 * * 1-5",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
     expect(result).toEqual({ ok: true });
 
@@ -599,7 +605,7 @@ describe("choosing a cadence", () => {
 
   it("a preset chosen after a custom expression clears it", async () => {
     await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
-    const actor = "ada@example.test";
+    const actor = asActor("ada@example.test");
     await setCadence(db, {
       tenantId: TENANT,
       source: "hubspot",
@@ -615,7 +621,7 @@ describe("choosing a cadence", () => {
 
   it("an expression the scheduler cannot keep is refused, and nothing is written", async () => {
     await upsertConnection(db, { tenantId: TENANT, source: "hubspot", status: "connected" });
-    const actor = "ada@example.test";
+    const actor = asActor("ada@example.test");
 
     expect(
       await setCadence(db, {
@@ -655,7 +661,7 @@ describe("choosing a scope", () => {
       tenantId: TENANT,
       source: "gmail",
       selectionJson: GMAIL_SCOPE,
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
@@ -672,7 +678,7 @@ describe("choosing a scope", () => {
       tenantId: TENANT,
       source: "gmail",
       selectionJson: GMAIL_SCOPE,
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
@@ -688,7 +694,7 @@ describe("choosing a scope", () => {
         labels: [{ id: "Label_8", name: "Invoices" }],
         fileTypes: ["application/vnd.ms-excel", "text/csv"],
       }),
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
@@ -703,7 +709,7 @@ describe("choosing a scope", () => {
       tenantId: TENANT,
       source: "gmail",
       selectionJson: JSON.stringify({ files: [{ id: "x", name: "y", kind: "folder" }] }),
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
@@ -720,7 +726,7 @@ describe("choosing a scope", () => {
         organisation: { id: "org-9f2a", name: "Acme Pte Ltd" },
         entities: ["invoices", "contacts"],
       }),
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
@@ -742,7 +748,7 @@ describe("choosing a scope", () => {
       selectionJson: JSON.stringify({
         properties: { companies: ["annualrevenue", "x_onboarding_stage"] },
       }),
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
@@ -769,7 +775,7 @@ describe("choosing a scope", () => {
       tenantId: TENANT,
       source: "hubspot",
       selectionJson: JSON.stringify({ properties: { companies: ["city"], contacts: names } }),
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
@@ -785,14 +791,14 @@ describe("choosing a scope", () => {
       tenantId: TENANT,
       source: "gmail",
       selectionJson: GMAIL_SCOPE,
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
       actorId: "u1",
     });
 
     const { rows } = await db.query<{ action: string; detail: unknown }>(
       "SELECT action, detail FROM ops.audit_log",
     );
-    expect(rows[0]?.action).toBe("connection.scope_set");
+    expect(rows[0]?.action).toBe("connections.setScope");
     expect(JSON.stringify(rows[0]?.detail)).toContain('"count":1');
     expect(JSON.stringify(rows[0]?.detail)).not.toContain("Invoices");
   });
@@ -808,7 +814,7 @@ describe("connecting with a pasted token", () => {
       tenantId: TENANT,
       source: "hubspot",
       token: "pat-na1-secret",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(result).toEqual({ ok: true });
@@ -822,7 +828,7 @@ describe("connecting with a pasted token", () => {
     const { rows } = await db.query<{ action: string; detail: unknown }>(
       "SELECT action, detail FROM ops.audit_log",
     );
-    expect(rows[0]?.action).toBe("connection.connected");
+    expect(rows[0]?.action).toBe("connections.setToken");
     expect(JSON.stringify(rows[0]?.detail)).not.toContain("pat-na1-secret");
   });
 
@@ -833,7 +839,7 @@ describe("connecting with a pasted token", () => {
       tenantId: TENANT,
       source: "hubspot",
       token: "typo",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(result).toEqual({ ok: false, reason: "rejected" });
@@ -861,7 +867,7 @@ describe("disconnecting", () => {
     const result = await disconnect(db, worker, {
       tenantId: TENANT,
       source: "gmail",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(result.revokedUpstream).toBe(true);
@@ -882,7 +888,7 @@ describe("disconnecting", () => {
     const result = await disconnect(db, null, {
       tenantId: TENANT,
       source: "gmail",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(result.revokedUpstream).toBe(false);
@@ -900,7 +906,7 @@ describe("connecting with a pasted token, refused before anything is asked", () 
       tenantId: TENANT,
       source: "gmail",
       token: "t",
-      actor: "ada@example.test",
+      actor: asActor("ada@example.test"),
     });
 
     expect(result).toEqual({ ok: false, reason: "unsupported-source" });

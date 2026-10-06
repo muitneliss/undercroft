@@ -7,9 +7,17 @@ import * as keys from "../services/keys.ts";
 import * as models from "../services/models.ts";
 import * as preferences from "../services/preferences.ts";
 import * as runs from "../services/runs.ts";
-import { authedProcedure, publicProcedure, requireRole, router, tenantProcedure } from "./trpc.ts";
+import {
+  actorOf,
+  authedProcedure,
+  publicProcedure,
+  requireRole,
+  router,
+  tenantProcedure,
+} from "./trpc.ts";
 
 import { accountRouter } from "./accountRouter.ts";
+import { auditRouter } from "./auditRouter.ts";
 import { connectionsRouter } from "./connectionsRouter.ts";
 import { lakeRouter } from "./lakeRouter.ts";
 import { biRouter } from "./biRouter.ts";
@@ -99,7 +107,7 @@ export const appRouter = router({
           label: input.label,
           allowedSources: [...new Set(input.allowedSources)],
           ...(input.expiresInDays === undefined ? {} : { expiresInDays: input.expiresInDays }),
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
         }),
       ),
 
@@ -109,7 +117,7 @@ export const appRouter = router({
         const revoked = await keys.revoke(ctx.exec, {
           tenantId: ctx.tenantId,
           id: input.id,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
         });
         if (!revoked) {
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -127,6 +135,9 @@ export const appRouter = router({
    * not open is a NOT_FOUND.
    */
   people: peopleRouter,
+
+  /** Who did what: a person's own actions, a tenant's for its admin, all for a superadmin. */
+  audit: auditRouter,
 
   lake: lakeRouter,
   models: modelsRouter,
@@ -247,7 +258,7 @@ export const appRouter = router({
         const outcome = await runs.trigger(ctx.exec, ctx.worker, {
           tenantId: ctx.tenantId,
           source: input.source,
-          actor: ctx.user.email,
+          actor: actorOf(ctx),
           actorId: ctx.user.userId,
         });
         if (outcome.ok) {

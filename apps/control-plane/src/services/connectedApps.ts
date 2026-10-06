@@ -12,7 +12,7 @@
  */
 
 import type { SqlExecutor } from "@undercroft/db";
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import type { Grant } from "./accessTokens.ts";
 
 /** The scope a client asks for to read: every tool classified `read`. */
@@ -121,16 +121,16 @@ export async function list(apps: OAuthApps, email: string): Promise<ConnectedApp
 export async function revoke(
   exec: SqlExecutor,
   apps: OAuthApps,
-  input: { email: string; id: string },
+  input: { actor: Actor; id: string },
 ): Promise<boolean> {
-  const revoked = await apps.revokeFor(input.email, input.id);
+  const revoked = await apps.revokeFor(input.actor.email, input.id);
   if (!revoked) {
     return false;
   }
   try {
     await recordAudit(exec, {
       tenantId: null,
-      actor: input.email,
+      actor: input.actor,
       action: "account.apps.revoke",
       detail: JSON.stringify({ id: input.id }),
     });

@@ -21,10 +21,16 @@ import {
   saveQuestion,
 } from "./bi.ts";
 import { InMemoryWorkerClient } from "./inMemoryWorkerClient.ts";
+import type { Actor } from "../repos/auditLog.ts";
+
+/** An address acting through the browser, as a router would name it from a session. */
+function asActor(email: string): Actor {
+  return { userId: null, email, channel: "web", credential: null };
+}
 
 const TENANT = "CASE-0042";
 const OTHER = "CASE-0043";
-const ACTOR = { actor: "ada@example.test", actorId: "u-ada" };
+const ACTOR = { actor: asActor("ada@example.test"), actorId: "u-ada" };
 
 let db: TestDatabase;
 
@@ -94,7 +100,7 @@ describe("questions", () => {
       }),
     ).toEqual({ ok: false, reason: "not-found" });
     expect(
-      await removeQuestion(db, { tenantId: OTHER, id: saved.id, actor: "x@example.test" }),
+      await removeQuestion(db, { tenantId: OTHER, id: saved.id, actor: asActor("x@example.test") }),
     ).toBe(false);
     expect((await listQuestionViews(db, OTHER)).length).toBe(0);
     expect(await removeQuestion(db, { tenantId: TENANT, id: saved.id, actor: ACTOR.actor })).toBe(

@@ -27,7 +27,7 @@ import {
 import type { SqlExecutor } from "@undercroft/db";
 import { getModel } from "@undercroft/db/repos";
 
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import {
   type ExportKind,
   type ExportRow,
@@ -119,7 +119,7 @@ export async function createExport(
   input: {
     tenantId: string;
     userId: string;
-    actor: string;
+    actor: Actor;
     source: ExportSource;
     params: QueryParams;
     /** The file's name when what is exported has none of its own, in the caller's language. */
@@ -141,7 +141,7 @@ export async function createExport(
   await recordAudit(exec, {
     tenantId: input.tenantId,
     actor: input.actor,
-    action: "bi.export.create",
+    action: "bi.exports.create",
     detail: JSON.stringify({ id: row.id, kind: input.source.kind, of: ofWhat(input.source) }),
   });
   return { ok: true, export: row };

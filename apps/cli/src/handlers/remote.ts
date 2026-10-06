@@ -35,6 +35,7 @@
  * into the response of another.
  */
 
+import type { CLI_HEADER } from "@undercroft/control-plane/surface";
 import type { Locale } from "@undercroft/core/locale";
 import { BY_TRPC_CODE } from "virtual:surface";
 import type { Translate } from "../i18n/index.ts";
@@ -70,8 +71,17 @@ export interface Connection {
  */
 const SURFACE_CODE: ReadonlyMap<string, SurfaceErrorCode> = new Map(Object.entries(BY_TRPC_CODE));
 
+/**
+ * The header that tells the server this is the CLI, so its audit log can say so (ADR 0113). Sent
+ * on every request the CLI makes. Typed off the server's own constant, so the spelling cannot drift.
+ */
+export const CLIENT_HEADERS: Readonly<
+  Record<(typeof CLI_HEADER)["name"], (typeof CLI_HEADER)["value"]>
+> = { "x-undercroft-client": "cli" };
+
 function headersFor(connection: Connection): Record<string, string> {
   return {
+    ...CLIENT_HEADERS,
     "accept-language": connection.locale,
     ...(connection.cookie === null ? {} : { cookie: connection.cookie }),
   };

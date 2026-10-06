@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import { messages } from "../i18n/index.ts";
 import * as documentKinds from "../services/documentKinds.ts";
-import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 export const documentKindsRouter = router({
   list: tenantProcedure.query(({ ctx, input }) => documentKinds.list(ctx.exec, input.tenantId)),
@@ -22,7 +22,7 @@ export const documentKindsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const outcome = await documentKinds.add(ctx.exec, {
         tenantId: ctx.tenantId,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         actorId: ctx.user.userId,
         kind: input.kind,
         description: input.description ?? null,
@@ -47,7 +47,7 @@ export const documentKindsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const outcome = await documentKinds.update(ctx.exec, {
         tenantId: ctx.tenantId,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         actorId: ctx.user.userId,
         kind: input.kind,
         description: input.description,
@@ -63,7 +63,7 @@ export const documentKindsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const outcome = await documentKinds.remove(ctx.exec, {
         tenantId: ctx.tenantId,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         actorId: ctx.user.userId,
         kind: input.kind,
       });
@@ -92,7 +92,7 @@ export const documentKindsRouter = router({
     }
     const outcome = await documentKinds.initialise(ctx.exec, ctx.worker, {
       tenantId: ctx.tenantId,
-      actor: ctx.user.email,
+      actor: actorOf(ctx),
       actorId: ctx.user.userId,
     });
     if (outcome.ok) {
@@ -120,7 +120,7 @@ export const documentKindsRouter = router({
   publish: requireRole("admin").mutation(async ({ ctx }) => {
     const outcome = await documentKinds.publish(ctx.exec, {
       tenantId: ctx.tenantId,
-      actor: ctx.user.email,
+      actor: actorOf(ctx),
       actorId: ctx.user.userId,
     });
     if (!outcome.ok) {

@@ -40,7 +40,7 @@
 
 import type { SqlExecutor } from "@undercroft/db";
 import { findIdByEmail, provisionByEmail } from "../repos/appUser.ts";
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Channel, record as recordAudit } from "../repos/auditLog.ts";
 import { isKnownOrInvited, listLiveForEmail, markAccepted } from "../repos/invitation.ts";
 import { addMember } from "../repos/membership.ts";
 import { isSuperadmin, NO_SUPERADMINS, type Superadmins } from "./superadmin.ts";
@@ -119,6 +119,15 @@ export async function resolveInvitedUser(
   for (const invitation of invitations) {
     await addMember(exec, invitation.tenantId, appUserId, invitation.role);
     await markAccepted(exec, invitation.id);
+    // In the same transaction as the membership, unlike the refusal below: this row is the
+    // record of how somebody came to hold access (ADR 0113). No channel: Better Auth's hook
+    // runs before any door of ours has a context.
+    await recordAudit(exec, {
+      tenantId: invitation.tenantId,
+      actor: { userId: appUserId, email, channel: null, credential: null },
+      action: "auth.invitationRedeemed",
+      detail: JSON.stringify({ role: invitation.role }),
+    });
   }
 
   return { appUserId, email };
@@ -184,9 +193,42 @@ export async function recordRefusal(
   try {
     await recordAudit(exec, {
       tenantId: null,
-      actor: normalizeEmail(input.email),
+      // Nobody here, and no door of ours: the address was turned away before it had either.
+      actor: { userId: null, email: normalizeEmail(input.email), channel: null, credential: null },
       action: "auth.refused",
       detail: JSON.stringify({ via: input.via }),
+    });
+  } catch {
+    // Intentionally swallowed; see above.
+  }
+}
+
+/**
+ * Record that a person signed in: a session now exists for them (ADR 0113).
+ *
+ * `endpoint` is the Better Auth path that made the session -- which way in it was -- or `null`
+ * where none was given. An address with no `app_user` is recorded by address alone, which the
+ * gates above make the superadmin bootstrap's first moment and nothing else.
+ *
+ * Swallowed like the refusal, and for the same reason: the session already exists, and a failed
+ * insert turned into a failed sign-in would read like an outage to a person who is in fact in.
+ */
+export async function recordSignIn(
+  exec: SqlExecutor,
+  input: { email: string; channel: Channel; endpoint: string | null },
+): Promise<void> {
+  const email = normalizeEmail(input.email);
+  try {
+    await recordAudit(exec, {
+      tenantId: null,
+      actor: {
+        userId: await findIdByEmail(exec, email),
+        email,
+        channel: input.channel,
+        credential: null,
+      },
+      action: "auth.signIn",
+      detail: JSON.stringify({ endpoint: input.endpoint }),
     });
   } catch {
     // Intentionally swallowed; see above.

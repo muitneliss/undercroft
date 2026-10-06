@@ -19,14 +19,16 @@
  * only thing that actually knows.
  */
 
-import { useId, useRef } from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useSearchParams } from "react-router-dom";
 
+import { ActivityLog } from "@/components/ActivityLog.tsx";
 import { Errata } from "@/components/Errata.tsx";
-import { InvitePanel, OpenInvitations, RoleRights } from "@/components/Invitations.tsx";
+import { InvitePanel, OpenInvitations } from "@/components/Invitations.tsx";
+import { ViewHead } from "@/components/PeopleViews.tsx";
 import { Roster } from "@/components/Roster.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
+import { type PeopleAddress, usePeopleAddress } from "@/components/usePeopleAddress.ts";
 import { useUiStore } from "@/store.ts";
 import { trpc } from "@/trpc.ts";
 
@@ -84,144 +86,10 @@ function usePeopleMutations(
   };
 }
 
-/** The three views of the division, in the order the plates print. */
-const VIEWS = ["members", "invites", "roles"] as const;
-type PeopleView = (typeof VIEWS)[number];
-
-/**
- * Which view is open and what the reader searched for, both read from the address.
- *
- * The address and not the store, as the customer list's filters are: a view is a page a reader
- * links, reloads and comes Back to. A view the address names that is not one of the three
- * opens Members rather than guessing. The search is replaced rather than pushed, because a
- * keystroke is not a page; a view is pushed, because it is one. Both keep the other, so a
- * search carries from Members to the invitations it may also match.
- */
-interface PeopleAddress {
-  readonly view: PeopleView;
-  readonly search: string;
-  readonly setSearch: (search: string) => void;
-  readonly viewSearch: (view: PeopleView) => string;
-}
-
-function usePeopleAddress(): PeopleAddress {
-  const [params, setParams] = useSearchParams();
-  const asked = params.get("view");
-  return {
-    view: VIEWS.find((view) => view === asked) ?? "members",
-    search: params.get("q") ?? "",
-    setSearch: (search): void => {
-      const next = new URLSearchParams(params);
-      if (search === "") {
-        next.delete("q");
-      } else {
-        next.set("q", search);
-      }
-      setParams(next, { replace: true });
-    },
-    viewSearch: (view): string => {
-      const next = new URLSearchParams(params);
-      if (view === "members") {
-        next.delete("view");
-      } else {
-        next.set("view", view);
-      }
-      const written = next.toString();
-      return written === "" ? "" : `?${written}`;
-    },
-  };
-}
-
-/**
- * The three views as one control, the Models division's plate pair with a third plate, and
- * under it what the open view needs first: the address search, or the role statements. Each
- * count is the whole list's, not the search's: it says what a view holds before it is opened.
- */
-function ViewHead({
-  address,
-  members,
-  invitations,
-  tenantId,
-}: {
-  address: PeopleAddress;
-  members: number;
-  invitations: number;
-  tenantId: string;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const labels: Record<PeopleView, string> = {
-    members: t("people.viewMembers", { count: members }),
-    invites: t("people.viewInvites", { count: invitations }),
-    roles: t("people.viewRoles"),
-  };
-  return (
-    <>
-      <nav aria-label={t("people.viewsLabel")} className="langset">
-        {VIEWS.map((each) => (
-          <Link
-            key={each}
-            className="plate plate--small"
-            to={{ search: address.viewSearch(each) }}
-            {...(each === address.view ? { "aria-current": "page" as const } : {})}
-          >
-            {labels[each]}
-          </Link>
-        ))}
-      </nav>
-      {address.view === "roles" ? (
-        <RoleRights tenantId={tenantId} />
-      ) : (
-        <AddressSearch search={address.search} setSearch={address.setSearch} />
-      )}
-    </>
-  );
-}
-
-/** The search over addresses, on the two views that list them, and one clear while it narrows. */
-function AddressSearch({
-  search,
-  setSearch,
-}: {
-  search: string;
-  setSearch: (search: string) => void;
-}): React.JSX.Element {
-  const { t } = useTranslation();
-  const searchId = useId();
-  return (
-    <div className="row row--field">
-      <div className="field">
-        <label className="label" htmlFor={searchId}>
-          {t("people.searchLabel")}
-        </label>
-        <input
-          className="input"
-          id={searchId}
-          type="search"
-          autoComplete="off"
-          value={search}
-          onChange={(event): void => {
-            setSearch(event.target.value);
-          }}
-        />
-      </div>
-      {search === "" ? null : (
-        <button
-          className="plate"
-          type="button"
-          onClick={(): void => {
-            setSearch("");
-          }}
-        >
-          {t("people.clearSearch")}
-        </button>
-      )}
-    </div>
-  );
-}
-
 /**
  * The open view's list: who has access, or the invitations still waiting, narrowed by the
- * address search. Compare roles lists nothing; its statements are printed by `ViewHead`.
+ * address search, or the customer's activity. Compare roles lists nothing; its statements are
+ * printed by `ViewLead`.
  */
 function ViewList({
   address,
@@ -253,6 +121,9 @@ function ViewList({
         signedInAs={signedInAs}
       />
     );
+  }
+  if (address.view === "activity") {
+    return <ActivityLog scope={{ kind: "tenant", tenantId }} />;
   }
   if (address.view === "invites") {
     return (
@@ -302,8 +173,9 @@ function InviteBand({
 }
 
 /**
- * The people division, in three views bound to `?view=`: who has access (the default), the
- * invitations still open with the form that sends one, and what each role may do.
+ * The people division, in four views bound to `?view=`: who has access (the default), the
+ * invitations still open with the form that sends one, what each role may do, and -- for an
+ * admin -- everything done in the customer (ADR 0113).
  *
  * The form and the role statements stay together on Invitations, as the design contract asks:
  * an admin choosing a role reads what it grants beside the choice. Compare roles repeats the
@@ -339,6 +211,8 @@ export function People({
 
   const isAdmin = tenant.data?.role === "admin";
   const open = invitations.data.filter((i) => i.status === "pending");
+  const shown: PeopleAddress =
+    address.view === "activity" && !isAdmin ? { ...address, view: "members" } : address;
 
   return (
     <div className="sheet">
@@ -347,13 +221,14 @@ export function People({
         <h1>{t("people.title")}</h1>
         <p className="prose prose--lead">{t("people.lead", { tenantId })}</p>
         <ViewHead
-          address={address}
+          address={shown}
           members={members.data.length}
           invitations={open.length}
           tenantId={tenantId}
+          isAdmin={isAdmin}
         />
         <ViewList
-          address={address}
+          address={shown}
           roster={members.data}
           open={open}
           isAdmin={isAdmin}
@@ -363,7 +238,7 @@ export function People({
         />
       </div>
 
-      {address.view === "invites" ? (
+      {shown.view === "invites" ? (
         <InviteBand
           isAdmin={isAdmin}
           invite={writes.invite}

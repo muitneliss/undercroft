@@ -459,6 +459,24 @@ describe("a run's event feed is granted like a refusal, not like a run", () => {
   });
 });
 
+describe("the audit log is append-only in the database", () => {
+  // ADR 0113: a trail its own writer can edit is not evidence. Both halves: the control plane
+  // appends and reads, and may neither change nor delete what it appended.
+  it("the control plane appends and reads, and can neither change nor delete a row", async () => {
+    await db.asRole("undercroft_app", async (tx) => {
+      await tx.query(
+        "INSERT INTO ops.audit_log (tenant_id, actor, action) VALUES (NULL, 'a@x.test', 'auth.signIn')",
+      );
+      const { rows } = await tx.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM ops.audit_log",
+      );
+      expect(rows[0]?.n).toBe(1);
+      await expectDenied(() => tx.query("UPDATE ops.audit_log SET actor = 'b@x.test'"));
+      await expectDenied(() => tx.query("DELETE FROM ops.audit_log"));
+    });
+  });
+});
+
 /** Every ordinary table in schema app, enumerated rather than named so the next one counts. */
 async function appTables(): Promise<string[]> {
   const { rows } = await db.query<{ table_name: string }>(

@@ -17,7 +17,7 @@
 
 import type { SqlExecutor } from "@undercroft/db";
 import { isRoleCollision, provisionTenantRoles } from "@undercroft/db/repos";
-import { record as recordAudit } from "../repos/auditLog.ts";
+import { type Actor, record as recordAudit } from "../repos/auditLog.ts";
 import { listForUser, type MemberTenant } from "../repos/membership.ts";
 import {
   createTenant,
@@ -88,7 +88,7 @@ export type CreateResult =
  */
 export async function create(
   exec: SqlExecutor,
-  input: { tenantId: string; displayName: string; actor: string },
+  input: { tenantId: string; displayName: string; actor: Actor },
 ): Promise<CreateResult> {
   const created = await createTenant(exec, input.tenantId, input.displayName);
   if (!created) {
@@ -136,7 +136,7 @@ export async function create(
  */
 export async function rename(
   exec: SqlExecutor,
-  input: { tenantId: string; displayName: string; actor: string },
+  input: { tenantId: string; displayName: string; actor: Actor },
 ): Promise<Tenant | null> {
   const before = await findTenant(exec, input.tenantId);
   if (before === null) {
@@ -181,7 +181,7 @@ export type TransitionResult =
  */
 export async function deactivate(
   exec: SqlExecutor,
-  input: { tenantId: string; actor: string },
+  input: { tenantId: string; actor: Actor },
 ): Promise<TransitionResult> {
   const changed = await deactivateTenant(exec, input.tenantId);
   if (changed === null) {
@@ -205,7 +205,7 @@ export async function deactivate(
  */
 export async function reactivate(
   exec: SqlExecutor,
-  input: { tenantId: string; actor: string },
+  input: { tenantId: string; actor: Actor },
 ): Promise<TransitionResult> {
   const before = await findTenant(exec, input.tenantId);
   const changed = await reactivateTenant(exec, input.tenantId);

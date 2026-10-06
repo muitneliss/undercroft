@@ -34,18 +34,27 @@
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import type { Locale } from "@undercroft/core";
 import type { SqlExecutor } from "@undercroft/db";
 import { currentTraceId } from "@undercroft/telemetry";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
 import type { Grant } from "../services/accessTokens.ts";
+import {
+  type Actor,
+  type AuditDetail,
+  type Channel,
+  recordAction,
+  recordAttempt,
+} from "../services/audit.ts";
 import type { OAuthApps } from "../services/connectedApps.ts";
 import type { SignInMethod } from "./auth.ts";
 import { accessIn, outranks, type Role } from "../services/authz.ts";
 import type { SpecReads } from "../services/connections.ts";
 import type { StartOutcome } from "../services/oauth.ts";
 import type { WorkerClient } from "../services/workerClient.ts";
+import { type AuditRule, auditRuleOf } from "./audited.ts";
 import { effectOf, grantAdmits } from "./surface.ts";
 
 export interface SessionUser {
@@ -69,6 +78,12 @@ export interface Context {
    */
   readonly credentialId: string;
   readonly via: Via;
+  /**
+   * The door as the audit log names it (ADR 0113): `mcp` for a bearer, `cli` for a session the
+   * CLI says it is sending, `assistant` for the assistant's own caller, otherwise `web`. Like
+   * `via` it is for reading, never for authority -- the CLI's header is its own word.
+   */
+  readonly channel: Channel;
   /**
    * What the caller's credential lets through, which the base procedure below enforces against
    * each call's effect. A cookie session is always `write` -- it IS the person, at their own
@@ -174,6 +189,20 @@ export interface Context {
 
 export type { Role } from "../services/authz.ts";
 
+/** Who is acting, as an audit row names them: the person, the door, and a bearer's id. */
+export function actorOf(
+  ctx: Pick<Context, "channel" | "credentialId" | "via"> & {
+    readonly user: SessionUser;
+  },
+): Actor {
+  return {
+    userId: ctx.user.userId,
+    email: ctx.user.email,
+    channel: ctx.channel,
+    credential: ctx.via === "token" ? ctx.credentialId : null,
+  };
+}
+
 /** The facts a refusal names for a caller that acts on data: codes and ids, never sentences. */
 export type RefusalFacts = Readonly<Record<string, string | null>>;
 
@@ -241,8 +270,85 @@ export function refusalFacts(error: TRPCError): RefusalFacts | null {
 
 export const { router } = t;
 
+/** A field of a call's raw input, if the input is an object that has it. */
+function field(raw: unknown, name: string): unknown {
+  return typeof raw === "object" && raw !== null && Object.hasOwn(raw, name)
+    ? Reflect.get(raw, name)
+    : undefined;
+}
+
+/** The fields a router-written row copies, kept only where they are a plain value. */
+function detailOf(rule: Exclude<AuditRule, "service" | "none">, raw: unknown): AuditDetail {
+  const detail: Record<string, string | number | boolean | null> = {};
+  for (const name of rule.fields) {
+    const value = field(raw, name);
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
+      detail[name] = value;
+    }
+  }
+  return detail;
+}
+
+/** The tenant a call named, off its raw input: the one place every tenant procedure puts it. */
+function namedTenant(raw: unknown): string | null {
+  const value = field(raw, "tenantId");
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
 /**
- * The grant guard, at the root of every procedure -- the one door every caller shares.
+ * The audit log's half of every mutation (ADR 0113), outermost, so it sees what every gate below
+ * it decided -- the grant guard's refusal included.
+ *
+ * A mutation `AUDITED` marks `none` is not an action and leaves no row. For the rest: an attempt
+ * that did not succeed is recorded here, whoever refused it, as `refused` (a 4xx) or `failed` (a
+ * 5xx); one that succeeded is recorded here only when the table names the router as its writer,
+ * because otherwise its service already wrote the row and knows more than this does. A caller who
+ * is nobody leaves no row: there is no one to attribute it to.
+ *
+ * The raw input, not the parsed one: this runs before any `.input()` has parsed it. It is read for
+ * the tenant it names and for the fields the table lists, both kept only as plain values.
+ */
+const audited = t.procedure.use(async ({ ctx, path, type, getRawInput, next }) => {
+  const result = await next();
+  const rule = type === "mutation" ? (auditRuleOf(path) ?? "service") : "none";
+  if (rule === "none" || ctx.user === null) {
+    return result;
+  }
+  const actor = actorOf({ ...ctx, user: ctx.user });
+  // A procedure that takes no input never asks tRPC to parse the body, and a POST for one may
+  // carry none -- which this lazy parse would refuse after the call already happened. A call
+  // that sent nothing readable named nothing.
+  const raw: unknown = await getRawInput().catch(() => undefined);
+  if (result.ok) {
+    if (rule !== "service") {
+      await recordAction(ctx.exec, {
+        tenantId: namedTenant(raw),
+        actor,
+        action: path,
+        detail: detailOf(rule, raw),
+      });
+    }
+    return result;
+  }
+  await recordAttempt(ctx.exec, {
+    action: path,
+    actor: { ...actor, userId: ctx.user.userId },
+    superadmin: ctx.superadmin,
+    named: namedTenant(raw),
+    outcome: getHTTPStatusCodeFromError(result.error) >= 500 ? "failed" : "refused",
+    reason: refusalFacts(result.error)?.reason ?? result.error.code,
+  });
+  return result;
+});
+
+/**
+ * The grant guard, at the root of every procedure under the audit log's -- the one door every
+ * caller shares.
  *
  * A `read` grant admits a call only when `surface.ts` classifies it `read`; anything else,
  * an unclassified path included, is refused here. Here and not in the model-context door that
@@ -254,7 +360,7 @@ export const { router } = t;
  * FORBIDDEN, worded, with the facts an agent matches on: the caller is authenticated, and what
  * they lack is a grant their owner can give them by minting a `write` token.
  */
-export const publicProcedure = t.procedure.use(({ ctx, path, type, next }) => {
+export const publicProcedure = audited.use(({ ctx, path, type, next }) => {
   if (!grantAdmits(ctx.grant, effectOf({ path, type }))) {
     throw refusal("FORBIDDEN", messages(ctx.locale)("error.writesDisabled"), {
       reason: "WRITES_DISABLED",

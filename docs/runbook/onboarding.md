@@ -120,6 +120,8 @@ address before any agent is involved.
 - Reconnect with a write grant when they need to save models or reports, or to trigger a sync.
 - Every connection and token is revoked on the account page, effective at the next call. See
   [What a token is](mcp-setup.md#what-a-token-is).
+- What an agent did on your behalf is under **Hoạt động / Activity** on the account page, marked
+  with the door it came through (MCP, the CLI or the assistant), refusals included.
 
 ### 5. A first session
 

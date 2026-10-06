@@ -11,7 +11,7 @@ import { z } from "zod";
 import { Email, Role } from "./inputs.ts";
 import { messages } from "../i18n/index.ts";
 import * as people from "../services/people.ts";
-import { requireRole, router, tenantProcedure } from "./trpc.ts";
+import { actorOf, requireRole, router, tenantProcedure } from "./trpc.ts";
 
 /**
  * Why a role change or a removal was refused, worded for the caller.
@@ -52,7 +52,7 @@ export const peopleRouter = router({
         tenantId: ctx.tenantId,
         email: input.email,
         role: input.role,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
         notify: ctx.notifyInvitation,
       });
 
@@ -95,7 +95,7 @@ export const peopleRouter = router({
         tenantId: ctx.tenantId,
         email: input.email,
         role: input.role,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
       if (!result.ok) {
         throw membershipRefusal(ctx.locale, result.reason, input.email);
@@ -110,7 +110,7 @@ export const peopleRouter = router({
       const result = await people.removeMember(ctx.exec, {
         tenantId: ctx.tenantId,
         email: input.email,
-        actor: ctx.user.email,
+        actor: actorOf(ctx),
       });
       if (!result.ok) {
         throw membershipRefusal(ctx.locale, result.reason, input.email);
