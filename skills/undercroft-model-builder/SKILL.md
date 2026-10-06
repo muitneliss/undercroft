@@ -1,6 +1,6 @@
 ---
 name: undercroft-model-builder
-description: Guide a person through building an Undercroft dbt model, over its MCP tools or its CLI. Use when a person wants to save a query as a model -- a raw-lake query, a report question's SQL, or SQL they paste -- or to build a model of their own, such as a staging table over one source, a cleaned or joined table, or a table for a dashboard. It interviews the person before writing any SQL, reads the lake instead of guessing, reuses the customer's own dbt macros and proposes one when an expression would repeat, checks the model with models.check, and asks before it saves and again before it builds. Also use it to write or review a model's business context -- what one row is, its key, what each column means, its rules -- or to audit which models' contexts are incomplete or need review; it drafts, and only a person's yes approves. Needs the undercroft skill for how to reach the platform.
+description: Guide a person through building an Undercroft dbt model, over its MCP tools or its CLI. Use when a person wants to save a query as a model -- a raw-lake query, a report question's SQL, or SQL they paste -- or to build a model of their own, such as a staging table over one source, a cleaned or joined table, or a table for a dashboard. It interviews the person before writing any SQL, reads the lake instead of guessing, reuses the customer's own dbt macros and proposes one when an expression would repeat, checks the model with models.check, and asks before it saves and again before it builds. Needs the undercroft skill for how to reach the platform.
 ---
 
 # Build an Undercroft model
@@ -56,21 +56,16 @@ These hold for the whole workflow. None of them bends because the person is in a
     one, for example by running the model's SQL through `lake.query` instead.
 11. **Success is the build's answer.** The model exists when `models.build` says `ok` with
     its tests passed. Until then, say what happened, not what you hoped.
-12. **You draft a context; a person approves it.** A model's business context is what every
-    later reader trusts about what it means. Write it from the person's own answers, show it
-    marked DRAFT, and call `models.setContext` only after their yes to that exact text. A
-    meaning you inferred from a column's name or the data is a question, never a definition.
 
 ## Who can do what
 
 - Anyone who can see the customer may run `models.list`, `models.get`, `models.reference`,
   `models.check` and `models.lineage`, and `macros.list`, `macros.get` and `macros.check`.
-  Each model's business context, and its state, arrive with `models.list` and `models.get`.
 - Reading the raw lake (`lake.records`, `lake.querySchema`, `lake.query`), saving and
-  building a model (`models.save`, `models.build`), approving its business context
-  (`models.setContext`) and saving a macro (`macros.save`) need the `admin` role.
-- Over MCP, `lake.query`, `models.save`, `models.build`, `models.setContext` and
-  `macros.save` need a connection with a write grant. With the CLI, they need a profile that allows writes. `lake.query` counts as a
+  building a model (`models.save`, `models.build`) and saving a macro (`macros.save`) need
+  the `admin` role.
+- Over MCP, `lake.query`, `models.save`, `models.build` and `macros.save` need a connection
+  with a write grant. With the CLI, they need a profile that allows writes. `lake.query` counts as a
   write even though it only reads, because it runs SQL somebody wrote.
 
 If the person lacks one of these, say so at the start, before the interview. Do not find out
@@ -163,28 +158,7 @@ On a yes, call `models.build` and wait for its answer.
 - `CONFLICT`: a build is already running for this customer. Tell the person; build again
   only when they ask.
 
-### 9. Record the business context
-
-The brief already holds the model's business context: its purpose, its grain, its key, what
-each column means and the rules it applies. Save it with the model, so the next reader -- a
-person in the web UI, or an agent over MCP or the CLI -- does not have to guess it.
-
-- Read `models.get` for the model. Its `context` carries the state, what is missing, and the
-  `basis`: what an approval of the definition as it stands now must send back.
-- Write the context from the brief, and show it to the person marked DRAFT: the purpose, the
-  grain, the key (its columns, or no key and why), each column's definition with its unit or
-  currency, and the rules (or that it applies none).
-- On their yes, call `models.setContext` with the name, the `basis` and the context. Saving
-  approves it, so it needs the person's yes to that text, as a save of SQL does.
-- `CONFLICT` means the definition changed since you read it. Read `models.get` again, tell
-  the person what changed, and ask again. Do not resend the old `basis`.
-
-A context is documentation, not a test. A declared key is what the person says identifies a
-row; only the model's `unique` test checks it. Never call a context's key unique, verified or
-passed. To review the contexts a customer already has, follow
-`references/context-audit.md`.
-
-### 10. Hand over
+### 9. Hand over
 
 Tell the person the model's name, what one row means, the tests it passed and what the
 check could not verify. If they want a report on it, that is a new request: offer

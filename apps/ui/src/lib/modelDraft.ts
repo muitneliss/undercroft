@@ -37,10 +37,7 @@ export function testMapOf(tests: ModelTests): TestMap {
 }
 
 /** A draft seeded from what the server holds: nothing unsaved yet. */
-export function draftFrom(
-  tenantId: string,
-  model: Pick<ModelDetail, "name" | "sql" | "tests">,
-): ModelDraft {
+export function draftFrom(tenantId: string, model: ModelDetail): ModelDraft {
   const tests = testMapOf(model.tests);
   return { tenantId, name: model.name, sql: model.sql, tests, saved: { sql: model.sql, tests } };
 }

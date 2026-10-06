@@ -311,3 +311,6 @@
 ## [2026-10-06] ingest | ADR 0111 An Export Is a Link to a Streamed CSV
 ## [2026-10-06] ingest | Runbook: The undercroft CLI
 ## [2026-10-06] ingest | Runbook: Connecting an agent over MCP
+## [2026-10-06] ingest | Architecture
+## [2026-10-06] ingest | Runbook: Agent skills
+## [2026-10-06] ingest | ADR 0112 A Model Carries No Business Context

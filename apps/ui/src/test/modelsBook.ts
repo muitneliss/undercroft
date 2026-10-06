@@ -5,9 +5,7 @@
  *
  * Mirrors the design's fixtures rather than inventing new ones, so a capture can be read beside
  * the design's picture of the same screen: its fourteen models with their last builds, and what
- * each declares it reads (one ref to a model since deleted, one ref no reader can follow). Three
- * models carry an approved business context (ADR 0105): two still current, and churn_watch's
- * out of date since a model it reads changed -- the state the editor's picture shows.
+ * each declares it reads (one ref to a model since deleted, one ref no reader can follow).
  * Nothing here is anonymised from real data; every name is invented (`.claude/rules/pii.md`).
  *
  * Only for `*.vrt.test.tsx` (ADR 0099). Fixture times sit a little before `VISUAL_NOW`.
@@ -69,79 +67,6 @@ function sqlOf(declares: Declares): string {
   return `${head}select *\nfrom {{ ref('${first ?? ""}') }}\n${joins}`;
 }
 
-type ModelContext = ModelDetail["context"];
-type ContextBody = NonNullable<ModelContext["body"]>;
-
-/** The approved contexts, by model; every other model has none and reads `incomplete`. */
-const CONTEXTS: Readonly<Record<string, { body: ContextBody; changes: ModelContext["changes"] }>> =
-  {
-    churn_watch: {
-      body: {
-        purpose: "Customers whose ordering has slowed, for the account team's weekly call.",
-        grain: "One customer.",
-        key: { kind: "declared", columns: ["customer_id"] },
-        columns: [
-          { name: "customer_id", definition: "The customer's id in the CRM." },
-          {
-            name: "days_since_order",
-            definition: "Days since the customer's last order.",
-            unit: "days",
-          },
-        ],
-        rules: { kind: "listed", items: ["A customer with no order in 90 days is on the list."] },
-      },
-      changes: [{ model: "dim_customer", kind: "sql" }],
-    },
-    orders_daily: {
-      body: {
-        purpose: "Orders per day, for the revenue report.",
-        grain: "One calendar day.",
-        key: { kind: "declared", columns: ["order_date"] },
-        columns: [{ name: "order_date", definition: "The day, in Asia/Singapore." }],
-        rules: { kind: "none" },
-      },
-      changes: [],
-    },
-    stg_orders: {
-      body: {
-        purpose: "The CRM's deals, one row per deal, as the source sent them.",
-        grain: "One deal.",
-        key: { kind: "declared", columns: ["deal_id"] },
-        columns: [{ name: "deal_id", definition: "The deal's id in the CRM." }],
-        rules: { kind: "none" },
-      },
-      changes: [],
-    },
-  };
-
-const ALL_SECTIONS = ["purpose", "grain", "key", "columns", "rules"] as const;
-const REVIEWED_AT = "2026-09-20T08:00:00Z";
-
-function contextSummary(name: string): ModelItem["context"] {
-  const approved = CONTEXTS[name];
-  if (approved === undefined) {
-    return { state: "incomplete", missing: [...ALL_SECTIONS], changes: [] };
-  }
-  const { changes } = approved;
-  return { state: changes.length > 0 ? "needs_review" : "current", missing: [], changes };
-}
-
-/** The context as `models.get` answers it, its findings worked out as the server would. */
-function contextOf(name: string, built: readonly string[] | null, dynamic: boolean): ModelContext {
-  const approved = CONTEXTS[name];
-  const body = approved?.body ?? null;
-  const named = body === null ? [] : body.columns.map((column) => column.name);
-  return {
-    ...contextSummary(name),
-    body,
-    reviewedBy: body === null ? null : AUTHOR,
-    reviewedAt: body === null ? null : REVIEWED_AT,
-    basis: `basis-${name}`,
-    absentColumns: built === null ? null : named.filter((column) => !built.includes(column)),
-    upstreamUndeclared: dynamic,
-  };
-}
-
 function columnNames(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `column_${String(index + 1)}`);
 }
@@ -156,7 +81,6 @@ export const MODEL_LIST: readonly ModelItem[] = MODELS.map(([name, status], inde
   name,
   updatedAt: `2026-09-${String(LAST_UPDATED_DAY - (index % UPDATE_SPREAD))}T08:00:00Z`,
   updatedBy: AUTHOR,
-  context: contextSummary(name),
   lastBuild:
     status === null
       ? null
@@ -174,12 +98,7 @@ function modelDetail(name: string): ModelDetail | undefined {
   if (item === undefined || declares === undefined) {
     return undefined;
   }
-  return {
-    ...item,
-    sql: sqlOf(declares),
-    tests: { columns: { id: ["not_null"] } },
-    context: contextOf(name, item.lastBuild?.columns ?? null, declares.dynamic === true),
-  };
+  return { ...item, sql: sqlOf(declares), tests: { columns: { id: ["not_null"] } } };
 }
 
 const RAW = { records: "raw:raw.records", documents: "raw:raw.documents" } as const;

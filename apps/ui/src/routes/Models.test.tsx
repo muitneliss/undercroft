@@ -31,7 +31,6 @@ function built(name: string, status: string | null, columns: string[] = []): unk
     updatedAt: WHEN,
     updatedBy: "u1",
     lastBuild: status === null ? null : { runId: "run-7", status, endedAt: WHEN, columns },
-    context: { state: "incomplete", missing: ["purpose"], changes: [] },
   };
 }
 

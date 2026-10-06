@@ -406,13 +406,6 @@ environment, so a model's `env_var()` reads none of the worker's secrets. Models
 in both, as the same login, before its row goes; if the drop does not happen, the row stays
 ([ADR 0077](adr/0077-deleting-a-model-drops-what-it-built.md)).
 
-Each model may carry one business context in `app.model_context` -- its purpose, grain, key,
-column meanings and rules -- approved by an admin against a fingerprint of the model's
-definition and of the models it reads directly. Its state, `incomplete`, `needs_review` or
-`current`, is worked out when the model is read and never stored, so a scheduled build that
-changes a column is seen without the worker writing anything there
-([ADR 0105](adr/0105-a-model-carries-one-business-context-reviewed-against-its-definition.md)).
-
 Reports are first-party ([ADR 0020](adr/0020-bi-is-first-party-metabase-leaves-the-stack.md)). A
 question is a saved definition plus a chart. It compiles to SQL in which every identifier and
 literal is quoted, and the worker runs that SQL as the tenant's BI login. Result rows are never

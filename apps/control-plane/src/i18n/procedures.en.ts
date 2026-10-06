@@ -64,12 +64,8 @@ export const procedureSentences: SentenceTable = {
     "Draw the catalogue's first kinds from a sample of the customer's documents, as a run; publishes nothing. Admins.",
   "documentKinds.publish":
     "Publish the catalogue's draft, so every document is classified against it again. Admins.",
-  "models.list":
-    "The customer's dbt models, each with its business context's state (incomplete, needs_review, current) and why.",
-  "models.get":
-    "One dbt model: its SQL, tests and last build, and its approved business context with its state, what changed since approval and the basis to approve it again.",
-  "models.setContext":
-    "Approve and store a model's business context, with the basis models.get answered; refused if the definition changed since it was read. Runs nothing. Admins.",
+  "models.list": "The customer's dbt models.",
+  "models.get": "One dbt model and its SQL.",
   "models.save": "Store a dbt model; runs nothing. Admins.",
   "models.delete":
     "Delete a dbt model with the table it built and the rows its tests stored; deletes nothing if the table could not be dropped. Admins.",
