@@ -421,6 +421,7 @@ function contextFor(deps: ServerDeps, headers: Headers, door: Door, caller: Call
       sendInvitation(deps, to, tenantId, locale),
     apps: auth?.mcp ?? null,
     signInMethods: auth?.methods ?? [],
+    publicUrl: deps.publicUrl ?? null,
     worker: deps.worker ?? null,
     specReads: deps.specReads ?? NO_SPECS,
     // The id and key only. `clientSecret` is deliberately not spread in here; the

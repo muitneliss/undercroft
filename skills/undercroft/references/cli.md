@@ -51,6 +51,13 @@ code agrees with the code.
   `--source`, `--limit`). Anything nested, such as a model's SQL and tests, a dashboard or a
   scope selection, goes through `--input -` (stdin), `--input <file>` or
   `--input-json '<json>'`. A typed flag overrides the same field in the JSON.
+- **Save rows to a file with an export, never by copying an answer.** An answer stops at 5,000
+  rows. `undercroft bi exports create --tenant-id <id> --input-json '{"source":{...}}' --agent`
+  answers with a `url` for every row of a saved question, a definition or a model;
+  `undercroft bi exports download <url> --out <file> --agent` writes it, and answers with the
+  `path` and `bytes`. A download that was cut writes no file and fails with `NETWORK_ERROR`;
+  ask for the export again. A link to another server is refused as `INVALID_ARGUMENT` before
+  your session is sent anywhere.
 
 ## Sign in, and allow writes
 

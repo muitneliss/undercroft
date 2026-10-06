@@ -99,6 +99,18 @@ undercroft auth login --email ops@example.test --code 123456 --agent
 
 On a desktop install it takes one, `undercroft auth login --agent`, with no address.
 
+To save every row of a saved question, a definition or a dbt model to a file, ask for an export
+and download its link with the same session (ADR 0111):
+
+```sh
+undercroft bi exports create --tenant-id CASE-0042 \
+  --input-json '{"source":{"kind":"model","model":"fct_revenue"}}' --agent
+undercroft bi exports download <url> --out revenue.csv --agent
+```
+
+The link lives 15 minutes. A download that is cut writes no file, and a link to a server other
+than the profile's is refused before the session is sent.
+
 ## Where things live
 
 | What                | Where                                                                                               |

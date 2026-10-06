@@ -60,6 +60,11 @@ export interface RunTurns {
   readonly editorBuild?: Slots;
   readonly extract?: Slots;
   readonly semantic?: Slots;
+  /**
+   * Exports (ADR 0111). Not a run and not in the ledger, but each holds a tenant connection and
+   * an open transaction for as long as its reader takes, so it waits its turn like one.
+   */
+  readonly export?: Slots;
 }
 
 /** No limit: `work` runs at once. What a run gets when no limit was configured for its kind. */

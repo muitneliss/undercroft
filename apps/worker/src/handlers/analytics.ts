@@ -23,6 +23,7 @@ import { searchRaw } from "../services/rawSearch.ts";
 import { listDue, listExtractDue } from "../services/schedule.ts";
 import { UNAUTHENTICATED, jobDepsFor, serviceTokenOk } from "./bearer.ts";
 import { answerDue } from "./due.ts";
+import { registerExportRoute } from "./exports.ts";
 import type { LakeApiDeps } from "./lake.ts";
 import { registerSemanticRoutes } from "./semantic.ts";
 
@@ -54,6 +55,7 @@ export function registerAnalyticsRoutes(app: Hono, deps: LakeApiDeps): void {
   registerModelsDropRoute(app, deps);
   registerDqFailuresRoute(app, deps);
   registerQueriesRunRoute(app, deps);
+  registerExportRoute(app, deps);
   registerQueriesSchemaRoute(app, deps);
   registerRawQueryRoutes(app, deps);
   registerRunsDueGetRoute(app, deps);

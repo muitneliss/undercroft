@@ -41,6 +41,26 @@ per list and 60 KB, and a clipped text says so in a note; the whole answer is st
 A query result or a run's status may also render as a widget in the host. The widget shows
 the person the same answer you have; you do not need to repeat every row.
 
+## Exports
+
+An answer stops at 5,000 rows, and a tool result is not a file. When the person wants the rows
+themselves -- a report's whole answer, or a dbt model's table -- in a file, call
+`bi_exports_create` with a `source`:
+
+- `{ "kind": "question", "questionId": "<uuid>" }` for a saved question, with its `params`;
+- `{ "kind": "definition", "definition": { ... } }` for a definition, as `bi_answer` takes one;
+- `{ "kind": "model", "model": "<name>" }` for a model's whole table.
+
+It answers with a `url`, good for 15 minutes, which downloads a CSV of every row for the person
+who asked and nobody else. Give the person the link: they open it in a browser where they are
+signed in to Undercroft. If you have a shell, fetch it yourself with your own token
+(`Authorization: Bearer`) or with `undercroft bi exports download`. Never copy rows from a tool
+result into a file of your own: a figure you re-type is one nobody can check.
+
+A builder question exports what it answers, its own row limit included; the whole of a table is
+its model. A failed download is a broken file, never a short one: if the transfer is cut, ask
+for the export again.
+
 ## Refusals
 
 A refused call returns `isError: true` with a `structuredContent` of:

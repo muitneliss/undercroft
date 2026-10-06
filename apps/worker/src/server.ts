@@ -45,6 +45,11 @@ function required(name: string): string {
 
 /** Editor builds at once, apart from the scheduled ones (`services/jobs.ts`). */
 const EDITOR_BUILDS = 2;
+/**
+ * Exports at once (ADR 0111). Each holds a tenant connection and a transaction for minutes, out
+ * of the pooler's eight per login and fifty in all (ADR 0088); four leaves the dashboards theirs.
+ */
+const EXPORTS_AT_ONCE = 4;
 
 /**
  * A run limit from the environment, for one kind of run. Unset or empty is no limit; anything
@@ -202,6 +207,8 @@ const app = createLakeApi({
     ...limitFrom("UNDERCROFT_MAX_CONCURRENT_SEMANTIC", "semantic"),
     // A person at the model editor waits on these: two, apart from the scheduled builds.
     editorBuild: createSlots(EDITOR_BUILDS),
+    // A person waits on an export's first byte; a fifth is told the worker is busy.
+    export: createSlots(EXPORTS_AT_ONCE),
   },
   // The child environment every spawned reader inherits. `PATH` is the load-bearing part:
   // without it `Bun.spawn` cannot find `pdftotext` even where the image installed it, and

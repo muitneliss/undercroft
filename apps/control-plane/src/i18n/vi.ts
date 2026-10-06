@@ -412,4 +412,17 @@ export const vi = {
     textClipped:
       "Văn bản đã bị cắt ở {{kilobytes}} KB. Toàn bộ kết quả nằm trong structuredContent.",
   },
+
+  /**
+   * An export (ADR 0111): the name a file gets when what it holds has none, and what the
+   * download link says to a person who cannot have it. The link is a plain GET a browser opens
+   * from a chat, so a refusal there is a sentence in the reader's language, not a code.
+   */
+  export: {
+    unnamed: "Kết quả",
+    signIn:
+      "Hãy đăng nhập Undercroft trong trình duyệt này rồi mở lại liên kết. Liên kết chỉ tải được cho người đã yêu cầu nó.",
+    notFound:
+      "Không có bản xuất này. Liên kết hết hạn sau {{minutes}} phút và chỉ dùng được cho người đã yêu cầu; hãy yêu cầu xuất lại.",
+  },
 };

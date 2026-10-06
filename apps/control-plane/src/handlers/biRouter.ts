@@ -12,13 +12,24 @@ import {
   DashboardFilters,
   DashboardLayout,
   MAX_QUERY_ROWS,
+  ModelName,
   QueryParams,
   QuestionDefinition,
 } from "@undercroft/contracts";
 import { z } from "zod";
 import { messages } from "../i18n/index.ts";
+import { outranks } from "../services/authz.ts";
 import * as bi from "../services/bi.ts";
+import * as biExports from "../services/biExports.ts";
+import { exportPath, exportUrl } from "./exportLink.ts";
 import { requireRole, router, tenantProcedure } from "./trpc.ts";
+
+/** What an export is of: a saved question, a definition as `bi.answer` takes one, or a model. */
+const ExportSource = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("question"), questionId: z.string().uuid() }),
+  z.object({ kind: z.literal("definition"), definition: QuestionDefinition }),
+  z.object({ kind: z.literal("model"), model: ModelName }),
+]);
 
 export const biRouter = router({
   /**
@@ -192,6 +203,74 @@ export const biRouter = router({
           throw new TRPCError({ code: "NOT_FOUND" });
         }
         return { ok: true };
+      }),
+  }),
+
+  exports: router({
+    /**
+     * Ask for every row of a saved question, a definition or a model as a CSV file (ADR 0111),
+     * answered with a link good for fifteen minutes to the person who asked. Everything a
+     * procedure decides is decided here -- who may, which SQL -- and the download only finds it.
+     * A saved question is any member's to export, as its answer is; a definition or a model is
+     * SQL an author chooses, so a member's. A READ for the grant: it reads, and the row it keeps
+     * is the asking, not data.
+     */
+    create: tenantProcedure
+      .input(z.object({ source: ExportSource, params: QueryParams.default({}) }))
+      .mutation(async ({ ctx, input }) => {
+        const t = messages(ctx.locale);
+        if (biExports.exportNeedsMember(input.source.kind) && !outranks(ctx.role, "member")) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: t("error.requiresRole", { role: "member" }),
+          });
+        }
+        const outcome = await biExports.createExport(ctx.exec, {
+          tenantId: ctx.tenantId,
+          userId: ctx.user.userId,
+          actor: ctx.user.email,
+          source: input.source,
+          params: input.params,
+          unnamed: t("export.unnamed"),
+        });
+        if (!outcome.ok) {
+          if (outcome.reason === "param-missing") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: t("error.paramMissing", { name: outcome.param }),
+            });
+          }
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        const { id, fileName, expiresAt } = outcome.export;
+        const path = exportPath(ctx.tenantId, id);
+        return { id, fileName, expiresAt, path, url: exportUrl(ctx.publicUrl, path) };
+      }),
+
+    /**
+     * One export the caller asked for, while it lives: what it runs and what its file is called.
+     * The download reads it through this procedure, so the tenant's gates, the grant and the role
+     * an export needs are asked again at the moment the rows are taken. Anyone else's export, and
+     * an expired one, is NOT_FOUND.
+     */
+    get: tenantProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .query(async ({ ctx, input }) => {
+        const found = await biExports.openExport(ctx.exec, {
+          tenantId: ctx.tenantId,
+          id: input.id,
+          userId: ctx.user.userId,
+        });
+        if (found === null) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        if (biExports.exportNeedsMember(found.kind) && !outranks(ctx.role, "member")) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: messages(ctx.locale)("error.requiresRole", { role: "member" }),
+          });
+        }
+        return found;
       }),
   }),
 

@@ -24,6 +24,24 @@ export const TableResult = z.object({
 });
 export type TableResult = z.infer<typeof TableResult>;
 
+/** The Postgres types whose cells are figures: an exact decimal string, or a JSON number. */
+const NUMERIC_TYPES: ReadonlySet<string> = new Set([
+  "numeric",
+  "bigint",
+  "integer",
+  "smallint",
+  "real",
+  "double precision",
+]);
+
+/**
+ * Whether a column of this Postgres type holds figures. Read by the chart, which may plot it,
+ * and by the CSV encoder, which keeps its plain numbers' signs (`csv.ts`).
+ */
+export function isNumericType(pgType: string): boolean {
+  return NUMERIC_TYPES.has(pgType);
+}
+
 /** The most rows a preview or a failing-rows read returns. A look, not an export. */
 export const MAX_PREVIEW_ROWS = 50;
 
@@ -117,6 +135,20 @@ export const RunQueryRequest = z.object({
   offset: z.number().int().min(0).default(0),
 });
 export type RunQueryRequest = z.infer<typeof RunQueryRequest>;
+
+/**
+ * Stream every row one SELECT answers, as CSV, as the tenant's read-only login (ADR 0111).
+ *
+ * The same frame as `RunQueryRequest` with no LIMIT and no OFFSET: the rows come through one
+ * cursor in one read-only transaction, so an export of any length is one consistent snapshot
+ * rather than pages that a concurrent build could shift between. There is no `limit` because
+ * an export is the whole answer; a builder question still carries its own `LIMIT` in its SQL.
+ */
+export const ExportQueryRequest = z.object({
+  tenantId: z.string().min(1),
+  sql: z.string().min(1).max(MAX_QUERY_SQL_BYTES),
+});
+export type ExportQueryRequest = z.infer<typeof ExportQueryRequest>;
 
 /** The tenant's analytics schema as its read-only login sees it: every table, every column. */
 export const SchemaResponse = z.object({

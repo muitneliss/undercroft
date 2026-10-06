@@ -242,4 +242,11 @@ export const en = {
     textClipped:
       "This text was cut at {{kilobytes}} KB. The complete result is in structuredContent.",
   },
+  export: {
+    unnamed: "Result",
+    signIn:
+      "Sign in to Undercroft in this browser, then open the link again. Only the person who asked for it can download it.",
+    notFound:
+      "There is no such export. A link expires after {{minutes}} minutes and works only for the person who asked for it; ask for the export again.",
+  },
 };

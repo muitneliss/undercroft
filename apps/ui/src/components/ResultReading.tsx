@@ -10,13 +10,15 @@
  * so the rows sit folded beneath the drawing and the press opens the fold. Which point, and
  * which pane, live in the address, so nothing here holds state.
  *
- * The CSV is built in the browser from the very result on screen (`lib/csv.ts`), so it is
- * exactly those rows and columns, for the parameters in use, under the reader's own run. A
- * result cut at its row limit says so beside the control, before the file is taken, because
- * a file that silently stops at row 1,000 reads as the whole answer.
+ * The CSV is built in the browser from the very result on screen, by the encoder the worker's
+ * export also uses (`@undercroft/contracts/csv`), so it is exactly those rows and columns, for
+ * the parameters in use, under the reader's own run. A result cut at its row limit says so
+ * beside the control, before the file is taken, because a file that silently stops at row
+ * 1,000 reads as the whole answer.
  */
 
 import type { ChartConfig } from "@undercroft/contracts/bi";
+import { CSV_BOM, CSV_MEDIA_TYPE, csvFileName, resultCsv } from "@undercroft/contracts/csv";
 import type { Locale } from "@undercroft/core/locale";
 import { lazy, Suspense, useId } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,24 +28,16 @@ import type { TableResult } from "@/api/types.ts";
 import { ResultTable } from "@/components/ResultTable.tsx";
 import { Skeleton } from "@/components/Skeleton.tsx";
 import { POINT, pointFromSearch, rowsAt, withPoint } from "@/lib/chartData.ts";
-import { resultCsvBlob } from "@/lib/csv.ts";
 import { type QuestionPane, withPane } from "@/lib/questionPane.ts";
 
 const ChartFrame = lazy(() =>
   import("@/components/charts/ChartFrame.tsx").then((module) => ({ default: module.ChartFrame })),
 );
 
-/** Characters a file system refuses in a name, replaced rather than dropped. */
-const UNSAFE_FILENAME = /[\\/:*?"<>|]/gu;
-
-function fileName(name: string, fallback: string): string {
-  const cleaned = name.replace(UNSAFE_FILENAME, "_").trim();
-  return `${cleaned === "" ? fallback : cleaned}.csv`;
-}
-
 /** Hand the reader the file. The object URL is released once the browser has taken it. */
 function download(result: TableResult, name: string): void {
-  const href = URL.createObjectURL(resultCsvBlob(result));
+  const blob = new Blob([CSV_BOM, resultCsv(result)], { type: CSV_MEDIA_TYPE });
+  const href = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = href;
   anchor.download = name;
@@ -65,7 +59,7 @@ function CsvTake({ result, name }: { result: TableResult; name: string }): React
         disabled={result.columns.length === 0}
         type="button"
         onClick={(): void => {
-          download(result, fileName(name, t("bi.csvFallbackName")));
+          download(result, csvFileName(name, t("bi.csvFallbackName")));
         }}
       >
         {t("bi.csvDownload")}

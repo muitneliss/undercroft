@@ -55,6 +55,7 @@ const PLACE = {
   bi: "contents",
   biQuestions: "contents",
   biDashboards: "contents",
+  biExports: "contents",
   tenants: "contents",
   people: "contents",
   keys: "contents",

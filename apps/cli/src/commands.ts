@@ -17,6 +17,7 @@ import { Args, Command, Flags, type Interfaces } from "@oclif/core";
 import { PROCEDURES } from "virtual:surface";
 import { type FlagMap, globalFlags, inputFlags } from "./flags.ts";
 import type { Context, ParsedFlags } from "./handlers/context.ts";
+import { downloadExport } from "./handlers/download.ts";
 import { home } from "./handlers/home.ts";
 import {
   authLogin,
@@ -133,6 +134,20 @@ interface LocalCommand {
   readonly run: Definition["run"];
 }
 
+/**
+ * `bi exports download`, beside `bi exports create` whose link it fetches: a file on this
+ * machine is the one answer a procedure cannot give (`handlers/download.ts`, ADR 0111).
+ */
+function downloadCommand(ctx: Context): LocalCommand {
+  return {
+    id: "bi:exports:download",
+    description: "command.biExportsDownload",
+    flags: { out: Flags.string({ description: ctx.t("flag.out"), required: true }) },
+    args: { link: Args.string({ description: ctx.t("flag.exportLink"), required: true }) },
+    run: ({ flags, argv }) => downloadExport(ctx, flags, argv[0] ?? ""),
+  };
+}
+
 function localCommands(ctx: Context, catalogue: () => readonly Described[]): LocalCommand[] {
   const { t } = ctx;
   const name = { name: Args.string({ description: t("flag.profileName"), required: true }) };
@@ -183,6 +198,7 @@ function localCommands(ctx: Context, catalogue: () => readonly Described[]): Loc
       args: name,
       run: ({ argv }) => Promise.resolve(configUse(ctx, argv[0] ?? "")),
     },
+    downloadCommand(ctx),
     {
       id: "describe",
       description: "command.describe",

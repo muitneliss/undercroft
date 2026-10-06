@@ -6,15 +6,18 @@
  * client should not grow because the double did.
  */
 
-import type {
-  BrowseListing,
-  BrowseScopeResponse,
-  BuildModelResponse,
-  RawSearchResponse,
-  RevokeConnectionResponse,
-  SchemaResponse,
-  StoreCredentialResponse,
-  TableResult,
+import {
+  type BrowseListing,
+  type BrowseScopeResponse,
+  type BuildModelResponse,
+  CSV_BOM,
+  type ExportQueryRequest,
+  type RawSearchResponse,
+  resultCsv,
+  type RevokeConnectionResponse,
+  type SchemaResponse,
+  type StoreCredentialResponse,
+  type TableResult,
 } from "@undercroft/contracts";
 import type { SqlExecutor } from "@undercroft/db";
 import { upsertConnection } from "@undercroft/db/repos";
@@ -264,6 +267,25 @@ export class InMemoryWorkerClient implements WorkerClient {
       return Promise.resolve({ ok: false, reason: "query-failed", message: this.#refusal });
     }
     return Promise.resolve({ ok: true, value: this.#answer });
+  }
+
+  /** Every export this double was asked to stream, in order. */
+  readonly exports: ExportQueryRequest[] = [];
+
+  /**
+   * Stream the answer `answering` was given as the real worker streams one -- the shared CSV
+   * encoder, its byte-order mark first -- or refuse as it refuses bad SQL.
+   */
+  exportQuery(input: ExportQueryRequest): Promise<WorkerOutcome<ReadableStream<Uint8Array>>> {
+    if (this.#failWith !== null) {
+      return this.#fail();
+    }
+    this.exports.push(input);
+    if (this.#refusal !== null) {
+      return Promise.resolve({ ok: false, reason: "query-failed", message: this.#refusal });
+    }
+    const csv = new TextEncoder().encode(CSV_BOM + resultCsv(this.#answer));
+    return Promise.resolve({ ok: true, value: new Response(csv).body ?? new ReadableStream() });
   }
 
   readSchema(): Promise<WorkerOutcome<SchemaResponse>> {

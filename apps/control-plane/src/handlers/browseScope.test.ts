@@ -73,6 +73,7 @@ function callerOf(worker: InMemoryWorkerClient) {
     specReads: new Map(),
     googlePicker: null,
     signInMethods: [],
+    publicUrl: null,
   };
   return appRouter.createCaller(ctx);
 }

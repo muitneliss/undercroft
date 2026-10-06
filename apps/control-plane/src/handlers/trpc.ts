@@ -164,6 +164,12 @@ export interface Context {
    * sign-in was built. Required like the rest, so a door building a context decides it.
    */
   readonly signInMethods: readonly SignInMethod[];
+  /**
+   * `UNDERCROFT_PUBLIC_URL`, for a link a procedure hands out -- an export's (ADR 0111) -- to be
+   * whole wherever it is pasted. `null` where none is configured, and then the link is the path
+   * alone, which the browser and the CLI resolve against the server they already talk to.
+   */
+  readonly publicUrl: string | null;
 }
 
 export type { Role } from "../services/authz.ts";

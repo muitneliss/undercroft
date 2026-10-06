@@ -54,6 +54,33 @@ export function runFramed(
   });
 }
 
+/** The one cursor an export holds. Transaction-scoped, so the frame's ROLLBACK closes it. */
+const EXPORT_CURSOR = "_export";
+
+/**
+ * Open the author's SELECT as a cursor, inside a frame `inReadOnlyTransaction` already holds.
+ *
+ * The same sub-select as `runFramed` with no LIMIT and no OFFSET: an export is every row, read
+ * through one snapshot, a batch at a time. A syntax error, a table the login cannot see and a
+ * second statement are all refused HERE, before a row is fetched -- which is what lets the
+ * worker refuse an export with Postgres's sentence instead of starting a file it cannot finish.
+ */
+export async function openExportCursor(exec: SqlExecutor, sql: string): Promise<void> {
+  await exec.query(
+    `DECLARE ${EXPORT_CURSOR} NO SCROLL CURSOR FOR SELECT * FROM (\n${trimSql(sql)}\n) AS _q`,
+    [],
+  );
+}
+
+/** The next `rows` rows of the open export cursor; fewer at the end, none after it. */
+export async function fetchExportRows(exec: SqlExecutor, rows: number): Promise<Framed> {
+  const result = await exec.query<Record<string, unknown>>(
+    `FETCH FORWARD ${String(Math.trunc(rows))} FROM ${EXPORT_CURSOR}`,
+    [],
+  );
+  return { rows: result.rows, fields: result.fields ?? [] };
+}
+
 /**
  * The frame itself, without an opinion about what runs inside it.
  *

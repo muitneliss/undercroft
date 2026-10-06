@@ -166,6 +166,11 @@ token as an environment variable, as above, so it stays off every process's comm
   default.
 - **Results** are whole in `structuredContent`; the text beside it shows at most 50 items of any
   list and 60 KB, and says when it was cut.
+- **Exports.** An answer stops at 5,000 rows. For every row of a saved question, a definition or
+  a dbt model as a CSV file, the agent calls `bi_exports_create` and gives the person the link it
+  answers with. The link works for 15 minutes and only for that person: open it in a browser
+  where you are signed in to Undercroft. An agent with a shell can fetch it with its own token.
+  A transfer that is cut fails as a download; it never ends as a short file. ADR 0111.
 - **Refusals** carry a `code` -- the CLI's vocabulary -- a sentence, any facts the server named,
   and a `traceId`.
 - **Widgets.** In a host that draws MCP Apps (claude.ai, Claude Desktop), a query result

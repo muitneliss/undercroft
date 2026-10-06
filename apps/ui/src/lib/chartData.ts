@@ -16,7 +16,8 @@ import type { ChartConfig } from "@undercroft/contracts/bi";
 
 import type { TableResult } from "@/api/types.ts";
 import type { Cell } from "@/lib/cells.ts";
-import { isNumericType, plotValue } from "@/lib/plot.ts";
+import { isNumericType } from "@undercroft/contracts/results";
+import { plotValue } from "@/lib/plot.ts";
 import { CATEGORICAL, colourFor, OTHER } from "@/lib/plotPalette.ts";
 
 export interface Dataset {

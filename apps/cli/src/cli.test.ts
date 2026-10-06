@@ -485,6 +485,69 @@ describe("a desktop install signs its owner in on this machine (ADR 0096)", () =
   });
 });
 
+describe("an export is saved to a file (ADR 0111)", () => {
+  /** Ask for an export of a definition, as an agent does; the link it was answered with. */
+  async function exportLink(): Promise<string> {
+    const created = await undercroft([
+      "bi",
+      "exports",
+      "create",
+      "--tenant-id",
+      OWN,
+      "--input-json",
+      JSON.stringify({
+        source: { kind: "definition", definition: { kind: "sql", sql: "select 1" } },
+      }),
+      "--agent",
+    ]);
+    const data = envelope(created).data as { url?: unknown } | undefined;
+    return typeof data?.url === "string" ? data.url : "no link was answered";
+  }
+
+  it("with the person's own session, written whole to the file named", async () => {
+    writeProfile("local", plane.origin, false);
+    await signIn();
+    plane.worker.answering({
+      columns: [{ name: "amount", type: "numeric" }],
+      rows: [["-1234.5670"], [null]],
+      truncated: false,
+    });
+
+    const saved = await undercroft([
+      "bi",
+      "exports",
+      "download",
+      await exportLink(),
+      "--out",
+      "rows.csv",
+      "--agent",
+    ]);
+
+    expect(saved.exitCode).toBe(0);
+    expect(readFileSync(join(work, "rows.csv"), "utf8")).toBe("﻿amount\r\n-1234.5670\r\n\r\n");
+  });
+
+  it("refuses a link to another server before the session is sent anywhere", async () => {
+    writeProfile("local", plane.origin, false);
+    await signIn();
+    const elsewhere = new URL(await exportLink(), otherHost(plane.origin)).toString();
+
+    const refused = await undercroft([
+      "bi",
+      "exports",
+      "download",
+      elsewhere,
+      "--out",
+      "rows.csv",
+      "--agent",
+    ]);
+
+    expect(envelope(refused).error?.code).toBe("INVALID_ARGUMENT");
+    expect(plane.worker.exports).toEqual([]);
+    expect(existsSync(join(work, "rows.csv"))).toBe(false);
+  });
+});
+
 describe("signing out", () => {
   it("revokes the session on the server, so the old cookie is refused", async () => {
     writeProfile("local", plane.origin, false);

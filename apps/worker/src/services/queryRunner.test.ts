@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, test as it } from "bun:test";
 import { bindParams, compileVisual } from "@undercroft/contracts";
 import { createMigratedTestDatabase, type TestDatabase } from "@undercroft/db/testing";
 
+import { exportQuery } from "./queryExport.ts";
 import { QueryFailed, type QueryDeps, readSchema, runQuery } from "./queryRunner.ts";
 import { sessionsBySetRole } from "./tenantSession.ts";
 
@@ -155,6 +156,46 @@ describe("a compiled question", () => {
     const result = await runQuery(deps, { tenantId: TENANT, sql, limit: 10 });
     expect(result.columns.map((c) => c.name)).toEqual(["deals", "sum_amount"]);
     expect(result.rows).toEqual([[2, "12345678901244.5678"]]);
+  });
+});
+
+describe("exportQuery", () => {
+  it("streams every row past a dashboard's cap, each figure as the database sent it", async () => {
+    const stream = await exportQuery(deps, {
+      tenantId: TENANT,
+      sql: "select n, (n * 1.5)::numeric(18,4) as amount from generate_series(1, 12001) as n order by n",
+    });
+    // The bytes as a spreadsheet gets them: `Response#text()` would drop the byte-order mark.
+    const bytes = await new Response(stream).arrayBuffer();
+    const lines = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes).split("\r\n");
+
+    expect(lines[0]).toBe("﻿n,amount");
+    // A header, 12,001 rows -- more than twice MAX_QUERY_ROWS -- and the CRLF after the last.
+    expect(lines).toHaveLength(12_003);
+    expect(lines[1]).toBe("1,1.5000");
+    expect(lines[12_001]).toBe("12001,18001.5000");
+  });
+
+  it("refuses SQL Postgres refuses before the first byte, with Postgres's sentence", async () => {
+    const message = await refusal(() =>
+      exportQuery(deps, { tenantId: TENANT, sql: "select * from nope" }),
+    );
+    expect(message).toContain('relation "nope" does not exist');
+  });
+
+  it("a failure after the first byte cuts the stream rather than ending the file early", async () => {
+    // Row 1,500 divides by zero: the first batch of 1,000 is already on its way when it fails.
+    const stream = await exportQuery(deps, {
+      tenantId: TENANT,
+      sql: "select 1 / (n - 1500) as x from generate_series(1, 3000) as n",
+    });
+    let read: string | null = null;
+    try {
+      read = await new Response(stream).text();
+    } catch {
+      // The body failed, which is the promise: no client may take what came first for a file.
+    }
+    expect(read).toBeNull();
   });
 });
 

@@ -30,6 +30,7 @@ export {
   type RecordedByteResponse,
 } from "./httpBytes.ts";
 export { newRunId } from "./ids.ts";
+export { liftIdleTimeout } from "./idleTimeout.ts";
 export { isoFromMillis, isoInstant, msJsonDateMillis } from "./instant.ts";
 export {
   type LarkConfig,

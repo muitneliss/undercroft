@@ -13,23 +13,10 @@
  * bar of invented height.
  */
 
+import { isNumericType } from "@undercroft/contracts/results";
 import Big from "big.js";
 
 import type { Cell } from "@/lib/cells.ts";
-
-const NUMERIC_TYPES = new Set([
-  "numeric",
-  "bigint",
-  "integer",
-  "smallint",
-  "real",
-  "double precision",
-]);
-
-/** Whether a Postgres type name is one a chart can plot. */
-export function isNumericType(pgType: string): boolean {
-  return NUMERIC_TYPES.has(pgType);
-}
 
 /**
  * A cell as a plot position, or `null` for a gap.

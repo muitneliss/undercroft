@@ -1,12 +1,12 @@
 ---
 title: 'Runbook: Connecting an agent over MCP'
 type: source
-date: 2026-10-05
+date: 2026-10-06
 tags: []
 source: docs/runbook/mcp-setup.md
 source_path: docs/runbook/mcp-setup.md
-source_hash: 9d8adebe3911a9a92b53700d695bf8da3bed0aed1a2a61febfc609e85f10b4f0
-ingested: 2026-10-05
+source_hash: 353524821e4d1e2a6e121be874dffc39213cced973d9bf5e77f63b9a30122704
+ingested: 2026-10-06
 ---
 
 # Runbook: Connecting an agent over MCP
@@ -28,3 +28,5 @@ How a person connects claude.ai, Claude Desktop, Claude Code or any MCP client t
 **Why a bearer was refused.** The client gets the same 401 whatever the cause (403 for `insufficient_scope`); the server logs `mcp_refused { status, refusal, reason, credential }` with the request's `traceId`, `credential` being the `upat_…` id or `oauth:<clientId>` when proven, never the token. Reasons: `expired` (mint a new token; an OAuth client should renew by itself), `revoked` (token or app revoked), `no_person` (access removed; re-invite), `missing` (no bearer; every OAuth client's first contact, logged at info), `malformed` (unreadable), `unknown` (not issued by this server for `/mcp`), `insufficient_scope` (neither grant). Find them with `task obs:search FOR=status=401 SINCE=6h`, then `task obs:logs FOR=mcp_refused SINCE=6h`, and `task obs:logs FOR=<credential>` for when it last worked; the `debug-trace` skill walks through it.
 
 **Skills.** Besides tools and widgets, `/mcp` serves Undercroft's own Agent Skills through the MCP Skills extension (`skills/list`, `skills/get`, files at `skill://<name>/<path>`), the same files `npx skills add` installs; a host that supports the extension needs nothing installed, and Claude Code and Codex install them with `npx skills` ([[Runbook: Agent skills]], [[ADR 0067: The published skills are one family, installed by npx skills and served by /mcp]]).
+
+**Exports.** An answer stops at 5,000 rows; for every row of a saved question, a definition or a dbt model as CSV the agent calls `bi_exports_create` and gives the person the link, which works 15 minutes and only for them, in a browser signed in to Undercroft; an agent with a shell fetches it with its own token, and a cut transfer fails as a download rather than ending short ([[ADR 0111 An Export Is a Link to a Streamed CSV]]).
